@@ -36,7 +36,7 @@ type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunct
 #[clap(author, version, about)]
 pub struct Move {
     /// Path to a package which the command should be run with respect to.
-    #[clap(long = "path", short = 'p', global = true, parse(from_os_str))]
+    #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
 
     /// Print additional diagnostics if available.
@@ -76,7 +76,7 @@ pub enum Command {
     Sandbox {
         /// Directory storing Move resources, events, and module bytecodes produced by module publishing
         /// and script execution.
-        #[clap(long, default_value = DEFAULT_STORAGE_DIR, parse(from_os_str))]
+        #[clap(long, default_value = DEFAULT_STORAGE_DIR)]
         storage_dir: PathBuf,
         #[clap(subcommand)]
         cmd: sandbox::cli::SandboxCommand,
@@ -86,7 +86,7 @@ pub enum Command {
     Experimental {
         /// Directory storing Move resources, events, and module bytecodes produced by module publishing
         /// and script execution.
-        #[clap(long, default_value = DEFAULT_STORAGE_DIR, parse(from_os_str))]
+        #[clap(long, default_value = DEFAULT_STORAGE_DIR)]
         storage_dir: PathBuf,
         #[clap(subcommand)]
         cmd: experimental::cli::ExperimentalCommand,

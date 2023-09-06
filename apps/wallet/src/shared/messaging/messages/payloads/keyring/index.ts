@@ -4,7 +4,6 @@
 import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from '_payloads';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 
 import type { BasePayload, Payload } from '_payloads';
 import type { SerializedAccount } from '_src/background/keyring/Account';
@@ -111,13 +110,6 @@ type MethodToPayloads = {
 	 */
 	importPrivateKey: {
 		args: { password: string; keyPair: ExportedKeypair };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	updateAccountPublicInfo: {
-		args: { updates: AccountsPublicInfoUpdates };
 		return: void;
 	};
 };

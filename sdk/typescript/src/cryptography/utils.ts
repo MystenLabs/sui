@@ -12,6 +12,7 @@ import { decodeMultiSig } from './multisig.js';
 import type { PublicKey } from './publickey.js';
 import { Ed25519Keypair } from '../keypairs/ed25519/keypair.js';
 import { Secp256k1Keypair } from '../keypairs/secp256k1/keypair.js';
+import { Secp256r1Keypair } from '../keypairs/secp256r1/keypair.js';
 import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
 
@@ -82,6 +83,7 @@ export function toSingleSignaturePubkeyPair(
 	return res[0];
 }
 
+/// Creates specific PublicKey objects from serialized strings, based on their corresponding signature schemes
 export function publicKeyFromSerialized(schema: SignatureScheme, pubKey: string): PublicKey {
 	if (schema === 'ED25519') {
 		return new Ed25519PublicKey(pubKey);
@@ -89,9 +91,13 @@ export function publicKeyFromSerialized(schema: SignatureScheme, pubKey: string)
 	if (schema === 'Secp256k1') {
 		return new Secp256k1PublicKey(pubKey);
 	}
+	if (schema === 'Secp256r1') {
+		return new Secp256r1PublicKey(pubKey);
+	}
 	throw new Error('Unknown public key schema');
 }
 
+/// Reconstructs a `Keypair` object from an exported keypair representation
 export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
 	const secretKey = fromB64(keypair.privateKey);
 	switch (keypair.schema) {
@@ -104,6 +110,8 @@ export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
 			return Ed25519Keypair.fromSecretKey(pureSecretKey);
 		case 'Secp256k1':
 			return Secp256k1Keypair.fromSecretKey(secretKey);
+		case 'Secp256r1':
+			return Secp256r1Keypair.fromSecretKey(secretKey);
 		default:
 			throw new Error(`Invalid keypair schema ${keypair.schema}`);
 	}

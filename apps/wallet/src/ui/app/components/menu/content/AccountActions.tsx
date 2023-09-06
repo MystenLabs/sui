@@ -20,16 +20,17 @@ export type AccountActionsProps = {
 };
 
 export function AccountActions({ account }: AccountActionsProps) {
-	const exportAccountUrl = useNextMenuUrl(true, `/export/${account.address}`);
+	const exportAccountUrl = useNextMenuUrl(true, `/export/${account?.address}`);
 	const recoveryPassphraseUrl = useNextMenuUrl(true, '/recovery-passphrase');
+	if (!account) return null;
 
 	let actionContent: ReactNode | null = null;
 	if (isLedgerAccountSerializedUI(account)) {
 		actionContent = (
 			<div>
 				<VerifyLedgerConnectionStatus
-					accountAddress={account.address}
-					derivationPath={account.derivationPath}
+					accountAddress={account?.address}
+					derivationPath={account?.derivationPath}
 				/>
 			</div>
 		);

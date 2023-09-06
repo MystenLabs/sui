@@ -28,7 +28,7 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub(crate) mod object_store;
@@ -108,31 +108,31 @@ pub(crate) struct LocalProtocolConfig {
     pub(crate) object_runtime_max_num_cached_objects_system_tx: u64,
     pub(crate) object_runtime_max_num_store_entries: u64,
     pub(crate) object_runtime_max_num_store_entries_system_tx: u64,
+    pub(crate) loaded_child_object_format: bool,
 }
 
 impl LocalProtocolConfig {
-    fn new(constants: &ProtocolConfig) -> Self {
+    fn new(config: &ProtocolConfig) -> Self {
         Self {
-            max_num_deleted_move_object_ids: constants.max_num_deleted_move_object_ids(),
-            max_num_event_emit: constants.max_num_event_emit(),
-            max_num_new_move_object_ids: constants.max_num_new_move_object_ids(),
-            max_num_transferred_move_object_ids: constants.max_num_transferred_move_object_ids(),
-            max_event_emit_size: constants.max_event_emit_size(),
-            max_event_emit_size_total: constants.max_event_emit_size_total_as_option(),
-            max_num_deleted_move_object_ids_system_tx: constants
+            max_num_deleted_move_object_ids: config.max_num_deleted_move_object_ids(),
+            max_num_event_emit: config.max_num_event_emit(),
+            max_num_new_move_object_ids: config.max_num_new_move_object_ids(),
+            max_num_transferred_move_object_ids: config.max_num_transferred_move_object_ids(),
+            max_event_emit_size: config.max_event_emit_size(),
+            max_event_emit_size_total: config.max_event_emit_size_total_as_option(),
+            max_num_deleted_move_object_ids_system_tx: config
                 .max_num_deleted_move_object_ids_system_tx(),
-            max_num_new_move_object_ids_system_tx: constants
-                .max_num_new_move_object_ids_system_tx(),
-            max_num_transferred_move_object_ids_system_tx: constants
+            max_num_new_move_object_ids_system_tx: config.max_num_new_move_object_ids_system_tx(),
+            max_num_transferred_move_object_ids_system_tx: config
                 .max_num_transferred_move_object_ids_system_tx(),
 
-            object_runtime_max_num_cached_objects: constants
-                .object_runtime_max_num_cached_objects(),
-            object_runtime_max_num_cached_objects_system_tx: constants
+            object_runtime_max_num_cached_objects: config.object_runtime_max_num_cached_objects(),
+            object_runtime_max_num_cached_objects_system_tx: config
                 .object_runtime_max_num_cached_objects_system_tx(),
-            object_runtime_max_num_store_entries: constants.object_runtime_max_num_store_entries(),
-            object_runtime_max_num_store_entries_system_tx: constants
+            object_runtime_max_num_store_entries: config.object_runtime_max_num_store_entries(),
+            object_runtime_max_num_store_entries_system_tx: config
                 .object_runtime_max_num_store_entries_system_tx(),
+            loaded_child_object_format: config.loaded_child_object_format(),
         }
     }
 }
@@ -147,7 +147,7 @@ pub struct ObjectRuntime<'a> {
     // whether or not this TX is gas metered
     is_metered: bool,
 
-    pub(crate) constants: LocalProtocolConfig,
+    pub(crate) local_config: LocalProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
 
@@ -209,7 +209,7 @@ impl<'a> ObjectRuntime<'a> {
                 total_events_size: 0,
             },
             is_metered,
-            constants: LocalProtocolConfig::new(protocol_config),
+            local_config: LocalProtocolConfig::new(protocol_config),
             metrics,
         }
     }
@@ -220,8 +220,8 @@ impl<'a> ObjectRuntime<'a> {
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.new_ids.len(),
-            self.constants.max_num_new_move_object_ids,
-            self.constants.max_num_new_move_object_ids_system_tx,
+            self.local_config.max_num_new_move_object_ids,
+            self.local_config.max_num_new_move_object_ids_system_tx,
             self.metrics.excessive_new_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -249,8 +249,8 @@ impl<'a> ObjectRuntime<'a> {
         if let LimitThresholdCrossed::Hard(_, lim) = check_limit_by_meter!(
             self.is_metered,
             self.state.deleted_ids.len(),
-            self.constants.max_num_deleted_move_object_ids,
-            self.constants.max_num_deleted_move_object_ids_system_tx,
+            self.local_config.max_num_deleted_move_object_ids,
+            self.local_config.max_num_deleted_move_object_ids_system_tx,
             self.metrics.excessive_deleted_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -281,7 +281,12 @@ impl<'a> ObjectRuntime<'a> {
         // - Otherwise, check the input objects for the previous owner
         // - If it was not in the input objects, it must have been wrapped or must have been a
         //   child object
-        let is_framework_obj = [SUI_SYSTEM_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID].contains(&id);
+        let is_framework_obj = [
+            SUI_SYSTEM_STATE_OBJECT_ID,
+            SUI_CLOCK_OBJECT_ID,
+            SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+        ]
+        .contains(&id);
         let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
@@ -301,8 +306,9 @@ impl<'a> ObjectRuntime<'a> {
             // TODO: is this not redundant? Metered TX implies framework obj cannot be transferred
             self.is_metered && !is_framework_obj, // We have higher limits for unmetered transactions and framework obj
             self.state.transfers.len(),
-            self.constants.max_num_transferred_move_object_ids,
-            self.constants.max_num_transferred_move_object_ids_system_tx,
+            self.local_config.max_num_transferred_move_object_ids,
+            self.local_config
+                .max_num_transferred_move_object_ids_system_tx,
             self.metrics.excessive_transferred_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
@@ -317,8 +323,8 @@ impl<'a> ObjectRuntime<'a> {
     }
 
     pub fn emit_event(&mut self, ty: Type, tag: StructTag, event: Value) -> PartialVMResult<()> {
-        if self.state.events.len() >= (self.constants.max_num_event_emit as usize) {
-            return Err(max_event_error(self.constants.max_num_event_emit));
+        if self.state.events.len() >= (self.local_config.max_num_event_emit as usize) {
+            return Err(max_event_error(self.local_config.max_num_event_emit));
         }
         self.state.events.push((ty, tag, event));
         Ok(())
@@ -505,6 +511,12 @@ impl ObjectRuntimeState {
         // Check new owners from transfers, reports an error on cycles.
         // TODO can we have cycles in the new system?
         check_circular_ownership(transfers.iter().map(|(id, (owner, _, _))| (*id, *owner)))?;
+        // For both written_objects and deleted_ids, we need to mark the loaded child object as modified.
+        // These may not be covered in the child object effects if they are taken out in one PT command and then
+        // transferred/deleted in a different command. Marking them as modified will allow us properly determine their
+        // mutation category in effects.
+        // TODO: This could get error-prone quickly: what if we forgot to mark an object as modified? There may be a cleaner
+        // sulution.
         let written_objects: LinkedHashMap<_, _> = transfers
             .into_iter()
             .map(|(id, (owner, type_, value))| {
@@ -514,6 +526,11 @@ impl ObjectRuntimeState {
                 (id, (owner, type_, value))
             })
             .collect();
+        for deleted_id in deleted_ids.keys() {
+            if let Some(loaded_child) = loaded_child_objects.get_mut(deleted_id) {
+                loaded_child.is_modified = true;
+            }
+        }
 
         Ok(RuntimeResults {
             writes: written_objects,

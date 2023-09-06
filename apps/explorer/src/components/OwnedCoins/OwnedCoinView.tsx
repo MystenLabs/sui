@@ -3,6 +3,7 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { ArrowShowAndHideRight12, Warning16 } from '@mysten/icons';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Text } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
@@ -21,7 +22,8 @@ type OwnedCoinViewProps = {
 };
 
 export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
-	const [open, setOpen] = useState(false);
+	const isSuiCoin = coin.coinType === SUI_TYPE_ARG;
+	const [open, setOpen] = useState(isSuiCoin);
 	const [formattedTotalBalance, symbol] = useFormatCoin(coin.totalBalance, coin.coinType);
 
 	return (
@@ -30,12 +32,8 @@ export default function OwnedCoinView({ coin, id }: OwnedCoinViewProps) {
 				data-testid="ownedcoinlabel"
 				className={clsx(
 					'mt-1 flex w-full items-center rounded-lg bg-opacity-5 p-2 text-left hover:bg-hero-darkest hover:bg-opacity-5',
-					open && 'bg-hero-darkest pt-3',
+					open ? 'rounded-b-none bg-hero-darkest pt-3' : 'rounded-b-lg',
 				)}
-				style={{
-					borderBottomLeftRadius: open ? '0' : '8px',
-					borderBottomRightRadius: open ? '0' : '8px',
-				}}
 			>
 				<div className="flex w-[45%] items-center gap-1 truncate">
 					<ArrowShowAndHideRight12

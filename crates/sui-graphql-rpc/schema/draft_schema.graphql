@@ -524,7 +524,7 @@ type Validator {
   # The other validators this validator has reported
   reportRecords: [SuiAddress]
 
-  apy: Float
+  apy: Int
 }
 
 type ValidatorCredentials {

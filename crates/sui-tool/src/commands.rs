@@ -33,7 +33,7 @@ pub enum Verbosity {
 }
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "sui-tool",
     about = "Debugging utilities for sui",
     rename_all = "kebab-case",
@@ -42,27 +42,27 @@ pub enum Verbosity {
 )]
 pub enum ToolCommand {
     /// Fetch the same object from all validators
-    #[clap(name = "fetch-object")]
+    #[command(name = "fetch-object")]
     FetchObject {
-        #[clap(long, help = "The object ID to fetch")]
+        #[arg(long, help = "The object ID to fetch")]
         id: ObjectID,
 
-        #[clap(long, help = "Fetch object at a specific sequence")]
+        #[arg(long, help = "Fetch object at a specific sequence")]
         version: Option<u64>,
 
-        #[clap(
+        #[arg(
             long,
             help = "Validator to fetch from - if not specified, all validators are queried"
         )]
         validator: Option<AuthorityName>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
         /// Concise mode groups responses by results.
@@ -73,7 +73,7 @@ pub enum ToolCommand {
         ///      --genesis $HOME/.sui/sui_config/genesis.blob \
         ///      --verbosity concise --concise-no-header
         /// ```
-        #[clap(
+        #[arg(
             value_enum,
             long = "verbosity",
             default_value = "grouped",
@@ -81,7 +81,7 @@ pub enum ToolCommand {
         )]
         verbosity: Verbosity,
 
-        #[clap(
+        #[arg(
             long = "concise-no-header",
             help = "don't show header in concise output"
         )]
@@ -89,138 +89,138 @@ pub enum ToolCommand {
     },
 
     /// Fetch the effects association with transaction `digest`
-    #[clap(name = "fetch-transaction")]
+    #[command(name = "fetch-transaction")]
     FetchTransaction {
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
-        #[clap(long, help = "The transaction ID to fetch")]
+        #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
 
         /// If true, show the input transaction as well as the effects
-        #[clap(long = "show-tx")]
+        #[arg(long = "show-tx")]
         show_input_tx: bool,
     },
 
     /// Tool to read validator & node db.
-    #[clap(name = "db-tool")]
+    #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
-        #[clap(long = "db-path")]
+        #[arg(long = "db-path")]
         db_path: String,
-        #[clap(subcommand)]
+        #[command(subcommand)]
         cmd: Option<DbToolCommand>,
     },
 
     /// Tool to sync the node from archive store
-    #[clap(name = "sync-from-archive")]
+    #[command(name = "sync-from-archive")]
     SyncFromArchive {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
-        #[clap(long = "db-path")]
+        #[arg(long = "db-path")]
         db_path: PathBuf,
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
     /// Tool to verify the archive store
-    #[clap(name = "verify-archive")]
+    #[command(name = "verify-archive")]
     VerifyArchive {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
     /// Tool to verify the archive store by comparing file checksums
-    #[clap(name = "verify-archive-from-checksums")]
+    #[command(name = "verify-archive-from-checksums")]
     VerifyArchiveByChecksum {
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
-    #[clap(name = "dump-validators")]
+    #[command(name = "dump-validators")]
     DumpValidators {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
 
-        #[clap(
+        #[arg(
             long = "concise",
             help = "show concise output - name, protocol key and network address"
         )]
         concise: bool,
     },
 
-    #[clap(name = "dump-genesis")]
+    #[command(name = "dump-genesis")]
     DumpGenesis {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
     },
 
     /// Fetch authenticated checkpoint information at a specific sequence number.
     /// If sequence number is not specified, get the latest authenticated checkpoint.
-    #[clap(name = "fetch-checkpoint")]
+    #[command(name = "fetch-checkpoint")]
     FetchCheckpoint {
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
-        #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
+        #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
     },
 
-    #[clap(name = "anemo")]
+    #[command(name = "anemo")]
     Anemo {
-        #[clap(next_help_heading = "foo", flatten)]
+        #[command(next_help_heading = "foo", flatten)]
         args: anemo_cli::Args,
     },
 
-    #[clap(name = "restore-db")]
+    #[command(name = "restore-db")]
     RestoreFromDBCheckpoint {
-        #[clap(long = "config-path")]
+        #[arg(long = "config-path")]
         config_path: PathBuf,
-        #[clap(long = "db-checkpoint-path")]
+        #[arg(long = "db-checkpoint-path")]
         db_checkpoint_path: PathBuf,
     },
 
-    #[clap(name = "replay")]
+    #[command(name = "replay")]
     Replay {
-        #[clap(long = "rpc")]
+        #[arg(long = "rpc")]
         rpc_url: Option<String>,
-        #[clap(long = "safety-checks")]
+        #[arg(long = "safety-checks")]
         safety_checks: bool,
-        #[clap(long = "authority")]
+        #[arg(long = "authority")]
         use_authority: bool,
-        #[clap(long = "cfg-path", short)]
+        #[arg(long = "cfg-path", short)]
         cfg_path: Option<PathBuf>,
-        #[clap(subcommand)]
+        #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
 
     /// Ask all validators to sign a transaction through AuthorityAggregator.
-    #[clap(name = "sign-transaction")]
+    #[command(name = "sign-transaction")]
     SignTransaction {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
 
-        #[clap(
+        #[arg(
             long,
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]

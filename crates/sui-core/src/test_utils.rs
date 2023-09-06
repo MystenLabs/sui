@@ -31,7 +31,6 @@ use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
-use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
 use sui_types::transaction::{
     CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
@@ -369,6 +368,7 @@ pub fn make_transfer_object_move_transaction(
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
+    gas_budget_in_units: u64,
     gas_price: u64,
 ) -> Transaction {
     let args = vec![
@@ -385,7 +385,7 @@ pub fn make_transfer_object_move_transaction(
             Vec::new(),
             gas_object_ref,
             args,
-            TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * gas_price,
+            gas_budget_in_units * gas_price,
             gas_price,
         )
         .unwrap(),

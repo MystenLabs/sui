@@ -3,12 +3,13 @@
 
 import { isSuiNSName } from '@mysten/core';
 import { formatAddress, formatDigest } from '@mysten/sui.js/utils';
+import { type ReactNode } from 'react';
 
 import { Link, type LinkProps } from '~/ui/Link';
 
 interface BaseInternalLinkProps extends LinkProps {
 	noTruncate?: boolean;
-	label?: string;
+	label?: string | ReactNode;
 	queryStrings?: Record<string, string>;
 }
 

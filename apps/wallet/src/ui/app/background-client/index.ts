@@ -26,7 +26,6 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import {
 	type MethodPayload,
 	isMethodPayload,
@@ -409,18 +408,6 @@ export class BackgroundClient {
 		);
 	}
 
-	public updateAccountsPublicInfo(updates: AccountsPublicInfoUpdates) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'updateAccountPublicInfo'>>({
-					type: 'keyring',
-					method: 'updateAccountPublicInfo',
-					args: { updates },
-				}),
-			).pipe(take(1)),
-		);
-	}
-
 	public getStoredEntities<R>(type: UIAccessibleEntityType): Promise<R[]> {
 		return lastValueFrom(
 			this.sendMessage(
@@ -518,6 +505,18 @@ export class BackgroundClient {
 		);
 	}
 
+	public setAccountNickname({ id, nickname }: MethodPayload<'setAccountNickname'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'setAccountNickname'>>({
+					type: 'method-payload',
+					method: 'setAccountNickname',
+					args: { id, nickname },
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	public getStorageMigrationStatus() {
 		return lastValueFrom(
 			this.sendMessage(
@@ -545,6 +544,24 @@ export class BackgroundClient {
 					type: 'method-payload',
 					method: 'doStorageMigration',
 					args: inputs,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	/**
+	 * Wallet wasn't storing the public key of ledger accounts, but we need it to send it to the dapps.
+	 * Use this function to update the public keys whenever wallet has access to them.
+	 */
+	public storeLedgerAccountsPublicKeys(
+		args: MethodPayload<'storeLedgerAccountsPublicKeys'>['args'],
+	) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'storeLedgerAccountsPublicKeys'>>({
+					type: 'method-payload',
+					method: 'storeLedgerAccountsPublicKeys',
+					args,
 				}),
 			).pipe(take(1)),
 		);
