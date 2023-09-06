@@ -618,8 +618,8 @@ fn function(
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
     let acquires = acquires
-        .into_iter()
-        .map(|(s, _)| context.struct_definition_name(m.unwrap(), s))
+        .into_keys()
+        .map(|s| context.struct_definition_name(m.unwrap(), s))
         .collect();
     let body = match body.value {
         G::FunctionBody_::Native => IR::FunctionBody::Native,

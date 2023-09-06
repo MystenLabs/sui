@@ -158,7 +158,7 @@ impl GasProfiler {
             return;
         }
 
-        let frame_idx = self.add_frame(metadata.clone(), frame_name.clone(), metadata);
+        let frame_idx = self.add_frame(metadata.clone(), frame_name, metadata);
         let start = self.start_gas();
 
         self.profiles[0].events.push(Event {

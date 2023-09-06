@@ -52,7 +52,7 @@ impl<'env, 'map> Context<'env, 'map> {
     ) -> Self {
         let mut all_filter_alls = WarningFilters::new();
         for allow in compilation_env.filter_attributes() {
-            for f in compilation_env.filter_from_str(FILTER_ALL, allow.clone()) {
+            for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
                 all_filter_alls.add(f);
             }
         }
@@ -804,7 +804,7 @@ fn warning_filter(
                     n
                 }
             };
-            let filters = context.env.filter_from_str(name_, allow.clone());
+            let filters = context.env.filter_from_str(name_, allow);
             if filters.is_empty() {
                 let msg = format!("Unknown warning filter '{name_}'");
                 context
@@ -2662,7 +2662,7 @@ fn check_valid_address_name_(
 
 fn check_valid_local_name(context: &mut Context, v: &Var) {
     fn is_valid(s: Symbol) -> bool {
-        s.starts_with('_') || s.starts_with(|c| matches!(c, 'a'..='z'))
+        s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
     }
     if !is_valid(v.value()) {
         let msg = format!(
@@ -2822,7 +2822,7 @@ fn check_valid_module_member_name_impl(
 }
 
 pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {
-    s.starts_with(|c| matches!(c, 'A'..='Z'))
+    s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
 // Checks for a restricted name in any decl case

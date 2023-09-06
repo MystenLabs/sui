@@ -464,10 +464,7 @@ impl VMRuntime {
         #[cfg(debug_assertions)]
         {
             let rem = gas_meter.remaining_gas().into();
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(
-                func.pretty_string().to_owned(),
-                rem,
-            ));
+            gas_meter.set_profiler(GasProfiler::init_default_cfg(func.pretty_string(), rem));
         }
         // execute the function
         self.execute_function_impl(

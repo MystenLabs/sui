@@ -253,7 +253,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // Compute the coverage map. This will be used by other commands after this.
     if compute_coverage && !no_tests {
         let coverage_map = CoverageMap::from_trace_file(trace_path);
-        output_map_to_file(&coverage_map_path, &coverage_map).unwrap();
+        output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
     Ok(UnitTestResult::Success)
 }

@@ -320,7 +320,7 @@ impl OnDiskStateView {
             event_type,
             event_data,
         ));
-        Ok(fs::write(path, &bcs::to_bytes(&event_log)?)?)
+        Ok(fs::write(path, bcs::to_bytes(&event_log)?)?)
     }
 
     /// Save `module` on disk under the path `module.address()`/`module.name()`
