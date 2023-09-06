@@ -236,7 +236,12 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} objects and {} checkpoints", mutated_objects.len() + deleted_objects.len(), checkpoints.len())
+            info!(
+                elapsed,
+                "Persisted {} objects and {} checkpoints",
+                mutated_objects.len() + deleted_objects.len(),
+                checkpoints.len()
+            )
         })
     }
 
@@ -274,7 +279,11 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked transactions", transactions.len())
+            info!(
+                elapsed,
+                "Persisted {} chunked transactions",
+                transactions.len()
+            )
         })
     }
 
@@ -290,12 +299,14 @@ impl PgIndexerStoreV2 {
     //     futures::future::join_all(futures).await;
     // }
 
-    fn persist_events(
+    fn persist_events_chunk(
         &self,
         events: Vec<IndexedEvent>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let guard = metrics.checkpoint_db_commit_latency_events.start_timer();
+        let guard = metrics
+            .checkpoint_db_commit_latency_events_chunks
+            .start_timer();
         let events = events
             .into_iter()
             .map(StoredEvent::from)
@@ -317,7 +328,7 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} events", events.len())
+            info!(elapsed, "Persisted {} chunked events", events.len())
         })
     }
 
@@ -344,9 +355,7 @@ impl PgIndexerStoreV2 {
                         // unchanged during upgrades. In this case, we override the modules
                         .on_conflict(packages::package_id)
                         .do_update()
-                        .set((
-                            packages::modules.eq(excluded(packages::modules)),
-                        ))
+                        .set((packages::modules.eq(excluded(packages::modules)),))
                         .execute(conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write packages to PostgresDB")?;
@@ -361,13 +370,13 @@ impl PgIndexerStoreV2 {
         })
     }
 
-    fn persist_tx_indices(
+    fn persist_tx_indices_chunk(
         &self,
         indices: Vec<TxIndex>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let guard = metrics
-            .checkpoint_db_commit_latency_tx_indices
+            .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
         let indices = indices
             .into_iter()
@@ -390,7 +399,7 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} tx_indices", indices.len())
+            info!(elapsed, "Persisted {} chunked tx_indices", indices.len())
         })
     }
 
@@ -619,7 +628,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .start_timer();
         let mut futures = vec![];
         // FIXME
-        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE").unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string()).parse::<usize>().unwrap();
+        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
+            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         for transaction_chunk in transactions.chunks(chunk_size) {
             let chunk = transaction_chunk.to_vec();
             let metrics_clone = metrics.clone();
@@ -649,8 +661,37 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         events: Vec<IndexedEvent>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.persist_events(events, metrics))
+        let guard = metrics.checkpoint_db_commit_latency_events.start_timer();
+        let mut futures = vec![];
+        // FIXME
+        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
+            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
+        for event_chunk in events.chunks(chunk_size) {
+            let chunk = event_chunk.to_vec();
+            let metrics_clone = metrics.clone();
+            futures.push(
+                self.spawn_blocking_task(move |this| {
+                    this.persist_events_chunk(chunk, metrics_clone)
+                }),
+            );
+        }
+        futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all events chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} events", events.len());
+        Ok(())
+        // self.execute_in_blocking_worker(move |this| this.persist_events(events, metrics))
+        //     .await
     }
 
     async fn persist_packages(
@@ -667,8 +708,37 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         indices: Vec<TxIndex>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        self.execute_in_blocking_worker(move |this| this.persist_tx_indices(indices, metrics))
+        let guard = metrics
+            .checkpoint_db_commit_latency_tx_indices
+            .start_timer();
+        let mut futures = vec![];
+        // FIXME
+        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
+            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
+        for indices_chunk in indices.chunks(chunk_size) {
+            let chunk = indices_chunk.to_vec();
+            let metrics_clone = metrics.clone();
+            futures.push(self.spawn_blocking_task(move |this| {
+                this.persist_tx_indices_chunk(chunk, metrics_clone)
+            }));
+        }
+        futures::future::join_all(futures)
             .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all tx_indices chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} tx_indices", indices.len());
+        Ok(())
+        // self.execute_in_blocking_worker(move |this| this.persist_tx_indices(indices, metrics))
+        //     .await
     }
 
     async fn persist_epoch(

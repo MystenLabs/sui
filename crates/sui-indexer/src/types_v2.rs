@@ -98,7 +98,7 @@ pub struct IndexedEpochInfo {
     pub protocol_version: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IndexedEvent {
     pub tx_sequence_number: u64,
     pub event_sequence_number: u64,
@@ -242,7 +242,7 @@ pub struct IndexedTransaction {
     pub successful_tx_num: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TxIndex {
     pub tx_sequence_number: u64,
     pub transaction_digest: TransactionDigest,

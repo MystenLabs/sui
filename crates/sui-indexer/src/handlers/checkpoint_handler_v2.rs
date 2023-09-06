@@ -594,8 +594,14 @@ where
                         assert_eq!(oref.1, object.version());
                         let df_info =
                             try_create_dynamic_field_info(object, &objects, &module_resolver)
-                                .unwrap_or_else(|e| panic!("failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}", object.id(), object.version()));
-                            
+                                .unwrap_or_else(|e| {
+                                    panic!(
+                                "failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}",
+                                object.id(),
+                                object.version()
+                            )
+                                });
+
                         Some(IndexedObject::from_object(
                             checkpoint_seq,
                             object.clone(),
@@ -709,28 +715,28 @@ pub async fn start_tx_checkpoint_commit_task<S>(
                 state
                     .persist_transactions(tx_batch, metrics.clone())
                     .instrument(info_span!(
-                        "persist_transactions for checkpoint {} - {}",
+                        "persist_transactions for checkpoints",
                         first_checkpoint_seq,
                         last_checkpoint_seq
                     )),
                 state
                     .persist_tx_indices(tx_indices_batch, metrics.clone())
                     .instrument(info_span!(
-                        "persist_tx_indices for checkpoint {} - {}",
+                        "persist_tx_indices for checkpoints",
                         first_checkpoint_seq,
                         last_checkpoint_seq
                     )),
                 state
                     .persist_events(events_batch, metrics.clone())
                     .instrument(info_span!(
-                        "persist_events for checkpoint {} - {}",
+                        "persist_events for checkpoints",
                         first_checkpoint_seq,
                         last_checkpoint_seq
                     )),
                 state
                     .persist_packages(packages_batch, metrics.clone())
                     .instrument(info_span!(
-                        "persist_packages for checkpoint {} - {}",
+                        "persist_packages for checkpoints",
                         first_checkpoint_seq,
                         last_checkpoint_seq
                     )),
@@ -763,6 +769,11 @@ pub async fn start_tx_checkpoint_commit_task<S>(
                 checkpoint_batch,
                 metrics.clone(),
             )
+            .instrument(info_span!(
+                "persist_objects_and_checkpoints for checkpoints",
+                first_checkpoint_seq,
+                last_checkpoint_seq
+            ))
             .await
             .tap_err(|e| {
                 error!(
@@ -851,12 +862,17 @@ fn try_create_dynamic_field_info(
         return Ok(None);
     }
 
-    let move_struct =
-        move_object.to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)
+    let move_struct = move_object
+        .to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)
         // FIXME use a better error
-        .map_err(|e| IndexerError::GenericError(format!("Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
-            o.id(), o.version(), move_object.type_().to_string()
-    )))?;
+        .map_err(|e| {
+            IndexerError::GenericError(format!(
+                "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
+                o.id(),
+                o.version(),
+                move_object.type_().to_string()
+            ))
+        })?;
 
     let (name_value, type_, object_id) =
         DynamicFieldInfo::parse_move_object(&move_struct).tap_err(|e| warn!("{e}"))?;
