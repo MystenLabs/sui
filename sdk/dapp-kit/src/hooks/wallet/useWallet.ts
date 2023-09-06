@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
+import { useWalletContext } from 'dapp-kit/src/components/WalletProvider';
 import { useMemo } from 'react';
 
 /**
