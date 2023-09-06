@@ -7,6 +7,7 @@ import {
 	type AccountsFormValues,
 	useAccountsFormContext,
 } from '../components/accounts/AccountsFormContext';
+import { type AddedAccountsProperties, ampli } from '_src/shared/analytics/ampli';
 
 export type CreateType = NonNullable<AccountsFormValues>['type'];
 
@@ -26,6 +27,15 @@ function validateAccountFormValues<T extends CreateType>(
 	}
 	return true;
 }
+
+const createTypeToAmpliAccount: Record<CreateType, AddedAccountsProperties['accountType']> = {
+	zk: 'Zklogin',
+	'new-mnemonic': 'Derived',
+	'import-mnemonic': 'Derived',
+	'mnemonic-derived': 'Derived',
+	imported: 'Imported',
+	ledger: 'Ledger',
+};
 
 export function useCreateAccountsMutation() {
 	const backgroundClient = useBackgroundClient();
@@ -74,18 +84,28 @@ export function useCreateAccountsMutation() {
 					keyPair: accountsFormValues.keyPair,
 					password: password!,
 				});
-				// TODO implement all types
+			} else if (
+				type === 'ledger' &&
+				validateAccountFormValues(type, accountsFormValues, password)
+			) {
+				createdAccounts = await backgroundClient.createAccounts({
+					type: 'ledger',
+					accounts: accountsFormValues.accounts,
+					password: password!,
+				});
 			} else {
-				throw new Error('Not implemented yet');
+				throw new Error(`Create accounts with type ${type} is not implemented yet`);
 			}
-			if (createdAccounts) {
-				for (const aCreatedAccount of createdAccounts) {
-					await backgroundClient.unlockAccountSourceOrAccount({
-						id: aCreatedAccount.id,
-						password,
-					});
-				}
+			for (const aCreatedAccount of createdAccounts) {
+				await backgroundClient.unlockAccountSourceOrAccount({
+					id: aCreatedAccount.id,
+					password,
+				});
 			}
+			ampli.addedAccounts({
+				accountType: createTypeToAmpliAccount[type],
+				numberOfAccounts: createdAccounts.length,
+			});
 			setAccountFormValues(null);
 			return createdAccounts;
 		},

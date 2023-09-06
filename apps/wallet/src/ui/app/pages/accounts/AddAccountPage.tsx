@@ -5,9 +5,12 @@ import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
 import { useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import Browser from 'webextension-polyfill';
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
+import { useAppSelector } from '../../hooks';
+import { AppType } from '../../redux/slices/app/AppType';
 import { SocialButton } from '../../shared/SocialButton';
 import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
@@ -15,12 +18,15 @@ import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 
 export function AddAccountPage() {
-	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
 	const sourceFlow = searchParams.get('sourceFlow') || 'Unknown';
 	const showSocialSignInOptions = sourceFlow !== 'Onboarding';
+	const forceShowLedger =
+		searchParams.has('showLedger') && searchParams.get('showLedger') !== 'false';
 	const [, setAccountFormValues] = useAccountsFormContext();
+	const isPopup = useAppSelector((state) => state.app.appType === AppType.popup);
+	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(forceShowLedger);
 	return (
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
 			<div className="w-full flex flex-col gap-8">
@@ -82,9 +88,19 @@ export function AddAccountPage() {
 						size="tall"
 						text="Set up Ledger"
 						before={<LedgerLogo className="text-gray-90" width={16} height={16} />}
-						onClick={() => {
-							setConnectLedgerModalOpen(true);
+						onClick={async () => {
 							ampli.openedConnectLedgerFlow({ sourceFlow });
+							if (isPopup) {
+								const { origin, pathname, hash } = window.location;
+								await Browser.tabs.create({
+									url: `${origin}${pathname}${hash}${
+										hash.includes('showLedger') ? '' : `${hash.includes('?') ? '&' : '?'}showLedger`
+									}`,
+								});
+								window.close();
+							} else {
+								setConnectLedgerModalOpen(true);
+							}
 						}}
 					/>
 				</div>

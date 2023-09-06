@@ -13,7 +13,7 @@ import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Toaster, toast } from 'react-hot-toast';
-import { ImportLedgerAccountsPage } from './accounts/ImportLedgerAccountsPage';
+import { useNavigate } from 'react-router-dom';
 import { type BackgroundClient } from '../background-client';
 import { ConnectLedgerModal } from '../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../components/loading/LoadingIndicator';
@@ -26,7 +26,6 @@ import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../hooks/useQredoTransaction';
 import { useSigner } from '../hooks/useSigner';
 import { Button } from '../shared/ButtonUI';
-import { ModalDialog } from '../shared/ModalDialog';
 import { Card } from '../shared/card';
 import { FAUCET_HOSTS } from '../shared/faucet/FaucetRequestButton';
 import { useFaucetMutation } from '../shared/faucet/useFaucetMutation';
@@ -85,8 +84,8 @@ export function AccountsDev() {
 			backgroundClient.createAccounts({ type: 'zk', provider }),
 	});
 	const [isConnectLedgerModalVisible, setIsConnectLedgerModalVisible] = useState(false);
-	const [isImportLedgerModalVisible, setIsImportLedgerModalVisible] = useState(false);
 	const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
+	const navigate = useNavigate();
 	return (
 		<>
 			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5 gap-3">
@@ -200,27 +199,15 @@ export function AccountsDev() {
 					onError={(e) => toast.error(JSON.stringify(e))}
 					onConfirm={() => {
 						setIsConnectLedgerModalVisible(false);
-						setIsImportLedgerModalVisible(true);
 						toast.success('Connect confirmed');
+						navigate(
+							`/accounts/import-ledger-accounts?${new URLSearchParams({
+								successRedirect: '/accounts-dev',
+							})}`,
+						);
 					}}
 				/>
 			) : null}
-			<ModalDialog
-				isOpen={isImportLedgerModalVisible}
-				onClose={() => setIsImportLedgerModalVisible(false)}
-				body={
-					<>
-						<div id="overlay-portal-container"></div>
-						<ImportLedgerAccountsPage
-							password={testPassNewAccounts}
-							onClose={() => setIsImportLedgerModalVisible(false)}
-							onConfirmed={() => {
-								setIsImportLedgerModalVisible(false);
-							}}
-						/>
-					</>
-				}
-			/>
 		</>
 	);
 }
