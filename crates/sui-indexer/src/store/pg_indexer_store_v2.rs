@@ -257,8 +257,6 @@ impl PgIndexerStoreV2 {
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
-        // FIXME
-        info!("About to persisting {} transactions", transactions.len());
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -276,7 +274,7 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} transactions", transactions.len())
+            info!(elapsed, "Persisted {} chunked transactions", transactions.len())
         })
     }
 
@@ -328,6 +326,9 @@ impl PgIndexerStoreV2 {
         packages: Vec<IndexedPackage>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
+        if packages.is_empty() {
+            return Ok(());
+        }
         let guard = metrics.checkpoint_db_commit_latency_packages.start_timer();
         let packages = packages
             .into_iter()
@@ -339,7 +340,6 @@ impl PgIndexerStoreV2 {
                 for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE) {
                     diesel::insert_into(packages::table)
                         .values(packages_chunk)
-                        // .on_conflict_do_nothing()
                         // System packages such as 0x2/0x9 will have their package_id
                         // unchanged during upgrades. In this case, we override the modules
                         .on_conflict(packages::package_id)
@@ -635,6 +635,8 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
                     e
                 ))
             })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} transactions", transactions.len());
         Ok(())
         // self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics))
         //     .await
