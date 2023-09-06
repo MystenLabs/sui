@@ -247,7 +247,7 @@ pub mod checked {
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
-        ) -> GasCostSummary {
+        ) -> (GasCostSummary, bool) {
             // at this point, we have done *all* charging for computation,
             // but have not yet set the storage rebate or storage gas units
             debug_assert!(self.gas_status.storage_rebate() == 0);
@@ -274,11 +274,13 @@ pub mod checked {
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules
             if let Some(gas_object_id) = self.smashed_gas_coin {
-                if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                    self.handle_storage_and_rebate_v2(temporary_store, execution_result)
-                } else {
-                    self.handle_storage_and_rebate_v1(temporary_store, execution_result)
-                }
+                let oog_on_storage_charges =
+                    if dont_charge_budget_on_storage_oog(self.gas_model_version) {
+                        self.handle_storage_and_rebate_v2(temporary_store, execution_result)
+                    } else {
+                        self.handle_storage_and_rebate_v1(temporary_store, execution_result);
+                        false
+                    };
 
                 let cost_summary = self.gas_status.summary();
                 let gas_used = cost_summary.net_gas_usage();
@@ -289,9 +291,9 @@ pub mod checked {
                 trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
 
                 temporary_store.write_object(gas_object, WriteKind::Mutate);
-                cost_summary
+                (cost_summary, oog_on_storage_charges)
             } else {
-                GasCostSummary::default()
+                (GasCostSummary::default(), false)
             }
         }
 
@@ -315,7 +317,8 @@ pub mod checked {
             &mut self,
             temporary_store: &mut TemporaryStore<'_>,
             execution_result: &mut Result<T, ExecutionError>,
-        ) {
+        ) -> bool {
+            let mut oog_on_storage_charges = false;
             if let Err(err) = self.gas_status.charge_storage_and_rebate() {
                 // we run out of gas charging storage, reset and try charging for storage again.
                 // Input objects are touched and so they have a storage cost
@@ -329,6 +332,10 @@ pub mod checked {
                     self.gas_status.adjust_computation_on_out_of_gas();
                     temporary_store.ensure_active_inputs_mutated();
                     temporary_store.collect_rebate(self);
+                    // report up the call stack the fact that we could not charge for
+                    // storage and so `stroage_cost` will be set to 0.
+                    // This condition is vital for the conservation rules to work.
+                    oog_on_storage_charges = true;
                     if execution_result.is_ok() {
                         *execution_result = Err(err);
                     }
@@ -336,6 +343,7 @@ pub mod checked {
                     *execution_result = Err(err);
                 }
             }
+            oog_on_storage_charges
         }
     }
 }

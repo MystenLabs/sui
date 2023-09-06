@@ -837,6 +837,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// have updated object versions.
     pub fn check_sui_conserved(
         &self,
+        oog_on_storage_charges: bool,
         simple_conservation_checks: bool,
         gas_summary: &GasCostSummary,
     ) -> Result<(), ExecutionError> {
@@ -856,18 +857,19 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        if gas_summary.storage_cost == 0 {
-            // this condition is usually true when the transaction went OOG and no
+        if oog_on_storage_charges {
+            // this condition is true when the transaction went OOG and no
             // gas is left for storage charges.
-            // The storage cost has to be there at least for the gas coin which
+            // Normally the storage cost has to be there at least for the gas coin which
             // will not be deleted even when going to 0.
             // However if the storage cost is 0 and if there is any object touched
             // or deleted the value in input must be equal to the output plus rebate and
             // non refundable.
             // Rebate and non refundable will be positive when there are object deleted
             // (gas smashing being the primary and possibly only example).
-            // A more typical condition is for all storage charges in summary to be 0 and
+            // A typical condition is for all storage charges in summary to be 0 and
             // then input and output must be the same value
+            assert!(gas_summary.storage_cost == 0);
             if total_input_rebate
                 != total_output_rebate
                     + gas_summary.storage_rebate

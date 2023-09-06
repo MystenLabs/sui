@@ -273,7 +273,8 @@ mod checked {
             execution_result
         });
 
-        let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
+        let (cost_summary, oog_on_storage_charges) =
+            gas_charger.charge_gas(temporary_store, &mut result);
         // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
         // information provided to check_sui_conserved, because we mint rewards, and burn
         // the rebates. We also need to pass in the unmetered_storage_rebate because storage
@@ -289,6 +290,7 @@ mod checked {
             tx_ctx,
             move_vm,
             protocol_config.simple_conservation_checks(),
+            oog_on_storage_charges,
             enable_expensive_checks,
             &cost_summary,
             is_genesis_tx,
@@ -307,6 +309,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         tx_ctx: &mut TxContext,
         move_vm: &Arc<MoveVM>,
+        oog_on_storage_charges: bool,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
         cost_summary: &GasCostSummary,
@@ -318,7 +321,11 @@ mod checked {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
                 temporary_store
-                    .check_sui_conserved(simple_conservation_checks, cost_summary)
+                    .check_sui_conserved(
+                        oog_on_storage_charges,
+                        simple_conservation_checks,
+                        cost_summary,
+                    )
                     .and_then(|()| {
                         if enable_expensive_checks {
                             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
@@ -339,11 +346,16 @@ mod checked {
                 // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
                 result = Err(conservation_err);
                 gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, &mut result);
+                let (_, oog_on_storage_charges) =
+                    gas_charger.charge_gas(temporary_store, &mut result);
                 // check conservation once more more
                 if let Err(recovery_err) = {
                     temporary_store
-                        .check_sui_conserved(simple_conservation_checks, cost_summary)
+                        .check_sui_conserved(
+                            oog_on_storage_charges,
+                            simple_conservation_checks,
+                            cost_summary,
+                        )
                         .and_then(|()| {
                             if enable_expensive_checks {
                                 // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
