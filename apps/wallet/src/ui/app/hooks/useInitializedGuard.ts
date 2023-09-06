@@ -7,12 +7,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAccounts } from './useAccounts';
 import { useRestrictedGuard } from './useRestrictedGuard';
 
-export default function useInitializedGuard(initializedRequired: boolean) {
+export default function useInitializedGuard(initializedRequired: boolean, enabled = true) {
 	const restricted = useRestrictedGuard();
 	const { data: allAccounts, isLoading } = useAccounts();
 	const isInitialized = !!allAccounts?.length;
 	const navigate = useNavigate();
-	const guardAct = !restricted && !isLoading && initializedRequired !== isInitialized;
+	const guardAct = !restricted && !isLoading && initializedRequired !== isInitialized && enabled;
 	useEffect(() => {
 		if (guardAct) {
 			navigate(isInitialized ? '/' : '/accounts/welcome', { replace: true });
