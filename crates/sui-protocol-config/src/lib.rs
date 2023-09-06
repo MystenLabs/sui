@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 23;
+const MAX_PROTOCOL_VERSION: u64 = 24;
 
 // Record history of protocol version allocations here:
 //
@@ -67,7 +67,7 @@ const MAX_PROTOCOL_VERSION: u64 = 23;
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
 // Version 22: Child object format change.
-// Version 23: Re-enable simple gas conservation checks.
+// Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -1440,9 +1440,13 @@ impl ProtocolConfig {
             }
             23 => {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
+                cfg.feature_flags.loaded_child_object_format_type = true;
+                cfg
+            }
+            24 => {
+                let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.simple_conservation_checks = true;
                 cfg.max_publish_or_upgrade_per_ptb = Some(5);
-                cfg.feature_flags.loaded_child_object_format_type = true;
                 cfg
             }
             // Use this template when making changes:

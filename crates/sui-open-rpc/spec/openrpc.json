@@ -1347,7 +1347,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "23",
+              "maxSupportedProtocolVersion": "24",
               "protocolVersion": "6",
               "featureFlags": {
                 "advance_epoch_start_time_in_safe_mode": true,
@@ -1360,6 +1360,7 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
                 "loaded_child_object_format": false,
+                "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "narwhal_new_leader_election_schedule": false,
