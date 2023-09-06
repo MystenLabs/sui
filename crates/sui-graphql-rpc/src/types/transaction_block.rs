@@ -7,12 +7,13 @@ use super::{
     epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
+    tx_digest::TransactionDigest,
 };
 use async_graphql::*;
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct TransactionBlock {
-    pub digest: String,
+    pub digest: TransactionDigest,
     pub effects: Option<TransactionBlockEffects>,
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
@@ -22,7 +23,7 @@ pub(crate) struct TransactionBlock {
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 pub(crate) struct TransactionBlockEffects {
-    pub digest: String,
+    pub digest: TransactionDigest,
     pub gas_effects: Option<GasEffects>,
     pub epoch: Option<Epoch>,
     pub status: Option<ExecutionStatus>,
