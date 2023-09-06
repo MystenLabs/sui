@@ -70,13 +70,16 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
 
 ![1](../../static/zklogin-google1.png "Sign up for Google developer account")
-<br>
+*Sign up for Google developer account*
 <p>&nbsp;</p>
 
 ![2](../../static/zklogin-google2.png "Go to Credentials")
-<br>
+*Go to Credentials*
+<p>&nbsp;</p>
+<p>&nbsp;</p>
 
 ![3](../../static/zklogin-google3.png "Configure Redirect URL")
+*Configure a Redirect URL*
 
 ### Facebook
 
