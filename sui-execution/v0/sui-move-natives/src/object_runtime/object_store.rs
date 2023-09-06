@@ -385,14 +385,6 @@ impl<'a> ObjectStore<'a> {
                 );
             }
             if self.constants.loaded_child_object_format {
-                // double check format did not change
-                if child_ty != &ty {
-                    let msg = format!("Type changed for child {child} when setting the value back");
-                    return Err(
-                        PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                            .with_message(msg),
-                    );
-                }
                 value
             } else {
                 GlobalValue::none()
