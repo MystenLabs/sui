@@ -5,6 +5,7 @@ import {
 	type SerializedSignature,
 	type ExportedKeypair,
 	toSerializedSignature,
+	type PublicKey,
 } from '@mysten/sui.js/cryptography';
 import { computeZkAddress, getZkSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
@@ -29,13 +30,23 @@ import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
 
-type SessionStorageData = {
+type SerializedNetwork = `${NetworkEnvType['env']}_${NetworkEnvType['customRpcUrl']}`;
+
+function serializeNetwork(network: NetworkEnvType): SerializedNetwork {
+	return `${network.env}_${network.customRpcUrl}`;
+}
+
+type CredentialData = {
 	ephemeralKeyPair: ExportedKeypair;
-	proofs: PartialZkSignature;
+	proofs?: PartialZkSignature;
 	minEpoch: number;
 	maxEpoch: number;
 	network: NetworkEnvType;
+	randomness: string;
+	jwt: string;
 };
+
+type SessionStorageData = Partial<Record<SerializedNetwork, CredentialData>>;
 
 type JwtSerializedClaims = {
 	email: string;
@@ -145,54 +156,11 @@ export class ZkAccount
 	}
 
 	async isLocked(): Promise<boolean> {
-		const credentials = await this.getEphemeralValue();
-		if (!credentials) {
-			return true;
-		}
-		const { maxEpoch, network } = credentials;
-		const currentNetwork = await networkEnv.getActiveNetwork();
-		if (
-			currentNetwork.env !== network.env ||
-			currentNetwork.customRpcUrl !== network.customRpcUrl
-		) {
-			await this.lock(true);
-			return true;
-		}
-		return (await getCurrentEpoch()) > maxEpoch;
+		return !(await this.getEphemeralValue());
 	}
 
 	async unlock() {
-		const { provider, claims, salt: obfuscatedSalt } = await this.getStoredData();
-		const salt = await deobfuscate<string>(obfuscatedSalt);
-		const { email, sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
-		const epoch = await getCurrentEpoch();
-		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZKLogin(Number(epoch));
-		const jwt = await zkLogin({ provider, nonce, loginHint: sub });
-		const decodedJWT = decodeJwt(jwt);
-		if (
-			decodedJWT.aud !== aud ||
-			decodedJWT.email !== email ||
-			decodedJWT.sub !== sub ||
-			decodedJWT.iss !== iss
-		) {
-			throw new Error("Logged in account doesn't match with saved account");
-		}
-		const proofs = await createPartialZKSignature({
-			jwt,
-			ephemeralPublicKey: ephemeralKeyPair.getPublicKey(),
-			userSalt: BigInt(salt),
-			jwtRandomness: randomness,
-			keyClaimName: 'sub',
-			maxEpoch,
-		});
-		await this.setEphemeralValue({
-			ephemeralKeyPair: await ephemeralKeyPair.export(),
-			minEpoch: Number(epoch),
-			maxEpoch,
-			proofs,
-			network: await networkEnv.getActiveNetwork(),
-		});
-		await this.onUnlocked();
+		await this.#doLogin();
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
@@ -218,7 +186,6 @@ export class ZkAccount
 	async signData(data: Uint8Array): Promise<SerializedSignature> {
 		const digest = blake2b(data, { dkLen: 32 });
 		if (await this.isLocked()) {
-			// check is locked to handle cases of different network, current epoch higher than max epoch etc.
 			throw new Error('Account is locked');
 		}
 		const credentials = await this.getEphemeralValue();
@@ -226,9 +193,33 @@ export class ZkAccount
 			// checking the isLocked above should catch this but keep it just in case
 			throw new Error('Account is locked');
 		}
-		const { ephemeralKeyPair, proofs, maxEpoch } = credentials;
+		const activeNetwork = await networkEnv.getActiveNetwork();
+		let credentialsData = credentials[serializeNetwork(activeNetwork)];
+		const currentEpoch = await getCurrentEpoch();
+		// handle cases of different network, current epoch higher than max epoch etc.
+		if (!this.#areCredentialsValid(currentEpoch, activeNetwork, credentialsData)) {
+			credentialsData = await this.#doLogin();
+		}
+		const { ephemeralKeyPair, proofs: storedProofs, maxEpoch, jwt, randomness } = credentialsData;
 		const keyPair = fromExportedKeypair(ephemeralKeyPair);
-
+		let proofs = storedProofs;
+		if (!proofs) {
+			proofs = await this.#generateProofs(
+				jwt,
+				BigInt(randomness),
+				maxEpoch,
+				keyPair.getPublicKey(),
+			);
+			credentialsData.proofs = proofs;
+			// store the proofs to avoid creating them again
+			const newEphemeralValue = await this.getEphemeralValue();
+			if (!newEphemeralValue) {
+				// this should never happen
+				throw new Error('Missing data, account is locked');
+			}
+			newEphemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
+			await this.setEphemeralValue(newEphemeralValue);
+		}
 		const userSignature = toSerializedSignature({
 			signature: await keyPair.sign(digest),
 			signatureScheme: keyPair.getKeyScheme(),
@@ -236,5 +227,65 @@ export class ZkAccount
 		});
 
 		return getZkSignature({ inputs: proofs, maxEpoch, userSignature });
+	}
+
+	#areCredentialsValid(
+		currentEpoch: number,
+		activeNetwork: NetworkEnvType,
+		credentials?: CredentialData,
+	): credentials is CredentialData {
+		if (!credentials) {
+			return false;
+		}
+		const { maxEpoch, network } = credentials;
+		return (
+			activeNetwork.env === network.env &&
+			activeNetwork.customRpcUrl === network.customRpcUrl &&
+			currentEpoch <= maxEpoch
+		);
+	}
+
+	async #doLogin() {
+		const { provider, claims } = await this.getStoredData();
+		const { sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
+		const epoch = await getCurrentEpoch();
+		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZKLogin(Number(epoch));
+		const jwt = await zkLogin({ provider, nonce, loginHint: sub });
+		const decodedJWT = decodeJwt(jwt);
+		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
+			throw new Error("Logged in account doesn't match with saved account");
+		}
+		const ephemeralValue = (await this.getEphemeralValue()) || {};
+		const activeNetwork = await networkEnv.getActiveNetwork();
+		const credentialsData: CredentialData = {
+			ephemeralKeyPair: ephemeralKeyPair.export(),
+			minEpoch: Number(epoch),
+			maxEpoch,
+			network: activeNetwork,
+			randomness: randomness.toString(),
+			jwt,
+		};
+		ephemeralValue[serializeNetwork(activeNetwork)] = credentialsData;
+		await this.setEphemeralValue(ephemeralValue);
+		await this.onUnlocked();
+		return credentialsData;
+	}
+
+	async #generateProofs(
+		jwt: string,
+		randomness: bigint,
+		maxEpoch: number,
+		ephemeralPublicKey: PublicKey,
+	) {
+		const { salt: obfuscatedSalt } = await this.getStoredData();
+		const salt = await deobfuscate<string>(obfuscatedSalt);
+		return await createPartialZKSignature({
+			jwt,
+			ephemeralPublicKey,
+			userSalt: BigInt(salt),
+			jwtRandomness: randomness,
+			keyClaimName: 'sub',
+			maxEpoch,
+		});
 	}
 }
