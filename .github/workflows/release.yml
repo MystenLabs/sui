@@ -79,7 +79,7 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          cargo build --release
+          source ~/.cargo/env && cargo build --release
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
