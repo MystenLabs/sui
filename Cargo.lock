@@ -2832,6 +2832,7 @@ dependencies = [
  "byteorder",
  "diesel_derives 1.4.1",
  "mysqlclient-sys",
+ "r2d2",
  "url 1.7.2",
 ]
 
@@ -6025,6 +6026,7 @@ version = "0.1.0"
 dependencies = [
  "diesel 1.4.8",
  "dotenv",
+ "r2d2",
 ]
 
 [[package]]

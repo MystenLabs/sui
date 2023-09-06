@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-diesel = { version = "1.4.7", features = ["mysql"] }
+diesel = { version = "1.4.7", features = ["mysql", "r2d2"] }
 dotenv = "0.15.0"
-
+r2d2 = "0.8"
