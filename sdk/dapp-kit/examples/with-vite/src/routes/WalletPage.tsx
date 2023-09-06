@@ -16,22 +16,37 @@ export function WalletPage() {
 	const { mutate: switchAccount } = useSwitchAccount();
 
 	const isWalletDisconnected = connectionStatus === 'disconnected';
+	const isWalletConnecting = connectionStatus === 'connecting';
 
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="flex gap-4">
-				<Button
-					onClick={() => {
-						connectWallet({ walletName: 'Sui Wallet' });
-					}}
-					disabled={!isWalletDisconnected}
-				>
-					Connect Sui Wallet
-				</Button>
-				<Button onClick={() => disconnectWallet()} disabled={isWalletDisconnected}>
-					Disconnect Wallet
-				</Button>
+				{wallets.length > 0 ? (
+					<ul className="flex flex-col gap-3">
+						{wallets.map((wallet) => (
+							<li key={wallet.name}>
+								<Button
+									onClick={() => connectWallet({ walletName: wallet.name })}
+									disabled={!isWalletDisconnected}
+								>
+									Connect {wallet.name}
+								</Button>
+							</li>
+						))}
+						<li>
+							<Button
+								onClick={() => disconnectWallet()}
+								disabled={isWalletDisconnected || isWalletConnecting}
+							>
+								Disconnect Wallet
+							</Button>
+						</li>
+					</ul>
+				) : (
+					<div>You don't have any registered wallets</div>
+				)}
 			</div>
+
 			<div className="">
 				<div className="">Connection status: {connectionStatus}</div>
 				<div className="">Connected wallet: {currentWallet?.name ?? 'N/A'}</div>
