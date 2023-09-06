@@ -2139,7 +2139,7 @@ async fn assert_resp_err<E, F>(
                 assert!(!conflicting_tx_digests.is_empty());
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
-
+            AggregatorProcessTransactionError::TxAlreadyFinalizedWithDifferentUserSignatures => (),
             AggregatorProcessTransactionError::FatalConflictingTransaction {
                 errors,
                 conflicting_tx_digests,

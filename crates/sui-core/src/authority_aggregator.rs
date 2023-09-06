@@ -245,6 +245,9 @@ pub enum AggregatorProcessTransactionError {
         overloaded_stake: StakeUnit,
         errors: GroupedErrors,
     },
+
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSignatures,
 }
 
 #[derive(Error, Debug)]
@@ -304,6 +307,7 @@ struct ProcessTransactionState {
     // before we know for sure no tx can reach quorum. Namely, stake of the most
     // promising tx + retryable stake < 2f+1.
     retryable: bool,
+    tx_finalized_with_different_user_sig: bool,
 
     conflicting_tx_total_stake: StakeUnit,
     most_staked_conflicting_tx_stake: StakeUnit,
@@ -348,6 +352,31 @@ impl ProcessTransactionState {
             return true;
         }
         false
+    }
+
+    pub fn check_if_error_indicates_tx_finalized_with_different_user_sig(
+        &self,
+        quorum_threshold: StakeUnit,
+    ) -> bool {
+        // In some edge cases, the client may sent the same transaction multiple times but with different user signatures.
+        // When this happens, the "minority" tx will fail in safe_client because the certificate verification would fail
+        // and return Sui::FailedToVerifyTxCertWithExecutedEffects.
+        // Here, we check if there are 2f+1 validators return this error. If so, the transaction is already finalized
+        // with a different set of user signatures. It's not trivial to return the results of that successful transaction
+        // because we don't want fullnode to store the transaction with non-canonical user signatures. Given that this is
+        // very rare, we simply return an error here.
+        let invalid_sig_stake: StakeUnit = self
+            .errors
+            .iter()
+            .filter_map(|(e, _, stake)| {
+                if matches!(e, SuiError::FailedToVerifyTxCertWithExecutedEffects { .. }) {
+                    Some(stake)
+                } else {
+                    None
+                }
+            })
+            .sum();
+        invalid_sig_stake >= quorum_threshold
     }
 }
 
@@ -1135,6 +1164,7 @@ where
             retryable: true,
             conflicting_tx_digests: Default::default(),
             conflicting_tx_total_stake: 0,
+            tx_finalized_with_different_user_sig: false,
             most_staked_conflicting_tx_stake: 0,
         };
 
@@ -1318,6 +1348,13 @@ where
         }
 
         if !state.retryable {
+            if state.tx_finalized_with_different_user_sig
+                || state.check_if_error_indicates_tx_finalized_with_different_user_sig(
+                    self.committee.quorum_threshold(),
+                )
+            {
+                return AggregatorProcessTransactionError::TxAlreadyFinalizedWithDifferentUserSignatures;
+            }
             return AggregatorProcessTransactionError::FatalTransaction {
                 errors: group_errors(state.errors),
             };
@@ -1493,9 +1530,16 @@ where
             if most_staked_effects_digest_stake + self.get_retryable_stake(&state)
                 < self.committee.quorum_threshold()
             {
-                panic!(
-                    "We have violated our safety assumption or there is a fork. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
-                );
+                if state.check_if_error_indicates_tx_finalized_with_different_user_sig(
+                    self.committee.quorum_threshold(),
+                ) {
+                    state.retryable = false;
+                    state.tx_finalized_with_different_user_sig = true;
+                } else {
+                    panic!(
+                        "We have violated our safety assumption or there is a fork. Tx: {tx_digest:?}. Non-quorum effects: {non_quorum_effects:?}."
+                    );
+                }
             }
 
             let mut involved_validators = Vec::new();

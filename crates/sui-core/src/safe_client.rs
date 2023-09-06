@@ -250,7 +250,12 @@ impl<C: Clone> SafeClient<C> {
                             transaction.into_data(),
                             cert,
                         );
-                        ct.verify_committee_sigs_only(&committee)?;
+                        ct.verify_committee_sigs_only(&committee).map_err(|e| {
+                            SuiError::FailedToVerifyTxCertWithExecutedEffects {
+                                validator_name: self.address,
+                                error: e.to_string(),
+                            }
+                        })?;
                         Ok(PlainTransactionInfoResponse::ExecutedWithCert(
                             ct,
                             signed_effects,
