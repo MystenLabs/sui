@@ -1,0 +1,9 @@
+[package]
+name = "mysql_indexer_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+diesel = { version = "1.4.7", features = ["mysql"] }
+dotenv = "0.15.0"
+
