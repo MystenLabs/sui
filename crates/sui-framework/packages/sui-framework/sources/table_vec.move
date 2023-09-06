@@ -81,4 +81,10 @@ module sui::table_vec {
         table::drop(contents)
     }
 
+    /// Removes the `i`th element of the TableVec `t` and returns the value.
+    /// Aborts if `i` is out of bounds.
+    public fun remove<Element: store>(t: &mut TableVec<Element>, i: u64): Element {
+        assert!(length(t) > i, EIndexOutOfBound);
+        table::remove(&mut t.contents, i)
+    }
 }
