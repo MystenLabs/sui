@@ -11,18 +11,19 @@ import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
 import { useStorageMigrationStatus } from './hooks/useStorageMigrationStatus';
+import { AccountsDev } from './pages/AccountsDevPage';
 import { StorageMigrationPage } from './pages/StorageMigrationPage';
 
-import { WelcomePage } from './pages/WelcomePage';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
+import { BackupMnemonicPage } from './pages/accounts/BackupMnemonicPage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
 import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsPage';
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { WelcomePage } from './pages/accounts/WelcomePage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
-import { AccountsDev } from './pages/accounts-dev';
 
 import { ApprovalRequestPage } from './pages/approval-request';
 import HomePage, {
@@ -38,11 +39,6 @@ import HomePage, {
 	TransferCoinPage,
 } from './pages/home';
 import TokenDetailsPage from './pages/home/tokens/TokenDetailsPage';
-import InitializePage from './pages/initialize';
-import BackupPage from './pages/initialize/backup';
-import CreatePage from './pages/initialize/create';
-import { ImportPage } from './pages/initialize/import';
-import SelectPage from './pages/initialize/select';
 import { QredoConnectInfoPage } from './pages/qredo-connect/QredoConnectInfoPage';
 import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccountsPage';
 
@@ -138,18 +134,8 @@ const App = () => {
 	}
 	return (
 		<Routes>
-			<Route path="/welcome" element={<WelcomePage />} />
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
-
-			<Route path="/initialize" element={<InitializePage />}>
-				<Route path="select" element={<SelectPage />} />
-				<Route path="create" element={<CreatePage />} />
-				<Route path="import" element={<ImportPage />} />
-				<Route path="backup" element={<BackupPage />} />
-				<Route path="backup-imported" element={<BackupPage mode="imported" />} />
-			</Route>
-
 			<Route path="/*" element={<HomePage />}>
 				<Route path="apps/*" element={<AppsPage />} />
 				<Route path="kiosk" element={<KioskDetailsPage />} />
@@ -165,17 +151,16 @@ const App = () => {
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />
 			</Route>
-
 			<Route path="accounts/*" element={<AccountsPage />}>
-				<Route path="add-account" element={<AddAccountPage />} />
+				<Route path="welcome" element={<WelcomePage />} />
 				<Route path="add-account" element={<AddAccountPage />} />
 				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
 				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
 				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
 				<Route path="manage" element={<ManageAccountsPage />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
+				<Route path="backup/:accountSourceID" element={<BackupMnemonicPage />} />
 			</Route>
-
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			</Route>
@@ -185,7 +170,6 @@ const App = () => {
 				<Route path="qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
 				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
-
 			{process.env.NODE_ENV === 'development' ? (
 				<Route path="/accounts-dev" element={<AccountsDev />} />
 			) : null}

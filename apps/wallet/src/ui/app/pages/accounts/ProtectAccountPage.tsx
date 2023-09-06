@@ -1,22 +1,53 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ProtectAccountForm } from '../../components/accounts/ProtectAccountForm';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { useAccounts } from '../../hooks/useAccounts';
+import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
-import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
+import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
+
+const allowedAccountTypes: CreateType[] = [
+	'new-mnemonic',
+	'import-mnemonic',
+	'mnemonic-derived',
+	'imported',
+	'ledger',
+];
+
+type AllowedAccountTypes = (typeof allowedAccountTypes)[number];
+
+function isAllowedAccountType(accountType: string): accountType is AllowedAccountTypes {
+	return allowedAccountTypes.includes(accountType as any);
+}
 
 export function ProtectAccountPage() {
-	const backgroundClient = useBackgroundClient();
-	const [accountsFormValues] = useAccountsFormContext();
+	const [searchParams] = useSearchParams();
+	const accountType = searchParams.get('accountType') || '';
 	const navigate = useNavigate();
+	const { data: accounts } = useAccounts();
+	const createMutation = useCreateAccountsMutation();
+	useEffect(() => {
+		// don't show this page if other password accounts exist (we should show the verify password instead)
+		if (
+			accounts?.length &&
+			accounts.some(({ isPasswordUnlockable }) => isPasswordUnlockable) &&
+			!createMutation.isLoading &&
+			!createMutation.isSuccess
+		) {
+			navigate('/', { replace: true });
+		}
+	}, [accounts, navigate, createMutation.isSuccess, createMutation.isLoading]);
+	if (!isAllowedAccountType(accountType)) {
+		return <Navigate to="/" replace />;
+	}
 	return (
-		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full">
+		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto">
 			<Text variant="caption" color="steel-dark" weight="semibold">
 				Wallet Setup
 			</Text>
@@ -30,24 +61,27 @@ export function ProtectAccountPage() {
 					cancelButtonText="Back"
 					submitButtonText="Create Wallet"
 					onSubmit={async (formValues) => {
-						const mnemonic = accountsFormValues?.recoveryPhrase?.join(' ');
-						const accountSource = await backgroundClient.createMnemonicAccountSource({
-							password: formValues.password,
-							entropy: entropyToSerialized(mnemonicToEntropy(mnemonic!)),
-						});
 						try {
-							await backgroundClient.unlockAccountSourceOrAccount({
-								password: formValues.password,
-								id: accountSource.id,
+							const createdAccounts = await createMutation.mutateAsync({
+								type: accountType,
+								password: formValues.password.input,
 							});
-							await backgroundClient.createAccounts({
-								type: 'mnemonic-derived',
-								sourceID: accountSource.id,
-							});
+							if (
+								accountType === 'new-mnemonic' &&
+								isMnemonicSerializedUiAccount(createdAccounts[0])
+							) {
+								navigate(`/accounts/backup/${createdAccounts[0].sourceID}`, {
+									replace: true,
+									state: {
+										onboarding: true,
+									},
+								});
+							} else {
+								navigate('/tokens', { replace: true });
+							}
 						} catch (e) {
 							toast.error((e as Error).message ?? 'Failed to create account');
 						}
-						navigate('/tokens');
 					}}
 				/>
 			</div>

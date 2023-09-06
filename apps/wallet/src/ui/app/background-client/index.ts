@@ -567,6 +567,26 @@ export class BackgroundClient {
 		);
 	}
 
+	public getAccountSourceEntropy(accountSourceID: string) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getAccountSourceEntropy'>>({
+					type: 'method-payload',
+					method: 'getAccountSourceEntropy',
+					args: { accountSourceID },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isMethodPayload(payload, 'getAccountSourceEntropyResponse')) {
+						return payload.args;
+					}
+					throw new Error('Unexpected response type');
+				}),
+			),
+		);
+	}
+
 	private setupAppStatusUpdateInterval() {
 		setInterval(() => {
 			this.sendAppStatus();
