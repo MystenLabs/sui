@@ -18,7 +18,7 @@ zkLogin is designed with the following principles in mind:
 
 1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain. 
 
-Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [integration guide](#integration-guide).
+Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
 
 If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
 
@@ -68,9 +68,15 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 1. Register for a Google Cloud account and access the [dashboard](https://console.cloud.google.com/home/dashboard).
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
-   ![1](../../static/zklogin-google1.png "Sign up for Google developer account")
+
+   ![1]<a href="zklogin-google1.png" width=480> "Sign up for Google developer account")
+    *Sign up for Google developer account*
+
    ![2](../../static/zklogin-google2.png "Go to Credentials")
+   *Go to Credentials*
+
    ![3](../../static/zklogin-google3.png "Configure Redirect URL")
+   *Configure Redirect URL*
 
 ### Facebook
 
@@ -79,6 +85,8 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Select "Build your app" then "Products" then "Facebook Login" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-facebook1.png "Sign up for Facebook developer account")
+
+
 ![2](../../static/zklogin-facebook2.png "Go to Settings")
 
 ### Twitch
