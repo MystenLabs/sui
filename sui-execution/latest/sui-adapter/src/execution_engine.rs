@@ -7,8 +7,8 @@ pub use checked::*;
 mod checked {
 
     use move_binary_format::CompiledModule;
-    use move_vm_runtime::move_vm::MoveVM;
     use move_core_types::{identifier::Identifier, language_storage::ModuleId};
+    use move_vm_runtime::move_vm::MoveVM;
     use once_cell::sync::Lazy;
     use std::{
         collections::{BTreeSet, HashSet},
@@ -579,9 +579,15 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    fn authenticator_state_create_exists(move_vm: &Arc<MoveVM>) -> bool {
-        let module_id = ModuleId::new(SUI_AUTHENTICATOR_STATE_ADDRESS, Identifier::
-        move_vm.load_module(
+    fn authenticator_state_create_exists(
+        move_vm: &Arc<MoveVM>,
+        temporary_store: &TemporaryStore<'_>,
+    ) -> bool {
+        let module_id = ModuleId::new(
+            SUI_AUTHENTICATOR_STATE_ADDRESS,
+            Identifier::from("sui::authenticator_state"),
+        );
+        move_vm.load_module(&module_id, temporary_store).is_ok()
     }
 
     pub fn construct_advance_epoch_pt(
@@ -640,13 +646,10 @@ mod checked {
         let should_create_authenticator_state = protocol_config.enable_jwk_consensus_updates()
             && !temporary_store
                 .objects()
-                .contains_key(&SUI_AUTHENTICATOR_STATE_OBJECT_ID);
-            && authenticator_state_create_exists(move_vm);
+                .contains_key(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+            && authenticator_state_create_exists(move_vm, temporary_store);
 
-        if should_create_authenticator_state {
-
-
-        }
+        if should_create_authenticator_state {}
 
         // Step 5: Expire JWKs if the authenticator state object exists.
         if protocol_config.enable_jwk_consensus_updates() {
