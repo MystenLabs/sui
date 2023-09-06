@@ -3,6 +3,7 @@
 
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { SocialButton } from '../../shared/SocialButton';
@@ -28,12 +29,16 @@ const zkLoginProviders: {
 ];
 
 export function WelcomePage() {
-	const isFullscreenGuardLoading = useFullscreenGuard(true);
-	const isInitializedLoading = useInitializedGuard(false);
-	const [, setAccountsFormValues] = useAccountsFormContext();
 	const createAccountsMutation = useCreateAccountsMutation();
+	const isFullscreenGuardLoading = useFullscreenGuard(true);
+	const isInitializedLoading = useInitializedGuard(
+		false,
+		!(createAccountsMutation.isLoading || createAccountsMutation.isSuccess),
+	);
+	const [, setAccountsFormValues] = useAccountsFormContext();
 	const [createInProgressProvider, setCreateInProgressProvider] = useState<ZkProvider | null>(null);
 	const buttonsDisabled = createAccountsMutation.isLoading || createAccountsMutation.isSuccess;
+	const navigate = useNavigate();
 	return (
 		<Loading loading={isInitializedLoading || isFullscreenGuardLoading}>
 			<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-7 py-6 h-full overflow-auto">
@@ -74,6 +79,9 @@ export function WelcomePage() {
 												type: 'zk',
 											},
 											{
+												onSuccess: () => {
+													navigate('/tokens');
+												},
 												onError: (error) => {
 													toast.error(
 														(error as Error)?.message ||
