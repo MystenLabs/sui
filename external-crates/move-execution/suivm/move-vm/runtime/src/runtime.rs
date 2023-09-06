@@ -10,6 +10,7 @@ use crate::{
     native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
+use move_binary_format::file_format::AbilitySet;
 use move_binary_format::{
     access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
@@ -17,6 +18,7 @@ use move_binary_format::{
     CompiledModule, IndexKind,
 };
 use move_bytecode_verifier::script_signature;
+use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -28,6 +30,7 @@ use move_core_types::{
 use move_vm_config::runtime::VMConfig;
 #[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
+use move_vm_types::loaded_data::runtime_types::{CachedStructIndex, StructType};
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -38,7 +41,7 @@ use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 use tracing::warn;
 
 /// An instantiation of the MoveVM.
-pub(crate) struct VMRuntime {
+pub struct VMRuntime {
     loader: Loader,
 }
 
@@ -68,7 +71,7 @@ impl VMRuntime {
         }
     }
 
-    pub(crate) fn publish_module_bundle(
+    pub fn publish_module_bundle(
         &self,
         modules: Vec<Vec<u8>>,
         sender: AccountAddress,
@@ -484,5 +487,99 @@ impl VMRuntime {
 
     pub(crate) fn loader(&self) -> &Loader {
         &self.loader
+    }
+
+    pub fn get_type_abilities(&self, ty: &Type) -> VMResult<AbilitySet> {
+        self.loader
+            .abilities(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub fn get_type_tag(&self, ty: &Type) -> VMResult<TypeTag> {
+        self.loader
+            .type_to_type_tag(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub fn get_struct_type(&self, index: CachedStructIndex) -> Option<Arc<StructType>> {
+        self.loader.get_struct_type(index)
+    }
+
+    pub fn type_to_type_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+        self.loader
+            .type_to_type_layout(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub fn load_struct(
+        &self,
+        module_id: &ModuleId,
+        struct_name: &IdentStr,
+        data_store: &impl DataStore,
+    ) -> VMResult<(CachedStructIndex, Arc<StructType>)> {
+        self.loader
+            .load_struct_by_name(struct_name, module_id, data_store)
+    }
+
+    pub fn execute_function_bypass_visibility(
+        &self,
+        module: &ModuleId,
+        function_name: &IdentStr,
+        ty_args: Vec<Type>,
+        args: Vec<impl Borrow<[u8]>>,
+        data_store: &mut impl DataStore,
+        gas_meter: &mut impl GasMeter,
+        extensions: &mut NativeContextExtensions,
+    ) -> VMResult<SerializedReturnValues> {
+        #[cfg(debug_assertions)]
+        {
+            if gas_meter.get_profiler_mut().is_none() {
+                gas_meter.set_profiler(GasProfiler::init_default_cfg(
+                    function_name.to_string(),
+                    gas_meter.remaining_gas().into(),
+                ));
+            }
+        }
+
+        let bypass_declared_entry_check = true;
+        self.execute_function(
+            module,
+            function_name,
+            ty_args,
+            args,
+            data_store,
+            gas_meter,
+            extensions,
+            bypass_declared_entry_check,
+        )
+    }
+
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+        self.loader
+            .type_to_fully_annotated_layout(ty)
+            .map_err(|e| e.finish(Location::Undefined))
+    }
+
+    pub fn load_function(
+        &self,
+        module_id: &ModuleId,
+        function_name: &IdentStr,
+        type_arguments: &[Type],
+        data_store: &mut impl DataStore,
+    ) -> VMResult<LoadedFunctionInstantiation> {
+        let (_, _, _, instantiation) =
+            self.loader
+                .load_function(module_id, function_name, type_arguments, data_store)?;
+        Ok(instantiation)
+    }
+
+    pub fn load_module(
+        &self,
+        module_id: &ModuleId,
+        data_store: &impl DataStore,
+    ) -> VMResult<Arc<CompiledModule>> {
+        self.loader
+            .load_module(module_id, data_store)
+            .map(|(compiled, _)| compiled)
     }
 }
