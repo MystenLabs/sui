@@ -84,7 +84,7 @@ impl NumberOperationProcessor {
         }
     }
 
-    fn analyze_fun<'a>(&self, env: &'a GlobalEnv, target: FunctionTarget) {
+    fn analyze_fun(&self, env: &GlobalEnv, target: FunctionTarget) {
         if !target.func_env.is_native_or_intrinsic() {
             let cfg = StacklessControlFlowGraph::one_block(target.get_bytecode());
             let analyzer = NumberOperationAnalysis {

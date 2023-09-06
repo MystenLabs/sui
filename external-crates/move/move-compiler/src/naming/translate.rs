@@ -1645,7 +1645,7 @@ fn remove_unused_bindings_exp_dotted(
 }
 
 fn report_unused_local(context: &mut Context, sp!(loc, unused_): &N::Var) {
-    if !unused_.name.starts_with(|c| matches!(c, 'a'..='z')) {
+    if !unused_.name.starts_with(|c: char| c.is_ascii_lowercase()) {
         return;
     }
     let N::Var_ { name, id, color } = unused_;
