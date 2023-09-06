@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl]
+        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -79,10 +79,10 @@ jobs:
         if: ${{ env.sui_tag != 'main' }}
         shell: bash
         run: |
-          cargo build --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.sui_tag != 'main' && (matrix.os == 'ubuntu-ghcloud' || matrix.os == 'macos-latest-xl') }}
+        if: ${{ env.sui_tag != 'main' && matrix.os != 'windows-ghcloud' }}
         shell: bash
         run: |
           export arch=$(uname -m)
