@@ -5,27 +5,19 @@ import { useWallet, useConnectWallet, useDisconnectWallet } from '@mysten/dapp-k
 
 export function WalletPage() {
 	const { wallets, currentWallet, currentAccount } = useWallet();
-	const { mutate: connectWallet, isSuccess, isLoading } = useConnectWallet();
+	const { mutate: connectWallet } = useConnectWallet();
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 
 	return (
-		<>
-			<div
-				onClick={() =>
-					connectWallet(
-						{ walletName: 'Sui Wallet' },
-						{
-							onSuccess: (accounts) => console.log('ACC', accounts),
-							onError: (error) => console.log(error),
-						},
-					)
-				}
+		<div>
+			<button
+				onClick={() => {
+					connectWallet({ walletName: 'Sui Wallet' });
+				}}
 			>
-				hello
-				<div>Connected wallet: {currentWallet?.name}</div>
-				<div>Active account address: {currentAccount?.address}</div>
-			</div>
-			<button onClick={() => disconnectWallet(undefined, {})}>Disconnect</button>
-		</>
+				Connect Wallet
+			</button>
+			<button onClick={() => disconnectWallet()}>Disconnect Wallet</button>
+		</div>
 	);
 }

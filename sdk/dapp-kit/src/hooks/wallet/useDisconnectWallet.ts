@@ -18,7 +18,7 @@ type UseDisconnectWalletMutationOptions = Omit<
 export function useDisconnectWallet({
 	mutationKey,
 	...mutationOptions
-}: UseDisconnectWalletMutationOptions) {
+}: UseDisconnectWalletMutationOptions = {}) {
 	const { currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
 
 	return useMutation({

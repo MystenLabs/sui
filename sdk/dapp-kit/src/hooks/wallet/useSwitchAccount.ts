@@ -5,7 +5,11 @@ import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { useWalletContext } from 'dapp-kit/src/components/wallet-provider/WalletProvider';
 import { setMostRecentWalletConnectionInfo } from 'dapp-kit/src/components/wallet-provider/walletUtils';
-import { WalletNotConnectedError, WalletNotFoundError } from 'dapp-kit/src/errors/walletErrors';
+import { walletMutationKeys } from 'dapp-kit/src/constants/walletMutationKeys';
+import {
+	WalletAccountNotFoundError,
+	WalletNotConnectedError,
+} from 'dapp-kit/src/errors/walletErrors';
 
 type SwitchAccountArgs = {
 	accountAddress: string;
@@ -15,17 +19,20 @@ type SwitchAccountResult = void;
 
 type UseSwitchAccountMutationOptions = Omit<
 	UseMutationOptions<SwitchAccountResult, Error, SwitchAccountArgs, unknown>,
-	'mutationKey' | 'mutationFn'
+	'mutationFn'
 >;
 
 /**
- * Mutation hook for establishing a connection to a specific wallet.
+ * Mutation hook for switching to a specific wallet account.
  */
-export function useSwitchAccount({ ...mutationOptions }: UseSwitchAccountMutationOptions) {
-	const { storageAdapter, storageKey, accounts, currentWallet, dispatch } = useWalletContext();
+export function useSwitchAccount({
+	mutationKey,
+	...mutationOptions
+}: UseSwitchAccountMutationOptions) {
+	const { storageAdapter, storageKey, currentWallet, dispatch } = useWalletContext();
 
 	return useMutation({
-		mutationKey: mutationKey({ accountAddress }),
+		mutationKey: walletMutationKeys.switchAccount(mutationKey),
 		mutationFn: async ({ accountAddress }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
@@ -35,8 +42,9 @@ export function useSwitchAccount({ ...mutationOptions }: UseSwitchAccountMutatio
 				(account) => account.address === accountAddress,
 			);
 			if (!accountToSelect) {
-				// throw some custom error
-				throw new Error('');
+				throw new WalletAccountNotFoundError(
+					`Failed to switch to account with address ${accountAddress}.`,
+				);
 			}
 
 			dispatch({ type: 'wallet-account-switched', payload: accountAddress });

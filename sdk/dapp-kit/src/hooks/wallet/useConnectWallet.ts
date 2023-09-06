@@ -51,33 +51,42 @@ export function useConnectWallet({
 				);
 			}
 
-			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
-			const { walletName: mostRecentWalletName, accountAddress: mostRecentAccountAddress } =
-				await getMostRecentWalletConnectionInfo(storageAdapter, storageKey);
+			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
 
-			// When connecting to a wallet, we want to connect to the most recently used wallet account if
-			// that information is present. This allows for a more intuitive connection experience!
-			const hasRecentWalletAccountToConnectTo =
-				mostRecentWalletName === wallet.name && !!mostRecentAccountAddress;
-			const selectedAccount =
-				connectResult.accounts.length > 0 && hasRecentWalletAccountToConnectTo
-					? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
-					: connectResult.accounts[0];
+			try {
+				const connectResult = await wallet.features['standard:connect'].connect(
+					standardConnectInput,
+				);
+				const { walletName: mostRecentWalletName, accountAddress: mostRecentAccountAddress } =
+					await getMostRecentWalletConnectionInfo(storageAdapter, storageKey);
 
-			// A wallet technically doesn't have to authorize any accounts
-			dispatch({
-				type: 'wallet-connected',
-				payload: { wallet, currentAccount: selectedAccount ?? null },
-			});
+				// When connecting to a wallet, we want to connect to the most recently used wallet account if
+				// that information is present. This allows for a more intuitive connection experience!
+				const hasRecentWalletAccountToConnectTo =
+					mostRecentWalletName === wallet.name && !!mostRecentAccountAddress;
+				const selectedAccount =
+					connectResult.accounts.length > 0 && hasRecentWalletAccountToConnectTo
+						? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
+						: connectResult.accounts[0];
 
-			await setMostRecentWalletConnectionInfo({
-				storageAdapter,
-				storageKey,
-				walletName,
-				accountAddress: selectedAccount?.address,
-			});
+				// A wallet technically doesn't have to authorize any accounts
+				dispatch({
+					type: 'wallet-connected',
+					payload: { wallet, currentAccount: selectedAccount ?? null },
+				});
 
-			return connectResult;
+				await setMostRecentWalletConnectionInfo({
+					storageAdapter,
+					storageKey,
+					walletName,
+					accountAddress: selectedAccount?.address,
+				});
+
+				return connectResult;
+			} catch (error) {
+				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
+				throw error;
+			}
 		},
 		...mutationOptions,
 	});
