@@ -3,7 +3,7 @@
 
 import { toB64 } from '@mysten/sui.js/utils';
 import { useEffect, useMemo } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './hooks/useAccounts';
@@ -45,6 +45,7 @@ import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccoun
 import { RestrictedPage } from './pages/restricted';
 import SiteConnectPage from './pages/site-connect';
 import { AppType } from './redux/slices/app/AppType';
+import PageMainLayout from './shared/page-main-layout';
 import { Staking } from './staking/home';
 
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -160,6 +161,17 @@ const App = () => {
 				<Route path="manage" element={<ManageAccountsPage />} />
 				<Route path="protect-account" element={<ProtectAccountPage />} />
 				<Route path="backup/:accountSourceID" element={<BackupMnemonicPage />} />
+				<Route
+					path="qredo-connect/*"
+					element={
+						<PageMainLayout>
+							<Outlet />
+						</PageMainLayout>
+					}
+				>
+					<Route path=":requestID" element={<QredoConnectInfoPage />} />
+					<Route path=":id/select" element={<SelectQredoAccountsPage />} />
+				</Route>
 			</Route>
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />
@@ -167,8 +179,6 @@ const App = () => {
 			<Route path="/dapp/*" element={<HomePage disableNavigation />}>
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
-				<Route path="qredo-connect/:requestID" element={<QredoConnectInfoPage />} />
-				<Route path="qredo-connect/:id/select" element={<SelectQredoAccountsPage />} />
 			</Route>
 			{process.env.NODE_ENV === 'development' ? (
 				<Route path="/accounts-dev" element={<AccountsDev />} />

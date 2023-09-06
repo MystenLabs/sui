@@ -11,6 +11,7 @@ import {
 	type SetStateAction,
 } from 'react';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { type Wallet } from '_src/shared/qredo-api';
 
 export type AccountsFormValues =
 	| { type: 'zk'; provider: ZkProvider }
@@ -22,6 +23,7 @@ export type AccountsFormValues =
 			type: 'ledger';
 			accounts: { publicKey: string; derivationPath: string; address: string }[];
 	  }
+	| { type: 'qredo'; accounts: Wallet[]; qredoID: string }
 	| null;
 
 type AccountsFormContextType = [AccountsFormValues, Dispatch<SetStateAction<AccountsFormValues>>];
