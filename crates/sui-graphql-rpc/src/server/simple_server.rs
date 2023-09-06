@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::extensions::logger::Logger;
+use crate::limits::complexity::{self, set_complexity_config};
 use crate::server::sui_sdk_data_provider::SuiClientLoader;
 use crate::{
     server::{
@@ -25,6 +26,7 @@ pub struct ServerConfig {
     pub port: u16,
     pub host: String,
     pub rpc_url: String,
+    pub complexity_config: complexity::ComplexityConfig,
 }
 
 impl std::default::Default for ServerConfig {
@@ -33,6 +35,7 @@ impl std::default::Default for ServerConfig {
             port: 8000,
             host: "127.0.0.1".to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
+            complexity_config: complexity::ComplexityConfig::default(),
         }
     }
 }
@@ -76,6 +79,7 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         .expect("Failed to create SuiClient");
 
     let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
+
     let data_loader = DataLoader::with_cache(
         SuiClientLoader {
             client: sui_sdk_client_v0,
@@ -84,9 +88,15 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         async_graphql::dataloader::LruCache::new(DATA_LOADER_LRU_CACHE_SIZE),
     );
     data_loader.enable_all_cache(true);
+
+    set_complexity_config(&config.complexity_config);
+
     let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(data_provider)
         .data(data_loader)
+        .limit_depth(config.complexity_config.depth_limit)
+        .limit_complexity(config.complexity_config.complexity_limit)
+        .limit_recursive_depth(config.complexity_config.recursive_depth_limit)
         .extension(Logger::default())
         .finish();
 
