@@ -415,7 +415,7 @@ impl<'a> Disassembler<'a> {
     ) -> Result<String> {
         let sig_tok = locals
             .0
-            .get(local_idx as usize)
+            .get(local_idx)
             .ok_or_else(|| format_err!("Unable to get type for local at index {}", local_idx))?;
         self.disassemble_sig_tok(sig_tok.clone(), &function_source_map.type_parameters)
     }
@@ -462,7 +462,7 @@ impl<'a> Disassembler<'a> {
 
     fn preview_const(slice: &[u8]) -> String {
         if slice.len() <= 4 {
-            format!("{}", hex::encode(slice))
+            hex::encode(slice)
         } else {
             format!("{}..", hex::encode(&slice[..4]))
         }

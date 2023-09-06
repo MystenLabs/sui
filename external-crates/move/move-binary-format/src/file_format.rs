@@ -416,8 +416,10 @@ pub struct FieldDefinition {
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 #[cfg_attr(feature = "fuzzing", derive(arbitrary::Arbitrary))]
 #[repr(u8)]
+#[derive(Default)]
 pub enum Visibility {
     /// Accessible within its defining module only.
+    #[default]
     Private = 0x0,
     /// Accessible by any module or script outside of its declaring module.
     Public = 0x1,
@@ -430,12 +432,6 @@ pub enum Visibility {
 
 impl Visibility {
     pub const DEPRECATED_SCRIPT: u8 = 0x2;
-}
-
-impl Default for Visibility {
-    fn default() -> Self {
-        Visibility::Private
-    }
 }
 
 impl std::convert::TryFrom<u8> for Visibility {

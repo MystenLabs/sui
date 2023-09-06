@@ -490,7 +490,7 @@ fn entry_signature(
         Some((_, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
             &parameters[0..parameters.len() - 1]
         }
-        _ => &parameters,
+        _ => parameters,
     };
     entry_param(context, entry_loc, name, all_non_ctx_parameters);
     entry_return(context, entry_loc, name, return_type);

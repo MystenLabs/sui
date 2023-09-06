@@ -850,8 +850,8 @@ fn exp(
     Box::new(exp_(context, result, expected_type_opt, te))
 }
 
-fn exp_<'env>(
-    context: &mut Context<'env>,
+fn exp_(
+    context: &mut Context<'_>,
     result: &mut Block,
     initial_expected_type_opt: Option<&H::Type>,
     initial_e: T::Exp,

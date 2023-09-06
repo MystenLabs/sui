@@ -178,6 +178,7 @@ export default {
 				header: '68px',
 			},
 			height: {
+				12.5: '3.125rem',
 				31.5: '7.5rem',
 				120: '30rem',
 				300: '75rem',
@@ -188,6 +189,7 @@ export default {
 				ownCoinsPanel: '14.375rem',
 			},
 			width: {
+				12.5: '3.125rem',
 				31.5: '7.5rem',
 				walletLogo: '4.813rem',
 			},

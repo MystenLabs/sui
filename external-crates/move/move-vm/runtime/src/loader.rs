@@ -347,7 +347,7 @@ impl ModuleCache {
 
         let mut depth_cache = BTreeMap::new();
         for struct_type in self.structs.binaries.iter().rev().take(field_types_len) {
-            self.calculate_depth_of_struct(&struct_type, &mut depth_cache)?;
+            self.calculate_depth_of_struct(struct_type, &mut depth_cache)?;
         }
 
         debug_assert!(depth_cache.len() == field_types_len);
@@ -522,8 +522,8 @@ impl ModuleCache {
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
                 let struct_formula = self.calculate_depth_of_struct(&struct_type, depth_cache)?;
-                let subst_struct_formula = struct_formula.subst(ty_arg_map)?;
-                subst_struct_formula
+
+                struct_formula.subst(ty_arg_map)?
             }
         })
     }

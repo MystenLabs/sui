@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import { useFeature } from '@growthbook/growthbook-react';
 import { useFeature } from '@growthbook/growthbook-react';
 import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
 import { useAllBalances, useBalance } from '@mysten/dapp-kit';
@@ -40,7 +39,6 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
-import { useIsAccountReadLocked } from '_src/ui/app/hooks/useIsAccountReadLocked';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import PageTitle from '_src/ui/app/shared/PageTitle';
@@ -170,7 +168,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const isAccountLocked = useIsAccountReadLocked(activeAccount);
 	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
@@ -269,7 +266,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 						<PortfolioName
 							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
 						/>
-						{isAccountLocked ? null : (
+						{activeAccount.isLocked ? null : (
 							<>
 								<div
 									data-testid="coin-balance"
@@ -339,7 +336,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							</>
 						)}
 					</div>
-					{isAccountLocked ? (
+					{activeAccount.isLocked ? (
 						<UnlockAccountButton account={activeAccount} />
 					) : (
 						<MyTokens

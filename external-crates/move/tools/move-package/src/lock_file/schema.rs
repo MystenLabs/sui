@@ -96,9 +96,10 @@ impl Packages {
 
 /// Read lock file header after verifying that the version of the lock is not newer than the version
 /// supported by this library.
+#[allow(clippy::ptr_arg)] // Allowed to avoid interface changes.
 pub fn read_header(contents: &String) -> Result<Header> {
     let Schema { move_: header } =
-        toml::de::from_str::<Schema<Header>>(&contents).context("Deserializing lock header")?;
+        toml::de::from_str::<Schema<Header>>(contents).context("Deserializing lock header")?;
 
     if header.version > VERSION {
         bail!(
