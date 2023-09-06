@@ -61,9 +61,24 @@ export class QredoAccount
 		await this.onUnlocked();
 	}
 
+	async verifyPassword(password: string): Promise<void> {
+		const qredoSource = await this.#getQredoSource();
+		await qredoSource.verifyPassword(password);
+	}
+
 	async toUISerialized(): Promise<QredoSerializedUiAccount> {
-		const { id, type, address, publicKey, sourceID, labels, network, walletID, selected } =
-			await this.getStoredData();
+		const {
+			id,
+			type,
+			address,
+			publicKey,
+			sourceID,
+			labels,
+			network,
+			walletID,
+			selected,
+			nickname,
+		} = await this.getStoredData();
 		return {
 			id,
 			type,
@@ -76,6 +91,8 @@ export class QredoAccount
 			walletID,
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
+			isPasswordUnlockable: true,
 		};
 	}
 

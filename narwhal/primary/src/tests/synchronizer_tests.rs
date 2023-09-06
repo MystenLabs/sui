@@ -88,6 +88,13 @@ async fn accept_certificates() {
     }
 
     // Ensure the Synchronizer sends the parents of the certificates to the proposer.
+    //
+    // The first messages are the Synchronizer letting us know about the round of parent certificates
+    for _i in 0..3 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+    // the next message actually contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received, (certificates.clone(), 1, 0));
 
@@ -433,6 +440,11 @@ async fn synchronizer_recover_partial_certs() {
     }
     tokio::time::sleep(Duration::from_secs(5)).await;
 
+    for _ in 0..2 {
+        let received = rx_parents.recv().await.unwrap();
+        assert_eq!(received, (vec![], 0, 0));
+    }
+
     // the recovery flow sends message that contains the parents
     let received = rx_parents.recv().await.unwrap();
     assert_eq!(received.1, 1);
@@ -493,7 +505,7 @@ async fn synchronizer_recover_previous_round() {
         .unwrap();
     client.set_primary_network(network.clone());
 
-    // Create 3 certificates per round.
+    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -511,7 +523,6 @@ async fn synchronizer_recover_previous_round() {
         &latest_protocol_version(),
         &keys,
     );
-    // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
     let all_certificates: Vec<_> = all_certificates.into_iter().collect();
     let round_1_certificates = all_certificates[0..3].to_vec();
     let round_2_certificates = all_certificates[3..5].to_vec();
@@ -836,7 +847,7 @@ async fn gc_suspended_certificates() {
         &primary_channel_metrics,
     ));
 
-    // Make fake certificates.
+    // Make 5 rounds of fake certificates.
     let committee: Committee = fixture.committee();
     let genesis = Certificate::genesis(&committee)
         .iter()
@@ -867,8 +878,14 @@ async fn gc_suspended_certificates() {
             Err(e) => panic!("Unexpected error {e}"),
         }
     }
+    // Round 2~5 certificates are suspended.
+    // Round 1~4 certificates are missing and referenced as parents.
+    assert_eq!(
+        synchronizer.get_suspended_stats().await,
+        (NUM_AUTHORITIES * 4, NUM_AUTHORITIES * 4)
+    );
 
-    // Re-insertion of missing certificate as fetched certificates should be ok.
+    // Re-insertion of missing certificate as fetched certificates should be suspended too.
     for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
         match synchronizer
             .try_accept_fetched_certificate(cert.clone())
@@ -881,22 +898,30 @@ async fn gc_suspended_certificates() {
             Err(e) => panic!("Unexpected error {e}"),
         }
     }
+    assert_eq!(
+        synchronizer.get_suspended_stats().await,
+        (NUM_AUTHORITIES * 4, NUM_AUTHORITIES * 4)
+    );
 
-    // At commit round 8, round 3 becomes the GC round. Round 4 and 5 will be accepted.
+    // At commit round 8, round 3 becomes the GC round.
     let _ = tx_consensus_round_updates.send(ConsensusRound::new(8, gc_round(8, GC_DEPTH)));
 
     // Wait for all notifications to arrive.
     accept.collect::<Vec<()>>().await;
 
-    // Compare received and expected certificates.
-    let mut received_certificates = HashMap::new();
-    for _ in 0..NUM_AUTHORITIES * 2 {
-        let cert = rx_new_certificates.try_recv().unwrap();
-        received_certificates.insert(cert.digest(), cert);
-    }
-    let expected_certificates: HashMap<_, _> = certificates[NUM_AUTHORITIES * 3..]
+    // Expected to receive:
+    // Round 2~4 certificates will be accepted because of GC.
+    // Round 5 certificates will be accepted because of no missing dependencies.
+    let expected_certificates: HashMap<_, _> = certificates[NUM_AUTHORITIES..]
         .iter()
         .map(|cert| (cert.digest(), cert.clone()))
         .collect();
-    assert_eq!(received_certificates, expected_certificates);
+    let mut received_certificates = HashMap::new();
+    for _ in 0..expected_certificates.len() {
+        let cert = rx_new_certificates.try_recv().unwrap();
+        received_certificates.insert(cert.digest(), cert);
+    }
+    assert_eq!(expected_certificates, received_certificates);
+    // Suspended and missing certificates are cleared.
+    assert_eq!(synchronizer.get_suspended_stats().await, (0, 0));
 }

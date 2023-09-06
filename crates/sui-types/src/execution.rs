@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
-    language_storage::{ModuleId, StructTag},
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
@@ -17,8 +16,9 @@ use crate::{
     coin::Coin,
     digests::ObjectDigest,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
+    event::Event,
     execution_status::CommandArgumentError,
-    object::Owner,
+    object::{Object, Owner},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
 };
 
@@ -68,9 +68,36 @@ where
 {
 }
 
-pub struct ExecutionResults {
+#[derive(Debug)]
+pub enum ExecutionResults {
+    V1(ExecutionResultsV1),
+    V2(ExecutionResultsV2),
+}
+
+#[derive(Debug)]
+pub struct ExecutionResultsV1 {
     pub object_changes: BTreeMap<ObjectID, ObjectChange>,
-    pub user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
+    pub user_events: Vec<Event>,
+}
+
+/// Used by sui-execution v1 and above, to capture the execution results from Move.
+/// The results represent the primitive information that can then be used to construct
+/// both transaction effects V1 and V2.
+#[derive(Debug)]
+pub struct ExecutionResultsV2 {
+    /// All objects written regardless of whether they were mutated, created, or unwrapped.
+    pub written_objects: BTreeMap<ObjectID, Object>,
+    /// All objects loaded with the intention to be modified, with their original sequence number and digest.
+    /// If any object is not found in written_objects, they must be either deleted or wrapped.
+    pub objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    /// All object IDs created in this transaction.
+    pub created_object_ids: BTreeSet<ObjectID>,
+    /// All object IDs deleted in this transaction.
+    /// No object ID should be in both created_object_ids and deleted_object_ids.
+    pub deleted_object_ids: BTreeSet<ObjectID>,
+    /// All Move events emitted in this transaction.
+    pub user_events: Vec<Event>,
+    // TODO: capture loaded child objects if we want to.
 }
 
 #[derive(Clone, Debug)]
@@ -79,6 +106,7 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
+    pub digest: ObjectDigest,
 }
 
 #[derive(Debug, PartialEq, Eq)]

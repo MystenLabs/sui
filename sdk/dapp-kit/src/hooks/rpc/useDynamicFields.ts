@@ -12,13 +12,28 @@
 
 import type { GetDynamicFieldsParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 
 export function useDynamicFields(
 	params: GetDynamicFieldsParams,
 	options?: UseSuiClientQueryOptions<'getDynamicFields'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'getDynamicFields',
+			params,
+		},
+		options,
+	);
+}
+
+export function useDynamicFieldsInfinite(
+	params: GetDynamicFieldsParams,
+	options?: UseSuiClientInfiniteQueryOptions<'getDynamicFields'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'getDynamicFields',
 			params,

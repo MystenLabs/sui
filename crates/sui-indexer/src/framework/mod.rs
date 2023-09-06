@@ -1,6 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod fetcher;
+mod builder;
+mod fetcher;
 pub mod interface;
-pub mod runner;
+mod runner;
+
+pub use builder::IndexerBuilder;
+pub use interface::Handler;

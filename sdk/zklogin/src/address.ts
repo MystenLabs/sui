@@ -9,15 +9,9 @@ import { zkBcs } from './bcs.js';
 import { decodeJwt } from 'jose';
 import { genAddressSeed, toBufferBE } from './utils.js';
 
-export function jwtToAddress(jwt: string, userPin: bigint) {
+export function jwtToAddress(jwt: string, userSalt: bigint) {
 	const decodedJWT = decodeJwt(jwt);
-	if (
-		!decodedJWT.sub ||
-		!decodedJWT.iss ||
-		!decodedJWT.aud ||
-		!decodedJWT.email ||
-		typeof decodedJWT.email !== 'string'
-	) {
+	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
 		throw new Error('Missing jwt data');
 	}
 
@@ -26,7 +20,7 @@ export function jwtToAddress(jwt: string, userPin: bigint) {
 	}
 
 	return computeZkAddress({
-		userPin,
+		userSalt,
 		claimName: 'sub',
 		claimValue: decodedJWT.sub,
 		aud: decodedJWT.aud,
@@ -37,7 +31,7 @@ export function jwtToAddress(jwt: string, userPin: bigint) {
 export interface ComputeZKAddressOptions {
 	claimName: string;
 	claimValue: string;
-	userPin: bigint;
+	userSalt: bigint;
 	iss: string;
 	aud: string;
 }
@@ -47,9 +41,9 @@ export function computeZkAddress({
 	claimValue,
 	iss,
 	aud,
-	userPin,
+	userSalt,
 }: ComputeZKAddressOptions) {
-	const addressSeedBytesBigEndian = toBufferBE(genAddressSeed(userPin, claimName, claimValue), 32);
+	const addressSeedBytesBigEndian = toBufferBE(genAddressSeed(userSalt, claimName, claimValue), 32);
 	const addressParamBytes = zkBcs.ser('AddressParams', { iss, aud }).toBytes();
 
 	const tmp = new Uint8Array(1 + addressSeedBytesBigEndian.length + addressParamBytes.length);

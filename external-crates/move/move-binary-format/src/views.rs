@@ -441,7 +441,7 @@ impl<'a, T: ModuleAccess> LocalsSignatureView<'a, T> {
         let parameters = self.parameters();
         SignatureTokenView::new(
             self.function_def_view.module,
-            if (index as usize) < parameters.len() {
+            if index < parameters.len() {
                 &parameters[index]
             } else {
                 &self.additional_locals()[index - parameters.len()]

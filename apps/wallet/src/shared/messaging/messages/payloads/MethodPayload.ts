@@ -11,6 +11,10 @@ import { type Status } from '_src/background/storage-migration';
 import type { Payload } from './Payload';
 
 export type UIAccessibleEntityType = 'accountSources' | 'accounts';
+export type LedgerAccountsPublicKeys = {
+	accountID: string;
+	publicKey: string;
+}[];
 
 type MethodPayloads = {
 	getStoredEntities: { type: UIAccessibleEntityType };
@@ -45,6 +49,11 @@ type MethodPayloads = {
 	storageMigrationStatus: { status: Status };
 	doStorageMigration: { password: string };
 	switchAccount: { accountID: string };
+	setAccountNickname: { id: string; nickname: string | null };
+	verifyPassword: { password: string };
+	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeys };
+	getAccountSourceEntropy: { accountSourceID: string };
+	getAccountSourceEntropyResponse: { entropy: string };
 };
 
 type Methods = keyof MethodPayloads;

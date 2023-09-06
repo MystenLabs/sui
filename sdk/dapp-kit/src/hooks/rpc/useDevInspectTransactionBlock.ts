@@ -11,14 +11,14 @@
  */
 
 import type { DevInspectTransactionBlockParams } from '@mysten/sui.js/client';
-import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
-import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import type { UseSuiClientMutationOptions } from '../useSuiClientMutation.js';
+import { useSuiClientMutation } from '../useSuiClientMutation.js';
 
 export function useDevInspectTransactionBlock(
 	params: DevInspectTransactionBlockParams,
-	options?: UseSuiClientQueryOptions<'devInspectTransactionBlock'>,
+	options?: UseSuiClientMutationOptions<'devInspectTransactionBlock'>,
 ) {
-	return useSuiClientQuery(
+	return useSuiClientMutation(
 		{
 			method: 'devInspectTransactionBlock',
 			params,

@@ -314,6 +314,10 @@
 				]
 			},
 			{
+				"label": "About zkLogin",
+				"fileName": "build/zk_login"
+			},
+			{
 				"label": "RPC Best Practices",
 				"fileName": "build/rpc-best-practices"
 			},

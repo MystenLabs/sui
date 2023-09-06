@@ -4,7 +4,7 @@
 export { computeZkAddress, jwtToAddress } from './address.js';
 export type { ComputeZKAddressOptions } from './address.js';
 
-export { zkBcs } from './bcs.js';
+export { getZkSignature } from './bcs.js';
 
 export { poseidonHash } from './poseidon.js';
 

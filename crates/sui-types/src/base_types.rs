@@ -44,7 +44,7 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
-use fastcrypto_zkp::bn254::zk_login::big_int_str_to_bytes;
+use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
@@ -604,8 +604,8 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 }
 
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
-/// [zklogin_flag || bcs bytes of AddressParams || address seed in bytes] where
-/// AddressParams contains iss and key_claim_name.
+/// [zklogin_flag || bcs bytes of AddressParams || address_seed in bytes] where
+/// AddressParams contains iss and aud string.
 impl From<&ZkLoginAuthenticator> for SuiAddress {
     fn from(authenticator: &ZkLoginAuthenticator) -> Self {
         let mut hasher = DefaultHash::default();

@@ -232,6 +232,19 @@ pub enum UserInputError {
 
     #[error("Transaction {0} not found")]
     TransactionCursorNotFound(u64),
+
+    #[error(
+        "Object {:?} is a system object and cannot be accessed by user transactions.",
+        object_id
+    )]
+    InaccessibleSystemObject { object_id: ObjectID },
+    #[error(
+        "{max_publish_commands} max publish/upgrade commands allowed, {publish_count} provided"
+    )]
+    MaxPublishCountExceeded {
+        max_publish_commands: u64,
+        publish_count: u64,
+    },
 }
 
 #[derive(

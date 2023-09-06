@@ -22,7 +22,7 @@ pub mod db_dump;
 mod index_search;
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum DbToolCommand {
     ListTables,
     Dump(Options),
@@ -46,76 +46,76 @@ pub enum DbToolCommand {
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct IndexSearchKeyRangeOptions {
-    #[clap(long = "table-name", short = 't')]
+    #[arg(long = "table-name", short = 't')]
     table_name: String,
-    #[clap(long = "start", short = 's')]
+    #[arg(long = "start", short = 's')]
     start: String,
-    #[clap(long = "end", short = 'e')]
+    #[arg(long = "end", short = 'e')]
     end_key: String,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct IndexSearchCountOptions {
-    #[clap(long = "table-name", short = 't')]
+    #[arg(long = "table-name", short = 't')]
     table_name: String,
-    #[clap(long = "start", short = 's')]
+    #[arg(long = "start", short = 's')]
     start: String,
-    #[clap(long = "count", short = 'c')]
+    #[arg(long = "count", short = 'c')]
     count: u64,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct Options {
     /// The type of store to dump
-    #[clap(long = "store", short = 's', value_enum)]
+    #[arg(long = "store", short = 's', value_enum)]
     store_name: StoreName,
     /// The name of the table to dump
-    #[clap(long = "table-name", short = 't')]
+    #[arg(long = "table-name", short = 't')]
     table_name: String,
     /// The size of page to dump. This is a u16
-    #[clap(long = "page-size", short = 'p')]
+    #[arg(long = "page-size", short = 'p')]
     page_size: u16,
     /// The page number to dump
-    #[clap(long = "page-num", short = 'n')]
+    #[arg(long = "page-num", short = 'n')]
     page_number: usize,
 
     // TODO: We should load this automatically from the system object in AuthorityPerpetualTables.
     // This is very difficult to do right now because you can't share code between
     // AuthorityPerpetualTables and AuthorityEpochTablesReadonly.
     /// The epoch to use when loading AuthorityEpochTables.
-    #[clap(long = "epoch", short = 'e')]
+    #[arg(long = "epoch", short = 'e')]
     epoch: Option<EpochId>,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct PrintConsensusCommitOptions {
-    #[clap(long, help = "Sequence number of the consensus commit")]
+    #[arg(long, help = "Sequence number of the consensus commit")]
     seqnum: u64,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct PrintTransactionOptions {
-    #[clap(long, help = "The transaction digest to print")]
+    #[arg(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct PrintCheckpointOptions {
-    #[clap(long, help = "The checkpoint digest to print")]
+    #[arg(long, help = "The checkpoint digest to print")]
     digest: CheckpointDigest,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct PrintCheckpointContentOptions {
-    #[clap(
+    #[arg(
         long,
         help = "The checkpoint content digest (NOT the checkpoint digest)"
     )]
@@ -123,40 +123,40 @@ pub struct PrintCheckpointContentOptions {
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct RemoveTransactionOptions {
-    #[clap(long, help = "The transaction digest to remove")]
+    #[arg(long, help = "The transaction digest to remove")]
     digest: TransactionDigest,
 
-    #[clap(long)]
+    #[arg(long)]
     confirm: bool,
 
     /// The epoch to use when loading AuthorityEpochTables.
     /// Defaults to the current epoch.
-    #[clap(long = "epoch", short = 'e')]
+    #[arg(long = "epoch", short = 'e')]
     epoch: Option<EpochId>,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct RemoveObjectLockOptions {
-    #[clap(long, help = "The object ID to remove")]
+    #[arg(long, help = "The object ID to remove")]
     id: ObjectID,
 
-    #[clap(long, help = "The object version to remove")]
+    #[arg(long, help = "The object version to remove")]
     version: u64,
 
-    #[clap(long)]
+    #[arg(long)]
     confirm: bool,
 }
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub struct RewindCheckpointExecutionOptions {
-    #[clap(long = "epoch")]
+    #[arg(long = "epoch")]
     epoch: EpochId,
 
-    #[clap(long = "checkpoint-sequence-number")]
+    #[arg(long = "checkpoint-sequence-number")]
     checkpoint_sequence_number: u64,
 }
 

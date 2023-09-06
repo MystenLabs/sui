@@ -3,7 +3,9 @@
 
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 
+import { useState } from 'react';
 import { AccountMultiSelectItem } from './AccountMultiSelectItem';
+import { Button } from '../../shared/ButtonUI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
 type AccountMultiSelectProps = {
@@ -28,9 +30,55 @@ export function AccountMultiSelect({
 				<AccountMultiSelectItem
 					key={account.id}
 					account={account}
-					state={account.selected ? 'selected' : undefined}
+					state={
+						account.isLocked
+							? 'disabled'
+							: selectedAccountIDs.includes(account.id)
+							? 'selected'
+							: undefined
+					}
 				/>
 			))}
 		</ToggleGroup.Root>
+	);
+}
+
+export function AccountMultiSelectWithControls({
+	selectedAccountIDs: selectedAccountsFromProps,
+	accounts,
+	onChange: onChangeFromProps,
+}: AccountMultiSelectProps) {
+	const [selectedAccountIds, setSelectedAccountsIds] = useState(selectedAccountsFromProps);
+	const onChange = (value: string[]) => {
+		setSelectedAccountsIds(value);
+		onChangeFromProps(value);
+	};
+	return (
+		<div className="flex flex-col gap-3 [&>button]:border-none">
+			<AccountMultiSelect
+				selectedAccountIDs={selectedAccountIds}
+				accounts={accounts}
+				onChange={onChange}
+			/>
+
+			<Button
+				onClick={() => {
+					if (selectedAccountIds.length < accounts.length) {
+						// select all accounts if not all are selected
+						onChange(accounts.map((account) => account.id));
+					} else {
+						// deselect all accounts
+						onChange([]);
+					}
+				}}
+				variant="outline"
+				size="xs"
+				text={
+					selectedAccountIds.length < accounts.length
+						? 'Select All Accounts'
+						: 'Deselect All Accounts'
+				}
+			/>
+		</div>
 	);
 }

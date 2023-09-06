@@ -11,14 +11,14 @@
  */
 
 import type { DryRunTransactionBlockParams } from '@mysten/sui.js/client';
-import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
-import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import type { UseSuiClientMutationOptions } from '../useSuiClientMutation.js';
+import { useSuiClientMutation } from '../useSuiClientMutation.js';
 
 export function useDryRunTransactionBlock(
 	params: DryRunTransactionBlockParams,
-	options?: UseSuiClientQueryOptions<'dryRunTransactionBlock'>,
+	options?: UseSuiClientMutationOptions<'dryRunTransactionBlock'>,
 ) {
-	return useSuiClientQuery(
+	return useSuiClientMutation(
 		{
 			method: 'dryRunTransactionBlock',
 			params,

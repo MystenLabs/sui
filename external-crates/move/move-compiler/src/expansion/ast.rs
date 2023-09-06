@@ -187,7 +187,7 @@ pub enum StructFields {
 // Functions
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Visibility {
     Public(Loc),
     Friend(Loc),

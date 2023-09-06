@@ -421,7 +421,11 @@ impl From<ConsensusOutputDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
 
 impl fmt::Debug for ConsensusOutputDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
     }
 }
 
@@ -430,7 +434,9 @@ impl fmt::Display for ConsensusOutputDigest {
         write!(
             f,
             "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
         )
     }
 }
