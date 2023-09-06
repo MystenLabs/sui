@@ -12,6 +12,7 @@ import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
 import App from './app';
+import { AccountsFormProvider } from './app/components/accounts/AccountsFormContext';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
@@ -75,9 +76,11 @@ function AppWrapper() {
 							}}
 						>
 							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
-								<ErrorBoundary>
-									<App />
-								</ErrorBoundary>
+								<AccountsFormProvider>
+									<ErrorBoundary>
+										<App />
+									</ErrorBoundary>
+								</AccountsFormProvider>
 							</SuiClientProvider>
 						</PersistQueryClientProvider>
 					</Fragment>

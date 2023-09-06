@@ -5,6 +5,7 @@ import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
 import { useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import { getLedgerConnectionErrorMessage } from '../../helpers/errorMessages';
 import { SocialButton } from '../../shared/SocialButton';
@@ -13,20 +14,16 @@ import { Text } from '_app/shared/text';
 import Overlay from '_components/overlay';
 import { ampli } from '_src/shared/analytics/ampli';
 
-type AddAccountPageProps = {
-	showSocialSignInOptions?: boolean;
-};
-
-export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPageProps) {
+export function AddAccountPage() {
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(false);
 	const [searchParams] = useSearchParams();
 	const navigate = useNavigate();
-
 	const sourceFlow = searchParams.get('sourceFlow') || 'Unknown';
-
+	const showSocialSignInOptions = sourceFlow !== 'Onboarding';
+	const [, setAccountFormValues] = useAccountsFormContext();
 	return (
 		<Overlay showModal title="Add Account" closeOverlay={() => navigate('/')}>
-			<div className="w-full flex flex-col gap-8 pt-3">
+			<div className="w-full flex flex-col gap-8">
 				<div className="flex flex-col gap-3">
 					{showSocialSignInOptions && (
 						<>
@@ -96,8 +93,9 @@ export function AddAccountPage({ showSocialSignInOptions = false }: AddAccountPa
 						variant="outline"
 						size="tall"
 						text="Create a new Passphrase Account"
-						to="/accounts/protect-account"
+						to="/accounts/protect-account?accountType=new-mnemonic"
 						onClick={() => {
+							setAccountFormValues({ type: 'new-mnemonic' });
 							ampli.clickedCreateNewAccount({ sourceFlow });
 						}}
 					/>

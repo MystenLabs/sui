@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
 	type Dispatch,
 	type ReactNode,
@@ -9,10 +10,20 @@ import {
 	useState,
 	type SetStateAction,
 } from 'react';
-import { type FormValues as ImportRecoveryPhraseFormValues } from './ImportRecoveryPhraseForm';
-import { type FormValues as ProtectAccountFormValues } from './ProtectAccountForm';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
 
-type AccountsFormValues = Partial<ImportRecoveryPhraseFormValues & ProtectAccountFormValues> | null;
+export type AccountsFormValues =
+	| { type: 'zk'; provider: ZkProvider }
+	| { type: 'new-mnemonic' }
+	| { type: 'import-mnemonic'; entropy: string }
+	| { type: 'mnemonic-derived'; sourceID: string }
+	| { type: 'imported'; keyPair: ExportedKeypair }
+	| {
+			type: 'ledger';
+			accounts: { publicKey: string; derivationPath: string; address: string }[];
+	  }
+	| null;
+
 type AccountsFormContextType = [AccountsFormValues, Dispatch<SetStateAction<AccountsFormValues>>];
 
 const AccountsFormContext = createContext<AccountsFormContextType | null>(null);
