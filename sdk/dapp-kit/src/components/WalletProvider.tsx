@@ -48,8 +48,6 @@ export function WalletProvider({
 	requiredFeatures = [],
 	storageAdapter = localStorageAdapter,
 	storageKey = DEFAULT_STORAGE_KEY,
-	autoConnect = false,
-	enableUnsafeBurner = false,
 	children,
 }: WalletProviderProps) {
 	const walletsApi = getWallets();

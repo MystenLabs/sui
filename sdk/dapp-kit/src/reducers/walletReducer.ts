@@ -13,6 +13,6 @@ export type WalletState = {
 
 export type WalletAction = void;
 
-export function walletReducer(state: WalletState, action: WalletAction): WalletState {
+export function walletReducer(state: WalletState): WalletState {
 	return state;
 }
