@@ -3030,7 +3030,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "atty",
  "clap 4.4.1",
  "codespan",
  "codespan-reporting",

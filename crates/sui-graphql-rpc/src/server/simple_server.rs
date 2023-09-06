@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::extensions::logger::Logger;
+use crate::server::sui_sdk_data_provider::SuiClientLoader;
 use crate::{
     server::{
         data_provider::DataProvider,
@@ -9,6 +10,7 @@ use crate::{
     },
     types::query::{Query, SuiGraphQLSchema},
 };
+use async_graphql::dataloader::DataLoader;
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::middleware;
@@ -17,6 +19,7 @@ use std::time::Duration;
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+pub(crate) const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
 
 pub struct ServerConfig {
     pub port: u16,
@@ -72,10 +75,18 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         .await
         .expect("Failed to create SuiClient");
 
-    let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0);
-
+    let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
+    let data_loader = DataLoader::with_cache(
+        SuiClientLoader {
+            client: sui_sdk_client_v0,
+        },
+        tokio::spawn,
+        async_graphql::dataloader::LruCache::new(DATA_LOADER_LRU_CACHE_SIZE),
+    );
+    data_loader.enable_all_cache(true);
     let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(data_provider)
+        .data(data_loader)
         .extension(Logger::default())
         .finish();
 
