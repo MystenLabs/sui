@@ -1,8 +1,6 @@
 ---
-title: zkLogin Developer Doc
+title: About zkLogin
 ---
-
-# Overview
 
 zkLogin is a Sui primitive that lets wallets and apps link Sui objects with an OAuth credential—enabling users to perform transactions using both the credential and attached objects.
 
@@ -20,7 +18,7 @@ zkLogin is designed with the following principles in mind:
 
 1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain. 
 
-Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [integration guide](#integration-guide).
+Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
 
 If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
 
@@ -28,7 +26,7 @@ If you are curious about the security model and the privacy considerations of zk
 
 More questions? See [this page](#faq).
 
-# Integration Guide
+## Integration guide
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
 
@@ -52,7 +50,7 @@ npm install @mysten/zklogin
 npm install @mysten/zklogin@experimental
 ```
 
-## Configure Developer Account with OpenID Provider
+## Configure a developer account with OpenID provider
 
 Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
 
@@ -70,9 +68,20 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 1. Register for a Google Cloud account and access the [dashboard](https://console.cloud.google.com/home/dashboard).
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
-   ![1](../../static/zklogin-google1.png "Sign up for Google developer account")
-   ![2](../../static/zklogin-google2.png "Go to Credentials")
-   ![3](../../static/zklogin-google3.png "Configure Redirect URL")
+
+![1](../../static/zklogin-google1.png "Sign up for Google developer account")
+
+*Sign up for Google developer account*
+<p>&nbsp;</p>
+
+![2](../../static/zklogin-google2.png "Go to Credentials")
+
+*Go to Credentials*
+<p>&nbsp;</p>
+
+![3](../../static/zklogin-google3.png "Configure Redirect URL")
+
+*Configure a Redirect URL*
 
 ### Facebook
 
@@ -81,7 +90,13 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Select "Build your app" then "Products" then "Facebook Login" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-facebook1.png "Sign up for Facebook developer account")
+
+*Sign up for Facebook developer account*
+<p>&nbsp;</p>
+
 ![2](../../static/zklogin-facebook2.png "Go to Settings")
+
+*Go to Settings*
 
 ### Twitch
 
@@ -90,7 +105,13 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Go to "Register Your Application" then "Application" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-twitch1.png "Sign up for Twitch developer account")
+
+*Sign up for Twitch developer account*
+<p>&nbsp;</p>
+
 ![2](../../static/zklogin-twitch2.png "Go to Console")
+
+*Go to Console*
 
 ## Set Up OAuth Flow
 
@@ -163,7 +184,7 @@ Response: "{\"proof_points\":{\"pi_a\":[\"15675063703917306325241627795287749939
 
 Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
 
-## Assemble zkLogin Signature and Submit Transaction
+## Assemble the zkLogin signature and submit the transaction
 
 1. Sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
 
@@ -180,7 +201,7 @@ const { bytes, signature: userSignature } = await txb.sign({
 });
 ```
 
-1. Serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
+2. Serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
 
 ```typescript
 import { getZkSignature } from "@mysten/zklogin";
@@ -192,7 +213,7 @@ const zkSignature = getZkSignature({
 });
 ```
 
-1. Execute the transaction.
+3. Execute the transaction.
 
 ```typescript
 client.executeTransactionBlock({
@@ -200,13 +221,14 @@ client.executeTransactionBlock({
   signature: zkSignature,
 });
 ```
-## Add Sponsored Transaction Support
+
+## Add sponsored transaction support
 
 This is optional, but it enhances user experience by allowing zkLogin address holders to skip acquiring SUI prior to transaction initiation.
 
 Coming Soon
 
-## Example Integration
+## Example integration
 
 Coming Soon
 
@@ -220,7 +242,7 @@ The Groth16 zero-knowledge proof is generated based on the JWT token, concealing
 1. A transaction is submitted on-chain with the ephemeral signature and the ZK proof. Sui authorities execute the transaction after verifying the ephemeral signature and the proof.
 1. Instead of deriving the Sui address based on a public key, the zkLogin address is derived from `sub` (that uniquely identifies the user per provider), `iss` (identifies the provider), `aud` (identifies the application) and `user_salt` (a value that unlinks the OAuth identifier with the on-chain address).
 
-## The Complete zkLogin Flow
+## The complete zkLogin flow
 
 ![1](../../static/zklogin-flow.png "zkLogin Complete Flow")
 
@@ -246,7 +268,7 @@ The Groth16 zero-knowledge proof is generated based on the JWT token, concealing
 
 3. ZK Proving Service: This is a backend service responsible for generating ZK proofs based on JWT token, JWT randomness, user salt and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction. 
 
-## Address Definition
+## Address definition
 
 The address is computed on the following inputs:
 
@@ -264,19 +286,19 @@ The address is computed on the following inputs:
 
 Finally, we derive `zk_login_address = Blake2b_256(zk_login_flag, iss_L, iss, addr_seed)` where `addr_seed = Poseidon_BN254(kc_name_F, kc_value_F, aud_F, Poseidon_BN254(user_salt)`.
 
-## Terminology and Notations
+## Terminology and notations
 
 See below for all relevant OpenID terminology defined in [spec](https://openid.net/specs/openid-connect-core-1_0.html#Terminology) and how they are used in zkLogin, along with definitions for protocol details.
 
-### OpenID Provider (OP)
+### OpenID provider (OP)
 
 OAuth 2.0 Authorization Server that is capable of Authenticating the End-User and providing Claims to a Relying Party about the Authentication event and the End-User. This is identified in the `iss` field in JWT token payload. Currently zkLogin supported OPs include Google, Facebook and Twitch, and more compatible providers will be enabled in the future.
 
-### Relying Party (RP) or Client 
+### Relying party (RP) or client 
 
 OAuth 2.0 Client application requiring End-User Authentication and Claims from an OpenID Provider. This is assigned by OP when the developer creates the application. This is identified in the `aud` field in JWT token payload. This refers to any zkLogin enabled wallet or application.
 
-### Subject Identifier (sub)
+### Subject identifier (sub)
 
 Locally unique and never reassigned identifier within the Issuer for the End-User, which is intended to be consumed by the RP. We use this as the key claim to derive user address. 
 
@@ -307,10 +329,12 @@ JWT token can be found in the redirect URL to RP after the user completes the OA
 
 For a zkLogin transaction, we do not use the `iat` and `exp` claims (i.e., timestamp). This is because we provide a different way for users to specify expiry times, namely via `nonce`.
 
-### Key Claim 
+### Key Claim
+
 We call the claim used to derive a users' address as the "key claim" e.g., sub or email. Naturally, we only want to use claims that are fixed once and never changed again. For zkLogin, we currently support sub as the key claim because OpenID spec mandates that providers do not change this identifier. In the future, this can be extended to use email, username, etc. 
 
 ### Notations
+
 1. `(eph_sk, eph_pk)`: Ephemeral KeyPair refers to the private and public key pair used to produce ephemeral signatures. The signing mechanism is the same as traditional transaction signing, but it is ephemeral because it is only stored for a short session and can be refreshed upon new OAuth sessions. The ephemeral public key is used to compute nonce.
 2. `nonce`: An application-defined field embedded in the JWT token payload, computed as the hash of the ephemeral public key, JWT randomness, and the maximum epoch (Sui's defined expiry epoch). Specifically, a zkLogin compatible nonce is required to passed in as `nonce = ToBase64URL(Poseidon_BN254([ext_eph_pk_bigint / 2^128, ext_eph_pk_bigint % 2^128, max_epoch, jwt_randomness]).to_bytes()[len - 20..])` where `ext_eph_pk_bigint` is the BigInt representation of `ext_eph_pk`. 
 3. `ext_eph_pk`: The byte representation of an ephemeral public key (`flag || eph_pk`). Size varies depending on the choice of the signature scheme (denoted by the flag, defined [here](https://docs.sui.io/learn/cryptography/sui-signatures)).
@@ -332,7 +356,7 @@ The ceremony's objective is to compute a public common reference string (CRS). A
 
 We adopt a distributed setup process  instead of relying on a single central party to adhere to the requirements. Through a distributed protocol involving numerous parties, we ensure the setup affords the intended security and privacy assurances. Even if only one party follows the protocol honestly, the final setup remains reliable. Refer to this page for more details.
 
-### Who are Participating?
+### Who is participating?
 
 The following groups are invited to participate:
 
@@ -341,7 +365,7 @@ The following groups are invited to participate:
 
 The ceremony's security guarantees that among the participants, at least one adheres to the protocol and handles entropy safely. With several participants, the likelihood of this outcome is elevated.
 
-### What Exactly Happens During the Contribution?
+### What exactly happens during the contribution?
 
 Contributions to the ceremony are made one-by-one in sequence, with participants forming a queue. A participant joins the queue upon entering the invitation code in their browser. The coordinator server then assigns each participant a position according to their queue entry.
 
