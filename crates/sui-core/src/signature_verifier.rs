@@ -97,7 +97,7 @@ pub struct SignatureVerifier {
     /// don't want to pass a reference to the map to the verify method, since that would lead to a
     /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
     /// very cheaply.
-    jwks: RwLock<ImHashMap<JwkId, JWK>>,
+    oauth_provider_jwk: RwLock<ImHashMap<JwkId, JWK>>,
 
     /// Params that contains a list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
     zk_login_params: ZkLoginParams,
@@ -133,7 +133,7 @@ impl SignatureVerifier {
                 metrics.signed_data_cache_hits.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
-            jwks: Default::default(),
+            oauth_provider_jwk: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
             zk_login_params: ZkLoginParams {
@@ -306,23 +306,22 @@ impl SignatureVerifier {
 
     /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
     /// been inserted.
-    pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
-        let mut jwks = self.jwks.write();
-        jwks.insert(jwk_id.clone(), jwk.clone());
-    }
-
-    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
-        let jwks = self.jwks.read();
-        jwks.get(jwk_id) == Some(jwk)
+    pub(crate) fn insert_oauth_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
+        if oauth_provider_jwk.contains_key(jwk_id) {
+            return false;
+        }
+        oauth_provider_jwk.insert(jwk_id.clone(), jwk.clone());
+        true
     }
 
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {
                 signed_tx.verify_epoch(self.committee.epoch())?;
-                let jwks = self.jwks.read().clone();
+                let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
                 let aux_data = VerifyParams::new(
-                    jwks,
+                    oauth_provider_jwk,
                     self.zk_login_params.supported_providers.clone(),
                     self.zk_login_params.env.clone(),
                 );

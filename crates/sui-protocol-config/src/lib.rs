@@ -261,9 +261,6 @@ struct FeatureFlags {
     // If true, use the new child object format
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_object_format: bool,
-
-    #[serde(skip_serializing_if = "is_false")]
-    enable_jwk_consensus_updates: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -739,8 +736,6 @@ pub struct ProtocolConfig {
     // swapped when creating the consensus schedule. The values should be of the range [0 - 33]. Anything
     // above 33 (f) will not be allowed.
     consensus_bad_nodes_stake_threshold: Option<u64>,
-
-    max_jwk_votes_per_validator_per_epoch: Option<u64>,
 }
 
 // feature flags
@@ -861,10 +856,6 @@ impl ProtocolConfig {
 
     pub fn loaded_child_object_format(&self) -> bool {
         self.feature_flags.loaded_child_object_format
-    }
-
-    pub fn enable_jwk_consensus_updates(&self) -> bool {
-        self.feature_flags.enable_jwk_consensus_updates
     }
 }
 
@@ -1229,10 +1220,7 @@ impl ProtocolConfig {
 
                 max_event_emit_size_total: None,
 
-                consensus_bad_nodes_stake_threshold: None,
-
-                max_jwk_votes_per_validator_per_epoch: None,
-
+                consensus_bad_nodes_stake_threshold: None
                 // When adding a new constant, set it to None in the earliest version, like this:
                 // new_constant: None,
             },
@@ -1458,11 +1446,8 @@ impl ProtocolConfig {
     pub fn set_commit_root_state_digest_supported(&mut self, val: bool) {
         self.feature_flags.commit_root_state_digest = val
     }
-    pub fn set_zklogin_auth_for_testing(&mut self, val: bool) {
+    pub fn set_zklogin_auth(&mut self, val: bool) {
         self.feature_flags.zklogin_auth = val
-    }
-    pub fn set_enable_jwk_consensus_updates_for_testing(&mut self, val: bool) {
-        self.feature_flags.enable_jwk_consensus_updates = val
     }
 
     pub fn set_upgraded_multisig_for_testing(&mut self, val: bool) {
