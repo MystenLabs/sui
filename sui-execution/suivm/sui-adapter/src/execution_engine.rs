@@ -502,9 +502,6 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateUpdate(_auth_state_update) => {
-                todo!();
-            }
         }
     }
 

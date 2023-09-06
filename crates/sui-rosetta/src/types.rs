@@ -406,7 +406,6 @@ pub enum OperationType {
     Genesis,
     ConsensusCommitPrologue,
     ProgrammableTransaction,
-    AuthenticatorStateUpdate,
 }
 
 impl From<&SuiTransactionBlockKind> for OperationType {
@@ -419,9 +418,6 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             }
             SuiTransactionBlockKind::ProgrammableTransaction(_) => {
                 OperationType::ProgrammableTransaction
-            }
-            SuiTransactionBlockKind::AuthenticatorStateUpdate(_) => {
-                OperationType::AuthenticatorStateUpdate
             }
         }
     }

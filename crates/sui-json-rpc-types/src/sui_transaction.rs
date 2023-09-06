@@ -19,7 +19,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
-use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -285,8 +284,6 @@ pub enum SuiTransactionBlockKind {
     /// A series of transactions where the results of one transaction can be used in future
     /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
-    /// An transaction which updates global authenticator state
-    AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
     // .. more transaction types go here
 }
 
@@ -317,9 +314,6 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
-            Self::AuthenticatorStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
-            }
         }
         write!(f, "{}", writer)
     }
@@ -348,17 +342,6 @@ impl SuiTransactionBlockKind {
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
-            TransactionKind::AuthenticatorStateUpdate(update) => {
-                Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
-                    epoch: update.epoch,
-                    round: update.round,
-                    new_active_jwks: update
-                        .new_active_jwks
-                        .into_iter()
-                        .map(SuiActiveJwk::from)
-                        .collect(),
-                })
-            }
         })
     }
 
@@ -375,7 +358,6 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
-            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
         }
     }
 }
@@ -1053,64 +1035,6 @@ pub struct SuiConsensusCommitPrologue {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiAuthenticatorStateUpdate {
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: u64,
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub round: u64,
-
-    pub new_active_jwks: Vec<SuiActiveJwk>,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiActiveJwk {
-    pub jwk_id: SuiJwkId,
-    pub jwk: SuiJWK,
-
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: u64,
-}
-
-impl From<ActiveJwk> for SuiActiveJwk {
-    fn from(active_jwk: ActiveJwk) -> Self {
-        Self {
-            jwk_id: SuiJwkId {
-                iss: active_jwk.jwk_id.iss.clone(),
-                kid: active_jwk.jwk_id.kid.clone(),
-            },
-            jwk: SuiJWK {
-                kty: active_jwk.jwk.kty.clone(),
-                e: active_jwk.jwk.e.clone(),
-                n: active_jwk.jwk.n.clone(),
-                alg: active_jwk.jwk.alg.clone(),
-            },
-            epoch: active_jwk.epoch,
-        }
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiJwkId {
-    pub iss: String,
-    pub kid: String,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiJWK {
-    pub kty: String,
-    pub e: String,
-    pub n: String,
-    pub alg: String,
 }
 
 #[serde_as]

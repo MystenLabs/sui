@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*};
-use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -15,12 +14,11 @@ use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
+use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
@@ -201,28 +199,21 @@ pub enum TransactionKind {
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
-    AuthenticatorStateUpdate(AuthenticatorStateUpdate),
     // .. more transaction types go here
 }
 
 impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        // When adding new cases, they must be guarded by a feature flag and return
-        // UnsupportedFeatureError if the flag is not set.
+    fn check_version_supported(&self, _protocol_config: &ProtocolConfig) -> SuiResult {
+        // This code does nothing right now - it exists to cause a compiler error when new
+        // enumerants are added to TransactionKind.
+        //
+        // When we add new cases here, check that current_protocol_version does not pre-date the
+        // addition of that enumerant.
         match &self {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ProgrammableTransaction(_) => Ok(()),
-            TransactionKind::AuthenticatorStateUpdate(_) => {
-                if protocol_config.enable_jwk_consensus_updates() {
-                    Ok(())
-                } else {
-                    Err(SuiError::UnsupportedFeatureError {
-                        error: "authenticator state updates not enabled".to_string(),
-                    })
-                }
-            }
         }
     }
 }
@@ -829,7 +820,6 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
-                | TransactionKind::AuthenticatorStateUpdate(_)
         )
     }
 
@@ -901,13 +891,6 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
-            Self::AuthenticatorStateUpdate(_) => {
-                vec![InputObjectKind::SharedMoveObject {
-                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-                    mutable: true,
-                }]
-            }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -930,10 +913,6 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => (),
-            TransactionKind::AuthenticatorStateUpdate(_) => {
-                // The transaction should have been rejected earlier if the feature is not enabled.
-                assert!(config.enable_jwk_consensus_updates());
-            }
         };
         Ok(())
     }
@@ -959,7 +938,6 @@ impl TransactionKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
-            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
         }
     }
 }
@@ -986,9 +964,6 @@ impl Display for TransactionKind {
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
-            }
-            Self::AuthenticatorStateUpdate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
             }
         }
         write!(f, "{}", writer)
@@ -1600,7 +1575,13 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
-        if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
+        let allow_sponsored_tx = match &self.kind {
+            TransactionKind::ProgrammableTransaction(_) => true,
+            TransactionKind::ChangeEpoch(_)
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::Genesis(_) => false,
+        };
+        if allow_sponsored_tx {
             return Ok(());
         }
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
@@ -1961,20 +1942,6 @@ impl VerifiedTransaction {
             commit_timestamp_ms,
         }
         .pipe(TransactionKind::ConsensusCommitPrologue)
-        .pipe(Self::new_system_transaction)
-    }
-
-    pub fn new_authenticator_state_update(
-        epoch: u64,
-        round: u64,
-        new_active_jwks: Vec<ActiveJwk>,
-    ) -> Self {
-        AuthenticatorStateUpdate {
-            epoch,
-            round,
-            new_active_jwks,
-        }
-        .pipe(TransactionKind::AuthenticatorStateUpdate)
         .pipe(Self::new_system_transaction)
     }
 

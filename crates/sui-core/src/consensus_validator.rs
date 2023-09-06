@@ -97,8 +97,7 @@ impl TransactionValidator for SuiTxValidator {
                     ckpt_batch.push(signature.summary);
                 }
                 ConsensusTransactionKind::EndOfPublish(_)
-                | ConsensusTransactionKind::CapabilityNotification(_)
-                | ConsensusTransactionKind::NewJWKFetched(_, _) => {}
+                | ConsensusTransactionKind::CapabilityNotification(_) => {}
             }
         }
 
