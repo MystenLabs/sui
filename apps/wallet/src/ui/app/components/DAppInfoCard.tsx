@@ -29,7 +29,7 @@ export function DAppInfoCard({
 	const appHostname = validDAppUrl?.hostname ?? url;
 
 	return (
-		<div className="bg-white p-6 flex flex-1 flex-col gap-5">
+		<div className="bg-white p-6 flex flex-col gap-5">
 			<div className="flex flex-row flex-nowrap items-center gap-3.75 py-3">
 				<div className="flex items-stretch h-15 w-15 overflow-hidden bg-steel/20 shrink-0 grow-0 rounded-2xl">
 					{iconUrl ? <img className="flex-1" src={iconUrl} alt={name} /> : null}
@@ -58,11 +58,13 @@ export function DAppInfoCard({
 					<AccountAddress copyable address={connectedAddress} />
 				</div>
 			) : null}
-			<SummaryCard
-				header="Permissions requested"
-				body={permissions ? <DAppPermissionsList permissions={permissions} /> : null}
-				boxShadow
-			/>
+			{permissions?.length ? (
+				<SummaryCard
+					header="Permissions requested"
+					body={<DAppPermissionsList permissions={permissions} />}
+					boxShadow
+				/>
+			) : null}
 		</div>
 	);
 }

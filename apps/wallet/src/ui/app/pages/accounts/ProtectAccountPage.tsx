@@ -18,6 +18,7 @@ const allowedAccountTypes: CreateType[] = [
 	'mnemonic-derived',
 	'imported',
 	'ledger',
+	'qredo',
 ];
 
 type AllowedAccountTypes = (typeof allowedAccountTypes)[number];

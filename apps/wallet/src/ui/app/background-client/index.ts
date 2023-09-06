@@ -392,7 +392,15 @@ export class BackgroundClient {
 					method: 'acceptQredoConnection',
 					args,
 				}),
-			).pipe(take(1)),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isQredoConnectPayload(payload, 'acceptQredoConnectionResponse')) {
+						return payload.args.accounts;
+					}
+					throw new Error('Error unknown response for accept qredo connection');
+				}),
+			),
 		);
 	}
 
