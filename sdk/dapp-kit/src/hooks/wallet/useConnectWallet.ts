@@ -69,7 +69,7 @@ export function useConnectWallet({
 						? connectResult.accounts.find((account) => account.address === mostRecentAccountAddress)
 						: connectResult.accounts[0];
 
-				// A wallet technically doesn't have to authorize any accounts
+				// A wallet technically doesn't have to authorize any accounts hence the selected account potentially not existing.
 				dispatch({
 					type: 'wallet-connected',
 					payload: { wallet, currentAccount: selectedAccount ?? null },
