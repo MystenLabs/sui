@@ -46,7 +46,7 @@ function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 					src={coinMeta.iconUrl}
 					label={coinMeta.name || coinType}
 					fallback={coinMeta.name || coinType}
-					circle
+					rounded="full"
 				/>
 			) : (
 				<Unstaked />

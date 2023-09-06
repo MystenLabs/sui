@@ -73,7 +73,7 @@ export function ValidatorLogo({
 				label={validatorMeta?.name || ''}
 				fallback={validatorMeta?.name || ''}
 				size={iconSize}
-				circle
+				rounded="full"
 			/>
 			<div className="flex flex-col gap-1.5 overflow-hidden">
 				<div className="flex">
