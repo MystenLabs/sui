@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// An escrow for atomic swap of objects that trusts a third party for liveness,
-/// but not safety.
+/// An escrow for atomic swap of objects using single-owner transactions that
+/// trusts a third party for liveness, but not safety.
 ///
-/// Swap via Escrow proceeds in four phases:
+/// Swap via Escrow proceeds in three phases:
 ///
 /// 1. Both parties `lock` their objects, getting the `Locked` object and a
 ///    `Key`.  Each party can `unlock` their object, to preserve liveness if the
@@ -19,13 +19,19 @@
 /// 3. The custodian swaps the locked objects as long as all conditions are met:
 ///
 ///    - The sender of one Escrow is the recipient of the other and vice versa.
-///      If this is not true, the custodian has incorrectly paired together.
+///      If this is not true, the custodian has incorrectly paired together this
+///      swap.
 ///
-///    - The key of the desired object (`exchange_key`) matches the key the the
-///      other object was locked with (`escrowed_key`) and vice versa.  If this
-///      is not true, it means the wrong objects are being swapped, either
-///      because the custodian paired the wrong escrows together, or because one
-///      of the parties tampered with their object after locking it.
+///    - The key of the desired object (`exchange_key`) matches the key the
+///      other object was locked with (`escrowed_key`) and vice versa.
+
+///      If this is not true, it means the wrong objects are being swapped,
+///      either because the custodian paired the wrong escrows together, or
+///      because one of the parties tampered with their object after locking it.
+///
+///      The key in question is the ID of the `Key` object that unlocked the
+///      `Locked` object that the respective objects resided in immediately
+///      before being sent to the custodian.
 module escrow::example {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
@@ -126,11 +132,11 @@ module escrow::example {
     /// with the object, and if they re-locked the object it would be protected
     /// by a different, incompatible key.
     public fun create<T: key + store>(
-        recipient: address,
-        custodian: address,
-        exchange_key: ID,
         key: Key,
         locked: Locked<T>,
+        exchange_key: ID,
+        recipient: address,
+        custodian: address,
         ctx: &mut TxContext,
     ) {
         let escrow = Escrow {
@@ -261,7 +267,7 @@ module escrow::example {
             ts::next_tx(&mut ts, alice);
             let k1: Key = ts::take_from_sender(&ts);
             let l1: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(bob, custodian, ik2, k1, l1, ts::ctx(&mut ts));
+            create(k1, l1, ik2, bob, custodian, ts::ctx(&mut ts));
         };
 
         // Bob does the same.
@@ -269,7 +275,7 @@ module escrow::example {
             ts::next_tx(&mut ts, bob);
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(alice, custodian, ik1, k2, l2, ts::ctx(&mut ts));
+            create(k2, l2, ik1, alice, custodian, ts::ctx(&mut ts));
         };
 
         // The custodian makes the swap
@@ -333,7 +339,7 @@ module escrow::example {
             ts::next_tx(&mut ts, alice);
             let k1: Key = ts::take_from_sender(&ts);
             let l1: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(bob, custodian, ik2, k1, l1, ts::ctx(&mut ts));
+            create(k1, l1, ik2, bob, custodian, ts::ctx(&mut ts));
         };
 
         // But Bob wants to trade with Diane.
@@ -341,7 +347,7 @@ module escrow::example {
             ts::next_tx(&mut ts, bob);
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(diane, custodian, ik1, k2, l2, ts::ctx(&mut ts));
+            create(k2, l2, ik1, diane, custodian, ts::ctx(&mut ts));
         };
 
         // When the custodian tries to match up the swap, it will fail.
@@ -388,14 +394,14 @@ module escrow::example {
             ts::next_tx(&mut ts, alice);
             let k1: Key = ts::take_from_sender(&ts);
             let l1: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(bob, custodian, ik1, k1, l1, ts::ctx(&mut ts));
+            create(k1, l1, ik1, bob, custodian, ts::ctx(&mut ts));
         };
 
         {
             ts::next_tx(&mut ts, bob);
             let k2: Key = ts::take_from_sender(&ts);
             let l2: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(alice, custodian, ik1, k2, l2, ts::ctx(&mut ts));
+            create(k2, l2, ik1, alice, custodian, ts::ctx(&mut ts));
         };
 
         // When the custodian tries to match up the swap, it will fail.
@@ -445,7 +451,7 @@ module escrow::example {
             ts::next_tx(&mut ts, alice);
             let k1: Key = ts::take_from_sender(&ts);
             let l1: Locked<Coin<SUI>> = ts::take_from_sender(&ts);
-            create(bob, custodian, ik2, k1, l1, ts::ctx(&mut ts));
+            create(k1, l1, ik2, bob, custodian, ts::ctx(&mut ts));
         };
 
         // Bob has a change of heart, so they unlock the object and tamper
@@ -458,7 +464,7 @@ module escrow::example {
 
             let _dust = coin::split(&mut c, 1, ts::ctx(&mut ts));
             let (l, k) = lock(c, ts::ctx(&mut ts));
-            create(alice, custodian, ik1, k, l, ts::ctx(&mut ts));
+            create(k, l, ik1, alice, custodian, ts::ctx(&mut ts));
         };
 
         // When the Custodian makes the swap, it detects Bob's nefarious
@@ -487,7 +493,8 @@ module escrow::example {
             let c = test_coin(&mut ts);
             let cid = object::id(&c);
             let (l, k) = lock(c, ts::ctx(&mut ts));
-            create(bob, custodian, object::id(&l), k, l, ts::ctx(&mut ts));
+            let i = object::id_from_address(@0x0);
+            create(k, l, i, bob, custodian, ts::ctx(&mut ts));
             cid
         };
 
