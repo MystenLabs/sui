@@ -69,14 +69,14 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Register for a Google Cloud account and access the [dashboard](https://console.cloud.google.com/home/dashboard).
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
 
-   ![Dev account](../../static/zklogin-google1.png" "Sign up for Google developer account")
-   <br>
-
-   ![Creds](../../static/zklogin-google2.png "Go to Credentials")
-   <br>
-
-   ![Redirect](../../static/zklogin-google3.png "Configure Redirect URL")
-   <br>
+   ![1](../../static/zklogin-google1.png "Sign up for Google developer account")
+   *Sign up for Google developer account*
+<br>
+   ![2](../../static/zklogin-google2.png "Go to Credentials")
+   *Go to Credentials*
+<br>
+   ![3](../../static/zklogin-google3.png "Configure Redirect URL")
+   *Configure Redirect URL*
 
 ### Facebook
 
@@ -85,6 +85,7 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Select "Build your app" then "Products" then "Facebook Login" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-facebook1.png "Sign up for Facebook developer account")
+*Sign up for Facebook developer account*
 <br>
 
 ![2](../../static/zklogin-facebook2.png "Go to Settings")
@@ -96,7 +97,11 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Go to "Register Your Application" then "Application" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-twitch1.png "Sign up for Twitch developer account")
+*Sign up for Twitch developer account*
+<br>
+
 ![2](../../static/zklogin-twitch2.png "Go to Console")
+*Go to Console*
 
 ## Set Up OAuth Flow
 
