@@ -76,7 +76,6 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 ![2](../../static/zklogin-google2.png "Go to Credentials")
 *Go to Credentials*
 <p>&nbsp;</p>
-<p>&nbsp;</p>
 
 ![3](../../static/zklogin-google3.png "Configure Redirect URL")
 *Configure a Redirect URL*
@@ -89,10 +88,10 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 ![1](../../static/zklogin-facebook1.png "Sign up for Facebook developer account")
 *Sign up for Facebook developer account*
-<br>
-<br>
+<p>&nbsp;</p>
 
 ![2](../../static/zklogin-facebook2.png "Go to Settings")
+*Go to Settings*
 
 ### Twitch
 
@@ -102,8 +101,7 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 ![1](../../static/zklogin-twitch1.png "Sign up for Twitch developer account")
 *Sign up for Twitch developer account*
-<br>
-<br>
+<p>&nbsp;</p>
 
 ![2](../../static/zklogin-twitch2.png "Go to Console")
 *Go to Console*
