@@ -65,6 +65,15 @@ export function useCreateAccountsMutation() {
 					type: 'mnemonic-derived',
 					sourceID: accountsFormValues.sourceID,
 				});
+			} else if (
+				type === 'imported' &&
+				validateAccountFormValues(type, accountsFormValues, password)
+			) {
+				createdAccounts = await backgroundClient.createAccounts({
+					type: 'imported',
+					keyPair: accountsFormValues.keyPair,
+					password: password!,
+				});
 				// TODO implement all types
 			} else {
 				throw new Error('Not implemented yet');
