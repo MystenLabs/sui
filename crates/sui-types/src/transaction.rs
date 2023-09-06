@@ -15,7 +15,10 @@ use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
+use crate::messages_consensus::{
+    AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
+    ConsensusCommitPrologue,
+};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
@@ -203,6 +206,8 @@ pub enum TransactionKind {
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
     AuthenticatorStateUpdate(AuthenticatorStateUpdate),
+    AuthenticatorStateCreate(AuthenticatorStateCreate),
+    AuthenticatorStateExpire(AuthenticatorStateExpire),
     // .. more transaction types go here
 }
 
@@ -215,7 +220,9 @@ impl VersionedProtocolMessage for TransactionKind {
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ProgrammableTransaction(_) => Ok(()),
-            TransactionKind::AuthenticatorStateUpdate(_) => {
+            TransactionKind::AuthenticatorStateCreate(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::AuthenticatorStateExpire(_) => {
                 if protocol_config.enable_jwk_consensus_updates() {
                     Ok(())
                 } else {
@@ -845,6 +852,8 @@ impl TransactionKind {
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
                 | TransactionKind::AuthenticatorStateUpdate(_)
+                | TransactionKind::AuthenticatorStateExpire(_)
+                | TransactionKind::AuthenticatorStateCreate(_)
         )
     }
 
@@ -875,9 +884,15 @@ impl TransactionKind {
                 initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                 mutable: true,
             })),
+            Self::AuthenticatorStateCreate(_) => Either::Right(Either::Right(iter::empty())),
             Self::AuthenticatorStateUpdate(update) => Either::Left(iter::once(SharedInputObject {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                 initial_shared_version: update.authenticator_state_obj_start_version,
+                mutable: true,
+            })),
+            Self::AuthenticatorStateExpire(expire) => Either::Left(iter::once(SharedInputObject {
+                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                initial_shared_version: expire.authenticator_state_obj_start_version,
                 mutable: true,
             })),
             Self::ProgrammableTransaction(pt) => {
@@ -917,10 +932,18 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
+            Self::AuthenticatorStateCreate(_) => vec![],
             Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                     initial_shared_version: update.authenticator_state_obj_start_version,
+                    mutable: true,
+                }]
+            }
+            Self::AuthenticatorStateExpire(expire) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: expire.authenticator_state_obj_start_version,
                     mutable: true,
                 }]
             }
@@ -946,7 +969,9 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => (),
-            TransactionKind::AuthenticatorStateUpdate(_) => {
+            TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::AuthenticatorStateCreate(_)
+            | TransactionKind::AuthenticatorStateExpire(_) => {
                 // The transaction should have been rejected earlier if the feature is not enabled.
                 assert!(config.enable_jwk_consensus_updates());
             }
@@ -976,6 +1001,8 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::AuthenticatorStateCreate(_) => "AuthenticatorStateCreate",
+            Self::AuthenticatorStateExpire(_) => "AuthenticatorStateExpire",
         }
     }
 }
@@ -1005,6 +1032,12 @@ impl Display for TransactionKind {
             }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::AuthenticatorStateCreate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Create")?;
+            }
+            Self::AuthenticatorStateExpire(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Expire")?;
             }
         }
         write!(f, "{}", writer)
@@ -1980,6 +2013,12 @@ impl VerifiedTransaction {
         .pipe(Self::new_system_transaction)
     }
 
+    pub fn new_authenticator_state_create(epoch: u64, round: u64) -> Self {
+        AuthenticatorStateCreate { epoch, round }
+            .pipe(TransactionKind::AuthenticatorStateCreate)
+            .pipe(Self::new_system_transaction)
+    }
+
     pub fn new_authenticator_state_update(
         epoch: u64,
         round: u64,
@@ -1988,10 +2027,9 @@ impl VerifiedTransaction {
     ) -> Self {
         AuthenticatorStateUpdate {
             epoch,
-            round: Some(round),
+            round,
             authenticator_state_obj_start_version,
             new_active_jwks,
-            min_epoch: None,
         }
         .pipe(TransactionKind::AuthenticatorStateUpdate)
         .pipe(Self::new_system_transaction)
@@ -2002,14 +2040,12 @@ impl VerifiedTransaction {
         authenticator_state_obj_start_version: SequenceNumber,
         min_epoch: u64,
     ) -> Self {
-        AuthenticatorStateUpdate {
+        AuthenticatorStateExpire {
             epoch,
-            round: None,
             authenticator_state_obj_start_version,
-            new_active_jwks: Vec::new(),
-            min_epoch: Some(min_epoch),
+            min_epoch,
         }
-        .pipe(TransactionKind::AuthenticatorStateUpdate)
+        .pipe(TransactionKind::AuthenticatorStateExpire)
         .pipe(Self::new_system_transaction)
     }
 

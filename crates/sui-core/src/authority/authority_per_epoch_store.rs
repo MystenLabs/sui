@@ -190,6 +190,9 @@ pub struct AuthorityPerEpochStore {
 
     /// aggregator for JWK votes
     jwk_aggregator: Mutex<JwkAggregator>,
+
+    /// Creation version of the authenticator state object.
+    authenticator_state_start_version: Option<SequenceNumber>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.

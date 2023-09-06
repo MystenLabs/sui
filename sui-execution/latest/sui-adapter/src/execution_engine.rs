@@ -44,7 +44,10 @@ mod checked {
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
+    use sui_types::messages_consensus::{
+        AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
+        ConsensusCommitPrologue,
+    };
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
@@ -530,6 +533,19 @@ mod checked {
                     pt,
                 )
             }
+            TransactionKind::AuthenticatorStateCreate(auth_state_create) => {
+                setup_authenticator_state_create(
+                    auth_state_create,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("AuthenticatorStateCreate cannot fail");
+                Ok(Mode::empty_results())
+            }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
                     auth_state_update,
@@ -541,6 +557,19 @@ mod checked {
                     metrics,
                 )
                 .expect("AuthenticatorStateUpdate cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::AuthenticatorStateExpire(expire) => {
+                setup_authenticator_state_expire(
+                    expire,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("AuthenticatorStateExpire cannot fail");
                 Ok(Mode::empty_results())
             }
         }
@@ -928,6 +957,41 @@ mod checked {
         )
     }
 
+    fn setup_authenticator_state_create(
+        _create: AuthenticatorStateCreate,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state_create transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
@@ -956,6 +1020,50 @@ mod checked {
             assert_invariant!(
                 res.is_ok(),
                 "Unable to generate authenticator_state_update transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
+    fn setup_authenticator_state_expire(
+        expire: AuthenticatorStateExpire,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        assert!(protocol_config.enable_jwk_consensus_updates());
+
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        initial_shared_version: expire.authenticator_state_obj_start_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state_expire transaction!"
             );
             builder.finish()
         };

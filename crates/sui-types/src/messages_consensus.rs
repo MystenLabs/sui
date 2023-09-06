@@ -29,6 +29,28 @@ pub struct ConsensusCommitPrologue {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateCreate {
+    // note: the fields below are not used, they exist just to give the transaction a guaranteed
+    // unique digest.
+    /// Epoch of the authenticator state create transaction
+    pub epoch: u64,
+    /// Consensus round of the authenticator state create
+    pub round: u64,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateExpire {
+    // note: epoch is not used, it exists just to give the transaction a guaranteed
+    // unique digest.
+    /// Epoch of the authenticator state create transaction
+    pub epoch: u64,
+    /// Start version of the authenticator state object
+    pub authenticator_state_obj_start_version: SequenceNumber,
+    /// expire JWKs that have a lower epoch than this
+    pub min_epoch: u64,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorStateUpdate {
     /// Epoch of the authenticator state update transaction
     pub epoch: u64,
@@ -38,8 +60,6 @@ pub struct AuthenticatorStateUpdate {
     pub authenticator_state_obj_start_version: SequenceNumber,
     /// newly active jwks
     pub new_active_jwks: Vec<ActiveJwk>,
-    /// if set, expire JWKs that have a lower epoch than this
-    pub expire_jwks: Option<u64>,
     // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
     // TransactionKind.
 }

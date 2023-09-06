@@ -3762,6 +3762,35 @@ impl AuthorityState {
         (next_protocol_version, system_packages)
     }
 
+    pub async fn create_and_execute_authenticator_state_expiry_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        round: u64,
+    ) -> anyhow::Result<Option<TransactionEffects>> {
+        if !epoch_store.authenticator_state_enabled(self) {
+            return Ok(None);
+        }
+
+        let start_version = epoch_store
+            .authenticator_state_start_version(self)
+            .expect("cannot be None when authenticator_state_enabled");
+
+        let next_epoch = epoch_store.epoch().checked_add(1);
+        let min_epoch = next_epoch.saturating_sub(protocol_config.max_age_of_jwk_in_epochs());
+
+        let tx = VerifiedTransaction::new_authenticator_state_expire(
+            epoch_store.epoch(),
+            start_version,
+            min_epoch,
+        );
+
+        let txn = self
+            .create_authenticator_state_expiry_tx(epoch_store.protocol_config())
+            .await?;
+        let effects = self.execute_transaction(txn).await?;
+        Ok(Some(effects))
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
