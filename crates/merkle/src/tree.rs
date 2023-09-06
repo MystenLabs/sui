@@ -31,6 +31,11 @@ pub enum Child {
     Leaf {
         object_ref: ObjectRef,
     },
+    // InternalWithCommonPath {
+    //     path: NibblePath,
+    //     digest: MerkleDigest,
+    //     leaf_count: usize,
+    // },
     // TODO maybe have a collapsed node that has the common nibble path this could help situations
     // for leading zero ids 0x1,0x2, 0x5, etc although this may not help due to 0xdee9?
 }
@@ -108,6 +113,13 @@ impl Node {
         self.children.iter().all(Child::is_none)
     }
 
+    pub fn child_count(&self) -> usize {
+        self.children
+            .iter()
+            .map(|c| if c.is_none() { 0 } else { 1 })
+            .sum()
+    }
+
     pub fn leaf_count(&self) -> usize {
         self.children.iter().map(Child::leaf_count).sum()
     }
@@ -172,7 +184,15 @@ pub trait TreeStore {
 
 #[derive(Debug)]
 pub struct InMemoryStore {
-    inner: HashMap<MerkleDigest, Node>,
+    pub inner: HashMap<MerkleDigest, Node>,
+}
+
+impl InMemoryStore {
+    pub fn new() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
 }
 
 impl TreeStore for InMemoryStore {

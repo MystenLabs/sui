@@ -1,7 +1,9 @@
+use std::mem::size_of;
 use std::{path::Path, sync::Arc, time::Duration};
 
 use anyhow::Result;
 
+use merkle::tree::InMemoryStore;
 use sui_storage::http_key_value_store::HttpKVStore;
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_types::digests::TransactionDigest;
@@ -145,6 +147,23 @@ async fn main() -> Result<()> {
             "done: {checkpoint}, object count: {}",
             tree.root().leaf_count()
         );
+    }
+
+    let mut db = InMemoryStore::new();
+    for (digest, node) in merkledb.merkle_nodes.unbounded_iter() {
+        db.write_node(node)?;
+    }
+
+    println!("db entries: {}", db.inner.len());
+    println!("db size: {}", db.inner.len() * size_of::<Node>());
+    let mut sizes = [0; 17];
+
+    for node in db.inner.values() {
+        sizes[node.child_count()] += 1;
+    }
+
+    for (i, count) in sizes.into_iter().enumerate() {
+        println!("{i}: {count}");
     }
 
     Ok(())
