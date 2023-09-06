@@ -25,6 +25,7 @@ feature_flags:
   txn_base_cost_as_multiplier: true
   loaded_child_object_format: true
   simple_conservation_checks: true
+  loaded_child_object_format_type: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

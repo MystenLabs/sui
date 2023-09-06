@@ -272,6 +272,10 @@ struct FeatureFlags {
     // while charging for storage.
     #[serde(skip_serializing_if = "is_false")]
     simple_conservation_checks: bool,
+
+    // If true, use the new child object format type logging
+    #[serde(skip_serializing_if = "is_false")]
+    loaded_child_object_format_type: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -883,6 +887,10 @@ impl ProtocolConfig {
     pub fn simple_conservation_checks(&self) -> bool {
         self.feature_flags.simple_conservation_checks
     }
+
+    pub fn loaded_child_object_format_type(&self) -> bool {
+        self.feature_flags.loaded_child_object_format_type
+    }
 }
 
 #[cfg(not(msim))]
@@ -1434,6 +1442,7 @@ impl ProtocolConfig {
                 let mut cfg = Self::get_for_version_impl(version - 1, chain);
                 cfg.feature_flags.simple_conservation_checks = true;
                 cfg.max_publish_or_upgrade_per_ptb = Some(5);
+                cfg.feature_flags.loaded_child_object_format_type = true;
                 cfg
             }
             // Use this template when making changes:
