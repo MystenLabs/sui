@@ -69,7 +69,7 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Register for a Google Cloud account and access the [dashboard](https://console.cloud.google.com/home/dashboard).
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
 
-   ![1]<a href="zklogin-google1.png" width=480> "Sign up for Google developer account")
+   ![1]("Sign up for Google developer account")
     *Sign up for Google developer account*
 
    ![2](../../static/zklogin-google2.png "Go to Credentials")
