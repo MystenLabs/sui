@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{error::UNKNOWN_ERROR_CODE, ErrorObjectOwned};
 pub use sui_json_rpc::error::{TRANSACTION_EXECUTION_CLIENT_ERROR_CODE, TRANSIENT_ERROR_CODE};
 use thiserror::Error;
 
@@ -19,6 +19,10 @@ impl std::fmt::Display for Error {
 }
 
 impl Error {
+    pub fn is_call_error(&self) -> bool {
+        self.code != UNKNOWN_ERROR_CODE
+    }
+
     pub fn is_client_error(&self) -> bool {
         use jsonrpsee::types::error::{
             BATCHES_NOT_SUPPORTED_CODE, INVALID_PARAMS_CODE, INVALID_REQUEST_CODE,
@@ -47,6 +51,8 @@ impl Error {
 
 impl From<jsonrpsee::core::Error> for Error {
     fn from(err: jsonrpsee::core::Error) -> Self {
+        // The following code relies on jsonrpsee's From<Error> for ErrorObjectOwned implementation
+        // It converts any variant that is not Error::Call into an ErrorObject with UNKNOWN_ERROR_CODE
         let error_object_owned: ErrorObjectOwned = err.into();
         Error {
             code: error_object_owned.code(),
