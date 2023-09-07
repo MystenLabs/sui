@@ -126,11 +126,11 @@ const exampleMnemonic = 'result crisp session latin ...';
 const keyPair = Ed25519Keypair.deriveKeypair(exampleMnemonic);
 ```
 
-## Exporting and importing Keypairs
+## Exporting and importing key pairs
 
-Keypairs implement an `export` function that can be used to export a keypair in a standard format.
-The return value is an object with a `scheme` property that indicates the what type of keypair was
-exported, and a `privateKey` which can be used to derive the keypair again.
+`Keypair`s implement an `export` function that can be used to export a keypair in a standard format.
+The return value is an object with a `scheme` property that indicates what the type of keypair was
+exported, and a `privateKey` that you can use to derive the `Keypair` again.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
@@ -158,11 +158,11 @@ export function fromExportedKeypair(keypair: ExportedKeypair): Keypair {
 }
 ```
 
-## Deriving a keypair from a hex encoded secret key
+## Deriving a `Keypair` from a hex encoded secret key
 
-If you have an existing secret key formatted as a hex encoded string, you can derive a keypair by
-converting the secret key to a Uint8Array and passing it to the `fromSecretKey` method of a Keypair
-class.
+If you have an existing secret key formatted as a hex encoded string, you can derive a `Keypair` by
+converting the secret key to a `Uint8Array` and passing it to the `fromSecretKey` method of a
+`Keypair` class.
 
 ```typescript
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
