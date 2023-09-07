@@ -4,7 +4,7 @@
 import { KIOSK_ITEM, KioskClient, KioskItem, KioskOwnerCap, Network } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
-import { SuiClient, SuiObjectResponse } from '@mysten/sui.js/src/client';
+import { SuiClient } from '@mysten/sui.js/src/client';
 import { useSuiClient } from '@mysten/dapp-kit';
 
 export enum KioskTypes {
@@ -13,7 +13,7 @@ export enum KioskTypes {
 }
 
 export type Kiosk = {
-	items: Partial<SuiObjectResponse & KioskItem>[];
+	items: KioskItem[];
 	itemIds: string[];
 	kioskId: string;
 	type: KioskTypes;
