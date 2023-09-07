@@ -59,7 +59,7 @@ pub struct Opts {
     /// use a LocalValidatorAggregatorProxy.
     #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_execution: bool,
-    #[clap(long, parse(try_from_str), default_value = "false", global = true)]
+    #[clap(long, action = clap::ArgAction::Set, default_value = "false", global = true)]
     pub use_fullnode_for_gas_fetch: bool,
     /// True to use FullNodeReconfigObserver,
     /// Otherwise use EmbeddedReconfigObserver,
