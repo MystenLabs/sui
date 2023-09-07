@@ -3,13 +3,10 @@
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import type {
-	StandardConnectFeature,
+	IdentifierRecord,
 	StandardConnectMethod,
-	StandardDisconnectFeature,
 	StandardDisconnectMethod,
-	StandardEventsFeature,
 	StandardEventsOnMethod,
-	SuiFeatures,
 	SuiSignAndExecuteTransactionBlockMethod,
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockMethod,
@@ -22,9 +19,11 @@ export class MockWallet implements Wallet {
 	icon = `data:image/png;base64,` as const;
 	chains = SUI_CHAINS;
 	#walletName: string;
+	#additionalFeatures: IdentifierRecord<unknown>;
 
-	constructor(name: string) {
+	constructor(name: string, additionalFeatures: IdentifierRecord<unknown>) {
 		this.#walletName = name;
+		this.#additionalFeatures = additionalFeatures;
 	}
 
 	get name() {
@@ -42,10 +41,7 @@ export class MockWallet implements Wallet {
 		return [account];
 	}
 
-	get features(): StandardConnectFeature &
-		StandardDisconnectFeature &
-		StandardEventsFeature &
-		SuiFeatures {
+	get features() {
 		return {
 			'standard:connect': {
 				version: '1.0.0',
@@ -71,6 +67,7 @@ export class MockWallet implements Wallet {
 				version: '1.0.0',
 				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 			},
+			...this.#additionalFeatures,
 		};
 	}
 

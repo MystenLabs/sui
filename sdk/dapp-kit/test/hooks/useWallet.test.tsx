@@ -4,6 +4,7 @@
 import { renderHook } from '@testing-library/react';
 import { useWallet } from 'dapp-kit/src';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import { getWallets } from '@mysten/wallet-standard';
 
 describe('useWallet', () => {
 	test('that an error is thrown when rendered without a provider', () => {
@@ -41,5 +42,26 @@ describe('useWallet', () => {
 		unregister1();
 		unregister2();
 		unregister3();
+	});
+
+	test('that the list of wallets is correctly filtered by required features', () => {
+		const unregister1 = registerMockWallet('Mock Wallet 1', {
+			'my-dapp:super-cool-feature': {
+				version: '1.0.0',
+				superCoolFeature: () => {},
+			},
+		});
+		const unregister2 = registerMockWallet('Mock Wallet 2');
+
+		const wrapper = createWalletProviderContextWrapper({
+			requiredFeatures: ['my-dapp:super-cool-feature'],
+		});
+		const { result } = renderHook(() => useWallet(), { wrapper });
+		const walletNames = result.current.wallets.map((wallet) => wallet.name);
+
+		expect(walletNames).toStrictEqual(['Mock Wallet 1']);
+
+		unregister1();
+		unregister2();
 	});
 });

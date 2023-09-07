@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
+import type { IdentifierRecord } from '@mysten/wallet-standard';
 import { getWallets } from '@mysten/wallet-standard';
 import { SuiClientProvider, WalletProvider } from 'dapp-kit/src';
 import { MockWallet } from './mockWallet.js';
@@ -21,7 +22,10 @@ export function createWalletProviderContextWrapper(
 	};
 }
 
-export function registerMockWallet(walletName: string) {
+export function registerMockWallet(
+	walletName: string,
+	additionalFeatures: IdentifierRecord<unknown> = {},
+) {
 	const walletsApi = getWallets();
-	return walletsApi.register(new MockWallet(walletName));
+	return walletsApi.register(new MockWallet(walletName, additionalFeatures));
 }
