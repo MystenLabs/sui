@@ -191,9 +191,10 @@ export class BackgroundClient {
 	public clearWallet() {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'clear'>>({
-					type: 'keyring',
-					method: 'clear',
+				createMessage<MethodPayload<'clearWallet'>>({
+					type: 'method-payload',
+					method: 'clearWallet',
+					args: {},
 				}),
 			).pipe(take(1)),
 		);
@@ -392,7 +393,15 @@ export class BackgroundClient {
 					method: 'acceptQredoConnection',
 					args,
 				}),
-			).pipe(take(1)),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isQredoConnectPayload(payload, 'acceptQredoConnectionResponse')) {
+						return payload.args.accounts;
+					}
+					throw new Error('Error unknown response for accept qredo connection');
+				}),
+			),
 		);
 	}
 
@@ -564,6 +573,26 @@ export class BackgroundClient {
 					args,
 				}),
 			).pipe(take(1)),
+		);
+	}
+
+	public getAccountSourceEntropy(accountSourceID: string) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getAccountSourceEntropy'>>({
+					type: 'method-payload',
+					method: 'getAccountSourceEntropy',
+					args: { accountSourceID },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isMethodPayload(payload, 'getAccountSourceEntropyResponse')) {
+						return payload.args;
+					}
+					throw new Error('Unexpected response type');
+				}),
+			),
 		);
 	}
 

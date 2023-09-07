@@ -75,7 +75,8 @@
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui.js": "workspace:*",
+		"@mysten/wallet-standard": "workspace:*"
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^4.0.0",

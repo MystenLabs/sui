@@ -52,6 +52,9 @@ type MethodPayloads = {
 	setAccountNickname: { id: string; nickname: string | null };
 	verifyPassword: { password: string };
 	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeys };
+	getAccountSourceEntropy: { accountSourceID: string };
+	getAccountSourceEntropyResponse: { entropy: string };
+	clearWallet: {};
 };
 
 type Methods = keyof MethodPayloads;

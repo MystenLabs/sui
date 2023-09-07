@@ -18,7 +18,7 @@ import { Window } from '../Window';
 import { getQredoAccountSource } from '../account-sources';
 import { QredoAccountSource } from '../account-sources/QredoAccountSource';
 import { addNewAccounts } from '../accounts';
-import { type QredoSerializedAccount } from '../accounts/QredoAccount';
+import { type QredoAccount, type QredoSerializedAccount } from '../accounts/QredoAccount';
 import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 import { type Message } from '_src/shared/messaging/messages';
@@ -61,7 +61,7 @@ export async function requestUserApproval(
 				url: qredoConnectUrl,
 				windowID: existingPendingRequest.windowID || undefined,
 				match: ({ url, inAppRedirectUrl }) => {
-					const urlMatch = `/dapp/qredo-connect/${existingPendingRequest.id}`;
+					const urlMatch = `/accounts/qredo-connect/${existingPendingRequest.id}`;
 					return (
 						url.includes(urlMatch) || (!!inAppRedirectUrl && inAppRedirectUrl.includes(urlMatch))
 					);
@@ -238,10 +238,11 @@ export async function acceptQredoConnection({
 			nickname: null,
 		});
 	}
-	await addNewAccounts(newQredoAccounts);
+	const connectedAccounts = (await addNewAccounts(newQredoAccounts)) as QredoAccount[];
 	await deletePendingRequest(pendingRequest);
 	qredoEvents.emit('onConnectionResponse', {
 		allowed: true,
 		request: pendingRequest,
 	});
+	return Promise.all(connectedAccounts.map(async (anAccount) => await anAccount.toUISerialized()));
 }

@@ -4,25 +4,30 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useState } from 'react';
 
-const imageStyle = cva(['text-white capitalize overflow-hidden bg-gray-40  shrink-0'], {
-	variants: {
-		size: {
-			sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
-			md: 'w-7.5 h-7.5 font-medium text-body',
-			lg: 'w-10 h-10 font-medium text-heading4',
-			xl: 'w-15 h-15 font-medium text-heading4',
+const imageStyle = cva(
+	['text-white capitalize overflow-hidden bg-gray-40 shrink-0 bg-transparent'],
+	{
+		variants: {
+			size: {
+				sm: 'w-6 h-6 font-medium text-subtitleSmallExtra',
+				md: 'w-7.5 h-7.5 font-medium text-body',
+				lg: 'w-10 h-10 font-medium text-heading4',
+				xl: 'w-12.5 h-12.5 font-medium text-heading4',
+				xxl: 'w-15 h-15 font-medium text-heading4',
+			},
+			rounded: {
+				full: 'rounded-full',
+				md: 'rounded-md',
+				lg: 'rounded-lg',
+			},
 		},
-		circle: {
-			true: 'rounded-full',
-			false: 'rounded-md',
-		},
-	},
 
-	defaultVariants: {
-		circle: false,
-		size: 'md',
+		defaultVariants: {
+			rounded: 'md',
+			size: 'md',
+		},
 	},
-});
+);
 
 export interface ImageIconProps extends VariantProps<typeof imageStyle> {
 	src: string | null;

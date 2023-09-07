@@ -694,7 +694,7 @@ impl Options {
         }
         if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
             for name in m {
-                let pass = SimplificationPass::from_str(&name)
+                let pass = SimplificationPass::from_str(name)
                     .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
                 options.model_builder.simplification_pipeline.push(pass);
             }

@@ -424,7 +424,7 @@ type SystemParameters {
 }
 
 type TransactionBlock {
-	digest: String!
+	digest: TransactionDigest!
 	effects: TransactionBlockEffects
 	sender: Address
 	bcs: Base64
@@ -462,7 +462,7 @@ type TransactionBlockEdge {
 }
 
 type TransactionBlockEffects {
-	digest: String!
+	digest: TransactionDigest!
 	gasEffects: GasEffects
 	epoch: Epoch
 	status: ExecutionStatus
@@ -487,6 +487,8 @@ enum TransactionBlockKindInput {
 	PROGRAMMABLE_TX
 	SYSTEM_TX
 }
+
+scalar TransactionDigest
 
 type Validator {
 	address: Address!

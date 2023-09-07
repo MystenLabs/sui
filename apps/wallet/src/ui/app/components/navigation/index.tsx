@@ -7,7 +7,6 @@ import { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import { useActiveAccount } from '../../hooks/useActiveAccount';
-import { useIsAccountReadLocked } from '../../hooks/useIsAccountReadLocked';
 import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
 
@@ -20,9 +19,8 @@ export type NavigationProps = {
 function Navigation({ className }: NavigationProps) {
 	const isVisible = useAppSelector(getNavIsVisible);
 	const activeAccount = useActiveAccount();
-	const isActiveAccountReadLocked = useIsAccountReadLocked(activeAccount);
 	const makeLinkCls = ({ isActive }: { isActive: boolean }) =>
-		cl(st.link, { [st.active]: isActive, [st.disabled]: isActiveAccountReadLocked });
+		cl(st.link, { [st.active]: isActive, [st.disabled]: activeAccount?.isLocked });
 	const makeLinkClsNoDisabled = ({ isActive }: { isActive: boolean }) =>
 		cl(st.link, { [st.active]: isActive });
 	return (
@@ -51,7 +49,7 @@ function Navigation({ className }: NavigationProps) {
 					className={makeLinkCls}
 					title="Assets"
 					onClick={(e) => {
-						if (isActiveAccountReadLocked) {
+						if (activeAccount?.isLocked) {
 							e.preventDefault();
 						}
 					}}
@@ -64,7 +62,7 @@ function Navigation({ className }: NavigationProps) {
 					className={makeLinkCls}
 					title="Apps"
 					onClick={(e) => {
-						if (isActiveAccountReadLocked) {
+						if (activeAccount?.isLocked) {
 							e.preventDefault();
 						}
 					}}
@@ -78,7 +76,7 @@ function Navigation({ className }: NavigationProps) {
 					className={makeLinkCls}
 					title="Transactions"
 					onClick={(e) => {
-						if (isActiveAccountReadLocked) {
+						if (activeAccount?.isLocked) {
 							e.preventDefault();
 						}
 					}}

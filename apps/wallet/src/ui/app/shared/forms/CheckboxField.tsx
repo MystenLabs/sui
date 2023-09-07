@@ -3,6 +3,7 @@
 
 import { type ComponentProps, type ReactNode, forwardRef } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
+import FormField from './FormField';
 import { Checkbox } from './controls/Checkbox';
 
 type CheckboxFieldProps = {
@@ -18,14 +19,16 @@ export const CheckboxField = forwardRef<HTMLButtonElement, CheckboxFieldProps>(
 				control={control}
 				name={name}
 				render={({ field: { onChange, name, value } }) => (
-					<Checkbox
-						label={label}
-						onCheckedChange={onChange}
-						name={name}
-						checked={value}
-						ref={forwardedRef}
-						{...props}
-					/>
+					<FormField name={name}>
+						<Checkbox
+							label={label}
+							onCheckedChange={onChange}
+							name={name}
+							checked={value}
+							ref={forwardedRef}
+							{...props}
+						/>
+					</FormField>
 				)}
 			/>
 		);

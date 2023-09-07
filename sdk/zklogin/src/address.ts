@@ -11,13 +11,7 @@ import { genAddressSeed, toBufferBE } from './utils.js';
 
 export function jwtToAddress(jwt: string, userSalt: bigint) {
 	const decodedJWT = decodeJwt(jwt);
-	if (
-		!decodedJWT.sub ||
-		!decodedJWT.iss ||
-		!decodedJWT.aud ||
-		!decodedJWT.email ||
-		typeof decodedJWT.email !== 'string'
-	) {
+	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
 		throw new Error('Missing jwt data');
 	}
 
@@ -49,8 +43,11 @@ export function computeZkAddress({
 	aud,
 	userSalt,
 }: ComputeZKAddressOptions) {
-	const addressSeedBytesBigEndian = toBufferBE(genAddressSeed(userSalt, claimName, claimValue), 32);
-	const addressParamBytes = zkBcs.ser('AddressParams', { iss, aud }).toBytes();
+	const addressSeedBytesBigEndian = toBufferBE(
+		genAddressSeed(userSalt, claimName, claimValue, aud),
+		32,
+	);
+	const addressParamBytes = zkBcs.ser('AddressParams', { iss }).toBytes();
 
 	const tmp = new Uint8Array(1 + addressSeedBytesBigEndian.length + addressParamBytes.length);
 	tmp.set([SIGNATURE_SCHEME_TO_FLAG.Zk]);

@@ -597,7 +597,7 @@ impl FunctionTargetPipeline {
         let dump = format!("{}\n", content.trim());
         let file_name = format!("{}_{}_{}.bytecode", base_name, step_count, suffix);
         debug!("dumping bytecode to `{}`", file_name);
-        fs::write(&file_name, &dump).expect("dumping bytecode");
+        fs::write(&file_name, dump).expect("dumping bytecode");
     }
 
     /// Generate dot files for control-flow graphs.

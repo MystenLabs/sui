@@ -164,6 +164,14 @@ export class MnemonicAccountSource extends AccountSource<
 		};
 	}
 
+	async getEntropy() {
+		const data = await this.getEphemeralValue();
+		if (!data) {
+			throw new Error(`Mnemonic account source ${this.id} is locked`);
+		}
+		return data.entropyHex;
+	}
+
 	get sourceHash() {
 		return this.getStoredData().then(({ sourceHash }) => sourceHash);
 	}

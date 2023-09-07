@@ -8,7 +8,7 @@ edition = "2021"
 
 
 [dependencies]
-async-graphql.workspace = true
+async-graphql = {workspace = true, features = ["dataloader"] }
 async-graphql-axum = { version = "5.0.10" }
 async-trait.workspace = true
 axum.workspace = true
@@ -17,6 +17,7 @@ clap.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 hex.workspace = true
 serde.workspace = true
+serde_with.workspace = true
 telemetry-subscribers.workspace = true
 tracing.workspace = true
 tokio.workspace = true

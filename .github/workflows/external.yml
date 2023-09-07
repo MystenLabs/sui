@@ -38,7 +38,7 @@ jobs:
   diff:
     runs-on: [ubuntu-latest]
     outputs:
-      isRust: ${{ steps.diff.outputs.isRust }} 
+      isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
     steps:
       - uses: actions/checkout@v3
@@ -131,22 +131,14 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: arduino/setup-protoc@v1
-        # this avoids rate-limiting
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v3
       - run: rustup component add clippy
-      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
-      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
-      # 'librocksdb-sys' src directory which is managed by cargo
-      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-      #   with:
-      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
 
       # See '.cargo/config' for list of enabled/disappled clippy lints
-      - name: cargo clippy
-        run: cargo xclippy -D warnings
+      - name: cargo move-clippy
+        run: |
+          cd external-crates/move
+          cargo move-clippy -D warnings
 
   rustfmt:
     needs: diff

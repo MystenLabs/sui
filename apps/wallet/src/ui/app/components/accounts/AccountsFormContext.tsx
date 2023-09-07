@@ -1,24 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
-	type Dispatch,
 	type ReactNode,
 	createContext,
 	useContext,
-	useState,
-	type SetStateAction,
+	useRef,
+	useCallback,
+	useMemo,
+	type MutableRefObject,
 } from 'react';
-import { type FormValues as ImportRecoveryPhraseFormValues } from './ImportRecoveryPhraseForm';
-import { type FormValues as ProtectAccountFormValues } from './ProtectAccountForm';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { type Wallet } from '_src/shared/qredo-api';
 
-type AccountsFormValues = Partial<ImportRecoveryPhraseFormValues & ProtectAccountFormValues> | null;
-type AccountsFormContextType = [AccountsFormValues, Dispatch<SetStateAction<AccountsFormValues>>];
+export type AccountsFormValues =
+	| { type: 'zk'; provider: ZkProvider }
+	| { type: 'new-mnemonic' }
+	| { type: 'import-mnemonic'; entropy: string }
+	| { type: 'mnemonic-derived'; sourceID: string }
+	| { type: 'imported'; keyPair: ExportedKeypair }
+	| {
+			type: 'ledger';
+			accounts: { publicKey: string; derivationPath: string; address: string }[];
+	  }
+	| { type: 'qredo'; accounts: Wallet[]; qredoID: string }
+	| null;
+
+type AccountsFormContextType = [
+	MutableRefObject<AccountsFormValues>,
+	(values: AccountsFormValues) => void,
+];
 
 const AccountsFormContext = createContext<AccountsFormContextType | null>(null);
 
 export const AccountsFormProvider = ({ children }: { children: ReactNode }) => {
-	const value = useState<AccountsFormValues>(null);
+	const valuesRef = useRef<AccountsFormValues>(null);
+	const setter = useCallback((values: AccountsFormValues) => {
+		valuesRef.current = values;
+	}, []);
+	const value = useMemo(() => [valuesRef, setter] as AccountsFormContextType, [setter]);
 	return <AccountsFormContext.Provider value={value}>{children}</AccountsFormContext.Provider>;
 };
 

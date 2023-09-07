@@ -488,7 +488,7 @@ mod testing {
                 // If this is a vector<u8> we print it in hex (as most users would expect us to)
                 if is_non_empty_vector_u8(&vec) {
                     let bytes = MoveValue::vec_to_vec_u8(vec).map_err(to_vec_u8_type_err)?;
-                    write!(out, "0x{}", hex::encode(&bytes))
+                    write!(out, "0x{}", hex::encode(bytes))
                         .map_err(fmt_error_to_partial_vm_error)?;
                 } else {
                     let is_complex_inner_type =

@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '@mysten/bcs';
+import { BCS, fromB64, toB64 } from '@mysten/bcs';
+import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
 import { bcs } from '@mysten/sui.js/bcs';
 
 export const zkBcs = new BCS(bcs);
@@ -17,6 +18,31 @@ zkBcs.registerStructType('ZkClaim', {
 	index_mod_4: BCS.U8,
 });
 
+type Claim = {
+	name: string;
+	value_base64: string;
+	index_mod_4: number;
+};
+
+export interface ProofPoints {
+	pi_a: string[];
+	pi_b: string[][];
+	pi_c: string[];
+}
+
+export interface ZkSignatureInputs {
+	proof_points: ProofPoints;
+	address_seed: string;
+	claims: Claim[];
+	header_base64: string;
+}
+
+export interface ZkSignature {
+	inputs: ZkSignatureInputs;
+	maxEpoch: number;
+	userSignature: string | Uint8Array;
+}
+
 zkBcs.registerStructType('ZkSignature', {
 	inputs: {
 		proof_points: {
@@ -31,3 +57,25 @@ zkBcs.registerStructType('ZkSignature', {
 	max_epoch: BCS.U64,
 	user_signature: [BCS.VECTOR, BCS.U8],
 });
+
+function getZkSignatureBytes({ inputs, maxEpoch, userSignature }: ZkSignature) {
+	return zkBcs
+		.ser(
+			'ZkSignature',
+			{
+				inputs,
+				max_epoch: maxEpoch,
+				user_signature: typeof userSignature === 'string' ? fromB64(userSignature) : userSignature,
+			},
+			{ maxSize: 2048 },
+		)
+		.toBytes();
+}
+
+export function getZkSignature({ inputs, maxEpoch, userSignature }: ZkSignature) {
+	const bytes = getZkSignatureBytes({ inputs, maxEpoch, userSignature });
+	const signatureBytes = new Uint8Array(bytes.length + 1);
+	signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['Zk']]);
+	signatureBytes.set(bytes, 1);
+	return toB64(signatureBytes);
+}
