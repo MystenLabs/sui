@@ -26,7 +26,7 @@ If you are curious about the security model and the privacy considerations of zk
 
 More questions? See [this page](#faq).
 
-## Integration guide
+# Integration guide
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
 
@@ -123,13 +123,13 @@ const jwt_randomness = toBigIntBE(Buffer.from(randomBytes(16)));
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, jwt_randomness);
 ```
 
-The OAuth URL can be constructed with $CLIENT_ID, $REDIRECT_URL and $Nonce as follows: 
+The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$NONCE` as follows: 
 
 | Provider | URL |
 | ----------- | ----------- |
-| Google | https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE |
-| Facebook | https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token |
-| Twitch | https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE |
+| Google | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE` |
+| Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` |
+| Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` |
 
 ## User Salt Management
 
