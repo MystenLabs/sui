@@ -287,7 +287,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
         global_storage_error(
             context,
             *acquire_loc,
-            format!("Global storage acquires are not supported in Sui"),
+            "Global storage acquires are not supported in Sui",
         )
     }
     if name.0.value == INIT_FUNCTION_NAME {
@@ -874,11 +874,11 @@ fn exp(context: &mut Context, e: &T::Exp) {
             if module.value.is(SUI_ADDR_NAME, EVENT_MODULE_NAME)
                 && name.value() == EVENT_FUNCTION_NAME
             {
-                check_event_emit(context, e.exp.loc, &mcall)
+                check_event_emit(context, e.exp.loc, mcall)
             }
             let is_transfer_module = module.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME);
             if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
-                check_private_transfer(context, e.exp.loc, &mcall)
+                check_private_transfer(context, e.exp.loc, mcall)
             }
         }
         T::UnannotatedExp_::Builtin(b, _) => match &b.value {
@@ -1019,8 +1019,8 @@ fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
     }
 }
 
-fn global_storage_error(context: &mut Context, loc: Loc, msg: String) {
-    let mut diag = diag!(GLOBAL_STORAGE_DIAG, (loc, msg),);
+fn global_storage_error(context: &mut Context, loc: Loc, msg: impl ToString) {
+    let mut diag = diag!(GLOBAL_STORAGE_DIAG, (loc, msg));
     let sui_transfer_loc = context
         .sui_transfer_ident
         .as_ref()
