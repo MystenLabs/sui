@@ -87,4 +87,15 @@ module sui::table_vec {
         assert!(length(t) > i, EIndexOutOfBound);
         table::remove(&mut t.contents, i)
     }
+
+    /// Swaps the elements at the `i`th and `j`th indices in the TableVec `t`.
+    /// Aborts if `i` or `j` is out of bounds.
+    public fun swap<Element: store>(t: &mut TableVec<Element>, i: u64, j: u64) {
+        assert!(length(t) > i, EIndexOutOfBound);
+        assert!(length(t) > j, EIndexOutOfBound);
+        let element_i = table::remove(&mut t.contents, i);
+        let element_j = table::remove(&mut t.contents, j);
+        table::add(&mut t.contents, j, element_i);
+        table::add(&mut t.contents, i, element_j);
+    }
 }
