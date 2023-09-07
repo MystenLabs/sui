@@ -1086,6 +1086,15 @@ impl CheckpointBuilder {
         checkpoint: CheckpointSequenceNumber,
         // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
     ) -> anyhow::Result<SuiSystemState> {
+        if let Some(effects) = self
+            .state
+            .create_and_execute_authenticator_state_tx(&self.epoch_store, checkpoint)
+            .await?
+        {
+            checkpoint_effects.push(effects);
+            signatures.push(vec![]);
+        }
+
         let (system_state, effects) = self
             .state
             .create_and_execute_advance_epoch_tx(

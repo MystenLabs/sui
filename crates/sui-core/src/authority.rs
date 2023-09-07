@@ -76,6 +76,7 @@ use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{
     default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
@@ -90,6 +91,7 @@ use sui_types::effects::{
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
 use sui_types::inner_temporary_store::{
     InnerTemporaryStore, ObjectMap, TemporaryModuleResolver, TxCoins, WrittenObjects,
@@ -120,7 +122,7 @@ use sui_types::{
     fp_ensure,
     object::{Object, ObjectFormatOptions, ObjectRead},
     transaction::*,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_SYSTEM_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag};
 use typed_store::Map;
@@ -2399,30 +2401,6 @@ impl AuthorityState {
             .compute_object_reference())
     }
 
-    pub fn get_authenticator_state_start_version(&self) -> SuiResult<Option<SequenceNumber>> {
-        // should not be called if we have not reached the protocol version where this object
-        // exists
-        if self
-            .load_epoch_store_one_call_per_task()
-            .protocol_config()
-            .enable_jwk_consensus_updates()
-        {
-            let obj = self
-                .database
-                .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?
-                .expect("Authenticator state object must exist");
-
-            match obj.owner {
-                Owner::Shared {
-                    initial_shared_version,
-                } => Ok(Some(initial_shared_version)),
-                _ => panic!("Authenticator state object must be a shared object"),
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
     /// This function should be called once and exactly once during reconfiguration.
     /// Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
     /// besides when we are reading fields for the current epoch
@@ -3762,6 +3740,96 @@ impl AuthorityState {
         (next_protocol_version, system_packages)
     }
 
+    /// Creates and executes an authenticator state tx, but does not commit the
+    /// results to the db.
+    ///
+    /// If the authenticator state object does not yet exist, it creates an
+    /// AuthenticatorStateCreate tx. Otherwise, it creates an AuthenticatorStateExpire tx.
+    ///
+    /// The effects of the tx are only written to the database after a certified
+    /// checkpoint has been formed and executed by CheckpointExecutor
+    pub async fn create_and_execute_authenticator_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<TransactionEffects>> {
+        if !epoch_store.protocol_config().enable_jwk_consensus_updates() {
+            return Ok(None);
+        }
+
+        let authenticator_state_exists = epoch_store.authenticator_state_exists();
+        let tx = if authenticator_state_exists {
+            let next_epoch = epoch_store.epoch().checked_add(1).expect("epoch overflow");
+            let min_epoch =
+                next_epoch.saturating_sub(epoch_store.protocol_config().max_age_of_jwk_in_epochs());
+
+            let tx =
+                VerifiedTransaction::new_authenticator_state_expire(epoch_store.epoch(), min_epoch);
+
+            info!(
+                ?min_epoch,
+                tx_digest = ?tx.digest(),
+                "Creating AuthenticatorStateExpire tx",
+            );
+
+            tx
+        } else {
+            let tx = VerifiedTransaction::new_authenticator_state_create(epoch_store.epoch());
+            info!(tx_digest = ?tx.digest(), "Creating AuthenticatorStateCreate tx");
+            tx
+        };
+
+        let (effects, auth_state) = self
+            .execute_auxilliary_system_tx(
+                epoch_store,
+                &tx,
+                checkpoint,
+                "authenticator state tx has already been executed via state sync",
+                |temporary_store| get_authenticator_state(&temporary_store.written).ok(),
+            )
+            .await?;
+
+        if authenticator_state_exists {
+            assert!(
+                effects.status().is_ok(),
+                "authenticator state expiry transaction cannot fail"
+            );
+        } else {
+            // the creation function may actually fail in the case that the framework has not yet
+            // been upgraded, and the creation function does not exist.
+            // If the tx fails, we return None so that we do not add an unnecessary tx to the
+            // checkpoint.
+            // TODO: this code is ephemeral, and can be changed to an assert(is_ok()) after all
+            // production networks have the new framework.
+            match effects.status() {
+                ExecutionStatus::Failure {
+                    error: ExecutionFailureStatus::FunctionNotFound,
+                    ..
+                } => {
+                    warn!(
+                        "Authenticator state creation tx failed. This is expected if the framework \
+                        has not yet been upgraded to support authenticator state creation"
+                    );
+                    return Ok(None);
+                }
+                ExecutionStatus::Failure { error, .. } => {
+                    panic!(
+                        "Authenticator state creation tx failed with error: {:?}",
+                        error
+                    );
+                }
+                ExecutionStatus::Success => {
+                    assert!(
+                        auth_state.is_some(),
+                        "authenticator state tx must write to the authenticator state object"
+                    );
+                }
+            }
+        }
+
+        Ok(Some(effects))
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -3829,13 +3897,7 @@ impl AuthorityState {
             next_epoch_system_package_bytes,
         );
 
-        let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
-            tx.clone(),
-            epoch_store.epoch(),
-            checkpoint,
-        );
-
-        let tx_digest = executable_tx.digest();
+        let tx_digest = tx.digest();
 
         info!(
             ?next_epoch,
@@ -3850,6 +3912,51 @@ impl AuthorityState {
         );
 
         fail_point_async!("change_epoch_tx_delay");
+
+        let (effects, system_obj) = self
+            .execute_auxilliary_system_tx(
+                epoch_store,
+                &tx,
+                checkpoint,
+                "change epoch tx has already been executed via state sync",
+                |temporary_store| {
+                    get_sui_system_state(&temporary_store.written)
+                        .expect("change epoch tx must write to system object")
+                },
+            )
+            .await?;
+
+        assert!(
+            effects.status().is_ok(),
+            "change epoch transaction cannot fail"
+        );
+
+        info!(
+            "Effects summary of the change epoch transaction: {:?}",
+            effects.summary_for_debug()
+        );
+        epoch_store.record_checkpoint_builder_is_safe_mode_metric(system_obj.safe_mode());
+        Ok((system_obj, effects))
+    }
+
+    // common code factored from create_and_execute_advance_epoch_tx and
+    // create_and_execute_expiry_tx
+    async fn execute_auxilliary_system_tx<T>(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        tx: &VerifiedTransaction,
+        checkpoint: CheckpointSequenceNumber,
+        already_executed_warning: &str,
+        obj_extractor: impl FnOnce(&InnerTemporaryStore) -> T,
+    ) -> anyhow::Result<(TransactionEffects, T)> {
+        let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
+            tx.clone(),
+            epoch_store.epoch(),
+            checkpoint,
+        );
+
+        let tx_digest = executable_tx.digest();
+
         let _tx_lock = epoch_store.acquire_tx_lock(tx_digest).await;
 
         // The tx could have been executed by state sync already - if so simply return an error.
@@ -3859,10 +3966,8 @@ impl AuthorityState {
             .is_tx_already_executed(tx_digest)
             .expect("read cannot fail")
         {
-            warn!("change epoch tx has already been executed via state sync");
-            return Err(anyhow::anyhow!(
-                "change epoch tx has already been executed via state sync"
-            ));
+            warn!("{}", already_executed_warning);
+            return Err(anyhow::anyhow!(already_executed_warning.to_string()));
         }
 
         let execution_guard = self
@@ -3872,27 +3977,19 @@ impl AuthorityState {
         let (temporary_store, effects, _execution_error_opt) = self
             .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
             .await?;
-        let system_obj = get_sui_system_state(&temporary_store.written)
-            .expect("change epoch tx must write to system object");
+        let obj = obj_extractor(&temporary_store);
 
         // We must write tx and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified
         // checkpoint.
         self.database
-            .insert_transaction_and_effects(&tx, &effects)
+            .insert_transaction_and_effects(tx, &effects)
             .map_err(|err| {
                 let err: anyhow::Error = err.into();
                 err
             })?;
 
-        info!(
-            "Effects summary of the change epoch transaction: {:?}",
-            effects.summary_for_debug()
-        );
-        epoch_store.record_checkpoint_builder_is_safe_mode_metric(system_obj.safe_mode());
-        // The change epoch transaction cannot fail to execute.
-        assert!(effects.status().is_ok());
-        Ok((system_obj, effects))
+        Ok((effects, obj))
     }
 
     /// This function is called at the very end of the epoch.

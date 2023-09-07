@@ -30,6 +30,7 @@ mod checked {
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
+        AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
@@ -39,7 +40,10 @@ mod checked {
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
+    use sui_types::messages_consensus::{
+        AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
+        ConsensusCommitPrologue,
+    };
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
@@ -52,10 +56,8 @@ mod checked {
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::Object,
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_FRAMEWORK_ADDRESS,
-    };
-    use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+        SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
 
     /// If a transaction digest shows up in this list, when executing such transaction,
@@ -527,6 +529,22 @@ mod checked {
                     pt,
                 )
             }
+            TransactionKind::AuthenticatorStateCreate(auth_state_create) => {
+                // This can fail if the framework does not yet have the create() function.
+                // TODO: this is an ephemeral constraint - once all production networks have the
+                // new framework, we can add an .expect() at the end here (because at that point
+                // this should only be called during genesis of new networks).
+                setup_authenticator_state_create(
+                    auth_state_create,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )?;
+                Ok(Mode::empty_results())
+            }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
                     auth_state_update,
@@ -538,6 +556,19 @@ mod checked {
                     metrics,
                 )
                 .expect("AuthenticatorStateUpdate cannot fail");
+                Ok(Mode::empty_results())
+            }
+            TransactionKind::AuthenticatorStateExpire(expire) => {
+                setup_authenticator_state_expire(
+                    expire,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("AuthenticatorStateExpire cannot fail");
                 Ok(Mode::empty_results())
             }
         }
@@ -846,6 +877,41 @@ mod checked {
         )
     }
 
+    fn setup_authenticator_state_create(
+        _create: AuthenticatorStateCreate,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state_create transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
     fn setup_authenticator_state_update(
         update: AuthenticatorStateUpdate,
         temporary_store: &mut TemporaryStore<'_>,
@@ -865,7 +931,7 @@ mod checked {
                 vec![
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                        initial_shared_version: update.authenticator_state_obj_start_version,
+                        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
                         mutable: true,
                     }),
                     CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
@@ -874,6 +940,50 @@ mod checked {
             assert_invariant!(
                 res.is_ok(),
                 "Unable to generate authenticator_state_update transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
+    fn setup_authenticator_state_expire(
+        expire: AuthenticatorStateExpire,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        assert!(protocol_config.enable_jwk_consensus_updates());
+
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state_expire transaction!"
             );
             builder.finish()
         };

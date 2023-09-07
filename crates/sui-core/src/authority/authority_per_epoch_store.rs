@@ -24,11 +24,13 @@ use sui_types::committee::Committee;
 use sui_types::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
+use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
     CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
     VerifiedCertificate, VerifiedSignedTransaction,
 };
+use sui_types::{SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION};
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
@@ -324,6 +326,9 @@ pub struct AuthorityEpochTables {
     /// JWKs that have been voted for by one or more authorities but are not yet active.
     pending_jwks: DBMap<(AuthorityName, JwkId, JWK), ()>,
 
+    /// Stores whether the authenticator state object existed at the start of the epoch.
+    authenticator_state_exists: DBMap<(), bool>,
+
     /// JWKs that are currently available for zklogin authentication, and the round in which they
     /// became active.
     active_jwks: DBMap<u64, (JwkId, JWK)>,
@@ -486,7 +491,41 @@ impl AuthorityPerEpochStore {
             zklogin_env,
         );
 
-        if protocol_config.enable_jwk_consensus_updates() {
+        let authenticator_state_exists = {
+            let exists = tables
+                .authenticator_state_exists
+                .get(&())
+                .expect("read cannot fail")
+                .unwrap_or_else(|| {
+                    store
+                        .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)
+                        .expect("read cannot fail")
+                        .as_ref()
+                        .tap_some(|obj| match obj.owner {
+                            Owner::Shared {
+                                initial_shared_version,
+                            } => {
+                                assert_eq!(
+                                    initial_shared_version,
+                                    SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION
+                                );
+                            }
+                            _ => panic!("authenticator state object must be shared"),
+                        })
+                        .is_some()
+                });
+            tables
+                .authenticator_state_exists
+                .insert(&(), &exists)
+                .expect("write cannot fail");
+            exists
+        };
+
+        let authenticator_state_enabled =
+            authenticator_state_exists && protocol_config.enable_jwk_consensus_updates();
+
+        if authenticator_state_enabled {
+            info!("authenticator_state enabled");
             let authenticator_state =
                 get_authenticator_state(&store).expect("Failed to load authenticator state");
 
@@ -495,6 +534,8 @@ impl AuthorityPerEpochStore {
                 assert!(epoch <= &epoch_id);
                 signature_verifier.insert_jwk(jwk_id, jwk);
             }
+        } else {
+            info!("authenticator_state disabled");
         }
 
         let is_validator = committee.authority_index(&name).is_some();
@@ -538,6 +579,20 @@ impl AuthorityPerEpochStore {
         });
         s.update_buffer_stake_metric();
         s
+    }
+
+    // Returns true if authenticator state is enabled in the protocol config *and* the
+    // authenticator state object already exists
+    pub fn authenticator_state_enabled(&self) -> bool {
+        self.protocol_config().enable_jwk_consensus_updates() && self.authenticator_state_exists()
+    }
+
+    pub fn authenticator_state_exists(&self) -> bool {
+        self.tables
+            .authenticator_state_exists
+            .get(&())
+            .expect("read cannot fail")
+            .unwrap_or(false)
     }
 
     pub fn get_parent_path(&self) -> PathBuf {
@@ -1250,6 +1305,14 @@ impl AuthorityPerEpochStore {
             jwk
         );
 
+        if !self.authenticator_state_enabled() {
+            info!(
+                "ignoring vote because authenticator state object does exist yet
+                (it will be created at the end of this epoch)"
+            );
+            return Ok(());
+        }
+
         let mut jwk_aggregator = self.jwk_aggregator.lock();
 
         let votes = jwk_aggregator.votes_for_authority(authority);
@@ -1296,8 +1359,9 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
-        self.signature_verifier.has_jwk(jwk_id, jwk)
+    pub fn jwk_active_in_current_epoch(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        let jwk_aggregator = self.jwk_aggregator.lock();
+        jwk_aggregator.has_quorum_for_key(&(jwk_id.clone(), jwk.clone()))
     }
 
     /// Caller is responsible to call consensus_message_processed before this method

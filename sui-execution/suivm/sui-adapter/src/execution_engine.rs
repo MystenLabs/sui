@@ -522,8 +522,10 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateUpdate(_auth_state_update) => {
-                todo!();
+            TransactionKind::AuthenticatorStateCreate(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::AuthenticatorStateExpire(_) => {
+                panic!("AuthenticatorState{{Create|Update|Expire}} should not exist in suivm");
             }
         }
     }

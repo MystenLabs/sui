@@ -1628,6 +1628,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
                 },
@@ -9994,6 +9995,25 @@
             }
           },
           {
+            "description": "An transaction which creates the global authenticator state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "AuthenticatorStateCreate"
+                ]
+              }
+            }
+          },
+          {
             "description": "An transaction which updates global authenticator state",
             "type": "object",
             "required": [
@@ -10019,6 +10039,29 @@
                 }
               },
               "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
+            "description": "An transaction which expires global authenticator state",
+            "type": "object",
+            "required": [
+              "epoch",
+              "kind",
+              "min_epoch"
+            ],
+            "properties": {
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "AuthenticatorStateExpire"
+                ]
+              },
+              "min_epoch": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
               }
             }

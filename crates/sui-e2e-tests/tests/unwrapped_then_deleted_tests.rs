@@ -22,6 +22,9 @@ mod sim_only_tests {
             config.set_simplified_unwrap_then_delete(false);
             // sui-execution v1 assumes simplified_unwrap_then_delete is set.
             config.set_execution_version_for_testing(0);
+            // authenticator state updates cannot are not supported in execution v0
+            config.set_enable_jwk_consensus_updates_for_testing(false);
+
             config
         });
 

@@ -34,6 +34,13 @@ Argument:
         TUPLE:
           - U16
           - U16
+AuthenticatorStateCreate:
+  STRUCT:
+    - epoch: U64
+AuthenticatorStateExpire:
+  STRUCT:
+    - epoch: U64
+    - min_epoch: U64
 AuthenticatorStateUpdate:
   STRUCT:
     - epoch: U64
@@ -874,6 +881,14 @@ TransactionKind:
       AuthenticatorStateUpdate:
         NEWTYPE:
           TYPENAME: AuthenticatorStateUpdate
+    5:
+      AuthenticatorStateCreate:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateCreate
+    6:
+      AuthenticatorStateExpire:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateExpire
 TypeArgumentError:
   ENUM:
     0:
