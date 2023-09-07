@@ -28,7 +28,7 @@ interface WalletProviderProps {
 	/** Enables automatically reconnecting to the most recently used wallet account upon mounting. */
 	autoConnect?: boolean;
 
-	/** Enables the development-only unsafe burner wallet, which can be useful for testing on localnet. */
+	/** Enables the development-only unsafe burner wallet, which can be useful for testing. */
 	enableUnsafeBurner?: boolean;
 
 	children: ReactNode;
