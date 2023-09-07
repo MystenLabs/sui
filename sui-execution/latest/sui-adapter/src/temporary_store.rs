@@ -20,9 +20,7 @@ use sui_types::storage::BackingStore;
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiError, SuiResult},
     fp_bail,
@@ -199,36 +197,23 @@ impl<'backing> TemporaryStore<'backing> {
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
-        let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
-            let object = &self.execution_results.written_objects[&coin_id];
-            (object.compute_object_reference(), object.owner)
-        } else {
-            (
-                (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                Owner::AddressOwner(SuiAddress::default()),
-            )
-        };
+        let gas_coin = gas_charger.gas_coin();
 
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
-        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v2(
-            protocol_version,
             status,
             epoch,
             gas_cost_summary,
-            // While we could derive the list of shared objects from object_changes,
-            // it is difficult to keep it in the same order as today.
-            // TODO: We will remove it when we actually construct effects v2, but for v1
-            // we keep it as it is.
+            // TODO: Provide the list of read-only shared objects directly.
             shared_object_refs,
             *transaction_digest,
             lamport_version,
             object_changes,
-            updated_gas_object_info,
+            gas_coin,
             if inner.events.data.is_empty() {
                 None
             } else {
@@ -236,6 +221,7 @@ impl<'backing> TemporaryStore<'backing> {
             },
             transaction_dependencies.into_iter().collect(),
         );
+
         (inner, effects)
     }
 
@@ -374,26 +360,33 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_runtime_objects.extend(loaded_runtime_objects);
     }
 
-    // TODO: Simplify this logic for effects v2.
     pub fn estimate_effects_size_upperbound(&self) -> usize {
-        let num_deletes = self.execution_results.deleted_object_ids.len()
-            + self
-                .execution_results
-                .modified_objects
-                .iter()
-                .filter(|id| {
-                    // Filter for wrapped objects.
-                    !self.execution_results.written_objects.contains_key(id)
-                        && !self.execution_results.deleted_object_ids.contains(id)
-                })
-                .count();
-        // In the worst case, the number of deps is equal to the number of input objects
-        TransactionEffects::estimate_effects_size_upperbound(
-            self.execution_results.written_objects.len(),
-            self.mutable_input_refs.len(),
-            num_deletes,
-            self.input_objects.len(),
-        )
+        if self.protocol_config.enable_effects_v2() {
+            TransactionEffects::estimate_effects_size_upperbound_v2(
+                self.execution_results.written_objects.len(),
+                self.execution_results.modified_objects.len(),
+                self.input_objects.len(),
+            )
+        } else {
+            let num_deletes = self.execution_results.deleted_object_ids.len()
+                + self
+                    .execution_results
+                    .modified_objects
+                    .iter()
+                    .filter(|id| {
+                        // Filter for wrapped objects.
+                        !self.execution_results.written_objects.contains_key(id)
+                            && !self.execution_results.deleted_object_ids.contains(id)
+                    })
+                    .count();
+            // In the worst case, the number of deps is equal to the number of input objects
+            TransactionEffects::estimate_effects_size_upperbound_v1(
+                self.execution_results.written_objects.len(),
+                self.mutable_input_refs.len(),
+                num_deletes,
+                self.input_objects.len(),
+            )
+        }
     }
 
     pub fn written_objects_size(&self) -> usize {
