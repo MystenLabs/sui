@@ -6,9 +6,7 @@ use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
-use crate::digests::{
-    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
-};
+use crate::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
 use crate::execution_status::ExecutionStatus;
@@ -26,6 +24,8 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
+
+use self::effects_v2::TransactionEffectsV2;
 
 mod effects_v1;
 mod effects_v2;
@@ -51,20 +51,24 @@ pub const APPROX_SIZE_OF_OWNER: usize = 48;
 /// The response from processing a transaction or a certified transaction
 #[enum_dispatch(TransactionEffectsAPI)]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionEffects {
     V1(TransactionEffectsV1),
+    V2(TransactionEffectsV2),
 }
 
 impl VersionedProtocolMessage for TransactionEffects {
     fn message_version(&self) -> Option<u64> {
         Some(match self {
             Self::V1(_) => 1,
+            Self::V2(_) => 2,
         })
     }
 
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
         let (message_version, supported) = match self {
             Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
+            Self::V2(_) => (2, SupportedProtocolVersions::new_for_message(23, u64::MAX)),
             // Suppose we add V2 at protocol version 7, then we must change this to:
             // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
             // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
@@ -154,75 +158,36 @@ impl TransactionEffects {
     /// Creates a TransactionEffects message from the results of execution, choosing the correct
     /// format for the current protocol version.
     pub fn new_from_execution_v2(
-        _protocol_version: ProtocolVersion,
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
         shared_objects: Vec<ObjectRef>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
-        object_changes: BTreeMap<ObjectID, EffectsObjectChange>,
-        gas_object: (ObjectRef, Owner),
+        changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
+        gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
-        let mut created = vec![];
-        let mut mutated = vec![];
-        let mut unwrapped = vec![];
-        let mut deleted = vec![];
-        let mut unwrapped_then_deleted = vec![];
-        let mut wrapped = vec![];
-        let mut modified_at_versions = vec![];
-        let mut deleted_at_versions = vec![];
-        for (id, change) in object_changes {
-            if let Some(((version, digest), owner)) = change.get_written_object(lamport_version) {
-                if change.is_created() {
-                    created.push(((id, version, digest), owner));
-                } else if change.is_mutated() {
-                    mutated.push(((id, version, digest), owner));
-                    modified_at_versions.push((id, change.get_modified_at().unwrap().0 .0));
-                } else {
-                    assert!(change.is_unwrapped());
-                    unwrapped.push(((id, version, digest), owner));
-                }
-            } else if let Some(((version, _), _)) = change.get_modified_at() {
-                if change.is_deleted() {
-                    deleted.push((id, lamport_version, ObjectDigest::OBJECT_DIGEST_DELETED));
-                    deleted_at_versions.push((id, version));
-                } else {
-                    assert!(change.is_wrapped());
-                    wrapped.push((id, lamport_version, ObjectDigest::OBJECT_DIGEST_WRAPPED));
-                    deleted_at_versions.push((id, version));
-                }
-            } else if change.is_unwrapped_then_deleted() {
-                unwrapped_then_deleted.push((
-                    id,
-                    lamport_version,
-                    ObjectDigest::OBJECT_DIGEST_DELETED,
-                ));
-            } else {
-                assert!(change.is_created_then_wrapped());
-            }
-        }
-        modified_at_versions.extend(deleted_at_versions);
-
-        Self::V1(TransactionEffectsV1::new(
+        Self::V2(TransactionEffectsV2::new(
             status,
             executed_epoch,
             gas_used,
-            modified_at_versions,
             shared_objects,
             transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
+            lamport_version,
+            changed_objects,
             gas_object,
             events_digest,
             dependencies,
         ))
+    }
+
+    pub fn into_effects_v2(self, shared_object_refs: &[ObjectRef]) -> Self {
+        match self {
+            Self::V1(v1) => Self::V1(v1),
+            Self::V2(v2) => Self::V1(v2.into_effects_v1(shared_object_refs)),
+        }
     }
 
     pub fn execution_digests(&self) -> ExecutionDigests {
@@ -331,11 +296,11 @@ impl TransactionEffects {
     pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
         // TODO: Figure out who is calling this and why.
         // This creates an inconsistent effects where gas object is not mutated.
-        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_gas(tx, gas_object))
+        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_gas(tx, gas_object))
     }
 
     pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_status(tx, status))
+        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_status(tx, status))
     }
 }
 
@@ -350,6 +315,7 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+    fn modified_at_v2(&self) -> Vec<(ObjectRef, Owner)>;
     /// Returns the list of shared objects used in the input, with full object reference
     /// and use kind. This is needed in effects because in transaction we only have object ID
     /// for shared objects. Their version and digest can only be figured out after sequencing.

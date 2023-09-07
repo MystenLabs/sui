@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
+use crate::sui_types::effects::TransactionEffectsAPI;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
@@ -20,9 +21,7 @@ use sui_types::storage::BackingStore;
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiError, SuiResult},
     fp_bail,
@@ -179,36 +178,24 @@ impl<'backing> TemporaryStore<'backing> {
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
-        let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
-            let object = &self.execution_results.written_objects[&coin_id];
-            (object.compute_object_reference(), object.owner)
-        } else {
-            (
-                (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
-                Owner::AddressOwner(SuiAddress::default()),
-            )
-        };
+        let gas_coin = gas_charger.gas_coin();
 
         let object_changes = self.get_object_changes();
 
         let lamport_version = self.lamport_timestamp;
-        let protocol_version = self.protocol_config.version;
+        let store = self.store.clone();
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v2(
-            protocol_version,
             status,
             epoch,
             gas_cost_summary,
-            // While we could derive the list of shared objects from object_changes,
-            // it is difficult to keep it in the same order as today.
-            // TODO: We will remove it when we actually construct effects v2, but for v1
-            // we keep it as it is.
-            shared_object_refs,
+            // TODO: Provide the list of read-only shared objects directly.
+            shared_object_refs.clone(),
             *transaction_digest,
             lamport_version,
             object_changes,
-            updated_gas_object_info,
+            gas_coin,
             if inner.events.data.is_empty() {
                 None
             } else {
@@ -216,7 +203,19 @@ impl<'backing> TemporaryStore<'backing> {
             },
             transaction_dependencies,
         );
-        (inner, effects)
+        // TODO: Remove following when we actually ship effects v2.
+        if gas_coin.map(|id| id != ObjectID::MAX).unwrap_or(true) {
+            // ObjectID::MAX is the dummy gas object in dev inspect, ignore.
+            for (oref, owner) in effects.modified_at_v2() {
+                let old_obj = store
+                    .get_object(&oref.0)
+                    .unwrap()
+                    .expect(&format!("Modified old object {:?} must exists", oref));
+                assert_eq!(old_obj.compute_object_reference(), oref);
+                assert_eq!(old_obj.owner, owner);
+            }
+        }
+        (inner, effects.into_effects_v2(&shared_object_refs))
     }
 
     /// An internal check of the invariants (will only fire in debug)
