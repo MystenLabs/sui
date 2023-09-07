@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Dispatch, ReactNode } from 'react';
-import { createContext, useContext, useMemo, useReducer } from 'react';
-import { getWallets } from '@mysten/wallet-standard';
+import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
+import { Wallet, getWallets } from '@mysten/wallet-standard';
 import { localStorageAdapter } from '../utils/storageAdapters.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
 import { walletReducer } from '../reducers/walletReducer.js';
@@ -63,16 +63,17 @@ export function WalletProvider({
 		connectionStatus: 'disconnected',
 	});
 
-	useWalletsChanged({
-		onWalletRegistered() {
-			dispatch({
-				type: 'wallet-registered',
-				payload: {
-					updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
-				},
-			});
-		},
-		onWalletUnregistered(unregisteredWallet) {
+	const onWalletRegistered = useCallback(() => {
+		dispatch({
+			type: 'wallet-registered',
+			payload: {
+				updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+			},
+		});
+	}, [preferredWallets, requiredFeatures, walletsApi]);
+
+	const onWalletUnregistered = useCallback(
+		(unregisteredWallet: Wallet) => {
 			dispatch({
 				type: 'wallet-unregistered',
 				payload: {
@@ -81,6 +82,12 @@ export function WalletProvider({
 				},
 			});
 		},
+		[preferredWallets, requiredFeatures, walletsApi],
+	);
+
+	useWalletsChanged({
+		onWalletRegistered,
+		onWalletUnregistered,
 	});
 
 	useUnsafeBurnerWallet(enableUnsafeBurner);
