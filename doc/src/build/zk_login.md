@@ -187,40 +187,35 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
 ## Assemble the zkLogin signature and submit the transaction
 
 1. Sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+  ```typescript
+  const ephemeralKeyPair = new Ed25519Keypair();
 
-```typescript
-const ephemeralKeyPair = new Ed25519Keypair();
+  const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
-const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
+  const txb = new TransactionBlock();
 
-const txb = new TransactionBlock();
-
-const { bytes, signature: userSignature } = await txb.sign({
-  client,
-  signer: ephemeralKeyPair,
-});
-```
-
+  const { bytes, signature: userSignature } = await txb.sign({
+    client,
+    signer: ephemeralKeyPair,
+  });
+  ```
 2. Serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
+  ```typescript
+  import { getZkSignature } from "@mysten/zklogin";
 
-```typescript
-import { getZkSignature } from "@mysten/zklogin";
-
-const zkSignature = getZkSignature({
-  inputs,
-  maxEpoch,
-  userSignature,
-});
-```
-
+  const zkSignature = getZkSignature({
+    inputs,
+    maxEpoch,
+    userSignature,
+  });
+  ```
 3. Execute the transaction.
-
-```typescript
-client.executeTransactionBlock({
-  transactionBlock: bytes,
-  signature: zkSignature,
-});
-```
+  ```typescript
+  client.executeTransactionBlock({
+    transactionBlock: bytes,
+    signature: zkSignature,
+  });
+  ```
 
 ## Add sponsored transaction support
 
