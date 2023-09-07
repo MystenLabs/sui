@@ -8,6 +8,9 @@ exclude = [
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
     "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move-execution/v1/move-bytecode-verifier",
+    "external-crates/move-execution/v1/move-stdlib",
+    "external-crates/move-execution/v1/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -167,6 +170,9 @@ members = [
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/v1/sui-adapter",
+    "sui-execution/v1/sui-move-natives",
+    "sui-execution/v1/sui-verifier",
 ]
 
 [workspace.package]
