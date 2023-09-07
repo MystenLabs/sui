@@ -47,6 +47,7 @@ export class KioskClient {
 	 */
 	setSelectedCap(cap: KioskOwnerCap) {
 		this.selectedCap = cap;
+		return this;
 	}
 
 	// Someone would just have to create a `kiosk-client.ts` file in their project, initialize a KioskClient
@@ -89,7 +90,7 @@ export class KioskClient {
 
 	/**
 	 * Wraps a kiosk transaction that depends on `kioskOwnerCap`.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param ownerCap The `ownerCap` object as returned from the `getOwnedKiosk` function
 	 * @param callback The function you want to execute with the ownerCap.
 	 */
@@ -150,7 +151,7 @@ export class KioskClient {
 	 * A function to purchase and resolve a transfer policy.
 	 * If the transfer policy has the `lock` rule, the item is locked in the kiosk.
 	 * Otherwise, the item is placed in the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param item The item {type, objectId, price}
 	 * @param options Currently has `extraArgs`, which can be used for custom rule resolvers.
 	 */
@@ -264,7 +265,7 @@ export class KioskClient {
 
 	/**
 	 * A function to withdraw from kiosk
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
 	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
 	 * @param amount The amount we aim to withdraw.
@@ -280,7 +281,7 @@ export class KioskClient {
 
 	/**
 	 * A function to place an item in the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param item The ID or Transaction Argument of the item
 	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
@@ -298,7 +299,7 @@ export class KioskClient {
 
 	/**
 	 * A function to place an item in the kiosk and list it for sale in one transaction.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param item The ID or Transaction Argument of the item
 	 * @param price The price in MIST
@@ -318,7 +319,7 @@ export class KioskClient {
 
 	/**
 	 * A function to list an item in the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 * @param price The price in MIST
@@ -338,7 +339,7 @@ export class KioskClient {
 
 	/**
 	 * A function to delist an item from the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
@@ -356,7 +357,7 @@ export class KioskClient {
 
 	/**
 	 * A function to take an item from the kiosk. The transaction won't succeed if the item is listed or locked.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
@@ -373,8 +374,30 @@ export class KioskClient {
 	}
 
 	/**
+	 * Transfer a non-locked/non-listed item to an address.
+	 *
+	 * @param txb The Transaction Block
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
+	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
+	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
+	 * @param address The destination address
+	 */
+	transfer(
+		txb: TransactionBlock,
+		itemType: string,
+		itemId: string,
+		kiosk: ObjectArgument,
+		kioskCap: ObjectArgument,
+		address: string,
+	) {
+		const item = this.take(txb, itemType, itemId, kiosk, kioskCap);
+		txb.transferObjects([item], txb.pure(address, 'address'));
+	}
+
+	/**
 	 * A function to take lock an item in the kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 * @param policy The Policy ID or Transaction Argument for item T
@@ -394,7 +417,7 @@ export class KioskClient {
 
 	/**
 	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param kiosk (Optional) The Kiosk Id or Object
 	 * @param ownerCap (Optional) The Kiosk Owner Cap Object. If not passed, it will use the selectedCap's one.
 	 */
@@ -410,7 +433,7 @@ export class KioskClient {
 
 	/**
 	 * A function to get a transaction parameter for the kiosk.
-	 * @param txb The Transaction Block
+	 * @param txbb The Transaction Block
 	 * @returns An array [kioskOwnerCap, promise]. If there's a promise, you need to call `returnOwnerCap` after using the cap.
 	 */
 	getOwnerCap(
@@ -434,7 +457,7 @@ export class KioskClient {
 
 	/**
 	 * A function to return the `kioskOwnerCap` back to `PersonalKiosk` wrapper.
-	 * @param tx The Transaction Block
+	 * @param txb The Transaction Block
 	 * @param capObject The borrowed `KioskOwnerCap`
 	 * @param promise The promise that the cap would return
 	 */

@@ -10,7 +10,7 @@ import {
 	useGetObject,
 } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { take } from '@mysten/kiosk';
+import { KioskClient, Network } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
@@ -33,6 +33,12 @@ export function useTransferKioskItem({
 	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
 	const { data: kioskData } = useGetKioskContents(address);
 
+	const kioskClient = new KioskClient({
+		client,
+		// TODO: We need to pass the correct active network for `Personal Kiosk` to work.
+		network: Network.MAINNET,
+	});
+
 	const objectData = useGetObject(objectId);
 
 	return useMutation({
@@ -50,10 +56,15 @@ export function useTransferKioskItem({
 
 			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
 				const tx = new TransactionBlock();
-				// take item out of kiosk
-				const obj = take(tx, objectData.data?.data?.type, kioskId, kiosk?.ownerCap, objectId);
-				// transfer as usual
-				tx.transferObjects([obj], tx.pure(to));
+
+				kioskClient.setSelectedCap(kiosk.ownerCap);
+
+				const [kioskObj, cap, promise] = kioskClient.getOwnerCap(tx);
+
+				kioskClient.transfer(tx, objectData.data.data.type as string, objectId, kioskObj, cap, to);
+
+				kioskClient.returnOwnerCap(tx, cap, promise);
+
 				return signer.signAndExecuteTransactionBlock(
 					{
 						transactionBlock: tx,
