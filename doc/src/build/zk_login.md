@@ -179,7 +179,7 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
 
 ## Assemble the zkLogin signature and submit the transaction
 
-1. Sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
   ```typescript
   const ephemeralKeyPair = new Ed25519Keypair();
 
@@ -192,7 +192,8 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
     signer: ephemeralKeyPair,
   });
   ```
-2. Serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
+  
+Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
   ```typescript
   import { getZkSignature } from "@mysten/zklogin";
 
@@ -202,7 +203,8 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
     userSignature,
   });
   ```
-3. Execute the transaction.
+
+Finally, execute the transaction.
   ```typescript
   client.executeTransactionBlock({
     transactionBlock: bytes,
