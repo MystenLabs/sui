@@ -123,7 +123,7 @@ const jwt_randomness = toBigIntBE(Buffer.from(randomBytes(16)));
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, jwt_randomness);
 ```
 
-The OAuth URL can be constructed with $CLIENT_ID, $REDIRECT_URL and $Nonce as follows: 
+The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce` as follows: 
 
 | Provider | URL |
 | ----------- | ----------- |
