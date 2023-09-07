@@ -51,7 +51,6 @@ impl From<jsonrpsee::core::Error> for Error {
         Error {
             code: error_object_owned.code(),
             message: error_object_owned.message().to_string(),
-            // TODO: as this SDK is specialized for the Sui JSON RPC implementation, we should define structured representation for the data field if applicable
             data: None,
         }
     }
