@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{connection::Connection, *};
-
 use super::{
     address::Address, checkpoint::Checkpoint, object::Object, owner::ObjectOwner,
     protocol_config::ProtocolConfigs, sui_address::SuiAddress,
 };
-use crate::server::context_ext::DataProviderContextExt;
+use crate::{
+    limits::complexity::{get_complexity_config as gc, standard_calc as sc},
+    server::context_ext::DataProviderContextExt,
+};
+use async_graphql::{connection::Connection, *};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -16,10 +18,12 @@ pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, E
 #[allow(unused_variables)]
 #[Object]
 impl Query {
+    #[graphql(complexity = "sc(&gc().chain_identifier, None, None, child_complexity)")]
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
         ctx.data_provider().fetch_chain_id().await
     }
 
+    #[graphql(complexity = "sc(&gc().owner, None, None, child_complexity)")]
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
         let o = ctx.data_provider().fetch_obj(address, None).await?;
@@ -27,6 +31,7 @@ impl Query {
             .map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
+    #[graphql(complexity = "sc(&gc().object, None, None, child_complexity)")]
     async fn object(
         &self,
         ctx: &Context<'_>,
@@ -36,10 +41,12 @@ impl Query {
         ctx.data_provider().fetch_obj(address, version).await
     }
 
+    #[graphql(complexity = "sc(&gc().address, None, None, child_complexity)")]
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
     }
 
+    #[graphql(complexity = "sc(&gc().checkpoint_connection, first, last, child_complexity)")]
     async fn checkpoint_connection(
         &self,
         ctx: &Context<'_>,
@@ -53,6 +60,7 @@ impl Query {
             .await
     }
 
+    #[graphql(complexity = "sc(&gc().protocol_config, None, None, child_complexity)")]
     async fn protocol_config(
         &self,
         ctx: &Context<'_>,

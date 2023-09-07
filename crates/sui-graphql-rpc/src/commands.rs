@@ -27,5 +27,12 @@ pub enum Command {
         /// Host to bind the server to
         #[clap(long, default_value = "127.0.0.1")]
         host: String,
+
+        /// Maximum depth of query
+        #[clap(long, default_value = "10")]
+        max_depth: usize,
+        /// Maximum complexity of query
+        #[clap(long, default_value = "1000")]
+        max_complexity: usize,
     },
 }
