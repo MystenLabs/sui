@@ -57,6 +57,7 @@ export class LedgerAccount
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: null,
+			createdAt: Date.now(),
 		};
 	}
 
