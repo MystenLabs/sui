@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "wasm-pack build --target web --scope mysten",
+    "build": "wasm-pack build --target nodejs --scope mysten",
     "build:dev": "wasm-pack build --target nodejs --debug --scope mysten",
     "build:release": "wasm-pack build --target web --release --scope mysten",
     "test": "vitest run"
