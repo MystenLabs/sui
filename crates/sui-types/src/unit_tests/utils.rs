@@ -172,7 +172,7 @@ mod zk_login {
                 let mut hasher = DefaultHash::default();
                 hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
                 hasher.update(bcs::to_bytes(&get_inputs().get_address_params()).unwrap());
-                hasher.update(big_int_str_to_bytes(get_inputs().get_address_seed()));
+                hasher.update(big_int_str_to_bytes(get_inputs().get_address_seed()).unwrap());
                 SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
             };
         }

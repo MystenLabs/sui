@@ -612,7 +612,7 @@ impl From<&ZkLoginAuthenticator> for SuiAddress {
         hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
         // unwrap is safe here
         hasher.update(bcs::to_bytes(&authenticator.get_address_params()).unwrap());
-        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()));
+        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()).unwrap());
         SuiAddress(hasher.finalize().digest)
     }
 }

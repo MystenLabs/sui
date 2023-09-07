@@ -3,7 +3,7 @@
 
 use anyhow::anyhow;
 use fastcrypto::traits::EncodeDecodeBase64;
-use fastcrypto_zkp::bn254::utils::get_enoki_address;
+use fastcrypto_zkp::bn254::utils::get_zk_login_address;
 use fastcrypto_zkp::bn254::utils::{get_proof, get_salt};
 use regex::Regex;
 use reqwest::Client;
@@ -79,10 +79,13 @@ pub async fn perform_zk_login_test_tx(
     println!("ZkLogin inputs:");
     println!("{:?}", serde_json::to_string(&zk_login_inputs).unwrap());
     zk_login_inputs.init()?;
-    let zklogin_address = SuiAddress::from_bytes(get_enoki_address(
-        zk_login_inputs.get_address_seed(),
-        zk_login_inputs.get_address_params(),
-    ))?;
+    let zklogin_address = SuiAddress::from_bytes(
+        get_zk_login_address(
+            zk_login_inputs.get_address_seed(),
+            zk_login_inputs.get_address_params(),
+        )
+        .map_err(|_| anyhow!("Invalid zk_login_inputs"))?,
+    )?;
     println!("ZkLogin Address: {:?}", zklogin_address);
 
     // Request some coin from faucet and build a test transaction.
