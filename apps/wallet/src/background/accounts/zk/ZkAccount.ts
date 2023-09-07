@@ -49,7 +49,7 @@ type CredentialData = {
 type SessionStorageData = Partial<Record<SerializedNetwork, CredentialData>>;
 
 type JwtSerializedClaims = {
-	email: string;
+	email: string | null;
 	fullName: string | null;
 	firstName: string | null;
 	lastName: string | null;
@@ -74,7 +74,7 @@ export interface ZkAccountSerialized extends SerializedAccount {
 
 export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	type: 'zk';
-	email: string;
+	email: string | null;
 	picture: string | null;
 	provider: ZkProvider;
 }
@@ -100,13 +100,7 @@ export class ZkAccount
 		const jwt = await zkLogin({ provider, prompt: 'select_account' });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
-		if (
-			!decodedJWT.sub ||
-			!decodedJWT.iss ||
-			!decodedJWT.aud ||
-			!decodedJWT.email ||
-			typeof decodedJWT.email !== 'string'
-		) {
+		if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
 			throw new Error('Missing jwt data');
 		}
 		if (Array.isArray(decodedJWT.aud)) {
@@ -114,7 +108,7 @@ export class ZkAccount
 		}
 		const aud = decodedJWT.aud;
 		const claims: JwtSerializedClaims = {
-			email: decodedJWT.email,
+			email: String(decodedJWT.email || '') || null,
 			fullName: String(decodedJWT.name || '') || null,
 			firstName: String(decodedJWT.given_name || '') || null,
 			lastName: String(decodedJWT.family_name || '') || null,
