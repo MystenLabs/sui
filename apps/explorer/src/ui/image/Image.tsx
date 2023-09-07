@@ -5,7 +5,8 @@ import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { LoadingIndicator } from '@mysten/ui';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
-import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { type ImgHTMLAttributes, useEffect, useState } from 'react';
 
 import useImage from '~/hooks/useImage';
 import { VISIBILITY } from '~/hooks/useImageMod';
@@ -43,21 +44,51 @@ const imageStyles = cva(null, {
 
 type ImageStyleProps = VariantProps<typeof imageStyles>;
 
-export interface ImageProps extends ImageStyleProps, React.ImgHTMLAttributes<HTMLImageElement> {
+export interface ImageProps extends ImageStyleProps, ImgHTMLAttributes<HTMLImageElement> {
 	onClick?: () => void;
 	moderate?: boolean;
 	src: string;
 	visibility?: VISIBILITY;
+	fadeIn?: boolean;
+}
+
+function BaseImageContent({
+	alt,
+	src,
+	srcSet,
+	rounded,
+	fit,
+	size,
+	fadeIn,
+	...imgProps
+}: Omit<ImageProps, 'moderate' | 'visibility' | 'status'>) {
+	const content = (
+		<img
+			alt={alt}
+			src={src}
+			srcSet={srcSet}
+			className={imageStyles({
+				rounded,
+				fit,
+				size,
+			})}
+			{...imgProps}
+		/>
+	);
+
+	return fadeIn ? (
+		<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
+			{content}
+		</motion.div>
+	) : (
+		content
+	);
 }
 
 function BaseImage({
 	status,
 	size,
 	rounded,
-	alt,
-	src,
-	srcSet,
-	fit,
 	visibility,
 	onClick,
 	...imgProps
@@ -93,18 +124,7 @@ function BaseImage({
 				<NftTypeImage24 />
 			) : null}
 			{status === 'loaded' && (
-				<img
-					alt={alt}
-					src={src}
-					srcSet={srcSet}
-					className={imageStyles({
-						rounded,
-						fit,
-						size,
-					})}
-					onClick={onClick}
-					{...imgProps}
-				/>
+				<BaseImageContent onClick={onClick} rounded={rounded} size={size} {...imgProps} />
 			)}
 		</div>
 	);
