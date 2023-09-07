@@ -3,7 +3,7 @@
 
 // tests that shared objects cannot be freezed
 
-//# init --addresses t1=0x0 t2=0x0
+//# init --addresses t1=0x0 t2=0x0 --shared-object-deletion true
 
 //# publish
 

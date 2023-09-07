@@ -3,7 +3,7 @@
 
 // test that freezing prevents transfers/mutations
 
-//# init --addresses test=0x0 --accounts A --protocol-version 20
+//# init --addresses test=0x0 --accounts A --shared-object-deletion false
 
 //# publish
 

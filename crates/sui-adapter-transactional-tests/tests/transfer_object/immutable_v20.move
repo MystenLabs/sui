@@ -3,7 +3,7 @@
 
 // tests TransferObject should fail for an immutable object
 
-//# init --accounts A B --addresses test=0x0 --protocol-version 20
+//# init --accounts A B --addresses test=0x0 --shared-object-deletion false
 
 //# publish
 

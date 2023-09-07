@@ -1559,6 +1559,10 @@ impl ProtocolConfig {
     pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
         self.feature_flags.simplified_unwrap_then_delete = val
     }
+    pub fn set_shared_object_deletion(&mut self, val: bool) {
+        self.feature_flags.shared_object_deletion = val;
+    }
+
     pub fn set_narwhal_new_leader_election_schedule(&mut self, val: bool) {
         self.feature_flags.narwhal_new_leader_election_schedule = val;
     }
