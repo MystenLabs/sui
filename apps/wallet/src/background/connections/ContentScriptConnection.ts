@@ -8,7 +8,7 @@ import Browser from 'webextension-polyfill';
 import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import { Window } from '../Window';
-import { getStoredAccountsPublicInfo } from '../keyring/accounts';
+import { getAccountsStatusData } from '../accounts';
 import { requestUserApproval } from '../qredo';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
@@ -226,15 +226,11 @@ export class ContentScriptConnection extends Connection {
 	}
 
 	private async sendAccounts(accounts: string[], responseForID?: string) {
-		const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
 		this.send(
 			createMessage<GetAccountResponse>(
 				{
 					type: 'get-account-response',
-					accounts: accounts.map((anAddress) => ({
-						address: anAddress,
-						publicKey: allAccountsPublicInfo[anAddress]?.publicKey || null,
-					})),
+					accounts: await getAccountsStatusData(accounts),
 				},
 				responseForID,
 			),

@@ -26,7 +26,6 @@ import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
 import {
 	type MethodPayload,
 	isMethodPayload,
@@ -192,9 +191,10 @@ export class BackgroundClient {
 	public clearWallet() {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'clear'>>({
-					type: 'keyring',
-					method: 'clear',
+				createMessage<MethodPayload<'clearWallet'>>({
+					type: 'method-payload',
+					method: 'clearWallet',
+					args: {},
 				}),
 			).pipe(take(1)),
 		);
@@ -393,7 +393,15 @@ export class BackgroundClient {
 					method: 'acceptQredoConnection',
 					args,
 				}),
-			).pipe(take(1)),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isQredoConnectPayload(payload, 'acceptQredoConnectionResponse')) {
+						return payload.args.accounts;
+					}
+					throw new Error('Error unknown response for accept qredo connection');
+				}),
+			),
 		);
 	}
 
@@ -404,18 +412,6 @@ export class BackgroundClient {
 					type: 'qredo-connect',
 					method: 'rejectQredoConnection',
 					args,
-				}),
-			).pipe(take(1)),
-		);
-	}
-
-	public updateAccountsPublicInfo(updates: AccountsPublicInfoUpdates) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'updateAccountPublicInfo'>>({
-					type: 'keyring',
-					method: 'updateAccountPublicInfo',
-					args: { updates },
 				}),
 			).pipe(take(1)),
 		);
@@ -518,6 +514,18 @@ export class BackgroundClient {
 		);
 	}
 
+	public setAccountNickname({ id, nickname }: MethodPayload<'setAccountNickname'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'setAccountNickname'>>({
+					type: 'method-payload',
+					method: 'setAccountNickname',
+					args: { id, nickname },
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	public getStorageMigrationStatus() {
 		return lastValueFrom(
 			this.sendMessage(
@@ -547,6 +555,44 @@ export class BackgroundClient {
 					args: inputs,
 				}),
 			).pipe(take(1)),
+		);
+	}
+
+	/**
+	 * Wallet wasn't storing the public key of ledger accounts, but we need it to send it to the dapps.
+	 * Use this function to update the public keys whenever wallet has access to them.
+	 */
+	public storeLedgerAccountsPublicKeys(
+		args: MethodPayload<'storeLedgerAccountsPublicKeys'>['args'],
+	) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'storeLedgerAccountsPublicKeys'>>({
+					type: 'method-payload',
+					method: 'storeLedgerAccountsPublicKeys',
+					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public getAccountSourceEntropy(accountSourceID: string) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getAccountSourceEntropy'>>({
+					type: 'method-payload',
+					method: 'getAccountSourceEntropy',
+					args: { accountSourceID },
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isMethodPayload(payload, 'getAccountSourceEntropyResponse')) {
+						return payload.args;
+					}
+					throw new Error('Unexpected response type');
+				}),
+			),
 		);
 	}
 

@@ -30,8 +30,9 @@ pub enum FeatureGate {
     PublicPackage,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
 pub enum Flavor {
+    #[default]
     GlobalStorage,
     Sui,
 }
@@ -100,9 +101,9 @@ impl Edition {
 
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
-        match self {
-            &Self::LEGACY => None,
-            &Self::E2024_ALPHA => Some(Self::LEGACY),
+        match *self {
+            Self::LEGACY => None,
+            Self::E2024_ALPHA => Some(Self::LEGACY),
             _ => self.unknown_edition_panic(),
         }
     }
@@ -260,11 +261,5 @@ impl Display for FeatureGate {
 impl Default for Edition {
     fn default() -> Self {
         Edition::LEGACY
-    }
-}
-
-impl Default for Flavor {
-    fn default() -> Self {
-        Flavor::GlobalStorage
     }
 }

@@ -8,8 +8,9 @@ import {
 } from '@mysten/icons';
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import {
 	type SelectableLedgerAccount,
 	LedgerAccountList,
@@ -18,34 +19,21 @@ import {
 	type DerivedLedgerAccount,
 	useDeriveLedgerAccounts,
 } from '../../components/ledger/useDeriveLedgerAccounts';
-import { useImportLedgerAccountsMutation } from '../../components/ledger/useImportLedgerAccountsMutation';
 import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
-import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
-export function ImportLedgerAccountsPage({
-	onClose,
-	onConfirmed,
-	password = '',
-}: {
-	onConfirmed?: () => void;
-	onClose?: () => void;
-	// TODO: remove, this is temporary for testing new accounts
-	password?: string;
-}) {
-	const closeRedirectUrl = '/accounts/add-account';
-	const successRedirectUrl = '/tokens';
+export function ImportLedgerAccountsPage() {
+	const [searchParams] = useSearchParams();
+	const successRedirect = searchParams.get('successRedirect') || '/tokens';
 	const navigate = useNavigate();
-
 	const { data: existingAccounts } = useAccounts();
 	const [selectedLedgerAccounts, setSelectedLedgerAccounts] = useState<DerivedLedgerAccount[]>([]);
-
 	const {
 		data: ledgerAccounts,
 		isLoading: areLedgerAccountsLoading,
@@ -59,32 +47,9 @@ export function ImportLedgerAccountsPage({
 		},
 		onError: (error) => {
 			toast.error(getSuiApplicationErrorMessage(error) || 'Something went wrong.');
-			if (onClose) {
-				onClose();
-			} else {
-				navigate(closeRedirectUrl, { replace: true });
-			}
+			navigate(-1);
 		},
 	});
-
-	const importLedgerAccountsMutation = useImportLedgerAccountsMutation({
-		password,
-		onSuccess: (_, importedAccounts) => {
-			ampli.addedAccounts({
-				accountType: 'Ledger',
-				numberOfAccounts: importedAccounts.length,
-			});
-			if (onConfirmed) {
-				onConfirmed();
-			} else {
-				navigate(successRedirectUrl);
-			}
-		},
-		onError: () => {
-			toast.error('There was an issue importing your Ledger accounts.');
-		},
-	});
-
 	const onAccountClick = useCallback(
 		(targetAccount: SelectableLedgerAccount) => {
 			if (targetAccount.isSelected) {
@@ -99,15 +64,13 @@ export function ImportLedgerAccountsPage({
 		},
 		[setSelectedLedgerAccounts],
 	);
-
 	const numImportableAccounts = ledgerAccounts?.length;
 	const numSelectedAccounts = selectedLedgerAccounts.length;
-
 	const areAllAccountsImported = numImportableAccounts === 0;
 	const areAllAccountsSelected = numSelectedAccounts === numImportableAccounts;
-
 	const isUnlockButtonDisabled = numSelectedAccounts === 0;
 	const isSelectAllButtonDisabled = areAllAccountsImported || areAllAccountsSelected;
+	const [, setAccountsFormValues] = useAccountsFormContext();
 
 	let summaryCardBody: JSX.Element | null = null;
 	if (areLedgerAccountsLoading) {
@@ -148,11 +111,7 @@ export function ImportLedgerAccountsPage({
 			showModal
 			title="Import Accounts"
 			closeOverlay={() => {
-				if (onClose) {
-					onClose();
-				} else {
-					navigate(closeRedirectUrl);
-				}
+				navigate(-1);
 			}}
 		>
 			<div className="w-full flex flex-col gap-5">
@@ -184,10 +143,24 @@ export function ImportLedgerAccountsPage({
 						variant="primary"
 						size="tall"
 						before={<UnlockedLockIcon />}
-						text="Unlock"
-						loading={importLedgerAccountsMutation.isLoading}
+						text="Next"
 						disabled={isUnlockButtonDisabled}
-						onClick={() => importLedgerAccountsMutation.mutate(selectedLedgerAccounts)}
+						onClick={() => {
+							setAccountsFormValues({
+								type: 'ledger',
+								accounts: selectedLedgerAccounts.map(({ address, derivationPath, publicKey }) => ({
+									address,
+									derivationPath,
+									publicKey: publicKey!,
+								})),
+							});
+							navigate(
+								`/accounts/protect-account?${new URLSearchParams({
+									accountType: 'ledger',
+									successRedirect,
+								}).toString()}`,
+							);
+						}}
 					/>
 				</div>
 			</div>

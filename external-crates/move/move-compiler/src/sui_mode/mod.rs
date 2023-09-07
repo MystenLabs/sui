@@ -37,6 +37,9 @@ pub const SUI_SYSTEM_CREATE: Symbol = symbol!("create");
 pub const CLOCK_MODULE_NAME: Symbol = symbol!("clock");
 pub const CLOCK_TYPE_NAME: Symbol = symbol!("Clock");
 pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
+pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
+pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
+pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
 
 //**************************************************************************************************
 // Diagnostics

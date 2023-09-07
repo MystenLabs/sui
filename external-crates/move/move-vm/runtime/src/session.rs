@@ -213,7 +213,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
     }
 
     pub fn vm_config(&self) -> &move_vm_config::runtime::VMConfig {
-        &self.runtime.loader().vm_config()
+        self.runtime.loader().vm_config()
     }
 
     /// Same like `finish`, but also extracts the native context extensions from the session.

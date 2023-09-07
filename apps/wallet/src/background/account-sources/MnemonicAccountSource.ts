@@ -75,6 +75,7 @@ export class MnemonicAccountSource extends AccountSource<
 			type: 'mnemonic',
 			encryptedData: await encrypt(password, decryptedData),
 			sourceHash: bytesToHex(sha256(entropy)),
+			createdAt: Date.now(),
 		};
 		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {
@@ -162,6 +163,14 @@ export class MnemonicAccountSource extends AccountSource<
 			type,
 			isLocked: await this.isLocked(),
 		};
+	}
+
+	async getEntropy() {
+		const data = await this.getEphemeralValue();
+		if (!data) {
+			throw new Error(`Mnemonic account source ${this.id} is locked`);
+		}
+		return data.entropyHex;
 	}
 
 	get sourceHash() {

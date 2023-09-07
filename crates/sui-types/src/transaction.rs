@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*};
+use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -14,11 +15,12 @@ use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::ConsensusCommitPrologue;
+use crate::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
     SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
@@ -42,15 +44,17 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use tracing::trace;
 
-// TODO: The following constants appear to be very large.
-// We should revisit them.
-pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 5_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_VALIDATOR: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;
+// For some transactions we may either perform heavy operations or touch
+// objects that are storage expensive. That may happen (and often is the case)
+// because the object touched are set up in genesis and carry no storage cost
+// (and thus rebate) on first usage.
+pub const TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE: u64 = 5_000_000;
 
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
@@ -199,21 +203,28 @@ pub enum TransactionKind {
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdate),
     // .. more transaction types go here
 }
 
 impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, _protocol_config: &ProtocolConfig) -> SuiResult {
-        // This code does nothing right now - it exists to cause a compiler error when new
-        // enumerants are added to TransactionKind.
-        //
-        // When we add new cases here, check that current_protocol_version does not pre-date the
-        // addition of that enumerant.
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        // When adding new cases, they must be guarded by a feature flag and return
+        // UnsupportedFeatureError if the flag is not set.
         match &self {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ProgrammableTransaction(_) => Ok(()),
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                if protocol_config.enable_jwk_consensus_updates() {
+                    Ok(())
+                } else {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "authenticator state updates not enabled".to_string(),
+                    })
+                }
+            }
         }
     }
 }
@@ -647,8 +658,22 @@ impl ProgrammableTransaction {
         for input in inputs {
             input.validity_check(config)?
         }
+        let mut publish_count = 0u64;
         for command in commands {
-            command.validity_check(config)?
+            command.validity_check(config)?;
+            match command {
+                Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => publish_count += 1,
+                _ => (),
+            }
+        }
+        if let Some(max_publish_commands) = config.max_publish_or_upgrade_per_ptb_as_option() {
+            fp_ensure!(
+                publish_count <= max_publish_commands,
+                UserInputError::MaxPublishCountExceeded {
+                    max_publish_commands,
+                    publish_count,
+                }
+            );
         }
         Ok(())
     }
@@ -820,6 +845,7 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
+                | TransactionKind::AuthenticatorStateUpdate(_)
         )
     }
 
@@ -891,6 +917,13 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
+            Self::AuthenticatorStateUpdate(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -913,6 +946,10 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => (),
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.enable_jwk_consensus_updates());
+            }
         };
         Ok(())
     }
@@ -938,6 +975,7 @@ impl TransactionKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
         }
     }
 }
@@ -964,6 +1002,9 @@ impl Display for TransactionKind {
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
+            }
+            Self::AuthenticatorStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
             }
         }
         write!(f, "{}", writer)
@@ -1575,13 +1616,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
-        let allow_sponsored_tx = match &self.kind {
-            TransactionKind::ProgrammableTransaction(_) => true,
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::Genesis(_) => false,
-        };
-        if allow_sponsored_tx {
+        if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
@@ -1942,6 +1977,20 @@ impl VerifiedTransaction {
             commit_timestamp_ms,
         }
         .pipe(TransactionKind::ConsensusCommitPrologue)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_authenticator_state_update(
+        epoch: u64,
+        round: u64,
+        new_active_jwks: Vec<ActiveJwk>,
+    ) -> Self {
+        AuthenticatorStateUpdate {
+            epoch,
+            round,
+            new_active_jwks,
+        }
+        .pipe(TransactionKind::AuthenticatorStateUpdate)
         .pipe(Self::new_system_transaction)
     }
 

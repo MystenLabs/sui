@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 type SelectFieldProps = {
 	name: string;
 	options: string[];
+	disabled?: boolean;
 };
 
 export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(

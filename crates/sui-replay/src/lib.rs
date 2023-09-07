@@ -29,83 +29,83 @@ pub mod transaction_provider;
 pub mod types;
 
 #[derive(Parser, Clone)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 pub enum ReplayToolCommand {
     /// Generate a new network config file
-    #[clap(name = "gen")]
+    #[command(name = "gen")]
     GenerateDefaultConfig,
 
     /// Replay transaction
-    #[clap(name = "tx")]
+    #[command(name = "tx")]
     ReplayTransaction {
-        #[clap(long, short)]
+        #[arg(long, short)]
         tx_digest: String,
-        #[clap(long, short)]
+        #[arg(long, short)]
         show_effects: bool,
-        #[clap(long, short)]
+        #[arg(long, short)]
         diag: bool,
-        #[clap(long, short, allow_hyphen_values = true)]
+        #[arg(long, short, allow_hyphen_values = true)]
         executor_version_override: Option<i64>,
-        #[clap(long, short, allow_hyphen_values = true)]
+        #[arg(long, short, allow_hyphen_values = true)]
         protocol_version_override: Option<i64>,
     },
 
     /// Replay transactions listed in a file
-    #[clap(name = "rb")]
+    #[command(name = "rb")]
     ReplayBatch {
-        #[clap(long, short)]
+        #[arg(long, short)]
         path: PathBuf,
-        #[clap(long, short)]
+        #[arg(long, short)]
         terminate_early: bool,
-        #[clap(long, short, default_value = "16")]
+        #[arg(long, short, default_value = "16")]
         batch_size: u64,
     },
 
     /// Replay a transaction from a node state dump
-    #[clap(name = "rd")]
+    #[command(name = "rd")]
     ReplayDump {
-        #[clap(long, short)]
+        #[arg(long, short)]
         path: String,
-        #[clap(long, short)]
+        #[arg(long, short)]
         show_effects: bool,
     },
 
     /// Replay all transactions in a range of checkpoints
-    #[clap(name = "ch")]
+    #[command(name = "ch")]
     ReplayCheckpoints {
-        #[clap(long, short)]
+        #[arg(long, short)]
         start: u64,
-        #[clap(long, short)]
+        #[arg(long, short)]
         end: u64,
-        #[clap(long, short)]
+        #[arg(long, short)]
         terminate_early: bool,
-        #[clap(long, short, default_value = "16")]
+        #[arg(long, short, default_value = "16")]
         max_tasks: u64,
     },
 
     /// Replay all transactions in an epoch
-    #[clap(name = "ep")]
+    #[command(name = "ep")]
     ReplayEpoch {
-        #[clap(long, short)]
+        #[arg(long, short)]
         epoch: u64,
-        #[clap(long, short)]
+        #[arg(long, short)]
         terminate_early: bool,
-        #[clap(long, short, default_value = "16")]
+        #[arg(long, short, default_value = "16")]
         max_tasks: u64,
     },
 
     /// Run the replay based fuzzer
-    #[clap(name = "fz")]
+    #[command(name = "fz")]
     Fuzz {
-        #[clap(long, short)]
+        #[arg(long, short)]
         start: Option<FuzzStartPoint>,
-        #[clap(long, short)]
+        #[arg(long, short)]
         num_mutations_per_base: u64,
-        #[clap(long, short = 'b', default_value = "18446744073709551614")]
+        #[arg(long, short = 'b', default_value = "18446744073709551614")]
         num_base_transactions: u64,
     },
 
-    #[clap(name = "report")]
+    #[command(name = "report")]
     Report,
 }
 

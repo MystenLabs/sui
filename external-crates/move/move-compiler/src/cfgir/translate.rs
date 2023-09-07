@@ -90,7 +90,7 @@ impl<'env> Context<'env> {
         assert!(self.blocks.insert(lbl, basic_block).is_none());
         let block_info = match self.loop_bounds.get(&lbl) {
             None => BlockInfo::Other,
-            Some(info) => BlockInfo::LoopHead(info.clone()),
+            Some(info) => BlockInfo::LoopHead(*info),
         };
         self.block_info.push((lbl, block_info));
     }
@@ -98,7 +98,7 @@ impl<'env> Context<'env> {
     // Returns the blocks inserted in insertion ordering
     pub fn finish_blocks(&mut self) -> (Label, BasicBlocks, Vec<(Label, BlockInfo)>) {
         self.next_label = None;
-        let start = mem::replace(&mut self.start, None);
+        let start = self.start.take();
         let blocks = mem::take(&mut self.blocks);
         let block_ordering = mem::take(&mut self.block_ordering);
         let block_info = mem::take(&mut self.block_info);
@@ -765,13 +765,13 @@ fn visit_function(
         struct_declared_abilities: &context.struct_declared_abilities,
         signature,
         acquires,
-        locals: &locals,
+        locals,
         infinite_loop_starts: &infinite_loop_starts,
     };
     let mut ds = Diagnostics::new();
     for visitor in &context.env.visitors().abs_int {
         let mut v = visitor.borrow_mut();
-        ds.extend(v.verify(&context.env, prog, &function_context, &cfg));
+        ds.extend(v.verify(context.env, prog, &function_context, &cfg));
     }
     context.env.add_diags(ds);
     context.env.pop_warning_filter_scope();

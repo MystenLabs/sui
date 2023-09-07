@@ -22,6 +22,9 @@ use sui_types::{
     error::SuiError,
 };
 
+use crate::authority::move_integration_tests::{
+    build_multi_publish_txns, build_package, run_multi_txns,
+};
 use expect_test::expect;
 use std::env;
 use std::fs::File;
@@ -30,6 +33,7 @@ use std::{collections::HashSet, path::PathBuf};
 use sui_framework::BuiltInFramework;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -421,4 +425,66 @@ async fn test_publish_extraneous_bytes_modules() {
             command: Some(0)
         }
     )
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_max_packages() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let (_, modules, dependencies) = build_package("object_basics", false);
+
+    // push max number of packages allowed to publish
+    let max_pub_cmd = authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_publish_or_upgrade_per_ptb_as_option()
+        .unwrap_or(0);
+    assert!(max_pub_cmd > 0);
+    let packages = vec![(modules, dependencies); max_pub_cmd as usize];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_publish_txns(&mut builder, sender, packages);
+    let result = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap()
+        .1;
+    let effects = result.into_data();
+    assert_eq!(effects.status(), &ExecutionStatus::Success);
+}
+
+#[tokio::test]
+#[cfg_attr(msim, ignore)]
+async fn test_publish_more_than_max_packages_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+
+    let (_, modules, dependencies) = build_package("object_basics", false);
+
+    // push max number of packages allowed to publish
+    let max_pub_cmd = authority
+        .epoch_store_for_testing()
+        .protocol_config()
+        .max_publish_or_upgrade_per_ptb_as_option()
+        .unwrap_or(0);
+    assert!(max_pub_cmd > 0);
+    let packages = vec![(modules, dependencies); (max_pub_cmd + 1) as usize];
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    build_multi_publish_txns(&mut builder, sender, packages);
+    let err = run_multi_txns(&authority, sender, &sender_key, &gas_object_id, builder)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::MaxPublishCountExceeded {
+                max_publish_commands: max_pub_cmd,
+                publish_count: max_pub_cmd + 1,
+            }
+        }
+    );
 }

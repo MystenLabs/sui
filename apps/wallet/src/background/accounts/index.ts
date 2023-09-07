@@ -20,6 +20,7 @@ import {
 	type MethodPayload,
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -44,11 +45,11 @@ export async function getAllAccounts(filter?: { sourceID: string }) {
 	const db = await getDB();
 	let accounts;
 	if (filter?.sourceID) {
-		accounts = await db.accounts.where('sourceID').equals(filter.sourceID);
+		accounts = await db.accounts.where('sourceID').equals(filter.sourceID).sortBy('createdAt');
 	} else {
-		accounts = db.accounts;
+		accounts = await db.accounts.toCollection().sortBy('createdAt');
 	}
-	return (await accounts.toArray()).map(toAccount);
+	return accounts.map(toAccount);
 }
 
 export async function getAccountByID(id: string) {
@@ -69,6 +70,15 @@ export async function getAllSerializedUIAccounts() {
 
 export async function isAccountsInitialized() {
 	return (await (await getDB()).accounts.count()) > 0;
+}
+
+export async function getAccountsStatusData(
+	accountsFilter?: string[],
+): Promise<Required<WalletStatusChange>['accounts']> {
+	const allAccounts = await (await getDB()).accounts.toArray();
+	return allAccounts
+		.filter(({ address }) => !accountsFilter?.length || accountsFilter.includes(address))
+		.map(({ address, publicKey }) => ({ address, publicKey }));
 }
 
 export async function changeActiveAccount(accountID: string) {
@@ -175,6 +185,15 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			return true;
 		}
 	}
+	if (isMethodPayload(payload, 'setAccountNickname')) {
+		const { id, nickname } = payload.args;
+		const account = await getAccountByID(id);
+		if (account) {
+			await account.setNickname(nickname);
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
+	}
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const account = await getAccountByID(id);
@@ -269,6 +288,17 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			}
 		}
 		throw new Error('No password protected account found');
+	}
+	if (isMethodPayload(payload, 'storeLedgerAccountsPublicKeys')) {
+		const { publicKeysToStore } = payload.args;
+		const db = await getDB();
+		// TODO: seems bulkUpdate is supported from v4.0.1-alpha.6 change to it when available
+		await db.transaction('rw', db.accounts, async () => {
+			for (const { accountID, publicKey } of publicKeysToStore) {
+				await db.accounts.update(accountID, { publicKey });
+			}
+		});
+		return true;
 	}
 	return false;
 }

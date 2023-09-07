@@ -10,19 +10,6 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-/** A parsed result of all aux inputs. */
-export interface AuxInputs {
-	addr_seed: string;
-	eph_public_key: string[];
-	jwt_sha2_hash: string[];
-	jwt_signature: string;
-	key_claim_name: string;
-	masked_content: number[];
-	max_epoch: string;
-	num_sha2_blocks: number;
-	payload_len: number;
-	payload_start_index: number;
-}
 export interface Balance {
 	coinObjectCount: number;
 	coinType: string;
@@ -76,6 +63,12 @@ export type CheckpointCommitment = {
 	ECMHLiveObjectSetDigest: ECMHLiveObjectSetDigest;
 };
 export type CheckpointId = string | string;
+/** Necessary value for claim. */
+export interface Claim {
+	index_mod_4: number;
+	name: string;
+	value_base64: string;
+}
 export interface CoinStruct {
 	balance: string;
 	coinObjectId: string;
@@ -713,10 +706,6 @@ export type ProtocolConfigValue =
 	| {
 			f64: string;
 	  };
-/** The public inputs containing an array of string that is the all inputs hash. */
-export interface PublicInputs {
-	inputs: string[];
-}
 export type PublicKey =
 	| {
 			Ed25519: string;
@@ -1396,15 +1385,20 @@ export interface ValidatorsApy {
 }
 /** An zk login authenticator with all the necessary fields. */
 export interface ZkLoginAuthenticator {
-	aux_inputs: AuxInputs;
-	proof: ZkLoginProof;
-	public_inputs: PublicInputs;
+	inputs: ZkLoginInputs;
+	max_epoch: string;
 	user_signature: Signature;
+}
+/** All inputs required for the zk login proof verification and other auxiliary inputs. */
+export interface ZkLoginInputs {
+	address_seed: string;
+	claims: Claim[];
+	header_base64: string;
+	proof_points: ZkLoginProof;
 }
 /** The zk login proof. */
 export interface ZkLoginProof {
 	pi_a: string[];
 	pi_b: string[][];
 	pi_c: string[];
-	protocol: string;
 }

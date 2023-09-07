@@ -31,7 +31,7 @@ function CardView({ name, link, icon }: CardViewProp) {
 	return (
 		<div className="bg-white flex flex-col p-3.75 box-border w-full rounded-2xl border border-gray-45 border-solid h-32 hover:bg-sui/10 hover:border-sui/30">
 			<div className="flex mb-1">
-				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" circle />
+				<ImageIcon src={icon || null} label={name} fallback={name} size="lg" rounded="lg" />
 			</div>
 
 			<div className="flex flex-col gap-1 justify-start item-start">
@@ -58,7 +58,7 @@ type ListViewProp = {
 function ListView({ name, icon, description, tags }: ListViewProp) {
 	return (
 		<div className="bg-white flex py-3.5 px-1.25 gap-3 item-center box-border rounded hover:bg-sui/10">
-			<ImageIcon src={icon || null} label={name} fallback={name} size="xl" circle />
+			<ImageIcon src={icon || null} label={name} fallback={name} size="xxl" rounded="lg" />
 			<div className="flex flex-col gap-1 justify-center">
 				<Text variant="body" weight="semibold" color="sui-dark">
 					{name}

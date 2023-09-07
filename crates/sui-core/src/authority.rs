@@ -82,7 +82,7 @@ use sui_types::crypto::{
 };
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::effects::{
     SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
     VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
@@ -1068,6 +1068,13 @@ impl AuthorityState {
             epoch_store,
         )
         .await?;
+
+        if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
+            certificate.data().intent_message().value.kind()
+        {
+            epoch_store.update_authenticator_state(auth_state);
+        }
+
         Ok((effects, execution_error_opt))
     }
 
@@ -1224,15 +1231,11 @@ impl AuthorityState {
                 error: "dry-exec is only supported on fullnodes".to_string(),
             });
         }
-        match transaction.kind() {
-            TransactionKind::ProgrammableTransaction(_) => (),
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_) => {
-                return Err(SuiError::UnsupportedFeatureError {
-                    error: "dry-exec does not support system transactions".to_string(),
-                });
-            }
+
+        if transaction.kind().is_system_tx() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dry-exec does not support system transactions".to_string(),
+            });
         }
 
         // make a gas object if one was not provided
@@ -1875,35 +1878,6 @@ impl AuthorityState {
         })
     }
 
-    pub fn load_fastpath_input_objects(
-        &self,
-        effects: &TransactionEffects,
-    ) -> SuiResult<Vec<Object>> {
-        // Note: any future addition to the returned object list needs cautions
-        // to make sure not to mess up object pruning.
-
-        let clock_ref = effects
-            .input_shared_objects()
-            .into_iter()
-            .find(|(obj_ref, _)| obj_ref.0.is_clock())
-            .map(|(obj_ref, _)| obj_ref);
-
-        if let Some((id, version, digest)) = clock_ref {
-            let clock_obj = self.database.get_object_by_key(&id, version)?;
-            debug_assert!(clock_obj.is_some());
-            debug_assert_eq!(
-                clock_obj.as_ref().unwrap().compute_object_reference().2,
-                digest
-            );
-            Ok(clock_obj
-                .tap_none(|| error!("Clock object not found: {:?}", clock_ref))
-                .into_iter()
-                .collect())
-        } else {
-            Ok(vec![])
-        }
-    }
-
     fn check_protocol_version(
         supported_protocol_versions: SupportedProtocolVersions,
         current_version: ProtocolVersion,
@@ -2534,21 +2508,6 @@ impl AuthorityState {
                 error: format!("Provided object : [{object_id}] is not a Move object."),
             })
         }
-    }
-
-    /// This function read the dynamic fields of a Table and return the deserialized value for the key.
-    pub async fn read_table_value<K, V>(&self, table: ObjectID, key: &K) -> Option<V>
-    where
-        K: DeserializeOwned + Serialize,
-        V: DeserializeOwned,
-    {
-        let key_bcs = bcs::to_bytes(key).ok()?;
-        let df = self
-            .get_dynamic_fields_iterator(table, None)
-            .ok()?
-            .find(|(_, df)| key_bcs == df.bcs_name)?;
-        let field: Field<K, V> = self.get_move_object(&df.1.object_id).ok()?;
-        Some(field.value)
     }
 
     /// This function aims to serve rpc reads on past objects and
@@ -4102,6 +4061,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         }
 
         Ok((summaries, contents, summaries_by_digest, contents_by_digest))
+    }
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        self.database
+            .deprecated_get_transaction_checkpoint(&digest)
+            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
     }
 }
 

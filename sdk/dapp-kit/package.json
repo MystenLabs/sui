@@ -4,7 +4,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks for querying and interacting with the Sui blockchain.",
 	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.0.2",
+	"version": "0.0.4",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -75,7 +75,8 @@
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui.js": "workspace:*",
+		"@mysten/wallet-standard": "workspace:*"
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^4.0.0",

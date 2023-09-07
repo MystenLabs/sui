@@ -34,7 +34,7 @@ function PageTitle({ title = '', back, after }: PageTitleProps) {
 					<Button
 						to={typeof back === 'string' ? back : undefined}
 						onClick={backOnClick}
-						size="tiny"
+						size="xs"
 						before={<ArrowLeft16 className="text-base leading-none" />}
 						variant="plain"
 					/>

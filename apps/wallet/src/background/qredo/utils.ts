@@ -11,7 +11,7 @@ import {
 import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
 
 export function qredoConnectPageUrl(requestID: string) {
-	return `${Browser.runtime.getURL('ui.html')}#/dapp/qredo-connect/${encodeURIComponent(
+	return `${Browser.runtime.getURL('ui.html')}#/accounts/qredo-connect/${encodeURIComponent(
 		requestID,
 	)}`;
 }

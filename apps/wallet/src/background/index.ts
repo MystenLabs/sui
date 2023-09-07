@@ -9,11 +9,10 @@ import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
 import { accountSourcesEvents } from './account-sources/events';
-import { getAllAccounts } from './accounts';
+import { getAccountsStatusData, getAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
-import { getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
 import { initSentry } from './sentry';
 import { isSessionStorageSupported } from './storage-utils';
@@ -74,15 +73,11 @@ Permissions.permissionReply.subscribe((permission) => {
 });
 
 Permissions.on('connectedAccountsChanged', async ({ origin, accounts }) => {
-	const allAccountPublicInfo = await getStoredAccountsPublicInfo();
 	connections.notifyContentScript({
 		event: 'walletStatusChange',
 		origin,
 		change: {
-			accounts: accounts.map((address) => ({
-				address,
-				publicKey: allAccountPublicInfo[address]?.publicKey || null,
-			})),
+			accounts: await getAccountsStatusData(accounts),
 		},
 	});
 });

@@ -6,6 +6,7 @@ use types::owner::ObjectOwner;
 
 pub mod commands;
 pub mod error;
+pub mod extensions;
 pub mod server;
 pub mod types;
 

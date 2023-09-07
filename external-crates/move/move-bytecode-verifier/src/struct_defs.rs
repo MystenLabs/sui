@@ -104,7 +104,7 @@ impl<'a> StructDefGraphBuilder<'a> {
         token: &SignatureToken,
     ) -> PartialVMResult<()> {
         use SignatureToken as T;
-        Ok(match token {
+        match token {
             T::Bool
             | T::U8
             | T::U16
@@ -141,6 +141,7 @@ impl<'a> StructDefGraphBuilder<'a> {
                     self.add_signature_token(neighbors, cur_idx, t)?
                 }
             }
-        })
+        };
+        Ok(())
     }
 }

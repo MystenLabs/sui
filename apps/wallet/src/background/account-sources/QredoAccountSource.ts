@@ -68,6 +68,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 			service,
 			encrypted: await encrypt(password, decryptedData),
 			originFavIcon,
+			createdAt: Date.now(),
 		};
 		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {

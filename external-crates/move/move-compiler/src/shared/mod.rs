@@ -443,7 +443,7 @@ impl CompilationEnv {
             "TODO If triggered this TODO you might want to make this more efficient"
         );
         if let Some(cur_filter) = self.warning_filter.last() {
-            filter.union(&cur_filter)
+            filter.union(cur_filter)
         }
         self.warning_filter.push(filter)
     }
@@ -460,7 +460,7 @@ impl CompilationEnv {
         self.known_filters
             .get(&KnownFilterInfo::new(name, attribute_name))
             .cloned()
-            .unwrap_or_else(BTreeSet::new)
+            .unwrap_or_default()
     }
 
     pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {

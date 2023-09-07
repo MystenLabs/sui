@@ -3,36 +3,27 @@
 
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AccountListItem } from './AccountListItem';
 import { FooterLink } from './FooterLink';
-import { UnlockAccountModal } from './UnlockAccountModal';
+import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
 
 import { ampli } from '_src/shared/analytics/ampli';
-import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Collapsible } from '_src/ui/app/shared/collapse';
 
 export function AccountsList() {
-	const { data: accounts } = useAccounts();
+	const accountGroups = useAccountGroups();
+	const accounts = accountGroups.list();
 	const activeAccount = useActiveAccount();
 	const backgroundClient = useBackgroundClient();
 
-	// todo: these will be grouped by account type
 	const otherAccounts = useMemo(
-		() => accounts?.filter((a) => a.id !== activeAccount?.id) || [],
+		() => accounts.filter((a) => a.id !== activeAccount?.id) || [],
 		[accounts, activeAccount?.id],
 	);
-
-	// todo: replace this with a real flow
-	const [unlockModalOpen, setUnlockModalOpen] = useState(false);
-	const handleUnlockAccount = () => {
-		setUnlockModalOpen(true);
-	};
-
-	const close = () => setUnlockModalOpen(false);
 
 	const handleSelectAccount = async (accountID: string) => {
 		const account = accounts?.find((a) => a.id === accountID);
@@ -44,11 +35,10 @@ export function AccountsList() {
 			await backgroundClient.selectAccount(accountID);
 		}
 	};
-	if (!accounts || !activeAccount) {
-		return null;
-	}
+	if (!accounts || !activeAccount) return null;
+
 	return (
-		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full">
+		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full select-none">
 			<Heading variant="heading5" weight="semibold" color="steel-darker">
 				Accounts
 			</Heading>
@@ -63,10 +53,7 @@ export function AccountsList() {
 					<Collapsible title="Current" defaultOpen shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
-								<AccountListItem
-									address={activeAccount.address}
-									handleUnlockAccount={handleUnlockAccount}
-								/>
+								<AccountListItem account={activeAccount} />
 							</div>
 						</ToggleGroup.Item>
 					</Collapsible>
@@ -78,10 +65,7 @@ export function AccountsList() {
 									return (
 										<ToggleGroup.Item asChild key={account.id} value={account.id}>
 											<div>
-												<AccountListItem
-													address={account.address}
-													handleUnlockAccount={handleUnlockAccount}
-												/>
+												<AccountListItem account={account} />
 											</div>
 										</ToggleGroup.Item>
 									);
@@ -96,7 +80,6 @@ export function AccountsList() {
 				<FooterLink color="steelDarker" icon={<Filter16 />} to="/accounts/manage" text="Manage" />
 				<FooterLink color="steelDarker" icon={<Plus12 />} to="/accounts/add-account" text="Add" />
 			</div>
-			{unlockModalOpen ? <UnlockAccountModal onClose={close} onSuccess={close} /> : null}
 		</div>
 	);
 }

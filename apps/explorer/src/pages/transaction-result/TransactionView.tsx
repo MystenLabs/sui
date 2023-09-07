@@ -11,7 +11,7 @@ import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { Events } from '~/pages/transaction-result/Events';
 import { TransactionData } from '~/pages/transaction-result/TransactionData';
 import { TransactionSummary } from '~/pages/transaction-result/transaction-summary';
-import { SplitPanes } from '~/ui/SplitPanes';
+import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 
 import styles from './TransactionResult.module.css';
@@ -84,6 +84,7 @@ export function TransactionView({ transaction }: { transaction: SuiTransactionBl
 		<div className={clsx(styles.txdetailsbg)}>
 			<div className="h-screen md:h-full">
 				<SplitPanes
+					autoSaveId={LOCAL_STORAGE_SPLIT_PANE_KEYS.TRANSACTION_VIEW}
 					onCollapse={setIsCollapsed}
 					dividerSize={isMediumOrAbove ? 'md' : 'lg'}
 					splitPanels={[leftPane, rightPane]}

@@ -201,7 +201,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
             // check if manifest file and dependencies haven't changed and we can use existing lock
             // file to create the dependency graph
-            if new_manifest_digest_opt.clone() == manifest_digest_opt {
+            if new_manifest_digest_opt == manifest_digest_opt {
                 // manifest file hasn't changed
                 if let Some(deps_digest) = deps_digest_opt {
                     // dependencies digest exists in the lock file
@@ -225,7 +225,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             self.new_graph(
                 parent,
                 &manifest,
-                root_path.to_path_buf(),
+                root_path,
                 new_manifest_digest_opt,
                 new_deps_digest_opt,
             )?,
@@ -264,7 +264,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         dep_graphs.extend(dev_dep_graphs);
 
         let mut combined_graph = DependencyGraph {
-            root_path: root_path.clone(),
+            root_path,
             root_package: root_manifest.package.name,
             package_graph: DiGraphMap::new(),
             package_table: BTreeMap::new(),
@@ -373,7 +373,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 self.visited_dependencies
                     .push_front((dep_pkg_name, d.clone()));
                 let (mut pkg_graph, modified) =
-                    self.get_graph(&d.kind, pkg_path.clone(), manifest_string, lock_string)?;
+                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
@@ -457,7 +457,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .unwrap_or_default();
 
         let dev_dep_hashes = self
-            .dependency_hashes(root_path.clone(), &manifest.dev_dependencies)?
+            .dependency_hashes(root_path, &manifest.dev_dependencies)?
             .unwrap_or_default();
 
         if dep_hashes.is_empty() {
@@ -637,7 +637,7 @@ impl DependencyGraph {
         // collect all package names in all graphs in package table
         let mut all_packages: BTreeSet<PM::PackageName> =
             BTreeSet::from_iter(self.package_table.keys().cloned());
-        for graph_info in (&dep_graphs).values() {
+        for graph_info in dep_graphs.values() {
             all_packages.extend(graph_info.g.package_table.keys());
         }
 
@@ -651,7 +651,7 @@ impl DependencyGraph {
         // the way
         for pkg_name in all_packages {
             let mut existing_pkg_info: Option<(&DependencyGraph, &Package, bool)> = None;
-            for (_, graph_info) in &dep_graphs {
+            for graph_info in dep_graphs.values() {
                 let Some(pkg) = graph_info.g.package_table.get(&pkg_name) else {
                     continue;
                 };
@@ -671,10 +671,10 @@ impl DependencyGraph {
                         self.root_package,
                         pkg_name,
                         PackageWithResolverTOML(existing_pkg),
-                        PackageWithResolverTOML(&pkg),
+                        PackageWithResolverTOML(pkg),
                         dep_path_from_root(
                             self.root_package,
-                            &existing_graph,
+                            existing_graph,
                             pkg_name,
                             existing_is_external
                         )?,
@@ -691,7 +691,7 @@ impl DependencyGraph {
                 // are the same as well
                 match deps_equal(
                     pkg_name,
-                    &existing_graph,
+                    existing_graph,
                     self.pkg_table_for_deps_compare(
                         pkg_name,
                         existing_graph,
@@ -715,7 +715,7 @@ impl DependencyGraph {
                             format_deps(
                                 dep_path_from_root(
                                     self.root_package,
-                                    &existing_graph,
+                                    existing_graph,
                                     pkg_name,
                                     existing_is_external
                                 )?,
@@ -808,7 +808,7 @@ impl DependencyGraph {
                 if let Entry::Vacant(entry) = self.package_table.entry(dep_pkg_name) {
                     let mut pkg = Package {
                         kind: kind.clone(),
-                        version: version.clone(),
+                        version: *version,
                         resolver: None,
                     };
                     pkg.kind.reroot(parent)?;
@@ -820,7 +820,7 @@ impl DependencyGraph {
                     Dependency {
                         mode,
                         subst: subst.clone(),
-                        digest: digest.clone(),
+                        digest: *digest,
                         dep_override: *dep_override,
                     },
                 );
@@ -873,7 +873,7 @@ impl DependencyGraph {
 
     /// Helper function to remove an override for a package with a given name for "regular"
     /// dependencies (`dev_only` is false) or "dev" dependencies (`dev_only` is true).
-    fn remove_dep_override<'a>(
+    fn remove_dep_override(
         root_pkg_name: PM::PackageName,
         pkg_name: PM::PackageName,
         overrides: &mut BTreeMap<Symbol, Package>,
@@ -1307,7 +1307,7 @@ impl fmt::Display for Package {
         match &self.kind {
             PM::DependencyKind::Local(local) => {
                 write!(f, "local = ")?;
-                f.write_str(&path_escape(&local)?)?;
+                f.write_str(&path_escape(local)?)?;
             }
 
             PM::DependencyKind::Git(PM::GitInfo {
@@ -1322,7 +1322,7 @@ impl fmt::Display for Package {
                 f.write_str(&str_escape(git_rev.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(&subdir)?)?;
+                f.write_str(&path_escape(subdir)?)?;
             }
 
             PM::DependencyKind::Custom(PM::CustomDepInfo {
@@ -1341,7 +1341,7 @@ impl fmt::Display for Package {
                 f.write_str(&str_escape(package_address.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(&subdir)?)?;
+                f.write_str(&path_escape(subdir)?)?;
             }
         }
 
@@ -1462,7 +1462,7 @@ fn format_deps(
     pkg_path: String,
     dependencies: Vec<(&Dependency, PM::PackageName, &Package)>,
 ) -> String {
-    let mut s = format!("\nAt {}", pkg_path).to_string();
+    let mut s = format!("\nAt {}", pkg_path);
     if !dependencies.is_empty() {
         for (dep, pkg_name, pkg) in dependencies {
             s.push_str("\n\t");
@@ -1603,7 +1603,7 @@ fn dep_path_from_root(
                 i.next();
             }
             let p = i.map(|s| s.as_str()).collect::<Vec<_>>();
-            Ok(format!("{}", p.join(" -> ")))
+            Ok(p.join(" -> "))
         }
     }
 }

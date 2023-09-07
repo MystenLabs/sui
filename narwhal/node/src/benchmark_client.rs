@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use bytes::{BufMut as _, BytesMut};
-use clap::{crate_name, crate_version, App, AppSettings};
+use clap::Parser;
 use eyre::Context;
 use futures::{future::join_all, StreamExt};
 use rand::Rng;
@@ -15,25 +15,31 @@ use tracing_subscriber::filter::EnvFilter;
 use types::{TransactionProto, TransactionsClient};
 use url::Url;
 
+/// Benchmark client for Narwhal and Tusk
+///
+/// To run the benchmark client following are required:
+/// * the size of the transactions via the --size property
+/// * the worker address <ADDR> to send the transactions to. A url format is expected ex http://127.0.0.1:7000
+/// * the rate of sending transactions via the --rate parameter
+/// Optionally the --nodes parameter can be passed where a list (comma separated string) of worker addresses
+/// should be passed. The benchmarking client will first try to connect to all of those nodes before start sending
+/// any transactions. That confirms the system is up and running and ready to start processing the transactions.
+#[derive(Parser)]
+#[command(author, version, about)]
+struct App {
+    /// The network address of the node where to send txs. A url format is expected ex 'http://127.0.0.1:7000'
+    addr: String,
+    /// The size of each transaciton in bytes
+    size: usize,
+    /// The rate (txs/s) at which to send the transactions
+    rate: u64,
+    /// Network addresses, comma separated, that must be reachable before starting the benchmark.
+    nodes: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), eyre::Report> {
-    let matches = App::new(crate_name!())
-        .version(crate_version!())
-        .about("Benchmark client for Narwhal and Tusk.")
-        .long_about("To run the benchmark client following are required:\n\
-        * the size of the transactions via the --size property\n\
-        * the worker address <ADDR> to send the transactions to. A url format is expected ex http://127.0.0.1:7000\n\
-        * the rate of sending transactions via the --rate parameter\n\
-        \n\
-        Optionally the --nodes parameter can be passed where a list (comma separated string) of worker addresses\n\
-        should be passed. The benchmarking client will first try to connect to all of those nodes before start sending\n\
-        any transactions. That confirms the system is up and running and ready to start processing the transactions.")
-        .args_from_usage("<ADDR> 'The network address of the node where to send txs. A url format is expected ex http://127.0.0.1:7000'")
-        .args_from_usage("--size=<INT> 'The size of each transaction in bytes'")
-        .args_from_usage("--rate=<INT> 'The rate (txs/s) at which to send the transactions'")
-        .args_from_usage("--nodes=[ADDR]... 'Network addresses, comma separated, that must be reachable before starting the benchmark.'")
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .get_matches();
+    let app = App::parse();
 
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -51,28 +57,20 @@ async fn main() -> Result<(), eyre::Report> {
 
     set_global_default(subscriber).expect("Failed to set subscriber");
 
-    let target_str = matches.value_of("ADDR").unwrap();
-    let target = target_str.parse::<Url>().with_context(|| {
+    let target = app.addr.parse::<Url>().with_context(|| {
         format!(
-            "Invalid url format {target_str}. Should provide something like http://127.0.0.1:7000"
+            "Invalid url format {}. Should provide something like http://127.0.0.1:7000",
+            app.addr,
         )
     })?;
-    let size = matches
-        .value_of("size")
-        .unwrap()
-        .parse::<usize>()
-        .context("The size of transactions must be a non-negative integer")?;
-    let rate = matches
-        .value_of("rate")
-        .unwrap()
-        .parse::<u64>()
-        .context("The rate of transactions must be a non-negative integer")?;
-    let nodes = matches
-        .values_of("nodes")
-        .unwrap_or_default()
+    let size = app.size;
+    let rate = app.rate;
+    let nodes = app
+        .nodes
+        .split(',')
         .map(|x| x.parse::<Url>())
         .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("Invalid url format {target_str}"))?;
+        .with_context(|| format!("Invalid url format {}", app.nodes))?;
 
     info!("Node address: {target}");
 
