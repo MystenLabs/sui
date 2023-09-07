@@ -28,6 +28,7 @@ use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
+use crate::limits::complexity::DEFAULT_CONNECTION_PAGE_SIZE;
 use crate::server::data_provider::DataProvider;
 use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
 use async_graphql::connection::{Connection, Edge};
@@ -54,8 +55,6 @@ use sui_sdk::{
     },
     SuiClient,
 };
-
-const DEFAULT_PAGE_SIZE: usize = 50;
 
 pub(crate) struct SuiClientLoader {
     pub client: SuiClient,
@@ -190,7 +189,7 @@ impl DataProvider for SuiClient {
     ) -> Result<Connection<String, Balance>> {
         ensure_forward_pagination(&first, &after, &last, &before)?;
 
-        let count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64) as usize;
+        let count = first.unwrap_or(DEFAULT_CONNECTION_PAGE_SIZE as u64) as usize;
         let offset = after
             .map(|q| q.parse::<usize>().unwrap())
             .unwrap_or(0_usize);

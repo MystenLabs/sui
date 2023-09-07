@@ -19,20 +19,20 @@ pub enum Command {
     },
     StartServer {
         /// URL of the RPC server for data fetching
-        #[clap(short, long, default_value = "https://fullnode.testnet.sui.io:443/")]
-        rpc_url: String,
+        #[clap(short, long)]
+        rpc_url: Option<String>,
         /// Port to bind the server to
-        #[clap(short, long, default_value = "8000")]
-        port: u16,
+        #[clap(short, long)]
+        port: Option<u16>,
         /// Host to bind the server to
-        #[clap(long, default_value = "127.0.0.1")]
-        host: String,
+        #[clap(long)]
+        host: Option<String>,
 
         /// Maximum depth of query
-        #[clap(long, default_value = "10")]
-        max_depth: usize,
+        #[clap(long)]
+        max_depth: Option<usize>,
         /// Maximum complexity of query
-        #[clap(long, default_value = "1000")]
-        max_complexity: usize,
+        #[clap(long)]
+        max_complexity: Option<usize>,
     },
 }

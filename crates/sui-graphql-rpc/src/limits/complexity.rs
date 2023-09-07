@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use std::{cmp::max, sync::OnceLock};
+use std::sync::OnceLock;
 
 const DEFAULT_DEPTH_LIMIT: usize = 10;
 const OVERALL_COMPLEXITY_LIMIT: usize = 1000;
@@ -12,6 +12,8 @@ const DEFAULT_BASE_COMPLEXITY: usize = 1;
 const DEFAULT_CHILD_COMPLEXITY_MULTIPLIER: usize = 1;
 
 static COMPLEXITY_CONFIG: OnceLock<ComplexityConfig> = OnceLock::new();
+
+pub(crate) const DEFAULT_CONNECTION_PAGE_SIZE: usize = 50;
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Copy, Debug)]
 pub struct ComplexityConfigEntry {
@@ -64,13 +66,21 @@ impl Default for ComplexityConfig {
 }
 
 /// Standard calculation for complexity
-pub(crate) fn standard_calc(
+pub(crate) fn standard_calc(c: &ComplexityConfigEntry, child_complexity: usize) -> usize {
+    c.base_complexity + child_complexity * c.child_complexity_multiplier
+}
+
+/// Ccalculation for complexity for connections
+pub(crate) fn connection_calc(
     c: &ComplexityConfigEntry,
     first: Option<u64>,
     last: Option<u64>,
     child_complexity: usize,
 ) -> usize {
-    let num_nodes = max(first.unwrap_or(0) + last.unwrap_or(0), 1) as usize;
+    let mut num_nodes = (first.unwrap_or(0) + last.unwrap_or(0)) as usize;
+    if num_nodes == 0 {
+        num_nodes = DEFAULT_CONNECTION_PAGE_SIZE;
+    }
     c.base_complexity + num_nodes * child_complexity * c.child_complexity_multiplier
 }
 
