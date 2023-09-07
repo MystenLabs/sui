@@ -292,6 +292,9 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_effects_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -942,6 +945,10 @@ impl ProtocolConfig {
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
     }
+
+    pub fn enable_effects_v2(&self) -> bool {
+        self.feature_flags.enable_effects_v2
+    }
 }
 
 #[cfg(not(msim))]
@@ -1499,6 +1506,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
+                        // TODO: Move this to the proper protocol version.
+                        cfg.feature_flags.enable_effects_v2 = true;
                     }
                 }
                 27 => {

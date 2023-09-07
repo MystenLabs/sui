@@ -442,7 +442,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         // In the worst case, the number of deps is equal to the number of input objects
-        TransactionEffects::estimate_effects_size_upperbound(
+        TransactionEffects::estimate_effects_size_upperbound_v1(
             self.written.len(),
             self.mutable_input_refs.len(),
             self.deleted.len(),
