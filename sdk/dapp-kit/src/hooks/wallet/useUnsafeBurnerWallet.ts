@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import type { SuiClient } from '@mysten/sui.js/client';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
@@ -15,27 +15,24 @@ import type {
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, SUI_CHAINS, ReadonlyWalletAccount } from '@mysten/wallet-standard';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { useEffect } from 'react';
+import { useSuiClient } from '../useSuiClient.js';
 
 const WALLET_NAME = 'Unsafe Burner Wallet';
 
 export function useUnsafeBurnerWallet(enabled: boolean) {
+	const suiClient = useSuiClient();
+
 	useEffect(() => {
 		if (!enabled) {
 			return;
 		}
-		const unregister = registerUnsafeBurnerWallet();
+		const unregister = registerUnsafeBurnerWallet(suiClient);
 		return unregister;
-	}, [enabled]);
+	}, [enabled, suiClient]);
 }
 
-function registerUnsafeBurnerWallet(
-	client: SuiClient = new SuiClient({
-		url: getFullnodeUrl('localnet'),
-	}),
-	faucetUrl: string = getFaucetHost('localnet'),
-) {
+function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 	const walletsApi = getWallets();
 	const registeredWallets = walletsApi.get();
 
@@ -53,9 +50,9 @@ function registerUnsafeBurnerWallet(
 	const keypair = new Ed25519Keypair();
 	const account = new ReadonlyWalletAccount({
 		address: keypair.getPublicKey().toSuiAddress(),
+		publicKey: keypair.getPublicKey().toSuiBytes(),
 		chains: ['sui:unknown'],
 		features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
-		publicKey: keypair.getPublicKey().toBytes(),
 	});
 
 	class UnsafeBurnerWallet implements Wallet {
@@ -110,17 +107,6 @@ function registerUnsafeBurnerWallet(
 		};
 
 		#connect: StandardConnectMethod = async () => {
-			try {
-				await requestSuiFromFaucetV0({
-					host: faucetUrl,
-					recipient: keypair.getPublicKey().toSuiAddress(),
-				});
-			} catch (error) {
-				console.warn(
-					'Failed to request SUI from the faucet. This may prevent transactions from being submitted.',
-				);
-				console.warn(error);
-			}
 			return { accounts: this.accounts };
 		};
 
@@ -131,7 +117,7 @@ function registerUnsafeBurnerWallet(
 
 		#signTransactionBlock: SuiSignTransactionBlockMethod = async (transactionInput) => {
 			const { bytes, signature } = await transactionInput.transactionBlock.sign({
-				client,
+				client: suiClient,
 				signer: keypair,
 			});
 
@@ -144,7 +130,7 @@ function registerUnsafeBurnerWallet(
 		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (
 			transactionInput,
 		) => {
-			return await client.signAndExecuteTransactionBlock({
+			return await suiClient.signAndExecuteTransactionBlock({
 				signer: keypair,
 				transactionBlock: transactionInput.transactionBlock,
 				options: transactionInput.options,
