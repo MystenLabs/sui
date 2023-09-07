@@ -15,9 +15,9 @@ const zkLoginProviders: {
 	tooltip?: string;
 }[] = [
 	{ provider: 'google' },
-	{ provider: 'twitch', disabled: true, tooltip: 'Coming soon' },
+	{ provider: 'twitch' },
 	{ provider: 'facebook', disabled: true, tooltip: 'Coming soon' },
-	{ provider: 'microsoft', disabled: true, hidden: true },
+	// { provider: 'microsoft', disabled: true, hidden: true },
 ];
 
 const providerToAmpli: Record<ZkProvider, ClickedSocialSignInButtonProperties['signInProvider']> = {

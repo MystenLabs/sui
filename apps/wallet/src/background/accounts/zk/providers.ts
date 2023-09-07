@@ -6,15 +6,53 @@ export type ZkProvider = 'google' | 'twitch' | 'facebook' | 'microsoft';
 export interface ZkProviderData {
 	clientID: string;
 	url: string;
+	extraParams?: Record<string, string>;
+	buildExtraParams?: (inputs: {
+		prompt?: boolean;
+		loginHint?: string;
+		params: URLSearchParams;
+	}) => void;
 }
 
 export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 	google: {
 		clientID: '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com',
 		url: 'https://accounts.google.com/o/oauth2/v2/auth',
+		extraParams: {
+			response_type: 'id_token',
+			scope: 'openid email profile',
+		},
+		buildExtraParams: ({ prompt, loginHint, params }) => {
+			if (prompt) {
+				params.append('prompt', 'select_account');
+			}
+			if (loginHint) {
+				params.append('login_hint', loginHint);
+			}
+		},
+	},
+	twitch: {
+		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
+		url: 'https://id.twitch.tv/oauth2/authorize',
+		extraParams: {
+			// adding token seems to stop showing the authorization window
+			response_type: 'token id_token',
+			scope: 'openid user:read:email',
+			claims: JSON.stringify({
+				id_token: {
+					email: null,
+					email_verified: null,
+					picture: null,
+				},
+			}),
+		},
+		buildExtraParams: ({ prompt, params }) => {
+			if (prompt) {
+				params.append('force_verify', 'true');
+			}
+		},
 	},
 	// TODO: update this before enabling them
-	twitch: { clientID: '', url: '' },
 	facebook: { clientID: '', url: '' },
 	microsoft: { clientID: '', url: '' },
 };

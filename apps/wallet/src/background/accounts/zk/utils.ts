@@ -32,26 +32,22 @@ export async function zkLogin({
 }: {
 	provider: ZkProvider;
 	nonce?: string;
+	// This can be used for logins after the user has already connected an account
+	// and we need to make sure that the user logged in with the correct account
+	// seems only google supports this
 	loginHint?: string;
-	prompt?: 'select_account' | 'consent';
+	prompt?: boolean;
 }) {
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
 	}
-	const { clientID, url } = zkProviderDataMap[provider];
-	const params = new URLSearchParams();
+	const { clientID, url, extraParams, buildExtraParams } = zkProviderDataMap[provider];
+	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
-	params.append('response_type', 'id_token');
 	params.append('redirect_uri', Browser.identity.getRedirectURL());
-	params.append('scope', 'openid email profile');
 	params.append('nonce', nonce);
-	// This can be used for logins after the user has already connected a google account
-	// and we need to make sure that the user logged in with the correct account
-	if (loginHint) {
-		params.append('login_hint', loginHint);
-	}
-	if (prompt) {
-		params.append('prompt', prompt);
+	if (buildExtraParams) {
+		buildExtraParams({ prompt, loginHint, params });
 	}
 	const authUrl = `${url}?${params.toString()}`;
 	const responseURL = new URL(
