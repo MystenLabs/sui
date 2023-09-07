@@ -93,8 +93,6 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 ![2](../../static/zklogin-facebook2.png "Go to Settings")
 *Go to Settings*
 
-*Go to Settings*
-
 ### Twitch
 
 1. Register for a Twitch developer account. Access the [dashboard](https://dev.twitch.tv/console).
@@ -106,8 +104,6 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 <p>&nbsp;</p>
 
 ![2](../../static/zklogin-twitch2.png "Go to Console")
-*Go to Console*
-
 *Go to Console*
 
 ## Set Up OAuth Flow
