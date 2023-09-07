@@ -414,7 +414,6 @@ mod tests {
     use sui_types::coin::TreasuryCap;
     use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
     use sui_types::effects::TransactionEffects;
-    use sui_types::effects::TransactionEffectsV1;
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
@@ -1217,8 +1216,7 @@ mod tests {
         #[tokio::test]
         async fn test_object_not_found() {
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let transaction_effects: TransactionEffects =
-                TransactionEffects::V1(TransactionEffectsV1::default());
+            let transaction_effects = TransactionEffects::default();
 
             let mut mock_state = MockStateRead::new();
             mock_state
@@ -1328,8 +1326,7 @@ mod tests {
             let package_id = get_test_package_id();
             let (coin_name, _, _, _, _) = get_test_treasury_cap_peripherals(package_id);
             let transaction_digest = TransactionDigest::from([0; 32]);
-            let transaction_effects: TransactionEffects =
-                TransactionEffects::V1(TransactionEffectsV1::default());
+            let transaction_effects = TransactionEffects::default();
 
             let mut mock_state = MockStateRead::new();
             mock_state
