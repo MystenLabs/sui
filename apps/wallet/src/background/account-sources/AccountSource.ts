@@ -51,6 +51,7 @@ export abstract class AccountSource<
 export interface AccountSourceSerialized {
 	readonly id: string;
 	readonly type: AccountSourceType;
+	readonly createdAt: number;
 }
 
 export type AccountSourceSerializedUI = {

@@ -133,6 +133,7 @@ export class ZkAccount
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: claims.email || null,
+			createdAt: Date.now(),
 		};
 	}
 

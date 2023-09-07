@@ -236,6 +236,7 @@ export async function acceptQredoConnection({
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: null,
+			createdAt: Date.now(),
 		});
 	}
 	const connectedAccounts = (await addNewAccounts(newQredoAccounts)) as QredoAccount[];

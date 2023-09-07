@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import { ArrowBgFill16, Plus12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 import { useState } from 'react';
@@ -53,11 +52,12 @@ function AccountFooter({ accountID }: { accountID: string }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
 			<div className="flex gap-3 items-center">
-				<div className="w-4" />
+				<div className="w-1.5" />
 				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
-				<FooterLink to="/remove">
+				{/* TODO: Remove Account functionality */}
+				{/* <FooterLink to="/remove">
 					<div>Remove</div>
-				</FooterLink>
+				</FooterLink> */}
 			</div>
 		</div>
 	);

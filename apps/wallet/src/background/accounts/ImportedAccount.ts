@@ -55,6 +55,7 @@ export class ImportedAccount
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: null,
+			createdAt: Date.now(),
 		};
 	}
 
