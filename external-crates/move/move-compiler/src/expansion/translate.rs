@@ -5,6 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
+    editions::FeatureGate,
     expansion::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
@@ -470,6 +471,9 @@ fn module_(
             P::ModuleMember::Spec(s) => specs.push(spec(context, s)),
         }
     }
+
+    check_visibility_modifiers(context, &functions, &friends, package_name);
+
     context.set_to_outer_scope(old_aliases);
 
     let def = E::ModuleDefinition {
@@ -489,6 +493,84 @@ fn module_(
     };
     context.env.pop_warning_filter_scope();
     (current_module, def)
+}
+
+fn check_visibility_modifiers(
+    context: &mut Context,
+    functions: &UniqueMap<FunctionName, E::Function>,
+    friends: &UniqueMap<ModuleIdent, E::Friend>,
+    package_name: Option<Symbol>,
+) {
+    let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
+    let mut public_package_usage = None;
+    for (_, _, function) in functions {
+        match function.visibility {
+            E::Visibility::Friend(loc) if friend_usage.is_none() => {
+                friend_usage = Some(loc);
+            }
+            E::Visibility::Package(loc) => {
+                context
+                    .env
+                    .check_feature(&FeatureGate::PublicPackage, package_name, loc);
+                public_package_usage = Some(loc);
+            }
+            _ => (),
+        }
+    }
+
+    // Emit any errors.
+    if public_package_usage.is_some() && friend_usage.is_some() {
+        let friend_error_msg = format!(
+            "Cannot define 'friend' modules and use '{}' visibility in the same module",
+            E::Visibility::PACKAGE
+        );
+        let package_definition_msg = format!("'{}' visibility used here", E::Visibility::PACKAGE);
+        for (_, _, friend) in friends {
+            context.env.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (friend.loc, friend_error_msg.clone()),
+                (
+                    public_package_usage.unwrap(),
+                    package_definition_msg.clone()
+                )
+            ));
+        }
+        let package_error_msg = format!(
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::PACKAGE_IDENT,
+            E::Visibility::FRIEND_IDENT
+        );
+        let friend_error_msg = format!(
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::FRIEND_IDENT,
+            E::Visibility::PACKAGE_IDENT
+        );
+        for (_, _, function) in functions {
+            match function.visibility {
+                E::Visibility::Friend(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, friend_error_msg.clone()),
+                        (
+                            public_package_usage.unwrap(),
+                            package_definition_msg.clone()
+                        )
+                    ));
+                }
+                E::Visibility::Package(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, package_error_msg.clone()),
+                        (
+                            friend_usage.unwrap(),
+                            &format!("'{}' visibility used here", E::Visibility::FRIEND_IDENT)
+                        )
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 fn script(
@@ -536,7 +618,7 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     check_valid_module_member_name(context, ModuleMemberKind::Function, pfunction.name.0);
     let (function_name, function) = function_(context, 0, pfunction);
     match &function.visibility {
-        E::Visibility::Public(loc) | E::Visibility::Friend(loc) => {
+        E::Visibility::Friend(loc) | E::Visibility::Package(loc) | E::Visibility::Public(loc) => {
             let msg = format!(
                 "Invalid '{}' visibility modifier. \
                 Script functions are not callable from other Move functions.",
@@ -1367,13 +1449,14 @@ fn function_(
 
 fn visibility(context: &mut Context, pvisibility: P::Visibility) -> E::Visibility {
     match pvisibility {
+        P::Visibility::Friend(loc) => E::Visibility::Friend(loc),
+        P::Visibility::Internal => E::Visibility::Internal,
+        P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
         P::Visibility::Script(loc) => {
             assert!(!context.env.has_errors());
             E::Visibility::Public(loc)
         }
-        P::Visibility::Friend(loc) => E::Visibility::Friend(loc),
-        P::Visibility::Internal => E::Visibility::Internal,
     }
 }
 
