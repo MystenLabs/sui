@@ -134,9 +134,9 @@ export function AccountGroup({
 				<VerifyPasswordModal
 					open
 					onVerify={async (password) => {
-						if (accountsFormValues && accountsFormValues.type !== 'zk') {
+						if (accountsFormValues.current && accountsFormValues.current.type !== 'zk') {
 							await createAccountMutation.mutateAsync({
-								type: accountsFormValues.type,
+								type: accountsFormValues.current.type,
 								password,
 							});
 						}

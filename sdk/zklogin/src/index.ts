@@ -10,4 +10,4 @@ export { poseidonHash } from './poseidon.js';
 
 export { generateNonce } from './nonce.js';
 
-export { convertBase, hashToField, hashASCIIStrToField, genAddressSeed } from './utils.js';
+export { hashASCIIStrToField, genAddressSeed } from './utils.js';

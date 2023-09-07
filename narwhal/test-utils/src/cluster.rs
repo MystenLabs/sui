@@ -260,7 +260,6 @@ impl Cluster {
     fn parameters() -> Parameters {
         Parameters {
             batch_size: 200,
-            max_header_delay: Duration::from_secs(2),
             ..Parameters::default()
         }
     }

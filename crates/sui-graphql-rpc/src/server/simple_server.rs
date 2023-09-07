@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::extensions::logger::Logger;
+use crate::extensions::timeout::Timeout;
 use crate::limits::complexity::{self, set_complexity_config};
 use crate::server::sui_sdk_data_provider::SuiClientLoader;
 use crate::{
@@ -98,6 +99,7 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         .limit_complexity(config.complexity_config.complexity_limit)
         .limit_recursive_depth(config.complexity_config.recursive_depth_limit)
         .extension(Logger::default())
+        .extension(Timeout::default())
         .finish();
 
     let app = axum::Router::new()

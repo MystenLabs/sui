@@ -47,6 +47,10 @@ export async function getStatus() {
 	return (statusCache = 'required');
 }
 
+export function clearStatus() {
+	statusCache = null;
+}
+
 export async function makeMnemonicAccounts(password: string) {
 	if (!VaultStorage.mnemonicSeedHex || !VaultStorage.entropy) {
 		throw new Error('Missing mnemonic entropy');
