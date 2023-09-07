@@ -14,6 +14,8 @@ pub const AUTHENTICATOR_STATE_MODULE_NAME: &IdentStr = ident_str!("authenticator
 pub const AUTHENTICATOR_STATE_STRUCT_NAME: &IdentStr = ident_str!("AuthenticatorState");
 pub const AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME: &IdentStr =
     ident_str!("update_authenticator_state");
+pub const AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
+pub const AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME: &IdentStr = ident_str!("expire_jwks");
 pub const RESOLVED_SUI_AUTHENTICATOR_STATE: (&AccountAddress, &IdentStr, &IdentStr) = (
     &SUI_FRAMEWORK_ADDRESS,
     AUTHENTICATOR_STATE_MODULE_NAME,

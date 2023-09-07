@@ -170,7 +170,7 @@ mod checked {
 
         let tx_data = &cert.data().intent_message().value;
         let input_object_kinds = tx_data.input_objects()?;
-        let input_object_data = if tx_data.is_change_epoch_tx() {
+        let input_object_data = if tx_data.is_end_of_epoch_tx() {
             // When changing the epoch, we update a the system object, which is shared, without going
             // through sequencing, so we must bypass the sequence checks here.
             store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?
@@ -261,7 +261,10 @@ mod checked {
             check_one_object(&owner_address, object_kind, &object, system_transaction)?;
             all_objects.push((object_kind, object));
         }
-        if !transaction.is_genesis_tx() && all_objects.is_empty() {
+        if !transaction.is_genesis_tx()
+            && !transaction.is_authenticator_state_create_tx()
+            && all_objects.is_empty()
+        {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 

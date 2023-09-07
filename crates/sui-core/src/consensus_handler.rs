@@ -30,7 +30,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::authenticator_state::ActiveJwk;
-use sui_types::base_types::{AuthorityName, EpochId, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 
@@ -54,8 +54,6 @@ pub struct ConsensusHandler<T> {
     committee: Committee,
     /// Mappings used for logging and metrics
     authority_names_to_hostnames: HashMap<AuthorityName, String>,
-    /// The initial version of the authenticator state object.
-    authenticator_state_obj_start_version: Option<SequenceNumber>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -75,7 +73,6 @@ impl<T> ConsensusHandler<T> {
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
-        authenticator_state_obj_start_version: Option<SequenceNumber>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         // last_consensus_index is zero at the beginning of epoch, including for hash.
@@ -94,7 +91,6 @@ impl<T> ConsensusHandler<T> {
             low_scoring_authorities,
             committee,
             authority_names_to_hostnames,
-            authenticator_state_obj_start_version,
             metrics,
             processed_cache: Mutex::new(LruCache::new(
                 NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
@@ -494,11 +490,11 @@ impl<T> ConsensusHandler<T> {
         round: u64,
         new_active_jwks: Vec<ActiveJwk>,
     ) -> VerifiedExecutableTransaction {
+        info!("creating authenticator state update transaction");
+        assert!(self.epoch_store.authenticator_state_enabled());
         let transaction = VerifiedTransaction::new_authenticator_state_update(
             self.epoch(),
             round,
-            self.authenticator_state_obj_start_version
-                .expect("authenticator_state_obj_start_version must be set when ProtocolConfig::enable_jwk_consensus_updates is true"),
             new_active_jwks,
         );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())

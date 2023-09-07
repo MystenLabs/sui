@@ -285,8 +285,12 @@ pub enum SuiTransactionBlockKind {
     /// A series of transactions where the results of one transaction can be used in future
     /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
+    /// An transaction which creates the global authenticator state
+    AuthenticatorStateCreate(SuiAuthenticatorStateCreate),
     /// An transaction which updates global authenticator state
     AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
+    /// An transaction which expires global authenticator state
+    AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
     // .. more transaction types go here
 }
 
@@ -317,8 +321,14 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
+            Self::AuthenticatorStateCreate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Create")?;
+            }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::AuthenticatorStateExpire(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Expire")?;
             }
         }
         write!(f, "{}", writer)
@@ -348,6 +358,11 @@ impl SuiTransactionBlockKind {
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
+            TransactionKind::AuthenticatorStateCreate(update) => {
+                Self::AuthenticatorStateCreate(SuiAuthenticatorStateCreate {
+                    epoch: update.epoch,
+                })
+            }
             TransactionKind::AuthenticatorStateUpdate(update) => {
                 Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
                     epoch: update.epoch,
@@ -357,6 +372,12 @@ impl SuiTransactionBlockKind {
                         .into_iter()
                         .map(SuiActiveJwk::from)
                         .collect(),
+                })
+            }
+            TransactionKind::AuthenticatorStateExpire(expire) => {
+                Self::AuthenticatorStateExpire(SuiAuthenticatorStateExpire {
+                    epoch: expire.epoch,
+                    min_epoch: expire.min_epoch,
                 })
             }
         })
@@ -375,7 +396,9 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::AuthenticatorStateCreate(_) => "AuthenticatorStateCreate",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::AuthenticatorStateExpire(_) => "AuthenticatorStateExpire",
         }
     }
 }
@@ -1057,6 +1080,14 @@ pub struct SuiConsensusCommitPrologue {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateCreate {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiAuthenticatorStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
@@ -1066,6 +1097,17 @@ pub struct SuiAuthenticatorStateUpdate {
     pub round: u64,
 
     pub new_active_jwks: Vec<SuiActiveJwk>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateExpire {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub min_epoch: u64,
 }
 
 #[serde_as]

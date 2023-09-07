@@ -87,7 +87,6 @@ the SuiSystemStateInner version, or vice versa.
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
-<b>use</b> <a href="../../../.././build/Sui/docs/authenticator_state.md#0x2_authenticator_state">0x2::authenticator_state</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/balance.md#0x2_balance">0x2::balance</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/coin.md#0x2_coin">0x2::coin</a>;
 <b>use</b> <a href="../../../.././build/Sui/docs/dynamic_field.md#0x2_dynamic_field">0x2::dynamic_field</a>;
@@ -1396,15 +1395,6 @@ gas coins.
     ctx: &<b>mut</b> TxContext,
 ) : Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="sui_system.md#0x3_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
-
-    <b>let</b> previous_protocol_version = protocol_version(self);
-
-    // If we are moving from a version in which the AuthenticatorState <a href="../../../.././build/Sui/docs/object.md#0x2_object">object</a> did not exist,
-    // <b>to</b> one <b>where</b> it does, create it!
-    <b>if</b> (previous_protocol_version &lt; <a href="sui_system.md#0x3_sui_system_AuthenticatorStateFirstProtocolVersion">AuthenticatorStateFirstProtocolVersion</a>
-        && next_protocol_version &gt;= <a href="sui_system.md#0x3_sui_system_AuthenticatorStateFirstProtocolVersion">AuthenticatorStateFirstProtocolVersion</a>) {
-        <a href="../../../.././build/Sui/docs/authenticator_state.md#0x2_authenticator_state_create">authenticator_state::create</a>(ctx);
-    };
 
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="sui_system.md#0x3_sui_system_ENotSystemAddress">ENotSystemAddress</a>);

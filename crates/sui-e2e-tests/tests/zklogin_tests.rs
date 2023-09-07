@@ -73,16 +73,20 @@ async fn zklogin_end_to_end_test() {
 async fn zklogin_end_to_end_test_with_auth_state_creation() {
     // Create test cluster without auth state object in genesis
     let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(22.into())
-        .with_epoch_duration_ms(5000)
+        .with_protocol_version(23.into())
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
-    // Wait until we are in epoch 2.
-    test_cluster.wait_for_protocol_version(23.into()).await;
+    // Wait until we are in an epoch that has zklogin enabled, but the auth state object is not
+    // created yet.
+    test_cluster.wait_for_protocol_version(24.into()).await;
+
+    // Now wait until the next epoch, when the auth state object is created.
+    test_cluster.wait_for_epoch(None).await;
 
     // run zklogin end to end test
-    run_zklogin_end_to_end_test(TestClusterBuilder::new().build().await).await;
+    run_zklogin_end_to_end_test(test_cluster).await;
 }
 
 async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
@@ -135,8 +139,8 @@ async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
 #[sim_test]
 async fn test_create_authenticator_state_object() {
     let test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(22.into())
-        .with_epoch_duration_ms(5000)
+        .with_protocol_version(23.into())
+        .with_epoch_duration_ms(10000)
         .build()
         .await;
 
@@ -154,9 +158,9 @@ async fn test_create_authenticator_state_object() {
         });
     }
 
-    test_cluster.wait_for_protocol_version(23.into()).await;
+    test_cluster.wait_for_protocol_version(24.into()).await;
+    test_cluster.wait_for_epoch(None).await;
 
-    // no node has the authenticator state object yet
     for h in &handles {
         h.with(|node| {
             let auth_state = node

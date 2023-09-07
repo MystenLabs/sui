@@ -290,7 +290,12 @@ impl<'a> ObjectRuntime<'a> {
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
         ]
         .contains(&id);
-        let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
+        let transfer_result = if self.state.new_ids.contains_key(&id) {
+            TransferResult::New
+        } else if is_framework_obj {
+            // framework objects are always created when they are transfered, but the id is
+            // hard-coded so it is not yet in new_ids
+            self.state.new_ids.insert(id, ());
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
