@@ -19,7 +19,6 @@ pub enum KVTable {
     Events,
     CheckpointContent,
     CheckpointSummary,
-    TransactionToCheckpoint,
     State,
 }
 
@@ -87,7 +86,6 @@ impl DynamoDbClient {
             KVTable::State => "state",
             KVTable::CheckpointContent => "cc",
             KVTable::CheckpointSummary => "cs",
-            KVTable::TransactionToCheckpoint => "tx2c",
         }
         .to_string()
     }
