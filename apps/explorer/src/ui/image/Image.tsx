@@ -5,7 +5,7 @@ import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { LoadingIndicator } from '@mysten/ui';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
-import { motion } from 'framer-motion';
+import { useAnimate } from 'framer-motion';
 import { type ImgHTMLAttributes, useEffect, useState } from 'react';
 
 import useImage from '~/hooks/useImage';
@@ -52,58 +52,42 @@ export interface ImageProps extends ImageStyleProps, ImgHTMLAttributes<HTMLImage
 	fadeIn?: boolean;
 }
 
-function BaseImageContent({
-	alt,
-	src,
-	srcSet,
-	rounded,
-	fit,
-	size,
-	fadeIn,
-	...imgProps
-}: Omit<ImageProps, 'moderate' | 'visibility' | 'status'>) {
-	const content = (
-		<img
-			alt={alt}
-			src={src}
-			srcSet={srcSet}
-			className={imageStyles({
-				rounded,
-				fit,
-				size,
-			})}
-			{...imgProps}
-		/>
-	);
-
-	return fadeIn ? (
-		<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}>
-			{content}
-		</motion.div>
-	) : (
-		content
-	);
-}
-
 function BaseImage({
 	status,
 	size,
 	rounded,
+	alt,
+	src,
+	srcSet,
+	fit,
 	visibility,
 	onClick,
+	fadeIn,
 	...imgProps
 }: ImageProps & { status: string }) {
+	const [scope, animate] = useAnimate();
 	const [isBlurred, setIsBlurred] = useState(false);
 	useEffect(() => {
 		if (visibility && visibility !== VISIBILITY.PASS) {
 			setIsBlurred(true);
 		}
 	}, [visibility]);
+
+	const animateFadeIn = fadeIn && status === 'loaded';
+
+	useEffect(() => {
+		if (animateFadeIn) {
+			animate(scope.current, { opacity: 1 }, { duration: 0.3 });
+		}
+	}, [animate, animateFadeIn, scope]);
+
 	return (
 		<div
+			ref={scope}
 			className={cx(
 				imageStyles({ size, rounded }),
 				'relative flex items-center justify-center bg-gray-40 text-gray-65',
+				animateFadeIn && 'opacity-0',
 			)}
 		>
 			{status === 'loading' ? (
@@ -124,7 +108,18 @@ function BaseImage({
 				<NftTypeImage24 />
 			) : null}
 			{status === 'loaded' && (
-				<BaseImageContent onClick={onClick} rounded={rounded} size={size} {...imgProps} />
+				<img
+					alt={alt}
+					src={src}
+					srcSet={srcSet}
+					className={imageStyles({
+						rounded,
+						fit,
+						size,
+					})}
+					onClick={onClick}
+					{...imgProps}
+				/>
 			)}
 		</div>
 	);
