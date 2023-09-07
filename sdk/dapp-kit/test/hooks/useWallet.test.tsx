@@ -4,7 +4,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { useWallet } from 'dapp-kit/src';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
-import { getWallets } from '@mysten/wallet-standard';
 
 describe('useWallet', () => {
 	test('that an error is thrown when rendered without a provider', () => {
@@ -92,7 +91,9 @@ describe('useWallet', () => {
 
 		expect(walletNames).toStrictEqual(['Mock Wallet 1']);
 
-		unregister1();
-		unregister2();
+		act(() => {
+			unregister1();
+			unregister2();
+		});
 	});
 });
