@@ -3,7 +3,8 @@
 
 import type { Dispatch, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
-import { Wallet, getWallets } from '@mysten/wallet-standard';
+import type { Wallet } from '@mysten/wallet-standard';
+import { getWallets } from '@mysten/wallet-standard';
 import { localStorageAdapter } from '../utils/storageAdapters.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
 import { walletReducer } from '../reducers/walletReducer.js';
