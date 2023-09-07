@@ -3,12 +3,13 @@
 
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
-	type Dispatch,
 	type ReactNode,
 	createContext,
 	useContext,
-	useState,
-	type SetStateAction,
+	useRef,
+	useCallback,
+	useMemo,
+	type MutableRefObject,
 } from 'react';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { type Wallet } from '_src/shared/qredo-api';
@@ -26,12 +27,19 @@ export type AccountsFormValues =
 	| { type: 'qredo'; accounts: Wallet[]; qredoID: string }
 	| null;
 
-type AccountsFormContextType = [AccountsFormValues, Dispatch<SetStateAction<AccountsFormValues>>];
+type AccountsFormContextType = [
+	MutableRefObject<AccountsFormValues>,
+	(values: AccountsFormValues) => void,
+];
 
 const AccountsFormContext = createContext<AccountsFormContextType | null>(null);
 
 export const AccountsFormProvider = ({ children }: { children: ReactNode }) => {
-	const value = useState<AccountsFormValues>(null);
+	const valuesRef = useRef<AccountsFormValues>(null);
+	const setter = useCallback((values: AccountsFormValues) => {
+		valuesRef.current = values;
+	}, []);
+	const value = useMemo(() => [valuesRef, setter] as AccountsFormContextType, [setter]);
 	return <AccountsFormContext.Provider value={value}>{children}</AccountsFormContext.Provider>;
 };
 
