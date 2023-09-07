@@ -69,17 +69,17 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Register for a Google Cloud account and access the [dashboard](https://console.cloud.google.com/home/dashboard).
 1. Select "APIs & Services" then "Credentials", where you can find the client ID. Set the redirect URL. This should be the wallet or application front end.
 
-![1](/zklogin-google1.png "Sign up for Google developer account")
+![1](../../static/zklogin-google1.png "Sign up for Google developer account")
 
 *Sign up for Google developer account*
 <p>&nbsp;</p>
 
-![2](/zklogin-google2.png "Go to Credentials")
+![2](../../static/zklogin-google2.png "Go to Credentials")
 
 *Go to Credentials*
 <p>&nbsp;</p>
 
-![3](/zklogin-google3.png "Configure Redirect URL")
+![3](../../static/zklogin-google3.png "Configure Redirect URL")
 
 *Configure a Redirect URL*
 
@@ -89,12 +89,12 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 1. Select "Build your app" then "Products" then "Facebook Login" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
-![1](/zklogin-facebook1.png "Sign up for Facebook developer account")
+![1](../../static/zklogin-facebook1.png "Sign up for Facebook developer account")
 
 *Sign up for Facebook developer account*
 <p>&nbsp;</p>
 
-![2](/zklogin-facebook2.png "Go to Settings")
+![2](../../static/zklogin-facebook2.png "Go to Settings")
 
 *Go to Settings*
 
@@ -104,12 +104,12 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 
 1. Go to "Register Your Application" then "Application" where you can find the client ID. Set the redirect URL. This should be the wallet or application frontend.
 
-![1](/zklogin-twitch1.png "Sign up for Twitch developer account")
+![1](../../static/zklogin-twitch1.png "Sign up for Twitch developer account")
 
 *Sign up for Twitch developer account*
 <p>&nbsp;</p>
 
-![2](/zklogin-twitch2.png "Go to Console")
+![2](../../static/zklogin-twitch2.png "Go to Console")
 
 *Go to Console*
 
@@ -187,40 +187,38 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
 ## Assemble the zkLogin signature and submit the transaction
 
 1. Sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+  ```typescript
+  const ephemeralKeyPair = new Ed25519Keypair();
 
-```typescript
-const ephemeralKeyPair = new Ed25519Keypair();
+  const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
-const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
+  const txb = new TransactionBlock();
 
-const txb = new TransactionBlock();
-
-const { bytes, signature: userSignature } = await txb.sign({
-  client,
-  signer: ephemeralKeyPair,
-});
-```
+  const { bytes, signature: userSignature } = await txb.sign({
+    client,
+    signer: ephemeralKeyPair,
+  });
+  ```
 
 2. Serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
+  ```typescript
+  import { getZkSignature } from "@mysten/zklogin";
 
-```typescript
-import { getZkSignature } from "@mysten/zklogin";
-
-const zkSignature = getZkSignature({
-  inputs,
-  maxEpoch,
-  userSignature,
-});
-```
+  const zkSignature = getZkSignature({
+    inputs,
+    maxEpoch,
+    userSignature,
+  });
+  ```
 
 3. Execute the transaction.
 
-```typescript
-client.executeTransactionBlock({
-  transactionBlock: bytes,
-  signature: zkSignature,
-});
-```
+  ```typescript
+  client.executeTransactionBlock({
+    transactionBlock: bytes,
+    signature: zkSignature,
+  });
+  ```
 
 ## Add sponsored transaction support
 
