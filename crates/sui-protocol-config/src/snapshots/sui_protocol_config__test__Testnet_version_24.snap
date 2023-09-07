@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 23
+version: 24
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -19,7 +19,6 @@ feature_flags:
   disallow_change_struct_type_params_on_upgrade: true
   no_extraneous_module_bytes: true
   narwhal_versioned_metadata: true
-  zklogin_auth: true
   consensus_transaction_ordering: ByGasPrice
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
@@ -30,6 +29,7 @@ feature_flags:
     - Google
     - Twitch
   loaded_child_object_format: true
+  simple_conservation_checks: true
   loaded_child_object_format_type: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
@@ -47,6 +47,7 @@ max_programmable_tx_commands: 1024
 move_binary_format_version: 6
 max_move_object_size: 256000
 max_move_package_size: 102400
+max_publish_or_upgrade_per_ptb: 5
 max_tx_gas: 50000000000
 max_gas_price: 100000
 max_gas_computation_bucket: 5000000
