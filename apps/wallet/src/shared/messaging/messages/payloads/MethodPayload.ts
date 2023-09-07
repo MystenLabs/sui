@@ -54,6 +54,7 @@ type MethodPayloads = {
 	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeys };
 	getAccountSourceEntropy: { accountSourceID: string };
 	getAccountSourceEntropyResponse: { entropy: string };
+	clearWallet: {};
 };
 
 type Methods = keyof MethodPayloads;

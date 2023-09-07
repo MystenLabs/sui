@@ -3,6 +3,7 @@
 
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
+import Browser from 'webextension-polyfill';
 import { Connection } from './Connection';
 import NetworkEnv from '../NetworkEnv';
 import {
@@ -10,13 +11,14 @@ import {
 	accountSourcesHandleUIMessage,
 } from '../account-sources';
 import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
+import { getDB } from '../db';
 import {
 	acceptQredoConnection,
 	getUIQredoInfo,
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
-import { doMigration, getStatus } from '../storage-migration';
+import { clearStatus, doMigration, getStatus } from '../storage-migration';
 import { createMessage } from '_messages';
 import { type ErrorPayload, isBasePayload } from '_payloads';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
@@ -208,6 +210,16 @@ export class UiConnection extends Connection {
 				);
 			} else if (isMethodPayload(payload, 'doStorageMigration')) {
 				await doMigration(payload.args.password);
+				this.send(createMessage({ type: 'done' }, id));
+			} else if (isMethodPayload(payload, 'clearWallet')) {
+				await Browser.storage.local.clear();
+				await Browser.storage.local.set({
+					v: -1,
+				});
+				clearStatus();
+				const db = await getDB();
+				await db.delete();
+				await db.open();
 				this.send(createMessage({ type: 'done' }, id));
 			} else {
 				throw new Error(
