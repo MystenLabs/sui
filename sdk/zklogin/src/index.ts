@@ -8,6 +8,6 @@ export { getZkSignature } from './bcs.js';
 
 export { poseidonHash } from './poseidon.js';
 
-export { generateNonce } from './nonce.js';
+export { generateNonce, generateRandomness } from './nonce.js';
 
 export { hashASCIIStrToField, genAddressSeed } from './utils.js';

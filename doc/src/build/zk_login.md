@@ -12,11 +12,11 @@ zkLogin is designed with the following principles in mind:
 
 1. **Fully Self-Custodial**: A zkLogin transaction requires user approval within the OAuth login process, preventing unilateral fund movement from a zkLogin wallet—even by the OAuth provider.
 
-1. **Privacy-Focused**: Zero knowledge proofs prevent third parties from linking Sui addresses and OAuth identifiers. 
+1. **Privacy-Focused**: Zero knowledge proofs prevent third parties from linking Sui addresses and OAuth identifiers.
 
 1. **Natively Supported**: zkLogin is a protocol-level signature scheme, benefiting from [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). Unlike smart contract-based alternatives, it will smoothly integrate with sponsored transactions and MultiSig.
 
-1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain. 
+1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain.
 
 Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
 
@@ -54,15 +54,38 @@ npm install @mysten/zklogin@experimental
 
 Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
 
-In Devnet and Testnet, a dev-use only client ID is provided below, please contact us to whitelist your redirect URL, this should be the wallet or application front end.
+In Devnet and Testnet, a dev-use only client ID is provided below. These URLs can be used with the `redirect_uri` set to `https://zklogin-dev-redirect.vercel.app/api/auth`, which will use the `state` parameter to issue a redirect to your application.
 
 | Provider | Dev-Use Only Client ID |
 | ----------- | ----------- |
-| Google | 25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com | 
-| Facebook | 233307156352917 | 
+| Google | 25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com |
+| Facebook | 233307156352917 |
 | Twitch | rs1bh065i9ya4ydvifixl4kss0uhpt |
 
-In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows: 
+
+For example, the following TypeScript code can be used in Devnet and Testnet to construct a login URL for testing.
+
+```typescript
+const REDIRECT_URI = '<YOUR_SITE_URL>';
+
+const params = new URLSearchParams({
+  // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
+  state: new URLSearchParams({
+    redirect_uri: REDIRECT_URI
+  }).toString(),
+  // Test Client ID for devnet / testnet:
+  client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
+  redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
+  respond_type: 'id_token',
+  scope: 'openid',
+  // See below for details about generation of the nonce
+  nonce: nonce,
+});
+
+const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+```
+
+In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
 
 ### Google
 
@@ -115,15 +138,15 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 1. Assemble the OAuth URL with configured client ID, redirect URL, ephemeral public key and nonce: This is what the application sends the user to complete the login flow with a computed [nonce](#notations).
 
 ```typescript
-import { generateNonce } from '@mysten/zklogin';
+import { generateNonce, generateRandomness } from '@mysten/zklogin';
 
 const maxEpoch = currentEpoch + 2;
 const ephemeralKeyPair = new Ed25519Keypair();
-const jwt_randomness = toBigIntBE(Buffer.from(randomBytes(16)));
-const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, jwt_randomness);
+const randomness = generateRandomness();
+const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
 
-The OAuth URL can be constructed with $CLIENT_ID, $REDIRECT_URL and $Nonce as follows: 
+The OAuth URL can be constructed with $CLIENT_ID, $REDIRECT_URL and $Nonce as follows:
 
 | Provider | URL |
 | ----------- | ----------- |
@@ -134,14 +157,14 @@ The OAuth URL can be constructed with $CLIENT_ID, $REDIRECT_URL and $Nonce as fo
 ## User Salt Management
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
-1. Client Side: 
+1. Client Side:
     - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
     - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
 2. Backend service that exposes an endpoint that returns a unique salt for each user consistently.
     - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
-    - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds. 
+    - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used. 
+Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
 
 ```bash
 curl -X POST http://salt.api-devnet.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
@@ -153,7 +176,7 @@ User salt is used to disconnect the OAuth identifier (sub) from the on-chain Sui
 
 ## Get the User's Sui Address
 
-Once the OAuth flow completes, the JWT token can be found in the redirect URL. Along with the user salt, the zkLogin address can be derived as follows: 
+Once the OAuth flow completes, the JWT token can be found in the redirect URL. Along with the user salt, the zkLogin address can be derived as follows:
 
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
@@ -244,19 +267,19 @@ The Groth16 zero-knowledge proof is generated based on the JWT token, concealing
 
 (Step 6-7) The user sends the ZK proving service the JWT token, user salt, ephemeral public key, jwt randomness, key claim name (i.e. `sub`). The proving service generates a Zero-Knowledge Proof that takes these as private inputs and does the following: (a) Checks the nonce is derived correctly [as defined](#notations) (b) Checks that key claim value matches the corresponding field in the JWT, (c) Verifies the RSA signature from OP on the JWT, and (d) the address is consistent with the key claim value and user salt.
 
-(Step 8): The application computes the user address based on iss, aud, sub, aud. This step can be done independently as long as the application has a valid JWT token. 
+(Step 8): The application computes the user address based on iss, aud, sub, aud. This step can be done independently as long as the application has a valid JWT token.
 
-(Step 9-10) A transaction is signed using the ephemeral private key to generate an ephemeral signature. Finally, the user submits the transaction along with the ephemeral signature, ZK proof and other inputs to Sui. 
+(Step 9-10) A transaction is signed using the ephemeral private key to generate an ephemeral signature. Finally, the user submits the transaction along with the ephemeral signature, ZK proof and other inputs to Sui.
 
-(After Step 10) After submitted on chain, Sui Authorities verify the ZK proof against the provider JWKs from storage (agreed upon in consensus) and also the ephemeral signature. 
+(After Step 10) After submitted on chain, Sui Authorities verify the ZK proof against the provider JWKs from storage (agreed upon in consensus) and also the ephemeral signature.
 
 ## Entities
 
-1. Application frontend: This describes the wallet or frontend application that supports zkLogin. This frontend is responsible for storing the ephemeral private key, directing users to complete the OAuth login flow, creating and signing a zkLogin transaction. 
+1. Application frontend: This describes the wallet or frontend application that supports zkLogin. This frontend is responsible for storing the ephemeral private key, directing users to complete the OAuth login flow, creating and signing a zkLogin transaction.
 
-2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [integration guide](#integration-guide) for other strategies to maintain salt. 
+2. Salt Backup Service: This is a backend service responsible for returning a salt per unique user. See [integration guide](#integration-guide) for other strategies to maintain salt.
 
-3. ZK Proving Service: This is a backend service responsible for generating ZK proofs based on JWT token, JWT randomness, user salt and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction. 
+3. ZK Proving Service: This is a backend service responsible for generating ZK proofs based on JWT token, JWT randomness, user salt and max epoch. This proof is submitted on-chain along with the ephemeral signature for a zkLogin transaction.
 
 ## Address definition
 
@@ -266,13 +289,13 @@ The address is computed on the following inputs:
 
 1. `kc_name_F = hashBytesToField(kc_name, maxKCNameLen)`: Name of the key claim, e.g., `sub`. The sequence of bytes is mapped to a field element in BN254 using `hashBytesToField` (defined below).
 
-1. `kc_value_F = hashBytesToField(kc_value, maxKCValueLen)`: The value of the key claim mapped using `hashBytesToField`. 
+1. `kc_value_F = hashBytesToField(kc_value, maxKCValueLen)`: The value of the key claim mapped using `hashBytesToField`.
 
 1. `aud_F = hashBytesToField(aud, maxAudValueLen)`: The Relying Party (RP) identifier. See [definition](#terminology-and-notations).
 
 1. `iss`: The OpenID Provider (OP) identifier. See [definition](#terminology-and-notations).
 
-1. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address. 
+1. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address.
 
 Finally, we derive `zk_login_address = Blake2b_256(zk_login_flag, iss_L, iss, addr_seed)` where `addr_seed = Poseidon_BN254(kc_name_F, kc_value_F, aud_F, Poseidon_BN254(user_salt)`.
 
@@ -284,13 +307,13 @@ See below for all relevant OpenID terminology defined in [spec](https://openid.n
 
 OAuth 2.0 Authorization Server that is capable of Authenticating the End-User and providing Claims to a Relying Party about the Authentication event and the End-User. This is identified in the `iss` field in JWT token payload. Currently zkLogin supported OPs include Google, Facebook and Twitch, and more compatible providers will be enabled in the future.
 
-### Relying party (RP) or client 
+### Relying party (RP) or client
 
 OAuth 2.0 Client application requiring End-User Authentication and Claims from an OpenID Provider. This is assigned by OP when the developer creates the application. This is identified in the `aud` field in JWT token payload. This refers to any zkLogin enabled wallet or application.
 
 ### Subject identifier (sub)
 
-Locally unique and never reassigned identifier within the Issuer for the End-User, which is intended to be consumed by the RP. We use this as the key claim to derive user address. 
+Locally unique and never reassigned identifier within the Issuer for the End-User, which is intended to be consumed by the RP. We use this as the key claim to derive user address.
 
 ### JWK (JSON Web Key)
 
@@ -302,16 +325,16 @@ JWT token can be found in the redirect URL to RP after the user completes the OA
 
 **Header**
 
-| Name | Example Value | Usage | 
-| ----------- | ----------- | ----------- | 
-| alg | RS256 | zkLogin only supports `RS256` (RSA + SHA-256). | 
-| kid | c3afe7a9bda46bae6ef97e46c95cda48912e5979 | Identifies the JWK that should be used to verify the JWT. | 
+| Name | Example Value | Usage |
+| ----------- | ----------- | ----------- |
+| alg | RS256 | zkLogin only supports `RS256` (RSA + SHA-256). |
+| kid | c3afe7a9bda46bae6ef97e46c95cda48912e5979 | Identifies the JWK that should be used to verify the JWT. |
 | typ | JWT | zkLogin only supports `JWT`. |
 
 **Payload**
 
-| Name | Example Value | Usage | 
-| ----------- | ----------- | ----------- | 
+| Name | Example Value | Usage |
+| ----------- | ----------- | ----------- |
 | iss | https://accounts.google.com | A unique identifier assigned to the OAuth provider. |
 | aud | 575519200000-msop9ep45u2uo98hapqmngv8d8000000.apps.googleusercontent.com | A unique identifier assigned to the relying party by the OAuth provider. |
 | nonce | hTPpgF7XAKbW37rEUS6pEVZqmoI | A value set by the relying party. The zkLogin enabled wallet is required to set this to the hash of ephemeral public key, an expiry time and a randomness. |
@@ -321,18 +344,18 @@ For a zkLogin transaction, we do not use the `iat` and `exp` claims (i.e., times
 
 ### Key Claim
 
-We call the claim used to derive a users' address as the "key claim" e.g., sub or email. Naturally, we only want to use claims that are fixed once and never changed again. For zkLogin, we currently support sub as the key claim because OpenID spec mandates that providers do not change this identifier. In the future, this can be extended to use email, username, etc. 
+We call the claim used to derive a users' address as the "key claim" e.g., sub or email. Naturally, we only want to use claims that are fixed once and never changed again. For zkLogin, we currently support sub as the key claim because OpenID spec mandates that providers do not change this identifier. In the future, this can be extended to use email, username, etc.
 
 ### Notations
 
 1. `(eph_sk, eph_pk)`: Ephemeral KeyPair refers to the private and public key pair used to produce ephemeral signatures. The signing mechanism is the same as traditional transaction signing, but it is ephemeral because it is only stored for a short session and can be refreshed upon new OAuth sessions. The ephemeral public key is used to compute nonce.
-2. `nonce`: An application-defined field embedded in the JWT token payload, computed as the hash of the ephemeral public key, JWT randomness, and the maximum epoch (Sui's defined expiry epoch). Specifically, a zkLogin compatible nonce is required to passed in as `nonce = ToBase64URL(Poseidon_BN254([ext_eph_pk_bigint / 2^128, ext_eph_pk_bigint % 2^128, max_epoch, jwt_randomness]).to_bytes()[len - 20..])` where `ext_eph_pk_bigint` is the BigInt representation of `ext_eph_pk`. 
+2. `nonce`: An application-defined field embedded in the JWT token payload, computed as the hash of the ephemeral public key, JWT randomness, and the maximum epoch (Sui's defined expiry epoch). Specifically, a zkLogin compatible nonce is required to passed in as `nonce = ToBase64URL(Poseidon_BN254([ext_eph_pk_bigint / 2^128, ext_eph_pk_bigint % 2^128, max_epoch, jwt_randomness]).to_bytes()[len - 20..])` where `ext_eph_pk_bigint` is the BigInt representation of `ext_eph_pk`.
 3. `ext_eph_pk`: The byte representation of an ephemeral public key (`flag || eph_pk`). Size varies depending on the choice of the signature scheme (denoted by the flag, defined [here](https://docs.sui.io/learn/cryptography/sui-signatures)).
 4. `user_salt`: A value introduced to unlink the OAuth identifier with the on-chain address.
-5. `max_epoch`: The epoch at which the JWT token expires. This is u64 used in Sui. 
-6. `kc_name`: The key claim name, e.g. `sub`. 
-7. `kc_value`: The key claim value, e.g. `110463452167303000000`. 
-8. `hashBytesToField(str, maxLen)`: Hashes the ASCII string to a field element using the Poseidon hash. 
+5. `max_epoch`: The epoch at which the JWT token expires. This is u64 used in Sui.
+6. `kc_name`: The key claim name, e.g. `sub`.
+7. `kc_value`: The key claim value, e.g. `110463452167303000000`.
+8. `hashBytesToField(str, maxLen)`: Hashes the ASCII string to a field element using the Poseidon hash.
 
 ## Ceremony
 
@@ -351,7 +374,7 @@ We adopt a distributed setup process  instead of relying on a single central par
 The following groups are invited to participate:
 
 1. Experts: People who work in Web3, cryptography, and distributed systems, and who have possibly participated in similar ceremonies.
-2. Validators: Entities that have already participated in securing the Sui Network. 
+2. Validators: Entities that have already participated in securing the Sui Network.
 
 The ceremony's security guarantees that among the participants, at least one adheres to the protocol and handles entropy safely. With several participants, the likelihood of this outcome is elevated.
 
@@ -377,13 +400,13 @@ Throughout the contribution process, whether through browser interaction or runn
 
 Once the coordinator server confirms the accurately computed uploaded contribution and verifies the signed hash, it stores the latest contribution on-disk. Then, it advances to the next participant in the queue, who repeats the same steps. This cycle continues until the queue is empty.
 
-If for any reason, the participant at the head of the queue did not finish uploading the verified contribution in time, the coordinator discards the participant and moves on to the next one in the queue. Note that throughout the time, the coordinator does not have access to any private information about the contribution. 
+If for any reason, the participant at the head of the queue did not finish uploading the verified contribution in time, the coordinator discards the participant and moves on to the next one in the queue. Note that throughout the time, the coordinator does not have access to any private information about the contribution.
 
-We encourage the participant to use an entropy that is easy to discard, like using the mouse-moving option that contains high entropy. As long as one participant safely disposes of their entropy, we consider the resulting CRS is trustworthy. 
+We encourage the participant to use an entropy that is easy to discard, like using the mouse-moving option that contains high entropy. As long as one participant safely disposes of their entropy, we consider the resulting CRS is trustworthy.
 
 ## Finalization
 
-Once all contributions are concluded, the ultimate CRS and a verification script will be made available for public examination. The Sui Foundation will run the verification to ensure the integrity of the ceremony and we also invite anyone to verify the same. 
+Once all contributions are concluded, the ultimate CRS and a verification script will be made available for public examination. The Sui Foundation will run the verification to ensure the integrity of the ceremony and we also invite anyone to verify the same.
 
 Eventually, the final CRS will be used to generate the proving key and verifying key. The proving key will be used to generate zero knowledge proof for ZkLogin, stored with the ZK proving service. The verifying key will be deployed as part of the validator software that is used to verify the zkLogin transaction on Sui.
 
@@ -409,7 +432,7 @@ The ephemeral private key's lifespan is tied to the maximum epoch specified in n
 
 ## Proof
 
-Obtaining the proof itself cannot create a valid zkLogin transaction because an ephemeral signature over the transaction is also needed. 
+Obtaining the proof itself cannot create a valid zkLogin transaction because an ephemeral signature over the transaction is also needed.
 
 ## Privacy
 
@@ -434,7 +457,7 @@ On the other hand, a zkLogin wallet only requires an ephemeral private key stora
 
 ## How is zkLogin different from MPC or Multisig wallets?
 
-Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or distributing multiple key shares and then defining a threshold value for accepting a signature. 
+Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or distributing multiple key shares and then defining a threshold value for accepting a signature.
 
 zkLogin does not split any individual private keys, but ephemeral private keys are registered using nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
 
@@ -460,7 +483,7 @@ See more on address definition.
 
 ## Is a zkLogin Wallet custodial?
 
-A zkLogin wallet is a non-custodial or unhosted wallet. 
+A zkLogin wallet is a non-custodial or unhosted wallet.
 
 A custodial or hosted wallet is where a third party (the custodian) controls the private keys on behalf of a wallet user. No such third-party exists for zkLogin wallets.
 
@@ -470,7 +493,7 @@ Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two c
 
 No. Proof generation is only required when ephemeral KeyPair expires. Since the nonce is defined by the ephemeral public key (`eph_pk`) and expiry (`max_epoch`), the ZK proof is valid until what the expiry is committed to nonce in the JWT token. The ZK proof can be cached and the same ephemeral key can be used to sign transactions till it expires.
 
-## Does zkLogin work on mobile? 
+## Does zkLogin work on mobile?
 
 zkLogin works with any wallet that is whitelisted and has completed integration with it, including mobile wallets.
 
@@ -488,7 +511,7 @@ Yes, the user can follow the OAuth providers' recovery flow. The ephemeral priva
 
 ## What are some assumptions for the zkLogin circuit?
 
-Due to the way Groth16 works, we impose length restrictions on several fields in the JWT. Some of the fields that are length-restricted include aud, iss, the JWT's header and payload. For example, zkLogin can currently only work with aud values of up to length 120 (this value is not yet final). In general, we tried to make sure that the restrictions are as generous as possible. We have decided on these values after looking at as many JWTs that we could get our hands on. 
+Due to the way Groth16 works, we impose length restrictions on several fields in the JWT. Some of the fields that are length-restricted include aud, iss, the JWT's header and payload. For example, zkLogin can currently only work with aud values of up to length 120 (this value is not yet final). In general, we tried to make sure that the restrictions are as generous as possible. We have decided on these values after looking at as many JWTs that we could get our hands on.
 
 ## How is zkLogin different from other solutions that support social login?
 
@@ -504,7 +527,7 @@ Some of the existing deployed solutions rely on some of these assumptions. Web3A
 
 The key differentiators that zkLogin brings to Sui are:
 
-1. Native Support in Sui: Unlike other solutions that are blockchain agnostic, zkLogin is deployed just for Sui. This means a zkLogin transaction can be combined with Multisig and sponsored transactions seamlessly. 
+1. Native Support in Sui: Unlike other solutions that are blockchain agnostic, zkLogin is deployed just for Sui. This means a zkLogin transaction can be combined with Multisig and sponsored transactions seamlessly.
 
 2. Self-Custodial without additional trust: We leverage the nonce field in JWT token to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. In addition, the JWK itself is an oracle agreed upon by the quorum of stakes by the validators with trusting any source of authority.
 
