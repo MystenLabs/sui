@@ -5,7 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -697,7 +697,8 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
-            let external_transfers: Vec<_> = additional_writes.keys().copied().collect();
+            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
+
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,

@@ -1,6 +1,10 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
+<<<<<<< HEAD
 assertion_line: 1608
+=======
+assertion_line: 1602
+>>>>>>> 92cc036242 (add flag to transaction test for shared object deletion)
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 24

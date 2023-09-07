@@ -5,7 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeSet, HashSet};
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -670,6 +670,8 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
+            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
+
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
@@ -683,8 +685,9 @@ mod checked {
             );
 
             for id in by_value_shared_objects {
-                if !writes.contains_key(&id) && !deleted_object_ids.contains_key(&id)
-                //&& !additional_transfer_object_vals.contains(id)
+                if !writes.contains_key(&id)
+                    && !deleted_object_ids.contains_key(&id)
+                    && !external_transfers.contains(&id)
                 {
                     return Err(ExecutionError::new(
                         ExecutionErrorKind::SharedObjectOperationNotAllowed,
