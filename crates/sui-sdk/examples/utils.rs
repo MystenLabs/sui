@@ -51,6 +51,11 @@ pub const SUI_FAUCET: &str = "https://faucet.testnet.sui.io/v1/gas"; // testnet 
 /// e.g., transfering objects from one address to another.
 pub async fn setup_for_write() -> Result<(SuiClient, SuiAddress, SuiAddress), anyhow::Error> {
     let (client, active_address) = setup_for_read().await?;
+    // make sure we have some SUI (5_000_000 MIST) on this address
+    let coin = fetch_coin(&client, &active_address).await?;
+    if coin.is_none() {
+        request_tokens_from_faucet(active_address, &client).await?;
+    }
     let wallet = retrieve_wallet().await?;
     let addresses = wallet.get_addresses();
     let addresses = addresses
@@ -77,15 +82,7 @@ pub async fn setup_for_read() -> Result<(SuiClient, SuiAddress), anyhow::Error> 
     assert!(wallet.get_addresses().len() >= 2);
     let active_address = wallet.active_address()?;
 
-    println!("Local wallet active address is: {active_address}");
-
-    // make sure we have some SUI (5_000_000 MIST) on this address
-    let coin = fetch_coin(&client, &active_address).await?;
-
-    if coin.is_none() {
-        request_tokens_from_faucet(active_address, &client).await?;
-    }
-
+    println!("Wallet active address is: {active_address}");
     Ok((client, active_address))
 }
 
