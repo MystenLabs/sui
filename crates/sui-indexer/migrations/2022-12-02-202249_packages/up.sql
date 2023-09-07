@@ -1,11 +1,11 @@
 CREATE TABLE packages
 (
-    package_id address     NOT NULL,
+    package_id VARCHAR(66)     NOT NULL,
     version    BIGINT      NOT NULL,
-    author     address     NOT NULL,
+    author     VARCHAR(66)     NOT NULL,
     -- means the column cannot be null,
     -- the element in the array can still be null
-    data       bcs_bytes[] NOT NULL,
+    data       JSON NOT NULL,
     CONSTRAINT packages_pk PRIMARY KEY (package_id, version)
 );
 

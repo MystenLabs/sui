@@ -1,25 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::pg::sql_types::Bytea;
-use diesel::sql_types::Text;
-use diesel::QueryableByName;
-use diesel::RunQueryDsl;
+// use diesel::sql_types::Text;
+// use diesel::QueryableByName;
+// use diesel::RunQueryDsl;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
 
-use sui_types::base_types::ObjectID;
-
-use crate::errors::{Context, IndexerError};
-use crate::store::diesel_marco::read_only_blocking;
-use crate::PgConnectionPool;
+// use sui_types::base_types::ObjectID;
+// use crate::errors::Context;
+// use crate::store::diesel_marco::read_only_blocking;
+use crate::errors::IndexerError;
+use crate::DBConnectionPool;
 
 pub struct IndexerModuleResolver {
-    cp: PgConnectionPool,
+    cp: DBConnectionPool,
 }
 
 impl IndexerModuleResolver {
-    pub fn new(cp: PgConnectionPool) -> Self {
+    pub fn new(cp: DBConnectionPool) -> Self {
         Self { cp }
     }
 }
@@ -33,24 +32,25 @@ impl ModuleResolver for IndexerModuleResolver {
     type Error = IndexerError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        #[derive(QueryableByName)]
-        struct ModuleBytes {
-            #[diesel(sql_type = Bytea)]
-            data: Vec<u8>,
-        }
+        // #[derive(QueryableByName)]
+        // struct ModuleBytes {
+        //     data: Vec<u8>,
+        // }
 
-        let package_id = ObjectID::from(*id.address()).to_string();
-        let module_name = id.name().to_string();
+        // let package_id = ObjectID::from(*id.address()).to_string();
+        // let module_name = id.name().to_string();
 
-        // TODO: do we need to make this async?
-        let module_bytes = read_only_blocking!(&self.cp, |conn| {
-            diesel::sql_query(LATEST_MODULE_QUERY)
-                .bind::<Text, _>(package_id)
-                .bind::<Text, _>(module_name)
-                .get_result::<ModuleBytes>(conn)
-        })
-        .context("Error reading module.")?;
+        // // TODO: do we need to make this async?
+        // let module_bytes = read_only_blocking!(&self.cp, |conn| {
+        //     diesel::sql_query(LATEST_MODULE_QUERY)
+        //         .bind::<Text, _>(package_id)
+        //         .bind::<Text, _>(module_name)
+        //         .get_result::<ModuleBytes>(conn)
+        // })
+        // .context("Error reading module.")?;
 
-        Ok(Some(module_bytes.data))
+        // Ok(Some(module_bytes.data))
+        // TODO(gegaowp): implement move module resolver based on Module bytes stored in MySQL blob.
+        todo!()
     }
 }

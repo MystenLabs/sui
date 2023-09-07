@@ -1,48 +1,48 @@
 CREATE TABLE move_calls (
-    id                          BIGSERIAL       PRIMARY KEY,
-    transaction_digest          base58digest    NOT NULL,
+    id                          BIGINT AUTO_INCREMENT       PRIMARY KEY,
+    transaction_digest          VARCHAR(44)    NOT NULL,
     checkpoint_sequence_number  BIGINT          NOT NULL,
     epoch                       BIGINT          NOT NULL,
-    sender                      address         NOT NULL,
+    sender                      VARCHAR(66)         NOT NULL,
     move_package                TEXT            NOT NULL,
-    move_module                 TEXT            NOT NULL,
+    move_module                 TEXT           NOT NULL,
     move_function               TEXT            NOT NULL
 );
 CREATE INDEX move_calls_transaction_digest ON move_calls (transaction_digest);
-CREATE INDEX move_calls_move_package ON move_calls (move_package);
-CREATE INDEX move_calls_move_module ON move_calls (move_module);
-CREATE INDEX move_calls_move_function ON move_calls (move_function);
+CREATE INDEX move_calls_move_package ON move_calls (move_package(255));
+CREATE INDEX move_calls_move_module ON move_calls (move_module(255));
+CREATE INDEX move_calls_move_function ON move_calls (move_function(255));
 CREATE INDEX move_calls_epoch ON move_calls (epoch);
 
 CREATE TABLE recipients (
-    id                          BIGSERIAL       PRIMARY KEY,
-    transaction_digest          base58digest    NOT NULL,
+    id                          BIGINT AUTO_INCREMENT       PRIMARY KEY,
+    transaction_digest          VARCHAR(44)    NOT NULL,
     checkpoint_sequence_number  BIGINT          NOT NULL,
     epoch                       BIGINT          NOT NULL,
-    sender                      address         NOT NULL,
-    recipient                   address         NOT NULL
+    sender                      VARCHAR(66)         NOT NULL,
+    recipient                   VARCHAR(66)         NOT NULL
 );
 CREATE INDEX recipients_transaction_digest ON recipients (transaction_digest);
 CREATE INDEX recipients_sender ON recipients (sender);
 CREATE INDEX recipients_recipient ON recipients (recipient);
 
 CREATE TABLE input_objects (
-    id                          BIGSERIAL       PRIMARY KEY,
-    transaction_digest          base58digest    NOT NULL,
+    id                          BIGINT AUTO_INCREMENT       PRIMARY KEY,
+    transaction_digest          VARCHAR(44)    NOT NULL,
     checkpoint_sequence_number  BIGINT          NOT NULL,
     epoch                       BIGINT          NOT NULL,
-    object_id                   address         NOT NULL,
+    object_id                   VARCHAR(66)         NOT NULL,
     object_version              BIGINT
 );
 CREATE INDEX input_objects_transaction_digest ON input_objects (transaction_digest);
 CREATE INDEX input_objects_object_id ON input_objects (object_id);
 
 CREATE TABLE changed_objects (
-    id                         BIGSERIAL       PRIMARY KEY,
-    transaction_digest         base58digest    NOT NULL,
+    id                         BIGINT AUTO_INCREMENT       PRIMARY KEY,
+    transaction_digest         VARCHAR(44)    NOT NULL,
     checkpoint_sequence_number BIGINT          NOT NULL,
     epoch                      BIGINT          NOT NULL,
-    object_id                  address         NOT NULL,
+    object_id                  VARCHAR(66)         NOT NULL,
     object_change_type         TEXT            NOT NULL,
     object_version             BIGINT          NOT NULL
 );

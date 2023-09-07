@@ -19,14 +19,33 @@ pub struct ObjectOwner {
     pub object_status: ObjectStatus,
 }
 
-#[derive(DbEnum, Debug, Clone, Deserialize, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::OwnerType"]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, Clone, Deserialize, Serialize, DbEnum)]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,
     Shared,
     Immutable,
+}
+
+impl OwnerType {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            OwnerType::AddressOwner => "AddressOwner",
+            OwnerType::ObjectOwner => "ObjectOwner",
+            OwnerType::Shared => "Shared",
+            OwnerType::Immutable => "Immutable",
+        }
+    }
+
+    pub fn from_string(s: &str) -> Option<Self> {
+        match s {
+            "AddressOwner" => Some(OwnerType::AddressOwner),
+            "ObjectOwner" => Some(OwnerType::ObjectOwner),
+            "Shared" => Some(OwnerType::Shared),
+            "Immutable" => Some(OwnerType::Immutable),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Queryable, Debug)]

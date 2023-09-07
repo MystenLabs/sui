@@ -9,7 +9,7 @@ use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::utils::reset_database;
-use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
+use sui_indexer::{get_db_pool_connection, new_db_connection_pool, Indexer, IndexerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), IndexerError> {
@@ -33,12 +33,12 @@ async fn main() -> Result<(), IndexerError> {
     )?;
     let indexer_metrics = IndexerMetrics::new(&registry);
     let db_url = indexer_config.get_db_url().map_err(|e| {
-        IndexerError::PgPoolConnectionError(format!(
+        IndexerError::PoolConnectionError(format!(
             "Failed parsing database url with error {:?}",
             e
         ))
     })?;
-    let blocking_cp = new_pg_connection_pool(&db_url).await.map_err(|e| {
+    let blocking_cp = new_db_connection_pool(&db_url).await.map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e
@@ -46,7 +46,7 @@ async fn main() -> Result<(), IndexerError> {
         e
     })?;
     if indexer_config.reset_db {
-        let mut conn = get_pg_pool_connection(&blocking_cp).map_err(|e| {
+        let mut conn = get_db_pool_connection(&blocking_cp).map_err(|e| {
             error!(
                 "Failed getting Postgres connection from connection pool with error {:?}",
                 e

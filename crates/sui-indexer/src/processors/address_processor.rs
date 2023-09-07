@@ -121,13 +121,14 @@ where
                     }
                 }
 
-                let addr_stats = self
-                    .store
-                    .calculate_address_stats(
-                        last_processed_addr_checkpoint + ADDRESS_STATS_BATCH_SIZE as i64,
-                    )
-                    .await?;
-                self.store.persist_address_stats(&addr_stats).await?;
+                // TODO(gegaowp): worry about analytical processor later.
+                // let addr_stats = self
+                //     .store
+                //     .calculate_address_stats(
+                //         last_processed_addr_checkpoint + ADDRESS_STATS_BATCH_SIZE as i64,
+                //     )
+                //     .await?;
+                // self.store.persist_address_stats(&addr_stats).await?;
                 info!(
                     "Processed addresses and address stats for checkpoint: {}",
                     last_processed_addr_checkpoint

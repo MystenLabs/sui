@@ -5,7 +5,7 @@ use std::ops::Neg;
 
 use anyhow::anyhow;
 use diesel::migration::MigrationSource;
-use diesel::{PgConnection, RunQueryDsl};
+use diesel::{MysqlConnection, RunQueryDsl};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use jsonrpsee::http_client::HttpClient;
 use sui_types::digests::ObjectDigest;
@@ -27,7 +27,7 @@ use sui_types::storage::{DeleteKind, WriteKind};
 
 use crate::errors::IndexerError;
 use crate::types::CheckpointTransactionBlockResponse;
-use crate::PgPoolConnection;
+use crate::DBPoolConnection;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -36,7 +36,7 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 /// If `drop_all` is set to `true`, the function will drop all tables in the database before
 /// resetting the migrations. This option is destructive and will result in the loss of all
 /// data in the tables. Use with caution, especially in production environments.
-pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
+pub fn reset_database(conn: &mut DBPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
     info!("Resetting database ...");
     if drop_all {
         drop_all_tables(conn)
@@ -52,7 +52,7 @@ pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(),
     Ok(())
 }
 
-pub fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Error> {
+pub fn drop_all_tables(conn: &mut MysqlConnection) -> Result<(), diesel::result::Error> {
     info!("Dropping all tables in the database");
     let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
         "

@@ -3,6 +3,7 @@
 
 use diesel::{Insertable, Queryable};
 use jsonrpsee::core::__reexports::serde::Deserialize;
+use serde_json::Value;
 
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 
@@ -20,9 +21,9 @@ pub struct DBEpochInfo {
     pub epoch_end_timestamp: Option<i64>,
     pub epoch_total_transactions: i64,
     pub next_epoch_version: Option<i64>,
-    pub next_epoch_committee: Vec<Option<Vec<u8>>>,
-    pub next_epoch_committee_stake: Vec<Option<i64>>,
-    pub epoch_commitments: Vec<Option<Vec<u8>>>,
+    pub next_epoch_committee: Value,
+    pub next_epoch_committee_stake: Value,
+    pub epoch_commitments: Value,
 
     /// existing fields from `SystemEpochInfo`
     pub protocol_version: Option<i64>,

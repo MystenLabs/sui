@@ -1,38 +1,25 @@
-DO $$
-BEGIN
--- SuiAddress and ObjectId type, 0x + 64 chars hex string
-CREATE DOMAIN address VARCHAR(66);
--- Max char length for base58 encoded digest
-CREATE DOMAIN base58digest VARCHAR(44);
-EXCEPTION
-    WHEN duplicate_object THEN
-        -- Domain already exists, do nothing
-        NULL;
-END $$;
-
-
 CREATE TABLE transactions (
-    id                          BIGSERIAL PRIMARY KEY,
-    transaction_digest          base58digest NOT NULL,
+    id                          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transaction_digest          VARCHAR(44)  NOT NULL,
     sender                      VARCHAR(255) NOT NULL,
-    recipients                  TEXT[]       NOT NULL,
+    recipients                  JSON       NOT NULL,
     checkpoint_sequence_number  BIGINT,
     timestamp_ms                BIGINT,
     transaction_kind            TEXT         NOT NULL,
     transaction_count           BIGINT       NOT NULL,
-    execution_success           BOOLEAN      NOT NULL,
+    execution_success           TINYINT(1)      NOT NULL,
     -- object related
-    created                     TEXT[]       NOT NULL,
-    mutated                     TEXT[]       NOT NULL,
-    deleted                     TEXT[]       NOT NULL,
-    unwrapped                   TEXT[]       NOT NULL,
-    wrapped                     TEXT[]       NOT NULL,
+    created                     JSON       NOT NULL,
+    mutated                     JSON       NOT NULL,
+    deleted                     JSON       NOT NULL,
+    unwrapped                   JSON       NOT NULL,
+    wrapped                     JSON       NOT NULL,
     -- each move call is <package>::<module>::<function>
-    move_calls                  TEXT[]       NOT NULL,
+    move_calls                  JSON       NOT NULL,
     -- gas object related
-    gas_object_id               address      NOT NULL,
+    gas_object_id               VARCHAR(66)  NOT NULL,
     gas_object_sequence         BIGINT       NOT NULL,
-    gas_object_digest           address      NOT NULL,
+    gas_object_digest           VARCHAR(66)  NOT NULL,
     -- gas budget & cost related
     gas_budget                  BIGINT       NOT NULL,
     total_gas_cost              BIGINT       NOT NULL,
@@ -44,10 +31,10 @@ CREATE TABLE transactions (
     -- not the reference gas price
     gas_price                   BIGINT       NOT NULL,
     -- BCS serialized SenderSignedData
-    raw_transaction             bytea        NOT NULL,
+    raw_transaction             BLOB        NOT NULL,
     transaction_content         TEXT         NOT NULL,
     transaction_effects_content TEXT         NOT NULL,
-    confirmed_local_execution   BOOLEAN,
+    confirmed_local_execution   TINYINT(1),
     UNIQUE (transaction_digest)
 );
 

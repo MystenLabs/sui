@@ -11,14 +11,14 @@ use crate::errors::IndexerError;
 use crate::store::PgIndexerStore;
 use crate::utils::reset_database;
 use crate::IndexerMetrics;
-use crate::{new_pg_connection_pool, Indexer, IndexerConfig};
+use crate::{new_db_connection_pool, Indexer, IndexerConfig};
 
 /// Spawns an indexer thread with provided Postgres DB url
 pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> Result<(PgIndexerStore, JoinHandle<Result<(), IndexerError>>), anyhow::Error> {
     let parsed_url = config.base_connection_url()?;
-    let blocking_pool = new_pg_connection_pool(&parsed_url)
+    let blocking_pool = new_db_connection_pool(&parsed_url)
         .await
         .map_err(|e| anyhow!("unable to connect to Postgres, is it running? {e}"))?;
     if config.reset_db {

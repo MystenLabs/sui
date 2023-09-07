@@ -11,7 +11,8 @@ use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use backoff::ExponentialBackoff;
 use clap::Parser;
-use diesel::pg::PgConnection;
+use diesel::mysql::MysqlConnection;
+
 use diesel::r2d2::ConnectionManager;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
@@ -48,8 +49,8 @@ pub mod test_utils;
 pub mod types;
 pub mod utils;
 
-pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
-pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
+pub type DBConnectionPool = diesel::r2d2::Pool<ConnectionManager<MysqlConnection>>;
+pub type DBPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<MysqlConnection>>;
 
 const METRICS_ROUTE: &str = "/metrics";
 /// Returns all endpoints for which we have implemented on the indexer,
@@ -293,11 +294,11 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
         })
 }
 
-pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
-    let manager = ConnectionManager::<PgConnection>::new(db_url);
+pub async fn new_db_connection_pool(db_url: &str) -> Result<DBConnectionPool, IndexerError> {
+    let manager = ConnectionManager::<MysqlConnection>::new(db_url);
     // default connection pool max size is 10
     let blocking_conn_pool = diesel::r2d2::Pool::builder().build(manager).map_err(|e| {
-        IndexerError::PgConnectionPoolInitError(format!(
+        IndexerError::ConnectionPoolInitError(format!(
             "Failed to initialize connection pool with error: {:?}",
             e
         ))
@@ -305,14 +306,14 @@ pub async fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, In
     Ok(blocking_conn_pool)
 }
 
-pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
+pub fn get_db_pool_connection(pool: &DBConnectionPool) -> Result<DBPoolConnection, IndexerError> {
     backoff::retry(ExponentialBackoff::default(), || {
         let pool_conn = pool.get()?;
         Ok(pool_conn)
     })
     .map_err(|e| {
-        IndexerError::PgPoolConnectionError(format!(
-            "Failed to get connection from PG connection pool with error: {:?}",
+        IndexerError::PoolConnectionError(format!(
+            "Failed to get connection from DB connection pool with error: {:?}",
             e
         ))
     })

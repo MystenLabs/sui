@@ -3,6 +3,7 @@
 
 use std::str::FromStr;
 
+use serde_json::Value;
 use diesel::{Insertable, Queryable};
 
 use sui_types::base_types::{EpochId, ObjectID, SuiAddress};
@@ -31,7 +32,7 @@ pub struct DBSystemStateSummary {
     pub total_stake: i64,
     pub pending_active_validators_id: String,
     pub pending_active_validators_size: i64,
-    pub pending_removals: Vec<i64>,
+    pub pending_removals: Value,
     pub staking_pool_mappings_id: String,
     pub staking_pool_mappings_size: i64,
     pub inactive_pools_id: String,
@@ -42,6 +43,7 @@ pub struct DBSystemStateSummary {
 
 impl From<SuiSystemStateSummary> for DBSystemStateSummary {
     fn from(s: SuiSystemStateSummary) -> Self {
+        let pending_removals: Vec<i64> = s.pending_removals.iter().map(|i| *i as i64).collect();
         Self {
             epoch: s.epoch as i64,
             protocol_version: s.protocol_version as i64,
@@ -59,7 +61,7 @@ impl From<SuiSystemStateSummary> for DBSystemStateSummary {
             total_stake: s.total_stake as i64,
             pending_active_validators_id: s.pending_active_validators_id.to_string(),
             pending_active_validators_size: s.pending_active_validators_size as i64,
-            pending_removals: s.pending_removals.iter().map(|i| *i as i64).collect(),
+            pending_removals: serde_json::json!(pending_removals),
             staking_pool_mappings_id: s.staking_pool_mappings_id.to_string(),
             staking_pool_mappings_size: s.staking_pool_mappings_size as i64,
             inactive_pools_id: s.inactive_pools_id.to_string(),
@@ -215,5 +217,5 @@ pub struct DBAtRiskValidator {
     pub epoch: i64,
     pub address: String,
     pub epoch_count: i64,
-    pub reported_by: Vec<String>,
+    pub reported_by: Value,
 }

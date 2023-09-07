@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
-
+use serde_json::Value;
 use fastcrypto::traits::EncodeDecodeBase64;
 use sui_json_rpc_types::Checkpoint as RpcCheckpoint;
 use sui_types::base_types::TransactionDigest;
@@ -20,7 +20,7 @@ pub struct Checkpoint {
     pub sequence_number: i64,
     pub checkpoint_digest: String,
     pub epoch: i64,
-    pub transactions: Vec<Option<String>>,
+    pub transactions: Value,
     pub previous_checkpoint_digest: Option<String>,
     pub end_of_epoch: bool,
     // total_gas_cost can be negative,
@@ -61,7 +61,7 @@ impl Checkpoint {
             sequence_number: rpc_checkpoint.sequence_number as i64,
             checkpoint_digest: rpc_checkpoint.digest.base58_encode(),
             epoch: rpc_checkpoint.epoch as i64,
-            transactions: checkpoint_transactions,
+            transactions: serde_json::json!(checkpoint_transactions),
             previous_checkpoint_digest: rpc_checkpoint.previous_digest.map(|d| d.base58_encode()),
             end_of_epoch: rpc_checkpoint.end_of_epoch_data.is_some(),
             total_gas_cost,
@@ -106,8 +106,16 @@ impl Checkpoint {
                 })
             })
             .transpose()?;
-        let parsed_tx_digests: Vec<TransactionDigest> = self
-            .transactions
+
+        let deserialize_transactions: Vec<Option<String>> =
+            serde_json::from_value(self.transactions.clone()).map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to deserialize transactions: {:?} with err: {:?}",
+                    self.transactions, e
+                ))
+            })?;
+
+        let parsed_tx_digests: Vec<TransactionDigest> = deserialize_transactions
             .into_iter()
             .filter_map(|tx| {
                 tx.map(|tx| {

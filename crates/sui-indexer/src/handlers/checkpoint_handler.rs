@@ -704,7 +704,7 @@ where
                 .map(|v| (system_state.epoch, v.clone()).into())
                 .collect();
 
-            let epoch_commitments = end_of_epoch_data
+            let epoch_commitments: Vec<Option<Vec<u8>>> = end_of_epoch_data
                 .epoch_commitments
                 .iter()
                 .map(|c| match c {
@@ -743,8 +743,8 @@ where
                     next_epoch_version: Some(
                         end_of_epoch_data.next_epoch_protocol_version.as_u64() as i64,
                     ),
-                    next_epoch_committee,
-                    next_epoch_committee_stake,
+                    next_epoch_committee: serde_json::json!(next_epoch_committee),
+                    next_epoch_committee_stake: serde_json::json!(next_epoch_committee_stake),
                     stake_subsidy_amount: event.map(|e| e.stake_subsidy_amount),
                     reference_gas_price: event.map(|e| e.reference_gas_price),
                     storage_fund_balance: event.map(|e| e.storage_fund_balance),
@@ -757,7 +757,7 @@ where
                     protocol_version: event.map(|e| e.protocol_version),
                     storage_rebate: event.map(|e| e.storage_rebate),
                     leftover_storage_fund_inflow: event.map(|e| e.leftover_storage_fund_inflow),
-                    epoch_commitments,
+                    epoch_commitments: serde_json::json!(epoch_commitments),
                 }),
                 new_epoch: DBEpochInfo {
                     epoch: system_state.epoch as i64,
@@ -870,7 +870,7 @@ pub async fn fetch_changed_objects(
 ) -> Result<Vec<(ObjectStatus, SuiObjectData)>, IndexerError> {
     join_all(object_changes.chunks(MULTI_GET_CHUNK_SIZE).map(|objects| {
         let wanted_past_object_statuses: Vec<ObjectStatus> =
-            objects.iter().map(|(_, _, status)| *status).collect();
+            objects.iter().map(|(_, _, status)| status.clone()).collect();
 
         let wanted_past_object_request = objects
             .iter()

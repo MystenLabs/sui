@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{collections::BTreeMap, str::FromStr};
-
-use diesel::deserialize::FromSql;
-use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use diesel::serialize::{Output, ToSql, WriteTuple};
-use diesel::sql_types::{Bytea, Nullable, Record, VarChar};
-use diesel::SqlType;
+// use diesel::{AsExpression, FromSqlRow}
+// use diesel::serialize::{Output, ToSql, WriteTuple};
+// use diesel::sql_types::{Blob, Nullable, Record, VarChar};
 use diesel_derive_enum::DbEnum;
 use fastcrypto::encoding::{Base64, Encoding};
 use serde::{Deserialize, Serialize};
 use serde_json;
+use serde_json::Value;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
@@ -24,14 +22,13 @@ use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner
 use crate::errors::IndexerError;
 use crate::models::owners::OwnerType;
 use crate::schema::objects;
-use crate::schema::sql_types::BcsBytes;
 
 const OBJECT: &str = "object";
 
 // NOTE: please add updating statement like below in pg_indexer_store.rs,
 // if new columns are added here:
 // objects::epoch.eq(excluded(objects::epoch))
-#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[derive(Queryable, Insertable, Debug, Clone)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct Object {
     // epoch id in which this object got update.
@@ -43,31 +40,15 @@ pub struct Object {
     pub object_id: String,
     pub version: i64,
     pub object_digest: String,
-    pub owner_type: OwnerType,
+    pub owner_type: String,
     pub owner_address: Option<String>,
     pub initial_shared_version: Option<i64>,
     pub previous_transaction: String,
     pub object_type: String,
-    pub object_status: ObjectStatus,
+    pub object_status: String,
     pub has_public_transfer: bool,
     pub storage_rebate: i64,
-    pub bcs: Vec<NamedBcsBytes>,
-}
-#[derive(SqlType, Debug, Clone)]
-#[diesel(sql_type = crate::schema::sql_types::BcsBytes)]
-pub struct NamedBcsBytes(pub String, pub Vec<u8>);
-
-impl ToSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
-    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
-        WriteTuple::<(VarChar, Bytea)>::write_tuple(&(self.0.clone(), self.1.clone()), out)
-    }
-}
-
-impl FromSql<Nullable<BcsBytes>, Pg> for NamedBcsBytes {
-    fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
-        let (name, data) = FromSql::<Record<(VarChar, Bytea)>, Pg>::from_sql(bytes)?;
-        Ok(NamedBcsBytes(name, data))
-    }
+    pub bcs: Value,
 }
 
 #[derive(Debug, Clone)]
@@ -79,10 +60,10 @@ pub struct DeletedObject {
     pub object_id: String,
     pub version: i64,
     pub object_digest: String,
-    pub owner_type: OwnerType,
+    pub owner_type: String,
     pub previous_transaction: String,
     pub object_type: String,
-    pub object_status: ObjectStatus,
+    pub object_status: String,
     pub has_public_transfer: bool,
 }
 
@@ -103,14 +84,12 @@ impl From<DeletedObject> for Object {
             object_status: o.object_status,
             has_public_transfer: o.has_public_transfer,
             storage_rebate: 0,
-            bcs: vec![],
+            bcs: serde_json::json!([]),
         }
     }
 }
 
-#[derive(DbEnum, Debug, Clone, Copy, Deserialize, Serialize)]
-#[ExistingTypePath = "crate::schema::sql_types::ObjectStatus"]
-#[serde(rename_all = "snake_case")]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize, DbEnum)]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -119,6 +98,32 @@ pub enum ObjectStatus {
     Unwrapped,
     UnwrappedThenDeleted,
 }
+
+impl ObjectStatus {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            ObjectStatus::Created => "Created",
+            ObjectStatus::Mutated => "Mutated",
+            ObjectStatus::Deleted => "Deleted",
+            ObjectStatus::Wrapped => "Wrapped",
+            ObjectStatus::Unwrapped => "Unwrapped",
+            ObjectStatus::UnwrappedThenDeleted => "UnwrappedThenDeleted",
+        }
+    }
+
+    pub fn from_string(s: &str) -> Option<Self> {
+        match s {
+            "Created" => Some(ObjectStatus::Created),
+            "Mutated" => Some(ObjectStatus::Mutated),
+            "Deleted" => Some(ObjectStatus::Deleted),
+            "Wrapped" => Some(ObjectStatus::Wrapped),
+            "Unwrapped" => Some(ObjectStatus::Unwrapped),
+            "UnwrappedThenDeleted" => Some(ObjectStatus::UnwrappedThenDeleted),
+            _ => None,
+        }
+    }
+}
+
 
 impl Object {
     pub fn from(
@@ -134,14 +139,15 @@ impl Object {
             match o.bcs.clone().expect("Expect BCS data to be non-empty") {
                 SuiRawData::MoveObject(o) => (
                     o.has_public_transfer,
-                    vec![NamedBcsBytes(OBJECT.to_string(), o.bcs_bytes)],
+                    serde_json::json!(vec![(OBJECT.to_string(), o.bcs_bytes)]),
                 ),
                 SuiRawData::Package(p) => (
                     false,
-                    p.module_map
+                    serde_json::json!(p.module_map
                         .into_iter()
-                        .map(|(k, v)| NamedBcsBytes(k, v))
-                        .collect(),
+                        .map(|(k, v)| (k, v))
+                        .collect::<Vec<(String, Vec<u8>)>>()
+                    ),
                 ),
             };
 
@@ -152,7 +158,7 @@ impl Object {
             object_id: o.object_id.to_string(),
             version: o.version.value() as i64,
             object_digest: o.digest.base58_encode(),
-            owner_type,
+            owner_type: owner_type.to_string().to_string(),
             owner_address,
             initial_shared_version,
             previous_transaction: o
@@ -164,7 +170,7 @@ impl Object {
                 .as_ref()
                 .expect("Expect the object type to be non-empty")
                 .to_string(),
-            object_status: *status,
+            object_status: status.to_string().to_string(),
             has_public_transfer,
             storage_rebate: o.storage_rebate.unwrap_or_default() as i64,
             bcs,
@@ -175,7 +181,9 @@ impl Object {
         self,
         module_cache: &impl GetModule,
     ) -> Result<ObjectRead, IndexerError> {
-        Ok(match self.object_status {
+        let object_status = ObjectStatus::from_string(&self.object_status)
+            .ok_or_else(|| IndexerError::SerdeError("Invalid object status".to_string()))?;
+        Ok(match object_status {
             ObjectStatus::Deleted | ObjectStatus::UnwrappedThenDeleted => {
                 ObjectRead::Deleted(self.get_object_ref()?)
             }
@@ -207,7 +215,9 @@ impl TryFrom<Object> for sui_types::object::Object {
         let object_type = ObjectType::from_str(&o.object_type)?;
         let object_id = ObjectID::from_str(&o.object_id)?;
         let version = SequenceNumber::from_u64(o.version as u64);
-        let owner = match o.owner_type {
+        let owner_type = OwnerType::from_string(&o.owner_type)
+            .ok_or_else(|| IndexerError::SerdeError("Invalid owner type".to_string()))?;
+        let owner = match owner_type {
             OwnerType::AddressOwner => Owner::AddressOwner(SuiAddress::from_str(
                 &o.owner_address.expect("Owner address should not be empty."),
             )?),
@@ -226,10 +236,15 @@ impl TryFrom<Object> for sui_types::object::Object {
 
         Ok(match object_type {
             ObjectType::Package => {
-                let modules = o
-                    .bcs
+                let bcs: Vec<(String, Vec<u8>)> = serde_json::from_value(o.bcs.clone()).map_err(|e| {
+                    IndexerError::SerdeError(format!(
+                        "Failed to parse BCS data: {}, error: {}",
+                        o.bcs, e
+                    ))
+                })?;
+                let modules = bcs
                     .into_iter()
-                    .map(|NamedBcsBytes(name, bytes)| (name, bytes))
+                    .map(|(name, bytes)| (name, bytes))
                     .collect();
                 // Ok to unwrap, package size is safe guarded by the full node, we are not limiting size when reading back from DB.
                 let package = MovePackage::new(
@@ -254,8 +269,14 @@ impl TryFrom<Object> for sui_types::object::Object {
             }
             // Reconstructing MoveObject form database table, move VM safety concern is irrelevant here.
             ObjectType::Struct(object_type) => unsafe {
-                let content = o
-                    .bcs
+                let bcs = serde_json::from_value::<Vec<(String, Vec<u8>)>>(o.bcs.clone())
+                    .map_err(|e| {
+                        IndexerError::SerdeError(format!(
+                            "Failed to parse BCS data: {}, error: {}",
+                            o.bcs, e
+                        ))
+                    })?;
+                let content = bcs
                     .first()
                     .expect("BCS content should not be empty")
                     .1
@@ -297,10 +318,10 @@ impl DeletedObject {
             // DeleteObject is use for upsert only, this value will not be inserted into the DB
             // this dummy value is use to satisfy non null constrain.
             object_digest: "DELETED".to_string(),
-            owner_type: OwnerType::AddressOwner,
+            owner_type: OwnerType::AddressOwner.to_string().to_string(),
             previous_transaction: previous_tx.base58_encode(),
             object_type: "DELETED".to_string(),
-            object_status: *status,
+            object_status: status.to_string().to_string(),
             has_public_transfer: false,
         }
     }
@@ -353,8 +374,9 @@ pub fn compose_object_bulk_insert_query(objects: &[Object]) -> String {
     let rows = objects
         .iter()
         .map(|obj| {
-            let bcs_rows = obj
-                .bcs
+            let bcs = serde_json::from_value::<Vec<(String, Vec<u8>)>>(obj.bcs.clone())
+                .expect("Failed to parse BCS data");
+            let bcs_rows = bcs
                 .iter()
                 .map(|bcs| (bcs.0.clone(), bcs.1.clone()))
                 .collect::<Vec<_>>();

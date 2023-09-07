@@ -14,10 +14,10 @@ use tokio::runtime::Runtime;
 
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::models::checkpoints::Checkpoint;
-use sui_indexer::models::objects::{NamedBcsBytes, Object as DBObject, ObjectStatus};
+use sui_indexer::models::objects::{Object as DBObject, ObjectStatus};
 use sui_indexer::models::owners::OwnerType;
 use sui_indexer::models::transactions::Transaction;
-use sui_indexer::new_pg_connection_pool;
+use sui_indexer::new_db_connection_pool;
 use sui_indexer::store::{
     IndexerStore, PgIndexerStore, TemporaryCheckpointStore, TransactionObjectChanges,
 };
@@ -39,7 +39,7 @@ fn indexer_benchmark(c: &mut Criterion) {
 
     let rt: Runtime = Runtime::new().unwrap();
     let (mut _checkpoints, store) = rt.block_on(async {
-        let blocking_cp = new_pg_connection_pool(&db_url).await.unwrap();
+        let blocking_cp = new_db_connection_pool(&db_url).await.unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true).unwrap();
         let registry = Registry::default();
         let indexer_metrics = IndexerMetrics::new(&registry);
@@ -64,7 +64,7 @@ fn create_checkpoint(sequence_number: i64) -> TemporaryCheckpointStore {
             sequence_number,
             checkpoint_digest: CheckpointDigest::random().base58_encode(),
             epoch: 0,
-            transactions: vec![],
+            transactions: serde_json::json!([]),
             previous_checkpoint_digest: Some(CheckpointDigest::random().base58_encode()),
             end_of_epoch: false,
             validator_signature: AggregateAuthoritySignature::default().to_string(),
@@ -116,18 +116,18 @@ fn create_transaction(sequence_number: i64) -> Transaction {
         id: None,
         transaction_digest: TransactionDigest::random().base58_encode(),
         sender: SuiAddress::random_for_testing_only().to_string(),
-        recipients: vec![],
+        recipients: serde_json::json!([]),
         checkpoint_sequence_number: Some(sequence_number),
         timestamp_ms: Some(Utc::now().timestamp_millis()),
         transaction_kind: "test".to_string(),
         transaction_count: 0,
         execution_success: true,
-        created: vec![],
-        mutated: vec![],
-        deleted: vec![],
-        unwrapped: vec![],
-        wrapped: vec![],
-        move_calls: vec![],
+        created: serde_json::json!([]),
+        mutated: serde_json::json!([]),
+        deleted: serde_json::json!([]),
+        unwrapped: serde_json::json!([]),
+        wrapped: serde_json::json!([]),
+        move_calls: serde_json::json!([]),
         gas_object_id: ObjectID::random().to_string(),
         gas_object_sequence: 0,
         gas_object_digest: ObjectDigest::random().base58_encode(),
@@ -152,15 +152,15 @@ fn create_object(sequence_number: i64) -> DBObject {
         object_id: ObjectID::random().to_string(),
         version: 0,
         object_digest: ObjectDigest::random().to_string(),
-        owner_type: OwnerType::AddressOwner,
+        owner_type: OwnerType::AddressOwner.to_string().to_string(),
         owner_address: Some(SuiAddress::random_for_testing_only().to_string()),
         initial_shared_version: None,
         previous_transaction: TransactionDigest::random().base58_encode(),
         object_type: GasCoin::type_().to_string(),
-        object_status: ObjectStatus::Created,
+        object_status: ObjectStatus::Created.to_string().to_string(),
         has_public_transfer: true,
         storage_rebate: 0,
-        bcs: vec![NamedBcsBytes(
+        bcs: serde_json::json!(vec![(
             "data".to_string(),
             Object::new_gas_for_testing()
                 .data
@@ -168,7 +168,7 @@ fn create_object(sequence_number: i64) -> DBObject {
                 .unwrap()
                 .contents()
                 .to_vec(),
-        )],
+        )]),
     }
 }
 criterion_group! {

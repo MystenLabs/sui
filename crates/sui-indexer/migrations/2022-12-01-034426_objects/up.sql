@@ -1,40 +1,23 @@
-DO
-$$
-    BEGIN
-        CREATE TYPE owner_type AS ENUM ('address_owner', 'object_owner', 'shared', 'immutable');
-        CREATE TYPE object_status AS ENUM ('created', 'mutated', 'deleted', 'wrapped', 'unwrapped', 'unwrapped_then_deleted');
-        CREATE TYPE bcs_bytes AS
-        (
-            name TEXT,
-            data bytea
-        );
-    EXCEPTION
-        WHEN duplicate_object THEN
-            -- Type already exists, do nothing
-            NULL;
-    END
-$$;
-
 CREATE TABLE objects
 (
     epoch                  BIGINT        NOT NULL,
     checkpoint             BIGINT        NOT NULL,
-    object_id              address       PRIMARY KEY,
+    object_id              VARCHAR(66)       PRIMARY KEY,
     version                BIGINT        NOT NULL,
-    object_digest          base58digest  NOT NULL,
-    -- owner related
-    owner_type             owner_type    NOT NULL,
-    -- only non-null for objects with an owner,
-    -- the owner can be an account or an object. 
-    owner_address          address,
-    -- only non-null for shared objects
+    object_digest          VARCHAR(44)  NOT NULL,
+    -- TODO(gegaowp): use ENUM type for owner_type.
+    -- owner_type             ENUM ('address_owner', 'object_owner', 'shared', 'immutable') NOT NULL,
+    owner_type             VARCHAR(31) NOT NULL,
+    owner_address          VARCHAR(66),
     initial_shared_version BIGINT,
-    previous_transaction   base58digest  NOT NULL,
-    object_type            VARCHAR       NOT NULL,
-    object_status          object_status NOT NULL,
-    has_public_transfer    BOOLEAN       NOT NULL,
+    previous_transaction   VARCHAR(44)  NOT NULL,
+    object_type            TEXT      NOT NULL,
+    -- TODO(gegaowp): use ENUM type for object_status.
+    -- object_status          ENUM ('created', 'mutated', 'deleted', 'wrapped', 'unwrapped', 'unwrapped_then_deleted') NOT NULL,
+    object_status          VARCHAR(31) NOT NULL,
+    has_public_transfer    TINYINT(1)     NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
-    bcs                    bcs_bytes[]   NOT NULL
+    bcs                    JSON   NOT NULL
 );
 CREATE INDEX objects_owner_address ON objects (owner_type, owner_address);
 CREATE INDEX objects_tx_digest ON objects (previous_transaction);
@@ -44,37 +27,46 @@ CREATE TABLE objects_history
 (
     epoch                  BIGINT        NOT NULL,
     checkpoint             BIGINT        NOT NULL,
-    object_id              address       NOT NULL,
+    object_id              VARCHAR(66)       NOT NULL,
     version                BIGINT        NOT NULL,
-    object_digest          base58digest  NOT NULL,
-    owner_type             owner_type    NOT NULL,
-    owner_address          address,
-    old_owner_type         owner_type,
-    old_owner_address      address,
+    object_digest          VARCHAR(44)  NOT NULL,
+    -- TODO(gegaowp): use ENUM type for owner_type.
+    -- owner_type             ENUM ('address_owner', 'object_owner', 'shared', 'immutable') NOT NULL,
+    owner_type             VARCHAR(31) NOT NULL,
+    owner_address          VARCHAR(66),
+    -- TODO(gegaowp): use ENUM type for old_owner_type.
+    -- old_owner_type         ENUM ('address_owner', 'object_owner', 'shared', 'immutable'),
+    old_owner_type         VARCHAR(31),
+    old_owner_address      VARCHAR(66),
     initial_shared_version BIGINT,
-    previous_transaction   base58digest  NOT NULL,
-    object_type            VARCHAR       NOT NULL,
-    object_status          object_status NOT NULL,
-    has_public_transfer    BOOLEAN       NOT NULL,
+    previous_transaction   VARCHAR(44)  NOT NULL,
+    object_type            TEXT       NOT NULL,
+    -- TODO(gegaowp): use ENUM type for object_status.
+    -- object_status          ENUM ('created', 'mutated', 'deleted', 'wrapped', 'unwrapped', 'unwrapped_then_deleted') NOT NULL,
+    object_status          VARCHAR(31) NOT NULL,
+    has_public_transfer    TINYINT(1)       NOT NULL,
     storage_rebate         BIGINT        NOT NULL,
-    bcs                    bcs_bytes[]   NOT NULL,
+    bcs                    JSON   NOT NULL,
     CONSTRAINT objects_history_pk PRIMARY KEY (object_id, version, checkpoint)
-) PARTITION BY RANGE (checkpoint);
+); 
+-- TODO(gegaowp): handle partitioning later for objects_history.
+-- PARTITION BY RANGE (checkpoint);
+-- fast-path partition for the most recent objects before checkpoint, range is half-open.
+-- partition name need to match regex of '.*(_partition_)\d+'.
+-- CREATE TABLE objects_history_fast_path_partition_0 PARTITION OF objects_history FOR VALUES FROM (-1) TO (0);
+-- CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
+
 CREATE INDEX objects_history_checkpoint_index ON objects_history (checkpoint);
 CREATE INDEX objects_history_id_version_index ON objects_history (object_id, version);
 CREATE INDEX objects_history_owner_index ON objects_history (owner_type, owner_address);
 CREATE INDEX objects_history_old_owner_index ON objects_history (old_owner_type, old_owner_address);
--- fast-path partition for the most recent objects before checkpoint, range is half-open.
--- partition name need to match regex of '.*(_partition_)\d+'.
-CREATE TABLE objects_history_fast_path_partition_0 PARTITION OF objects_history FOR VALUES FROM (-1) TO (0);
-CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES FROM (0) TO (MAXVALUE);
 
 -- CREATE OR REPLACE FUNCTION objects_modified_func() RETURNS TRIGGER AS
 -- $body$
 -- BEGIN
 --     IF (TG_OP = 'INSERT') THEN
 --         INSERT INTO objects_history
---         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.owner_type,
+--         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.ENUM ('address_owner', 'object_owner', 'shared', 'immutable'),
 --                 NEW.owner_address, NULL, NULL,
 --                 NEW.initial_shared_version,
 --                 NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.has_public_transfer,
@@ -82,8 +74,8 @@ CREATE TABLE objects_history_partition_0 PARTITION OF objects_history FOR VALUES
 --         RETURN NEW;
 --     ELSEIF (TG_OP = 'UPDATE') THEN
 --         INSERT INTO objects_history
---         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.owner_type,
---                 NEW.owner_address, OLD.owner_type, OLD.owner_address,
+--         VALUES (NEW.epoch, NEW.checkpoint, NEW.object_id, NEW.version, NEW.object_digest, NEW.ENUM ('address_owner', 'object_owner', 'shared', 'immutable'),
+--                 NEW.owner_address, OLD.ENUM ('address_owner', 'object_owner', 'shared', 'immutable'), OLD.owner_address,
 --                 NEW.initial_shared_version,
 --                 NEW.previous_transaction, NEW.object_type, NEW.object_status, NEW.has_public_transfer,
 --                 NEW.storage_rebate, NEW.bcs);
