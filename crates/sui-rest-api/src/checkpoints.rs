@@ -88,6 +88,12 @@ pub async fn get_full_checkpoint(
                 .cloned()
                 .expect("event was already checked to be present")
         });
+        // Note unwrapped_then_deleted contains **updated** versions.
+        let unwrapped_then_deleted_obj_ids = fx
+            .unwrapped_then_deleted()
+            .into_iter()
+            .map(|k| k.0)
+            .collect::<HashSet<_>>();
 
         let input_object_keys = fx
             .input_shared_objects()
@@ -100,13 +106,24 @@ pub async fn get_full_checkpoint(
             )
             .collect::<HashSet<_>>()
             .into_iter()
+            // Unwrapped-then-deleted objects are not stored in state before the tx, so we have nothing to fetch.
+            .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
             .collect::<Vec<_>>();
 
         let input_objects = state
             .database
             .multi_get_object_by_key(&input_object_keys)?
             .into_iter()
-            .map(|maybe_object| maybe_object.ok_or_else(|| anyhow::anyhow!("missing object")))
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing input object key {:?} from tx {}",
+                        input_object_keys[idx],
+                        tx.digest()
+                    )
+                })
+            })
             .collect::<Result<Vec<_>>>()?;
 
         let output_object_keys = fx
@@ -119,7 +136,16 @@ pub async fn get_full_checkpoint(
             .database
             .multi_get_object_by_key(&output_object_keys)?
             .into_iter()
-            .map(|maybe_object| maybe_object.ok_or_else(|| anyhow::anyhow!("missing object")))
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing output object key {:?} from tx {}",
+                        output_object_keys[idx],
+                        tx.digest()
+                    )
+                })
+            })
             .collect::<Result<Vec<_>>>()?;
 
         let full_transaction = CheckpointTransaction {
