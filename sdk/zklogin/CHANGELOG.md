@@ -1,5 +1,18 @@
 # @mysten/zklogin
 
+## 0.1.3
+
+### Patch Changes
+
+- 1786c68b5: Update hashASCIIStr logic and constants
+- 8384490bb: Remove BCS export and introduce new getZkSignature export.
+- 35bdbd00d: update bcs AddressParams struct
+- 1f87936fd: Move aud to inner hash
+- d89fff405: Expose new randomness function
+- Updated dependencies [290c8e640]
+  - @mysten/bcs@0.7.4
+  - @mysten/sui.js@0.41.2
+
 ## 0.1.2
 
 ### Patch Changes
