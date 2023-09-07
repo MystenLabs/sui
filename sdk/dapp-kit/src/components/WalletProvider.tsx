@@ -10,6 +10,7 @@ import { walletReducer } from '../reducers/walletReducer.js';
 import type { WalletAction, WalletState } from '../reducers/walletReducer.js';
 import { sortWallets } from '../utils/walletUtils.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
+import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
 
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -60,6 +61,26 @@ export function WalletProvider({
 		accounts: [],
 		currentAccount: null,
 		connectionStatus: 'disconnected',
+	});
+
+	useWalletsChanged({
+		onWalletRegistered() {
+			dispatch({
+				type: 'wallet-registered',
+				payload: {
+					updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+				},
+			});
+		},
+		onWalletUnregistered(unregisteredWallet) {
+			dispatch({
+				type: 'wallet-unregistered',
+				payload: {
+					updatedWallets: sortWallets(walletsApi.get(), preferredWallets, requiredFeatures),
+					unregisteredWallet,
+				},
+			});
+		},
 	});
 
 	useUnsafeBurnerWallet(enableUnsafeBurner);
