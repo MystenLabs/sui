@@ -34,8 +34,12 @@ use sui_verifier::meter::SuiVerifierMeter;
 use shared_crypto::intent::Intent;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    BalanceChange, DynamicFieldPage, ObjectChange, OwnedObjectRef, SuiAuthenticatorStateUpdate,
+    SuiCallArg, SuiChangeEpoch, SuiCommand, SuiConsensusCommitPrologue, SuiData, SuiGasData,
+    SuiObjectRef, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData, SuiTransactionBlock,
+    SuiTransactionBlockData, SuiTransactionBlockDataV1, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockEvents, SuiTransactionBlockKind,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -1427,14 +1431,14 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::Upgrade(response)
             | SuiClientCommandResult::Publish(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::Object(object_read) => {
                 let object = unwrap_err_to_string(|| Ok(object_read.object()?));
                 writeln!(writer, "{}", object)?;
             }
             SuiClientCommandResult::TransactionBlock(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::RawObject(raw_object_read) => {
                 let raw_object = match raw_object_read.object() {
@@ -1458,7 +1462,7 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}", raw_object)?;
             }
             SuiClientCommandResult::Call(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::SerializedUnsignedTransaction(tx_data) => {
                 writeln!(
@@ -1475,19 +1479,19 @@ impl Display for SuiClientCommandResult {
                 )?;
             }
             SuiClientCommandResult::Transfer(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::TransferSui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::Pay(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::PaySui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::PayAllSui(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::Objects(object_refs) => {
                 writeln!(
@@ -1541,10 +1545,10 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "{}", ci)?;
             }
             SuiClientCommandResult::SplitCoin(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::MergeCoin(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::Switch(response) => {
                 write!(writer, "{}", response)?;
@@ -1556,7 +1560,7 @@ impl Display for SuiClientCommandResult {
                 };
             }
             SuiClientCommandResult::ExecuteSignedTx(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                convert_tx_response_to_table(f, response)?;
             }
             SuiClientCommandResult::ActiveEnv(env) => {
                 write!(writer, "{}", env.as_deref().unwrap_or("None"))?;
@@ -1657,38 +1661,312 @@ fn convert_number_to_string(value: Value) -> Value {
     }
 }
 
-// TODO(chris): only print out the full response when `--verbose` is provided
-pub fn write_transaction_response(
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionEffectsOutput {
+    status: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    created: Vec<OwnedObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    mutated: Vec<OwnedObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    deleted: Vec<SuiObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    wrapped: Vec<SuiObjectRef>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    unwrapped: Vec<OwnedObjectRef>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProgrammableTransactionOutput {
+    msg_version: String,
+    tx_kind: String,
+    tx_inputs: Vec<SuiCallArg>,
+    tx_commands: Vec<SuiCommand>,
+    sender: SuiAddress,
+    payment: Vec<SuiObjectRef>,
+    gas_owner: SuiAddress,
+    gas_price: u64,
+    gas_budget: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeEpochOutput {
+    msg_version: String,
+    tx_kind: String,
+    tx_data: SuiChangeEpoch,
+    sender: SuiAddress,
+    payment: Vec<SuiObjectRef>,
+    gas_owner: SuiAddress,
+    gas_price: u64,
+    gas_budget: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenesisTransactionOutput {
+    msg_version: String,
+    tx_kind: String,
+    tx_data: Vec<ObjectID>,
+    sender: SuiAddress,
+    payment: Vec<SuiObjectRef>,
+    gas_owner: SuiAddress,
+    gas_price: u64,
+    gas_budget: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsensusCommitPrologueOutput {
+    msg_version: String,
+    tx_kind: String,
+    tx_data: SuiConsensusCommitPrologue,
+    sender: SuiAddress,
+    payment: Vec<SuiObjectRef>,
+    gas_owner: SuiAddress,
+    gas_price: u64,
+    gas_budget: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthenticatorStateUpdateOutput {
+    msg_version: String,
+    tx_kind: String,
+    tx_data: SuiAuthenticatorStateUpdate,
+    sender: SuiAddress,
+    payment: Vec<SuiObjectRef>,
+    gas_owner: SuiAddress,
+    gas_price: u64,
+    gas_budget: u64,
+}
+
+impl From<&SuiTransactionBlockEffects> for TransactionEffectsOutput {
+    fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+        Self {
+            status: match tx_effects.status() {
+                SuiExecutionStatus::Success => "success".to_string(),
+                SuiExecutionStatus::Failure { error } => format!("error: {error}"),
+            },
+            created: tx_effects.created().to_vec(),
+            mutated: tx_effects.mutated().to_vec(),
+            deleted: tx_effects.deleted().to_vec(),
+            wrapped: tx_effects.wrapped().to_vec(),
+            unwrapped: tx_effects.unwrapped().to_vec(),
+        }
+    }
+}
+
+impl AuthenticatorStateUpdateOutput {
+    fn new(
+        tx_kind: String,
+        sender: SuiAddress,
+        gas_data: SuiGasData,
+        tx_data: SuiAuthenticatorStateUpdate,
+    ) -> Self {
+        Self {
+            msg_version: "V1".to_string(),
+            tx_kind,
+            tx_data,
+            sender,
+            payment: gas_data.payment,
+            gas_owner: gas_data.owner,
+            gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
+        }
+    }
+}
+
+impl ChangeEpochOutput {
+    fn new(
+        tx_kind: String,
+        sender: SuiAddress,
+        gas_data: SuiGasData,
+        tx_data: SuiChangeEpoch,
+    ) -> Self {
+        Self {
+            msg_version: "V1".to_string(),
+            tx_kind,
+            tx_data,
+            sender,
+            payment: gas_data.payment,
+            gas_owner: gas_data.owner,
+            gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
+        }
+    }
+}
+
+impl ProgrammableTransactionOutput {
+    fn new(
+        tx_kind: String,
+        sender: SuiAddress,
+        gas_data: SuiGasData,
+        tx_inputs: Vec<SuiCallArg>,
+        tx_commands: Vec<SuiCommand>,
+    ) -> Self {
+        Self {
+            msg_version: "V1".to_string(),
+            tx_kind,
+            tx_inputs,
+            tx_commands,
+            sender,
+            payment: gas_data.payment,
+            gas_owner: gas_data.owner,
+            gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
+        }
+    }
+}
+
+impl GenesisTransactionOutput {
+    fn new(
+        tx_kind: String,
+        sender: SuiAddress,
+        gas_data: SuiGasData,
+        tx_data: Vec<ObjectID>,
+    ) -> Self {
+        Self {
+            msg_version: "V1".to_string(),
+            tx_kind,
+            tx_data,
+            sender,
+            payment: gas_data.payment,
+            gas_owner: gas_data.owner,
+            gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
+        }
+    }
+}
+
+impl ConsensusCommitPrologueOutput {
+    fn new(
+        tx_kind: String,
+        sender: SuiAddress,
+        gas_data: SuiGasData,
+        tx_data: SuiConsensusCommitPrologue,
+    ) -> Self {
+        Self {
+            msg_version: "V1".to_string(),
+            tx_kind,
+            tx_data,
+            sender,
+            payment: gas_data.payment,
+            gas_owner: gas_data.owner,
+            gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum Options {
+    AuthenticatorStateUpdate(AuthenticatorStateUpdateOutput),
+    ChangeEpoch(ChangeEpochOutput),
+    ConsensuCommitPrologue(ConsensusCommitPrologueOutput),
+    GenesisTransaction(GenesisTransactionOutput),
+    ProgrammableTransaction(ProgrammableTransactionOutput),
+}
+
+fn convert_tx_data_to_options(
+    transaction: SuiTransactionBlockData,
+) -> Result<Options, anyhow::Error> {
+    let tx_data = match transaction {
+        SuiTransactionBlockData::V1(SuiTransactionBlockDataV1 {
+            transaction,
+            sender,
+            gas_data,
+        }) => {
+            let tx_kind = transaction.name().to_string();
+            match transaction {
+                SuiTransactionBlockKind::AuthenticatorStateUpdate(x) => {
+                    Options::AuthenticatorStateUpdate(AuthenticatorStateUpdateOutput::new(
+                        tx_kind, sender, gas_data, x,
+                    ))
+                }
+                SuiTransactionBlockKind::ChangeEpoch(x) => {
+                    Options::ChangeEpoch(ChangeEpochOutput::new(tx_kind, sender, gas_data, x))
+                }
+                SuiTransactionBlockKind::ConsensusCommitPrologue(x) => {
+                    Options::ConsensuCommitPrologue(ConsensusCommitPrologueOutput::new(
+                        tx_kind, sender, gas_data, x,
+                    ))
+                }
+                SuiTransactionBlockKind::Genesis(x) => Options::GenesisTransaction(
+                    GenesisTransactionOutput::new(tx_kind, sender, gas_data, x.objects),
+                ),
+                SuiTransactionBlockKind::ProgrammableTransaction(x) => {
+                    Options::ProgrammableTransaction(ProgrammableTransactionOutput::new(
+                        tx_kind, sender, gas_data, x.inputs, x.commands,
+                    ))
+                }
+                _ => anyhow::bail!("unsupported"),
+            }
+        }
+    };
+    Ok(tx_data)
+}
+
+pub fn convert_tx_response_to_table(
+    writer: &mut impl Write,
     response: &SuiTransactionBlockResponse,
-) -> Result<String, fmt::Error> {
-    let mut writer = String::new();
-    writeln!(writer, "{}", "----- Transaction Digest ----".bold())?;
+) -> Result<(), fmt::Error> {
+    // let style = TableStyle::modern().intersection('┼');
+    let style = TableStyle::rounded().horizontals([]);
+    writeln!(writer, "{}", "Transaction Digest".bold())?;
     writeln!(writer, "{}", response.digest)?;
-    writeln!(writer, "{}", "----- Transaction Data ----".bold())?;
+    writeln!(writer, "{}", "\nTransaction Data".bold())?;
     if let Some(t) = &response.transaction {
-        writeln!(writer, "{}", t)?;
+        let tx_data = convert_tx_data_to_options(t.data.clone()).unwrap();
+        let json_obj = json!(tx_data);
+        let mut table = json_to_table(&json_obj);
+        table.with(style.clone());
+        writeln!(writer, "{}", table)?;
+    }
+    writeln!(writer, "{}", "\nTransaction Signatures".bold())?;
+    if let Some(t) = &response.transaction {
+        let json_obj = json!(t.tx_signatures);
+        let mut table = json_to_table(&json_obj);
+        table.with(style.clone());
+        writeln!(writer, "{}", table)?;
     }
 
-    writeln!(writer, "{}", "----- Transaction Effects ----".bold())?;
+    writeln!(writer, "{}", "\nTransaction Effects".bold())?;
     if let Some(e) = &response.effects {
-        writeln!(writer, "{}", e)?;
+        let json_obj = json!(TransactionEffectsOutput::from(e));
+        let mut table = json_to_table(&json_obj);
+        table.with(style.clone());
+        writeln!(writer, "{}", table)?;
     }
 
-    writeln!(writer, "{}", "----- Events ----".bold())?;
+    writeln!(writer, "{}", "\nEvents".bold())?;
     if let Some(e) = &response.events {
-        writeln!(writer, "{:#?}", json!(e))?;
+        let json_obj = json!(e);
+        let mut table = json_to_table(&json_obj);
+        table.with(style.clone());
+        writeln!(writer, "{}", table)?;
     }
 
-    writeln!(writer, "{}", "----- Object changes ----".bold())?;
+    writeln!(writer, "{}", "\nObject changes".bold())?;
     if let Some(e) = &response.object_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        let json_obj = json!(e);
+        let mut table = json_to_table(&json_obj);
+        table.with(style.clone());
+        writeln!(writer, "{}", table)?;
     }
 
-    writeln!(writer, "{}", "----- Balance changes ----".bold())?;
+    writeln!(writer, "{}", "\nBalance changes".bold())?;
     if let Some(e) = &response.balance_changes {
-        writeln!(writer, "{:#?}", json!(e))?;
+        let json_obj = json!(e);
+        let mut table = json_to_table(&json_obj);
+        table.with(style);
+        writeln!(writer, "{}", table)?;
     }
-    Ok(writer)
+
+    Ok(())
 }
 
 impl Debug for SuiClientCommandResult {
@@ -1771,6 +2049,23 @@ pub struct NewAddressOutput {
     pub address: SuiAddress,
     pub key_scheme: SignatureScheme,
     pub recovery_phrase: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionOutput {
+    pub digest: TransactionDigest,
+    /// Transaction input data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<SuiTransactionBlock>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effects: Option<SuiTransactionBlockEffects>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<SuiTransactionBlockEvents>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub object_changes: Option<Vec<ObjectChange>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance_changes: Option<Vec<BalanceChange>>,
 }
 
 #[derive(Serialize)]
