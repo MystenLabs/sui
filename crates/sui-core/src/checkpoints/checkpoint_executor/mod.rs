@@ -504,42 +504,42 @@ impl CheckpointExecutor {
         Ok(())
     }
 
-    async fn execute_end_of_epoch_tx(
+    async fn execute_change_epoch_tx(
         &self,
         execution_digests: ExecutionDigests,
-        end_of_epoch_tx_digest: TransactionDigest,
-        end_of_epoch_tx: VerifiedExecutableTransaction,
+        change_epoch_tx_digest: TransactionDigest,
+        change_epoch_tx: VerifiedExecutableTransaction,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint: VerifiedCheckpoint,
     ) {
-        let end_of_epoch_fx = self
+        let change_epoch_fx = self
             .authority_store
             .perpetual_tables
             .effects
             .get(&execution_digests.effects)
-            .expect("Fetching effects for end_of_epoch tx cannot fail")
-            .expect("end of epoch tx effects must exist");
+            .expect("Fetching effects for change_epoch tx cannot fail")
+            .expect("Change_epoch tx effects must exist");
 
-        if end_of_epoch_tx.contains_shared_object() {
+        if change_epoch_tx.contains_shared_object() {
             epoch_store
                 .acquire_shared_locks_from_effects(
-                    &end_of_epoch_tx,
-                    &end_of_epoch_fx,
+                    &change_epoch_tx,
+                    &change_epoch_fx,
                     &self.authority_store,
                 )
                 .await
-                .expect("Acquiring shared locks for end_of_epoch tx cannot fail");
+                .expect("Acquiring shared locks for change_epoch tx cannot fail");
         }
 
         self.tx_manager
             .enqueue_with_expected_effects_digest(
-                vec![(end_of_epoch_tx.clone(), execution_digests.effects)],
+                vec![(change_epoch_tx.clone(), execution_digests.effects)],
                 &epoch_store,
             )
-            .expect("Enqueueing end_of_epoch tx cannot fail");
+            .expect("Enqueueing change_epoch tx cannot fail");
         handle_execution_effects(
             vec![execution_digests],
-            vec![end_of_epoch_tx_digest],
+            vec![change_epoch_tx_digest],
             checkpoint.clone(),
             self.checkpoint_store.clone(),
             self.authority_store.clone(),
@@ -563,37 +563,35 @@ impl CheckpointExecutor {
 
         if let Some(checkpoint) = checkpoint {
             if checkpoint.epoch() == cur_epoch {
-                let end_of_epoch_txns = extract_end_of_epoch_txns(
-                    checkpoint,
-                    self.authority_store.clone(),
-                    self.checkpoint_store.clone(),
-                    epoch_store.clone(),
-                );
-                let end_of_epoch = !end_of_epoch_txns.is_empty();
-                for (digests, end_of_epoch_tx) in end_of_epoch_txns.into_iter() {
-                    let end_of_epoch_tx_digest = digests.transaction;
+                if let Some((change_epoch_execution_digests, change_epoch_tx)) =
+                    extract_end_of_epoch_tx(
+                        checkpoint,
+                        self.authority_store.clone(),
+                        self.checkpoint_store.clone(),
+                        epoch_store.clone(),
+                    )
+                {
+                    let change_epoch_tx_digest = change_epoch_execution_digests.transaction;
 
                     info!(
                         ended_epoch = cur_epoch,
                         last_checkpoint = checkpoint.sequence_number(),
-                        "Reached end of epoch, executing end_of_epoch transaction",
+                        "Reached end of epoch, executing change_epoch transaction",
                     );
 
-                    self.execute_end_of_epoch_tx(
-                        digests,
-                        end_of_epoch_tx_digest,
-                        end_of_epoch_tx,
+                    self.execute_change_epoch_tx(
+                        change_epoch_execution_digests,
+                        change_epoch_tx_digest,
+                        change_epoch_tx,
                         epoch_store.clone(),
                         checkpoint.clone(),
                     )
                     .await;
-                }
 
-                if end_of_epoch {
                     // For finalizing the checkpoint, we need to pass in all checkpoint
-                    // transaction effects, not just the end_of_epoch tx effects. However,
+                    // transaction effects, not just the change_epoch tx effects. However,
                     // we have already notify awaited all tx effects separately (once
-                    // for end_of_epoch tx, and once for all other txes). Therefore this
+                    // for change_epoch tx, and once for all other txes). Therefore this
                     // should be a fast operation
                     let all_tx_digests: Vec<_> = self
                         .checkpoint_store
@@ -797,17 +795,13 @@ fn assert_not_forked(
 }
 
 // Given a checkpoint, find the end of epoch transaction, if it exists
-fn extract_end_of_epoch_txns(
+fn extract_end_of_epoch_tx(
     checkpoint: &VerifiedCheckpoint,
     authority_store: Arc<AuthorityStore>,
     checkpoint_store: Arc<CheckpointStore>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-) -> Vec<(ExecutionDigests, VerifiedExecutableTransaction)> {
-    let mut end_of_epoch_txns = Vec::new();
-
-    if checkpoint.end_of_epoch_data.is_none() {
-        return end_of_epoch_txns;
-    }
+) -> Option<(ExecutionDigests, VerifiedExecutableTransaction)> {
+    checkpoint.end_of_epoch_data.as_ref()?;
 
     // Last checkpoint must have the end of epoch transaction as the last transaction.
 
@@ -823,54 +817,32 @@ fn extract_end_of_epoch_txns(
         })
         .into_inner();
 
-    // get a reverse iterator on execution digests
-    let mut rev_iter = execution_digests.iter().rev();
-
-    let build_tx = |digests: &ExecutionDigests| {
-        let end_of_epoch_txn = authority_store
-            .get_transaction_block(&digests.transaction)
-            .expect("read cannot fail");
-
-        VerifiedExecutableTransaction::new_from_checkpoint(
-            end_of_epoch_txn.unwrap_or_else(||
-                panic!(
-                    "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
-                    digests.transaction,
-                )
-            ),
-            epoch_store.epoch(),
-            *checkpoint_sequence,
-        )
-    };
-
-    let last = rev_iter
-        .next()
+    let digests = execution_digests
+        .last()
         .expect("Final checkpoint must have at least one transaction");
 
-    let change_epoch_tx = build_tx(last);
+    let change_epoch_tx = authority_store
+        .get_transaction_block(&digests.transaction)
+        .expect("read cannot fail");
 
-    assert!(&change_epoch_tx
+    let change_epoch_tx = VerifiedExecutableTransaction::new_from_checkpoint(
+        change_epoch_tx.unwrap_or_else(||
+            panic!(
+                "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {checkpoint:?}",
+                digests.transaction,
+            )
+        ),
+        epoch_store.epoch(),
+        *checkpoint_sequence,
+    );
+
+    assert!(change_epoch_tx
         .data()
         .intent_message()
         .value
-        .is_change_epoch_tx());
+        .is_end_of_epoch_tx());
 
-    end_of_epoch_txns.push((*last, change_epoch_tx));
-
-    // there may also be an AuthenticatorStateExpire transaction
-    if let Some(digests) = rev_iter.next() {
-        let tx = build_tx(digests);
-        if tx
-            .data()
-            .intent_message()
-            .value
-            .is_authenticator_state_expire_tx()
-        {
-            end_of_epoch_txns.push((*digests, tx));
-        }
-    }
-
-    end_of_epoch_txns
+    Some((*digests, change_epoch_tx))
 }
 
 // Given a checkpoint, filter out any already executed transactions, then return the remaining
@@ -912,50 +884,23 @@ fn get_unexecuted_transactions(
     });
 
     // Remove the change epoch transaction so that we can special case its execution.
-    if checkpoint.end_of_epoch_data.is_some() {
-        assert!(
-            !execution_digests.is_empty(),
-            "Final checkpoint must have at least one transaction"
-        );
-
-        let mut trim_end_of_epoch_tx = || {
-            let tx_digest = execution_digests.last()?.transaction;
-
-            let tx = authority_store
-                .get_transaction_block(&tx_digest)
-                .expect("read cannot fail")
-                .unwrap_or_else(||
-                    panic!(
-                        "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {}",
-                        tx_digest, checkpoint.sequence_number()
-                    )
-                );
-            if tx.data().intent_message().value.is_end_of_epoch_tx() {
-                execution_digests.pop().unwrap();
-                Some(tx)
-            } else {
-                None
-            }
-        };
-
-        // Change epoch tx is mandatory
-        assert!(trim_end_of_epoch_tx()
+    checkpoint.end_of_epoch_data.as_ref().tap_some(|_| {
+        let change_epoch_tx_digest = execution_digests
+            .pop()
             .expect("Final checkpoint must have at least one transaction")
-            .data()
-            .intent_message()
-            .value
-            .is_change_epoch_tx());
+            .transaction;
 
-        // AuthenticatorStateExpire tx is optional (will only be inserted after the authenticator
-        // state object has been created in a prior epoch).
-        trim_end_of_epoch_tx().tap_some(|tx| {
-            assert!(tx
-                .data()
-                .intent_message()
-                .value
-                .is_authenticator_state_expire_tx())
-        });
-    }
+        let change_epoch_tx = authority_store
+            .get_transaction_block(&change_epoch_tx_digest)
+            .expect("read cannot fail")
+            .unwrap_or_else(||
+                panic!(
+                    "state-sync should have ensured that transaction with digest {:?} exists for checkpoint: {}",
+                    change_epoch_tx_digest, checkpoint.sequence_number()
+                )
+            );
+        assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
+    });
 
     let all_tx_digests: Vec<TransactionDigest> =
         execution_digests.iter().map(|tx| tx.transaction).collect();

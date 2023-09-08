@@ -36,7 +36,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::authenticator_state::get_authenticator_state;
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ChainIdentifier;
@@ -2001,9 +2001,8 @@ async fn create_epoch_store(
     let epoch_start_config = EpochStartConfiguration::new(
         sys_state,
         CheckpointDigest::random(),
-        get_authenticator_state(&authority_state.database)
-            .expect("read cannot fail")
-            .is_some(),
+        get_authenticator_state_obj_initial_shared_version(&authority_state.database)
+            .expect("read cannot fail"),
     );
 
     let registry = Registry::new();

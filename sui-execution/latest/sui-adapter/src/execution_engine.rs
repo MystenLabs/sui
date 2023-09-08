@@ -49,8 +49,8 @@ mod checked {
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
-        Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ObjectArg,
-        ProgrammableTransaction, TransactionKind,
+        Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisTransaction,
+        ObjectArg, ProgrammableTransaction, TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -119,7 +119,10 @@ mod checked {
             epoch_timestamp_ms,
         );
 
-        let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
+        let is_epoch_change = matches!(
+            transaction_kind,
+            TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
+        );
 
         let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
@@ -321,7 +324,7 @@ mod checked {
         advance_epoch_gas_summary: Option<(u64, u64)>,
     ) -> Result<(), ExecutionError> {
         let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
-        if !is_genesis_tx && !Mode::allow_arbitrary_values() {
+        if !is_genesis_tx && !Mode::skip_conservation_checks() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
                 temporary_store
@@ -529,20 +532,51 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateCreate(auth_state_create) => {
-                // This can fail if the framework does not yet have the create() function.
-                // TODO: this is an ephemeral constraint - once all production networks have the
-                // new framework, we can add an .expect() at the end here (because at that point
-                // this should only be called during genesis of new networks).
-                setup_authenticator_state_create(
-                    auth_state_create,
-                    temporary_store,
-                    tx_ctx,
-                    move_vm,
-                    gas_charger,
-                    protocol_config,
-                    metrics,
-                )?;
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                for tx in txns {
+                    match tx {
+                        EndOfEpochTransactionKind::ChangeEpoch(change_epoch) => {
+                            advance_epoch(
+                                change_epoch,
+                                temporary_store,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics.clone(),
+                            )?;
+                        }
+                        EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
+                            // This can fail if the framework does not yet have the create()
+                            // function.
+                            // TODO: this is an ephemeral constraint - once all production
+                            // networks have the new framework, we can add an .expect() at the
+                            // end here (because at that point this should only be called during
+                            // genesis of new networks).
+                            setup_authenticator_state_create(
+                                create,
+                                temporary_store,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics.clone(),
+                            )?;
+                        }
+                        EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
+                            setup_authenticator_state_expire(
+                                expire,
+                                temporary_store,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics.clone(),
+                            )
+                            .expect("AuthenticatorStateExpire cannot fail");
+                        }
+                    }
+                }
                 Ok(Mode::empty_results())
             }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
@@ -556,19 +590,6 @@ mod checked {
                     metrics,
                 )
                 .expect("AuthenticatorStateUpdate cannot fail");
-                Ok(Mode::empty_results())
-            }
-            TransactionKind::AuthenticatorStateExpire(expire) => {
-                setup_authenticator_state_expire(
-                    expire,
-                    temporary_store,
-                    tx_ctx,
-                    move_vm,
-                    gas_charger,
-                    protocol_config,
-                    metrics,
-                )
-                .expect("AuthenticatorStateExpire cannot fail");
                 Ok(Mode::empty_results())
             }
         }

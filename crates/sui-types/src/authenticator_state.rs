@@ -5,8 +5,10 @@ use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use serde::{Deserialize, Serialize};
 
+use crate::base_types::SequenceNumber;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::{SuiError, SuiResult};
+use crate::object::Owner;
 use crate::storage::ObjectStore;
 use crate::{id::UID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 
@@ -75,4 +77,17 @@ pub fn get_authenticator_state(
         })?;
 
     Ok(Some(inner))
+}
+
+pub fn get_authenticator_state_obj_initial_shared_version(
+    object_store: &dyn ObjectStore,
+) -> SuiResult<Option<SequenceNumber>> {
+    Ok(object_store
+        .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?
+        .map(|obj| match obj.owner {
+            Owner::Shared {
+                initial_shared_version,
+            } => initial_shared_version,
+            _ => unreachable!("Authenticator state object must be shared"),
+        }))
 }

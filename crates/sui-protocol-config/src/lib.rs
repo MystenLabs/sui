@@ -268,6 +268,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_jwk_consensus_updates: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    end_of_epoch_transaction_supported: bool,
+
     // Perform simple conservation checks keeping into account out of gas scenarios
     // while charging for storage.
     #[serde(skip_serializing_if = "is_false")]
@@ -885,7 +889,12 @@ impl ProtocolConfig {
     }
 
     pub fn enable_jwk_consensus_updates(&self) -> bool {
-        self.feature_flags.enable_jwk_consensus_updates
+        let ret = self.feature_flags.enable_jwk_consensus_updates;
+        if ret {
+            // jwk updates required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
     }
 
     pub fn simple_conservation_checks(&self) -> bool {
@@ -894,6 +903,15 @@ impl ProtocolConfig {
 
     pub fn loaded_child_object_format_type(&self) -> bool {
         self.feature_flags.loaded_child_object_format_type
+    }
+
+    pub fn end_of_epoch_transaction_supported(&self) -> bool {
+        let ret = self.feature_flags.end_of_epoch_transaction_supported;
+        if !ret {
+            // jwk updates required end-of-epoch transactions
+            assert!(!self.feature_flags.enable_jwk_consensus_updates);
+        }
+        ret
     }
 
     // this function only exists for readability in the genesis code.
@@ -1415,6 +1433,9 @@ impl ProtocolConfig {
                 24 => {
                     cfg.feature_flags.simple_conservation_checks = true;
                     cfg.max_publish_or_upgrade_per_ptb = Some(5);
+
+                    cfg.feature_flags.end_of_epoch_transaction_supported = true;
+
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_jwk_consensus_updates = true;
                         // Max of 100 votes per hour

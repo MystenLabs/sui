@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authenticator_state::ActiveJwk;
-use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{AuthorityName, ObjectRef, SequenceNumber, TransactionDigest};
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
 };
@@ -44,6 +44,14 @@ pub struct AuthenticatorStateExpire {
     pub epoch: u64,
     /// expire JWKs that have a lower epoch than this
     pub min_epoch: u64,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+}
+
+impl AuthenticatorStateExpire {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -54,8 +62,16 @@ pub struct AuthenticatorStateUpdate {
     pub round: u64,
     /// newly active jwks
     pub new_active_jwks: Vec<ActiveJwk>,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
     // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
     // TransactionKind.
+}
+
+impl AuthenticatorStateUpdate {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
 }
 
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.

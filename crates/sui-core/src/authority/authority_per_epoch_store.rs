@@ -486,7 +486,9 @@ impl AuthorityPerEpochStore {
             zklogin_env,
         );
 
-        let authenticator_state_exists = epoch_start_configuration.authenticator_state_exists();
+        let authenticator_state_exists = epoch_start_configuration
+            .authenticator_obj_initial_shared_version()
+            .is_some();
         let authenticator_state_enabled =
             authenticator_state_exists && protocol_config.enable_jwk_consensus_updates();
 
@@ -555,7 +557,9 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn authenticator_state_exists(&self) -> bool {
-        self.epoch_start_configuration.authenticator_state_exists()
+        self.epoch_start_configuration
+            .authenticator_obj_initial_shared_version()
+            .is_some()
     }
 
     pub fn get_parent_path(&self) -> PathBuf {

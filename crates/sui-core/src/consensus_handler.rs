@@ -4,6 +4,7 @@
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithHash,
 };
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::{
     CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
@@ -496,6 +497,10 @@ impl<T> ConsensusHandler<T> {
             self.epoch(),
             round,
             new_active_jwks,
+            self.epoch_store
+                .epoch_start_config()
+                .authenticator_obj_initial_shared_version()
+                .expect("authenticator state obj must exist"),
         );
         VerifiedExecutableTransaction::new_system(transaction, self.epoch())
     }
