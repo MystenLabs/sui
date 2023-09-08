@@ -37,15 +37,6 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 	});
 	const { register } = form;
 
-	const handleKeyPress = (e: React.KeyboardEvent<HTMLFormElement>) => {
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			form.handleSubmit(onSubmit)();
-			const inputElement = document.getElementById('current-address-nickname-edit');
-			inputElement?.blur();
-		}
-	};
-
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (account && accountID) {
 			try {
@@ -58,6 +49,16 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 			}
 		}
 	};
+
+	const handleKeyPress = (e: React.KeyboardEvent<HTMLFormElement>) => {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			form.handleSubmit(onSubmit)();
+			const inputElement = document.getElementById('current-address-nickname-edit');
+			inputElement?.blur();
+		}
+	};
+
 	return (
 		<div>
 			<Form className="flex flex-col" form={form} onSubmit={onSubmit} onKeyPress={handleKeyPress}>
