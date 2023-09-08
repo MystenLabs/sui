@@ -7,8 +7,8 @@ use crate::{
     csv_writer::CSVWriter,
     errors::AnalyticsIndexerError,
     tables::{
-        CheckpointEntry, EventEntry, InputObjectKind, ObjectEntry, ObjectStatus, OwnerType,
-        TransactionEntry, TransactionObjectEntry,
+        CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, ObjectEntry, ObjectStatus,
+        OwnerType, TransactionEntry, TransactionObjectEntry,
     },
     writer::CheckpointWriter,
     AnalyticsIndexerConfig,
@@ -17,6 +17,7 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::EncodeDecodeBase64,
 };
+use move_core_types::identifier::IdentStr;
 use std::collections::BTreeSet;
 use sui_indexer::framework::interface::Handler;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
@@ -103,7 +104,7 @@ impl AnalyticsProcessor {
     fn process_checkpoints(
         &mut self,
         summary: &CertifiedCheckpointSummary,
-        checkpoint_transactions: &Vec<CheckpointTransaction>,
+        checkpoint_transactions: &[CheckpointTransaction],
     ) {
         self.metrics.total_checkpoint_received.inc();
 
@@ -224,6 +225,14 @@ impl AnalyticsProcessor {
             raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
         };
         self.writer.write_transaction(transaction_entry);
+
+        self.process_move_calls(
+            epoch,
+            checkpoint,
+            timestamp_ms,
+            transaction_digest.clone(),
+            &move_calls,
+        );
 
         // transaction objects
         txn_data
@@ -370,6 +379,29 @@ impl AnalyticsProcessor {
             object_status: object_status_tracker.get_object_status(object_id),
         };
         self.writer.write_transaction_object(entry);
+    }
+
+    // Process move calls.
+    fn process_move_calls(
+        &mut self,
+        epoch: u64,
+        checkpoint: u64,
+        timestamp_ms: u64,
+        transaction_digest: String,
+        move_calls: &[(&ObjectID, &IdentStr, &IdentStr)],
+    ) {
+        for (package, module, function) in move_calls.iter() {
+            let entry = MoveCallEntry {
+                transaction_digest: transaction_digest.clone(),
+                checkpoint,
+                epoch,
+                timestamp_ms,
+                package: package.to_string(),
+                module: module.to_string(),
+                function: function.to_string(),
+            };
+            self.writer.write_move_calls(entry);
+        }
     }
 
     // Ensure a writer is in place
