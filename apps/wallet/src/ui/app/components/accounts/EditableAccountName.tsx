@@ -32,7 +32,6 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		},
 	});
 	const { register } = form;
-	const inputRef = useRef<HTMLInputElement | null>(null);
 
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (accountID) {
