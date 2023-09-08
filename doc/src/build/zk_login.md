@@ -28,7 +28,7 @@ More questions? See [this page](#faq).
 
 ## OpenID providers
 
-The following tables lists the available OpenID providers and indicates whether they can support zkLogin.
+The following tables lists the OpenID providers and that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
 | Provider     | Can support? | Comments |
 | ------------ | ----------   | -------- |
@@ -37,7 +37,6 @@ The following tables lists the available OpenID providers and indicates whether 
 | Twitch       | Yes          |          |
 | Slack        | Yes          |          |
 | Apple        | Yes          |          |
-| Twitter      | No           |          |
 | RedBull      | Under review |          |
 | Microsoft    | Under review |          |
 | AWS (Tenant) | Under review |          |
