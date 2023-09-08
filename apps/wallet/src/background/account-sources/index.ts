@@ -8,6 +8,7 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
+import { getAccountsBySourceID } from '../accounts';
 import { type UiConnection } from '../connections/UiConnection';
 import { getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
@@ -18,7 +19,6 @@ import {
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { toEntropy } from '_src/shared/utils/bip39';
-import { getAccountsBySourceID } from '../accounts';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
 	if (MnemonicAccountSource.isOfType(accountSource)) {

@@ -12,10 +12,10 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { autoLockDataToMinutes } from '../../hooks/useAutoLockMinutes';
 import { useAutoLockMinutesMutation } from '../../hooks/useAutoLockMinutesMutation';
 import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
+import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteAccountSourceMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteAccountSourceMutation';
 
 const allowedAccountTypes: CreateType[] = [
 	'new-mnemonic',
@@ -78,7 +78,7 @@ export function ProtectAccountPage() {
 				toast.error((e as Error).message ?? 'Failed to create account');
 			}
 		},
-		[createMutation, navigate, successRedirect],
+		[createMutation, navigate, successRedirect, deleteMutation, isResetting],
 	);
 	const autoLockMutation = useAutoLockMinutesMutation();
 	if (!isAllowedAccountType(accountType)) {
