@@ -42,23 +42,16 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 					id: accountID,
 					nickname: nickname || null,
 				});
+				inputRef.current?.blur();
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
 		}
 	};
 
-	const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
-		if (e.key === 'Enter') {
-			e.preventDefault();
-			form.handleSubmit(onSubmit)();
-			inputRef.current?.blur();
-		}
-	};
-
 	return (
 		<div>
-			<Form className="flex flex-col" form={form} onSubmit={onSubmit} onKeyDown={handleKeyDown}>
+			<Form className="flex flex-col" form={form} onSubmit={onSubmit}>
 				<Input
 					{...rest}
 					onBlur={() => form.handleSubmit(onSubmit)()}
@@ -67,6 +60,7 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 						inputRef.current = e;
 					}}
 				/>
+				<button className="hidden" type="submit" />
 			</Form>
 		</div>
 	);
