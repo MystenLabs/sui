@@ -180,6 +180,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
+            genesis.authenticator_state_object().is_some(),
         );
         let expensive_safety_checks = match self.expensive_safety_checks {
             None => ExpensiveSafetyCheckConfig::default(),
