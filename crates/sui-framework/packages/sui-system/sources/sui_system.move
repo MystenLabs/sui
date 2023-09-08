@@ -77,9 +77,6 @@ module sui_system::sui_system {
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
 
-    // First protocol version in which the AuthenticatorState system object is used.
-    const AuthenticatorStateFirstProtocolVersion: u64 = 23;
-
     // ==== functions that can only be called by genesis ====
 
     /// Create a new SuiSystemState object and make it shared.

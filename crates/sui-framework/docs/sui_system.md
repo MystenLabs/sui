@@ -160,15 +160,6 @@ the SuiSystemStateInner version, or vice versa.
 
 
 
-<a name="0x3_sui_system_AuthenticatorStateFirstProtocolVersion"></a>
-
-
-
-<pre><code><b>const</b> <a href="sui_system.md#0x3_sui_system_AuthenticatorStateFirstProtocolVersion">AuthenticatorStateFirstProtocolVersion</a>: u64 = 23;
-</code></pre>
-
-
-
 <a name="0x3_sui_system_create"></a>
 
 ## Function `create`
