@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type ZkProvider = 'google' | 'twitch' | 'facebook' | 'microsoft';
+export type ZkProvider = 'google' | 'twitch' | 'facebook';
 
 export interface ZkProviderData {
 	clientID: string;
@@ -12,6 +12,7 @@ export interface ZkProviderData {
 		loginHint?: string;
 		params: URLSearchParams;
 	}) => void;
+	enabled: boolean;
 }
 
 export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
@@ -30,6 +31,7 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 				params.append('login_hint', loginHint);
 			}
 		},
+		enabled: true,
 	},
 	twitch: {
 		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
@@ -51,8 +53,7 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 				params.append('force_verify', 'true');
 			}
 		},
+		enabled: true,
 	},
-	// TODO: update this before enabling them
-	facebook: { clientID: '', url: '' },
-	microsoft: { clientID: '', url: '' },
+	facebook: { clientID: '', url: '', enabled: false },
 };
