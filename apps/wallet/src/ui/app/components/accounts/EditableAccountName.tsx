@@ -26,8 +26,6 @@ const formSchema = z.object({
 
 export function EditableAccountName({ accountID, name }: { accountID: string; name: string }) {
 	const backgroundClient = useBackgroundClient();
-	const { data: accounts } = useAccounts();
-	const account = accounts?.find((account) => account.id === accountID);
 	const form = useZodForm({
 		mode: 'all',
 		schema: formSchema,
@@ -38,7 +36,7 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 	const { register } = form;
 
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
-		if (account && accountID) {
+		if (accountID) {
 			try {
 				await backgroundClient.setAccountNickname({
 					id: accountID,
