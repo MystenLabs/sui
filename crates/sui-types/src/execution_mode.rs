@@ -147,6 +147,8 @@ impl ExecutionMode for System {
     }
 
     fn allow_arbitrary_values() -> bool {
+        // For AuthenticatorStateUpdate, we need to be able to pass in a vector of
+        // JWKs, so we need to allow arbitrary values.
         true
     }
 
