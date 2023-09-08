@@ -32,7 +32,7 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		},
 	});
 	const { register } = form;
-	const { ref, ...rest } = register('nickname');
+	// const { ref, ...rest } = register('nickname');
 	const inputRef = useRef<HTMLInputElement | null>(null);
 
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
@@ -42,7 +42,8 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 					id: accountID,
 					nickname: nickname || null,
 				});
-				inputRef.current?.blur();
+				//@ts-ignore-next-line
+				document.activeElement?.blur();
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
@@ -52,14 +53,7 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 	return (
 		<div>
 			<Form className="flex flex-col" form={form} onSubmit={onSubmit}>
-				<Input
-					{...rest}
-					onBlur={() => form.handleSubmit(onSubmit)()}
-					ref={(e) => {
-						ref(e);
-						inputRef.current = e;
-					}}
-				/>
+				<Input {...register('nickname')} onBlur={() => form.handleSubmit(onSubmit)()} />
 				<button className="hidden" type="submit" />
 			</Form>
 		</div>
