@@ -58,8 +58,7 @@ export function ProtectAccountPage() {
 		async (password: string, type: CreateType) => {
 			try {
 				if (isResetting && type.includes('mnemonic')) {
-					const response = await deleteMutation.mutateAsync({ type: 'mnemonic' });
-					console.log(response);
+					await deleteMutation.mutateAsync({ type: 'mnemonic' });
 				}
 				const createdAccounts = await createMutation.mutateAsync({
 					type,
