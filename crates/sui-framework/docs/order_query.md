@@ -91,7 +91,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_bids">iter_bids</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
 </code></pre>
 
 
@@ -112,9 +112,11 @@
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
     max_id: Option&lt;u64&gt;,
+    // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
+    ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> bids = <a href="clob_v2.md#0xdee9_clob_v2_bids">clob_v2::bids</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(bids, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(bids, start_tick_level, start_order_id, min_expire_timestamp, max_id, ascending);
     <b>let</b> (orders, has_next_page, next_tick_level, next_order_id) = <b>if</b> (<a href="_length">vector::length</a>(&orders) &gt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>) {
         <b>let</b> last_order = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> orders);
         (orders, <b>true</b>, some(<a href="clob_v2.md#0xdee9_clob_v2_tick_level">clob_v2::tick_level</a>(&last_order)), some(<a href="clob_v2.md#0xdee9_clob_v2_order_id">clob_v2::order_id</a>(&last_order)))
@@ -141,7 +143,7 @@
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
+<pre><code><b>public</b> <b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_asks">iter_asks</a>&lt;T1, T2&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;T1, T2&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="order_query.md#0xdee9_order_query_OrderPage">order_query::OrderPage</a>
 </code></pre>
 
 
@@ -162,9 +164,11 @@
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
     max_id: Option&lt;u64&gt;,
+    // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
+    ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> asks = <a href="clob_v2.md#0xdee9_clob_v2_asks">clob_v2::asks</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(asks, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(asks, start_tick_level, start_order_id, min_expire_timestamp, max_id, ascending);
     <b>let</b> (orders, has_next_page, next_tick_level, next_order_id) = <b>if</b> (<a href="_length">vector::length</a>(&orders) &gt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>) {
         <b>let</b> last_order = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> orders);
         (orders, <b>true</b>, some(<a href="clob_v2.md#0xdee9_clob_v2_tick_level">clob_v2::tick_level</a>(&last_order)), some(<a href="clob_v2.md#0xdee9_clob_v2_order_id">clob_v2::order_id</a>(&last_order)))
@@ -191,7 +195,7 @@
 
 
 
-<pre><code><b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(ticks: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;): <a href="">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
+<pre><code><b>fun</b> <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(ticks: &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;, start_tick_level: <a href="_Option">option::Option</a>&lt;u64&gt;, start_order_id: <a href="_Option">option::Option</a>&lt;u64&gt;, min_expire_timestamp: <a href="_Option">option::Option</a>&lt;u64&gt;, max_id: <a href="_Option">option::Option</a>&lt;u64&gt;, ascending: bool): <a href="">vector</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
 </code></pre>
 
 
@@ -212,11 +216,17 @@
     // do not show orders <b>with</b> an ID larger than max_id--
     // i.e., orders added later than this one
     max_id: Option&lt;u64&gt;,
+    // <b>if</b> <b>true</b>, the orders are returned in ascending tick level.
+    ascending: bool,
 ): <a href="">vector</a>&lt;Order&gt; {
     <b>let</b> tick_level_key = <b>if</b> (<a href="_is_some">option::is_some</a>(&start_tick_level)) {
         <a href="_destroy_some">option::destroy_some</a>(start_tick_level)
     } <b>else</b> {
-        <b>let</b> (key, _) = <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(ticks);
+        <b>let</b> (key, _) = <b>if</b> (ascending) {
+            <a href="critbit.md#0xdee9_critbit_min_leaf">critbit::min_leaf</a>(ticks)
+        }<b>else</b> {
+            <a href="critbit.md#0xdee9_critbit_max_leaf">critbit::max_leaf</a>(ticks)
+        };
         key
     };
 
@@ -229,7 +239,11 @@
         <b>let</b> next_order_key = <b>if</b> (<a href="_is_some">option::is_some</a>(&start_order_id)) {
             <b>let</b> key = <a href="_destroy_some">option::destroy_some</a>(start_order_id);
             <b>if</b> (!<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(open_orders, key)) {
-                <b>let</b> (next_leaf, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(ticks, tick_level_key);
+                <b>let</b> (next_leaf, _) = <b>if</b> (ascending) {
+                    <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(ticks, tick_level_key)
+                }<b>else</b> {
+                    <a href="critbit.md#0xdee9_critbit_previous_leaf">critbit::previous_leaf</a>(ticks, tick_level_key)
+                };
                 tick_level_key = next_leaf;
                 <b>continue</b>
             };

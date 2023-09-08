@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::order_query {
+    use std::debug::print;
     use std::option;
     use std::option::{Option, some, none};
     use std::vector;
@@ -38,9 +39,18 @@ module deepbook::order_query {
         // do not show orders with an ID larger than max_id--
         // i.e., orders added later than this one
         max_id: Option<u64>,
+        // if true, the orders are returned in ascending tick level.
+        ascending: bool,
     ): OrderPage {
         let bids = clob_v2::bids(pool);
-        let orders = iter_ticks_internal(bids, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+        let orders = iter_ticks_internal(
+            bids,
+            start_tick_level,
+            start_order_id,
+            min_expire_timestamp,
+            max_id,
+            ascending
+        );
         let (orders, has_next_page, next_tick_level, next_order_id) = if (vector::length(&orders) > PAGE_LIMIT) {
             let last_order = vector::pop_back(&mut orders);
             (orders, true, some(clob_v2::tick_level(&last_order)), some(clob_v2::order_id(&last_order)))
@@ -68,9 +78,18 @@ module deepbook::order_query {
         // do not show orders with an ID larger than max_id--
         // i.e., orders added later than this one
         max_id: Option<u64>,
+        // if true, the orders are returned in ascending tick level.
+        ascending: bool,
     ): OrderPage {
         let asks = clob_v2::asks(pool);
-        let orders = iter_ticks_internal(asks, start_tick_level, start_order_id, min_expire_timestamp, max_id);
+        let orders = iter_ticks_internal(
+            asks,
+            start_tick_level,
+            start_order_id,
+            min_expire_timestamp,
+            max_id,
+            ascending
+        );
         let (orders, has_next_page, next_tick_level, next_order_id) = if (vector::length(&orders) > PAGE_LIMIT) {
             let last_order = vector::pop_back(&mut orders);
             (orders, true, some(clob_v2::tick_level(&last_order)), some(clob_v2::order_id(&last_order)))
@@ -98,11 +117,17 @@ module deepbook::order_query {
         // do not show orders with an ID larger than max_id--
         // i.e., orders added later than this one
         max_id: Option<u64>,
+        // if true, the orders are returned in ascending tick level.
+        ascending: bool,
     ): vector<Order> {
         let tick_level_key = if (option::is_some(&start_tick_level)) {
             option::destroy_some(start_tick_level)
         } else {
-            let (key, _) = critbit::min_leaf(ticks);
+            let (key, _) = if (ascending) {
+                critbit::min_leaf(ticks)
+            }else {
+                critbit::max_leaf(ticks)
+            };
             key
         };
 
@@ -115,7 +140,11 @@ module deepbook::order_query {
             let next_order_key = if (option::is_some(&start_order_id)) {
                 let key = option::destroy_some(start_order_id);
                 if (!linked_table::contains(open_orders, key)) {
-                    let (next_leaf, _) = critbit::next_leaf(ticks, tick_level_key);
+                    let (next_leaf, _) = if (ascending) {
+                        critbit::next_leaf(ticks, tick_level_key)
+                    }else {
+                        critbit::previous_leaf(ticks, tick_level_key)
+                    };
                     tick_level_key = next_leaf;
                     continue
                 };
@@ -129,9 +158,9 @@ module deepbook::order_query {
                 let key = option::destroy_some(next_order_key);
                 let order = linked_table::borrow(open_orders, key);
 
-                // if the order id is greater than max_id, we stop.
+                // if the order id is greater than max_id, we end the iteration for this tick level.
                 if (option::is_some(&max_id) && key > option::destroy_some(max_id)) {
-                    return orders
+                    break;
                 };
 
                 next_order_key = *linked_table::next(open_orders, key);
@@ -142,7 +171,11 @@ module deepbook::order_query {
                     vector::push_back(&mut orders, clob_v2::clone_order(order));
                 };
             };
-            let (next_leaf, _) = critbit::next_leaf(ticks, tick_level_key);
+            let (next_leaf, _) = if (ascending) {
+                critbit::next_leaf(ticks, tick_level_key)
+            }else {
+                critbit::previous_leaf(ticks, tick_level_key)
+            };
             tick_level_key = next_leaf;
         };
         orders
