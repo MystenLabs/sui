@@ -21,7 +21,6 @@ function AccountGroupHeader({ text }: { text: string }) {
 
 export function ResetWarningPage() {
 	const navigate = useNavigate();
-
 	const accountGroups = useAccountGroups();
 	const accounts = accountGroups.list();
 

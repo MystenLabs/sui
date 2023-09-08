@@ -18,6 +18,7 @@ import {
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import { toEntropy } from '_src/shared/utils/bip39';
+import { getAccountsBySourceID } from '../accounts';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
 	if (MnemonicAccountSource.isOfType(accountSource)) {
@@ -72,6 +73,32 @@ async function createAccountSource({
 	}
 }
 
+async function deleteAccountSourceByType({
+	type,
+}: MethodPayload<'deleteAccountSourceByType'>['args']) {
+	switch (type) {
+		case 'mnemonic':
+			const mnemonicAccountSources = await getAccountSources({ type: 'mnemonic' });
+			const ids = mnemonicAccountSources.map((source) => source.id);
+			const accountPromises = ids.map((id) => getAccountsBySourceID(id));
+			const accountResults = await Promise.all(accountPromises);
+			const accids: string[] = [];
+			accountResults.forEach((accForSource) => {
+				if (accForSource) {
+					accForSource.forEach((acc) => {
+						accids.push(acc.id);
+					});
+				}
+			});
+			const res = await (await getDB()).accounts.bulkDelete(accids);
+			const result = await (await getDB()).accountSources.bulkDelete(ids);
+			return true;
+		default: {
+			throw new Error(`Unknown Account source type ${type}`);
+		}
+	}
+}
+
 export async function getQredoAccountSource(filter: string | QredoConnectIdentity) {
 	let accountSource: AccountSource | null = null;
 	if (typeof filter === 'string') {
@@ -114,6 +141,21 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 		);
 		return true;
 	}
+
+	if (isMethodPayload(payload, 'deleteAccountSourceByType')) {
+		await uiConnection.send(
+			createMessage<MethodPayload<'deleteAccountSourceByTypeResponse'>>(
+				{
+					method: 'deleteAccountSourceByTypeResponse',
+					type: 'method-payload',
+					args: { success: await deleteAccountSourceByType(payload.args) },
+				},
+				msg.id,
+			),
+		);
+		return true;
+	}
+
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const accountSource = await getAccountSourceByID(id);

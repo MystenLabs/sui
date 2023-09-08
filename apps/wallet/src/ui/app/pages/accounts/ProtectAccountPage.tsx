@@ -15,6 +15,7 @@ import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreat
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
+import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteMnemonicAccountSource';
 
 const allowedAccountTypes: CreateType[] = [
 	'new-mnemonic',
@@ -39,6 +40,7 @@ export function ProtectAccountPage() {
 	const navigate = useNavigate();
 	const { data: accounts } = useAccounts();
 	const createMutation = useCreateAccountsMutation();
+	const deleteMutation = useDeleteAccountSourceMutation();
 	const hasPasswordAccounts = useMemo(
 		() => accounts && accounts.some(({ isPasswordUnlockable }) => isPasswordUnlockable),
 		[accounts],
@@ -55,6 +57,10 @@ export function ProtectAccountPage() {
 	const createAccountCallback = useCallback(
 		async (password: string, type: CreateType) => {
 			try {
+				if (isResetting && type.includes('mnemonic')) {
+					const response = await deleteMutation.mutateAsync({ type: 'mnemonic' });
+					console.log(response);
+				}
 				const createdAccounts = await createMutation.mutateAsync({
 					type,
 					password,

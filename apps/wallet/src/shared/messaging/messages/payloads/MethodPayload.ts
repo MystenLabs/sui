@@ -41,7 +41,9 @@ type MethodPayloads = {
 				type: 'zk';
 				provider: ZkProvider;
 		  };
+	deleteAccountSourceByType: { type: 'mnemonic' };
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
+	deleteAccountSourceByTypeResponse: { success: boolean };
 	signData: { data: string; id: string };
 	signDataResponse: { signature: SerializedSignature };
 	entitiesUpdated: { type: UIAccessibleEntityType };

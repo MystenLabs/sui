@@ -435,6 +435,29 @@ export class BackgroundClient {
 		);
 	}
 
+	public deleteAccountSourceByType(inputs: MethodPayload<'deleteAccountSourceByType'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'deleteAccountSourceByType'>>({
+					method: 'deleteAccountSourceByType',
+					type: 'method-payload',
+					args: inputs,
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (!isMethodPayload(payload, 'deleteAccountSourceByTypeResponse')) {
+						throw new Error('Unknown response');
+					}
+					// if (inputs.types !== payload.args.accounts[0]?.type) {
+					// 	throw new Error(`Unexpected accounts type response ${payload.args.accounts[0]?.type}`);
+					// }
+					return payload.args.success;
+				}),
+			),
+		);
+	}
+
 	public unlockAccountSourceOrAccount(
 		inputs: MethodPayload<'unlockAccountSourceOrAccount'>['args'],
 	) {
