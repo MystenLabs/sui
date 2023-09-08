@@ -198,6 +198,8 @@ module deepbook::custodian_v2 {
     #[test_only]
     friend deepbook::clob_test;
     #[test_only]
+    friend deepbook::order_query_tests;
+    #[test_only]
     use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
     #[test_only]
     use sui::transfer;
