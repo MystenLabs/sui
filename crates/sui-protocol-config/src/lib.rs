@@ -1400,6 +1400,8 @@ impl ProtocolConfig {
                 }
                 23 => {
                     cfg.feature_flags.loaded_child_object_format_type = true;
+                    cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
                 }
                 24 => {
                     cfg.feature_flags.simple_conservation_checks = true;
