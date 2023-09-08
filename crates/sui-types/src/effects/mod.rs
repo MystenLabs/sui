@@ -16,8 +16,8 @@ use crate::message_envelope::{
 };
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use crate::transaction::{Transaction, TransactionDataAPI, VersionedProtocolMessage};
-pub use effects_v1::TransactionEffectsV1;
+use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
+use effects_v1::TransactionEffectsV1;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
@@ -129,7 +129,7 @@ impl TransactionEffects {
         // TODO: when there are multiple versions, use protocol_version to construct the
         // appropriate one.
 
-        Self::V1(TransactionEffectsV1 {
+        Self::V1(TransactionEffectsV1::new(
             status,
             executed_epoch,
             gas_used,
@@ -145,7 +145,7 @@ impl TransactionEffects {
             gas_object,
             events_digest,
             dependencies,
-        })
+        ))
     }
 
     pub fn execution_digests(&self) -> ExecutionDigests {
@@ -241,22 +241,24 @@ impl TransactionEffects {
 
 // testing helpers.
 impl TransactionEffects {
-    pub fn new_with_tx(tx: &Transaction) -> TransactionEffects {
+    pub fn new_with_tx(tx: &SenderSignedData) -> TransactionEffects {
         Self::new_with_tx_and_gas(
             tx,
             (
                 random_object_ref(),
-                Owner::AddressOwner(tx.data().intent_message().value.sender()),
+                Owner::AddressOwner(tx.transaction_data().sender()),
             ),
         )
     }
 
-    pub fn new_with_tx_and_gas(tx: &Transaction, gas_object: (ObjectRef, Owner)) -> Self {
-        TransactionEffects::V1(TransactionEffectsV1 {
-            transaction_digest: *tx.digest(),
-            gas_object,
-            ..Default::default()
-        })
+    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
+        // TODO: Figure out who is calling this and why.
+        // This creates an inconsistent effects where gas object is not mutated.
+        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_gas(tx, gas_object))
+    }
+
+    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
+        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_status(tx, status))
     }
 }
 
