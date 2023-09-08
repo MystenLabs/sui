@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { AccountListItem } from '../../components/accounts/AccountListItem';
+import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
 import { Button } from '_app/shared/ButtonUI';
-import { AccountsList } from '../../components/accounts/AccountsList';
-import { useAccountGroups } from '../../hooks/useAccountGroups';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { useMemo } from 'react';
-import { AccountListItem } from '../../components/accounts/AccountListItem';
 
 function AccountGroupHeader({ text }: { text: string }) {
 	return (
@@ -27,8 +25,6 @@ export function ResetWarningPage() {
 	const accountGroups = useAccountGroups();
 	const accounts = accountGroups.list();
 
-	const backgroundClient = useBackgroundClient();
-
 	const passphraseAccounts = useMemo(
 		() => accounts.filter((a) => a.type === 'mnemonic-derived') || [],
 		[accounts],
@@ -38,8 +34,6 @@ export function ResetWarningPage() {
 		() => accounts.filter((a) => a.type === 'imported') || [],
 		[accounts],
 	);
-
-	console.log(passphraseAccounts, importedAccounts);
 
 	return (
 		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 overflow-auto w-popup-width h-popup-height">

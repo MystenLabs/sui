@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useNavigate } from 'react-router-dom';
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ImportRecoveryPhraseForm } from '../../components/accounts/ImportRecoveryPhraseForm';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export function ForgotPasswordPage() {
