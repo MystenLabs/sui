@@ -11,6 +11,7 @@ const SUI_PKG_NAME: &str = "Sui";
 const SUI_PKG_PATH: &str = "{ git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework/packages/sui-framework\", rev = \"framework/testnet\" }";
 
 #[derive(Parser)]
+#[group(id = "sui-move-new")]
 pub struct New {
     #[clap(flatten)]
     pub new: new::New,
