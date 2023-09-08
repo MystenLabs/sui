@@ -10,7 +10,6 @@ import { API_ENV } from '_src/shared/api-env';
 
 import { getSuiClient } from '_src/shared/sui-client';
 import type { BackgroundClient } from './background-client';
-import type { SignerWithProvider } from '@mysten/sui.js';
 
 type EnvInfo = {
 	name: string;
@@ -45,7 +44,7 @@ const accountTypesWithBackgroundSigner = ['mnemonic-derived', 'imported', 'zk'];
 
 export default class ApiProvider {
 	private _apiFullNodeProvider?: SuiClient;
-	private _signerByAddress: Map<string, SignerWithProvider> = new Map();
+	private _signerByAddress: Map<string, WalletSigner> = new Map();
 	apiEnv: API_ENV = DEFAULT_API_ENV;
 
 	public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV, customRPC?: string | null) {
@@ -76,7 +75,7 @@ export default class ApiProvider {
 	public getSignerInstance(
 		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
-	): SignerWithProvider {
+	): WalletSigner {
 		if (!this._apiFullNodeProvider) {
 			this.setNewJsonRpcProvider();
 		}

@@ -4,6 +4,7 @@
 import { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
 import {
 	SUI_CLOCK_OBJECT_ID,
+	SUI_FRAMEWORK_ADDRESS,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
@@ -30,7 +31,6 @@ import {
 	UserPosition,
 	bcs,
 } from './types';
-import { Coin } from '@mysten/sui.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
 
@@ -690,7 +690,14 @@ export class DeepBookClient {
 			id: coinId,
 			options: { showType: true },
 		});
-		return Coin.getCoinTypeArg(resp);
+
+		const parsed = resp.data?.type != null ? parseStructTag(resp.data.type) : null;
+
+		return parsed?.address === SUI_FRAMEWORK_ADDRESS &&
+			parsed.module === 'coin' &&
+			parsed.name === 'Coin'
+			? parsed.typeParams[0]
+			: null;
 	}
 
 	#nextClientOrderId() {

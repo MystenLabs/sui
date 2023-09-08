@@ -1313,8 +1313,6 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format/pkg: {}
-
   sdk/suins-toolkit:
     dependencies:
       '@mysten/sui.js':
@@ -1376,9 +1374,6 @@ importers:
       '@mysten/build-scripts':
         specifier: workspace:*
         version: link:../build-scripts
-      '@size-limit/preset-small-lib':
-        specifier: ^8.2.6
-        version: 8.2.6(size-limit@8.2.6)
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
@@ -1391,18 +1386,12 @@ importers:
       msw:
         specifier: ^1.2.2
         version: 1.2.2(typescript@5.1.6)
-      size-limit:
-        specifier: ^8.2.6
-        version: 8.2.6
       tmp:
         specifier: ^0.2.1
         version: 0.2.1
       ts-retry-promise:
         specifier: ^0.7.0
         version: 0.7.0
-      tsup:
-        specifier: ^7.1.0
-        version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       tsx:
         specifier: ^3.12.7
         version: 3.12.7
