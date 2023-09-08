@@ -75,6 +75,7 @@ export class MnemonicAccountSource extends AccountSource<
 			type: 'mnemonic',
 			encryptedData: await encrypt(password, decryptedData),
 			sourceHash: bytesToHex(sha256(entropy)),
+			createdAt: Date.now(),
 		};
 		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {

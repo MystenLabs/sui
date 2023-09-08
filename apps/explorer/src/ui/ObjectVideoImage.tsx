@@ -36,6 +36,7 @@ interface Props extends ImageStylesProps {
 	setOpen?: (open: boolean) => void;
 	video?: string | null;
 	disablePreview?: boolean;
+	fadeIn?: boolean;
 }
 
 export function ObjectVideoImage({
@@ -47,6 +48,7 @@ export function ObjectVideoImage({
 	open,
 	setOpen,
 	disablePreview,
+	fadeIn,
 }: Props) {
 	const close = () => {
 		if (disablePreview) {
@@ -79,7 +81,7 @@ export function ObjectVideoImage({
 				alt={title}
 			/>
 			<div className={imageStyles({ variant, disablePreview })}>
-				<Image rounded="md" onClick={openPreview} alt={title} src={src} />
+				<Image rounded="md" onClick={openPreview} alt={title} src={src} fadeIn={fadeIn} />
 				{video && (
 					<div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80">
 						<MediaPlay16 className={clsx(variant === 'large' ? 'h-8 w-8' : 'h-5 w-5')} />

@@ -202,6 +202,8 @@ codes!(
         InvalidNonPhantomUse:
             { msg: "invalid non-phantom type parameter usage", severity: Warning },
         InvalidAttribute: { msg: "invalid attribute", severity: NonblockingError },
+        InvalidVisibilityModifier:
+            { msg: "invalid visibility modifier", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [

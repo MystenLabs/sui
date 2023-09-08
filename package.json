@@ -14,6 +14,7 @@
         "kiosk": "pnpm --filter ./sdk/kiosk",
         "suins": "pnpm --filter ./sdk/suins-toolkit",
         "deepbook": "pnpm --filter ./sdk/deepbook",
+        "mbf": "pnpm --filter ./sdk/move-binary-format",
         "multisig": "pnpm --filter ./dapps/multisig-toolkit",
         "changeset-version": "pnpm changeset version && pnpm sdk codegen:version",
         "prettier:check": "prettier -c --ignore-unknown .",

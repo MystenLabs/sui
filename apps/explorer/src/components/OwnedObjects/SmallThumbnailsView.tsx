@@ -52,6 +52,7 @@ function SmallThumbnail({ obj }: { obj: SuiObjectResponse }) {
 	return (
 		<div className="group flex items-center gap-3.75 overflow-auto">
 			<ObjectVideoImage
+				fadeIn
 				disablePreview
 				title={name}
 				subtitle={type}

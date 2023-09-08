@@ -26,7 +26,9 @@ pub struct Edition {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
-pub enum FeatureGate {}
+pub enum FeatureGate {
+    PublicPackage,
+}
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
 pub enum Flavor {
@@ -39,17 +41,37 @@ pub enum Flavor {
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(env: &mut CompilationEnv, edition: Edition, loc: Loc, feature: FeatureGate) {
-    let is_supported = SUPPORTED_FEATURES.get(&edition).unwrap().contains(&feature);
-    if !is_supported {
-        env.add_diag(diag!(
+pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
+    if !edition.supports(feature) {
+        let valid_editions = valid_editions_for_feature(feature)
+            .into_iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut diag = diag!(
             Editions::FeatureTooNew,
             (
                 loc,
-                format!("{feature} requires edition {edition} or newer")
+                format!(
+                    "{feature} not supported by current edition '{edition}', \
+                    only '{valid_editions}' support this feature"
+                )
             )
-        ))
+        );
+        diag.add_note(
+            "You can update the edition in the 'Move.toml', \
+            or via command line flag if invoking the compiler directly.",
+        );
+        env.add_diag(diag);
     }
+}
+
+pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
+    Edition::ALL
+        .iter()
+        .filter(|e| e.supports(feature))
+        .copied()
+        .collect()
 }
 
 //**************************************************************************************************
@@ -73,6 +95,10 @@ impl Edition {
 
     pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
+    pub fn supports(&self, feature: &FeatureGate) -> bool {
+        SUPPORTED_FEATURES.get(self).unwrap().contains(feature)
+    }
+
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match *self {
@@ -87,7 +113,11 @@ impl Edition {
     fn features(&self) -> BTreeSet<FeatureGate> {
         match *self {
             Self::LEGACY => BTreeSet::new(),
-            Self::E2024_ALPHA => self.prev().unwrap().features(),
+            Self::E2024_ALPHA => {
+                let mut features = self.prev().unwrap().features();
+                features.extend([FeatureGate::PublicPackage]);
+                features
+            }
             _ => self.unknown_edition_panic(),
         }
     }

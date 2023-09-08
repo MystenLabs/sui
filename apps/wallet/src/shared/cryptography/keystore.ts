@@ -18,7 +18,7 @@ export type Serializable =
 	| number
 	| boolean
 	| null
-	| { [index: string]: Serializable }
+	| { [index: string]: Serializable | undefined }
 	| Serializable[];
 
 export async function encrypt(password: string, secrets: Serializable): Promise<string> {

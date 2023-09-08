@@ -1,32 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
+import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
 import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
-import { SocialButton } from '../../shared/SocialButton';
 import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useFullscreenGuard, useInitializedGuard } from '_hooks';
-import { type ZkProvider } from '_src/background/accounts/zk/providers';
-import { type ClickedSocialSignInButtonProperties, ampli } from '_src/shared/analytics/ampli';
 import WelcomeSplash from '_src/ui/assets/images/WelcomeSplash.svg';
-
-const zkLoginProviders: {
-	provider: ZkProvider;
-	ampliSignInProvider: ClickedSocialSignInButtonProperties['signInProvider'];
-	disabled?: boolean;
-}[] = [
-	{ provider: 'google', ampliSignInProvider: 'Google' },
-	{ provider: 'twitch', ampliSignInProvider: 'Twitch', disabled: true },
-	{ provider: 'facebook', ampliSignInProvider: 'Facebook', disabled: true },
-	{ provider: 'microsoft', ampliSignInProvider: 'Microsoft', disabled: true },
-];
 
 export function WelcomePage() {
 	const createAccountsMutation = useCreateAccountsMutation();
@@ -36,8 +22,6 @@ export function WelcomePage() {
 		!(createAccountsMutation.isLoading || createAccountsMutation.isSuccess),
 	);
 	const [, setAccountsFormValues] = useAccountsFormContext();
-	const [createInProgressProvider, setCreateInProgressProvider] = useState<ZkProvider | null>(null);
-	const buttonsDisabled = createAccountsMutation.isLoading || createAccountsMutation.isSuccess;
 	const navigate = useNavigate();
 	return (
 		<Loading loading={isInitializedLoading || isFullscreenGuardLoading}>
@@ -62,50 +46,35 @@ export function WelcomePage() {
 					<Text variant="pBody" color="steel-dark" weight="medium">
 						Sign in with your preferred service
 					</Text>
-					<div className="flex gap-2 w-full">
-						{zkLoginProviders.map(({ provider, ampliSignInProvider, disabled }) => (
-							<div key={provider} className="flex-1">
-								<SocialButton
-									provider={provider}
-									onClick={() => {
-										setCreateInProgressProvider(provider);
-										ampli.clickedSocialSignInButton({
-											signInProvider: ampliSignInProvider,
-											sourceFlow: 'Onboarding',
-										});
-										setAccountsFormValues({ type: 'zk', provider });
-										createAccountsMutation.mutate(
-											{
-												type: 'zk',
-											},
-											{
-												onSuccess: () => {
-													navigate('/tokens');
-												},
-												onError: (error) => {
-													toast.error(
-														(error as Error)?.message ||
-															'Failed to create account. (Unknown error)',
-													);
-												},
-												onSettled: () => {
-													setCreateInProgressProvider(null);
-												},
-											},
+					<ZkLoginButtons
+						layout="row"
+						buttonsDisabled={createAccountsMutation.isSuccess}
+						sourceFlow="Onboarding"
+						onButtonClick={async (provider) => {
+							setAccountsFormValues({ type: 'zk', provider });
+							await createAccountsMutation.mutateAsync(
+								{
+									type: 'zk',
+								},
+								{
+									onSuccess: () => {
+										navigate('/tokens');
+									},
+									onError: (error) => {
+										toast.error(
+											(error as Error)?.message || 'Failed to create account. (Unknown error)',
 										);
-									}}
-									disabled={disabled || buttonsDisabled}
-									loading={createInProgressProvider === provider}
-								/>
-							</div>
-						))}
-					</div>
+									},
+								},
+							);
+						}}
+					/>
 					<Button
 						to="/accounts/add-account?sourceFlow=Onboarding"
 						size="tall"
 						variant="secondary"
 						text="More Options"
-						disabled={buttonsDisabled}
+						disabled={createAccountsMutation.isLoading || createAccountsMutation.isSuccess}
 					/>
 				</div>
 			</div>

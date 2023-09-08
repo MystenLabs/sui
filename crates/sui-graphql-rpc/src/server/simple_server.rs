@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::extensions::logger::Logger;
+use crate::extensions::timeout::Timeout;
 use crate::server::sui_sdk_data_provider::SuiClientLoader;
 use crate::{
     server::{
@@ -88,6 +89,7 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
         .data(data_provider)
         .data(data_loader)
         .extension(Logger::default())
+        .extension(Timeout::default())
         .finish();
 
     let app = axum::Router::new()

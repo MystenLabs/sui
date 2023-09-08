@@ -53,6 +53,10 @@ jobs:
             turbo-${{ runner.os }}-
       - name: Lint
         run: pnpm turbo lint
+      - name: Install wasm-pack for mbf package
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'latest'
       - name: Build
         run: pnpm turbo build
       - name: Test

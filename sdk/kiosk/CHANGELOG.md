@@ -1,5 +1,11 @@
 # @mysten/kiosk
 
+## 0.5.3
+
+### Patch Changes
+
+- @mysten/sui.js@0.41.2
+
 ## 0.5.2
 
 ### Patch Changes

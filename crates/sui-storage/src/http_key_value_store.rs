@@ -100,7 +100,7 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         )),
         Key::CheckpointContentsByDigest(digest) => Ok((encode_digest(digest), "cc")),
         Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
-        Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "ts2c")),
+        Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "tx2c")),
     }
 }
 
