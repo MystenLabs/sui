@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{diag, shared::CompilationEnv};
+use crate::{diag, parser::ast::Visibility, shared::CompilationEnv};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -252,7 +252,7 @@ impl Serialize for Flavor {
 impl Display for FeatureGate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FeatureGate::PublicPackage => Ok(()),
+            FeatureGate::PublicPackage => write!(f, "'{}'", Visibility::PACKAGE),
             FeatureGate::DotCall => write!(f, "method style syntax"),
         }
     }
