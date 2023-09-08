@@ -449,9 +449,6 @@ export class BackgroundClient {
 					if (!isMethodPayload(payload, 'deleteAccountSourceByTypeResponse')) {
 						throw new Error('Unknown response');
 					}
-					// if (inputs.types !== payload.args.accounts[0]?.type) {
-					// 	throw new Error(`Unexpected accounts type response ${payload.args.accounts[0]?.type}`);
-					// }
 					return payload.args.success;
 				}),
 			),
