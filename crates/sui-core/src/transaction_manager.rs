@@ -3,7 +3,7 @@
 
 use std::{
     cmp::max,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
 };
 
@@ -140,15 +140,15 @@ impl CacheInner {
     }
 
     fn insert(&mut self, object: &InputKey) {
-        if let Some(version) = object.1 {
+        if let Some(version) = object.version() {
             if let Some((previous_id, previous_version)) =
-                self.versioned_cache.push(object.0, version)
+                self.versioned_cache.push(object.id(), version)
             {
-                if previous_id == object.0 && previous_version > version {
+                if previous_id == object.id() && previous_version > version {
                     // do not allow highest known version to decrease
                     // This should not be possible unless bugs are introduced elsewhere in this
                     // module.
-                    self.versioned_cache.put(object.0, previous_version);
+                    self.versioned_cache.put(object.id(), previous_version);
                 } else {
                     self.metrics
                         .transaction_manager_object_cache_evictions
@@ -158,11 +158,11 @@ impl CacheInner {
             self.metrics
                 .transaction_manager_object_cache_size
                 .set(self.versioned_cache.len() as i64);
-        } else if let Some((previous_id, _)) = self.unversioned_cache.push(object.0, ()) {
+        } else if let Some((previous_id, _)) = self.unversioned_cache.push(object.id(), ()) {
             // lru_cache will does not check if the value being evicted is the same as the value
             // being inserted, so we do need to check if the id is different before counting this
             // as an eviction.
-            if previous_id != object.0 {
+            if previous_id != object.id() {
                 self.metrics
                     .transaction_manager_package_cache_evictions
                     .inc();
@@ -176,8 +176,8 @@ impl CacheInner {
     // Returns Some(true/false) for a definitive result. Returns None if the caller must defer to
     // the db.
     fn is_object_available(&mut self, object: &InputKey) -> Option<bool> {
-        if let Some(version) = object.1 {
-            if let Some(current) = self.versioned_cache.get(&object.0) {
+        if let Some(version) = object.version() {
+            if let Some(current) = self.versioned_cache.get(&object.id()) {
                 self.metrics.transaction_manager_object_cache_hits.inc();
                 Some(*current >= version)
             } else {
@@ -186,7 +186,7 @@ impl CacheInner {
             }
         } else {
             self.unversioned_cache
-                .get(&object.0)
+                .get(&object.id())
                 .tap_some(|_| self.metrics.transaction_manager_package_cache_hits.inc())
                 .tap_none(|| self.metrics.transaction_manager_package_cache_misses.inc())
                 .map(|_| true)
@@ -305,15 +305,18 @@ impl Inner {
             return ready_certificates;
         }
 
-        let input_count = self.input_objects.get_mut(&input_key.0).unwrap_or_else(|| {
-            panic!(
-                "# of transactions waiting on object {:?} cannot be 0",
-                input_key.0
-            )
-        });
+        let input_count = self
+            .input_objects
+            .get_mut(&input_key.id())
+            .unwrap_or_else(|| {
+                panic!(
+                    "# of transactions waiting on object {:?} cannot be 0",
+                    input_key.id()
+                )
+            });
         *input_count -= digests.len();
         if *input_count == 0 {
-            self.input_objects.remove(&input_key.0);
+            self.input_objects.remove(&input_key.id());
         }
 
         for digest in digests {
@@ -451,6 +454,7 @@ impl TransactionManager {
             .collect();
 
         let mut object_availability: HashMap<InputKey, Option<bool>> = HashMap::new();
+        let mut receiving_objects: HashSet<InputKey> = HashSet::new();
         let certs: Vec<_> = certs
             .into_iter()
             .map(|(cert, fx_digest)| {
@@ -461,17 +465,31 @@ impl TransactionManager {
                     .value
                     .input_objects()
                     .expect("input_objects() cannot fail");
-                let input_object_locks = self.authority_store.get_input_object_locks(
+                let mut input_object_locks = self.authority_store.get_input_object_locks(
                     &digest,
                     &input_object_kinds,
                     epoch_store,
                 );
+
                 if input_object_kinds.len() != input_object_locks.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);
                 }
+
+                let receiving_object_entries =
+                    cert.data().intent_message().value.receiving_objects();
+                for entry in receiving_object_entries {
+                    let key = InputKey::VersionedObject {
+                        id: entry.0,
+                        version: entry.1,
+                    };
+                    receiving_objects.insert(key);
+                    input_object_locks.insert(key, LockMode::Default);
+                }
+
                 for key in input_object_locks.keys() {
                     object_availability.insert(*key, None);
                 }
+
                 (cert, fx_digest, input_object_locks)
             })
             .collect();
@@ -497,7 +515,11 @@ impl TransactionManager {
         // So missing objects' availability are checked again after releasing the TM lock.
         let cache_miss_availibility = self
             .authority_store
-            .multi_input_objects_exist(input_object_cache_misses.iter().cloned())
+            .multi_input_objects_available(
+                input_object_cache_misses.iter().cloned(),
+                receiving_objects,
+                epoch_store,
+            )
             .expect("Checking object existence cannot fail!")
             .into_iter()
             .zip(input_object_cache_misses.into_iter());
@@ -511,7 +533,7 @@ impl TransactionManager {
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for (available, key) in cache_miss_availibility {
-            if available && key.1.is_none() {
+            if available && key.version().is_none() {
                 // Mutable objects obtained from cache_miss_availability usually will not be read
                 // again, so we do not want to evict other objects in order to insert them into the
                 // cache. However, packages will likely be read often, so we do want to insert them
@@ -635,7 +657,7 @@ impl TransactionManager {
                 }
                 if acquire {
                     pending_cert.acquiring_locks.insert(key, lock_mode);
-                    let input_count = inner.input_objects.entry(key.0).or_default();
+                    let input_count = inner.input_objects.entry(key.id()).or_default();
                     *input_count += 1;
                 } else {
                     pending_cert.acquired_locks.insert(key, lock_mode);
@@ -795,15 +817,11 @@ impl TransactionManager {
         let cert = pending_certificate.certificate;
         let expected_effects_digest = pending_certificate.expected_effects_digest;
         trace!(tx_digest = ?cert.digest(), "certificate ready");
+        let tx_data = &cert.data().intent_message().value;
         // Record as an executing certificate.
         assert_eq!(
             pending_certificate.acquired_locks.len(),
-            cert.data()
-                .intent_message()
-                .value
-                .input_objects()
-                .unwrap()
-                .len()
+            tx_data.input_objects().unwrap().len() + tx_data.receiving_objects().len(),
         );
         assert!(inner
             .executing_certificates
@@ -915,7 +933,7 @@ mod test {
         // insert 10 unique unversioned objects
         for i in 0..10 {
             let object = ObjectID::new([i; 32]);
-            let input_key = InputKey(object, None);
+            let input_key = InputKey::Package { id: object };
             assert_eq!(cache.is_object_available(&input_key), None);
             cache.insert(&input_key);
             assert_eq!(cache.is_object_available(&input_key), Some(true));
@@ -924,14 +942,17 @@ mod test {
         // first 5 have been evicted
         for i in 0..5 {
             let object = ObjectID::new([i; 32]);
-            let input_key = InputKey(object, None);
+            let input_key = InputKey::Package { id: object };
             assert_eq!(cache.is_object_available(&input_key), None);
         }
 
         // insert 10 unique versioned objects
         for i in 0..10 {
             let object = ObjectID::new([i; 32]);
-            let input_key = InputKey(object, Some((i as u64).into()));
+            let input_key = InputKey::VersionedObject {
+                id: object,
+                version: (i as u64).into(),
+            };
             assert_eq!(cache.is_object_available(&input_key), None);
             cache.insert(&input_key);
             assert_eq!(cache.is_object_available(&input_key), Some(true));
@@ -940,26 +961,38 @@ mod test {
         // first 5 versioned objects have been evicted
         for i in 0..5 {
             let object = ObjectID::new([i; 32]);
-            let input_key = InputKey(object, Some((i as u64).into()));
+            let input_key = InputKey::VersionedObject {
+                id: object,
+                version: (i as u64).into(),
+            };
             assert_eq!(cache.is_object_available(&input_key), None);
         }
 
         // but versioned objects do not cause evictions of unversioned objects
         for i in 5..10 {
             let object = ObjectID::new([i; 32]);
-            let input_key = InputKey(object, None);
+            let input_key = InputKey::Package { id: object };
             assert_eq!(cache.is_object_available(&input_key), Some(true));
         }
 
         // object 9 is available at version 9
         let object = ObjectID::new([9; 32]);
-        let input_key = InputKey(object, Some(9.into()));
+        let input_key = InputKey::VersionedObject {
+            id: object,
+            version: 9.into(),
+        };
         assert_eq!(cache.is_object_available(&input_key), Some(true));
         // but not at version 10
-        let input_key = InputKey(object, Some(10.into()));
+        let input_key = InputKey::VersionedObject {
+            id: object,
+            version: 10.into(),
+        };
         assert_eq!(cache.is_object_available(&input_key), Some(false));
         // it is available at version 8 (this case can be used by readonly shared objects)
-        let input_key = InputKey(object, Some(8.into()));
+        let input_key = InputKey::VersionedObject {
+            id: object,
+            version: 8.into(),
+        };
         assert_eq!(cache.is_object_available(&input_key), Some(true));
     }
 }

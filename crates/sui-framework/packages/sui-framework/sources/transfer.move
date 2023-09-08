@@ -3,11 +3,23 @@
 
 module sui::transfer {
 
-    use sui::object;
+    use sui::object::{Self, ID, UID};
     use sui::prover;
 
     #[test_only]
     friend sui::test_scenario;
+
+    /// This represents the ability to `receive` an object of type `T`.
+    /// This type is ephemeral per-transaction and cannot be stored on-chain.
+    /// This does not represent the obligation to receive the object that it
+    /// references, but simply the ability to receive the object with object ID
+    /// `id` at version `version` if you can prove mutable access to the parent
+    /// object during the transaction.
+    /// Internals of this struct are opaque outside this module.
+    struct Receiving<phantom T: key> has drop {
+        id: ID,
+        version: u64,
+    }
 
     #[allow(unused_const)]
     /// Shared an object that was previously created. Shared objects must currently
@@ -70,6 +82,17 @@ module sui::transfer {
         share_object_impl(obj)
     }
 
+    /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
+    /// referencing an object of type `T` owned by `parent` use the `to_receive`
+    /// argument to receive and return the referenced owned object of type `T`.
+    public fun receive<T: key>(parent: &mut UID, to_receive: Receiving<T>): T {
+        let Receiving {
+            id,
+            version,
+        } = to_receive;
+        receive_impl(object::uid_to_address(parent), id, version)
+    }
+
     public(friend) native fun freeze_object_impl<T: key>(obj: T);
 
     spec freeze_object_impl {
@@ -106,5 +129,14 @@ module sui::transfer {
         ensures [abstract] exists<object::Ownership>(object::id(obj).bytes);
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).owner == recipient;
         ensures [abstract] global<object::Ownership>(object::id(obj).bytes).status == prover::OWNED;
+    }
+
+    native fun receive_impl<T: key>(parent: address, to_receive: object::ID, version: u64): T;
+
+    spec receive_impl {
+        pragma opaque;
+        // TODO: stub to be replaced by actual abort conditions if any
+        aborts_if [abstract] true;
+        // TODO: specify actual function behavior
     }
 }

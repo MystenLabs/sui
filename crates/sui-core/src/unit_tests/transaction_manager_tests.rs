@@ -64,7 +64,10 @@ fn make_transaction(gas_object: Object, input: Vec<CallArg>) -> VerifiedExecutab
 fn get_input_keys(objects: &[Object]) -> Vec<InputKey> {
     objects
         .iter()
-        .map(|object| InputKey(object.id(), Some(object.version())))
+        .map(|object| InputKey::VersionedObject {
+            id: object.id(),
+            version: object.version(),
+        })
         .collect()
 }
 
@@ -251,7 +254,10 @@ async fn transaction_manager_read_lock() {
 
     // Notify TM about availability of the shared object.
     transaction_manager.objects_available(
-        vec![InputKey(shared_object.id(), Some(shared_version))],
+        vec![InputKey::VersionedObject {
+            id: shared_object.id(),
+            version: shared_version,
+        }],
         &state.epoch_store_for_testing(),
     );
 
