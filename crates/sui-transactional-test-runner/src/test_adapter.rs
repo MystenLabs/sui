@@ -366,6 +366,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
+                None,
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,

@@ -27,7 +27,8 @@ use move_command_line_common::{
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{Diagnostics, FilesSourceText, WarningFilters},
-    shared::NumericalAddress,
+    editions::Edition,
+    shared::{NumericalAddress, PackageConfig},
     FullyCompiledProgram,
 };
 use move_core_types::{
@@ -55,6 +56,7 @@ pub struct CompiledState<'a> {
     compiled_module_named_address_mapping: BTreeMap<ModuleId, Symbol>,
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
     default_named_address_mapping: Option<NumericalAddress>,
+    edition: Edition,
     modules: BTreeMap<ModuleId, CompiledModule>,
     temp_files: BTreeMap<String, NamedTempFile>,
 }
@@ -404,6 +406,7 @@ impl<'a> CompiledState<'a> {
         named_address_mapping: BTreeMap<String, NumericalAddress>,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
         default_named_address_mapping: Option<NumericalAddress>,
+        compiler_edition: Option<Edition>,
     ) -> Self {
         let pre_compiled_ids = match pre_compiled_deps {
             None => BTreeSet::new(),
@@ -425,6 +428,7 @@ impl<'a> CompiledState<'a> {
             modules: BTreeMap::new(),
             compiled_module_named_address_mapping: BTreeMap::new(),
             named_address_mapping,
+            edition: compiler_edition.unwrap_or(Edition::LEGACY),
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
         };
@@ -626,6 +630,10 @@ pub fn compile_source_units(
     .set_pre_compiled_lib_opt(state.pre_compiled_deps)
     .set_flags(move_compiler::Flags::empty().set_sources_shadow_deps(true))
     .set_warning_filter(Some(warning_filter))
+    .set_default_config(PackageConfig {
+        edition: state.edition,
+        ..PackageConfig::default()
+    })
     .run::<PASS_COMPILATION>()?;
     let units_or_diags = comments_and_compiler_res
         .map(|(_comments, move_compiler)| move_compiler.into_compiled_units());

@@ -6,10 +6,11 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, SpecId,
-        Visibility,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, StructTypeParameter, TParam},
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        self as P, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+    },
     shared::{ast_debug::*, unique_map::UniqueMap, Name, NumericalAddress, TName},
 };
 use move_ir_types::location::*;
@@ -102,6 +103,14 @@ pub struct Constant {
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
+
+// package visibility is removed after typing is done
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum Visibility {
+    Public(Loc),
+    Friend(Loc),
+    Internal,
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FunctionSignature {
@@ -392,6 +401,19 @@ impl Var {
 
     pub fn starts_with_underscore(&self) -> bool {
         self.0.value.starts_with('_')
+    }
+}
+
+impl Visibility {
+    pub const FRIEND: &'static str = P::Visibility::FRIEND;
+    pub const INTERNAL: &'static str = P::Visibility::INTERNAL;
+    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
+
+    pub fn loc(&self) -> Option<Loc> {
+        match self {
+            Visibility::Friend(loc) | Visibility::Public(loc) => Some(*loc),
+            Visibility::Internal => None,
+        }
     }
 }
 
@@ -739,6 +761,20 @@ impl std::fmt::Display for TypeName_ {
     }
 }
 
+impl std::fmt::Display for Visibility {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                Visibility::Public(_) => Visibility::PUBLIC,
+                Visibility::Friend(_) => Visibility::FRIEND,
+                Visibility::Internal => Visibility::INTERNAL,
+            }
+        )
+    }
+}
+
 impl std::fmt::Display for Label {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -945,6 +981,12 @@ impl AstDebug for FunctionSignature {
         });
         w.write("): ");
         return_type.ast_debug(w)
+    }
+}
+
+impl AstDebug for Visibility {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write(&format!("{} ", self))
     }
 }
 

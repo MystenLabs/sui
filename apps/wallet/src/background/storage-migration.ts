@@ -121,6 +121,7 @@ async function makeQredoAccounts(password: string) {
 				sourceID: aQredoSource.id,
 				selected: false,
 				nickname: null,
+				createdAt: Date.now(),
 			});
 		}
 	}

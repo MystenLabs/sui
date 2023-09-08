@@ -45,11 +45,11 @@ export async function getAllAccounts(filter?: { sourceID: string }) {
 	const db = await getDB();
 	let accounts;
 	if (filter?.sourceID) {
-		accounts = await db.accounts.where('sourceID').equals(filter.sourceID);
+		accounts = await db.accounts.where('sourceID').equals(filter.sourceID).sortBy('createdAt');
 	} else {
-		accounts = db.accounts;
+		accounts = await db.accounts.toCollection().sortBy('createdAt');
 	}
-	return (await accounts.toArray()).map(toAccount);
+	return accounts.map(toAccount);
 }
 
 export async function getAccountByID(id: string) {

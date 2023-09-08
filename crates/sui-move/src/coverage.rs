@@ -7,6 +7,7 @@ use move_package::BuildConfig;
 use std::path::PathBuf;
 
 #[derive(Parser)]
+#[group(id = "sui-move-coverage")]
 pub struct Coverage {
     #[clap(flatten)]
     pub coverage: coverage::Coverage,

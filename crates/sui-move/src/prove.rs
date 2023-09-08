@@ -10,6 +10,7 @@ use sui_types::sui_framework_address_concat_string;
 const SUI_NATIVE_TEMPLATE: &[u8] = include_bytes!("sui-natives.bpl");
 
 #[derive(Parser)]
+#[group(id = "sui-move-prover")]
 pub struct Prover {
     #[clap(flatten)]
     pub prove: prove::Prove,

@@ -9,7 +9,6 @@ export const zkBcs = new BCS(bcs);
 
 zkBcs.registerStructType('AddressParams', {
 	iss: BCS.STRING,
-	aud: BCS.STRING,
 });
 
 zkBcs.registerStructType('ZkClaim', {

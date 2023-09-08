@@ -16,7 +16,7 @@ use sui_types::{
 };
 
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEffectsV1};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
@@ -158,18 +158,18 @@ impl UpgradeStateRunner {
             builder.transfer_arg(self.sender, cap);
             builder.finish()
         };
-        let TransactionEffects::V1(effects) = self.run(pt).await;
-        assert!(effects.status.is_ok(), "{:#?}", effects.status);
+        let effects = self.run(pt).await;
+        assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
         let package = effects
-            .created
-            .iter()
+            .created()
+            .into_iter()
             .find(|(_, owner)| matches!(owner, Owner::Immutable))
             .unwrap();
 
         let cap = effects
-            .created
-            .iter()
+            .created()
+            .into_iter()
             .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
             .unwrap();
 
@@ -182,7 +182,7 @@ impl UpgradeStateRunner {
         digest: Vec<u8>,
         modules: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
-    ) -> TransactionEffectsV1 {
+    ) -> TransactionEffects {
         let pt = {
             let package_id = self.package.0;
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -203,11 +203,11 @@ impl UpgradeStateRunner {
             builder.finish()
         };
 
-        let TransactionEffects::V1(effects) = self.run(pt).await;
-        if effects.status.is_ok() {
-            self.package = *effects
-                .created
-                .iter()
+        let effects = self.run(pt).await;
+        if effects.status().is_ok() {
+            self.package = effects
+                .created()
+                .into_iter()
                 .find_map(|(pkg, owner)| matches!(owner, Owner::Immutable).then_some(pkg))
                 .unwrap();
         }
@@ -227,14 +227,12 @@ impl UpgradeStateRunner {
         .await
         .unwrap();
 
-        let TransactionEffects::V1(fx) = &effects;
-
-        if let Some(updated_cap) = fx
-            .mutated
-            .iter()
+        if let Some(updated_cap) = effects
+            .mutated()
+            .into_iter()
             .find_map(|(cap, _)| (cap.0 == self.upgrade_cap.0).then_some(cap))
         {
-            self.upgrade_cap = *updated_cap;
+            self.upgrade_cap = updated_cap;
         }
 
         effects
@@ -245,7 +243,7 @@ impl UpgradeStateRunner {
 async fn test_upgrade_package_happy_path() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! {
@@ -257,7 +255,7 @@ async fn test_upgrade_package_happy_path() {
         })
         .await;
 
-    match effects.status.unwrap_err().0 {
+    match effects.into_status().unwrap_err().0 {
         ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
         err => panic!("Unexpected error: {:#?}", err),
     };
@@ -291,7 +289,7 @@ async fn test_upgrade_package_happy_path() {
         )));
 
     // Call into the upgraded module
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! {
@@ -302,7 +300,7 @@ async fn test_upgrade_package_happy_path() {
             builder.finish()
         })
         .await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -320,7 +318,7 @@ async fn test_upgrade_introduces_type_then_uses_it() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v2 = runner.package.0;
 
     // Second upgrade introduces an entry function that creates `B`s.
@@ -334,12 +332,12 @@ async fn test_upgrade_introduces_type_then_uses_it() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v3 = runner.package.0;
 
     // Create an instance of the type introduced at version 2, with the function introduced at
     // version 3.
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v3)::base::makes_b() };
@@ -347,10 +345,10 @@ async fn test_upgrade_introduces_type_then_uses_it() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let created = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find_map(|(b, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(b))
         .unwrap();
 
@@ -372,16 +370,16 @@ async fn test_upgrade_introduces_type_then_uses_it() {
     );
 
     // Delete the instance we just created
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
-            let b = builder.obj(ObjectArg::ImmOrOwnedObject(*created)).unwrap();
+            let b = builder.obj(ObjectArg::ImmOrOwnedObject(created)).unwrap();
             move_call! { builder, (package_v3)::base::destroys_b(b) };
             builder.finish()
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -394,7 +392,7 @@ async fn test_upgrade_incompatible() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade,
         },
@@ -412,7 +410,7 @@ async fn test_upgrade_package_incorrect_digest() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::DigestDoesNotMatch { digest }
         }
@@ -434,7 +432,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
@@ -443,7 +441,7 @@ async fn test_upgrade_package_compatibility_too_permissive() {
 
     // ETooPermissive abort when we try to authorize the upgrade.
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::MoveAbort(_, 1)
     ));
 }
@@ -458,7 +456,7 @@ async fn test_upgrade_package_compatible_in_dep_only_mode() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
@@ -475,7 +473,7 @@ async fn test_upgrade_package_compatible_in_additive_mode() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
@@ -490,7 +488,7 @@ async fn test_upgrade_package_invalid_compatibility() {
     let effects = runner.upgrade(255u8, digest, modules, vec![]).await;
 
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::UnknownUpgradePolicy { policy: 255 }
         }
@@ -507,7 +505,7 @@ async fn test_upgrade_package_missing_type() {
         .await;
 
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         }
@@ -524,7 +522,7 @@ async fn test_upgrade_package_missing_type_module_removal() {
         .await;
 
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         }
@@ -540,7 +538,7 @@ async fn test_upgrade_package_additive_mode() {
         .upgrade(UpgradePolicy::ADDITIVE, digest, modules, vec![])
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -553,7 +551,7 @@ async fn test_upgrade_package_invalid_additive_mode() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
@@ -570,7 +568,7 @@ async fn test_upgrade_package_additive_dep_only_mode() {
         .await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::IncompatibleUpgrade
         },
@@ -591,7 +589,7 @@ async fn test_upgrade_package_dep_only_mode() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -609,10 +607,10 @@ async fn test_upgrade_package_not_a_ticket() {
         builder.upgrade(current_package_id, cap, vec![], modules);
         builder.finish()
     };
-    let TransactionEffects::V1(effects) = runner.run(pt).await;
+    let effects = runner.run(pt).await;
 
     assert_eq!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::CommandArgumentError {
             arg_idx: 0,
             kind: CommandArgumentError::TypeMismatch
@@ -640,10 +638,10 @@ async fn test_upgrade_ticket_doesnt_match() {
         builder.upgrade(MOVE_STDLIB_PACKAGE_ID, upgrade_ticket, vec![], modules);
         builder.finish()
     };
-    let TransactionEffects::V1(effects) = runner.run(pt).await;
+    let effects = runner.run(pt).await;
 
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::PackageIDDoesNotMatch {
                 package_id: _,
@@ -658,7 +656,7 @@ async fn upgrade_missing_deps() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let (_, effects) = test_multiple_upgrades(&mut runner, true).await;
     assert!(matches!(
-        effects.status.unwrap_err().0,
+        effects.into_status().unwrap_err().0,
         ExecutionFailureStatus::PackageUpgradeError {
             upgrade_error: PackageUpgradeError::DigestDoesNotMatch { digest: _ }
         }
@@ -669,23 +667,23 @@ async fn upgrade_missing_deps() {
 async fn test_multiple_upgrades_valid() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let (_, effects) = test_multiple_upgrades(&mut runner, false).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 async fn test_multiple_upgrades(
     runner: &mut UpgradeStateRunner,
     use_empty_deps: bool,
-) -> (ObjectID, TransactionEffectsV1) {
+) -> (ObjectID, TransactionEffects) {
     let (digest, modules) = build_upgrade_test_modules("stage1_basic_compatibility_valid");
     let effects = runner
         .upgrade(UpgradePolicy::COMPATIBLE, digest, modules, vec![])
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let package_v2 = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0
@@ -746,12 +744,12 @@ async fn test_interleaved_upgrades() {
 
         builder.finish()
     };
-    let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt1).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let dep_v2_package = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0;
@@ -786,8 +784,8 @@ async fn test_interleaved_upgrades() {
 
         builder.finish()
     };
-    let TransactionEffects::V1(effects) = runner.run(pt2).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt2).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -812,12 +810,12 @@ async fn test_publish_override_happy_path() {
         runner.upgrade_cap,
     );
 
-    let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt1).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let dep_v2_package = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0;
@@ -910,7 +908,7 @@ async fn test_publish_transitive_happy_path() {
 
     // Call into the root module to call base module's function (should abort due to base module's
     // call_return_0 aborting with code 42)
-    let TransactionEffects::V1(call_effects) = runner
+    let call_effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! {
@@ -922,7 +920,7 @@ async fn test_publish_transitive_happy_path() {
         })
         .await;
 
-    match call_effects.status.unwrap_err().0 {
+    match call_effects.into_status().unwrap_err().0 {
         ExecutionFailureStatus::MoveAbort(_, 42) => { /* nop */ }
         err => panic!("Unexpected error: {:#?}", err),
     };
@@ -952,14 +950,14 @@ async fn test_publish_transitive_override_happy_path() {
         runner.upgrade_cap,
     );
 
-    let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt1).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     // Dependency graph: base(v1) <-- dep_on_upgrading_package
     //                   base(v2)
 
     let base_v2_package = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0;
@@ -1000,7 +998,7 @@ async fn test_publish_transitive_override_happy_path() {
 
     // Call into the root module to call upgraded base module's function (should succeed due to base module's
     // call_return_0 no longer aborting)
-    let TransactionEffects::V1(call_effects) = runner
+    let call_effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! {
@@ -1012,7 +1010,11 @@ async fn test_publish_transitive_override_happy_path() {
         })
         .await;
 
-    assert!(call_effects.status.is_ok(), "{:#?}", call_effects.status);
+    assert!(
+        call_effects.status().is_ok(),
+        "{:#?}",
+        call_effects.status()
+    );
 }
 
 #[tokio::test]
@@ -1030,7 +1032,7 @@ async fn test_upgraded_types_in_one_txn() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v2 = runner.package.0;
 
     // Second upgrade (version 3) introduces a new type, C.
@@ -1044,11 +1046,11 @@ async fn test_upgraded_types_in_one_txn() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v3 = runner.package.0;
 
     // Create an instance of the type introduced at version 2 using function from version 2.
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v2)::base::makes_b() };
@@ -1056,15 +1058,15 @@ async fn test_upgraded_types_in_one_txn() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let created_b = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find_map(|(b, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(b))
         .unwrap();
 
     // Create an instance of the type introduced at version 3 using function from version 3.
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v3)::base::makes_c() };
@@ -1072,40 +1074,36 @@ async fn test_upgraded_types_in_one_txn() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let created_c = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find_map(|(c, owner)| matches!(owner, Owner::AddressOwner(_)).then_some(c))
         .unwrap();
 
     // modify objects created of types introduced at versions 2 and 3 and emit events using types
     // introduced at versions 2 and 3 (using functions from version 3)
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
-            let b = builder
-                .obj(ObjectArg::ImmOrOwnedObject(*created_b))
-                .unwrap();
+            let b = builder.obj(ObjectArg::ImmOrOwnedObject(created_b)).unwrap();
             move_call! { builder, (package_v3)::base::modifies_b(b) };
-            let c = builder
-                .obj(ObjectArg::ImmOrOwnedObject(*created_c))
-                .unwrap();
+            let c = builder.obj(ObjectArg::ImmOrOwnedObject(created_c)).unwrap();
             move_call! { builder, (package_v3)::base::modifies_c(c) };
             builder.finish()
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     // verify that the types of events match
     let e1_type = StructTag::from_str(&format!("{package_v2}::base::BModEvent")).unwrap();
     let e2_type = StructTag::from_str(&format!("{package_v3}::base::CModEvent")).unwrap();
 
-    let event_digest = effects.events_digest.unwrap();
+    let event_digest = effects.events_digest().unwrap();
     let mut events = runner
         .authority_state
-        .get_transaction_events(&event_digest)
+        .get_transaction_events(event_digest)
         .unwrap()
         .data;
     events.sort_by(|a, b| a.type_.name.as_str().cmp(b.type_.name.as_str()));
@@ -1119,18 +1117,18 @@ async fn test_different_versions_across_calls() {
     // create 3 versions of the same package, all containing the return_0 function
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
     let (package_v2, effects) = test_multiple_upgrades(&mut runner, false).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let package_v3 = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0
          .0;
 
     // call the same function twice within the same block but from two different module versions
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v2)::base::return_0() };
@@ -1139,7 +1137,7 @@ async fn test_different_versions_across_calls() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 }
 
 #[tokio::test]
@@ -1165,12 +1163,12 @@ async fn test_conflicting_versions_across_calls() {
         runner.upgrade_cap,
     );
 
-    let TransactionEffects::V1(effects) = runner.run(pt1).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt1).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let base_v2_package = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0;
@@ -1210,19 +1208,19 @@ async fn test_conflicting_versions_across_calls() {
         builder.finish()
     };
 
-    let TransactionEffects::V1(effects) = runner.run(pt2).await;
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    let effects = runner.run(pt2).await;
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
 
     let dependent_v2_package = effects
-        .created
-        .iter()
+        .created()
+        .into_iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .unwrap()
         .0;
 
     // call the same function twice within the same block but from two different module versions
     // that differ only by having different dependencies
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             // call from upgraded package - should succeed
@@ -1234,7 +1232,7 @@ async fn test_conflicting_versions_across_calls() {
         })
         .await;
 
-    let call_error = effects.status.unwrap_err();
+    let call_error = effects.into_status().unwrap_err();
 
     // verify that execution aborts
     match call_error.0 {
@@ -1252,7 +1250,7 @@ async fn test_upgrade_cross_module_refs() {
     let package_v1 = runner.package.0;
 
     // create instances of objects within module and cross module
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v1)::base::make_objs() };
@@ -1260,8 +1258,8 @@ async fn test_upgrade_cross_module_refs() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
-    assert_eq!(effects.created.len(), 2);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+    assert_eq!(effects.created().len(), 2);
 
     // Upgrade and cross module, cross version type usage
     let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref1");
@@ -1274,11 +1272,11 @@ async fn test_upgrade_cross_module_refs() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v2 = runner.package.0;
 
     // create instances of objects within module and cross module for v2
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v2)::base::make_objs() };
@@ -1287,8 +1285,8 @@ async fn test_upgrade_cross_module_refs() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
-    assert_eq!(effects.created.len(), 5);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+    assert_eq!(effects.created().len(), 5);
 
     // Upgrade and cross module, cross version type usage
     let (digest, modules) = build_upgrade_test_modules("object_cross_module_ref2");
@@ -1301,11 +1299,11 @@ async fn test_upgrade_cross_module_refs() {
         )
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
     let package_v2 = runner.package.0;
 
     // create instances of objects within module and cross module for v2
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! { builder, (package_v2)::base::make_objs() };
@@ -1315,8 +1313,8 @@ async fn test_upgrade_cross_module_refs() {
         })
         .await;
 
-    assert!(effects.status.is_ok(), "{:#?}", effects.status);
-    assert_eq!(effects.created.len(), 6);
+    assert!(effects.status().is_ok(), "{:#?}", effects.status());
+    assert_eq!(effects.created().len(), 6);
 }
 
 #[tokio::test]
@@ -1326,7 +1324,7 @@ async fn test_upgrade_max_packages() {
     let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     //
-    // Build and publich max number of packages allowed
+    // Build and publish max number of packages allowed
     let (_, modules, dependencies) = build_package("move_upgrade/base", false);
 
     // push max number of packages allowed to publish
@@ -1381,7 +1379,7 @@ async fn test_upgrade_more_than_max_packages_error() {
     let authority = init_state_with_ids(vec![(sender, gas_object_id)]).await;
 
     //
-    // Build and publich max number of packages allowed
+    // Build and publish max number of packages allowed
     let (_, modules, dependencies) = build_package("move_upgrade/base", false);
 
     // push max number of packages allowed to publish
