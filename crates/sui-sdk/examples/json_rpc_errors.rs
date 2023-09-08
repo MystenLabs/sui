@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod utils;
+use anyhow::bail;
 use sui_sdk::error::{Error, JsonRpcError};
 use utils::setup_for_read;
 
@@ -20,7 +21,7 @@ async fn main() -> Result<(), anyhow::Error> {
         println!("{converted}");
         println!("{}", converted.is_client_error());
     } else {
-        panic!("Expected Error::RpcError, got {:?}", error);
+        bail!("Expected Error::RpcError, got {:?}", error);
     }
     Ok(())
 }
