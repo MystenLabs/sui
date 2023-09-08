@@ -16,7 +16,7 @@ use self::{
         groth16::{
             Groth16PrepareVerifyingKeyCostParams, Groth16VerifyGroth16ProofInternalCostParams,
         },
-        hash::{HashBlake2b256CostParams, HashKeccak256CostParams},
+        hash::{HashBlake2b256CostParams, HashKeccak256CostParams, HashPoseidonBN254CostParams},
         hmac::HmacHmacSha3256CostParams,
     },
     dynamic_field::{
@@ -126,6 +126,7 @@ pub struct NativesCostTable {
     // hash
     pub hash_blake2b256_cost_params: HashBlake2b256CostParams,
     pub hash_keccak256_cost_params: HashKeccak256CostParams,
+    pub hash_poseidon_bn254_cost_params: HashPoseidonBN254CostParams,
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
@@ -270,6 +271,14 @@ impl NativesCostTable {
                     .into(),
                 hash_keccak256_data_cost_per_block: protocol_config
                     .hash_keccak256_data_cost_per_block()
+                    .into(),
+            },
+            hash_poseidon_bn254_cost_params: HashPoseidonBN254CostParams {
+                hash_poseidon_bn254_cost_base: protocol_config
+                    .hash_poseidon_bn254_cost_base()
+                    .into(),
+                hash_poseidon_bn254_data_cost_per_block: protocol_config
+                    .hash_poseidon_bn254_data_cost_per_block()
                     .into(),
             },
             transfer_transfer_internal_cost_params: TransferInternalCostParams {
@@ -571,6 +580,7 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "record_new_uid",
             make_native!(object::record_new_uid),
         ),
+        ("hash", "poseidon_bn254", make_native!(hash::poseidon_bn254)),
         (
             "test_scenario",
             "take_from_address_by_id",

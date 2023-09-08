@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
+use fastcrypto_zkp::bn254::poseidon::hash_to_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
+use move_core_types::u256;
+use move_core_types::u256::U256;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -135,4 +138,65 @@ pub fn blake2b256(
         hash_blake2b256_cost_params.hash_blake2b256_data_cost_per_block,
         BLAKE_2B256_BLOCK_SIZE,
     )
+}
+
+pub const INVALID_POSEIDON_INPUTS: u64 = 0;
+
+#[derive(Clone)]
+pub struct HashPoseidonBN254CostParams {
+    /// Base cost for invoking the `poseidon_bn254` function
+    pub hash_poseidon_bn254_cost_base: InternalGas,
+    /// Cost per block of `data`, where a block is 32 bytes
+    pub hash_poseidon_bn254_data_cost_per_block: InternalGas,
+}
+
+/***************************************************************************************************
+ * native fun poseidon_bn254
+ * Implementation of the Move native function `hash::poseidon_bn254(data: &vector<u8>): vector<u8>`
+ *   gas cost: hash_poseidon_bn254_cost_base                           | base cost for function call and fixed opers
+ *              + hash_poseidon_bn254_data_cost_per_block * num_blocks | cost depends on number of blocks in message
+ **************************************************************************************************/
+pub fn poseidon_bn254(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    // Load the cost parameters from the protocol config
+    let cost_params = &context
+        .extensions()
+        .get::<NativesCostTable>()
+        .hash_poseidon_bn254_cost_params
+        .clone();
+
+    // Charge the base cost for this operation
+    native_charge_gas_early_exit!(context, cost_params.hash_poseidon_bn254_cost_base);
+
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 1);
+
+    // The input is a reference to a vector of vector<u8>'s
+    let inputs = pop_arg!(args, VectorRef);
+    let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
+
+    let mut field_elements: Vec<Vec<u8>> = Vec::new();
+    for i in 0..length {
+        let input = inputs
+            .borrow_elem(i as usize, &Type::U256)?
+            .value_as::<u256::U256>()?;
+        field_elements.push(input.to_le_bytes().to_vec());
+    }
+
+    match hash_to_bytes(&field_elements) {
+        Ok(hash) => {
+            let result = U256::from_le_bytes(&hash);
+            Ok(NativeResult::ok(
+                context.gas_used(),
+                smallvec![Value::u256(result)],
+            ))
+        }
+        Err(_) => Ok(NativeResult::err(
+            context.gas_used(),
+            INVALID_POSEIDON_INPUTS,
+        )),
+    }
 }

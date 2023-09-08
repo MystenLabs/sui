@@ -737,6 +737,9 @@ pub struct ProtocolConfig {
     hash_keccak256_cost_base: Option<u64>,
     hash_keccak256_data_cost_per_byte: Option<u64>,
     hash_keccak256_data_cost_per_block: Option<u64>,
+    // hash::poseidon_bn254
+    hash_poseidon_bn254_cost_base: Option<u64>,
+    hash_poseidon_bn254_data_cost_per_block: Option<u64>,
 
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
@@ -1230,6 +1233,9 @@ impl ProtocolConfig {
             hash_keccak256_cost_base: Some(52),
             hash_keccak256_data_cost_per_byte: Some(2),
             hash_keccak256_data_cost_per_block: Some(2),
+            // hash::poseidon_bn254
+            hash_poseidon_bn254_cost_base: Some(52),
+            hash_poseidon_bn254_data_cost_per_block: Some(66),
 
             // hmac::hmac_sha3_256
             hmac_hmac_sha3_256_cost_base: Some(52),
