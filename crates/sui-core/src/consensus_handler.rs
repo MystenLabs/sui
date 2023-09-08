@@ -21,7 +21,6 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -44,7 +43,10 @@ pub struct ConsensusHandler<T> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
     epoch_store: Arc<AuthorityPerEpochStore>,
-    last_seen: Mutex<ExecutionIndicesWithHash>,
+    /// Holds the highest transaction index that has been seen so far. It is used for avoiding replaying
+    /// already processed transactions and also act as a chain consistency check by calculating and storing a
+    /// hash chain.
+    last_seen: ExecutionIndicesWithHash,
     checkpoint_service: Arc<CheckpointService>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     object_store: T,
@@ -58,7 +60,7 @@ pub struct ConsensusHandler<T> {
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
     /// Lru cache to quickly discard transactions processed by consensus
-    processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
+    processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
 }
 
@@ -75,12 +77,11 @@ impl<T> ConsensusHandler<T> {
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // last_consensus_index is zero at the beginning of epoch, including for hash.
+        // last_seen is zero at the beginning of epoch, including for hash.
         // It needs to be recovered on restart to ensure consistent consensus hash.
-        let last_consensus_index = epoch_store
+        let last_seen = epoch_store
             .get_last_consensus_index()
             .expect("Should be able to read last consensus index");
-        let last_seen = Mutex::new(last_consensus_index);
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
@@ -92,27 +93,37 @@ impl<T> ConsensusHandler<T> {
             committee,
             authority_names_to_hostnames,
             metrics,
-            processed_cache: Mutex::new(LruCache::new(
-                NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
-            )),
+            processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_scheduler,
         }
+    }
+
+    /// Updates the execution indexes based on the provided input. Some is returned when the indexes
+    /// are updated which means that the transaction has been seen for first time. None is returned
+    /// otherwise.
+    fn update_hash(
+        &mut self,
+        index: ExecutionIndices,
+        v: &[u8],
+    ) -> Option<ExecutionIndicesWithHash> {
+        if let Some(execution_indexes) = update_hash(&self.last_seen, index, v) {
+            self.last_seen = execution_indexes.clone();
+            return Some(execution_indexes);
+        }
+        None
     }
 }
 
 fn update_hash(
-    last_seen: &Mutex<ExecutionIndicesWithHash>,
+    last_seen: &ExecutionIndicesWithHash,
     index: ExecutionIndices,
     v: &[u8],
 ) -> Option<ExecutionIndicesWithHash> {
-    let mut last_seen_guard = last_seen
-        .try_lock()
-        .expect("Should not have contention on ExecutionState::update_hash");
-    if last_seen_guard.index >= index {
+    if last_seen.index >= index {
         return None;
     }
 
-    let previous_hash = last_seen_guard.hash;
+    let previous_hash = last_seen.hash;
     let mut hasher = DefaultHasher::new();
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
@@ -124,9 +135,7 @@ fn update_hash(
             index.sub_dag_index, index.transaction_index, hash
         );
     }
-    let last_seen = ExecutionIndicesWithHash { index, hash };
-    *last_seen_guard = last_seen.clone();
-    Some(last_seen)
+    Some(ExecutionIndicesWithHash { index, hash })
 }
 
 #[async_trait]
@@ -273,7 +282,6 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let mut roots = BTreeSet::new();
 
         {
-            let mut processed_cache = self.processed_cache.lock();
             // We need a set here as well, since the processed_cache is a LRU cache and can drop
             // entries while we're iterating over the sequenced transactions.
             let mut processed_set = HashSet::new();
@@ -291,7 +299,7 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
                     transaction_index: seq as u64,
                 };
 
-                let index_with_hash = match update_hash(&self.last_seen, index, &serialized) {
+                let index_with_hash = match self.update_hash(index, &serialized) {
                     Some(i) => i,
                     None => {
                         debug!(
@@ -320,7 +328,8 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
                 let key = sequenced_transaction.key();
                 let in_set = !processed_set.insert(key);
-                let in_cache = processed_cache
+                let in_cache = self
+                    .processed_cache
                     .put(sequenced_transaction.key(), ())
                     .is_some();
 
@@ -673,7 +682,6 @@ mod tests {
             hash: 1000,
         };
 
-        let last_seen = Mutex::new(last_seen);
         let tx = &[0];
         assert!(update_hash(&last_seen, index0, tx).is_none());
         assert!(update_hash(&last_seen, index1, tx).is_none());
