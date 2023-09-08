@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
-import { type ComponentProps, forwardRef } from 'react';
+import { type ComponentProps, forwardRef, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
@@ -15,7 +15,6 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, forwardedR
 		className="transition peer items-center border-none outline-none bg-transparent hover:text-hero rounded-sm text-pBody text-steel-darker font-semibold p-0 focus:bg-transparent"
 		ref={forwardedRef}
 		{...props}
-		id="current-address-nickname-edit"
 	/>
 ));
 
@@ -33,6 +32,8 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		},
 	});
 	const { register } = form;
+	const { ref, ...rest } = register('nickname');
+	const inputRef = useRef<HTMLInputElement | null>(null);
 
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (accountID) {
@@ -47,19 +48,25 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		}
 	};
 
-	const handleKeyPress = (e: React.KeyboardEvent<HTMLFormElement>) => {
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
 		if (e.key === 'Enter') {
 			e.preventDefault();
 			form.handleSubmit(onSubmit)();
-			const inputElement = document.getElementById('current-address-nickname-edit');
-			inputElement?.blur();
+			inputRef.current?.blur();
 		}
 	};
 
 	return (
 		<div>
-			<Form className="flex flex-col" form={form} onSubmit={onSubmit} onKeyPress={handleKeyPress}>
-				<Input {...register('nickname')} onBlur={() => form.handleSubmit(onSubmit)()} />
+			<Form className="flex flex-col" form={form} onSubmit={onSubmit} onKeyDown={handleKeyDown}>
+				<Input
+					{...rest}
+					onBlur={() => form.handleSubmit(onSubmit)()}
+					ref={(e) => {
+						ref(e);
+						inputRef.current = e;
+					}}
+				/>
 			</Form>
 		</div>
 	);
