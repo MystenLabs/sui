@@ -20,7 +20,7 @@ type AccountListItemProps = {
 export function AccountListItem({ account }: AccountListItemProps) {
 	const activeAccount = useActiveAccount();
 	const { data: domainName } = useResolveSuiNSName(account?.address);
-	const { unlockAccount, lockAccount, isLoading } = useUnlockAccount();
+	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
 
 	return (
 		<AccountItem
@@ -32,7 +32,7 @@ export function AccountListItem({ account }: AccountListItemProps) {
 					<div className="flex items-center justify-center">
 						<LockUnlockButton
 							isLocked={account.isLocked}
-							isLoading={isLoading}
+							isLoading={isLoading && accountToUnlock?.id === account.id}
 							onClick={(e) => {
 								// prevent the account from being selected when clicking the lock button
 								e.stopPropagation();

@@ -33,9 +33,8 @@ export async function getAccountSources(filter?: { type: AccountSourceType }) {
 	const db = await getDB();
 	return (
 		await (filter?.type
-			? await db.accountSources.where('type').equals(filter.type)
-			: await db.accountSources
-		).toArray()
+			? await db.accountSources.where('type').equals(filter.type).sortBy('createdAt')
+			: await db.accountSources.toCollection().sortBy('createdAt'))
 	).map(toAccountSource);
 }
 

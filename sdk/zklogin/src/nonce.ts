@@ -9,6 +9,10 @@ import { toBufferBE } from './utils.js';
 
 const NONCE_LENGTH = 27;
 
+export function generateRandomness() {
+	return toBigIntBE(Buffer.from(crypto.getRandomValues(new Uint8Array(16))));
+}
+
 export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness: bigint) {
 	const publicKeyBytes = toBigIntBE(Buffer.from(publicKey.toSuiBytes()));
 	const eph_public_key_0 = publicKeyBytes / 2n ** 128n;

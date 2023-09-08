@@ -1617,8 +1617,14 @@ module deepbook::clob_v2 {
         let depth_vec = vector::empty<u64>();
         if (critbit::is_empty(&pool.bids)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
-        if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
+
+        // If price_low is greater than the higest element in the tree, we return empty
+        if (price_low > price_high_) {
+            return (price_vec, depth_vec)
+        };
+
+        if (price_low < price_low_) price_low = price_low_;
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
@@ -1653,6 +1659,12 @@ module deepbook::clob_v2 {
         let depth_vec = vector::empty<u64>();
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
+
+        // Price_high is less than the lowest leaf in the tree then we return an empty array
+        if (price_high < price_low_) {
+            return (price_vec, depth_vec)
+        };
+
         if (price_low < price_low_) price_low = price_low_;
         let (price_high_, _) = critbit::max_leaf(&pool.asks);
         if (price_high > price_high_) price_high = price_high_;

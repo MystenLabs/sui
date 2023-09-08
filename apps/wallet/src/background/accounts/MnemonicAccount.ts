@@ -63,6 +63,7 @@ export class MnemonicAccount
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: null,
+			createdAt: Date.now(),
 		};
 	}
 

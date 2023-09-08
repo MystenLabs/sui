@@ -423,6 +423,8 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         let is_entry = def.entry.is_some();
         let visibility = match def.visibility {
             EA::Visibility::Public(_) => FunctionVisibility::Public,
+            // Packages are converted to friend during compilation.
+            EA::Visibility::Package(_) => FunctionVisibility::Friend,
             EA::Visibility::Friend(_) => FunctionVisibility::Friend,
             EA::Visibility::Internal => FunctionVisibility::Private,
         };
@@ -2801,6 +2803,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 PA::Visibility::Friend(..) => {
                     // TODO: model friend visibility properly
                     unimplemented!("Friend visibility not supported yet")
+                }
+                PA::Visibility::Package(..) => {
+                    // TODO: model friend visibility properly
+                    unimplemented!("Package visibility not supported yet")
                 }
             }
         }
