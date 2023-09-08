@@ -198,7 +198,7 @@ export function createWalletKitCore({
 			try {
 				const lastWalletName = await storageAdapter.get(storageKey);
 				if (lastWalletName) {
-					walletKit.connect(lastWalletName, { silent: true });
+					await walletKit.connect(lastWalletName, { silent: true });
 				}
 			} catch {
 				/* ignore error */
