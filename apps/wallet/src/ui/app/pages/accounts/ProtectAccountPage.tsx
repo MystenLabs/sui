@@ -15,7 +15,7 @@ import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreat
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteMnemonicAccountSource';
+import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteAccountSourceMutation';
 
 const allowedAccountTypes: CreateType[] = [
 	'new-mnemonic',
