@@ -116,7 +116,14 @@
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> bids = <a href="clob_v2.md#0xdee9_clob_v2_bids">clob_v2::bids</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(bids, start_tick_level, start_order_id, min_expire_timestamp, max_id, ascending);
+    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
+        bids,
+        start_tick_level,
+        start_order_id,
+        min_expire_timestamp,
+        max_id,
+        ascending
+    );
     <b>let</b> (orders, has_next_page, next_tick_level, next_order_id) = <b>if</b> (<a href="_length">vector::length</a>(&orders) &gt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>) {
         <b>let</b> last_order = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> orders);
         (orders, <b>true</b>, some(<a href="clob_v2.md#0xdee9_clob_v2_tick_level">clob_v2::tick_level</a>(&last_order)), some(<a href="clob_v2.md#0xdee9_clob_v2_order_id">clob_v2::order_id</a>(&last_order)))
@@ -168,7 +175,14 @@
     ascending: bool,
 ): <a href="order_query.md#0xdee9_order_query_OrderPage">OrderPage</a> {
     <b>let</b> asks = <a href="clob_v2.md#0xdee9_clob_v2_asks">clob_v2::asks</a>(pool);
-    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(asks, start_tick_level, start_order_id, min_expire_timestamp, max_id, ascending);
+    <b>let</b> orders = <a href="order_query.md#0xdee9_order_query_iter_ticks_internal">iter_ticks_internal</a>(
+        asks,
+        start_tick_level,
+        start_order_id,
+        min_expire_timestamp,
+        max_id,
+        ascending
+    );
     <b>let</b> (orders, has_next_page, next_tick_level, next_order_id) = <b>if</b> (<a href="_length">vector::length</a>(&orders) &gt; <a href="order_query.md#0xdee9_order_query_PAGE_LIMIT">PAGE_LIMIT</a>) {
         <b>let</b> last_order = <a href="_pop_back">vector::pop_back</a>(&<b>mut</b> orders);
         (orders, <b>true</b>, some(<a href="clob_v2.md#0xdee9_clob_v2_tick_level">clob_v2::tick_level</a>(&last_order)), some(<a href="clob_v2.md#0xdee9_clob_v2_order_id">clob_v2::order_id</a>(&last_order)))
@@ -257,9 +271,9 @@
             <b>let</b> key = <a href="_destroy_some">option::destroy_some</a>(next_order_key);
             <b>let</b> order = <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(open_orders, key);
 
-            // <b>if</b> the order id is greater than max_id, we stop.
+            // <b>if</b> the order id is greater than max_id, we end the iteration for this tick level.
             <b>if</b> (<a href="_is_some">option::is_some</a>(&max_id) && key &gt; <a href="_destroy_some">option::destroy_some</a>(max_id)) {
-                <b>return</b> orders
+                <b>break</b>;
             };
 
             next_order_key = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_next">linked_table::next</a>(open_orders, key);
@@ -270,7 +284,11 @@
                 <a href="_push_back">vector::push_back</a>(&<b>mut</b> orders, <a href="clob_v2.md#0xdee9_clob_v2_clone_order">clob_v2::clone_order</a>(order));
             };
         };
-        <b>let</b> (next_leaf, _) = <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(ticks, tick_level_key);
+        <b>let</b> (next_leaf, _) = <b>if</b> (ascending) {
+            <a href="critbit.md#0xdee9_critbit_next_leaf">critbit::next_leaf</a>(ticks, tick_level_key)
+        }<b>else</b> {
+            <a href="critbit.md#0xdee9_critbit_previous_leaf">critbit::previous_leaf</a>(ticks, tick_level_key)
+        };
         tick_level_key = next_leaf;
     };
     orders

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::order_query {
-    use std::debug::print;
     use std::option;
     use std::option::{Option, some, none};
     use std::vector;

@@ -3,7 +3,6 @@
 
 #[test_only]
 module deepbook::order_query_tests {
-    use std::debug::print;
     use std::option;
     use std::option::{none, some, Option};
     use std::vector;
