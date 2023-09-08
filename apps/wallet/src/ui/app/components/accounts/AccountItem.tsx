@@ -25,23 +25,11 @@ interface AccountItemProps {
 	selected?: boolean; // whether the account is selected in the context of a multi-select
 	isActiveAccount?: boolean; // whether the account is the active account in the context of the account list
 	background?: 'gradient';
-	editable?: boolean;
 }
 
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 	(
-		{
-			background,
-			selected,
-			isActiveAccount,
-			disabled,
-			icon,
-			name,
-			address,
-			after,
-			editable,
-			...props
-		},
+		{ background, selected, isActiveAccount, disabled, icon, name, address, after, ...props },
 		ref,
 	) => {
 		const { data: accounts } = useAccounts();
