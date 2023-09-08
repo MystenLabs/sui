@@ -26,6 +26,26 @@ If you are curious about the security model and the privacy considerations of zk
 
 More questions? See [this page](#faq).
 
+## OpenID providers
+
+The following tables lists the available OpenID providers and indicates whether they can support zkLogin.
+
+| Provider     | Can support? | Comments |
+| ------------ | ----------   | -------- |
+| Facebook     | Yes          |	         |
+| Google       | Yes          |          |
+| Twitch       | Yes          |          |
+| Slack        | Yes          |          |
+| Apple        | Yes          |          |
+| Twitter      | No           |          |
+| RedBull      | Under review |          |
+| Microsoft    | Under review |          |
+| AWS (Tenant) | Under review |          |
+| Amazon       | Under review |          |
+| WeChat       | Under review |          |
+| Auth0        | Under review |          |
+| Okta         | Under review |          |
+
 ## Integration guide
 
 Here is the high-level flow the wallet or frontend application must implement to support zkLogin-enabled transactions:
@@ -410,7 +430,7 @@ Once all contributions are concluded, the ultimate CRS and a verification script
 
 Eventually, the final CRS will be used to generate the proving key and verifying key. The proving key will be used to generate zero knowledge proof for ZkLogin, stored with the ZK proving service. The verifying key will be deployed as part of the validator software that is used to verify the zkLogin transaction on Sui.
 
-# Security and Privacy
+## Security and Privacy
 
 We'll walk through all zkLogin artifacts, their security assumptions, and the consequences of loss or exposure.
 
@@ -443,7 +463,7 @@ The ZK proving service and the salt service (if maintained) can link the user id
 
 In the future, the user can opt in to verify their OAuth identity associated with an Sui address on-chain.
 
-# FAQ
+## FAQ
 
 ## What providers is zkLogin compatible with?
 
