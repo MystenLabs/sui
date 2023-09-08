@@ -25,11 +25,23 @@ interface AccountItemProps {
 	selected?: boolean; // whether the account is selected in the context of a multi-select
 	isActiveAccount?: boolean; // whether the account is the active account in the context of the account list
 	background?: 'gradient';
+	editable?: boolean;
 }
 
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 	(
-		{ background, selected, isActiveAccount, disabled, icon, name, address, after, ...props },
+		{
+			background,
+			selected,
+			isActiveAccount,
+			disabled,
+			icon,
+			name,
+			address,
+			after,
+			editable,
+			...props
+		},
 		ref,
 	) => {
 		const { data: accounts } = useAccounts();
@@ -60,7 +72,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			>
 				{icon}
 				<div className="flex flex-col gap-1 overflow-hidden items-start">
-					{!isActiveAccount ? (
+					{!isActiveAccount && !editable ? (
 						<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
 							{accountName}
 						</Text>
