@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
-import { type ComponentProps, forwardRef, useRef } from 'react';
+import { type ComponentProps, forwardRef } from 'react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
