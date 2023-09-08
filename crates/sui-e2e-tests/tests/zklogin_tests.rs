@@ -85,6 +85,9 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
     // Now wait until the next epoch, when the auth state object is created.
     test_cluster.wait_for_epoch(None).await;
 
+    // Wait for JWKs to be fetched and sequenced.
+    sleep(Duration::from_secs(10)).await;
+
     // run zklogin end to end test
     run_zklogin_end_to_end_test(test_cluster).await;
 }
