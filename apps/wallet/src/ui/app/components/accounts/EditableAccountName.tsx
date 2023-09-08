@@ -32,7 +32,6 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		},
 	});
 	const { register } = form;
-	// const { ref, ...rest } = register('nickname');
 	const inputRef = useRef<HTMLInputElement | null>(null);
 
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
@@ -42,8 +41,8 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 					id: accountID,
 					nickname: nickname || null,
 				});
-				//@ts-ignore-next-line
-				document.activeElement?.blur();
+				const activeElement = document.activeElement as HTMLElement;
+				activeElement?.blur();
 			} catch (e) {
 				toast.error((e as Error).message || 'Failed to set nickname');
 			}
