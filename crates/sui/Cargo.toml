@@ -35,14 +35,15 @@ const-str.workspace = true
 num-bigint.workspace = true
 regex.workspace = true
 reqwest.workspace = true
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
+move-bytecode-verifier = { path = "../../external-crates/move-execution/v1/move-bytecode-verifier", package = "move-bytecode-verifier-v1"}
+sui-adapter = { path = "../../sui-execution/v1/sui-adapter", package = "sui-adapter-v1" }
+sui-verifier = { path = "../../sui-execution/v1/sui-verifier", package = "sui-verifier-v1" }
 
 sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-types.workspace = true
+
 sui-json.workspace = true
 sui-swarm.workspace = true
 sui-json-rpc-types.workspace = true

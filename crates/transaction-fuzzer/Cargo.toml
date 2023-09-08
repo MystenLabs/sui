@@ -17,7 +17,7 @@ move-binary-format.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
+sui-adapter = { path = "../../sui-execution/v1/sui-adapter", package = "sui-adapter-v1" }
 
 test-cluster.workspace = true
 once_cell.workspace = true
