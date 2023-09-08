@@ -222,6 +222,32 @@ impl SuiNode {
             supported_providers
         );
 
+        fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
+            let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
+                warn!(
+                    "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
+                    id.iss,
+                    provider
+                );
+                return false;
+            };
+
+            if iss_provider != *provider {
+                warn!(
+                    "JWK iss {:?} (retrieved from {:?}) does not match provider {:?}",
+                    id.iss, provider, iss_provider
+                );
+                return false;
+            }
+
+            if !check_total_jwk_size(id, jwk) {
+                warn!("JWK {:?} (retrieved from {:?}) is too large", id, provider);
+                return false;
+            }
+
+            true
+        }
+
         for p in supported_providers.into_iter() {
             let epoch_store = epoch_store.clone();
             let consensus_adapter = consensus_adapter.clone();
@@ -241,7 +267,7 @@ impl SuiNode {
                             }
                             Ok(mut keys) => {
                                 keys.retain(|(id, jwk)| {
-                                    check_total_jwk_size(id, jwk) &&
+                                    validate_jwk(&p, id, jwk) &&
                                     !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
                                     seen.insert((id.clone(), jwk.clone()))
                                 });
