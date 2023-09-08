@@ -162,6 +162,7 @@ pub fn run_test(
 ) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
 
+    let flags = flags.set_sources_shadow_deps(true);
     let (files, comments_and_compiler_res) = Compiler::from_files(
         targets,
         move_stdlib::move_stdlib_files(),
