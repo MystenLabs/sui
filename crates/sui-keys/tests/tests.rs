@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::fs;
 use std::str::FromStr;
 
 use fastcrypto::hash::HashFunction;
+use fastcrypto::traits::EncodeDecodeBase64;
+use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
@@ -11,13 +15,94 @@ use sui_types::{
     base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::Ed25519SuiSignature,
 };
+
+#[test]
+fn alias_exists_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    keystore
+        .generate_and_add_new_key(
+            SignatureScheme::ED25519,
+            Some("my_alias_test".to_string()),
+            None,
+            None,
+        )
+        .unwrap();
+    let aliases = keystore.alias_names();
+    assert_eq!(1, aliases.len());
+    assert_eq!(vec!["my_alias_test"], aliases);
+    assert!(!aliases.contains(&"alias_does_not_exist"));
+}
+
+#[test]
+fn create_alias_keystore_file_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let mut keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
+        .unwrap();
+    keystore_path.set_extension("aliases");
+    assert!(keystore_path.exists());
+
+    keystore_path = temp_dir.path().join("myfile.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
+        .unwrap();
+    keystore_path.set_extension("aliases");
+    assert!(keystore_path.exists());
+}
+
+#[test]
+fn create_alias_if_not_exists_test() {
+    let temp_dir = TempDir::new().unwrap();
+    let keystore_path = temp_dir.path().join("sui.keystore");
+    let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+
+    let alias = Some("my_alias_test".to_string());
+    keystore
+        .generate_and_add_new_key(SignatureScheme::ED25519, alias.clone(), None, None)
+        .unwrap();
+
+    // test error first
+    let create_alias_result = keystore.create_alias(alias);
+    assert!(create_alias_result.is_err());
+    // test expected result
+    let create_alias_result = keystore.create_alias(Some("test".to_string()));
+    assert_eq!("test".to_string(), create_alias_result.unwrap());
+}
+
+#[test]
+fn keystore_no_aliases() {
+    // this tests if when calling FileBasedKeystore::new, it creates a
+    // sui.aliases file with the existing address in the sui.keystore,
+    // and a new alias for it.
+    // This idea is to test the correct conversion
+    // from the old type (which only contains keys and an optional path)
+    // to the new type which contains keys and aliases (and an optional path), and if it creates the aliases file.
+
+    let temp_dir = TempDir::new().unwrap();
+    let mut keystore_path = temp_dir.path().join("sui.keystore");
+    let (_, keypair, _, _) = generate_new_key(SignatureScheme::ED25519, None, None).unwrap();
+    let private_keys = vec![EncodeDecodeBase64::encode_base64(&keypair)];
+    let keystore_data = serde_json::to_string_pretty(&private_keys).unwrap();
+    fs::write(&keystore_path, keystore_data).unwrap();
+
+    let keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    keystore_path.set_extension("aliases");
+    assert!(keystore_path.exists());
+    assert_eq!(1, keystore.aliases().len());
+}
+
 #[test]
 fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
     let (address, phrase, scheme) = keystore
-        .generate_and_add_new_key(SignatureScheme::ED25519, None, None)
+        .generate_and_add_new_key(SignatureScheme::ED25519, None, None, None)
         .unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
