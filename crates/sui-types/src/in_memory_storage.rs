@@ -7,9 +7,7 @@ use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
-    storage::{
-        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectStore, ParentSync, WriteKind,
-    },
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, WriteKind},
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -22,8 +20,6 @@ use std::sync::Arc;
 #[derive(Debug, Default)]
 pub struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
-    last_entry_for_deleted: BTreeMap<ObjectID, ObjectRef>,
-    wrapped: BTreeMap<ObjectID, VersionNumber>,
 }
 
 impl BackingPackageStore for InMemoryStorage {
@@ -62,11 +58,11 @@ impl ChildObjectResolver for InMemoryStorage {
 }
 
 impl ParentSync for InMemoryStorage {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        if let Some(obj) = self.persistent.get(&object_id) {
-            return Ok(Some(obj.compute_object_reference()));
-        }
-        Ok(self.last_entry_for_deleted.get(&object_id).copied())
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        _object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        unreachable!("Should not be called for InMemoryStorage as it's deprecated.")
     }
 }
 
@@ -156,11 +152,7 @@ impl InMemoryStorage {
         for o in objects {
             persistent.insert(o.id(), o);
         }
-        Arc::new(Self {
-            persistent,
-            last_entry_for_deleted: BTreeMap::new(),
-            wrapped: BTreeMap::new(),
-        })
+        Arc::new(Self { persistent })
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -177,8 +169,6 @@ impl InMemoryStorage {
 
     pub fn insert_object(&mut self, object: Object) {
         let id = object.id();
-        self.last_entry_for_deleted.remove(&id);
-        self.wrapped.remove(&id);
         self.persistent.insert(id, object);
     }
 
@@ -186,42 +176,14 @@ impl InMemoryStorage {
         &self.persistent
     }
 
-    pub fn wrapped(&self) -> &BTreeMap<ObjectID, VersionNumber> {
-        &self.wrapped
-    }
-
-    pub fn get_wrapped(&self, id: &ObjectID) -> Option<VersionNumber> {
-        self.wrapped.get(id).copied()
-    }
-
     pub fn into_inner(self) -> BTreeMap<ObjectID, Object> {
         self.persistent
     }
 
-    pub fn finish(
-        &mut self,
-        written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    ) {
-        debug_assert!(written.keys().all(|id| !deleted.contains_key(id)));
+    pub fn finish(&mut self, written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>) {
         for (_id, (_, new_object, _)) in written {
             debug_assert!(new_object.id() == _id);
             self.insert_object(new_object);
-        }
-        for (id, (ver, kind)) in deleted {
-            if let Some(obj) = self.persistent.remove(&id) {
-                self.last_entry_for_deleted
-                    .insert(id, obj.compute_object_reference());
-            }
-            match kind {
-                DeleteKind::Wrap => {
-                    self.wrapped.insert(id, ver);
-                }
-                DeleteKind::UnwrapThenDelete => {
-                    self.wrapped.remove(&id);
-                }
-                _ => (),
-            }
         }
     }
 }

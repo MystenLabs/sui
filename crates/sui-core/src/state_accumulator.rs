@@ -36,7 +36,9 @@ pub struct StateAccumulator {
 pub trait AccumulatorReadStore {
     fn multi_get_object_by_key(&self, object_keys: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>>;
 
-    fn get_object_ref_prior_to_key(
+    /// This function is only called in older protocol versions, and should no longer be used.
+    /// It creates an explicit dependency to tombstones which is not desired.
+    fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -48,7 +50,7 @@ impl AccumulatorReadStore for AuthorityStore {
         self.multi_get_object_by_key(object_keys)
     }
 
-    fn get_object_ref_prior_to_key(
+    fn get_object_ref_prior_to_key_deprecated(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
@@ -66,21 +68,12 @@ impl AccumulatorReadStore for InMemoryStorage {
         Ok(objects)
     }
 
-    fn get_object_ref_prior_to_key(
+    fn get_object_ref_prior_to_key_deprecated(
         &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
+        _object_id: &ObjectID,
+        _version: VersionNumber,
     ) -> SuiResult<Option<ObjectRef>> {
-        Ok(if let Some(wrapped_version) = self.get_wrapped(object_id) {
-            assert!(wrapped_version < version);
-            Some((
-                *object_id,
-                wrapped_version,
-                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-            ))
-        } else {
-            None
-        })
+        unreachable!("get_object_ref_prior_to_key is only called by accumulate_effects_v1, while InMemoryStorage is used by testing and genesis only, which always uses latest protocol ")
     }
 }
 
@@ -230,7 +223,7 @@ where
         .iter()
         .filter_map(|(_tx_digest, id, seq_num)| {
             let objref = store
-                .get_object_ref_prior_to_key(id, *seq_num)
+                .get_object_ref_prior_to_key_deprecated(id, *seq_num)
                 .expect("read cannot fail");
 
             objref.map(|(id, version, digest)| {
