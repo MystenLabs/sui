@@ -24,6 +24,41 @@ export function prepareZKLogin(currentEpoch: number) {
 	};
 }
 
+const forceSilentGetProviders: ZkProvider[] = ['twitch'];
+
+/**
+ * This method does a get request to the authorize url and is used as a workarround
+ * for `forceSilentGetProviders` that they do the silent login/token refresh using
+ * html directives or js code to redirect to the redirect_url (instead of response headers) and that forces the launchWebAuthFlow
+ * to open and close quickly a new window. Which closes the popup window when open but also creates a weird flickering effect.
+ *
+ * @param authUrl
+ */
+async function tryGetRedirectURLSilently(provider: ZkProvider, authUrl: string) {
+	if (!forceSilentGetProviders.includes(provider)) {
+		return null;
+	}
+	try {
+		const responseText = await (await fetch(authUrl)).text();
+		const redirectURLMatch =
+			/<meta\s*http-equiv="refresh"\s*(CONTENT|content)=["']0;\s?URL='(.*)'["']\s*\/?>/.exec(
+				responseText,
+			);
+		if (redirectURLMatch) {
+			const redirectURL = redirectURLMatch[2];
+			if (
+				redirectURL.startsWith(`https://${Browser.runtime.id}.chromiumapp.org`) &&
+				redirectURL.includes('id_token=')
+			) {
+				return new URL(redirectURL.replaceAll('&amp;', '&'));
+			}
+		}
+	} catch (e) {
+		//do nothing
+	}
+	return null;
+}
+
 export async function zkLogin({
 	provider,
 	nonce,
@@ -50,12 +85,18 @@ export async function zkLogin({
 		buildExtraParams({ prompt, loginHint, params });
 	}
 	const authUrl = `${url}?${params.toString()}`;
-	const responseURL = new URL(
-		await Browser.identity.launchWebAuthFlow({
-			url: authUrl,
-			interactive: true,
-		}),
-	);
+	let responseURL;
+	if (!prompt) {
+		responseURL = await tryGetRedirectURLSilently(provider, authUrl);
+	}
+	if (!responseURL) {
+		responseURL = new URL(
+			await Browser.identity.launchWebAuthFlow({
+				url: authUrl,
+				interactive: true,
+			}),
+		);
+	}
 	const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
 	const jwt = responseParams.get('id_token');
 	if (!jwt) {
