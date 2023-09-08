@@ -10,7 +10,7 @@ use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
     editions::Flavor,
-    expansion::ast::{AttributeName_, Fields, ModuleIdent, Value_, Visibility},
+    expansion::ast::{AttributeName_, Fields, Friend, ModuleIdent, Value_, Visibility},
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
@@ -59,16 +59,44 @@ fn modules(
     context: &mut Context,
     modules: UniqueMap<ModuleIdent, N::ModuleDefinition>,
 ) -> UniqueMap<ModuleIdent, T::ModuleDefinition> {
-    modules.map(|ident, mdef| module(context, ident, mdef))
+    let mut all_new_friends = BTreeMap::new();
+    let mut typed_modules = modules.map(|ident, mdef| {
+        let (typed_mdef, new_friends) = module(context, ident, mdef);
+        for (pub_package_module, loc) in new_friends {
+            all_new_friends
+                .entry(pub_package_module)
+                .or_insert_with(BTreeMap::new)
+                .insert(
+                    ident,
+                    Friend {
+                        attributes: UniqueMap::new(),
+                        loc,
+                    },
+                );
+        }
+        typed_mdef
+    });
+
+    for (mident, friends) in all_new_friends {
+        let mdef = typed_modules.get_mut(&mident).unwrap();
+        // point of interest: if we have any new friends, we know there can't be any
+        // "current" friends becahse all thew new friends are generated off of
+        // `public(package)` usage, which disallows other friends.
+        mdef.friends = UniqueMap::maybe_from_iter(friends.into_iter())
+            .expect("ICE compiler added duplicate friends to public(package) friend list");
+    }
+
+    typed_modules
 }
 
 fn module(
     context: &mut Context,
     ident: ModuleIdent,
     mdef: N::ModuleDefinition,
-) -> T::ModuleDefinition {
+) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_script_constants.is_none());
     assert!(context.called_fns.is_empty());
+    assert!(context.new_friends.is_empty());
 
     context.current_module = Some(ident);
     let N::ModuleDefinition {
@@ -102,10 +130,12 @@ fn module(
         functions,
     };
     gen_unused_warnings(context, &typed_module);
+    // get the list of new friends and reset the list.
+    let new_friends = std::mem::take(&mut context.new_friends);
     // reset called functions set so that it's ready to be be populated with values from
     // a single module only
     context.called_fns.clear();
-    typed_module
+    (typed_module, new_friends)
 }
 
 fn scripts(

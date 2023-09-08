@@ -11,7 +11,7 @@ use move_command_line_common::{
 use move_compiler::{
     command_line::compiler::move_check_for_errors,
     diagnostics::*,
-    editions::Flavor,
+    editions::{Edition, Flavor},
     shared::{Flags, NumericalAddress, PackageConfig},
     Compiler, PASS_PARSER,
 };
@@ -24,6 +24,7 @@ const VERIFICATION_EXT: &str = "verification";
 const UNUSED_EXT: &str = "unused";
 
 const SUI_MODE_DIR: &str = "sui_mode";
+const MOVE_2024_DIR: &str = "move_2024";
 
 fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
@@ -52,8 +53,14 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
     } else {
         Flavor::default()
     };
+    let edition = if path.components().any(|c| c.as_os_str() == MOVE_2024_DIR) {
+        Edition::E2024_ALPHA
+    } else {
+        Edition::default()
+    };
     let config = PackageConfig {
         flavor,
+        edition,
         ..PackageConfig::default()
     };
     testsuite(path, config)

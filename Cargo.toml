@@ -65,6 +65,7 @@ exclude = [
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
     "external-crates/move/tools/read-write-set/types",
+    "sdk/move-binary-format",
 ]
 
 members = [

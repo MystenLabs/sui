@@ -7,11 +7,9 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{
-        AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId, Visibility,
-    },
+    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId},
     hlir::{
-        ast::{self as H, Value_, Var},
+        ast::{self as H, Value_, Var, Visibility},
         translate::{display_var, DisplayVar},
     },
     naming::{

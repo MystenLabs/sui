@@ -47,6 +47,10 @@ export async function getStatus() {
 	return (statusCache = 'required');
 }
 
+export function clearStatus() {
+	statusCache = null;
+}
+
 export async function makeMnemonicAccounts(password: string) {
 	if (!VaultStorage.mnemonicSeedHex || !VaultStorage.entropy) {
 		throw new Error('Missing mnemonic entropy');
@@ -117,6 +121,7 @@ async function makeQredoAccounts(password: string) {
 				sourceID: aQredoSource.id,
 				selected: false,
 				nickname: null,
+				createdAt: Date.now(),
 			});
 		}
 	}

@@ -1,45 +1,55 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MenuLayout } from './MenuLayout';
 import { Button } from '_app/shared/ButtonUI';
 import { useNextMenuUrl } from '_components/menu/hooks';
+import { ampli } from '_src/shared/analytics/ampli';
+import { persister } from '_src/ui/app/helpers/queryClient';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { ConfirmationModal } from '_src/ui/app/shared/ConfirmationModal';
 
 export function MoreOptions() {
 	const mainMenuUrl = useNextMenuUrl(true, '/');
-	const [logoutInProgress, setLogoutInProgress] = useState(false);
 	const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-
+	const backgroundClient = useBackgroundClient();
+	const queryClient = useQueryClient();
+	const logoutMutation = useMutation({
+		mutationKey: ['logout', 'clear wallet'],
+		mutationFn: async () => {
+			ampli.client.reset();
+			queryClient.cancelQueries();
+			queryClient.clear();
+			await persister.removeClient();
+			await backgroundClient.clearWallet();
+		},
+	});
 	return (
 		<MenuLayout title="More Options" back={mainMenuUrl}>
 			<Button
 				variant="warning"
 				text="Logout"
 				size="narrow"
-				loading={logoutInProgress}
+				loading={logoutMutation.isLoading}
 				disabled={isLogoutDialogOpen}
-				onClick={async () => {
-					setIsLogoutDialogOpen(true);
-				}}
+				onClick={() => setIsLogoutDialogOpen(true)}
 			/>
 			<ConfirmationModal
 				isOpen={isLogoutDialogOpen}
 				confirmText="Logout"
 				confirmStyle="outlineWarning"
 				title="Are you sure you want to Logout?"
-				hint="You will need the 12-word Recovery Passphrase that was created when you first set up the wallet to log back in."
+				hint="You will need to set up all your accounts again."
 				onResponse={async (confirmed) => {
 					setIsLogoutDialogOpen(false);
 					if (confirmed) {
-						setLogoutInProgress(true);
-						try {
-							// TODO: implement logout
-							window.location.reload();
-						} finally {
-							setLogoutInProgress(false);
-						}
+						await logoutMutation.mutateAsync(undefined, {
+							onSuccess: () => {
+								window.location.reload();
+							},
+						});
 					}
 				}}
 			/>

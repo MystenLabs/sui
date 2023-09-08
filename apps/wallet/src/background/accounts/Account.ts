@@ -128,6 +128,7 @@ export interface SerializedAccount {
 	 */
 	readonly selected: boolean;
 	readonly nickname: string | null;
+	readonly createdAt: number;
 }
 
 export interface SerializedUIAccount {

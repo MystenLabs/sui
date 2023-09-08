@@ -62,6 +62,7 @@ function ListViewItemContainer({ obj }: { obj: SuiObjectResponse }) {
 			assetCell={
 				<>
 					<ObjectVideoImage
+						fadeIn
 						disablePreview
 						title={name}
 						subtitle={type}
