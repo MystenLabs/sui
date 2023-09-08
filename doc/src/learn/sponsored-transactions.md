@@ -78,7 +78,7 @@ Depending on the nature of the Gas Station, sponsors can apply different authori
 
 ### Abuse Detection
 
-For all gas objects that the sponsor gives out, track if users ever try to equivocate and lock objects. If such behavior is detected, block list this user or requestor accordingly.
+For all gas objects that the sponsor gives out, track if users ever try to equivocate and lock objects. If such behavior is detected, block list this user or requester accordingly.
 
 ## Code examples to create a Sui Gas Station
 
@@ -142,8 +142,3 @@ pub struct GasData {
 ```
 
 To learn more about Transaction in Sui, see [Transactions](../learn/transactions.md).
-
-
-
-
-
