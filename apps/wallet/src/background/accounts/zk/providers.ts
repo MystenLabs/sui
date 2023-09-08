@@ -37,7 +37,7 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
 		url: 'https://id.twitch.tv/oauth2/authorize',
 		extraParams: {
-			// adding token seems to stop showing the authorization window
+			// adding token in the response_type allows the silent auth to work - without it, every time the auth window is shown
 			response_type: 'token id_token',
 			scope: 'openid user:read:email',
 			claims: JSON.stringify({
