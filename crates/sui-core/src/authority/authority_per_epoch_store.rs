@@ -492,8 +492,9 @@ impl AuthorityPerEpochStore {
 
         if authenticator_state_enabled {
             info!("authenticator_state enabled");
-            let authenticator_state =
-                get_authenticator_state(&store).expect("Failed to load authenticator state");
+            let authenticator_state = get_authenticator_state(&store)
+                .expect("Read cannot fail")
+                .expect("Authenticator state must exist");
 
             for active_jwk in &authenticator_state.active_jwks {
                 let ActiveJwk { jwk_id, jwk, epoch } = active_jwk;

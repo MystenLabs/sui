@@ -152,7 +152,7 @@ impl Genesis {
     }
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
-        get_authenticator_state(&self.objects()).ok()
+        get_authenticator_state(&self.objects()).expect("Read from genesis cannot fail")
     }
 
     pub fn clock(&self) -> Clock {
@@ -324,7 +324,7 @@ impl UnsignedGenesis {
     }
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
-        get_authenticator_state(&self.objects()).ok()
+        get_authenticator_state(&self.objects()).expect("read from genesis cannot fail")
     }
 }
 

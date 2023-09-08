@@ -49,13 +49,11 @@ pub struct ActiveJwk {
 
 pub fn get_authenticator_state(
     object_store: &dyn ObjectStore,
-) -> SuiResult<AuthenticatorStateInner> {
-    let outer = object_store
-        .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?
-        // Don't panic here on None because object_store is a generic store.
-        .ok_or_else(|| {
-            SuiError::SuiSystemStateReadError("AuthenticatorState object not found".to_owned())
-        })?;
+) -> SuiResult<Option<AuthenticatorStateInner>> {
+    let outer = object_store.get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?;
+    let Some(outer) = outer else {
+        return Ok(None);
+    };
     let move_object = outer.data.try_as_move().ok_or_else(|| {
         SuiError::SuiSystemStateReadError(
             "AuthenticatorState object must be a Move object".to_owned(),
@@ -76,5 +74,5 @@ pub fn get_authenticator_state(
             ))
         })?;
 
-    Ok(inner)
+    Ok(Some(inner))
 }

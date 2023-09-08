@@ -1467,7 +1467,9 @@ impl SuiNode {
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
 
-        let authenticator_state_exists = get_authenticator_state(&state.database).is_ok();
+        let authenticator_state_exists = get_authenticator_state(&state.database)
+            .expect("read cannot fail")
+            .is_some();
 
         let epoch_start_configuration = EpochStartConfiguration::new(
             next_epoch_start_system_state,
