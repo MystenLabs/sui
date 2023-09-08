@@ -54,8 +54,6 @@ pub struct ConsensusHandler<T> {
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
     committee: Committee,
-    /// Mappings used for logging and metrics
-    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
@@ -73,7 +71,6 @@ impl<T> ConsensusHandler<T> {
         transaction_manager: Arc<TransactionManager>,
         object_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
@@ -91,7 +88,6 @@ impl<T> ConsensusHandler<T> {
             object_store,
             low_scoring_authorities,
             committee,
-            authority_names_to_hostnames,
             metrics,
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_scheduler,
@@ -225,7 +221,6 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
             self.low_scoring_authorities.clone(),
             &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_hostnames.clone(),
             &self.metrics,
             self.epoch_store.protocol_config(),
         );
