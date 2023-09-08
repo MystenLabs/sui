@@ -85,11 +85,9 @@ async function deleteAccountSourceByType({
 				const allAccountsOfSourceType = await Promise.all(accountPromises);
 				const accountIds: string[] = [];
 				allAccountsOfSourceType.forEach((accForSource) => {
-					if (accForSource) {
-						accForSource.forEach((acc) => {
-							accountIds.push(acc.id);
-						});
-					}
+					accForSource?.forEach((acc) => {
+						accountIds.push(acc.id);
+					});
 				});
 				await (await getDB()).accounts.bulkDelete(accountIds);
 				await (await getDB()).accountSources.bulkDelete(sourceIds);
