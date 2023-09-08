@@ -26,6 +26,7 @@ use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
@@ -1360,6 +1361,7 @@ impl SuiNode {
 
                 let new_epoch_store = self
                     .reconfigure_state(
+                        &self.state,
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
@@ -1398,6 +1400,7 @@ impl SuiNode {
             } else {
                 let new_epoch_store = self
                     .reconfigure_state(
+                        &self.state,
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
@@ -1450,6 +1453,7 @@ impl SuiNode {
 
     async fn reconfigure_state(
         &self,
+        state: &Arc<AuthorityState>,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
@@ -1462,8 +1466,14 @@ impl SuiNode {
             .get_epoch_last_checkpoint(cur_epoch_store.epoch())
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
-        let epoch_start_configuration =
-            EpochStartConfiguration::new(next_epoch_start_system_state, *last_checkpoint.digest());
+
+        let authenticator_state_exists = get_authenticator_state(&state.database).is_ok();
+
+        let epoch_start_configuration = EpochStartConfiguration::new(
+            next_epoch_start_system_state,
+            *last_checkpoint.digest(),
+            authenticator_state_exists,
+        );
 
         let new_epoch_store = self
             .state

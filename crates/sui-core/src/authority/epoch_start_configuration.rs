@@ -16,6 +16,7 @@ pub trait EpochStartConfigTrait {
     fn epoch_digest(&self) -> CheckpointDigest;
     fn epoch_start_state(&self) -> &EpochStartSystemState;
     fn flags(&self) -> &[EpochFlag];
+    fn authenticator_state_exists(&self) -> bool;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -30,14 +31,20 @@ pub enum EpochFlag {
 pub enum EpochStartConfiguration {
     V1(EpochStartConfigurationV1),
     V2(EpochStartConfigurationV2),
+    V3(EpochStartConfigurationV3),
 }
 
 impl EpochStartConfiguration {
-    pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
-        Self::new_v2(
+    pub fn new(
+        system_state: EpochStartSystemState,
+        epoch_digest: CheckpointDigest,
+        authenticator_state_exists: bool,
+    ) -> Self {
+        Self::new_v3(
             system_state,
             epoch_digest,
             EpochFlag::default_flags_for_new_epoch(),
+            authenticator_state_exists,
         )
     }
 
@@ -54,6 +61,20 @@ impl EpochStartConfiguration {
             system_state,
             epoch_digest,
             flags,
+        ))
+    }
+
+    pub fn new_v3(
+        system_state: EpochStartSystemState,
+        epoch_digest: CheckpointDigest,
+        flags: Vec<EpochFlag>,
+        authenticator_state_exists: bool,
+    ) -> Self {
+        Self::V3(EpochStartConfigurationV3::new(
+            system_state,
+            epoch_digest,
+            flags,
+            authenticator_state_exists,
         ))
     }
 
@@ -87,6 +108,15 @@ pub struct EpochStartConfigurationV2 {
     flags: Vec<EpochFlag>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct EpochStartConfigurationV3 {
+    system_state: EpochStartSystemState,
+    epoch_digest: CheckpointDigest,
+    flags: Vec<EpochFlag>,
+    /// Does the authenticator state object exist at the beginning of the epoch?
+    authenticator_state_exists: bool,
+}
+
 impl EpochStartConfigurationV1 {
     pub fn new(system_state: EpochStartSystemState, epoch_digest: CheckpointDigest) -> Self {
         Self {
@@ -110,6 +140,22 @@ impl EpochStartConfigurationV2 {
     }
 }
 
+impl EpochStartConfigurationV3 {
+    pub fn new(
+        system_state: EpochStartSystemState,
+        epoch_digest: CheckpointDigest,
+        flags: Vec<EpochFlag>,
+        authenticator_state_exists: bool,
+    ) -> Self {
+        Self {
+            system_state,
+            epoch_digest,
+            flags,
+            authenticator_state_exists,
+        }
+    }
+}
+
 impl EpochStartConfigTrait for EpochStartConfigurationV1 {
     fn epoch_digest(&self) -> CheckpointDigest {
         self.epoch_digest
@@ -121,6 +167,10 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
 
     fn flags(&self) -> &[EpochFlag] {
         &[]
+    }
+
+    fn authenticator_state_exists(&self) -> bool {
+        false
     }
 }
 
@@ -135,6 +185,28 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
 
     fn flags(&self) -> &[EpochFlag] {
         &self.flags
+    }
+
+    fn authenticator_state_exists(&self) -> bool {
+        false
+    }
+}
+
+impl EpochStartConfigTrait for EpochStartConfigurationV3 {
+    fn epoch_digest(&self) -> CheckpointDigest {
+        self.epoch_digest
+    }
+
+    fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.system_state
+    }
+
+    fn flags(&self) -> &[EpochFlag] {
+        &self.flags
+    }
+
+    fn authenticator_state_exists(&self) -> bool {
+        self.authenticator_state_exists
     }
 }
 

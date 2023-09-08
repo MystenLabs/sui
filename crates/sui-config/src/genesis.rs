@@ -151,6 +151,10 @@ impl Genesis {
         get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
     }
 
+    pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
+        get_authenticator_state(&self.objects()).ok()
+    }
+
     pub fn clock(&self) -> Clock {
         let clock = self
             .objects()
