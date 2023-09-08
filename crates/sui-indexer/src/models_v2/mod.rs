@@ -8,3 +8,4 @@ pub mod objects;
 pub mod packages;
 pub mod transactions;
 pub mod tx_indices;
+pub mod watermarks;

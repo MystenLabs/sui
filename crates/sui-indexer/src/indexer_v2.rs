@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
-
+use crate::apis::{IndexerApiV2, ReadApiV2};
+use crate::errors::IndexerError;
+use crate::metrics::IndexerMetrics;
 use crate::IndexerConfig;
 use anyhow::Result;
-
-use crate::metrics::IndexerMetrics;
-use prometheus::Registry;
-
-use tracing::info;
-
-use crate::errors::IndexerError;
 use mysten_metrics::spawn_monitored_task;
+use prometheus::Registry;
+use std::env;
+use std::net::SocketAddr;
+use sui_json_rpc::ServerType;
+use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
+use tokio::runtime::Handle;
+use tracing::info;
 
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler_v2::new_handlers;
@@ -35,12 +36,17 @@ impl IndexerV2 {
         );
         mysten_metrics::init_metrics(registry);
 
-        if config.rpc_server_worker {
-            unimplemented!("not supported in v2 yet");
-        }
-
-        // It's a writer
-        info!("Starting indexer with only fullnode sync");
+        // For testing purposes, for the time being we allow an indexer to be a
+        // reader and wrtier at the same time
+        let _handle = if config.rpc_server_worker {
+            info!("Starting indexer reader");
+            let handle = build_json_rpc_server(registry, store.clone(), config, None)
+                .await
+                .expect("Json rpc server should not run into errors upon start.");
+            Some(tokio::spawn(async move { handle.stopped().await }))
+        } else {
+            None
+        };
 
         // None will be returned when checkpoints table is empty.
         let last_seq_from_db = store
@@ -77,4 +83,24 @@ impl IndexerV2 {
 
         Ok(())
     }
+}
+
+pub async fn build_json_rpc_server<S: IndexerStoreV2 + Sync + Send + 'static + Clone>(
+    prometheus_registry: &Registry,
+    state: S,
+    config: &IndexerConfig,
+    custom_runtime: Option<Handle>,
+) -> Result<ServerHandle, IndexerError> {
+    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+
+    builder.register_module(ReadApiV2::new(state.clone()))?;
+    builder.register_module(IndexerApiV2::new(state.clone()))?;
+    let default_socket_addr: SocketAddr = SocketAddr::new(
+        // unwrap() here is safe b/c the address is a static config.
+        config.rpc_server_url.as_str().parse().unwrap(),
+        config.rpc_server_port,
+    );
+    Ok(builder
+        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
+        .await?)
 }

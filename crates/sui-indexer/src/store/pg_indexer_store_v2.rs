@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use core::result::Result::Ok;
+use itertools::Itertools;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -19,14 +20,16 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::transaction::SenderSignedData;
-use tracing::info;
+use tracing::instrument::Instrumented;
+use tracing::{info, Instrument};
 
 use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiTransactionBlock, SuiTransactionBlockEffects,
-    SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    BalanceChange, ObjectChange, SuiObjectDataFilter, SuiTransactionBlock,
+    SuiTransactionBlockEffects, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent};
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::committee::EpochId;
 use sui_types::digests::{CheckpointDigest, TransactionDigest};
 use sui_types::event::{Event, EventID};
@@ -48,20 +51,34 @@ use crate::store::diesel_marco::{read_only_blocking, transactional_blocking_with
 use crate::store::module_resolver_v2::IndexerModuleResolverV2;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedObject, IndexedObjectChange, IndexedPackage,
-    IndexedTransaction, IndexerResult, TxIndex,
+    IndexedTransaction, IndexerResult, OwnerType, TxIndex,
 };
 use crate::PgConnectionPool;
 
 use super::{IndexerStoreV2, TemporaryEpochStoreV2, TransactionObjectChangesV2};
 
+#[macro_export]
+macro_rules! chunk {
+    ($data: expr, $size: expr) => {{
+        $data
+            .into_iter()
+            .chunks($size)
+            .into_iter()
+            .map(|c| c.collect())
+            .collect::<Vec<Vec<_>>>()
+    }};
+}
+
+// FIXME: consolidate these two?
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
-const PG_COMMIT_TX_CHUNK_SIZE: usize = 500;
+const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 500;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
     blocking_cp: PgConnectionPool,
     module_cache: Arc<SyncModuleCache<IndexerModuleResolverV2>>,
     metrics: IndexerMetrics,
+    parallel_chunk_size: usize,
 }
 
 impl PgIndexerStoreV2 {
@@ -69,10 +86,15 @@ impl PgIndexerStoreV2 {
         let module_cache: Arc<SyncModuleCache<IndexerModuleResolverV2>> = Arc::new(
             SyncModuleCache::new(IndexerModuleResolverV2::new(blocking_cp.clone())),
         );
+        let parallel_chunk_size = std::env::var("PG_COMMIT_PARALLEL_CHUNK_SIZE")
+            .unwrap_or_else(|e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         Self {
             blocking_cp,
             module_cache,
             metrics,
+            parallel_chunk_size,
         }
     }
 
@@ -150,30 +172,123 @@ impl PgIndexerStoreV2 {
         .context("Failed to read object from PostgresDB")
     }
 
-    fn persist_objects_and_checkpoints(
+    // fn persist_objects_and_checkpoints(
+    //     &self,
+    //     object_changes: Vec<TransactionObjectChangesV2>,
+    //     checkpoints: Vec<IndexedCheckpoint>,
+    //     metrics: IndexerMetrics,
+    // ) -> Result<(), IndexerError> {
+    //     let guard = metrics
+    //         .checkpoint_db_commit_latency_checkpoints_and_objects
+    //         .start_timer();
+    //     // If checkpoints is empty, object_changes must be empty too.
+    //     if checkpoints.is_empty() {
+    //         return Ok(());
+    //     }
+
+    //     let (mutated_objects, deleted_objects) = get_objects_to_commit(object_changes);
+    //     let mutated_objects = mutated_objects
+    //         .into_iter()
+    //         .map(StoredObject::from)
+    //         .collect::<Vec<_>>();
+
+    //     let checkpoints = checkpoints
+    //         .iter()
+    //         .map(StoredCheckpoint::from)
+    //         .collect::<Vec<_>>();
+    //     transactional_blocking_with_retry!(
+    //         &self.blocking_cp,
+    //         |conn| {
+    //             // Persist mutated objects
+    //             for mutated_object_change_chunk in mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+    //                 diesel::insert_into(objects::table)
+    //                     .values(mutated_object_change_chunk)
+    //                     .on_conflict(objects::object_id)
+    //                     .do_update()
+    //                     .set((
+    //                         objects::object_id.eq(excluded(objects::object_id)),
+    //                         objects::object_version.eq(excluded(objects::object_version)),
+    //                         objects::object_digest.eq(excluded(objects::object_digest)),
+    //                         objects::checkpoint_sequence_number
+    //                             .eq(excluded(objects::checkpoint_sequence_number)),
+    //                         objects::owner_type.eq(excluded(objects::owner_type)),
+    //                         objects::owner_id.eq(excluded(objects::owner_id)),
+    //                         objects::serialized_object.eq(excluded(objects::serialized_object)),
+    //                         objects::coin_type.eq(excluded(objects::coin_type)),
+    //                         objects::coin_balance.eq(excluded(objects::coin_balance)),
+    //                         objects::df_kind.eq(excluded(objects::df_kind)),
+    //                         objects::df_name.eq(excluded(objects::df_name)),
+    //                         objects::df_object_type.eq(excluded(objects::df_object_type)),
+    //                         objects::df_object_id.eq(excluded(objects::df_object_id)),
+    //                     ))
+    //                     .execute(conn)
+    //                     .map_err(IndexerError::from)
+    //                     .context("Failed to write object mutation to PostgresDB")?;
+    //             }
+
+    //             // Persist deleted objects
+    //             for deleted_objects_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+    //                 diesel::delete(
+    //                     objects::table.filter(
+    //                         objects::object_id.eq_any(
+    //                             deleted_objects_chunk
+    //                                 .iter()
+    //                                 .map(|o| o.to_vec())
+    //                                 .collect::<Vec<_>>(),
+    //                         ),
+    //                     ),
+    //                 )
+    //                 .execute(conn)
+    //                 .map_err(IndexerError::from)
+    //                 .context("Failed to write object deletion to PostgresDB")?;
+    //             }
+
+    //             // Persist checkpoints
+    //             for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE) {
+    //                 diesel::insert_into(checkpoints::table)
+    //                     .values(checkpoint_chunk)
+    //                     .on_conflict_do_nothing()
+    //                     .execute(conn)
+    //                     .map_err(IndexerError::from)
+    //                     .context("Failed to write checkpoints to PostgresDB")?;
+    //             }
+    //             Ok::<(), IndexerError>(())
+    //         },
+    //         Duration::from_secs(60)
+    //     )
+    //     .tap(|_| {
+    //         let elapsed = guard.stop_and_record();
+    //         info!(
+    //             elapsed,
+    //             "Persisted {} objects and {} checkpoints",
+    //             mutated_objects.len() + deleted_objects.len(),
+    //             checkpoints.len()
+    //         )
+    //     })
+    // }
+
+    fn persist_objects_chunk(
         &self,
-        object_changes: Vec<TransactionObjectChangesV2>,
-        checkpoints: Vec<IndexedCheckpoint>,
+        objects: Vec<ObjectChangeToCommit>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let guard = metrics
-            .checkpoint_db_commit_latency_checkpoints_and_objects
+            .checkpoint_db_commit_latency_objects_chunks
             .start_timer();
-        // If checkpoints is empty, object_changes must be empty too.
-        if checkpoints.is_empty() {
-            return Ok(());
+
+        let mut mutated_objects = vec![];
+        let mut deleted_object_ids = vec![];
+        for object in objects {
+            match object {
+                ObjectChangeToCommit::MutatedObject(o) => {
+                    mutated_objects.push(o);
+                }
+                ObjectChangeToCommit::DeletedObject(id) => {
+                    deleted_object_ids.push(id);
+                }
+            }
         }
 
-        let (mutated_objects, deleted_objects) = get_objects_to_commit(object_changes);
-        let mutated_objects = mutated_objects
-            .into_iter()
-            .map(StoredObject::from)
-            .collect::<Vec<_>>();
-
-        let checkpoints = checkpoints
-            .iter()
-            .map(StoredCheckpoint::from)
-            .collect::<Vec<_>>();
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -205,7 +320,7 @@ impl PgIndexerStoreV2 {
                 }
 
                 // Persist deleted objects
-                for deleted_objects_chunk in deleted_objects.chunks(PG_COMMIT_CHUNK_SIZE) {
+                for deleted_objects_chunk in deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE) {
                     diesel::delete(
                         objects::table.filter(
                             objects::object_id.eq_any(
@@ -221,6 +336,39 @@ impl PgIndexerStoreV2 {
                     .context("Failed to write object deletion to PostgresDB")?;
                 }
 
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )
+        .tap(|_| {
+            let elapsed = guard.stop_and_record();
+            info!(
+                elapsed,
+                "Persisted {} objects chunks",
+                mutated_objects.len() + deleted_object_ids.len(),
+            )
+        })
+    }
+
+    fn persist_checkpoints(
+        &self,
+        checkpoints: Vec<IndexedCheckpoint>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        if checkpoints.is_empty() {
+            return Ok(());
+        }
+        let guard = metrics
+            .checkpoint_db_commit_latency_checkpoints
+            .start_timer();
+
+        let checkpoints = checkpoints
+            .iter()
+            .map(StoredCheckpoint::from)
+            .collect::<Vec<_>>();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
                 // Persist checkpoints
                 for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE) {
                     diesel::insert_into(checkpoints::table)
@@ -236,12 +384,7 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(
-                elapsed,
-                "Persisted {} objects and {} checkpoints",
-                mutated_objects.len() + deleted_objects.len(),
-                checkpoints.len()
-            )
+            info!(elapsed, "Persisted {} checkpoints", checkpoints.len());
         })
     }
 
@@ -483,10 +626,14 @@ impl PgIndexerStoreV2 {
         R: Send + 'static,
     {
         let this = self.clone();
-        tokio::task::spawn_blocking(move || f(this))
-            .await
-            .map_err(Into::into)
-            .and_then(std::convert::identity)
+        let current_span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            let _guard = current_span.enter();
+            f(this)
+        })
+        .await
+        .map_err(Into::into)
+        .and_then(std::convert::identity)
     }
 
     fn spawn_blocking_task<F, R>(
@@ -498,7 +645,11 @@ impl PgIndexerStoreV2 {
         R: Send + 'static,
     {
         let this = self.clone();
-        tokio::task::spawn_blocking(move || f(this))
+        let current_span = tracing::Span::current();
+        tokio::task::spawn_blocking(move || {
+            let _guard = current_span.enter();
+            f(this)
+        })
     }
 }
 
@@ -606,17 +757,88 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         unimplemented!()
     }
 
-    async fn persist_objects_and_checkpoints(
+    async fn get_owned_object(
         &self,
-        object_changes: Vec<TransactionObjectChangesV2>,
-        checkpoints: Vec<IndexedCheckpoint>,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError> {
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
         self.execute_in_blocking_worker(move |this| {
-            this.persist_objects_and_checkpoints(object_changes, checkpoints, metrics)
+            let objects: Vec<StoredObject> = read_only_blocking!(&this.blocking_cp, |conn| {
+                let mut query = objects::dsl::objects
+                    .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
+                    .filter(objects::dsl::owner_id.eq(address.to_vec()))
+                    .limit(limit as i64)
+                    .into_boxed();
+                if let Some(object_cursor) = cursor {
+                    query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
+                }
+                query.load::<StoredObject>(conn)
+            })
+            .context("Failed to read stored objects from PostgresDB")?;
+            objects
+                .into_iter()
+                .map(|object| object.try_into_object_read(&this.module_cache))
+                .collect::<Result<Vec<_>, _>>()
         })
         .await
     }
+
+    async fn persist_objects(
+        &self,
+        object_changes: Vec<TransactionObjectChangesV2>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        if object_changes.is_empty() {
+            return Ok(());
+        }
+        let len = object_changes.len();
+        let guard = metrics.checkpoint_db_commit_latency_objects.start_timer();
+        let objects = get_objects_to_commit(object_changes);
+        let chunks = chunk!(objects, self.parallel_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                let metrics_clone = metrics.clone();
+                self.spawn_blocking_task(move |this| this.persist_objects_chunk(c, metrics_clone))
+            })
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all objects chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} objects", len);
+        Ok(())
+    }
+
+    async fn persist_checkpoints(
+        &self,
+        checkpoints: Vec<IndexedCheckpoint>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError> {
+        self.execute_in_blocking_worker(move |this| this.persist_checkpoints(checkpoints, metrics))
+            .await
+    }
+
+    // async fn persist_objects_and_checkpoints(
+    //     &self,
+    //     object_changes: Vec<TransactionObjectChangesV2>,
+    //     checkpoints: Vec<IndexedCheckpoint>,
+    //     metrics: IndexerMetrics,
+    // ) -> Result<(), IndexerError> {
+    //     self.execute_in_blocking_worker(move |this| {
+    //         this.persist_objects_and_checkpoints(object_changes, checkpoints, metrics)
+    //     })
+    //     .await
+    // }
 
     async fn persist_transactions(
         &self,
@@ -626,19 +848,19 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         let guard = metrics
             .checkpoint_db_commit_latency_transactions
             .start_timer();
-        let mut futures = vec![];
-        // FIXME
-        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
-            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
-            .parse::<usize>()
-            .unwrap();
-        for transaction_chunk in transactions.chunks(chunk_size) {
-            let chunk = transaction_chunk.to_vec();
-            let metrics_clone = metrics.clone();
-            futures.push(self.spawn_blocking_task(move |this| {
-                this.persist_transactions_chunk(chunk, metrics_clone)
-            }));
-        }
+        let len = transactions.len();
+
+        let chunks = chunk!(transactions, self.parallel_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                let metrics_clone = metrics.clone();
+                self.spawn_blocking_task(move |this| {
+                    this.persist_transactions_chunk(c, metrics_clone)
+                })
+            })
+            .collect::<Vec<_>>();
+
         futures::future::join_all(futures)
             .await
             .into_iter()
@@ -650,10 +872,8 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
                 ))
             })?;
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} transactions", transactions.len());
+        info!(elapsed, "Persisted {} transactions", len);
         Ok(())
-        // self.spawn_blocking(move |this| this.persist_transactions(transactions, metrics))
-        //     .await
     }
 
     async fn persist_events(
@@ -661,22 +881,20 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         events: Vec<IndexedEvent>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
-        let guard = metrics.checkpoint_db_commit_latency_events.start_timer();
-        let mut futures = vec![];
-        // FIXME
-        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
-            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
-            .parse::<usize>()
-            .unwrap();
-        for event_chunk in events.chunks(chunk_size) {
-            let chunk = event_chunk.to_vec();
-            let metrics_clone = metrics.clone();
-            futures.push(
-                self.spawn_blocking_task(move |this| {
-                    this.persist_events_chunk(chunk, metrics_clone)
-                }),
-            );
+        if events.is_empty() {
+            return Ok(());
         }
+        let len = events.len();
+        let guard = metrics.checkpoint_db_commit_latency_events.start_timer();
+        let chunks = chunk!(events, self.parallel_chunk_size);
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                let metrics_clone = metrics.clone();
+                self.spawn_blocking_task(move |this| this.persist_events_chunk(c, metrics_clone))
+            })
+            .collect::<Vec<_>>();
+
         futures::future::join_all(futures)
             .await
             .into_iter()
@@ -688,7 +906,7 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
                 ))
             })?;
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} events", events.len());
+        info!(elapsed, "Persisted {} events", len);
         Ok(())
         // self.execute_in_blocking_worker(move |this| this.persist_events(events, metrics))
         //     .await
@@ -699,6 +917,9 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         packages: Vec<IndexedPackage>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
+        if packages.is_empty() {
+            return Ok(());
+        }
         self.execute_in_blocking_worker(move |this| this.persist_packages(packages, metrics))
             .await
     }
@@ -708,22 +929,24 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         indices: Vec<TxIndex>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
+        if indices.is_empty() {
+            return Ok(());
+        }
+        let len = indices.len();
         let guard = metrics
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
-        let mut futures = vec![];
-        // FIXME
-        let chunk_size = std::env::var("PG_COMMIT_TX_CHUNK_SIZE")
-            .unwrap_or_else(|e| PG_COMMIT_TX_CHUNK_SIZE.to_string())
-            .parse::<usize>()
-            .unwrap();
-        for indices_chunk in indices.chunks(chunk_size) {
-            let chunk = indices_chunk.to_vec();
-            let metrics_clone = metrics.clone();
-            futures.push(self.spawn_blocking_task(move |this| {
-                this.persist_tx_indices_chunk(chunk, metrics_clone)
-            }));
-        }
+        let chunks = chunk!(indices, self.parallel_chunk_size);
+
+        let futures = chunks
+            .into_iter()
+            .map(|c| {
+                let metrics_clone = metrics.clone();
+                self.spawn_blocking_task(move |this| {
+                    this.persist_tx_indices_chunk(c, metrics_clone)
+                })
+            })
+            .collect::<Vec<_>>();
         futures::future::join_all(futures)
             .await
             .into_iter()
@@ -735,10 +958,8 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
                 ))
             })?;
         let elapsed = guard.stop_and_record();
-        info!(elapsed, "Persisted {} tx_indices", indices.len());
+        info!(elapsed, "Persisted {} tx_indices", len);
         Ok(())
-        // self.execute_in_blocking_worker(move |this| this.persist_tx_indices(indices, metrics))
-        //     .await
     }
 
     async fn persist_epoch(
@@ -895,12 +1116,15 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
 
 fn get_objects_to_commit(
     tx_object_changes: Vec<TransactionObjectChangesV2>,
-) -> (Vec<IndexedObject>, Vec<ObjectID>) {
-    let deleted_changes = tx_object_changes
+) -> Vec<ObjectChangeToCommit> {
+    let deleted_objects = tx_object_changes
         .iter()
         .flat_map(|changes| &changes.deleted_objects)
         .map(|o| o.0)
-        .collect::<HashSet<_>>();
+        .into_iter()
+        .map(ObjectChangeToCommit::DeletedObject)
+        .collect::<Vec<_>>();
+
     let mutated_objects = tx_object_changes
         .into_iter()
         .flat_map(|changes| changes.changed_objects);
@@ -917,8 +1141,23 @@ fn get_objects_to_commit(
             }
         }
     }
-    (
-        latest_objects.into_values().collect(),
-        deleted_changes.into_iter().collect(),
-    )
+    deleted_objects
+        .into_iter()
+        .chain(
+            latest_objects
+                .into_values()
+                .map(StoredObject::from)
+                .map(ObjectChangeToCommit::MutatedObject),
+        )
+        .collect()
+
+    // (
+    //     latest_objects.into_values().collect(),
+    //     deleted_changes.into_iter().collect(),
+    // )
+}
+
+enum ObjectChangeToCommit {
+    MutatedObject(StoredObject),
+    DeletedObject(ObjectID),
 }

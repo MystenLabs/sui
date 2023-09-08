@@ -113,6 +113,12 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    watermarks (latest_main_checkpoint_sequence_number) {
+        latest_main_checkpoint_sequence_number -> Int8,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
     epochs,
@@ -121,4 +127,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     packages,
     transactions,
     tx_indices,
+    watermarks,
 );

@@ -84,6 +84,9 @@ pub enum IndexerError {
     #[error("Indexer generic error: `{0}`")]
     GenericError(String),
 
+    #[error("Indexer failed to resolve object to move struct with error: `{0}`")]
+    ResolveMoveStructError(String),
+
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),
 

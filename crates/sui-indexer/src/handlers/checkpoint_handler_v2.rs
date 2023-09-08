@@ -15,6 +15,7 @@ use sui_types::object::ObjectFormatOptions;
 use tokio::sync::watch;
 use tracing::debug;
 use tracing::info_span;
+use tracing::instrument;
 use tracing::Instrument;
 
 use std::collections::HashMap;
@@ -661,14 +662,11 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         .ready_chunks(checkpoint_commit_batch_size);
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
-        let mut checkpoint_batch = vec![];
-        let mut tx_batch = vec![];
-        let mut events_batch = vec![];
-        let mut tx_indices_batch = vec![];
-        let mut object_changes_batch = vec![];
-        let mut packages_batch = vec![];
-        let mut _epoch_batch = None;
-
+        // TODO: don't batch checkpoints across epoch boundary (for partitioning management)
+        // impossible but as a safety check
+        if indexed_checkpoint_batch.is_empty() {
+            continue;
+        }
         if config.skip_db_commit {
             info!(
                 "[Checkpoint/Tx] Downloaded and indexed checkpoint {:?} - {:?} successfully, skipping DB commit...",
@@ -677,141 +675,130 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             );
             continue;
         }
-
-        for indexed_checkpoint in indexed_checkpoint_batch {
-            let TemporaryCheckpointStoreV2 {
-                checkpoint,
-                transactions,
-                events,
-                tx_indices,
-                object_changes,
-                packages,
-                epoch,
-            } = indexed_checkpoint;
-            checkpoint_batch.push(checkpoint);
-            tx_batch.push(transactions);
-            events_batch.push(events);
-            tx_indices_batch.push(tx_indices);
-            object_changes_batch.push(object_changes);
-            packages_batch.push(packages);
-            _epoch_batch = epoch;
-        }
-
-        let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
-        let last_checkpoint_seq = checkpoint_batch.last().as_ref().unwrap().sequence_number;
-
-        let guard = metrics.checkpoint_db_commit_latency.start_timer();
-        let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
-        let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
-        let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
-        let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
-        let checkpoint_num = checkpoint_batch.len();
-        let tx_count = tx_batch.len();
-
-        // TODO: persist epoch
-        {
-            let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
-            futures::future::join_all(vec![
-                state
-                    .persist_transactions(tx_batch, metrics.clone())
-                    .instrument(info_span!(
-                        "persist_transactions for checkpoints",
-                        first_checkpoint_seq,
-                        last_checkpoint_seq
-                    )),
-                state
-                    .persist_tx_indices(tx_indices_batch, metrics.clone())
-                    .instrument(info_span!(
-                        "persist_tx_indices for checkpoints",
-                        first_checkpoint_seq,
-                        last_checkpoint_seq
-                    )),
-                state
-                    .persist_events(events_batch, metrics.clone())
-                    .instrument(info_span!(
-                        "persist_events for checkpoints",
-                        first_checkpoint_seq,
-                        last_checkpoint_seq
-                    )),
-                state
-                    .persist_packages(packages_batch, metrics.clone())
-                    .instrument(info_span!(
-                        "persist_packages for checkpoints",
-                        first_checkpoint_seq,
-                        last_checkpoint_seq
-                    )),
-            ])
-            .await
-            .into_iter()
-            .map(|res| {
-                if res.is_err() {
-                    error!("Failed to persist data with error: {:?}", res);
-                }
-                res
-            })
-            .collect::<IndexerResult<Vec<_>>>()
-            .expect("Persisting data into DB should not fail.");
-        }
-
-        // Note: the reason that we persist object changes with checkpoint
-        // atomically is that when we batch process checkpoints, some hot
-        // objects may be updated multiple times in the batch. Because we
-        // only store the latest objects, it's possible that the intermediate
-        // verisons will be nowhere to be found unless we ask the the data
-        // source again. Then if the idnexer restarts and picks up checkpoints
-        // that is halfway through (objects changes persisted but not checkpoints)
-        // it will have difficulty in getting the depended objects and fail.
-        // When we switch to also getting input objects from the data source,
-        // we can largely remove this atomicity requirement.
-        state
-            .persist_objects_and_checkpoints(
-                object_changes_batch,
-                checkpoint_batch,
-                metrics.clone(),
-            )
-            .instrument(info_span!(
-                "persist_objects_and_checkpoints for checkpoints",
-                first_checkpoint_seq,
-                last_checkpoint_seq
-            ))
-            .await
-            .tap_err(|e| {
-                error!(
-                    "Failed to persist checkpoint data with error: {}",
-                    e.to_string()
-                );
-            })
-            .expect("Persisting data into DB should not fail.");
-        let elapsed = guard.stop_and_record();
-
-        commit_notifier
-            .send(Some(last_checkpoint_seq))
-            .expect("Commit watcher should not be closed");
-
-        metrics
-            .latest_tx_checkpoint_sequence_number
-            .set(last_checkpoint_seq as i64);
-
-        metrics
-            .total_tx_checkpoint_committed
-            .inc_by(checkpoint_num as u64);
-        metrics.total_transaction_committed.inc_by(tx_count as u64);
-        info!(
-            elapsed,
-            "Checkpoint {}-{} committed with {} transactions.",
-            first_checkpoint_seq,
-            last_checkpoint_seq,
-            tx_count,
-        );
-        metrics
-            .transaction_per_checkpoint
-            .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
-        // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
-        // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
-        metrics
-            .thousand_transaction_avg_db_commit_latency
-            .observe(elapsed * 1000.0 / tx_count as f64);
+        // let first_checkpoint_seq = indexed_checkpoint_batch.first().as_ref().unwrap().checkpoint.sequence_number;
+        // let last_checkpoint_seq = indexed_checkpoint_batch.last().as_ref().unwrap().checkpoint.sequence_number;
+        commit_checkpoints(&state, indexed_checkpoint_batch, &metrics, &commit_notifier).await;
     }
+}
+
+// Unwrap: Caller needs to make sure indexed_checkpoint_batch is not empty
+#[instrument(skip_all, fields(
+    first = indexed_checkpoint_batch.first().as_ref().unwrap().checkpoint.sequence_number,
+    last = indexed_checkpoint_batch.last().as_ref().unwrap().checkpoint.sequence_number
+))]
+async fn commit_checkpoints<S>(
+    state: &S,
+    indexed_checkpoint_batch: Vec<TemporaryCheckpointStoreV2>,
+    metrics: &IndexerMetrics,
+    commit_notifier: &watch::Sender<Option<CheckpointSequenceNumber>>,
+    // first_checkpoint_seq: u64,
+    // last_checkpoint_seq: u64,
+) where
+    S: IndexerStoreV2 + Clone + Sync + Send + 'static,
+{
+    let mut checkpoint_batch = vec![];
+    let mut tx_batch = vec![];
+    let mut events_batch = vec![];
+    let mut tx_indices_batch = vec![];
+    let mut object_changes_batch = vec![];
+    let mut packages_batch = vec![];
+    let mut _epoch_batch = None;
+
+    for indexed_checkpoint in indexed_checkpoint_batch {
+        let TemporaryCheckpointStoreV2 {
+            checkpoint,
+            transactions,
+            events,
+            tx_indices,
+            object_changes,
+            packages,
+            epoch,
+        } = indexed_checkpoint;
+        checkpoint_batch.push(checkpoint);
+        tx_batch.push(transactions);
+        events_batch.push(events);
+        tx_indices_batch.push(tx_indices);
+        object_changes_batch.push(object_changes);
+        packages_batch.push(packages);
+        _epoch_batch = epoch;
+    }
+
+    let first_checkpoint_seq = checkpoint_batch.first().as_ref().unwrap().sequence_number;
+    let last_checkpoint_seq = checkpoint_batch.last().as_ref().unwrap().sequence_number;
+
+    let guard = metrics.checkpoint_db_commit_latency.start_timer();
+    let tx_batch = tx_batch.into_iter().flatten().collect::<Vec<_>>();
+    let tx_indices_batch = tx_indices_batch.into_iter().flatten().collect::<Vec<_>>();
+    let events_batch = events_batch.into_iter().flatten().collect::<Vec<_>>();
+    let packages_batch = packages_batch.into_iter().flatten().collect::<Vec<_>>();
+    let checkpoint_num = checkpoint_batch.len();
+    let tx_count = tx_batch.len();
+
+    // TODO: persist epoch
+    {
+        let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
+        futures::future::join_all(vec![
+            state.persist_transactions(tx_batch, metrics.clone()),
+            state.persist_tx_indices(tx_indices_batch, metrics.clone()),
+            state.persist_events(events_batch, metrics.clone()),
+            state.persist_packages(packages_batch, metrics.clone()),
+            state.persist_objects(object_changes_batch, metrics.clone()),
+
+        ])
+        .await
+        .into_iter()
+        .map(|res| {
+            if res.is_err() {
+                error!("Failed to persist data with error: {:?}", res);
+            }
+            res
+        })
+        .collect::<IndexerResult<Vec<_>>>()
+        .expect("Persisting data into DB should not fail.");
+    }
+
+    state
+        .persist_checkpoints(
+            checkpoint_batch,
+            metrics.clone(),
+        )
+        .await
+        .tap_err(|e| {
+            error!(
+                "Failed to persist checkpoint data with error: {}",
+                e.to_string()
+            );
+        })
+        .expect("Persisting data into DB should not fail.");
+    let elapsed = guard.stop_and_record();
+
+    commit_notifier
+        .send(Some(last_checkpoint_seq))
+        .expect("Commit watcher should not be closed");
+
+    metrics
+        .latest_tx_checkpoint_sequence_number
+        .set(last_checkpoint_seq as i64);
+
+    metrics
+        .total_tx_checkpoint_committed
+        .inc_by(checkpoint_num as u64);
+    metrics.total_transaction_committed.inc_by(tx_count as u64);
+    info!(
+        elapsed,
+        "Checkpoint {}-{} committed with {} transactions.",
+        first_checkpoint_seq,
+        last_checkpoint_seq,
+        tx_count,
+    );
+    metrics
+        .transaction_per_checkpoint
+        .observe(tx_count as f64 / (last_checkpoint_seq - first_checkpoint_seq + 1) as f64);
+    // 1000.0 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
+    // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
+    metrics
+        .thousand_transaction_avg_db_commit_latency
+        .observe(elapsed * 1000.0 / tx_count as f64);
 }
 
 pub fn get_deleted_objects(effects: &TransactionEffects) -> Vec<ObjectRef> {
@@ -864,9 +851,8 @@ fn try_create_dynamic_field_info(
 
     let move_struct = move_object
         .to_move_struct_with_resolver(ObjectFormatOptions::default(), resolver)
-        // FIXME use a better error
         .map_err(|e| {
-            IndexerError::GenericError(format!(
+            IndexerError::ResolveMoveStructError(format!(
                 "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
                 o.id(),
                 o.version(),

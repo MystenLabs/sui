@@ -12,7 +12,7 @@ use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent,
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::digests::CheckpointDigest;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -70,6 +70,13 @@ pub trait IndexerStoreV2 {
 
     async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError>;
 
+    async fn get_owned_object(
+        &self,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError>;
+
     // TODO: combine all get_transaction* methods
     async fn get_transaction_by_digest(
         &self,
@@ -82,9 +89,21 @@ pub trait IndexerStoreV2 {
         tx_digests: &[String],
     ) -> Result<Vec<SuiTransactionBlockResponse>, IndexerError>;
 
-    async fn persist_objects_and_checkpoints(
+    // async fn persist_objects_and_checkpoints(
+    //     &self,
+    //     object_changes: Vec<TransactionObjectChangesV2>,
+    //     checkpoints: Vec<IndexedCheckpoint>,
+    //     metrics: IndexerMetrics,
+    // ) -> Result<(), IndexerError>;
+
+    async fn persist_objects(
         &self,
         object_changes: Vec<TransactionObjectChangesV2>,
+        metrics: IndexerMetrics,
+    ) -> Result<(), IndexerError>;
+
+    async fn persist_checkpoints(
+        &self,
         checkpoints: Vec<IndexedCheckpoint>,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError>;
