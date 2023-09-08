@@ -38,8 +38,8 @@ use fastcrypto::traits::EncodeDecodeBase64;
 use std::collections::HashMap;
 use std::str::FromStr;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse,
+    SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
