@@ -3772,7 +3772,10 @@ impl AuthorityState {
                 &tx,
                 checkpoint,
                 "authenticator state tx has already been executed via state sync",
-                |temporary_store| get_authenticator_state(&temporary_store.written).ok(),
+                |temporary_store| {
+                    get_authenticator_state(&temporary_store.written)
+                        .expect("read from TemporaryStore cannot fail")
+                },
             )
             .await?;
 

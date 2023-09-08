@@ -2007,7 +2007,9 @@ async fn create_epoch_store(
     let epoch_start_config = EpochStartConfiguration::new(
         sys_state,
         CheckpointDigest::random(),
-        get_authenticator_state(&authority_state.database).is_ok(),
+        get_authenticator_state(&authority_state.database)
+            .expect("read cannot fail")
+            .is_some(),
     );
 
     let registry = Registry::new();
