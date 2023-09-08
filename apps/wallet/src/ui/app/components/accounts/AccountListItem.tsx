@@ -15,9 +15,10 @@ type AccountListItemProps = {
 	account: SerializedUIAccount;
 	editable?: boolean;
 	selected?: boolean;
+	showLocked?: boolean;
 };
 
-export function AccountListItem({ account, editable }: AccountListItemProps) {
+export function AccountListItem({ account, editable, showLocked = true }: AccountListItemProps) {
 	const activeAccount = useActiveAccount();
 	const { data: domainName } = useResolveSuiNSName(account?.address);
 	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
@@ -28,23 +29,25 @@ export function AccountListItem({ account, editable }: AccountListItemProps) {
 			name={account.nickname || domainName || formatAddress(account.address)}
 			isActiveAccount={account.address === activeAccount?.address}
 			after={
-				<div className="ml-auto">
-					<div className="flex items-center justify-center">
-						<LockUnlockButton
-							isLocked={account.isLocked}
-							isLoading={isLoading && accountToUnlock?.id === account.id}
-							onClick={(e) => {
-								// prevent the account from being selected when clicking the lock button
-								e.stopPropagation();
-								if (account.isLocked) {
-									unlockAccount(account);
-								} else {
-									lockAccount(account);
-								}
-							}}
-						/>
+				showLocked ? (
+					<div className="ml-auto">
+						<div className="flex items-center justify-center">
+							<LockUnlockButton
+								isLocked={account.isLocked}
+								isLoading={isLoading && accountToUnlock?.id === account.id}
+								onClick={(e) => {
+									// prevent the account from being selected when clicking the lock button
+									e.stopPropagation();
+									if (account.isLocked) {
+										unlockAccount(account);
+									} else {
+										lockAccount(account);
+									}
+								}}
+							/>
+						</div>
 					</div>
-				</div>
+				) : null
 			}
 			accountID={account.id}
 			editable={editable}

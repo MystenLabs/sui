@@ -26,6 +26,8 @@ import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsP
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
 import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
+import { ResetPasswordPage } from './pages/accounts/ResetPasswordPage';
+import { ResetWarningPage } from './pages/accounts/ResetWarningPage';
 import { WelcomePage } from './pages/accounts/WelcomePage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
 
@@ -159,6 +161,9 @@ const App = () => {
 	}
 	return (
 		<Routes>
+			<Route path="reset-password/*" element={<ResetPasswordPage />}>
+				<Route path="warning" element={<ResetWarningPage />} />
+			</Route>
 			<Route path="forgot-password" element={<ForgotPasswordPage />} />
 			<Route path="restricted" element={<RestrictedPage />} />
 			<Route path="/*" element={<HomePage />}>

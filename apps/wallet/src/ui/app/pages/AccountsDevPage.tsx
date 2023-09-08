@@ -39,7 +39,7 @@ import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccoun
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
-export const testPassNewAccounts = '61916a448d7885641';
+export const testPassNewAccounts = 'test';
 const testMnemonic =
 	'lawsuit welcome deputy faith shadow monitor common paper candy horse panda history';
 const mnemonicFirstKeyPair: ExportedKeypair = {

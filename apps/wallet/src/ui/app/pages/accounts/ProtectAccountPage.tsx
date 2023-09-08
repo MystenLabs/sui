@@ -35,6 +35,7 @@ export function ProtectAccountPage() {
 	const [searchParams] = useSearchParams();
 	const accountType = searchParams.get('accountType') || '';
 	const successRedirect = searchParams.get('successRedirect') || '/tokens';
+	const isResetting = Boolean(searchParams.get('reset')) || false;
 	const navigate = useNavigate();
 	const { data: accounts } = useAccounts();
 	const createMutation = useCreateAccountsMutation();
@@ -48,7 +49,7 @@ export function ProtectAccountPage() {
 			typeof hasPasswordAccounts !== 'undefined' &&
 			!(createMutation.isSuccess || createMutation.isLoading)
 		) {
-			setShowVerifyPasswordView(hasPasswordAccounts);
+			setShowVerifyPasswordView(hasPasswordAccounts && !isResetting);
 		}
 	}, [hasPasswordAccounts, createMutation.isSuccess, createMutation.isLoading]);
 	const createAccountCallback = useCallback(
@@ -78,6 +79,8 @@ export function ProtectAccountPage() {
 	if (!isAllowedAccountType(accountType)) {
 		return <Navigate to="/" replace />;
 	}
+
+	console.log(showVerifyPasswordView === null && !isResetting);
 	return (
 		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 overflow-auto w-popup-width max-h-popup-height min-h-popup-minimum h-screen">
 			<Loading loading={showVerifyPasswordView === null}>
@@ -100,11 +103,12 @@ export function ProtectAccountPage() {
 						<div className="mt-6 w-full grow">
 							<ProtectAccountForm
 								cancelButtonText="Back"
-								submitButtonText="Create Wallet"
+								submitButtonText={isResetting ? 'Reset Password ' : 'Create Wallet'}
 								onSubmit={async ({ password, autoLock }) => {
 									await autoLockMutation.mutateAsync({ minutes: autoLockDataToMinutes(autoLock) });
 									await createAccountCallback(password.input, accountType);
 								}}
+								displayToS={!isResetting}
 							/>
 						</div>
 					</>

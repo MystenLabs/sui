@@ -5,9 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { ImportRecoveryPhraseForm } from '../../components/accounts/ImportRecoveryPhraseForm';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
+import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export function ForgotPasswordPage() {
 	const navigate = useNavigate();
+	const [, setFormValues] = useAccountsFormContext();
 	return (
 		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 h-full overflow-auto gap-6">
 			<div className="flex flex-col items-center gap-2">
@@ -22,13 +25,12 @@ export function ForgotPasswordPage() {
 				<ImportRecoveryPhraseForm
 					cancelButtonText="Cancel"
 					submitButtonText="Next"
-					onSubmit={(formValues) => {
-						// eslint-disable-next-line no-console
-						console.log(
-							'TODO: Do something when the user submits the form successfully',
-							formValues,
-						);
-						navigate('/accounts/reset-password');
+					onSubmit={({ recoveryPhrase }) => {
+						setFormValues({
+							type: 'import-mnemonic',
+							entropy: entropyToSerialized(mnemonicToEntropy(recoveryPhrase.join(' '))),
+						});
+						navigate('/reset-password/warning/');
 					}}
 				/>
 			</div>
