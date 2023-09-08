@@ -49,7 +49,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, error_span, info, trace, warn, Instrument};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -971,6 +971,7 @@ impl CheckpointBuilder {
                         &mut signatures,
                         sequence_number,
                     )
+                    .instrument(error_span!("augment_epoch_last_checkpoint"))
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;
@@ -1086,15 +1087,6 @@ impl CheckpointBuilder {
         checkpoint: CheckpointSequenceNumber,
         // TODO: Check whether we must use anyhow::Result or can we use SuiResult.
     ) -> anyhow::Result<SuiSystemState> {
-        if let Some(effects) = self
-            .state
-            .create_and_execute_authenticator_state_tx(&self.epoch_store, checkpoint)
-            .await?
-        {
-            checkpoint_effects.push(effects);
-            signatures.push(vec![]);
-        }
-
         let (system_state, effects) = self
             .state
             .create_and_execute_advance_epoch_tx(

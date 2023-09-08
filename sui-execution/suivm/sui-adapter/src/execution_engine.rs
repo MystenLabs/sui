@@ -553,10 +553,11 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateCreate(_)
-            | TransactionKind::AuthenticatorStateUpdate(_)
-            | TransactionKind::AuthenticatorStateExpire(_) => {
-                panic!("AuthenticatorState{{Create|Update|Expire}} should not exist in suivm");
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                panic!("AuthenticatorStateUpdate should not exist in suivm");
+            }
+            TransactionKind::EndOfEpochTransaction(_) => {
+                panic!("EndOfEpochTransaction should not exist in suivm");
             }
         }
     }

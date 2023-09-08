@@ -161,18 +161,19 @@ async fn test_create_authenticator_state_object() {
         });
     }
 
+    // wait until feature is enabled
     test_cluster.wait_for_protocol_version(24.into()).await;
+    // wait until next epoch - authenticator state object is created at the end of the first epoch
+    // in which it is supported.
     test_cluster.wait_for_epoch(None).await;
 
     for h in &handles {
         h.with(|node| {
-            let auth_state = node
-                .state()
+            node.state()
                 .database
                 .get_latest_object_ref_or_tombstone(SUI_AUTHENTICATOR_STATE_OBJECT_ID)
                 .unwrap()
-                .unwrap();
-            dbg!(auth_state);
+                .expect("auth state object should exist");
         });
     }
 }

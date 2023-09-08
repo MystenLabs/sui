@@ -261,10 +261,7 @@ mod checked {
             check_one_object(&owner_address, object_kind, &object, system_transaction)?;
             all_objects.push((object_kind, object));
         }
-        if !transaction.is_genesis_tx()
-            && !transaction.is_authenticator_state_create_tx()
-            && all_objects.is_empty()
-        {
+        if !transaction.is_genesis_tx() && all_objects.is_empty() {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 

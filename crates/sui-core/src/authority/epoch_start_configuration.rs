@@ -5,6 +5,7 @@ use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 
 use std::fmt;
+use sui_types::base_types::SequenceNumber;
 use sui_types::epoch_data::EpochData;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointTimestamp};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -16,7 +17,7 @@ pub trait EpochStartConfigTrait {
     fn epoch_digest(&self) -> CheckpointDigest;
     fn epoch_start_state(&self) -> &EpochStartSystemState;
     fn flags(&self) -> &[EpochFlag];
-    fn authenticator_state_exists(&self) -> bool;
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
@@ -38,13 +39,13 @@ impl EpochStartConfiguration {
     pub fn new(
         system_state: EpochStartSystemState,
         epoch_digest: CheckpointDigest,
-        authenticator_state_exists: bool,
+        authenticator_obj_initial_shared_version: Option<SequenceNumber>,
     ) -> Self {
         Self::new_v3(
             system_state,
             epoch_digest,
             EpochFlag::default_flags_for_new_epoch(),
-            authenticator_state_exists,
+            authenticator_obj_initial_shared_version,
         )
     }
 
@@ -68,13 +69,13 @@ impl EpochStartConfiguration {
         system_state: EpochStartSystemState,
         epoch_digest: CheckpointDigest,
         flags: Vec<EpochFlag>,
-        authenticator_state_exists: bool,
+        authenticator_obj_initial_shared_version: Option<SequenceNumber>,
     ) -> Self {
         Self::V3(EpochStartConfigurationV3::new(
             system_state,
             epoch_digest,
             flags,
-            authenticator_state_exists,
+            authenticator_obj_initial_shared_version,
         ))
     }
 
@@ -114,7 +115,7 @@ pub struct EpochStartConfigurationV3 {
     epoch_digest: CheckpointDigest,
     flags: Vec<EpochFlag>,
     /// Does the authenticator state object exist at the beginning of the epoch?
-    authenticator_state_exists: bool,
+    authenticator_obj_initial_shared_version: Option<SequenceNumber>,
 }
 
 impl EpochStartConfigurationV1 {
@@ -145,13 +146,13 @@ impl EpochStartConfigurationV3 {
         system_state: EpochStartSystemState,
         epoch_digest: CheckpointDigest,
         flags: Vec<EpochFlag>,
-        authenticator_state_exists: bool,
+        authenticator_obj_initial_shared_version: Option<SequenceNumber>,
     ) -> Self {
         Self {
             system_state,
             epoch_digest,
             flags,
-            authenticator_state_exists,
+            authenticator_obj_initial_shared_version,
         }
     }
 }
@@ -169,8 +170,8 @@ impl EpochStartConfigTrait for EpochStartConfigurationV1 {
         &[]
     }
 
-    fn authenticator_state_exists(&self) -> bool {
-        false
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
     }
 }
 
@@ -187,8 +188,8 @@ impl EpochStartConfigTrait for EpochStartConfigurationV2 {
         &self.flags
     }
 
-    fn authenticator_state_exists(&self) -> bool {
-        false
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        None
     }
 }
 
@@ -205,8 +206,8 @@ impl EpochStartConfigTrait for EpochStartConfigurationV3 {
         &self.flags
     }
 
-    fn authenticator_state_exists(&self) -> bool {
-        self.authenticator_state_exists
+    fn authenticator_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
+        self.authenticator_obj_initial_shared_version
     }
 }
 

@@ -39,9 +39,9 @@ use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
 use sui_types::transaction::{
-    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-    TransactionKind, VersionedProtocolMessage,
+    Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
+    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -285,12 +285,10 @@ pub enum SuiTransactionBlockKind {
     /// A series of transactions where the results of one transaction can be used in future
     /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
-    /// An transaction which creates the global authenticator state
-    AuthenticatorStateCreate(SuiAuthenticatorStateCreate),
-    /// An transaction which updates global authenticator state
+    /// A transaction which updates global authenticator state
     AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
-    /// An transaction which expires global authenticator state
-    AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
+    /// The transaction which occurs only at the end of the epoch
+    EndOfEpochTransaction(SuiEndOfEpochTransaction),
     // .. more transaction types go here
 }
 
@@ -321,14 +319,11 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
-            Self::AuthenticatorStateCreate(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Create")?;
-            }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
             }
-            Self::AuthenticatorStateExpire(_) => {
-                writeln!(writer, "Transaction Kind : Authenticator State Expire")?;
+            Self::EndOfEpochTransaction(_) => {
+                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -338,13 +333,7 @@ impl Display for SuiTransactionBlockKind {
 impl SuiTransactionBlockKind {
     fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
-            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
-                epoch: e.epoch,
-                storage_charge: e.storage_charge,
-                computation_charge: e.computation_charge,
-                storage_rebate: e.storage_rebate,
-                epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
-            }),
+            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(e.into()),
             TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
                 objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
@@ -358,11 +347,6 @@ impl SuiTransactionBlockKind {
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
-            TransactionKind::AuthenticatorStateCreate(update) => {
-                Self::AuthenticatorStateCreate(SuiAuthenticatorStateCreate {
-                    epoch: update.epoch,
-                })
-            }
             TransactionKind::AuthenticatorStateUpdate(update) => {
                 Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
                     epoch: update.epoch,
@@ -374,10 +358,31 @@ impl SuiTransactionBlockKind {
                         .collect(),
                 })
             }
-            TransactionKind::AuthenticatorStateExpire(expire) => {
-                Self::AuthenticatorStateExpire(SuiAuthenticatorStateExpire {
-                    epoch: expire.epoch,
-                    min_epoch: expire.min_epoch,
+            TransactionKind::EndOfEpochTransaction(end_of_epoch_tx) => {
+                Self::EndOfEpochTransaction(SuiEndOfEpochTransaction {
+                    transactions: end_of_epoch_tx
+                        .into_iter()
+                        .map(|tx| match tx {
+                            EndOfEpochTransactionKind::ChangeEpoch(e) => {
+                                SuiEndOfEpochTransactionKind::ChangeEpoch(e.into())
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateCreate(
+                                    SuiAuthenticatorStateCreate {
+                                        epoch: create.epoch,
+                                    },
+                                )
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateExpire(
+                                    SuiAuthenticatorStateExpire {
+                                        epoch: expire.epoch,
+                                        min_epoch: expire.min_epoch,
+                                    },
+                                )
+                            }
+                        })
+                        .collect(),
                 })
             }
         })
@@ -396,9 +401,8 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
-            Self::AuthenticatorStateCreate(_) => "AuthenticatorStateCreate",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
-            Self::AuthenticatorStateExpire(_) => "AuthenticatorStateExpire",
+            Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
 }
@@ -421,6 +425,18 @@ pub struct SuiChangeEpoch {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub epoch_start_timestamp_ms: u64,
+}
+
+impl From<ChangeEpoch> for SuiChangeEpoch {
+    fn from(e: ChangeEpoch) -> Self {
+        Self {
+            epoch: e.epoch,
+            storage_charge: e.storage_charge,
+            computation_charge: e.computation_charge,
+            storage_rebate: e.storage_rebate,
+            epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -1080,14 +1096,6 @@ pub struct SuiConsensusCommitPrologue {
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiAuthenticatorStateCreate {
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: u64,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiAuthenticatorStateUpdate {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
@@ -1097,6 +1105,28 @@ pub struct SuiAuthenticatorStateUpdate {
     pub round: u64,
 
     pub new_active_jwks: Vec<SuiActiveJwk>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiEndOfEpochTransaction {
+    pub transactions: Vec<SuiEndOfEpochTransactionKind>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum SuiEndOfEpochTransactionKind {
+    ChangeEpoch(SuiChangeEpoch),
+    AuthenticatorStateCreate(SuiAuthenticatorStateCreate),
+    AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateCreate {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
 }
 
 #[serde_as]
