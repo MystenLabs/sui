@@ -59,7 +59,7 @@ export function ResetWarningPage() {
 					<div className="flex flex-col gap-4">
 						<AccountGroupHeader text="Imported accounts" />
 						{importedAccounts.map((account) => {
-							return <AccountListItem account={account} />;
+							return <AccountListItem account={account} showLocked={false} />;
 						})}
 					</div>
 				)}

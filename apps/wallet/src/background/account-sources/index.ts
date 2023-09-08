@@ -8,7 +8,7 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
-import { getAccountsBySourceID } from '../accounts';
+import { getAccountsBySourceID, getAccountsByType } from '../accounts';
 import { type UiConnection } from '../connections/UiConnection';
 import { getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
@@ -82,14 +82,16 @@ async function deleteAccountSourceByType({
 				const mnemonicAccountSources = await getAccountSources({ type: 'mnemonic' });
 				const sourceIds = mnemonicAccountSources.map((source) => source.id);
 				const accountPromises = sourceIds.map((id) => getAccountsBySourceID(id));
-				const allAccountsOfSourceType = await Promise.all(accountPromises);
+				const allAccountsOfSources = await Promise.all(accountPromises);
 				const accountIds: string[] = [];
-				allAccountsOfSourceType.forEach((accForSource) => {
+				allAccountsOfSources.forEach((accForSource) => {
 					accForSource?.forEach((acc) => {
 						accountIds.push(acc.id);
 					});
 				});
-				await (await getDB()).accounts.bulkDelete(accountIds);
+				const allImportedAccounts = await getAccountsByType('imported');
+				const allAccountIds = accountIds.concat(allImportedAccounts?.map((acc) => acc.id) || []);
+				await (await getDB()).accounts.bulkDelete(allAccountIds);
 				await (await getDB()).accountSources.bulkDelete(sourceIds);
 				return true;
 			} catch (e) {

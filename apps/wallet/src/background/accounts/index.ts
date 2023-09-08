@@ -75,6 +75,16 @@ export async function getAccountsBySourceID(id: string) {
 	return accountSources;
 }
 
+export async function getAccountsByType(type: string) {
+	const accountSources = await (await getDB()).accounts
+		.filter((account) => account.type === type)
+		.toArray();
+	if (!accountSources) {
+		return null;
+	}
+	return accountSources;
+}
+
 export async function getAccountsByAddress(address: string) {
 	return (await (await getDB()).accounts.where('address').equals(address).toArray()).map(toAccount);
 }
