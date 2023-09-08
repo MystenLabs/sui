@@ -58,7 +58,7 @@ The documentation of the `Settings` struct in `./src/settings.rs` provides detai
 ```json
 "repository": {
   "url": "http://[your_token]@github.com/mystenlabs/sui.git",
-  "commit": "orchestrator"
+  "commit": "main"
 }
 ```
 
@@ -86,7 +86,7 @@ Running benchmarks involves installing the specified version of the codebase on 
 cargo run --bin sui-aws-orchestrator -- benchmark --committee 10 fixed-load --loads 200 --duration 180
 ```
 
-In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
+In a network of 10 validators, each with a corresponding load generator, each load generator submits a fixed load of 20 tx/s. Performance measurements are collected by regularly scraping the Prometheus metrics exposed by the load generators. The `sui-aws-orchestrator` binary provides additional commands to run a specific number of load generators on separate machines.
 
 ## Step 5. Monitoring
 

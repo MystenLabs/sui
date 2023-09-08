@@ -7,6 +7,6 @@
     "specs": "m5d.8xlarge",
     "repository": {
         "url": "https://github.com/mystenlabs/sui.git",
-        "commit": "orchestrator"
+        "commit": "main"
     }
 }
