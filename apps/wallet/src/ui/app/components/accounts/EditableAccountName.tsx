@@ -5,7 +5,6 @@ import { useZodForm } from '@mysten/core';
 import { type ComponentProps, forwardRef } from 'react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
-import { useAccounts } from '../../hooks/useAccounts';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Form } from '../../shared/forms/Form';
 
