@@ -78,21 +78,25 @@ async function deleteAccountSourceByType({
 }: MethodPayload<'deleteAccountSourceByType'>['args']) {
 	switch (type) {
 		case 'mnemonic':
-			const mnemonicAccountSources = await getAccountSources({ type: 'mnemonic' });
-			const ids = mnemonicAccountSources.map((source) => source.id);
-			const accountPromises = ids.map((id) => getAccountsBySourceID(id));
-			const accountResults = await Promise.all(accountPromises);
-			const accids: string[] = [];
-			accountResults.forEach((accForSource) => {
-				if (accForSource) {
-					accForSource.forEach((acc) => {
-						accids.push(acc.id);
-					});
-				}
-			});
-			const res = await (await getDB()).accounts.bulkDelete(accids);
-			const result = await (await getDB()).accountSources.bulkDelete(ids);
-			return true;
+			try {
+				const mnemonicAccountSources = await getAccountSources({ type: 'mnemonic' });
+				const sourceIds = mnemonicAccountSources.map((source) => source.id);
+				const accountPromises = sourceIds.map((id) => getAccountsBySourceID(id));
+				const allAccountsOfSourceType = await Promise.all(accountPromises);
+				const accountIds: string[] = [];
+				allAccountsOfSourceType.forEach((accForSource) => {
+					if (accForSource) {
+						accForSource.forEach((acc) => {
+							accountIds.push(acc.id);
+						});
+					}
+				});
+				await (await getDB()).accounts.bulkDelete(accountIds);
+				await (await getDB()).accountSources.bulkDelete(sourceIds);
+				return true;
+			} catch (e) {
+				throw new Error(`Failed to delete Account source of type: ${type}`);
+			}
 		default: {
 			throw new Error(`Unknown Account source type ${type}`);
 		}
