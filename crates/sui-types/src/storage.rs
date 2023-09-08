@@ -8,7 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
-use crate::execution::LoadedChildObjectMetadata;
+use crate::execution::{ExecutionResults, LoadedChildObjectMetadata};
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -19,11 +19,11 @@ use crate::transaction::{SenderSignedData, TransactionDataAPI, VerifiedTransacti
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
-    event::Event,
     object::Object,
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -124,12 +124,9 @@ pub trait ChildObjectResolver {
 pub trait Storage {
     fn reset(&mut self);
 
-    /// Record an event that happened during execution
-    fn log_event(&mut self, event: Event);
-
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+    fn record_execution_results(&mut self, results: ExecutionResults);
 
     fn save_loaded_child_objects(
         &mut self,
@@ -1139,5 +1136,28 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         self.0.insert_committee(new_committee)
+    }
+}
+
+pub trait BackingStore:
+    BackingPackageStore
+    + ChildObjectResolver
+    + GetModule<Error = SuiError, Item = CompiledModule>
+    + ObjectStore
+    + ParentSync
+{
+    fn as_object_store(&self) -> &dyn ObjectStore;
+}
+
+impl<T> BackingStore for T
+where
+    T: BackingPackageStore,
+    T: ChildObjectResolver,
+    T: GetModule<Error = SuiError, Item = CompiledModule>,
+    T: ObjectStore,
+    T: ParentSync,
+{
+    fn as_object_store(&self) -> &dyn ObjectStore {
+        self
     }
 }

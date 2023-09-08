@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 async-trait.workspace = true
-base64 = "0.13.0"
+base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 derive_builder.workspace = true

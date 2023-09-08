@@ -10,9 +10,9 @@ import { type QueryKey } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
 
 import { growthbook } from '../experimentation/feature-gating';
+import { accountsQueryKey } from '../helpers/query-client-keys';
 import { queryClient } from '../helpers/queryClient';
-import { accountSourcesQueryKey } from '../hooks/accounts-v2/useAccountSources';
-import { accountsQueryKey } from '../hooks/accounts-v2/useAccounts';
+import { accountSourcesQueryKey } from '../hooks/useAccountSources';
 import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
@@ -22,14 +22,10 @@ import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
 import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
-import { setKeyringStatus } from '_redux/slices/account';
 import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
-import { type AccountsPublicInfoUpdates } from '_src/background/keyring/accounts';
-import { NEW_ACCOUNTS_ENABLED } from '_src/shared/constants';
 import {
 	type MethodPayload,
 	isMethodPayload,
@@ -46,7 +42,7 @@ import type { GetPermissionRequests, PermissionResponse } from '_payloads/permis
 import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import type { NetworkEnvType } from '_src/background/NetworkEnv';
+import type { NetworkEnvType } from '_src/shared/api-env';
 import type { AppDispatch } from '_store';
 
 const entitiesToClientQueryKeys: Record<UIAccessibleEntityType, QueryKey> = {
@@ -77,7 +73,6 @@ export class BackgroundClient {
 		return Promise.all([
 			this.sendGetPermissionRequests(),
 			this.sendGetTransactionRequests(),
-			this.getWalletStatus(),
 			this.loadFeatures(),
 			this.getNetwork(),
 		]).then(() => undefined);
@@ -240,25 +235,16 @@ export class BackgroundClient {
 	public signData(addressOrID: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
-				NEW_ACCOUNTS_ENABLED
-					? createMessage<MethodPayload<'signData'>>({
-							type: 'method-payload',
-							method: 'signData',
-							args: { data: toB64(data), id: addressOrID },
-					  })
-					: createMessage<KeyringPayload<'signData'>>({
-							type: 'keyring',
-							method: 'signData',
-							args: { data: toB64(data), address: addressOrID },
-					  }),
+				createMessage<MethodPayload<'signData'>>({
+					type: 'method-payload',
+					method: 'signData',
+					args: { data: toB64(data), id: addressOrID },
+				}),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
-					if (NEW_ACCOUNTS_ENABLED && isMethodPayload(payload, 'signDataResponse')) {
+					if (isMethodPayload(payload, 'signDataResponse')) {
 						return payload.args.signature;
-					}
-					if (isKeyringPayload(payload, 'signData') && payload.return) {
-						return payload.return;
 					}
 					throw new Error('Error unknown response for signData message');
 				}),
@@ -277,13 +263,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public selectAccount(address: string) {
+	public selectAccount(accountID: string) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'switchAccount'>>({
-					type: 'keyring',
+				createMessage<MethodPayload<'switchAccount'>>({
+					type: 'method-payload',
 					method: 'switchAccount',
-					args: { address },
+					args: { accountID },
 				}),
 			).pipe(take(1)),
 		);
@@ -308,26 +294,20 @@ export class BackgroundClient {
 		);
 	}
 
-	importLedgerAccounts(ledgerAccounts: SerializedLedgerAccount[]) {
+	public verifyPassword(password: string, legacyAccounts: boolean = false) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'importLedgerAccounts'>>({
-					type: 'keyring',
-					method: 'importLedgerAccounts',
-					args: { ledgerAccounts },
-				}),
-			).pipe(take(1)),
-		);
-	}
-
-	public verifyPassword(password: string) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'verifyPassword'>>({
-					type: 'keyring',
-					method: 'verifyPassword',
-					args: { password },
-				}),
+				legacyAccounts
+					? createMessage<KeyringPayload<'verifyPassword'>>({
+							type: 'keyring',
+							method: 'verifyPassword',
+							args: { password },
+					  })
+					: createMessage<MethodPayload<'verifyPassword'>>({
+							type: 'method-payload',
+							method: 'verifyPassword',
+							args: { password },
+					  }),
 			).pipe(take(1)),
 		);
 	}
@@ -423,18 +403,6 @@ export class BackgroundClient {
 					type: 'qredo-connect',
 					method: 'rejectQredoConnection',
 					args,
-				}),
-			).pipe(take(1)),
-		);
-	}
-
-	public updateAccountsPublicInfo(updates: AccountsPublicInfoUpdates) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'updateAccountPublicInfo'>>({
-					type: 'keyring',
-					method: 'updateAccountPublicInfo',
-					args: { updates },
 				}),
 			).pipe(take(1)),
 		);
@@ -537,6 +505,18 @@ export class BackgroundClient {
 		);
 	}
 
+	public setAccountNickname({ id, nickname }: MethodPayload<'setAccountNickname'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'setAccountNickname'>>({
+					type: 'method-payload',
+					method: 'setAccountNickname',
+					args: { id, nickname },
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	public getStorageMigrationStatus() {
 		return lastValueFrom(
 			this.sendMessage(
@@ -569,6 +549,24 @@ export class BackgroundClient {
 		);
 	}
 
+	/**
+	 * Wallet wasn't storing the public key of ledger accounts, but we need it to send it to the dapps.
+	 * Use this function to update the public keys whenever wallet has access to them.
+	 */
+	public storeLedgerAccountsPublicKeys(
+		args: MethodPayload<'storeLedgerAccountsPublicKeys'>['args'],
+	) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'storeLedgerAccountsPublicKeys'>>({
+					type: 'method-payload',
+					method: 'storeLedgerAccountsPublicKeys',
+					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	private setupAppStatusUpdateInterval() {
 		setInterval(() => {
 			this.sendAppStatus();
@@ -583,17 +581,6 @@ export class BackgroundClient {
 				method: 'appStatusUpdate',
 				args: { active },
 			}),
-		);
-	}
-
-	private getWalletStatus() {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'walletStatusUpdate'>>({
-					type: 'keyring',
-					method: 'walletStatusUpdate',
-				}),
-			).pipe(take(1)),
 		);
 	}
 
@@ -629,11 +616,6 @@ export class BackgroundClient {
 			action = setTransactionRequests(payload.txRequests);
 		} else if (isUpdateActiveOrigin(payload)) {
 			action = setActiveOrigin(payload);
-		} else if (
-			isKeyringPayload<'walletStatusUpdate'>(payload, 'walletStatusUpdate') &&
-			payload.return
-		) {
-			action = setKeyringStatus(payload.return);
 		} else if (isLoadedFeaturesPayload(payload)) {
 			growthbook.setAttributes(payload.attributes);
 			growthbook.setFeatures(payload.features);

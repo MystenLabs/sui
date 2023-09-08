@@ -1,15 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::extensions::logger::Logger;
+use crate::{
+    server::{
+        data_provider::DataProvider,
+        version::{check_version_middleware, set_version_middleware},
+    },
+    types::query::{Query, SuiGraphQLSchema},
+};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::middleware;
+use std::default::Default;
+use std::time::Duration;
 
-use crate::types::query::{Query, SuiGraphQLSchema};
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 pub struct ServerConfig {
     pub port: u16,
     pub host: String,
-    pub dummy_data: bool,
+    pub rpc_url: String,
 }
 
 impl std::default::Default for ServerConfig {
@@ -17,7 +29,7 @@ impl std::default::Default for ServerConfig {
         Self {
             port: 8000,
             host: "127.0.0.1".to_string(),
-            dummy_data: true,
+            rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
         }
     }
 }
@@ -49,11 +61,29 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 
 pub async fn start_example_server(config: Option<ServerConfig>) {
     let config = config.unwrap_or_default();
-    let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription).finish();
+    let _guard = telemetry_subscribers::TelemetryConfig::new()
+        .with_env()
+        .init();
+
+    let sui_sdk_client_v0 = sui_sdk::SuiClientBuilder::default()
+        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+        .build(config.rpc_url.as_str())
+        .await
+        .expect("Failed to create SuiClient");
+
+    let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0);
+
+    let schema = async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription)
+        .data(data_provider)
+        .extension(Logger::default())
+        .finish();
 
     let app = axum::Router::new()
         .route("/", axum::routing::get(graphiql).post(graphql_handler))
-        .layer(axum::extract::Extension(schema));
+        .layer(axum::extract::Extension(schema))
+        .layer(middleware::from_fn(check_version_middleware))
+        .layer(middleware::from_fn(set_version_middleware));
 
     println!("Launch GraphiQL IDE at: {}", config.url());
 

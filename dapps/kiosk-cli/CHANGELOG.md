@@ -1,5 +1,22 @@
 # kiosk-cli
 
+## 1.0.7
+
+### Patch Changes
+
+- Updated dependencies [24c21e1f0]
+  - @mysten/sui.js@0.41.1
+  - @mysten/kiosk@0.5.2
+
+## 1.0.6
+
+### Patch Changes
+
+- Updated dependencies [ba8e3b857]
+- Updated dependencies [f4b7b3474]
+  - @mysten/sui.js@0.41.0
+  - @mysten/kiosk@0.5.1
+
 ## 1.0.5
 
 ### Patch Changes

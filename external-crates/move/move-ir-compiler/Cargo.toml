@@ -19,7 +19,7 @@ move-ir-types = { path = "../move-ir/types" }
 move-core-types = { path = "../move-core/types" }
 move-binary-format = { path = "../move-binary-format" }
 move-symbol-pool = { path = "../move-symbol-pool" }
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true
 serde_json = "1.0.64"
 
 bcs.workspace = true

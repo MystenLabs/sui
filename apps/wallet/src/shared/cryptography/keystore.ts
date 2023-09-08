@@ -17,6 +17,7 @@ export type Serializable =
 	| string
 	| number
 	| boolean
+	| null
 	| { [index: string]: Serializable }
 	| Serializable[];
 
@@ -37,4 +38,14 @@ export function getRandomPassword() {
 
 export function makeEphemeraPassword(rndPass: string) {
 	return `${PASSWORD}${rndPass}`;
+}
+
+const obfuscationPassword = 'Qe2wZcFYG5eFdSefWb27shstk2eUnNI39';
+
+export function obfuscate(value: Serializable) {
+	return encrypt(obfuscationPassword, value);
+}
+
+export function deobfuscate<T extends Serializable>(obfuscatedValue: string) {
+	return decrypt<T>(obfuscationPassword, obfuscatedValue);
 }

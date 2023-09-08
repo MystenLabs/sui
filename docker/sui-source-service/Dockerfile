@@ -45,7 +45,9 @@ RUN cargo build --release \
 # Production Image
 FROM debian:bullseye-slim AS runtime
 WORKDIR sui
+RUN apt update && apt install -y git
 COPY --from=builder /sui/target/release/sui-source-validation-service /usr/local/bin
+COPY crates/sui-source-validation-service/config.toml /var/sui/
 
 ARG BUILD_DATE
 ARG GIT_REVISION

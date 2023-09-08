@@ -1,0 +1,21 @@
+[package]
+name = "sui-rest-api"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+bcs.workspace = true
+reqwest.workspace = true
+axum.workspace = true
+sui-types.workspace = true
+sui-core.workspace = true
+futures.workspace = true
+tap.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio.workspace = true

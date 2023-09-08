@@ -31,8 +31,8 @@ use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{
     CallArg, InputObjectKind, ObjectArg, ProgrammableTransaction, Transaction, TransactionData,
     TransactionDataAPI, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_STAKING,
-    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
+    TEST_ONLY_GAS_UNIT_FOR_STAKING, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -162,7 +162,7 @@ async fn test_publish_and_move_call() {
         sender,
         pt,
         vec![],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
         rgp,
         false,
     )

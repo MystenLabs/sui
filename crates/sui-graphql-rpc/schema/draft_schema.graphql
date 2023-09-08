@@ -206,8 +206,13 @@ input ObjectFilter {
   type: String
 
   owner: SuiAddress
-  objectId: SuiAddress
-  version: Int
+  objectIds: [SuiAddress!]
+  objectKeys: [ObjectKey!]
+}
+
+input ObjectKey {
+  objectId: SuiAddress!
+  version: Int!
 }
 
 input EventFilter {
@@ -269,7 +274,7 @@ type AvailableRange {
   last: Checkpoint
 }
 
-interface Owner {
+interface ObjectOwner {
   location: SuiAddress!
 
   objectConnection(
@@ -315,9 +320,12 @@ interface Owner {
 
 # Returned by Object.owner, where we can't disambiguate between
 # Address and Object.
-type AmbiguousOwner implements Owner
+type Owner implements ObjectOwner {
+  asAddress: Address
+  asObject: Object
+}
 
-type Address implements Owner {
+type Address implements ObjectOwner {
   transactionBlockConnection(
     first: Int,
     after: String,
@@ -335,11 +343,19 @@ enum AddressTransactionBlockRelationship {
   PAID # Transactions that were paid for by this address
 }
 
-type Object implements Owner {
+enum ObjectKind {
+  OWNED
+  CHILD
+  SHARED
+  IMMUTABLE
+}
+
+type Object implements ObjectOwner {
   id: ID!
   version: Int!
   digest: String!
-  owner: AmbiguousOwner
+  owner: Owner
+  kind: ObjectKind
 
   previousTransactionBlock: TransactionBlock
   storageRebate: BigInt
@@ -410,13 +426,20 @@ type Epoch {
 
 type ProtocolConfigs {
   protocolVersion: Int!
-  configs: [ProtocolConfig]
-  config(key: String!): ProtocolConfig
+  featureFlags: [ProtocolConfigFeatureFlag]
+  configs: [ProtocolConfigAttr]
+  config(key: String!): ProtocolConfigAttr
+  featureFlag(key: String!): ProtocolConfigFeatureFlag
 }
 
-type ProtocolConfig {
+type ProtocolConfigAttr {
   key: String!
   value: String!
+}
+
+type ProtocolConfigFeatureFlag {
+  key: String!
+  value: Boolean!
 }
 
 type SystemParameters {
@@ -501,7 +524,7 @@ type Validator {
   # The other validators this validator has reported
   reportRecords: [SuiAddress]
 
-  apy: Float
+  apy: Int
 }
 
 type ValidatorCredentials {
@@ -578,10 +601,8 @@ type TransactionBlock {
 }
 
 enum TransactionBlockKindInput {
-  CONSENSUS_COMMIT_PROLOGUE
-  GENESIS
-  CHANGE_EPOCH
-  PROGRAMMABLE
+  PROGRAMMABLE_TX
+  SYSTEM_TX
 }
 
 union TransactionBlockKind =

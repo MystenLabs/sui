@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppsBackend, useElementHeight } from '@mysten/core';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useAppsBackend, useElementDimensions } from '@mysten/core';
 import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
@@ -28,6 +29,7 @@ const DEFAULT_HEADER_HEIGHT = 68;
 export function PageLayout({ gradient, content, loading, isError }: PageLayoutProps) {
 	const [network] = useNetworkContext();
 	const { request } = useAppsBackend();
+	const outageOverride = useFeatureIsOn('network-outage-override');
 
 	const { data } = useQuery({
 		queryKey: ['apps-backend', 'monitor-network'],
@@ -41,9 +43,10 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 		enabled: network === Network.MAINNET,
 	});
 	const isGradientVisible = !!gradient;
-	const renderNetworkDegradeBanner = network === Network.MAINNET && data?.degraded;
+	const renderNetworkDegradeBanner =
+		outageOverride || (network === Network.MAINNET && data?.degraded);
 	const headerRef = useRef<HTMLElement | null>(null);
-	const headerHeight = useElementHeight(headerRef, DEFAULT_HEADER_HEIGHT);
+	const [headerHeight] = useElementDimensions(headerRef, DEFAULT_HEADER_HEIGHT);
 
 	return (
 		<div className="relative min-h-screen w-full">
@@ -97,7 +100,9 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 					</section>
 				) : null}
 				{!loading && (
-					<section className="mx-auto max-w-[1440px] p-5 sm:py-8 md:p-10">{content}</section>
+					<section className="mx-auto max-w-[1440px] p-5 pb-20 sm:py-8 md:p-10 md:pb-20">
+						{content}
+					</section>
 				)}
 			</main>
 			<Footer />

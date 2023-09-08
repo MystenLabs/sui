@@ -93,14 +93,14 @@ impl<A: Allower> rustls::server::ClientCertVerifier for CertVerifier<A> {
         true
     }
 
-    fn client_auth_mandatory(&self) -> Option<bool> {
-        Some(true)
+    fn client_auth_mandatory(&self) -> bool {
+        true
     }
 
-    fn client_auth_root_subjects(&self) -> Option<rustls::DistinguishedNames> {
+    fn client_auth_root_subjects(&self) -> &[rustls::DistinguishedName] {
         // Since we're relying on self-signed certificates and not on CAs, continue the handshake
         // without passing a list of CA DNs
-        Some(rustls::DistinguishedNames::new())
+        &[]
     }
 
     // Verifies this is a valid ed25519 self-signed certificate
@@ -117,7 +117,7 @@ impl<A: Allower> rustls::server::ClientCertVerifier for CertVerifier<A> {
         let public_key = public_key_from_certificate(end_entity)?;
 
         if !self.allower.allowed(&public_key) {
-            return Err(rustls::Error::InvalidCertificateData(format!(
+            return Err(rustls::Error::General(format!(
                 "invalid certificate: {:?} is not in the validator set",
                 public_key,
             )));
@@ -130,19 +130,22 @@ impl<A: Allower> rustls::server::ClientCertVerifier for CertVerifier<A> {
 
         // Step 2: call verification from webpki
         let cert = cert
-            .verify_is_valid_tls_client_cert(
+            .verify_for_usage(
                 SUPPORTED_SIG_ALGS,
-                &webpki::TlsClientTrustAnchors(&trustroots),
+                &trustroots,
                 &chain,
                 now,
+                webpki::KeyUsage::client_auth(),
+                &[],
             )
             .map_err(pki_error)
             .map(|_| cert)?;
 
         // Ensure the cert is valid for the network name
-        let dns_nameref = webpki::DnsNameRef::try_from_ascii_str(crate::SUI_VALIDATOR_SERVER_NAME)
-            .map_err(|_| rustls::Error::UnsupportedNameType)?;
-        cert.verify_is_valid_for_dns_name(dns_nameref)
+        let dns_nameref =
+            webpki::SubjectNameRef::try_from_ascii_str(crate::SUI_VALIDATOR_SERVER_NAME)
+                .map_err(|_| rustls::Error::UnsupportedNameType)?;
+        cert.verify_is_valid_for_subject_name(dns_nameref)
             .map_err(pki_error)
             .map(|_| rustls::server::ClientCertVerified::assertion())
     }
@@ -174,12 +177,15 @@ fn prepare_for_self_signed<'a>(
 fn pki_error(error: webpki::Error) -> rustls::Error {
     use webpki::Error::*;
     match error {
-        BadDer | BadDerTime => rustls::Error::InvalidCertificateEncoding,
-        InvalidSignatureForPublicKey => rustls::Error::InvalidCertificateSignature,
-        UnsupportedSignatureAlgorithm | UnsupportedSignatureAlgorithmForPublicKey => {
-            rustls::Error::InvalidCertificateSignatureType
+        BadDer | BadDerTime => {
+            rustls::Error::InvalidCertificate(rustls::CertificateError::BadEncoding)
         }
-        e => rustls::Error::InvalidCertificateData(format!("invalid peer certificate: {e}")),
+        InvalidSignatureForPublicKey
+        | UnsupportedSignatureAlgorithm
+        | UnsupportedSignatureAlgorithmForPublicKey => {
+            rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature)
+        }
+        e => rustls::Error::General(format!("invalid peer certificate: {e}")),
     }
 }
 
@@ -189,16 +195,13 @@ pub(crate) fn public_key_from_certificate(
     use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 
     let cert = X509Certificate::from_der(certificate.0.as_ref())
-        .map_err(|_| rustls::Error::InvalidCertificateEncoding)?;
+        .map_err(|e| rustls::Error::General(e.to_string()))?;
     let spki = cert.1.public_key();
     let public_key_bytes =
         <ed25519::pkcs8::PublicKeyBytes as pkcs8::DecodePublicKey>::from_public_key_der(spki.raw)
-            .map_err(|e| {
-            rustls::Error::InvalidCertificateData(format!("invalid ed25519 public key: {e}"))
-        })?;
+            .map_err(|e| rustls::Error::General(format!("invalid ed25519 public key: {e}")))?;
 
-    let public_key = Ed25519PublicKey::from_bytes(public_key_bytes.as_ref()).map_err(|e| {
-        rustls::Error::InvalidCertificateData(format!("invalid ed25519 public key: {e}"))
-    })?;
+    let public_key = Ed25519PublicKey::from_bytes(public_key_bytes.as_ref())
+        .map_err(|e| rustls::Error::General(format!("invalid ed25519 public key: {e}")))?;
     Ok(public_key)
 }

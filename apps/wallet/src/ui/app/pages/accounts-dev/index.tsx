@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Popover } from '@headlessui/react';
+import { useFormatCoin } from '@mysten/core';
+import { useBalance } from '@mysten/dapp-kit';
+import { TransactionBlock } from '@mysten/sui.js/builder';
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/framework';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
@@ -11,15 +16,20 @@ import { Toaster, toast } from 'react-hot-toast';
 import { type BackgroundClient } from '../../background-client';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../../components/loading/LoadingIndicator';
-import { useAccountSources } from '../../hooks/accounts-v2/useAccountSources';
-import { useAccounts } from '../../hooks/accounts-v2/useAccounts';
-import { useSigner } from '../../hooks/accounts-v2/useSigner';
+import Logo from '../../components/logo';
+import NetworkSelector from '../../components/network-selector';
+import { useAppSelector } from '../../hooks';
+import { useAccountSources } from '../../hooks/useAccountSources';
+import { useAccounts } from '../../hooks/useAccounts';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../../hooks/useQredoTransaction';
+import { useSigner } from '../../hooks/useSigner';
 import { ImportLedgerAccountsPage } from '../../pages/accounts/ImportLedgerAccountsPage';
 import { Button } from '../../shared/ButtonUI';
 import { ModalDialog } from '../../shared/ModalDialog';
 import { Card } from '../../shared/card';
+import { FAUCET_HOSTS } from '../../shared/faucet/FaucetRequestButton';
+import { useFaucetMutation } from '../../shared/faucet/useFaucetMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '../../shared/text';
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
@@ -27,6 +37,7 @@ import { type AccountType, type SerializedUIAccount } from '_src/background/acco
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
 import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export const testPassNewAccounts = '61916a448d7885641';
@@ -37,10 +48,11 @@ const mnemonicFirstKeyPair: ExportedKeypair = {
 	privateKey: toB64(hexToBytes('5051bc918ec4991c62969d6cd0f1edaabfbe5244e509d7a96f39fe52e76cf54f')),
 };
 const typeOrder: Record<AccountType, number> = {
-	'mnemonic-derived': 0,
-	imported: 1,
-	ledger: 2,
-	qredo: 3,
+	zk: 0,
+	'mnemonic-derived': 1,
+	imported: 2,
+	ledger: 3,
+	qredo: 4,
 };
 
 /**
@@ -67,11 +79,25 @@ export function AccountsDev() {
 				keyPair,
 			}),
 	});
+	const zkCreateAccount = useMutation({
+		mutationKey: ['accounts v2 create zk'],
+		mutationFn: async ({ provider }: { provider: ZkProvider }) =>
+			backgroundClient.createAccounts({ type: 'zk', provider }),
+	});
 	const [isConnectLedgerModalVisible, setIsConnectLedgerModalVisible] = useState(false);
 	const [isImportLedgerModalVisible, setIsImportLedgerModalVisible] = useState(false);
+	const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
 	return (
 		<>
-			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5">
+			<div className="overflow-auto h-[100vh] w-[100vw] flex flex-col items-center p-5 gap-3">
+				<Popover className="relative self-stretch flex justify-center">
+					<Popover.Button as="div">
+						<Logo networkName={networkName} />
+					</Popover.Button>
+					<Popover.Panel className="absolute z-10 top-[100%] shadow-lg">
+						<NetworkSelector />
+					</Popover.Panel>
+				</Popover>
 				<div className="flex flex-col gap-10">
 					<div className="grid grid-cols-2 gap-2">
 						<Button
@@ -105,6 +131,11 @@ export function AccountsDev() {
 						<Button
 							text="Connect Ledger account"
 							onClick={() => setIsConnectLedgerModalVisible(true)}
+						/>
+						<Button
+							text="Connect Google Account"
+							loading={zkCreateAccount.isLoading}
+							onClick={() => zkCreateAccount.mutate({ provider: 'google' })}
 						/>
 					</div>
 					{accounts.isLoading ? (
@@ -288,11 +319,40 @@ function Account({ account }: { account: SerializedUIAccount }) {
 			toast.success(JSON.stringify(result, null, 2));
 		},
 	});
+	const signAndExecute = useMutation({
+		mutationKey: ['accounts v2 sign'],
+		mutationFn: () => {
+			if (account.isLocked) {
+				throw new Error('Account is locked');
+			}
+			if (!signer) {
+				throw new Error('Signer not found');
+			}
+			const transactionBlock = new TransactionBlock();
+			const [coin] = transactionBlock.splitCoins(transactionBlock.gas, [transactionBlock.pure(1)]);
+			transactionBlock.transferObjects([coin], transactionBlock.pure(account.address));
+			return signer.signAndExecuteTransactionBlock({ transactionBlock }, clientIdentifier);
+		},
+		onSuccess: (result) => {
+			toast.success(JSON.stringify(result, null, 2));
+		},
+	});
+	const { data: coinBalance } = useBalance(
+		{ coinType: SUI_TYPE_ARG, owner: account.address },
+		{ refetchInterval: 5000 },
+	);
+	const [formattedSuiBalance] = useFormatCoin(coinBalance?.totalBalance, coinBalance?.coinType);
+
+	const network = useAppSelector(({ app }) => app.apiEnv);
+	const faucetMutation = useFaucetMutation({
+		host: network in FAUCET_HOSTS ? FAUCET_HOSTS[network as keyof typeof FAUCET_HOSTS] : null,
+		address: account.address,
+	});
 	return (
 		<>
 			{notificationModal}
 			<Card
-				header={account.address}
+				header={`${account.address} (${formattedSuiBalance} SUI)`}
 				key={account.address}
 				footer={
 					account.isLocked ? (
@@ -320,11 +380,28 @@ function Account({ account }: { account: SerializedUIAccount }) {
 								loading={sign.isLoading}
 								disabled={lock.isLoading || unlock.isLoading}
 							/>
+							<Button
+								text="Sign & Execute"
+								onClick={() => {
+									signAndExecute.mutate();
+								}}
+								loading={signAndExecute.isLoading}
+								disabled={lock.isLoading || unlock.isLoading}
+							/>
 						</div>
 					)
 				}
 			>
-				<pre>{JSON.stringify(account, null, 2)}</pre>
+				<div className="flex flex-col gap-3 items-start">
+					<div>
+						<Button
+							text="Faucet Request"
+							onClick={() => faucetMutation.mutate()}
+							loading={faucetMutation.isLoading}
+						/>
+					</div>
+					<pre>{JSON.stringify(account, null, 2)}</pre>
+				</div>
 			</Card>
 		</>
 	);

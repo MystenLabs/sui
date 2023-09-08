@@ -5,6 +5,7 @@
 mod package_lock;
 
 pub mod compilation;
+pub mod lock_file;
 pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
@@ -53,7 +54,7 @@ pub struct BuildConfig {
     pub generate_abis: bool,
 
     /// Installation directory for compiled artifacts. Defaults to current directory.
-    #[clap(long = "install-dir", parse(from_os_str), global = true)]
+    #[clap(long = "install-dir", global = true)]
     pub install_dir: Option<PathBuf>,
 
     /// Force recompilation of all packages

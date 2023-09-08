@@ -1,12 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useGetValidatorsApy,
-	formatPercentageDisplay,
-	calculateStakeShare,
-	useGetSystemState,
-} from '@mysten/core';
+import { useGetValidatorsApy, formatPercentageDisplay, calculateStakeShare } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useState, useMemo } from 'react';
@@ -38,7 +34,7 @@ export function SelectValidatorCard() {
 	const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
 	const [sortKey, setSortKey] = useState<SortKeys | null>(null);
 	const [sortAscending, setSortAscending] = useState(true);
-	const { data, isLoading, isError } = useGetSystemState();
+	const { data, isLoading, isError } = useLatestSuiSystemState();
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 

@@ -94,6 +94,7 @@ default-members = [
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 bcs = "0.1.4"
+clap = { version = "4", features = ["derive"] }
 
 [profile.bench]
 debug = true

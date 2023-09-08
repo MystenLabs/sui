@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useGetSystemState } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { formatAddress } from '@mysten/sui.js/utils';
 import cl from 'classnames';
 import { useMemo } from 'react';
@@ -31,7 +31,7 @@ export function ValidatorLogo({
 	showActiveStatus = false,
 	activeEpoch,
 }: ValidatorLogoProps) {
-	const { data, isLoading } = useGetSystemState();
+	const { data, isLoading } = useLatestSuiSystemState();
 
 	const validatorMeta = useMemo(() => {
 		if (!data) return null;

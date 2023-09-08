@@ -3,22 +3,24 @@
 
 import { fromB64 } from '@mysten/sui.js/utils';
 import Dexie from 'dexie';
-import { isSigningAccount, type SerializedAccount } from './Account';
+import { isPasswordUnLockable, isSigningAccount, type SerializedAccount } from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
 import { accountsEvents } from './events';
+import { ZkAccount } from './zk/ZkAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
 import { backupDB, getDB } from '../db';
-import { getFromLocalStorage, makeUniqueKey } from '../storage-utils';
+import { makeUniqueKey } from '../storage-utils';
 import { createMessage, type Message } from '_src/shared/messaging/messages';
 import {
 	type MethodPayload,
 	isMethodPayload,
 } from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -32,6 +34,9 @@ function toAccount(account: SerializedAccount) {
 	}
 	if (QredoAccount.isOfType(account)) {
 		return new QredoAccount({ id: account.id, cachedData: account });
+	}
+	if (ZkAccount.isOfType(account)) {
+		return new ZkAccount({ id: account.id, cachedData: account });
 	}
 	throw new Error(`Unknown account of type ${account.type}`);
 }
@@ -67,12 +72,26 @@ export async function isAccountsInitialized() {
 	return (await (await getDB()).accounts.count()) > 0;
 }
 
-export async function getActiveAccount() {
-	const accountID = await getFromLocalStorage<string>('active-account-id-key');
-	if (!accountID) {
-		return null;
-	}
-	return getAccountByID(accountID);
+export async function getAccountsStatusData(
+	accountsFilter?: string[],
+): Promise<Required<WalletStatusChange>['accounts']> {
+	const allAccounts = await (await getDB()).accounts.toArray();
+	return allAccounts
+		.filter(({ address }) => !accountsFilter?.length || accountsFilter.includes(address))
+		.map(({ address, publicKey }) => ({ address, publicKey }));
+}
+
+export async function changeActiveAccount(accountID: string) {
+	const db = await getDB();
+	return db.transaction('rw', db.accounts, async () => {
+		const newSelectedAccount = await db.accounts.get(accountID);
+		if (!newSelectedAccount) {
+			throw new Error(`Failed, account with id ${accountID} not found`);
+		}
+		await db.accounts.where('id').notEqual(accountID).modify({ selected: false });
+		await db.accounts.update(accountID, { selected: true });
+		accountsEvents.emit('activeAccountChanged', { accountID });
+	});
 }
 
 async function deleteQredoAccounts<T extends SerializedAccount>(accounts: Omit<T, 'id'>[]) {
@@ -144,6 +163,11 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 			}
 			accountInstances.push(accountInstance);
 		}
+		const selectedAccount = await db.accounts.filter(({ selected }) => selected).first();
+		if (!selectedAccount && accountInstances.length) {
+			const firstAccount = accountInstances[0];
+			await db.accounts.update(firstAccount.id, { selected: true });
+		}
 		return accountInstances;
 	});
 	await backupDB();
@@ -161,11 +185,27 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			return true;
 		}
 	}
+	if (isMethodPayload(payload, 'setAccountNickname')) {
+		const { id, nickname } = payload.args;
+		const account = await getAccountByID(id);
+		if (account) {
+			await account.setNickname(nickname);
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
+	}
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const account = await getAccountByID(id);
 		if (account) {
-			await account.passwordUnlock(password);
+			if (isPasswordUnLockable(account)) {
+				if (!password) {
+					throw new Error('Missing password to unlock the account');
+				}
+				await account.passwordUnlock(password);
+			} else {
+				await account.unlock();
+			}
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 			return true;
 		}
@@ -211,6 +251,8 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			for (const aLedgerAccount of accounts) {
 				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
 			}
+		} else if (type === 'zk') {
+			newSerializedAccounts.push(await ZkAccount.createNew(payload.args));
 		} else {
 			throw new Error(`Unknown accounts type to create ${type}`);
 		}
@@ -229,6 +271,33 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'switchAccount')) {
+		await changeActiveAccount(payload.args.accountID);
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+		return true;
+	}
+	if (isMethodPayload(payload, 'verifyPassword')) {
+		const allAccounts = await getAllAccounts();
+		for (const anAccount of allAccounts) {
+			if (isPasswordUnLockable(anAccount)) {
+				await anAccount.verifyPassword(payload.args.password);
+				await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+				return true;
+			}
+		}
+		throw new Error('No password protected account found');
+	}
+	if (isMethodPayload(payload, 'storeLedgerAccountsPublicKeys')) {
+		const { publicKeysToStore } = payload.args;
+		const db = await getDB();
+		// TODO: seems bulkUpdate is supported from v4.0.1-alpha.6 change to it when available
+		await db.transaction('rw', db.accounts, async () => {
+			for (const { accountID, publicKey } of publicKeysToStore) {
+				await db.accounts.update(accountID, { publicKey });
+			}
+		});
 		return true;
 	}
 	return false;

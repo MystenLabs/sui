@@ -17,7 +17,7 @@ async fn test_server_authorizations() {
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     let test_authority = test_cluster.authority(0);
-    let test_client = test_authority.client.clone();
+    let test_client = test_authority.client().await;
     let test_committee = test_cluster.committee.clone();
     let test_worker_cache = test_cluster.worker_cache.clone();
 

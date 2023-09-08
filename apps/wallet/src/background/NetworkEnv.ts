@@ -5,12 +5,8 @@ import mitt from 'mitt';
 import Browser from 'webextension-polyfill';
 
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
-import { API_ENV } from '_src/shared/api-env';
+import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { isValidUrl } from '_src/shared/utils';
-
-export type NetworkEnvType =
-	| { env: Exclude<API_ENV, API_ENV.customRPC>; customRpcUrl: null }
-	| { env: API_ENV.customRPC; customRpcUrl: string };
 
 class NetworkEnv {
 	#events = mitt<{ changed: NetworkEnvType }>();

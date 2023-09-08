@@ -16,7 +16,7 @@ import {
 } from '../session-ephemeral-values';
 import { type Serializable } from '_src/shared/cryptography/keystore';
 
-export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo';
+export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo' | 'zk';
 
 export abstract class Account<
 	T extends SerializedAccount = SerializedAccount,
@@ -48,6 +48,10 @@ export abstract class Account<
 
 	get lastUnlockedOn() {
 		return this.getCachedData().then(({ lastUnlockedOn }) => lastUnlockedOn);
+	}
+
+	get publicKey() {
+		return this.getCachedData().then(({ publicKey }) => publicKey);
 	}
 
 	protected getCachedData() {
@@ -106,6 +110,11 @@ export abstract class Account<
 		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: null });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
+
+	public async setNickname(nickname: string | null) {
+		await (await getDB()).accounts.update(this.id, { nickname });
+		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
+	}
 }
 
 export interface SerializedAccount {
@@ -114,6 +123,11 @@ export interface SerializedAccount {
 	readonly address: string;
 	readonly publicKey: string | null;
 	readonly lastUnlockedOn: number | null;
+	/**
+	 * indicates if it's the selected account in the UI (active account)
+	 */
+	readonly selected: boolean;
+	readonly nickname: string | null;
 }
 
 export interface SerializedUIAccount {
@@ -131,11 +145,18 @@ export interface SerializedUIAccount {
 	 * This is used to determine if the account is locked for read or not. (eg. lastUnlockedOn more than 4 hours ago -> read locked)
 	 */
 	readonly lastUnlockedOn: number | null;
+	/**
+	 * indicates if it's the selected account in the UI (active account)
+	 */
+	readonly selected: boolean;
+	readonly nickname: string | null;
+	readonly isPasswordUnlockable: boolean;
 }
 
 export interface PasswordUnlockableAccount {
 	readonly unlockType: 'password';
 	passwordUnlock(password: string): Promise<void>;
+	verifyPassword(password: string): Promise<void>;
 }
 
 export function isPasswordUnLockable(account: unknown): account is PasswordUnlockableAccount {

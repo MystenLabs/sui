@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use crate::traits::{PrimaryToPrimaryRpc, WorkerRpc};
 use crate::{traits::ReliableNetwork, CancelOnDropHandler, RetryConfig};
 use anemo::PeerId;
@@ -87,8 +89,9 @@ impl ReliableNetwork<WorkerBatchMessage> for anemo::Network {
     ) -> CancelOnDropHandler<Result<anemo::Response<()>>> {
         let message = message.to_owned();
         let f = move |peer| {
-            let message = message.clone();
-            async move { WorkerToWorkerClient::new(peer).report_batch(message).await }
+            // Timeout will be retried in send().
+            let req = anemo::Request::new(message.clone()).with_timeout(Duration::from_secs(15));
+            async move { WorkerToWorkerClient::new(peer).report_batch(req).await }
         };
 
         send(self.clone(), peer, f)

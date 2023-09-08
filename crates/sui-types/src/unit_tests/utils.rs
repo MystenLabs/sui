@@ -21,20 +21,17 @@ use crate::{
     signature::GenericSignature,
     transaction::{Transaction, TransactionData},
     zk_login_authenticator::ZkLoginAuthenticator,
-    zk_login_util::AddressParams,
 };
 use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair as KeypairTraits;
-use fastcrypto::traits::ToFromBytes;
-use fastcrypto_zkp::bn254::zk_login::{
-    big_int_str_to_bytes, AuxInputs, OAuthProvider, PublicInputs, SupportedKeyClaim, ZkLoginProof,
-};
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::collections::BTreeMap;
+
+pub const TEST_CLIENT_ID: &str =
+    "575519204237-msop9ep45u2uo98hapqmngv8d84qdc8k.apps.googleusercontent.com";
 
 pub fn make_committee_key<R>(rand: &mut R) -> (Vec<AuthorityKeyPair>, Committee)
 where
@@ -157,45 +154,25 @@ pub fn mock_certified_checkpoint<'a>(
 }
 
 mod zk_login {
+    use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
+
     use super::*;
 
-    fn get_proof() -> ZkLoginProof {
+    fn get_inputs() -> ZkLoginInputs {
         thread_local! {
-            static PROOF: ZkLoginProof = ZkLoginProof::from_json("{\"pi_a\":[\"20481687889574648566428019854107422666251563600790506685694911259823357210233\",\"11033765255561191214948060245394777764506124769509578847678858254198587195988\",\"1\"],\"pi_b\":[[\"13849903711561313829934917969652092838978156769404699511299089312160663498036\",\"17165083942449254199283169058554211190103242687213364739060521395815615321163\"],[\"13911193808133271991822994609120431485365326128265885756983411624230351985366\",\"18294503277588808632327215611840242319415026224438195239817828865313916798900\"],[\"1\",\"0\"]],\"pi_c\":[\"2745104594185654286823222462448377902592393467516853387351618591034524080250\",\"6061284742000900942330610155574919999955182564883105081721057622928771176724\",\"1\"],\"protocol\":\"groth16\"}").unwrap();
+            static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proof_points\":{\"pi_a\":[\"2639684184680217707167754014000719722348206659392422133035933088167295844621\",\"15411697389380103098050765723042580180772223011905582881833041447034179685161\",\"1\"],\"pi_b\":[[\"18356546416649273600365508068279984662879338153955858345242905260545040887165\",\"14180424108251071134157931909030745068063443512539428703047837797454965825626\"],[\"13156473667176810581893653079638435272252026941153836815590225135710650196382\",\"21239978751364084281206642892186667820382067271473352046319441969708281386102\"],[\"1\",\"0\"]],\"pi_c\":[\"10224668151896969767148853455746517578322339166888897843411999928700401320418\",\"10920763695594894441298491254988284677195769983974208707015444852382653532723\",\"1\"]},\"address_seed\":\"21483285397923302977910340636259412155696585453250993383687293995976400590480\",\"claims\":[{\"name\":\"iss\",\"value_base64\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"index_mod_4\":2},{\"name\":\"aud\",\"value_base64\":\"yJhdWQiOiJyczFiaDA2NWk5eWE0eWR2aWZpeGw0a3NzMHVocHQiLC\",\"index_mod_4\":1}],\"header_base64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}").unwrap().init().unwrap();
         }
-        PROOF.with(|p| p.clone())
-    }
-
-    fn get_aux_inputs() -> AuxInputs {
-        thread_local! {
-            static AUX_INPUTS: AuxInputs = AuxInputs::from_json("{\"addr_seed\":\"15981857537914003189887860118363233571575210046307592386608444813549663761927\",\"eph_public_key\":[\"166965004900001969288935757320344789203\",\"305091191138823352551463131979024497360\"],\"jwt_sha2_hash\":[\"212488216193738404698731705976768876226\",\"265684893115222891384798683500367647809\"],\"jwt_signature\":\"bfHHlvI1WmU-WfvQ9WdLQTbERXIlVUYn92hcMlP5mMhso4l5SVwh29DRQu_CJ0Cnmi1gSdUtzn1KFu1c2eFaFVW5ApbGWdAwk7e9pOpi3AoId_W9GN8Nnjp9EogsqTFQwHYz2Pbz7KWYNIGLwq1KZAsk0cixA3PwtJPZHnB4tXF9BGAS4XWDpK4hjqGCJYiQV1labncedbjxbxl7j0JtEE-JgxA4ymgx_OR4azKIjRPoGfT-ufIhEOKAD7p_auW6CNE-8v8VEX20REWNV3iw2WYTqpCGRqVTl92pslxRdU2eEcCa-X0P6_xtvFZVs3AwcRjbePS1ivp-MFqrnhmxSw\",\"key_claim_name\":\"sub\",\"masked_content\":[101, 121, 74, 104, 98, 71, 99, 105, 79, 105, 74, 83, 85, 122, 73, 49, 78, 105, 73, 115, 73, 109, 116, 112, 90, 67, 73, 54, 73, 106, 89, 119, 79, 68, 78, 107, 90, 68, 85, 53, 79, 68, 69, 50, 78, 122, 78, 109, 78, 106, 89, 120, 90, 109, 82, 108, 79, 87, 82, 104, 90, 84, 89, 48, 78, 109, 73, 50, 90, 106, 65, 122, 79, 68, 66, 104, 77, 68, 69, 48, 78, 87, 77, 105, 76, 67, 74, 48, 101, 88, 65, 105, 79, 105, 74, 75, 86, 49, 81, 105, 102, 81, 46, 61, 121, 74, 112, 99, 51, 77, 105, 79, 105, 74, 111, 100, 72, 82, 119, 99, 122, 111, 118, 76, 50, 70, 106, 89, 50, 57, 49, 98, 110, 82, 122, 76, 109, 100, 118, 98, 50, 100, 115, 90, 83, 53, 106, 98, 50, 48, 105, 76, 67, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 67, 74, 104, 100, 87, 81, 105, 79, 105, 73, 53, 78, 68, 89, 51, 77, 122, 69, 122, 78, 84, 73, 121, 78, 122, 89, 116, 99, 71, 115, 49, 90, 50, 120, 106, 90, 122, 104, 106, 99, 87, 56, 122, 79, 71, 53, 107, 89, 106, 77, 53, 97, 68, 100, 113, 77, 68, 107, 122, 90, 110, 66, 122, 99, 71, 104, 49, 99, 51, 85, 117, 89, 88, 66, 119, 99, 121, 53, 110, 98, 50, 57, 110, 98, 71, 86, 49, 99, 50, 86, 121, 89, 50, 57, 117, 100, 71, 86, 117, 100, 67, 53, 106, 98, 50, 48, 105, 76, 67, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 61, 128, 0, 0, 0, 0, 0, 0, 0, 0, 21, 168, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],\"max_epoch\":197,\"num_sha2_blocks\":11,\"payload_len\":590,\"payload_start_index\":103}").unwrap();
-        }
-
-        AUX_INPUTS.with(|a| a.clone())
-    }
-
-    fn get_public_inputs() -> PublicInputs {
-        thread_local! {
-            static PUBLIC_INPUTS: PublicInputs = PublicInputs::from_json(
-                "[\"17943667729617637440509062721605164279479613242834309109747499529639666176396\"]",
-            )
-            .unwrap();
-        }
-        PUBLIC_INPUTS.with(|p| p.clone())
+        ZKLOGIN_INPUTS.with(|a| a.clone())
     }
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
             static USER_ADDRESS: SuiAddress = {
-                // Derive user address manually: Blake2b_256 hash of [zklogin_flag || address seed in bytes || bcs bytes of AddressParams])
+                // Derive user address manually: Blake2b_256 hash of [zklogin_flag || bcs bytes of AddressParams || address seed in bytes])
                 let mut hasher = DefaultHash::default();
                 hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-                let address_params = AddressParams::new(
-                    OAuthProvider::Google.get_config().0.to_owned(),
-                    SupportedKeyClaim::Sub.to_string(),
-                );
-                hasher.update(bcs::to_bytes(&address_params).unwrap());
-                hasher.update(big_int_str_to_bytes(get_aux_inputs().get_address_seed()));
+                hasher.update(bcs::to_bytes(&get_inputs().get_address_params()).unwrap());
+                hasher.update(big_int_str_to_bytes(get_inputs().get_address_seed()));
                 SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
             };
         }
@@ -203,12 +180,7 @@ mod zk_login {
     }
 
     fn get_zklogin_user_key() -> SuiKeyPair {
-        SuiKeyPair::Ed25519(
-            Ed25519KeyPair::from_bytes(
-                &Base64::decode("a3R0jvXpEziZLHsbX1DogdyGm8AK87HScEK+JJHwaV8=").unwrap(),
-            )
-            .unwrap(),
-        )
+        SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])))
     }
 
     pub fn make_zklogin_tx() -> (SuiAddress, Transaction, GenericSignature) {
@@ -234,9 +206,8 @@ mod zk_login {
 
         // Construct the authenticator with all user submitted components.
         let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-            get_proof(),
-            get_public_inputs(),
-            get_aux_inputs(),
+            get_inputs(),
+            10,
             s.clone(),
         ));
 

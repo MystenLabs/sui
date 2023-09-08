@@ -8,8 +8,7 @@ import { DEFAULT_API_ENV } from '_app/ApiProvider';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { RootState } from '_redux/RootReducer';
-import type { NetworkEnvType } from '_src/background/NetworkEnv';
-import type { API_ENV } from '_src/shared/api-env';
+import type { NetworkEnvType, API_ENV } from '_src/shared/api-env';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 type AppState = {

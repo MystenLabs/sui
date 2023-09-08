@@ -61,6 +61,8 @@ export class MnemonicAccount
 			derivationPath,
 			publicKey: keyPair.getPublicKey().toBase64(),
 			lastUnlockedOn: null,
+			selected: false,
+			nickname: null,
 		};
 	}
 
@@ -87,8 +89,14 @@ export class MnemonicAccount
 		await this.onUnlocked();
 	}
 
+	async verifyPassword(password: string): Promise<void> {
+		const mnemonicSource = await this.#getMnemonicSource();
+		await mnemonicSource.verifyPassword(password);
+	}
+
 	async toUISerialized(): Promise<MnemonicSerializedUiAccount> {
-		const { id, type, address, derivationPath, publicKey, sourceID } = await this.getStoredData();
+		const { id, type, address, derivationPath, publicKey, sourceID, selected, nickname } =
+			await this.getStoredData();
 		return {
 			id,
 			type,
@@ -98,6 +106,9 @@ export class MnemonicAccount
 			publicKey,
 			sourceID,
 			lastUnlockedOn: await this.lastUnlockedOn,
+			selected,
+			nickname,
+			isPasswordUnlockable: true,
 		};
 	}
 

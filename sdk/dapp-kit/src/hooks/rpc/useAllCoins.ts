@@ -12,13 +12,28 @@
 
 import type { GetAllCoinsParams } from '@mysten/sui.js/client';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 
 export function useAllCoins(
 	params: GetAllCoinsParams,
 	options?: UseSuiClientQueryOptions<'getAllCoins'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'getAllCoins',
+			params,
+		},
+		options,
+	);
+}
+
+export function useAllCoinsInfinite(
+	params: GetAllCoinsParams,
+	options?: UseSuiClientInfiniteQueryOptions<'getAllCoins'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'getAllCoins',
 			params,

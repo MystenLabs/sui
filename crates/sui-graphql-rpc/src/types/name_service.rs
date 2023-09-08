@@ -2,14 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::*;
+use serde::{Deserialize, Serialize};
 
-pub(crate) struct NameServiceConnection;
-
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
-impl NameServiceConnection {
-    async fn unimplemented(&self) -> bool {
-        unimplemented!()
-    }
-}
+#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+pub(crate) struct NameService(String);
+scalar!(NameService, "NameService");

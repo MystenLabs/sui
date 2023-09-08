@@ -9,11 +9,10 @@ import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
 import { accountSourcesEvents } from './account-sources/events';
-import { getAllAccounts } from './accounts';
+import { getAccountsStatusData, getAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
-import { deleteAccountsPublicInfo, getStoredAccountsPublicInfo } from './keyring/accounts';
 import * as Qredo from './qredo';
 import { initSentry } from './sentry';
 import { isSessionStorageSupported } from './storage-utils';
@@ -74,34 +73,13 @@ Permissions.permissionReply.subscribe((permission) => {
 });
 
 Permissions.on('connectedAccountsChanged', async ({ origin, accounts }) => {
-	const allAccountPublicInfo = await getStoredAccountsPublicInfo();
 	connections.notifyContentScript({
 		event: 'walletStatusChange',
 		origin,
 		change: {
-			accounts: accounts.map((address) => ({
-				address,
-				publicKey: allAccountPublicInfo[address]?.publicKey || null,
-			})),
+			accounts: await getAccountsStatusData(accounts),
 		},
 	});
-});
-
-const keyringStatusCallback = () => {
-	connections.notifyUI({
-		event: 'lockStatusUpdate',
-		isLocked: Keyring.isLocked,
-	});
-};
-Keyring.on('lockedStatusUpdate', keyringStatusCallback);
-Keyring.on('accountsChanged', keyringStatusCallback);
-Keyring.on('activeAccountChanged', keyringStatusCallback);
-
-Keyring.on('accountsChanged', async (accounts) => {
-	await deleteAccountsPublicInfo({
-		toKeep: accounts.map(({ address }) => address),
-	});
-	await Permissions.ensurePermissionAccountsUpdated(accounts);
 });
 
 accountsEvents.on('accountsChanged', async () => {
@@ -113,6 +91,9 @@ accountsEvents.on('accountsChanged', async () => {
 	);
 });
 accountsEvents.on('accountStatusChanged', () => {
+	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
+});
+accountsEvents.on('activeAccountChanged', () => {
 	connections.notifyUI({ event: 'storedEntitiesUpdated', type: 'accounts' });
 });
 accountSourcesEvents.on('accountSourceStatusUpdated', () => {

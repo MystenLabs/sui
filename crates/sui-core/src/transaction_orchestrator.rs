@@ -236,51 +236,30 @@ where
                     ))));
                 }
 
-                // TODO: local execution for shared-object txns is disabled due to the fact that
-                // it can cause forks on transactions that read child objects from read-only
-                // parent shared objects.
-                //
-                // This can be re-enabled after MVCC for child objects is merged.
-                if transaction.contains_shared_object() {
-                    self.validator_state
-                        .database
-                        .notify_read_executed_effects_digests(vec![tx_digest])
-                        .await
-                        .map_err(|e| {
-                            warn!(?tx_digest, "notify_read_effects failed: {e:?}");
-                            QuorumDriverError::QuorumDriverInternalError(e)
-                        })?;
-                    Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
+                    transaction,
+                    effects_cert.executed_epoch(),
+                );
+
+                match Self::execute_finalized_tx_locally_with_timeout(
+                    &self.validator_state,
+                    &executable_tx,
+                    &effects_cert,
+                    objects,
+                    &self.metrics,
+                )
+                .await
+                {
+                    Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
                         response.events,
                         true,
-                    ))))
-                } else {
-                    let executable_tx = VerifiedExecutableTransaction::new_from_quorum_execution(
-                        transaction,
-                        effects_cert.executed_epoch(),
-                    );
-
-                    match Self::execute_finalized_tx_locally_with_timeout(
-                        &self.validator_state,
-                        &executable_tx,
-                        &effects_cert,
-                        objects,
-                        &self.metrics,
-                    )
-                    .await
-                    {
-                        Ok(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                            response.events,
-                            true,
-                        )))),
-                        Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
-                            FinalizedEffects::new_from_effects_cert(effects_cert.into()),
-                            response.events,
-                            false,
-                        )))),
-                    }
+                    )))),
+                    Err(_) => Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
+                        FinalizedEffects::new_from_effects_cert(effects_cert.into()),
+                        response.events,
+                        false,
+                    )))),
                 }
             }
         }
@@ -362,6 +341,7 @@ where
         } else {
             metrics.local_execution_latency_single_writer.start_timer()
         };
+        debug!(?tx_digest, "Executing finalized tx locally.");
         match timeout(
             LOCAL_EXECUTION_TIMEOUT,
             validator_state.fullnode_execute_certificate_with_effects(
@@ -371,7 +351,10 @@ where
                 &epoch_store,
             ),
         )
-        .instrument(error_span!("transaction_orchestrator", ?tx_digest))
+        .instrument(error_span!(
+            "transaction_orchestrator::local_execution",
+            ?tx_digest
+        ))
         .await
         {
             Err(_elapsed) => {

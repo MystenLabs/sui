@@ -1,5 +1,21 @@
 # @mysten/sui.js
 
+## 0.41.1
+
+### Patch Changes
+
+- 24c21e1f0: Fix defaults not being applied correctly in websocket client
+
+## 0.41.0
+
+### Minor Changes
+
+- ba8e3b857: Rename TransactionBlock generated type in @mysten/sui.js/client to SuiTransactionBlock to avoid conflicting names in exports
+
+### Patch Changes
+
+- f4b7b3474: Adds zk signature scheme
+
 ## 0.40.0
 
 ### Minor Changes

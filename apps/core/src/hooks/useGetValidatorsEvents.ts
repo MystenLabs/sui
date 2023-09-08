@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useRpcClient } from '../api/RpcClientContext';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { type EventId, SuiEvent } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 
@@ -15,7 +15,7 @@ const VALIDATORS_EVENTS_QUERY = '0x3::validator_set::ValidatorEpochInfoEventV2';
 
 //TODO: get validatorEvents by validator address
 export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	// Since we are getting events based on the number of validators, we need to make sure that the limit
 	// is not null and cache by the limit number of validators can change from network to network
 	return useQuery({
@@ -35,7 +35,7 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
 				const results: SuiEvent[] = [];
 
 				while (hasNextPage && results.length < limit) {
-					const validatorEventsResponse = await rpc.queryEvents({
+					const validatorEventsResponse = await client.queryEvents({
 						query: { MoveEventType: VALIDATORS_EVENTS_QUERY },
 						cursor: currCursor,
 						limit: Math.min(limit, QUERY_MAX_RESULT_LIMIT),
@@ -49,7 +49,7 @@ export function useGetValidatorsEvents({ limit, order }: GetValidatorsEvent) {
 				return results.slice(0, limit);
 			}
 
-			const validatorEventsResponse = await rpc.queryEvents({
+			const validatorEventsResponse = await client.queryEvents({
 				query: { MoveEventType: VALIDATORS_EVENTS_QUERY },
 				limit,
 				order,

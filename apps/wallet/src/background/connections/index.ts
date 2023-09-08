@@ -12,10 +12,10 @@ import { type UIAccessibleEntityType } from '_src/shared/messaging/messages/payl
 import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
 import type { Connection } from './Connection';
-import type { NetworkEnvType } from '../NetworkEnv';
 import type { SetNetworkPayload } from '_payloads/network';
 import type { Permission } from '_payloads/permissions';
 import type { WalletStatusChange, WalletStatusChangePayload } from '_payloads/wallet-status-change';
+import type { NetworkEnvType } from '_src/shared/api-env';
 
 const appOrigin = new URL(Browser.runtime.getURL('')).origin;
 
@@ -114,7 +114,6 @@ export class Connections {
 	public notifyUI(
 		notification:
 			| { event: 'networkChanged'; network: NetworkEnvType }
-			| { event: 'lockStatusUpdate'; isLocked: boolean }
 			| { event: 'storedEntitiesUpdated'; type: UIAccessibleEntityType },
 	) {
 		for (const aConnection of this.#connections) {
@@ -127,9 +126,6 @@ export class Connections {
 								network: notification.network,
 							}),
 						);
-						break;
-					case 'lockStatusUpdate':
-						aConnection.sendLockedStatusUpdate(notification.isLocked);
 						break;
 					case 'storedEntitiesUpdated':
 						aConnection.notifyEntitiesUpdated(notification.type);
