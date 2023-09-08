@@ -133,7 +133,7 @@ fn update_hash(
 impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
 
         // This code no longer supports old protocol versions.

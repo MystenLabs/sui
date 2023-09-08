@@ -990,16 +990,18 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
-        let consensus_handler = Arc::new(ConsensusHandler::new(
-            epoch_store.clone(),
-            checkpoint_service.clone(),
-            state.transaction_manager().clone(),
-            state.db(),
-            low_scoring_authorities,
-            authority_names_to_hostnames,
-            committee,
-            state.metrics.clone(),
-        ));
+        let consensus_handler_initializer = || {
+            ConsensusHandler::new(
+                epoch_store.clone(),
+                checkpoint_service.clone(),
+                state.transaction_manager().clone(),
+                state.db(),
+                low_scoring_authorities.clone(),
+                authority_names_to_hostnames.clone(),
+                committee.clone(),
+                state.metrics.clone(),
+            )
+        };
 
         let transactions_addr = &config
             .consensus_config
@@ -1013,7 +1015,7 @@ impl SuiNode {
                 new_epoch_start_state.get_narwhal_committee(),
                 epoch_store.protocol_config().clone(),
                 worker_cache,
-                consensus_handler,
+                consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),
                     checkpoint_service.clone(),
