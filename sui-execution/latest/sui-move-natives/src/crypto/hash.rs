@@ -5,7 +5,6 @@ use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use fastcrypto_zkp::bn254::poseidon::hash_to_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::u256;
 use move_core_types::u256::U256;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
@@ -182,7 +181,7 @@ pub fn poseidon_bn254(
     for i in 0..length {
         let input = inputs
             .borrow_elem(i as usize, &Type::U256)?
-            .value_as::<u256::U256>()?;
+            .value_as::<U256>()?;
         field_elements.push(input.to_le_bytes().to_vec());
     }
 
