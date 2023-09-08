@@ -55,5 +55,13 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 		},
 		enabled: true,
 	},
-	facebook: { clientID: '', url: '', enabled: false },
+	facebook: {
+		clientID: '1544965116313994',
+		url: 'https://facebook.com/dialog/oauth/',
+		extraParams: {
+			response_type: 'id_token',
+			scope: 'openid email',
+		},
+		enabled: true,
+	},
 };
