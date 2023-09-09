@@ -31,6 +31,7 @@ feature_flags:
     - Twitch
   loaded_child_object_format: true
   enable_jwk_consensus_updates: true
+  end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
 max_tx_size_bytes: 131072
