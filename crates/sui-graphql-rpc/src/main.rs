@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
+use std::path::PathBuf;
+
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
+use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::simple_server::start_example_server;
-use sui_graphql_rpc::server::simple_server::ServerConfig;
 
 #[tokio::main]
 async fn main() {
@@ -24,24 +27,22 @@ async fn main() {
             rpc_url,
             port,
             host,
-            max_query_depth,
+            config,
         } => {
-            let mut config = ServerConfig::default();
-            if let Some(rpc_url) = rpc_url {
-                config.rpc_url = rpc_url;
-            }
-            if let Some(port) = port {
-                config.port = port;
-            }
-            if let Some(host) = host {
-                config.host = host;
-            }
-            if let Some(max_query_depth) = max_query_depth {
-                config.max_query_depth = max_query_depth;
-            }
+            let conn = ConnectionConfig::new(port, host, rpc_url);
+            let service_config = service_config(config);
 
             println!("Starting server...");
-            start_example_server(Some(config)).await;
+            start_example_server(conn, service_config).await;
         }
     }
+}
+
+fn service_config(path: Option<PathBuf>) -> ServiceConfig {
+    let Some(path) = path else {
+        return ServiceConfig::default();
+    };
+
+    let contents = fs::read_to_string(path).expect("Reading configuration");
+    ServiceConfig::read(&contents).expect("Deserializing configuration")
 }

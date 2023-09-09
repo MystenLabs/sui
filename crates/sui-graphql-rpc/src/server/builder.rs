@@ -12,10 +12,6 @@ use axum::middleware;
 use axum::{routing::IntoMakeService, Router};
 use std::any::Any;
 
-pub(crate) const DEFAULT_PORT: u16 = 8000;
-pub(crate) const DEFAULT_HOST: &str = "127.0.0.1";
-pub(crate) const DEFAULT_DEPTH_LIMIT: usize = 10;
-
 pub(crate) struct Server {
     pub server: hyper::Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>>,
 }
@@ -27,37 +23,23 @@ impl Server {
 }
 
 pub(crate) struct ServerBuilder {
-    port: Option<u16>,
-    host: Option<String>,
+    port: u16,
+    host: String,
 
     schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
 }
 
 impl ServerBuilder {
-    pub fn new() -> Self {
+    pub fn new(port: u16, host: String) -> Self {
         Self {
-            port: None,
-            host: None,
+            port,
+            host,
             schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
         }
     }
 
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = Some(port);
-        self
-    }
-
-    pub fn host(mut self, host: String) -> Self {
-        self.host = Some(host);
-        self
-    }
-
     pub fn address(&self) -> String {
-        format!(
-            "{}:{}",
-            self.host.as_ref().unwrap_or(&DEFAULT_HOST.to_string()),
-            self.port.unwrap_or(DEFAULT_PORT)
-        )
+        format!("{}:{}", self.host, self.port)
     }
 
     pub fn max_query_depth(mut self, max_depth: usize) -> Self {
