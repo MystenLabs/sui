@@ -26,6 +26,7 @@ use std::{
     time::Duration,
 };
 use storage::{CertificateStore, PayloadStore};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{
     sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
@@ -306,6 +307,7 @@ impl Synchronizer {
     pub fn new(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         gc_depth: Round,
         client: NetworkClient,
@@ -319,7 +321,7 @@ impl Synchronizer {
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
         let committee: &Committee = &committee;
-        let genesis = Self::make_genesis(committee);
+        let genesis = Self::make_genesis(&protocol_config, committee);
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
@@ -621,8 +623,11 @@ impl Synchronizer {
         Ok(())
     }
 
-    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
-        Certificate::genesis(committee)
+    fn make_genesis(
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+    ) -> HashMap<CertificateDigest, Certificate> {
+        Certificate::genesis(protocol_config, committee)
             .into_iter()
             .map(|x| (x.digest(), x))
             .collect()
@@ -630,7 +635,7 @@ impl Synchronizer {
 
     /// Checks if the certificate is valid and can potentially be accepted into the DAG.
     // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
-    pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+    pub fn sanitize_certificate(&self, certificate: &mut Certificate) -> DagResult<()> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -652,7 +657,7 @@ impl Synchronizer {
 
     async fn process_certificate_internal(
         &self,
-        certificate: Certificate,
+        mut certificate: Certificate,
         sanitize: bool,
         early_suspend: bool,
     ) -> DagResult<()> {
@@ -678,7 +683,7 @@ impl Synchronizer {
             }
         }
         if sanitize {
-            self.sanitize_certificate(&certificate)?;
+            self.sanitize_certificate(&mut certificate)?;
         }
 
         debug!(

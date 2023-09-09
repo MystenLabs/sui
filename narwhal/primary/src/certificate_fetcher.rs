@@ -441,13 +441,13 @@ async fn process_certificates_helper(
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
-            let certs = certs.to_vec();
+            let mut certs = certs.to_vec();
             let sync = synchronizer.clone();
             let metrics = metrics.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 let now = Instant::now();
-                for c in &certs {
+                for c in &mut certs {
                     sync.sanitize_certificate(c)?;
                 }
                 metrics
