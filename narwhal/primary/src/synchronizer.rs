@@ -33,6 +33,7 @@ use tokio::{
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
+use types::SignatureVerificationState;
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
@@ -59,6 +60,7 @@ struct Inner {
     authority_id: AuthorityIdentifier,
     /// Committee of the current epoch.
     committee: Committee,
+    protocol_config: ProtocolConfig,
     /// The worker information cache.
     worker_cache: WorkerCache,
     /// The depth of the garbage collector.
@@ -164,6 +166,21 @@ impl Inner {
                     panic!("Parent {digest:?} not found for {certificate:?}!")
                 }
             }
+        }
+
+        if self.protocol_config.narwhal_certificate_v2()
+            && !matches!(
+                certificate.signature_verification_state(),
+                SignatureVerificationState::VerifiedDirectly(_)
+                    | SignatureVerificationState::VerifiedIndirectly
+                    | SignatureVerificationState::Genesis
+            )
+        {
+            panic!(
+                "Attempting to write cert {:?} with invalid signature state {:?} to store",
+                certificate.digest(),
+                certificate.signature_verification_state()
+            );
         }
 
         // Store the certificate and make it available as parent to other certificates.
@@ -342,6 +359,7 @@ impl Synchronizer {
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
+            protocol_config,
             worker_cache,
             gc_depth,
             gc_round: AtomicU64::new(gc_round),
