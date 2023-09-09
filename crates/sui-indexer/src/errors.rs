@@ -75,6 +75,9 @@ pub enum IndexerError {
     #[error("Indexer failed to serialize/deserialize with error: `{0}`")]
     SerdeError(String),
 
+    #[error("Indexer error related to dynamic field: `{0}`")]
+    DynamicFieldError(String),
+
     #[error("Indexer does not support the feature with error: `{0}`")]
     NotSupportedError(String),
 

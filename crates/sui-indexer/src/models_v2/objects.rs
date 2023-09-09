@@ -5,14 +5,15 @@ use diesel::prelude::*;
 use sui_types::digests::ObjectDigest;
 
 use move_bytecode_utils::module_cache::GetModule;
-use sui_types::base_types::{ObjectID, ObjectRef};
-use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
 use sui_types::object::Object;
 use sui_types::object::{ObjectFormatOptions, ObjectRead};
 
 use crate::errors::IndexerError;
 use crate::schema_v2::objects;
 use crate::types_v2::IndexedObject;
+use sui_types::dynamic_field::DynamicFieldName;
 
 // NOTE: please add updating statement like below in pg_indexer_store_v2.rs,
 // if new columns are added here:
@@ -87,6 +88,78 @@ impl StoredObject {
         let object: sui_types::object::Object = self.try_into()?;
         let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
         Ok(ObjectRead::Exists(oref, object, layout))
+    }
+
+    pub fn try_into_dynamic_field_info(self) -> Result<Option<DynamicFieldInfo>, IndexerError> {
+        if self.df_kind.is_none() {
+            return Ok(None);
+        }
+
+        // Past this point, if there is any unexpected field, it's a data corruption error
+        let object_id = ObjectID::from_bytes(&self.object_id).map_err(|_| {
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Can't convert {:?} to object_id",
+                self.object_id
+            ))
+        })?;
+        let object_digest = ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|e| {
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible object digest. Error: {e}",
+                object_id
+            ))
+        })?;
+        let df_object_id = if let Some(df_object_id) = self.df_object_id {
+            ObjectID::from_bytes(&df_object_id).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible dynamic field type: df_object_id. Error: {e}",
+                    object_id
+                ))
+            })
+        } else {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible dynamic field type: empty df_object_id",
+                object_id
+            )));
+        }?;
+        let type_ = match self.df_kind {
+            Some(0) => DynamicFieldType::DynamicField,
+            Some(1) => DynamicFieldType::DynamicObject,
+            _ => {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible dynamic field type: empty df_kind",
+                    object_id
+                )))
+            }
+        };
+        let (name, bcs_name) = if let Some(bcs_name) = self.df_name {
+            let name = bcs::from_bytes(&bcs_name).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible dynamic field type: df_name. Error: {e}",
+                    object_id
+                ))
+            })?;
+            Ok::<_, IndexerError>((name, bcs_name))
+        } else {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible dynamic field type: empty df_name",
+                object_id
+            )));
+        }?;
+        let object_type =
+            self.df_object_type
+                .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "object {} has incompatible dynamic field type: empty df_object_type",
+                    object_id
+                )))?;
+        Ok(Some(DynamicFieldInfo {
+            version: SequenceNumber::from_u64(self.object_version as u64),
+            digest: object_digest,
+            type_,
+            name,
+            bcs_name: bcs_name.to_vec(),
+            object_type,
+            object_id: df_object_id,
+        }))
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {

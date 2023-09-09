@@ -4,10 +4,11 @@
 use core::result::Result::Ok;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_types::dynamic_field::DynamicFieldName;
 use tap::Tap;
 
 use async_trait::async_trait;
@@ -18,13 +19,13 @@ use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use sui_json_rpc_types::{Page, SuiObjectDataOptions, SuiObjectResponse};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::transaction::SenderSignedData;
-use tracing::instrument::Instrumented;
 use tracing::{info, Instrument};
 
 use sui_json_rpc_types::{
-    BalanceChange, ObjectChange, SuiObjectDataFilter, SuiTransactionBlock,
+    BalanceChange, DynamicFieldPage, ObjectChange, SuiObjectDataFilter, SuiTransactionBlock,
     SuiTransactionBlockEffects, SuiTransactionBlockEvents, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
@@ -72,6 +73,7 @@ macro_rules! chunk {
 // FIXME: consolidate these two?
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
 const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 500;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -79,6 +81,7 @@ pub struct PgIndexerStoreV2 {
     module_cache: Arc<SyncModuleCache<IndexerModuleResolverV2>>,
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
+    parallel_objects_chunk_size: usize,
 }
 
 impl PgIndexerStoreV2 {
@@ -90,11 +93,16 @@ impl PgIndexerStoreV2 {
             .unwrap_or_else(|e| PG_COMMIT_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+        let parallel_objects_chunk_size = std::env::var("PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE")
+            .unwrap_or_else(|e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
+            .parse::<usize>()
+            .unwrap();
         Self {
             blocking_cp,
             module_cache,
             metrics,
             parallel_chunk_size,
+            parallel_objects_chunk_size,
         }
     }
 
@@ -344,7 +352,7 @@ impl PgIndexerStoreV2 {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
-                "Persisted {} objects chunks",
+                "Persisted {} chunked objects",
                 mutated_objects.len() + deleted_object_ids.len(),
             )
         })
@@ -726,6 +734,86 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
             .await
     }
 
+    async fn get_dynamic_fields(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> IndexerResult<DynamicFieldPage> {
+        self.execute_in_blocking_worker(move |this| {
+            let objects: Vec<StoredObject> = read_only_blocking!(&this.blocking_cp, |conn| {
+                let mut query = objects::dsl::objects
+                    .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
+                    .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
+                    .limit((limit + 1) as i64)
+                    .into_boxed();
+                if let Some(object_cursor) = cursor {
+                    query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
+                }
+                query.load::<StoredObject>(conn)
+            })
+            .context("Failed to read stored objects from PostgresDB")?;
+            let mut fields = objects
+                .into_iter()
+                .map(|object| object.try_into_dynamic_field_info())
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(|info| {
+                    info.ok_or(IndexerError::DynamicFieldError(format!(
+                        "Unexpected failure to create dynamic field for parent_object_id: {}",
+                        parent_object_id
+                    )))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let next_cursor = fields.get(limit).map(|o| o.object_id);
+            fields.truncate(limit);
+            Ok(DynamicFieldPage {
+                data: fields,
+                next_cursor,
+                has_next_page: next_cursor.is_some(),
+            })
+        })
+        .await
+    }
+
+    async fn get_dynamic_field_object(
+        &self,
+        parent_object_id: ObjectID,
+        name: DynamicFieldName,
+    ) -> IndexerResult<SuiObjectResponse> {
+        let object = self.execute_in_blocking_worker(move |this| {
+            let bcs_name = bcs::to_bytes(&name).map_err(|e| {
+                IndexerError::DynamicFieldError(format!(
+                    "Failed to serialize dynamic field name: {}",
+                    e
+                ))
+            })?;
+            let object: Option<StoredObject> = read_only_blocking!(&this.blocking_cp, |conn| {
+                objects::dsl::objects
+                    .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
+                    .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
+                    .filter(objects::dsl::df_name.eq(bcs_name.to_vec()))
+                    .first::<StoredObject>(conn)
+                    .optional()
+            })
+            .context("Failed to read stored objects from PostgresDB")?;
+            Ok(object)
+        })
+        .await?;
+        let object_read = if let Some(object) = object {
+            object.try_into_object_read(&self.module_cache())
+        } else {
+            return Ok(SuiObjectResponse::new(None, None));
+        }?;
+        SuiObjectResponse::try_from((object_read, SuiObjectDataOptions::bcs_lossless()))
+            .map_err(|e| {
+                IndexerError::DynamicFieldError(format!(
+                    "Failed to convert objectRead to SuiObjectResponse: {}",
+                    e
+                ))
+            })
+    }
+
     async fn get_total_transaction_number_from_checkpoints(&self) -> Result<i64, IndexerError> {
         unimplemented!()
     }
@@ -792,10 +880,10 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         if object_changes.is_empty() {
             return Ok(());
         }
-        let len = object_changes.len();
         let guard = metrics.checkpoint_db_commit_latency_objects.start_timer();
         let objects = get_objects_to_commit(object_changes);
-        let chunks = chunk!(objects, self.parallel_chunk_size);
+        let len = objects.len();
+        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| {

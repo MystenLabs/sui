@@ -743,7 +743,6 @@ async fn commit_checkpoints<S>(
             state.persist_events(events_batch, metrics.clone()),
             state.persist_packages(packages_batch, metrics.clone()),
             state.persist_objects(object_changes_batch, metrics.clone()),
-
         ])
         .await
         .into_iter()
@@ -758,10 +757,7 @@ async fn commit_checkpoints<S>(
     }
 
     state
-        .persist_checkpoints(
-            checkpoint_batch,
-            metrics.clone(),
-        )
+        .persist_checkpoints(checkpoint_batch, metrics.clone())
         .await
         .tap_err(|e| {
             error!(

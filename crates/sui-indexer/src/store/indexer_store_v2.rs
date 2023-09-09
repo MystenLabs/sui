@@ -9,11 +9,12 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use std::sync::{Arc, Mutex};
 use sui_json_rpc_types::{
-    Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, SuiEvent,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Checkpoint as RpcCheckpoint, CheckpointId, DynamicFieldPage, EpochInfo, EventFilter, EventPage,
+    SuiEvent, SuiObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::digests::CheckpointDigest;
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Object, ObjectRead};
@@ -154,6 +155,19 @@ pub trait IndexerStoreV2 {
         limit: usize,
         descending_order: Option<bool>,
     ) -> Result<Vec<EpochInfo>, IndexerError>;
+
+    async fn get_dynamic_fields(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> IndexerResult<DynamicFieldPage>;
+
+    async fn get_dynamic_field_object(
+        &self,
+        parent_object_id: ObjectID,
+        name: DynamicFieldName,
+    ) -> IndexerResult<SuiObjectResponse>;
 
     async fn get_current_epoch(&self) -> Result<EpochInfo, IndexerError>;
 

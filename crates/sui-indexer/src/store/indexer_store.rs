@@ -4,16 +4,18 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use jsonrpsee::core::RpcResult;
 use prometheus::{Histogram, IntCounter};
 
 use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{
     Checkpoint as RpcCheckpoint, CheckpointId, EpochInfo, EventFilter, EventPage, MoveCallMetrics,
     NetworkMetrics, SuiObjectData, SuiObjectDataFilter, SuiTransactionBlockEffects,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions, DynamicFieldPage, SuiObjectResponse,
 };
 use sui_types::base_types::{EpochId, ObjectID, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{CheckpointDigest, TransactionDigest};
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::error::SuiError;
 use sui_types::event::EventID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -247,6 +249,7 @@ pub trait IndexerStore {
     ) -> Result<(), IndexerError>;
 
     async fn persist_epoch(&self, data: &TemporaryEpochStore) -> Result<(), IndexerError>;
+
     async fn get_network_total_transactions_previous_epoch(
         &self,
         epoch: i64,
