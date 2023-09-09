@@ -425,7 +425,7 @@ The command parameters include:
   willing to pay for the `transfer` call to be completed to avoid
   accidental drainage of all gas in the gas payment
 * `--type-args` - a list of types to let the Sui Move compiler know how to fill
-  in generic type paramenters in the called function.
+  in generic type parameters in the called function.
   It is not needed above, but it would be if the function being called were generic.
   See more about this flag below.
 
@@ -434,7 +434,7 @@ Note the third argument to the `transfer` function representing
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
-**Important:** 
+**Important:**
 
 1. If you use a shell that interprets square brackets ([ ]) as special
    characters (such as the `zsh` shell), you must enclose the brackets in single
