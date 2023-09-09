@@ -12,6 +12,7 @@ use async_graphql::*;
 use async_trait::async_trait;
 use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sdk::types::base_types::ObjectID;
+use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
 #[async_trait]
 pub(crate) trait DataProvider: Send + Sync {
@@ -63,4 +64,6 @@ pub(crate) trait DataProvider: Send + Sync {
     async fn fetch_chain_id(&self) -> Result<String>;
 
     async fn fetch_protocol_config(&self, version: Option<u64>) -> Result<ProtocolConfigs>;
+
+    async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary>;
 }
