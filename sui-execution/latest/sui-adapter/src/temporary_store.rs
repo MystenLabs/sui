@@ -886,8 +886,7 @@ impl<'backing> TemporaryStore<'backing> {
             if total_input_rebate
                 != gas_summary.storage_rebate + gas_summary.non_refundable_storage_fee
             {
-                return Err(ExecutionError::invariant_violation(
-                    format!(
+                return Err(ExecutionError::invariant_violation(format!(
                     "SUI conservation failed -- {} SUI in storage rebate field of input objects, \
                         {} SUI in tx storage rebate or tx non-refundable storage rebate",
                     total_input_rebate, gas_summary.non_refundable_storage_fee,
