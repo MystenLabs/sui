@@ -37,7 +37,7 @@ use std::{
 use std::{collections::HashSet, ffi::CStr};
 use tap::TapFallible;
 use tokio::sync::oneshot;
-use tracing::{error, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 use crate::rocks::safe_iter::SafeIter;
@@ -703,7 +703,7 @@ impl<K, V> DBMap<K, V> {
                     _ = &mut recv => break,
                 }
             }
-            info!("Returning the cf metric logging task for DBMap: {}", &cf);
+            debug!("Returning the cf metric logging task for DBMap: {}", &cf);
         });
         DBMap {
             rocksdb: db.clone(),
