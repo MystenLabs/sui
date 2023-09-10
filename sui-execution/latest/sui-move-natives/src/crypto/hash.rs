@@ -178,12 +178,14 @@ pub fn poseidon_bn254(
     let length = inputs.len(&Type::U256)?.value_as::<u64>()?;
 
     let mut field_elements: Vec<Vec<u8>> = Vec::new();
-    for i in 0..length {
-        let input = inputs
-            .borrow_elem(i as usize, &Type::U256)?
-            .value_as::<U256>()?;
+
+    for _ in 0..length {
+        let input = inputs.pop(&Type::U256)?.value_as::<U256>()?;
         field_elements.push(input.to_le_bytes().to_vec());
     }
+
+    // Inputs are read in reverse order
+    field_elements.reverse();
 
     match hash_to_bytes(&field_elements) {
         Ok(hash) => {
