@@ -66,19 +66,15 @@ export async function getAccountByID(id: string) {
 }
 
 export async function getAccountsBySourceID(id: string) {
-	const accountSources = await (await getDB()).accounts
-		.filter((account) => account.sourceID === id)
-		.toArray();
+	const accountSources = await (await getDB()).accounts.where({ sourceID: id }).toArray();
 	if (!accountSources) {
 		return null;
 	}
 	return accountSources;
 }
 
-export async function getAccountsByType(type: string) {
-	const accountSources = await (await getDB()).accounts
-		.filter((account) => account.type === type)
-		.toArray();
+export async function getAccountsByType(accountType: string) {
+	const accountSources = await (await getDB()).accounts.where({ type: accountType }).toArray();
 	if (!accountSources) {
 		return null;
 	}
