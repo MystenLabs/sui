@@ -1619,6 +1619,12 @@
                 "hash_keccak256_data_cost_per_byte": {
                   "u64": "2"
                 },
+                "hash_poseidon_bn254_cost_base": {
+                  "u64": "52"
+                },
+                "hash_poseidon_bn254_data_cost_per_block": {
+                  "u64": "66"
+                },
                 "hmac_hmac_sha3_256_cost_base": {
                   "u64": "52"
                 },
@@ -10537,7 +10543,9 @@
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "maxItems": 3,
+            "minItems": 3
           },
           "pi_b": {
             "type": "array",
@@ -10545,14 +10553,20 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
-            }
+              },
+              "maxItems": 2,
+              "minItems": 2
+            },
+            "maxItems": 3,
+            "minItems": 3
           },
           "pi_c": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "maxItems": 3,
+            "minItems": 3
           }
         }
       }
