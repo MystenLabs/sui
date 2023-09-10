@@ -95,32 +95,6 @@ mod sim_only_tests {
         (package_id, object_id)
     }
 
-    async fn create_and_wrap_child(
-        test_cluster: &TestCluster,
-        package_id: ObjectID,
-        object_id: ObjectID,
-    ) -> SuiTransactionBlockEffects {
-        let object = test_cluster.wallet.get_object_ref(object_id).await.unwrap();
-        let effects = test_cluster
-            .sign_and_execute_transaction(
-                &test_cluster
-                    .test_transaction_builder()
-                    .await
-                    .move_call(
-                        package_id,
-                        "objects",
-                        "create_and_wrap_child",
-                        vec![object.into(), true.into()],
-                    )
-                    .build(),
-            )
-            .await
-            .effects
-            .unwrap();
-        assert!(effects.created().is_empty() && effects.wrapped().is_empty());
-        effects
-    }
-
     async fn create_owned_child(test_cluster: &TestCluster, package_id: ObjectID) -> ObjectID {
         test_cluster
             .sign_and_execute_transaction(
