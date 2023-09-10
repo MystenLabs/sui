@@ -11,6 +11,7 @@ const REQUIRED_FEATURES: (keyof MinimallyRequiredFeatures)[] = [
 	'standard:events',
 ];
 
+/** @deprecated Use isWalletWithRequiredFeatureSet instead since it provides more accurate typing! */
 export function isWalletWithSuiFeatures(
 	wallet: Wallet,
 	/** Extra features that are required to be present, in addition to the expected feature set. */
