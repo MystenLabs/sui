@@ -44,7 +44,9 @@ export class KioskClient {
 	// and call the `addRuleResolver` function. Each rule has a `resolve` function.
 	// The resolve function is automatically called on `purchaseAndResolve` function call.
 	addRuleResolver(rule: TransferPolicyRule) {
-		if (!this.#rules.find((x) => x.rule === rule.rule)) this.#rules.push(rule);
+		if (this.#rules.find((x) => x.rule === rule.rule))
+			throw new Error(`Rule ${rule.rule} resolver already exists.`);
+		this.#rules.push(rule);
 	}
 
 	/**
@@ -52,7 +54,7 @@ export class KioskClient {
 	 * Helpful if we want to chain some actions before sharing + transferring the cap to the specified address.
 	 */
 	create(txb: TransactionBlock): [TransactionArgument, TransactionArgument] {
-		let [kiosk, cap] = kioskTx.createKiosk(txb);
+		const [kiosk, cap] = kioskTx.createKiosk(txb);
 		return [kiosk, cap];
 	}
 
@@ -60,7 +62,7 @@ export class KioskClient {
 	 * Single function way to create a kiosk, share it and transfer the cap to the specified address.
 	 */
 	createAndShare(txb: TransactionBlock, address: string) {
-		let cap = kioskTx.createKioskAndShare(txb);
+		const cap = kioskTx.createKioskAndShare(txb);
 		txb.transferObjects([cap], txb.pure(address, 'address'));
 	}
 
@@ -90,7 +92,7 @@ export class KioskClient {
 		cap: KioskOwnerCap,
 		callback: (kiosk: TransactionArgument, capObject: TransactionArgument) => Promise<void>,
 	): Promise<void> {
-		let [kiosk, capObject, returnPromise] = this.getOwnerCap(txb, cap);
+		const [kiosk, capObject, returnPromise] = this.getOwnerCap(txb, cap);
 
 		await callback(kiosk, capObject);
 
@@ -103,7 +105,7 @@ export class KioskClient {
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
 	async getOwnedKiosks(address: string): Promise<OwnedKiosks> {
-		let personalPackageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
+		const personalPackageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 		return getOwnedKiosks(this.client, address, {
 			personalKioskType: personalPackageId
 				? `${personalPackageId}::personal_kiosk::PersonalKioskCap`
@@ -162,7 +164,7 @@ export class KioskClient {
 		options?: PurchaseOptions,
 	): Promise<void> {
 		// Get a list of the transfer policies.
-		let policies = await queryTransferPolicy(this.client, itemType);
+		const policies = await queryTransferPolicy(this.client, itemType);
 
 		if (policies.length === 0) {
 			throw new Error(
@@ -170,7 +172,7 @@ export class KioskClient {
 			);
 		}
 
-		let policy = policies[0]; // we now pick the first one. We need to add an option to define which one.
+		const policy = policies[0]; // we now pick the first one. We need to add an option to define which one.
 
 		// Split the coin for the amount of the listing.
 		const coin = txb.splitCoins(txb.gas, [txb.pure(price, 'u64')]);
@@ -180,8 +182,8 @@ export class KioskClient {
 
 		let canTransferOutsideKiosk = true;
 
-		for (let rule of policy.rules) {
-			let ruleDefinition = this.#rules.find((x) => x.rule === rule);
+		for (const rule of policy.rules) {
+			const ruleDefinition = this.#rules.find((x) => x.rule === rule);
 			if (!ruleDefinition) throw new Error(`No resolver for the following rule: ${rule}.`);
 			if (ruleDefinition.hasLockingRule) canTransferOutsideKiosk = false;
 
@@ -219,7 +221,7 @@ export class KioskClient {
 		ownerCap: TransactionArgument,
 		callback: (item: TransactionArgument) => Promise<void>,
 	) {
-		let [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
+		const [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
 
 		callback(itemObj).finally(() => {
 			kioskTx.returnValue(txb, itemType, kiosk, itemObj, promise);
@@ -239,7 +241,7 @@ export class KioskClient {
 		kiosk: ObjectArgument,
 		ownerCap: TransactionArgument,
 	): [TransactionArgument, TransactionArgument] {
-		let [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
+		const [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
 
 		return [itemObj, promise];
 	}

@@ -64,7 +64,7 @@ export class TransferPolicyManager {
 		},
 	) {
 		if (!options || !options.skipCheck) {
-			let policies = await queryTransferPolicy(this.client, itemType);
+			const policies = await queryTransferPolicy(this.client, itemType);
 			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
 		}
 		const cap = createTransferPolicy(tx, itemType, publisher);
@@ -88,7 +88,7 @@ export class TransferPolicyManager {
 		},
 	): Promise<TransferPolicyManager> {
 		if (!options || !options.skipCheck) {
-			let policies = await queryTransferPolicy(this.client, itemType);
+			const policies = await queryTransferPolicy(this.client, itemType);
 			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
 		}
 		const [transferPolicy, cap] = createTransferPolicyWithoutSharing(tx, itemType, publisher);
@@ -130,7 +130,7 @@ export class TransferPolicyManager {
 	 * @param address The owner of the Cap.
 	 */
 	async setPolicyByTypeAsync(itemType: string, address: string) {
-		let cap = await this.getPolicyCapId(itemType, address);
+		const cap = await this.getPolicyCapId(itemType, address);
 		if (!cap)
 			throw new Error(
 				`Couldn't find a TransferPolicyCap for type ${itemType} owned by address ${address}`,
@@ -145,7 +145,7 @@ export class TransferPolicyManager {
 	 * @param policyCapId The Object ID for the TransferPolicyCap object
 	 */
 	async setPolicyAsync(policyCapId: string) {
-		let capObject = await this.client.getObject({
+		const capObject = await this.client.getObject({
 			id: policyCapId,
 			options: {
 				showContent: true,
@@ -153,15 +153,15 @@ export class TransferPolicyManager {
 		});
 		if (!capObject) throw new Error("This cap Object wasn't found");
 
-		let type = (capObject?.data?.content as { type: string })?.type;
+		const type = (capObject?.data?.content as { type: string })?.type;
 		//@ts-ignore-next-line
-		let policyId = capObject?.data?.content?.fields?.policy_id;
+		const policyId = capObject?.data?.content?.fields?.policy_id;
 
 		if (!type.includes(TRANSFER_POLICY_CAP_TYPE))
 			throw new Error('Invalid Cap Object Id. Are you sure this ID is a cap?');
 
 		// Transform 0x2::transfer_policy::TransferPolicyCap<itemType> -> itemType
-		let itemType = type.replace(TRANSFER_POLICY_CAP_TYPE + '<', '').slice(0, -1);
+		const itemType = type.replace(TRANSFER_POLICY_CAP_TYPE + '<', '').slice(0, -1);
 
 		this.setPolicy(policyId, policyCapId, itemType);
 	}
@@ -200,7 +200,7 @@ export class TransferPolicyManager {
 	withdraw(tx: TransactionBlock, address: string, amount?: string | bigint) {
 		this.#validateInputs();
 		// Withdraw coin for specified amount (or none)
-		let coin = withdrawFromPolicy(tx, this.itemType!, this.policyId!, this.policyCap!, amount);
+		const coin = withdrawFromPolicy(tx, this.itemType!, this.policyId!, this.policyCap!, amount);
 
 		tx.transferObjects([coin], tx.pure(address, 'address'));
 	}
@@ -295,7 +295,7 @@ export class TransferPolicyManager {
 	removeLockRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = KIOSK_LOCK_RULE_ADDRESS[this.network];
+		const packageId = KIOSK_LOCK_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -311,7 +311,7 @@ export class TransferPolicyManager {
 	removeRoyaltyRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = ROYALTY_RULE_ADDRESS[this.network];
+		const packageId = ROYALTY_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -327,7 +327,7 @@ export class TransferPolicyManager {
 	removePersonalKioskRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
+		const packageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -343,7 +343,7 @@ export class TransferPolicyManager {
 	removeFloorPriceRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = FLOOR_PRICE_RULE_ADDRESS[this.network];
+		const packageId = FLOOR_PRICE_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,

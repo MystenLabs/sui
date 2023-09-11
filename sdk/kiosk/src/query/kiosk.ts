@@ -95,7 +95,7 @@ export async function getOwnedKiosks(
 			kioskIds: [],
 		};
 
-	let filter: SuiObjectDataFilter = {
+	const filter: SuiObjectDataFilter = {
 		MatchAny: [
 			{
 				StructType: KIOSK_OWNER_CAP,

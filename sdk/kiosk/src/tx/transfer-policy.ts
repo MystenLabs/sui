@@ -14,7 +14,7 @@ export function createTransferPolicy(
 	itemType: string,
 	publisher: ObjectArgument,
 ): TransactionArgument {
-	let [transferPolicy, transferPolicyCap] = createTransferPolicyWithoutSharing(
+	const [transferPolicy, transferPolicyCap] = createTransferPolicyWithoutSharing(
 		tx,
 		itemType,
 		publisher,
@@ -34,7 +34,7 @@ export function createTransferPolicyWithoutSharing(
 	itemType: string,
 	publisher: ObjectArgument,
 ): [TransactionArgument, TransactionArgument] {
-	let [transferPolicy, transferPolicyCap] = tx.moveCall({
+	const [transferPolicy, transferPolicyCap] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::new`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, publisher)],

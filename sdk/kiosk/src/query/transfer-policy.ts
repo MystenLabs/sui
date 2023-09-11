@@ -46,7 +46,7 @@ export async function queryTransferPolicy(
 				throw new Error(`Invalid policy: ${policy?.objectId}, expected object, got package`);
 			}
 
-			let parsed = bcs.de(TRANSFER_POLICY_TYPE, policy.bcs.bcsBytes, 'base64');
+			const parsed = bcs.de(TRANSFER_POLICY_TYPE, policy.bcs.bcsBytes, 'base64');
 
 			return {
 				id: policy?.objectId,
