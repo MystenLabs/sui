@@ -24,10 +24,10 @@ import {
 import { queryOwnedTransferPolicyCap, queryTransferPolicy } from '../query/transfer-policy';
 import { SuiClient } from '@mysten/sui.js/src/client';
 import {
-	floorPriceRuleAddress,
-	kioskLockRuleAddress,
-	personalKioskAddress,
-	royaltyRuleAddress,
+	FLOOR_PRICE_RULE_ADDRESS,
+	KIOSK_LOCK_RULE_ADDRESS,
+	PERSONAL_KIOSK_RULE_ADDRESS,
+	ROYALTY_RULE_ADDRESS,
 } from '../constants';
 
 export class TransferPolicyManager {
@@ -233,7 +233,7 @@ export class TransferPolicyManager {
 			this.policyCap!,
 			percentageBps,
 			minAmount,
-			royaltyRuleAddress[this.network],
+			ROYALTY_RULE_ADDRESS[this.network],
 		);
 		return this;
 	}
@@ -252,7 +252,7 @@ export class TransferPolicyManager {
 			this.itemType!,
 			this.policyId!,
 			this.policyCap!,
-			kioskLockRuleAddress[this.network],
+			KIOSK_LOCK_RULE_ADDRESS[this.network],
 		);
 		return this;
 	}
@@ -269,7 +269,7 @@ export class TransferPolicyManager {
 			this.itemType!,
 			this.policyId!,
 			this.policyCap!,
-			personalKioskAddress[this.network],
+			PERSONAL_KIOSK_RULE_ADDRESS[this.network],
 		);
 		return this;
 	}
@@ -287,7 +287,7 @@ export class TransferPolicyManager {
 			this.policyId!,
 			this.policyCap!,
 			minPrice,
-			floorPriceRuleAddress[this.network],
+			FLOOR_PRICE_RULE_ADDRESS[this.network],
 		);
 		return this;
 	}
@@ -295,7 +295,7 @@ export class TransferPolicyManager {
 	removeLockRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = kioskLockRuleAddress[this.network];
+		let packageId = KIOSK_LOCK_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -311,7 +311,7 @@ export class TransferPolicyManager {
 	removeRoyaltyRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = royaltyRuleAddress[this.network];
+		let packageId = ROYALTY_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -327,7 +327,7 @@ export class TransferPolicyManager {
 	removePersonalKioskRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = personalKioskAddress[this.network];
+		let packageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,
@@ -343,7 +343,7 @@ export class TransferPolicyManager {
 	removeFloorPriceRule(tx: TransactionBlock) {
 		this.#validateInputs();
 
-		let packageId = floorPriceRuleAddress[this.network];
+		let packageId = FLOOR_PRICE_RULE_ADDRESS[this.network];
 
 		removeTransferPolicyRule(
 			tx,

@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 import * as kioskTx from '../tx/kiosk';
-import { TransferPolicyRule, personalKioskAddress, rules } from '../constants';
+import { TransferPolicyRule, PERSONAL_KIOSK_RULE_ADDRESS, rules } from '../constants';
 import { queryTransferPolicy } from '../query/transfer-policy';
 import { convertToPersonalTx } from '../tx/personal-kiosk';
 import { confirmRequest } from '../tx/transfer-policy';
@@ -112,7 +112,7 @@ export class KioskClient {
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
 	async getOwnedKiosks(address: string): Promise<OwnedKiosks> {
-		let personalPackageId = personalKioskAddress[this.network];
+		let personalPackageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 		return getOwnedKiosks(this.client, address, {
 			personalKioskType: personalPackageId
 				? `${personalPackageId}::personal_kiosk::PersonalKioskCap`
@@ -152,7 +152,12 @@ export class KioskClient {
 	 * If the transfer policy has the `lock` rule, the item is locked in the kiosk.
 	 * Otherwise, the item is placed in the kiosk.
 	 * @param txb The Transaction Block
-	 * @param item The item {type, objectId, price}
+	 * @param itemType The type of the item
+	 * @param itemId The id of the item
+	 * @param price The price of the specified item
+	 * @param kiosk The kiosk the item resides in
+	 * @param ownedKiosk The kiosk the item will be placed or locked into
+	 * @param ownedKioskCap The OwnerCap as retrieved from the `getOwnerCap` function
 	 * @param options Currently has `extraArgs`, which can be used for custom rule resolvers.
 	 */
 	async purchaseAndResolve(
@@ -427,7 +432,7 @@ export class KioskClient {
 			txb,
 			kiosk || this.selectedCap!.kioskId,
 			ownerCap || this.selectedCap!.objectId,
-			personalKioskAddress[this.network],
+			PERSONAL_KIOSK_RULE_ADDRESS[this.network],
 		);
 	}
 
@@ -448,7 +453,7 @@ export class KioskClient {
 			];
 
 		const [capObject, promise] = txb.moveCall({
-			target: `${personalKioskAddress[this.network]}::personal_kiosk::borrow_val`,
+			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::borrow_val`,
 			arguments: [txb.object(this.selectedCap!.objectId)],
 		});
 
@@ -470,7 +475,7 @@ export class KioskClient {
 		if (!this.selectedCap!.isPersonal || !promise) return;
 
 		txb.moveCall({
-			target: `${personalKioskAddress[this.network]}::personal_kiosk::return_val`,
+			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::return_val`,
 			arguments: [txb.object(this.selectedCap!.objectId), objArg(txb, capObject), promise],
 		});
 	}

@@ -20,50 +20,50 @@ export type TransferPolicyRule = {
 	hasLockingRule?: boolean;
 };
 
-export const royaltyRuleAddress: Record<Network, string> = {
+export const ROYALTY_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
 	[Network.MAINNET]: '0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879',
 };
 
-export const kioskLockRuleAddress: Record<Network, string> = {
+export const KIOSK_LOCK_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: 'bd8fc1947cf119350184107a3087e2dc27efefa0dd82e25a1f699069fe81a585',
 	[Network.MAINNET]: '0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879',
 };
 
-export const floorPriceRuleAddress: Record<Network, string> = {
+export const FLOOR_PRICE_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
 	[Network.MAINNET]: '',
 };
 
-export const personalKioskAddress: Record<Network, string> = {
+export const PERSONAL_KIOSK_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
 	[Network.MAINNET]: '',
 };
 
 export const testnetRules: TransferPolicyRule[] = [
 	{
-		rule: `${royaltyRuleAddress[Network.TESTNET]}::royalty_rule::Rule`,
+		rule: `${ROYALTY_RULE_ADDRESS[Network.TESTNET]}::royalty_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: royaltyRuleAddress[Network.TESTNET],
+		packageId: ROYALTY_RULE_ADDRESS[Network.TESTNET],
 		resolveRuleFunction: resolveRoyaltyRule,
 	},
 	{
-		rule: `${kioskLockRuleAddress[Network.TESTNET]}::kiosk_lock_rule::Rule`,
+		rule: `${KIOSK_LOCK_RULE_ADDRESS[Network.TESTNET]}::kiosk_lock_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: kioskLockRuleAddress[Network.TESTNET],
+		packageId: KIOSK_LOCK_RULE_ADDRESS[Network.TESTNET],
 		resolveRuleFunction: resolveKioskLockRule,
 		hasLockingRule: true,
 	},
 	{
-		rule: `${personalKioskAddress[Network.TESTNET]}::personal_kiosk_rule::Rule`,
+		rule: `${PERSONAL_KIOSK_RULE_ADDRESS[Network.TESTNET]}::personal_kiosk_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: personalKioskAddress[Network.TESTNET],
+		packageId: PERSONAL_KIOSK_RULE_ADDRESS[Network.TESTNET],
 		resolveRuleFunction: resolvePersonalKioskRule,
 	},
 	{
-		rule: `${floorPriceRuleAddress[Network.TESTNET]}::floor_price_rule::Rule`,
+		rule: `${FLOOR_PRICE_RULE_ADDRESS[Network.TESTNET]}::floor_price_rule::Rule`,
 		network: Network.TESTNET,
-		packageId: floorPriceRuleAddress[Network.TESTNET],
+		packageId: FLOOR_PRICE_RULE_ADDRESS[Network.TESTNET],
 		resolveRuleFunction: resolveFloorPriceRule,
 	},
 ];
@@ -72,15 +72,15 @@ export const testnetRules: TransferPolicyRule[] = [
 
 export const mainnetRules: TransferPolicyRule[] = [
 	{
-		rule: `${royaltyRuleAddress[Network.MAINNET]}::royalty_rule::Rule`,
+		rule: `${ROYALTY_RULE_ADDRESS[Network.MAINNET]}::royalty_rule::Rule`,
 		network: Network.MAINNET,
-		packageId: royaltyRuleAddress[Network.MAINNET],
+		packageId: ROYALTY_RULE_ADDRESS[Network.MAINNET],
 		resolveRuleFunction: resolveRoyaltyRule,
 	},
 	{
-		rule: `${kioskLockRuleAddress[Network.MAINNET]}::kiosk_lock_rule::Rule`,
+		rule: `${KIOSK_LOCK_RULE_ADDRESS[Network.MAINNET]}::kiosk_lock_rule::Rule`,
 		network: Network.MAINNET,
-		packageId: kioskLockRuleAddress[Network.MAINNET],
+		packageId: KIOSK_LOCK_RULE_ADDRESS[Network.MAINNET],
 		resolveRuleFunction: resolveKioskLockRule,
 		hasLockingRule: true,
 	},

@@ -17,8 +17,8 @@ export type ObjectArgument = string | TransactionArgument | SharedObjectRef | Su
  * A Network selection
  */
 export enum Network {
-	MAINNET,
-	TESTNET,
+	MAINNET = 'mainnet',
+	TESTNET = 'testnet',
 }
 
 /**
