@@ -40,9 +40,15 @@ type WalletConnectedAction = {
 	};
 };
 
+type WalletDisconnectedAction = {
+	type: 'wallet-disconnected';
+	payload?: never;
+};
+
 export type WalletAction =
 	| WalletConnectionStatusUpdatedAction
 	| WalletConnectedAction
+	| WalletDisconnectedAction
 	| WalletRegisteredAction
 	| WalletUnregisteredAction;
 
@@ -83,6 +89,15 @@ export function walletReducer(state: WalletState, { type, payload }: WalletActio
 				currentAccount: payload.currentAccount,
 				connectionStatus: 'connected',
 			};
+		case 'wallet-disconnected': {
+			return {
+				...state,
+				currentWallet: null,
+				accounts: [],
+				currentAccount: null,
+				connectionStatus: 'disconnected',
+			};
+		}
 		default:
 			assertUnreachable(type);
 	}
