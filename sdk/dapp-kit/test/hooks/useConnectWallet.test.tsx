@@ -9,9 +9,7 @@ import type { Mock } from 'vitest';
 
 describe('useConnectWallet', () => {
 	test('throws an error when connecting to a wallet when a connection is already active', async () => {
-		const { unregister, mockWallet } = registerMockWallet({
-			walletName: 'Mock Wallet 1',
-		});
+		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
