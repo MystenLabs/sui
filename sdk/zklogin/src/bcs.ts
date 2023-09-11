@@ -31,40 +31,36 @@ export interface ZkSignature {
 	userSignature: string | Uint8Array;
 }
 
-zkBcs.registerStructType('ZkSignature', {
+zkBcs.registerFixedArray('FixedArray[2]', 2);
+zkBcs.registerFixedArray('FixedArray[3]', 3);
+
+zkBcs.registerStructType('ZkloginSignature', {
 	inputs: {
-		proof_points: {
-			a: [BCS.VECTOR, BCS.STRING],
-			b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
-			c: [BCS.VECTOR, BCS.STRING],
+		proofPoints: {
+			a: ['FixedArray[3]', BCS.STRING],
+			// nested fixed array seem to not work
+			b: ['FixedArray[3]', ['FixedArray[2]', BCS.STRING]],
+			c: ['FixedArray[3]', BCS.STRING],
 		},
-		iss_base64_details: {
+		issBase64Details: {
 			value: BCS.STRING,
-			index_mod_4: BCS.U8,
+			indexMod4: BCS.U8,
 		},
-		header_base64: BCS.STRING,
-		address_seed: BCS.STRING,
+		headerBase64: BCS.STRING,
+		addressSeed: BCS.STRING,
 	},
-	max_epoch: BCS.U64,
-	user_signature: [BCS.VECTOR, BCS.U8],
+	maxEpoch: BCS.U64,
+	userSignature: [BCS.VECTOR, BCS.U8],
 });
 
 function getZkSignatureBytes({ inputs, maxEpoch, userSignature }: ZkSignature) {
 	return zkBcs
 		.ser(
-			'ZkSignature',
+			'ZkloginSignature',
 			{
-				inputs: {
-					proof_points: inputs.proofPoints,
-					iss_base64_details: {
-						value: inputs.issBase64Details.value,
-						index_mod_4: inputs.issBase64Details.indexMod4,
-					},
-					header_base64: inputs.headerBase64,
-					address_seed: inputs.addressSeed,
-				},
-				max_epoch: maxEpoch,
-				user_signature: typeof userSignature === 'string' ? fromB64(userSignature) : userSignature,
+				inputs,
+				maxEpoch,
+				userSignature: typeof userSignature === 'string' ? fromB64(userSignature) : userSignature,
 			},
 			{ maxSize: 2048 },
 		)
