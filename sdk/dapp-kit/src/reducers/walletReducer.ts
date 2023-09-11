@@ -27,7 +27,24 @@ type WalletUnregisteredAction = {
 	};
 };
 
-export type WalletAction = WalletRegisteredAction | WalletUnregisteredAction;
+type WalletConnectionStatusUpdatedAction = {
+	type: 'wallet-connection-status-updated';
+	payload: WalletState['connectionStatus'];
+};
+
+type WalletConnectedAction = {
+	type: 'wallet-connected';
+	payload: {
+		wallet: WalletWithRequiredFeatures;
+		currentAccount: WalletAccount | null;
+	};
+};
+
+export type WalletAction =
+	| WalletConnectionStatusUpdatedAction
+	| WalletConnectedAction
+	| WalletRegisteredAction
+	| WalletUnregisteredAction;
 
 export function walletReducer(state: WalletState, { type, payload }: WalletAction): WalletState {
 	switch (type) {
@@ -53,6 +70,19 @@ export function walletReducer(state: WalletState, { type, payload }: WalletActio
 				wallets: payload.updatedWallets,
 			};
 		}
+		case 'wallet-connection-status-updated':
+			return {
+				...state,
+				connectionStatus: payload,
+			};
+		case 'wallet-connected':
+			return {
+				...state,
+				currentWallet: payload.wallet,
+				accounts: payload.wallet.accounts,
+				currentAccount: payload.currentAccount,
+				connectionStatus: 'connected',
+			};
 		default:
 			assertUnreachable(type);
 	}
