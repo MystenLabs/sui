@@ -1374,6 +1374,11 @@ impl ProtocolConfig {
                 23 => {
                     cfg.feature_flags.loaded_child_object_format_type = true;
                     cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    // Taking a baby step approach, we consider only 20% by stake as bad nodes so we
+                    // have a 80% by stake of nodes participating in the leader committee. That allow
+                    // us for more redundancy in case we have validators under performing - since the
+                    // responsibility is shared amongst more nodes. We can increase that once we do have
+                    // higher confidence.
                     cfg.consensus_bad_nodes_stake_threshold = Some(20);
                 }
                 // Use this template when making changes:
