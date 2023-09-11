@@ -13,7 +13,7 @@ use crate::types::committee_member::CommitteeMember;
 use crate::types::date_time::DateTime;
 use crate::types::end_of_epoch_data::EndOfEpochData;
 use crate::types::epoch::Epoch;
-use crate::types::object::{Object, ObjectFilter, ObjectKind};
+use crate::types::object::{Object, ObjectFilter};
 use crate::types::protocol_config::{
     ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs,
 };
@@ -39,7 +39,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use sui_json_rpc_types::{
     OwnedObjectRef, SuiExecutionStatus, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+    SuiPastObjectResponse, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
@@ -49,7 +49,6 @@ use sui_sdk::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest as NativeTransactionDigest,
         gas::GasCostSummary as NativeGasCostSummary,
-        object::Owner as NativeOwner,
         sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
     SuiClient,
@@ -115,7 +114,7 @@ impl DataProvider for SuiClient {
                 val.data.unwrap()
             }
         };
-        Ok(Some(convert_obj(&g)))
+        Ok(Some((&g).into()))
     }
 
     async fn fetch_owned_objs(
@@ -165,7 +164,7 @@ impl DataProvider for SuiClient {
 
         connection.edges.extend(pg.data.into_iter().map(|n| {
             let g = n.data.unwrap();
-            let o = convert_obj(&g);
+            let o = (&g).into();
 
             Edge::new(g.object_id.to_string(), o)
         }));
@@ -375,36 +374,6 @@ pub(crate) fn convert_json_rpc_checkpoint(
     })
 }
 
-fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
-    Object {
-        version: s.version.into(),
-        digest: s.digest.to_string(),
-        storage_rebate: s.storage_rebate.map(BigInt::from),
-        address: SuiAddress::from_array(**s.object_id),
-        owner: s
-            .owner
-            .unwrap()
-            .get_owner_address()
-            .map(|x| SuiAddress::from_array(x.to_inner()))
-            .ok(),
-        bcs: s.bcs.as_ref().map(|raw| match raw {
-            SuiRawData::Package(raw_package) => Base64::from(bcs::to_bytes(raw_package).unwrap()),
-            SuiRawData::MoveObject(raw_object) => Base64::from(&raw_object.bcs_bytes),
-        }),
-        previous_transaction: Some(TransactionDigest::from_array(
-            s.previous_transaction.unwrap().into_inner(),
-        )),
-        kind: Some(match s.owner.unwrap() {
-            NativeOwner::AddressOwner(_) => ObjectKind::Owned,
-            NativeOwner::ObjectOwner(_) => ObjectKind::Child,
-            NativeOwner::Shared {
-                initial_shared_version: _,
-            } => ObjectKind::Shared,
-            NativeOwner::Immutable => ObjectKind::Immutable,
-        }),
-    }
-}
-
 fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
     Balance {
         coin_object_count: b.coin_object_count as u64,
@@ -425,7 +394,7 @@ pub(crate) async fn convert_to_gas_input(
 
     let payment_objs = obj_responses
         .iter()
-        .map(|x| convert_obj(x.data.as_ref().unwrap()))
+        .map(|x| x.data.as_ref().unwrap().into())
         .collect();
 
     Ok(GasInput {
@@ -458,7 +427,7 @@ pub(crate) async fn convert_to_gas_effects(
             SuiObjectDataOptions::full_content(),
         )
         .await?;
-    let gas_object = convert_obj(&gas_obj.data.unwrap());
+    let gas_object = (&gas_obj.data.unwrap()).into();
     Ok(GasEffects {
         gas_object: Some(gas_object),
         gas_summary: Some(gas_summary),

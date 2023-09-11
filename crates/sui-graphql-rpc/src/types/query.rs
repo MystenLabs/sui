@@ -24,7 +24,7 @@ impl Query {
         // Currently only an account address can own an object
         let o = ctx.data_provider().fetch_obj(address, None).await?;
         Ok(o.and_then(|q| q.owner)
-            .map(|o| ObjectOwner::Address(Address { address: o })))
+            .map(|o| ObjectOwner::Address(Address { address: o.address })))
     }
 
     async fn object(
