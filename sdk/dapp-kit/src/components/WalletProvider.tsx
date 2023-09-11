@@ -42,7 +42,7 @@ interface WalletProviderContext extends WalletState {
 }
 
 const SUI_WALLET_NAME = 'Sui Wallet';
-const DEFAULT_STORAGE_KEY = 'dapp-kit:most-recent-wallet-connection-info';
+const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
 const WalletContext = createContext<WalletProviderContext | null>(null);
 
