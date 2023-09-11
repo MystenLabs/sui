@@ -94,6 +94,7 @@ impl TransactionValidator for SuiTxValidator {
 
         //if !found {
         if validators[0] == self.state.name {
+            tracing::error!("Failing randomly on purpose {:?}", b.digest());
             return Err(eyre::eyre!("failing randomly on purpose"));
         }
 
