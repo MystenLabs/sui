@@ -67,11 +67,9 @@ export function withdrawFromPolicy(
 	policyCap: ObjectArgument,
 	amount?: string | bigint | null,
 ): TransactionArgument {
-	let amountArg = amount
-		? tx.pure({ Some: amount }, 'Option<u64>')
-		: tx.pure({ None: true }, 'Option<u64>');
+	const amountArg = tx.pure(amount ? { Some: amount } : { None: true }, 'Option<u64>');
 
-	let [profits] = tx.moveCall({
+	const [profits] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::withdraw`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, policy), objArg(tx, policyCap), amountArg],

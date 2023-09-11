@@ -321,7 +321,7 @@ async function placeItem(itemId) {
   const txb = new TransactionBlock();
   const itemArg = txb.objectRef({ ...item.data });
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     kioskClient.place(txb, item.data.type, itemArg, kiosk, cap);
   });
 
@@ -367,7 +367,7 @@ async function lockItem(itemId) {
   const itemArg = txb.objectRef({ ...item.data });
   const policyArg = txb.object(policy.id);
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     kioskClient.lock(txb, item.data.type, itemArg, policyArg, kiosk, cap);
   });
 
@@ -403,7 +403,7 @@ async function takeItem(itemId, { address }) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     let taken = kioskClient.take(txb, item.data.type, itemId, kiosk, cap);
     txb.transferObjects([taken], txb.pure(receiver, 'address'));
   });
@@ -434,7 +434,7 @@ async function listItem(itemId, amount) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     kioskClient.list(txb, item.data.type, item.data.objectId, amount, kiosk, cap);
   });
 
@@ -464,7 +464,7 @@ async function delistItem(itemId) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     kioskClient.delist(txb, item.data.type, itemId, kiosk, cap);
   });
 
@@ -550,7 +550,7 @@ async function purchaseItem(itemId, opts) {
     );
   }
 
-  await kioskClient.ownedKioskTx(txb, async (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, async (kiosk, cap) => {
     await kioskClient.purchaseAndResolve(
       txb,
       itemInfo.data.type,
@@ -647,7 +647,7 @@ async function withdrawAll() {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, (kiosk, cap) => {
+  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
     const coin = kioskClient.withdraw(txb, kiosk, cap);
     txb.transferObjects([coin], txb.pure(sender, 'address'));
   });
@@ -706,8 +706,6 @@ async function findKioskCap(address) {
   if (kioskOwnerCaps.length === 0) {
     throw new Error(`No Kiosk found for "${sender}"`);
   }
-
-  kioskClient.setSelectedCap(kioskOwnerCaps[0]);
 
   return kioskOwnerCaps[0];
 }

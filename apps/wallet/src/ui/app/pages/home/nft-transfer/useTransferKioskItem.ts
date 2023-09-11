@@ -57,13 +57,11 @@ export function useTransferKioskItem({
 			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
 				const tx = new TransactionBlock();
 
-				kioskClient.setSelectedCap(kiosk.ownerCap);
-
-				const [kioskObj, cap, promise] = kioskClient.getOwnerCap(tx);
+				const [kioskObj, cap, promise] = kioskClient.getOwnerCap(tx, kiosk.ownerCap);
 
 				kioskClient.transfer(tx, objectData.data.data.type as string, objectId, kioskObj, cap, to);
 
-				kioskClient.returnOwnerCap(tx, cap, promise);
+				kioskClient.returnOwnerCap(tx, kiosk.ownerCap, cap, promise);
 
 				return signer.signAndExecuteTransactionBlock(
 					{

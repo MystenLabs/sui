@@ -33,21 +33,11 @@ export class KioskClient {
 	client: SuiClient;
 	network: Network;
 	#rules: TransferPolicyRule[];
-	selectedCap?: KioskOwnerCap;
 
 	constructor(options: KioskClientOptions) {
 		this.client = options.client;
 		this.network = options.network;
 		this.#rules = rules; // add all the default rules. WIP
-	}
-
-	/**
-	 * Should be called before running any transactions that involve kiosk.
-	 * @param cap The cap object, as returned from `getOwnedKiosks`.
-	 */
-	setSelectedCap(cap: KioskOwnerCap) {
-		this.selectedCap = cap;
-		return this;
 	}
 
 	// Someone would just have to create a `kiosk-client.ts` file in their project, initialize a KioskClient
@@ -91,19 +81,20 @@ export class KioskClient {
 	/**
 	 * Wraps a kiosk transaction that depends on `kioskOwnerCap`.
 	 * @param txb The Transaction Block
+	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
 	 * @param ownerCap The `ownerCap` object as returned from the `getOwnedKiosk` function
 	 * @param callback The function you want to execute with the ownerCap.
 	 */
 	async ownedKioskTx(
 		txb: TransactionBlock,
+		cap: KioskOwnerCap,
 		callback: (kiosk: TransactionArgument, capObject: TransactionArgument) => Promise<void>,
 	): Promise<void> {
-		this.#verifyCapIsSet();
-		let [kiosk, capObject, returnPromise] = this.getOwnerCap(txb);
+		let [kiosk, capObject, returnPromise] = this.getOwnerCap(txb, cap);
 
 		await callback(kiosk, capObject);
 
-		this.returnOwnerCap(txb, capObject, returnPromise);
+		this.returnOwnerCap(txb, cap, capObject, returnPromise);
 	}
 
 	/**
@@ -170,7 +161,6 @@ export class KioskClient {
 		ownedKioskCap: ObjectArgument,
 		options?: PurchaseOptions,
 	): Promise<void> {
-		this.#verifyCapIsSet();
 		// Get a list of the transfer policies.
 		let policies = await queryTransferPolicy(this.client, itemType);
 
@@ -423,68 +413,64 @@ export class KioskClient {
 	/**
 	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
 	 * @param txb The Transaction Block
-	 * @param kiosk (Optional) The Kiosk Id or Object
-	 * @param ownerCap (Optional) The Kiosk Owner Cap Object. If not passed, it will use the selectedCap's one.
+	 * @param ownerCap The Kiosk Owner Cap Object as returned from the `getOwnedKiosks`, or the `kioskOwnerCap` returned from the `new` function.
+	 * @param kiosk The Kiosk Id or Object. Optional if `ownerCap` is from `getOwnedKiosks` call
 	 */
-	convertToPersonal(txb: TransactionBlock, kiosk?: ObjectArgument, ownerCap?: ObjectArgument) {
-		if (!kiosk || !ownerCap) this.#verifyCapIsSet();
-		convertToPersonalTx(
-			txb,
-			kiosk || this.selectedCap!.kioskId,
-			ownerCap || this.selectedCap!.objectId,
-			PERSONAL_KIOSK_RULE_ADDRESS[this.network],
-		);
+	convertToPersonal(
+		txb: TransactionBlock,
+		ownerCap: KioskOwnerCap | ObjectArgument,
+		kiosk?: ObjectArgument,
+	) {
+		let capParam, kioskParam;
+		if (typeof ownerCap === 'object' && 'kioskId' in ownerCap && 'objectId' in ownerCap) {
+			kioskParam = ownerCap.kioskId;
+			capParam = ownerCap.objectId;
+		} else {
+			kioskParam = kiosk;
+		}
+		if (!kioskParam || !capParam) throw new Error('Kiosk or OwnerCap is not supplied');
+
+		convertToPersonalTx(txb, kioskParam, capParam, PERSONAL_KIOSK_RULE_ADDRESS[this.network]);
 	}
 
 	/**
 	 * A function to get a transaction parameter for the kiosk.
-	 * @param txbb The Transaction Block
+	 * @param txb The Transaction Block
+	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
 	 * @returns An array [kioskOwnerCap, promise]. If there's a promise, you need to call `returnOwnerCap` after using the cap.
 	 */
 	getOwnerCap(
 		txb: TransactionBlock,
+		cap: KioskOwnerCap,
 	): [TransactionArgument, TransactionArgument, TransactionArgument | undefined] {
-		this.#verifyCapIsSet();
-		if (!this.selectedCap!.isPersonal)
-			return [
-				objArg(txb, this.selectedCap!.kioskId),
-				objArg(txb, this.selectedCap!.objectId),
-				undefined,
-			];
+		if (!cap.isPersonal) return [objArg(txb, cap.kioskId), objArg(txb, cap.objectId), undefined];
 
 		const [capObject, promise] = txb.moveCall({
 			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::borrow_val`,
-			arguments: [txb.object(this.selectedCap!.objectId)],
+			arguments: [txb.object(cap.objectId)],
 		});
 
-		return [objArg(txb, this.selectedCap!.kioskId), capObject, promise];
+		return [objArg(txb, cap.kioskId), capObject, promise];
 	}
 
 	/**
 	 * A function to return the `kioskOwnerCap` back to `PersonalKiosk` wrapper.
 	 * @param txb The Transaction Block
+	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
 	 * @param capObject The borrowed `KioskOwnerCap`
 	 * @param promise The promise that the cap would return
 	 */
 	returnOwnerCap(
 		txb: TransactionBlock,
+		cap: KioskOwnerCap,
 		capObject: ObjectArgument,
 		promise?: TransactionArgument | undefined,
 	) {
-		this.#verifyCapIsSet();
-		if (!this.selectedCap!.isPersonal || !promise) return;
+		if (!promise) return;
 
 		txb.moveCall({
 			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::return_val`,
-			arguments: [txb.object(this.selectedCap!.objectId), objArg(txb, capObject), promise],
+			arguments: [txb.object(cap.objectId), objArg(txb, capObject), promise],
 		});
-	}
-
-	/**
-	 * This helps check whether we have the `selectedCap` set.
-	 */
-	#verifyCapIsSet() {
-		if (!this.selectedCap)
-			throw new Error('You need to call `setSelectedCap` before calling this function.');
 	}
 }

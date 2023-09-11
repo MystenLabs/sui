@@ -108,10 +108,10 @@ export class TransferPolicyManager {
 		shareTransferPolicy(tx, this.itemType, this.policyId as TransactionArgument);
 		tx.transferObjects([this.policyCap as TransactionArgument], tx.pure(address, 'address'));
 
-		this.resetPolicy();
+		this.#resetPolicy();
 	}
 
-	resetPolicy() {
+	#resetPolicy() {
 		this.policyCap = undefined;
 		this.policyId = undefined;
 	}

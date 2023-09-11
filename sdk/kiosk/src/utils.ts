@@ -213,11 +213,11 @@ export async function getAllObjects(
 	options: SuiObjectDataOptions,
 	limit: number = DEFAULT_QUERY_LIMIT,
 ) {
-	let chunks = Array.from({ length: Math.ceil(ids.length / limit) }, (_, index) =>
+	const chunks = Array.from({ length: Math.ceil(ids.length / limit) }, (_, index) =>
 		ids.slice(index * limit, index * limit + limit),
 	);
 
-	let results = await Promise.all(
+	const results = await Promise.all(
 		chunks.map((chunk) => {
 			return client.multiGetObjects({
 				ids: chunk,

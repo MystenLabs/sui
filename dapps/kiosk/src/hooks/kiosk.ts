@@ -74,7 +74,7 @@ export function useKiosk(kioskId: string | undefined | null) {
 
 			return {
 				kioskData: res,
-				items: res.items.map((x) => ({ data: x.data })),
+				items: res.items,
 			};
 		},
 		retry: false,

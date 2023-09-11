@@ -10,7 +10,7 @@ import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
 export function createKiosk(tx: TransactionBlock): [TransactionArgument, TransactionArgument] {
-	let [kiosk, kioskOwnerCap] = tx.moveCall({
+	const [kiosk, kioskOwnerCap] = tx.moveCall({
 		target: `${KIOSK_MODULE}::new`,
 	});
 
@@ -22,7 +22,7 @@ export function createKiosk(tx: TransactionBlock): [TransactionArgument, Transac
  * Returns the `kioskOwnerCap` object.
  */
 export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
-	let [kiosk, kioskOwnerCap] = createKiosk(tx);
+	const [kiosk, kioskOwnerCap] = createKiosk(tx);
 	shareKiosk(tx, kiosk);
 	return kioskOwnerCap;
 }
@@ -90,7 +90,7 @@ export function take(
 	kioskCap: ObjectArgument,
 	itemId: string,
 ): TransactionArgument {
-	let [item] = tx.moveCall({
+	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
@@ -171,7 +171,7 @@ export function purchase(
 	itemId: string,
 	payment: ObjectArgument,
 ): [TransactionArgument, TransactionArgument] {
-	let [item, transferRequest] = tx.moveCall({
+	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, kiosk), tx.pure(itemId, 'address'), objArg(tx, payment)],
@@ -190,16 +190,9 @@ export function withdrawFromKiosk(
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
 ): TransactionArgument {
-	let amountArg = amount
-		? tx.pure(
-				{
-					Some: amount,
-				},
-				'Option<u64>',
-		  )
-		: tx.pure({ None: true }, 'Option<u64>');
+	const amountArg = tx.pure(amount ? { Some: amount } : { None: true }, 'Option<u64>');
 
-	let [coin] = tx.moveCall({
+	const [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,
 		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), amountArg],
 	});
@@ -220,7 +213,7 @@ export function borrowValue(
 	kioskCap: ObjectArgument,
 	itemId: string,
 ): [TransactionArgument, TransactionArgument] {
-	let [item, promise] = tx.moveCall({
+	const [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
 		typeArguments: [itemType],
 		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
