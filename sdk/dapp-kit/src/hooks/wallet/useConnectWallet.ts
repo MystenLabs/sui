@@ -7,7 +7,7 @@ import type {
 	StandardConnectInput,
 	StandardConnectOutput,
 	WalletAccount,
-	WalletWithRequiredFeatures,
+	WalletWithSuiFeatures,
 } from '@mysten/wallet-standard';
 import { useWalletContext } from '../../components/WalletProvider.js';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
@@ -16,7 +16,7 @@ import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
-	wallet: WalletWithRequiredFeatures;
+	wallet: WalletWithSuiFeatures;
 
 	/** An optional account address to connect to. Defaults to the first authorized account. */
 	accountAddress?: string;
@@ -49,22 +49,31 @@ export function useConnectWallet({
 				);
 			}
 
-			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
-			const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
+			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
 
-			dispatch({
-				type: 'wallet-connected',
-				payload: { wallet, currentAccount: selectedAccount },
-			});
+			try {
+				const connectResult = await wallet.features['standard:connect'].connect(
+					standardConnectInput,
+				);
+				const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
 
-			await setMostRecentWalletConnectionInfo({
-				storageAdapter,
-				storageKey,
-				walletName: wallet.name,
-				accountAddress: selectedAccount?.address,
-			});
+				dispatch({
+					type: 'wallet-connected',
+					payload: { wallet, currentAccount: selectedAccount },
+				});
 
-			return connectResult;
+				await setMostRecentWalletConnectionInfo({
+					storageAdapter,
+					storageKey,
+					walletName: wallet.name,
+					accountAddress: selectedAccount?.address,
+				});
+
+				return connectResult;
+			} catch (error) {
+				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
+				throw error;
+			}
 		},
 		...mutationOptions,
 	});
