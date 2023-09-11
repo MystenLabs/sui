@@ -8,7 +8,6 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
-import { getAccountsBySourceID, getAccountsByType } from '../accounts';
 import { type UiConnection } from '../connections/UiConnection';
 import { getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
@@ -30,11 +29,11 @@ function toAccountSource(accountSource: AccountSourceSerialized) {
 	throw new Error(`Unknown account source of type ${accountSource.type}`);
 }
 
-export async function getAccountSources(filter?: { type: AccountSourceType }) {
+export async function getAccountSources(filter?: { type: AccountSourceType[] }) {
 	const db = await getDB();
 	return (
 		await (filter?.type
-			? await db.accountSources.where('type').equals(filter.type).sortBy('createdAt')
+			? await db.accountSources.where('type').anyOf(filter.type).sortBy('createdAt')
 			: await db.accountSources.toCollection().sortBy('createdAt'))
 	).map(toAccountSource);
 }
@@ -79,20 +78,16 @@ async function deleteAccountSourceByType({
 	switch (type) {
 		case 'mnemonic':
 			try {
-				const mnemonicAccountSources = await getAccountSources({ type: 'mnemonic' });
-				const sourceIds = mnemonicAccountSources.map((source) => source.id);
-				const accountPromises = sourceIds.map((id) => getAccountsBySourceID(id));
-				const allAccountsOfSources = await Promise.all(accountPromises);
-				const accountIds: string[] = [];
-				allAccountsOfSources.forEach((accForSource) => {
-					accForSource?.forEach((acc) => {
-						accountIds.push(acc.id);
-					});
-				});
-				const allImportedAccounts = await getAccountsByType('imported');
-				const allAccountIds = accountIds.concat(allImportedAccounts?.map((acc) => acc.id) || []);
-				await (await getDB()).accounts.bulkDelete(allAccountIds);
-				await (await getDB()).accountSources.bulkDelete(sourceIds);
+				const sourceIds = await (await getDB()).accountSources
+					.where('type')
+					.anyOf(['mnemonic', 'imported'])
+					.primaryKeys();
+				const accountIds = await (await getDB()).accounts
+					.where('sourceID')
+					.anyOf(sourceIds)
+					.primaryKeys();
+				await (await getDB()).accounts.bulkDelete(accountIds);
+				await (await getDB()).accountSources.bulkDelete(accountIds);
 				return true;
 			} catch (e) {
 				throw new Error(`Failed to delete Account source of type: ${type}`);
