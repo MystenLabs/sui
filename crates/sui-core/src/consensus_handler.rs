@@ -196,10 +196,17 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
         // Because of this delay, jwks that become active in the last round of the epoch will
         // never be committed. That is ok, because in the new epoch, the validators should
         // immediately re-submit these jwks, and they can become active then.
-        let new_jwks = self
+        let mut new_jwks = self
             .epoch_store
             .get_new_jwks(last_committed_round)
             .expect("Unrecoverable error in consensus handler");
+
+        // shuffle new_jwks randomly
+        use rand::prelude::SliceRandom;
+        {
+            let mut rng = rand::thread_rng();
+            new_jwks.shuffle(&mut rng);
+        }
 
         if !new_jwks.is_empty() {
             debug!("adding AuthenticatorStateUpdate tx: {:?}", new_jwks);
