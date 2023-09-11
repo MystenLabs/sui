@@ -73,13 +73,13 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 	return contents;
 }
 
-async function getSuiKioskContents(address: string, client: SuiClient) {
-	const kioskClient = new KioskClient({
-		client,
-		// TODO: We need to find a way to derive the correct network. Maybe from `SuiClient`?
-		// Otherwise, we won't be able to discover `Personal Kiosks` on testnet.
-		network: Network.MAINNET,
-	});
+// TODO: Replace `getSuiKioskContent` references to also pass in the network.
+async function getSuiKioskContents(
+	address: string,
+	client: SuiClient,
+	network: Network = Network.MAINNET,
+) {
+	const kioskClient = new KioskClient({ client, network });
 
 	const ownedKiosks = await kioskClient.getOwnedKiosks(address);
 
@@ -101,13 +101,17 @@ async function getSuiKioskContents(address: string, client: SuiClient) {
 	return contents;
 }
 
-export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
+export function useGetKioskContents(
+	address?: string | null,
+	network?: Network,
+	disableOriginByteKiosk?: boolean,
+) {
 	const client = useSuiClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: ['get-kiosk-contents', address, disableOriginByteKiosk],
+		queryKey: ['get-kiosk-contents', address, network, disableOriginByteKiosk],
 		queryFn: async () => {
-			const suiKiosks = await getSuiKioskContents(address!, client);
+			const suiKiosks = await getSuiKioskContents(address!, client, network);
 			const obKiosks = await getOriginByteKioskContents(address!, client);
 			return [...suiKiosks, ...obKiosks];
 		},
