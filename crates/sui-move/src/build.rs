@@ -12,6 +12,7 @@ const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
 #[derive(Parser)]
+#[group(id = "sui-move-build")]
 pub struct Build {
     /// Include the contents of packages in dependencies that haven't been published (only relevant
     /// when dumping bytecode as base64)

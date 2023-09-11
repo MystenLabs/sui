@@ -9,7 +9,7 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
-    editions::{Edition, Flavor},
+    editions::{check_feature as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     naming::ast::ModuleDefinition,
     sui_mode,
@@ -518,6 +518,11 @@ impl CompilationEnv {
 
     pub fn visitors(&self) -> Rc<Visitors> {
         self.visitors.clone()
+    }
+
+    // Logs an error if the feature isn't supported.
+    pub fn check_feature(&mut self, feature: &FeatureGate, package: Option<Symbol>, loc: Loc) {
+        edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {

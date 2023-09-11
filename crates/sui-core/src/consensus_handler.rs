@@ -31,7 +31,7 @@ use std::sync::Arc;
 use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::storage::ParentSync;
+use sui_types::storage::ObjectStore;
 use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -47,7 +47,7 @@ pub struct ConsensusHandler<T> {
     last_seen: Mutex<ExecutionIndicesWithHash>,
     checkpoint_service: Arc<CheckpointService>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
-    parent_sync_store: T,
+    object_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
@@ -69,7 +69,7 @@ impl<T> ConsensusHandler<T> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<CheckpointService>,
         transaction_manager: Arc<TransactionManager>,
-        parent_sync_store: T,
+        object_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
@@ -87,7 +87,7 @@ impl<T> ConsensusHandler<T> {
             epoch_store,
             last_seen,
             checkpoint_service,
-            parent_sync_store,
+            object_store,
             low_scoring_authorities,
             committee,
             authority_names_to_hostnames,
@@ -130,7 +130,7 @@ fn update_hash(
 }
 
 #[async_trait]
-impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
+impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
@@ -369,7 +369,7 @@ impl<T: ParentSync + Send + Sync> ExecutionState for ConsensusHandler<T> {
                 &sequenced_transactions,
                 &end_of_publish_transactions,
                 &self.checkpoint_service,
-                &self.parent_sync_store,
+                &self.object_store,
             )
             .await
             .expect("Unrecoverable error in consensus handler");

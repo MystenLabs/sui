@@ -407,7 +407,9 @@ impl AuthorityPerpetualTables {
         checkpoint_number: CheckpointSequenceNumber,
     ) -> SuiResult {
         let mut wb = self.pruned_checkpoint.batch();
-        self.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)
+        self.set_highest_pruned_checkpoint(&mut wb, checkpoint_number)?;
+        wb.write()?;
+        Ok(())
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {

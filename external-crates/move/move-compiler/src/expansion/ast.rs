@@ -88,7 +88,9 @@ pub type Attributes = UniqueMap<AttributeName, Attribute>;
 #[derive(Debug, Clone)]
 pub struct Script {
     pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
+    // package name metadata from compiler arguments.
+    // It is used primarily for retrieving the associated `PackageConfig`,
+    // but it is also used in determining public(package) visibility.
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
@@ -191,6 +193,7 @@ pub enum StructFields {
 pub enum Visibility {
     Public(Loc),
     Friend(Loc),
+    Package(Loc),
     Internal,
 }
 
@@ -719,13 +722,18 @@ impl AbilitySet {
 }
 
 impl Visibility {
-    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
     pub const FRIEND: &'static str = P::Visibility::FRIEND;
+    pub const FRIEND_IDENT: &'static str = P::Visibility::FRIEND_IDENT;
     pub const INTERNAL: &'static str = P::Visibility::INTERNAL;
+    pub const PACKAGE: &'static str = P::Visibility::PACKAGE;
+    pub const PACKAGE_IDENT: &'static str = P::Visibility::PACKAGE_IDENT;
+    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Public(loc) | Visibility::Friend(loc) => Some(*loc),
+            Visibility::Friend(loc) | Visibility::Package(loc) | Visibility::Public(loc) => {
+                Some(*loc)
+            }
             Visibility::Internal => None,
         }
     }
@@ -837,6 +845,7 @@ impl fmt::Display for Visibility {
             match &self {
                 Visibility::Public(_) => Visibility::PUBLIC,
                 Visibility::Friend(_) => Visibility::FRIEND,
+                Visibility::Package(_) => Visibility::PACKAGE,
                 Visibility::Internal => Visibility::INTERNAL,
             }
         )

@@ -231,24 +231,38 @@ pub fn get_module_by_id<S: BackingPackageStore>(
 }
 
 pub trait ParentSync {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>>;
+    /// This function is only called by older protocol versions.
+    /// It creates an explicit dependency to tombstones, which is not desired.
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>>;
 }
 
 impl<S: ParentSync> ParentSync for std::sync::Arc<S> {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(self.as_ref(), object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(self.as_ref(), object_id)
     }
 }
 
 impl<S: ParentSync> ParentSync for &S {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(*self, object_id)
     }
 }
 
 impl<S: ParentSync> ParentSync for &mut S {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(*self, object_id)
     }
 }
 
@@ -990,6 +1004,20 @@ impl<T: ObjectStore> ObjectStore for Arc<T> {
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
         self.as_ref().get_object_by_key(object_id, version)
+    }
+}
+
+impl<T: ObjectStore> ObjectStore for &T {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object(*self, object_id)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object_by_key(*self, object_id, version)
     }
 }
 

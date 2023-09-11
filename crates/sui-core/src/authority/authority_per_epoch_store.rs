@@ -73,7 +73,7 @@ use sui_types::messages_consensus::{
     check_total_jwk_size, AuthenticatorStateUpdate, AuthorityCapabilities, ConsensusTransaction,
     ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use sui_types::storage::{transaction_input_object_keys, ObjectKey, ParentSync};
+use sui_types::storage::{transaction_input_object_keys, ObjectKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
@@ -907,7 +907,7 @@ impl AuthorityPerEpochStore {
     async fn get_or_init_next_object_versions(
         &self,
         objects_to_init: impl Iterator<Item = (ObjectID, SequenceNumber)> + Clone,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
         let mut ret: HashMap<_, _>;
         // Since this can be called from consensus task, we must retry forever - the only other
@@ -943,13 +943,10 @@ impl AuthorityPerEpochStore {
                 .iter()
                 .map(|(id, initial_version)| {
                     // Note: we don't actually need to read from the transaction here, as no writer
-                    // can update parent_sync_store until after get_or_init_next_object_versions
+                    // can update object_store until after get_or_init_next_object_versions
                     // completes.
-                    match parent_sync_store
-                        .get_latest_parent_entry_ref(*id)
-                        .expect("read cannot fail")
-                    {
-                        Some(objref) => (*id, objref.1),
+                    match object_store.get_object(id).expect("read cannot fail") {
+                        Some(obj) => (*id, obj.version()),
                         None => (*id, *initial_version),
                     }
                 })
@@ -978,7 +975,7 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         assigned_versions: &Vec<(ObjectID, SequenceNumber)>,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult {
         let tx_digest = certificate.digest();
 
@@ -997,7 +994,7 @@ impl AuthorityPerEpochStore {
             .map(SharedInputObject::into_id_and_version)
             .collect();
 
-        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), parent_sync_store)
+        self.get_or_init_next_object_versions(shared_input_objects.into_iter(), object_store)
             .await?;
         self.tables
             .assigned_shared_object_versions
@@ -1012,7 +1009,7 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult {
         self.set_assigned_shared_object_versions(
             certificate,
@@ -1021,7 +1018,7 @@ impl AuthorityPerEpochStore {
                 .into_iter()
                 .map(|(obj_ref, _)| (obj_ref.0, obj_ref.1))
                 .collect(),
-            parent_sync_store,
+            object_store,
         )
         .await
     }
@@ -1666,7 +1663,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut batch = self.db_batch();
         let (executable_txns, notifications, _lock) = self
@@ -1675,7 +1672,7 @@ impl AuthorityPerEpochStore {
                 transactions,
                 end_of_publish_transactions,
                 checkpoint_service,
-                parent_sync_store,
+                object_store,
             )
             .await?;
         batch.write()?;
@@ -1689,7 +1686,7 @@ impl AuthorityPerEpochStore {
         &self,
         transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         let mut batch = self.db_batch();
 
@@ -1703,7 +1700,7 @@ impl AuthorityPerEpochStore {
                 &transactions,
                 &end_of_publish_transactions,
                 checkpoint_service,
-                parent_sync_store,
+                object_store,
             )
             .await?;
         batch.write()?;
@@ -1736,7 +1733,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
-        parent_sync_store: impl ParentSync,
+        object_store: impl ObjectStore,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
@@ -1766,7 +1763,7 @@ impl AuthorityPerEpochStore {
 
             self.get_or_init_next_object_versions(
                 unique_shared_input_objects.into_iter(),
-                &parent_sync_store,
+                &object_store,
             )
             .await?
         };
