@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::server::context_ext::DataProviderContextExt;
+use crate::context_data::context_ext::DataProviderContextExt;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::*;

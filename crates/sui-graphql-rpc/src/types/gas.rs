@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{server::context_ext::DataProviderContextExt, types::object::Object};
+use crate::context_data::context_ext::DataProviderContextExt;
+use crate::types::object::Object;
 use async_graphql::*;
 use sui_json_rpc_types::{OwnedObjectRef, SuiGasData, SuiObjectDataOptions};
 use sui_sdk::types::{

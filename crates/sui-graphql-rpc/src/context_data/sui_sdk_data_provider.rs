@@ -28,7 +28,6 @@ use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
-use crate::server::data_provider::DataProvider;
 use crate::types::gas::{GasCostSummary, GasEffects};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::dataloader::*;
@@ -37,6 +36,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::time::Duration;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse,
     SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
@@ -54,6 +54,12 @@ use sui_sdk::{
     },
     SuiClient,
 };
+
+use super::data_provider::DataProvider;
+
+const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
 
 const DEFAULT_PAGE_SIZE: usize = 50;
 
@@ -358,6 +364,29 @@ impl DataProvider for SuiClient {
             protocol_version: cfg.protocol_version.as_u64(),
         })
     }
+}
+
+pub(crate) async fn sui_sdk_client_v0(rpc_url: &String) -> SuiClient {
+    sui_sdk::SuiClientBuilder::default()
+        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+        .build(rpc_url)
+        .await
+        .expect("Failed to create SuiClient")
+}
+
+pub(crate) async fn lru_cache_data_loader(
+    client: &SuiClient,
+) -> DataLoader<SuiClientLoader, LruCache> {
+    let data_loader = DataLoader::with_cache(
+        SuiClientLoader {
+            client: client.clone(),
+        },
+        tokio::spawn,
+        async_graphql::dataloader::LruCache::new(DATA_LOADER_LRU_CACHE_SIZE),
+    );
+    data_loader.enable_all_cache(true);
+    data_loader
 }
 
 pub(crate) fn convert_json_rpc_checkpoint(

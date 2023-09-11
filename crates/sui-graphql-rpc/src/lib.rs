@@ -5,6 +5,7 @@ use async_graphql::*;
 use types::owner::ObjectOwner;
 
 pub mod commands;
+pub mod context_data;
 pub mod error;
 pub mod extensions;
 pub mod server;
