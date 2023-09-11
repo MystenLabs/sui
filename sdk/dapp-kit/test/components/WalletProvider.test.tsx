@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
-import { useWallet } from 'dapp-kit/src/index.js';
+import { useConnectWallet, useDisconnectWallet, useWallet } from 'dapp-kit/src/index.js';
+import { createMockAccount } from '../mocks/mockAccount.js';
 
 describe('WalletProvider', () => {
 	test('the correct wallet and account information is returned on initial render', () => {
@@ -91,6 +92,86 @@ describe('WalletProvider', () => {
 		act(() => {
 			unregister1();
 			unregister2();
+		});
+	});
+
+	describe('wallet auto-connection', () => {
+		test('auto-connecting to a wallet works successfully', async () => {
+			const { unregister, mockWallet } = registerMockWallet({
+				walletName: 'Mock Wallet 1',
+				accounts: [createMockAccount(), createMockAccount()],
+			});
+			const wrapper = createWalletProviderContextWrapper({
+				autoConnect: true,
+			});
+
+			const { result, unmount } = renderHook(
+				() => ({
+					connectWallet: useConnectWallet(),
+					walletInfo: useWallet(),
+				}),
+				{ wrapper },
+			);
+
+			// Manually connect a wallet so we have a wallet to auto-connect to later.
+
+			result.current.connectWallet.mutate({
+				wallet: mockWallet,
+				accountAddress: mockWallet.accounts[1].address,
+			});
+			await waitFor(() => expect(result.current.walletInfo.connectionStatus).toBe('connected'));
+
+			// Now unmount our component tree to simulate someone leaving the page.
+			unmount();
+
+			// Render our component tree again and auto-connect to our previously connected wallet account.
+			const { result: updatedResult } = renderHook(() => useWallet(), { wrapper });
+
+			await waitFor(() => expect(updatedResult.current.currentWallet).toBeTruthy());
+			expect(updatedResult.current.currentWallet!.name).toStrictEqual('Mock Wallet 1');
+
+			await waitFor(() => expect(updatedResult.current.currentAccount).toBeTruthy());
+			expect(updatedResult.current.currentAccount!.address).toStrictEqual(
+				mockWallet.accounts[1].address,
+			);
+
+			act(() => unregister());
+		});
+
+		test('wallet connection info is removed upon disconnection', async () => {
+			const { unregister, mockWallet } = registerMockWallet({
+				walletName: 'Mock Wallet 1',
+			});
+			const wrapper = createWalletProviderContextWrapper({
+				autoConnect: true,
+			});
+
+			const { result, unmount } = renderHook(
+				() => ({
+					connectWallet: useConnectWallet(),
+					disconnectWallet: useDisconnectWallet(),
+					walletInfo: useWallet(),
+				}),
+				{ wrapper },
+			);
+
+			result.current.connectWallet.mutate({
+				wallet: mockWallet,
+			});
+			await waitFor(() => expect(result.current.walletInfo.connectionStatus).toBe('connected'));
+
+			// By disconnecting, we should remove any wallet connection info that we have stored.
+			result.current.disconnectWallet.mutate();
+			await waitFor(() => expect(result.current.walletInfo.connectionStatus).toBe('disconnected'));
+
+			// Now unmount our component tree to simulate someone leaving the page.
+			unmount();
+
+			// Render our component tree again and assert that we weren't able to auto-connect
+			const { result: updatedResult } = renderHook(() => useWallet(), { wrapper });
+			await waitFor(() => expect(updatedResult.current.connectionStatus).toBe('disconnected'));
+
+			act(() => unregister());
 		});
 	});
 });
