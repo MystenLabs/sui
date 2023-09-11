@@ -12,7 +12,7 @@ import {
 	WalletNoAccountSelectedError,
 	WalletNotConnectedError,
 } from '../..//errors/walletErrors.js';
-import type { PartialBy } from 'dapp-kit/src/types/utilityTypes.js';
+import type { PartialBy } from '../../types/utilityTypes.js';
 
 type UseSignPersonalMessageArgs = PartialBy<SuiSignPersonalMessageInput, 'account'>;
 type UseSignPersonalMessageResult = SuiSignPersonalMessageOutput;
