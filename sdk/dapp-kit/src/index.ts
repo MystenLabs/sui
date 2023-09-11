@@ -8,6 +8,7 @@ export * from './hooks/useRpcApiVersion.js';
 export * from './hooks/rpc/index.js';
 export * from './hooks/wallet/useConnectWallet.js';
 export * from './hooks/wallet/useDisconnectWallet.js';
+export * from './hooks/wallet/useSignPersonalMessage.js';
 export * from './hooks/wallet/useWallet.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
