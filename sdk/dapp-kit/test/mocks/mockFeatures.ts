@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiFeatures } from '@mysten/wallet-standard';
+import type { IdentifierRecord, SuiFeatures } from '@mysten/wallet-standard';
 
 export const suiFeatures: SuiFeatures = {
 	'sui:signPersonalMessage': {
@@ -15,5 +15,12 @@ export const suiFeatures: SuiFeatures = {
 	'sui:signAndExecuteTransactionBlock': {
 		version: '1.0.0',
 		signAndExecuteTransactionBlock: vi.fn(),
+	},
+};
+
+export const superCoolFeature: IdentifierRecord<unknown> = {
+	'my-dapp:super-cool-feature': {
+		version: '1.0.0',
+		superCoolFeature: () => {},
 	},
 };
