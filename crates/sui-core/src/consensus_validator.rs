@@ -7,7 +7,7 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState};
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
@@ -21,6 +21,7 @@ use tracing::{info, warn};
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
+    state: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
@@ -29,6 +30,7 @@ pub struct SuiTxValidator {
 
 impl SuiTxValidator {
     pub fn new(
+        state: Arc<AuthorityState>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
@@ -39,6 +41,7 @@ impl SuiTxValidator {
             epoch_store.epoch()
         );
         Self {
+            state,
             epoch_store,
             checkpoint_service,
             _transaction_manager: transaction_manager,
@@ -67,6 +70,32 @@ impl TransactionValidator for SuiTxValidator {
         protocol_config: &ProtocolConfig,
     ) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
+
+        let committee = self.epoch_store.committee().clone();
+        use fastcrypto::hash::Hash;
+        use rand::SeedableRng;
+        let mut rng = rand::prelude::StdRng::from_seed(b.digest().0);
+        let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+
+        /*
+        let mut cumulative_stake = 0;
+        let mut found = false;
+        for v in validators.iter() {
+            if v == &self.state.name {
+                found = true;
+                break;
+            }
+            cumulative_stake += committee.weight(v);
+            if cumulative_stake >= committee.quorum_threshold() {
+                break;
+            }
+        }
+        */
+
+        //if !found {
+        if validators[0] == self.state.name {
+            return Err(eyre::eyre!("failing randomly on purpose"));
+        }
 
         // TODO: Remove once we have removed BatchV1 from the codebase.
         validate_batch_version(b, protocol_config)

@@ -1015,6 +1015,7 @@ impl SuiNode {
                 worker_cache,
                 consensus_handler,
                 SuiTxValidator::new(
+                    state.clone(),
                     epoch_store.clone(),
                     checkpoint_service.clone(),
                     state.transaction_manager().clone(),
