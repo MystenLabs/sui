@@ -39,16 +39,47 @@ export function useConnectWallet({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async (connectWalletArgs) => {
+		mutationFn: async ({ wallet, accountAddress, ...standardConnectInput }) => {
 			if (currentWallet) {
 				throw new WalletAlreadyConnectedError(
-					currentWallet.name === connectWalletArgs.wallet.name
-						? `The user is already connected to wallet ${connectWalletArgs.wallet.name}.`
+					currentWallet.name === wallet.name
+						? `The user is already connected to wallet ${wallet.name}.`
 						: "You must disconnect the wallet you're currently connected to before connecting to a new wallet.",
 				);
 			}
-			return await connectWallet(dispatch, storageAdapter, storageKey, connectWalletArgs);
+
+			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
+
+			try {
+				const connectResult = await wallet.features['standard:connect'].connect(
+					standardConnectInput,
+				);
+				const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
+
+				dispatch({
+					type: 'wallet-connected',
+					payload: { wallet, currentAccount: selectedAccount },
+				});
+
+				return connectResult;
+			} catch (error) {
+				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
+				throw error;
+			}
 		},
 		...mutationOptions,
 	});
+}
+
+function getSelectedAccount(connectedAccounts: readonly WalletAccount[], accountAddress?: string) {
+	if (connectedAccounts.length === 0) {
+		return null;
+	}
+
+	if (accountAddress) {
+		const selectedAccount = connectedAccounts.find((account) => account.address === accountAddress);
+		return selectedAccount ?? connectedAccounts[0];
+	}
+
+	return connectedAccounts[0];
 }
