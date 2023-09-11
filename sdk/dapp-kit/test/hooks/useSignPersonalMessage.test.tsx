@@ -9,6 +9,7 @@ import {
 	WalletNotConnectedError,
 } from 'dapp-kit/src/errors/walletErrors.js';
 import type { Mock } from 'vitest';
+import { suiFeatures } from '../mocks/mockFeatures.js';
 
 describe('useSignPersonalMessage', () => {
 	test('should throw an error when trying to sign a message without a wallet connection', async () => {
@@ -21,18 +22,37 @@ describe('useSignPersonalMessage', () => {
 	});
 
 	test('should throw an error when trying to sign a message with a wallet that lacks feature support', async () => {
+		const { unregister, mockWallet } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+		});
+
 		const wrapper = createWalletProviderContextWrapper();
-		const { result } = renderHook(() => useSignPersonalMessage(), { wrapper });
-
-		result.current.mutate({ message: new Uint8Array() });
-
-		await waitFor(() =>
-			expect(result.current.error).toBeInstanceOf(WalletFeatureNotSupportedError),
+		const { result } = renderHook(
+			() => ({
+				connectWallet: useConnectWallet(),
+				signPersonalMessage: useSignPersonalMessage(),
+			}),
+			{ wrapper },
 		);
+
+		result.current.connectWallet.mutate({ wallet: mockWallet });
+		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
+
+		result.current.signPersonalMessage.mutate({ message: new Uint8Array() });
+		await waitFor(() =>
+			expect(result.current.signPersonalMessage.error).toBeInstanceOf(
+				WalletFeatureNotSupportedError,
+			),
+		);
+
+		act(() => unregister());
 	});
 
 	test('signing a personal message from the currently connected account works successfully', async () => {
-		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			features: suiFeatures,
+		});
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
@@ -51,7 +71,7 @@ describe('useSignPersonalMessage', () => {
 
 		const signPersonalMessageFeature =
 			result.current.walletInfo.currentWallet!.features['sui:signPersonalMessage'];
-		const signPersonalMessageMock = signPersonalMessageFeature.signPersonalMessage as Mock;
+		const signPersonalMessageMock = signPersonalMessageFeature!.signPersonalMessage as Mock;
 
 		signPersonalMessageMock.mockReturnValue({ bytes: 'abc', signature: '123' });
 
@@ -65,8 +85,6 @@ describe('useSignPersonalMessage', () => {
 			signature: '123',
 		});
 
-		act(() => {
-			unregister();
-		});
+		act(() => unregister());
 	});
 });

@@ -71,7 +71,7 @@ describe('WalletProvider', () => {
 	test('the list of wallets is correctly filtered by required features', () => {
 		const { unregister: unregister1 } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
-			additionalFeatures: {
+			features: {
 				'my-dapp:super-cool-feature': {
 					version: '1.0.0',
 					superCoolFeature: () => {},

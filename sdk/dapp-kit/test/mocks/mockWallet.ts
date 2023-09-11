@@ -3,10 +3,8 @@
 
 import type {
 	IdentifierRecord,
-	StandardConnectFeature,
-	StandardEventsFeature,
-	SuiFeatures,
 	ReadonlyWalletAccount,
+	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
 import { SUI_CHAINS } from '@mysten/wallet-standard';
 import type { Wallet } from '@mysten/wallet-standard';
@@ -17,23 +15,20 @@ export class MockWallet implements Wallet {
 	chains = SUI_CHAINS;
 	#walletName: string;
 	#accounts: ReadonlyWalletAccount[];
-	#additionalFeatures: IdentifierRecord<unknown>;
+	#features: IdentifierRecord<unknown>;
 
 	#connect = vi.fn().mockImplementation(() => ({ accounts: this.#accounts }));
 	#disconnect = vi.fn();
 	#on = vi.fn();
-	#signPersonalMessage = vi.fn();
-	#signTransactionBlock = vi.fn();
-	#signAndExecuteTransactionBlock = vi.fn();
 
 	constructor(
 		name: string,
 		accounts: ReadonlyWalletAccount[],
-		additionalFeatures: IdentifierRecord<unknown>,
+		features: IdentifierRecord<unknown>,
 	) {
 		this.#walletName = name;
 		this.#accounts = accounts;
-		this.#additionalFeatures = additionalFeatures;
+		this.#features = features;
 	}
 
 	get name() {
@@ -44,10 +39,7 @@ export class MockWallet implements Wallet {
 		return this.#accounts;
 	}
 
-	get features(): StandardConnectFeature &
-		StandardEventsFeature &
-		SuiFeatures &
-		IdentifierRecord<unknown> {
+	get features(): WalletWithRequiredFeatures['features'] {
 		return {
 			'standard:connect': {
 				version: '1.0.0',
@@ -61,19 +53,7 @@ export class MockWallet implements Wallet {
 				version: '1.0.0',
 				on: this.#on,
 			},
-			'sui:signPersonalMessage': {
-				version: '1.0.0',
-				signPersonalMessage: this.#signPersonalMessage,
-			},
-			'sui:signTransactionBlock': {
-				version: '1.0.0',
-				signTransactionBlock: this.#signTransactionBlock,
-			},
-			'sui:signAndExecuteTransactionBlock': {
-				version: '1.0.0',
-				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
-			},
-			...this.#additionalFeatures,
+			...this.#features,
 		};
 	}
 }
