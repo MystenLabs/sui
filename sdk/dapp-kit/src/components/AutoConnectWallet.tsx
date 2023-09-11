@@ -20,13 +20,15 @@ export function AutoConnectWallet({
 	children,
 }: AutoConnectWalletProps) {
 	const { wallets, currentWallet: wallet, currentAccount: account } = useWalletContext();
+	const [previousWallet, setPreviousWallet] = useState<WalletWithRequiredFeatures | null>(null);
+	const [currentWallet, setCurrentWallet] = useState<WalletWithRequiredFeatures | null>(wallet);
+	const [previousAccount, setPreviousAccount] = useState<WalletAccount | null>(null);
+	const [currentAccount, setCurrentAccount] = useState<WalletAccount | null>(account);
 	const { mutate: connectWallet } = useConnectWallet();
 
-	const [previousWallet, setPreviousWallet] = useState<WalletWithRequiredFeatures | null>(wallet);
-	const [currentWallet, setCurrentWallet] = useState<WalletWithRequiredFeatures | null>(wallet);
-	const [previousAccount, setPreviousAccount] = useState<WalletAccount | null>(account);
-	const [currentAccount, setCurrentAccount] = useState<WalletAccount | null>(account);
-
+	// Instead of abstracting the previous wallet and account state logic into a generic
+	// usePrevious hook, we'll write this plainly to make it clear that this code depends
+	// on triggering shallow re-renders by updating state in the render code.
 	if (wallet !== currentWallet) {
 		setPreviousWallet(currentWallet);
 		setCurrentWallet(wallet);
