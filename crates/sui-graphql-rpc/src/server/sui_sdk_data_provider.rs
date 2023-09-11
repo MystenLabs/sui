@@ -579,7 +579,7 @@ async fn convert_to_transaction_block(
     let tx_data = tx.transaction.as_ref().unwrap();
     let tx_effects = tx.effects.as_ref().unwrap();
     let sender = *tx_data.data.sender();
-    let gas_effects = GasEffects::new(tx_effects.gas_cost_summary(), tx_effects.gas_object());
+    let gas_effects = GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object()));
     let gcs = tx_effects.gas_cost_summary();
     let system_state = cl.governance_api().get_latest_sui_system_state().await?;
     let protocol_configs = cl.fetch_protocol_config(None).await?;

@@ -56,7 +56,7 @@ impl GasInput {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct GasCostSummary {
     pub computation_cost: u64,
     pub storage_cost: u64,
@@ -94,21 +94,24 @@ impl GasCostSummary {
     }
 }
 
+// Struct mirroring GraphQL object contains fields needed to produce GraphQL object
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct GasEffects {
-    gcs: NativeGasCostSummary,
+    gcs: GasCostSummary,
     object_id: ObjectID,
 }
 
-impl GasEffects {
-    pub fn new(gcs: &NativeGasCostSummary, gas_obj_ref: &OwnedObjectRef) -> Self {
+// From trait to convert data into GasEffects
+impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
+    fn from((gcs, gas_obj_ref): (&NativeGasCostSummary, &OwnedObjectRef)) -> Self {
         Self {
-            gcs: gcs.clone(),
+            gcs: gcs.into(),
             object_id: gas_obj_ref.object_id(),
         }
     }
 }
 
+// impl #[Object] macro handles conversions and data fetches
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
@@ -120,6 +123,6 @@ impl GasEffects {
     }
 
     async fn gas_summary(&self) -> Option<GasCostSummary> {
-        Some((&self.gcs).into())
+        Some(self.gcs)
     }
 }
