@@ -97,6 +97,20 @@ impl TestRunner {
         .await
     }
 
+    pub async fn create_owned_object(&mut self) -> TransactionEffectsV1 {
+        let TransactionEffects::V1(effects) = self
+            .execute_owned_transaction({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                move_call! {
+                    builder,
+                    (self.package.0)::o2::create_owned()
+                };
+                builder.finish()
+            })
+            .await;
+        effects
+    }
+
     pub fn get_object_latest_version(&mut self, obj_id: ObjectID) -> SequenceNumber {
         self.authority_state
             .database
@@ -139,6 +153,61 @@ impl TestRunner {
         move_call! {
             delete_object_transaction_builder,
             (self.package.0)::o2::consume_o2(arg)
+        };
+        let delete_obj_tx = delete_object_transaction_builder.finish();
+        let gas_id = self.gas_object_ids.pop().unwrap();
+        self.create_signed_transaction_from_pt(delete_obj_tx, gas_id)
+            .await
+    }
+
+    pub async fn delete_shared_obj_with_owned_tx(
+        &mut self,
+        owned_obj: ObjectRef,
+        shared_obj_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    ) -> Transaction {
+        let mut object_transaction_builder = ProgrammableTransactionBuilder::new();
+        let arg_1 = object_transaction_builder
+            .obj(ObjectArg::ImmOrOwnedObject(owned_obj))
+            .unwrap();
+        let arg_2 = object_transaction_builder
+            .obj(ObjectArg::SharedObject {
+                id: shared_obj_id,
+                initial_shared_version,
+                mutable: true,
+            })
+            .unwrap();
+
+        move_call! {
+            object_transaction_builder,
+            (self.package.0)::o2::consume_with_owned(arg_1, arg_2)
+        };
+        let delete_obj_tx = object_transaction_builder.finish();
+        let gas_id = self.gas_object_ids.pop().unwrap();
+        self.create_signed_transaction_from_pt(delete_obj_tx, gas_id)
+            .await
+    }
+
+    pub async fn mutate_shared_obj_with_owned_tx(
+        &mut self,
+        owned_obj: ObjectRef,
+        shared_obj_id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    ) -> Transaction {
+        let mut delete_object_transaction_builder = ProgrammableTransactionBuilder::new();
+        let arg_1 = delete_object_transaction_builder
+            .obj(ObjectArg::ImmOrOwnedObject(owned_obj))
+            .unwrap();
+        let arg_2 = delete_object_transaction_builder
+            .obj(ObjectArg::SharedObject {
+                id: shared_obj_id,
+                initial_shared_version,
+                mutable: true,
+            })
+            .unwrap();
+        move_call! {
+            delete_object_transaction_builder,
+            (self.package.0)::o2::mutate_with_owned(arg_1, arg_2)
         };
         let delete_obj_tx = delete_object_transaction_builder.finish();
         let gas_id = self.gas_object_ids.pop().unwrap();
@@ -792,6 +861,93 @@ async fn test_delete_before_two_mutations() {
 
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
+}
+
+#[tokio::test]
+async fn test_object_lock_conflict() {
+    let mut user_1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user_1.create_shared_object().await;
+
+    assert_eq!(effects.created.len(), 1);
+    let shared_obj = effects.created[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+
+    let owned_effects = user_1.create_owned_object().await;
+
+    assert_eq!(owned_effects.created.len(), 1);
+    let owned_obj = owned_effects.created[0].0;
+
+    let delete_obj_tx = user_1
+        .delete_shared_obj_with_owned_tx(owned_obj, shared_obj_id, initial_shared_version)
+        .await;
+
+    let _delete_cert = user_1
+        .certify_shared_obj_transaction(delete_obj_tx)
+        .await
+        .unwrap();
+
+    let mutate_obj_tx = user_1
+        .mutate_shared_obj_with_owned_tx(owned_obj, shared_obj_id, initial_shared_version)
+        .await;
+
+    let mutate_cert_res = user_1.certify_shared_obj_transaction(mutate_obj_tx).await;
+
+    assert!(matches!(
+        mutate_cert_res.err(),
+        Some(SuiError::ObjectLockConflict { .. })
+    ));
+}
+
+#[tokio::test]
+async fn test_owned_object_version_increments_on_cert_denied() {
+    let mut user_1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user_1.create_shared_object().await;
+
+    assert_eq!(effects.created.len(), 1);
+    let shared_obj = effects.created[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+
+    let owned_effects = user_1.create_owned_object().await;
+
+    assert_eq!(owned_effects.created.len(), 1);
+    let owned_obj = owned_effects.created[0].0;
+    let owned_obj_id = owned_obj.0;
+
+    let delete_obj_tx = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_cert = user_1
+        .certify_shared_obj_transaction(delete_obj_tx)
+        .await
+        .unwrap();
+
+    let mutate_obj_tx = user_1
+        .mutate_shared_obj_with_owned_tx(owned_obj, shared_obj_id, initial_shared_version)
+        .await;
+
+    let mutate_cert = user_1
+        .certify_shared_obj_transaction(mutate_obj_tx)
+        .await
+        .unwrap();
+
+    let (TransactionEffects::V1(_delete_effects), _error) = user_1
+        .execute_sequenced_certificate_to_effects(delete_cert)
+        .await
+        .unwrap();
+
+    let version = user_1.get_object_latest_version(owned_obj_id);
+    assert_eq!(version, 4.into());
+
+    let (TransactionEffects::V1(_mutate_effects), _error) = user_1
+        .execute_sequenced_certificate_to_effects(mutate_cert)
+        .await
+        .unwrap();
+
+    let next_version = user_1.get_object_latest_version(owned_obj_id);
+    assert_eq!(next_version, 5.into());
 }
 
 #[tokio::test]

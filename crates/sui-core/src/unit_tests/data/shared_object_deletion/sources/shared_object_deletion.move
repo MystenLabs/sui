@@ -8,6 +8,11 @@ module shared_object_deletion::o2 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
+    struct Obj has key, store {
+        id: UID,
+        flipped: bool
+    }
+
     struct Obj2 has key, store {
         id: UID,
         mutation_count: u64,
@@ -16,6 +21,12 @@ module shared_object_deletion::o2 {
     struct Wrapper has key {
         id: UID,
         o2: Obj2
+    }
+
+    public entry fun create_owned(ctx: &mut TxContext) {
+        let o = Obj { id: object::new(ctx), flipped: false };
+        let sender = tx_context::sender(ctx);
+        transfer::transfer(o, sender)
     }
 
     public entry fun create(ctx: &mut TxContext) {
@@ -28,9 +39,22 @@ module shared_object_deletion::o2 {
         object::delete(id);
     }
 
+    public entry fun consume_with_owned(o: &mut Obj, o2: Obj2) {
+        let Obj2 { id, mutation_count: _mutation_count } = o2;
+        object::delete(id);
+        o.flipped = true;
+    }
+
     public entry fun mutate_o2(o2:  &mut Obj2) {
         let m = o2.mutation_count + 1;
         o2.mutation_count = m;
+    }
+
+    public entry fun mutate_with_owned(o: &mut Obj, o2: &mut Obj2) {
+        let m = o2.mutation_count + 1;
+        o2.mutation_count = m;
+
+        o.flipped = !o.flipped;
     }
 
     public entry fun freeze_o2(o2: Obj2) {
