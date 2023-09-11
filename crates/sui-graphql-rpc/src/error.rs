@@ -46,6 +46,8 @@ pub enum Error {
     InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
     CursorConnectionFetchFailed(String),
+    #[error("Error received in multi-get query: {0}")]
+    MultiGet(String),
     #[error("Internal error occurred while processing request.")]
     Internal(String),
 }
@@ -57,7 +59,8 @@ impl ErrorExtensions for Error {
             | Error::CursorNoFirstLast
             | Error::CursorNoReversePagination
             | Error::InvalidCursor(_)
-            | Error::CursorConnectionFetchFailed(_) => {
+            | Error::CursorConnectionFetchFailed(_)
+            | Error::MultiGet(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {
