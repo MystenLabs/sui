@@ -81,16 +81,12 @@ module sui::authenticator_state {
 
     fun jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
-        if ((&a.jwk.kty == &b.jwk.kty) &&
+        (&a.jwk.kty == &b.jwk.kty) &&
            (&a.jwk.e == &b.jwk.e) &&
            (&a.jwk.n == &b.jwk.n) &&
            (&a.jwk.alg == &b.jwk.alg) &&
            (&a.jwk_id.iss == &b.jwk_id.iss) &&
-           (&a.jwk_id.kid == &b.jwk_id.kid)) {
-            true
-        } else {
-            false
-        }
+           (&a.jwk_id.kid == &b.jwk_id.kid)
     }
 
     // Compare the underlying byte arrays lexicographically. Since the strings may be utf8 this

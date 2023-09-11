@@ -51,7 +51,7 @@ module sui_system::sui_system {
     use sui::table::Table;
     use sui_system::validator::Validator;
     use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2, protocol_version};
+    use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInnerV2};
     use sui_system::stake_subsidy::StakeSubsidy;
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
@@ -555,7 +555,6 @@ module sui_system::sui_system {
         ctx: &mut TxContext,
     ) : Balance<SUI> {
         let self = load_system_state_mut(wrapper);
-
         // Validator will make a special system call with sender set as 0x0.
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
         let storage_rebate = sui_system_state_inner::advance_epoch(
