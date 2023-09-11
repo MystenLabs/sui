@@ -183,6 +183,7 @@ export default {
 				120: '30rem',
 				300: '75rem',
 				coinsAndAssetsContainer: '31.25rem',
+				objectVideoImgEvenXl: '22.5rem',
 			},
 			maxHeight: {
 				coinsAndAssetsContainer: '31.25rem',
@@ -192,6 +193,14 @@ export default {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
 				walletLogo: '4.813rem',
+				objectVideoImgEvenXl: '22.5rem',
+				objectVideoImgPortraitLarge: '9.38rem',
+				objectVideoImgPortraitXl: '16.88rem',
+				objectVideoImgLandscapeXs: '2.67rem',
+				objectVideoImgLandscapeSmall: '5.33rem',
+				objectVideoImgLandscapeMedium: '10.5rem',
+				objectVideoImgLandscapeLarge: '16.67rem',
+				objectVideoImgLandscapeXl: '30rem',
 			},
 			maxWidth: {
 				80: '20rem',
