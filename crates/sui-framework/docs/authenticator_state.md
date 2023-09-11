@@ -281,16 +281,12 @@ Sender is not @0x0 the system address.
 
 <pre><code><b>fun</b> <a href="authenticator_state.md#0x2_authenticator_state_jwk_equal">jwk_equal</a>(a: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>, b: &<a href="authenticator_state.md#0x2_authenticator_state_ActiveJwk">ActiveJwk</a>): bool {
     // note: epoch is ignored
-    <b>if</b> ((&a.jwk.kty == &b.jwk.kty) &&
+    (&a.jwk.kty == &b.jwk.kty) &&
        (&a.jwk.e == &b.jwk.e) &&
        (&a.jwk.n == &b.jwk.n) &&
        (&a.jwk.alg == &b.jwk.alg) &&
        (&a.jwk_id.iss == &b.jwk_id.iss) &&
-       (&a.jwk_id.kid == &b.jwk_id.kid)) {
-        <b>true</b>
-    } <b>else</b> {
-        <b>false</b>
-    }
+       (&a.jwk_id.kid == &b.jwk_id.kid)
 }
 </code></pre>
 
