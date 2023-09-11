@@ -59,7 +59,9 @@ pub struct ModuleInfo {
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
 }
 
-pub struct ProgramInfo<const AFTER_TYPING: bool>(UniqueMap<ModuleIdent, ModuleInfo>);
+pub struct ProgramInfo<const AFTER_TYPING: bool> {
+    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
+}
 pub type NamingProgramInfo = ProgramInfo<false>;
 pub type TypingProgramInfo = ProgramInfo<true>;
 
@@ -130,7 +132,7 @@ macro_rules! program_info {
             (mident, minfo)
         }))
         .unwrap();
-        ProgramInfo(modules)
+        ProgramInfo { modules }
     }};
 }
 
@@ -148,7 +150,9 @@ impl NamingProgramInfo {
 
 impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
     pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.0.get(m).expect("ICE should have failed in naming")
+        self.modules
+            .get(m)
+            .expect("ICE should have failed in naming")
     }
 
     pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
