@@ -120,7 +120,7 @@ use sui_types::{
     fp_ensure,
     object::{Object, ObjectFormatOptions, ObjectRead},
     transaction::*,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_SYSTEM_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag};
 use typed_store::Map;
@@ -258,6 +258,8 @@ pub struct AuthorityMetrics {
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
+
+    pub authenticator_state_update_failed: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -570,6 +572,12 @@ impl AuthorityMetrics {
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
+            authenticator_state_update_failed: register_int_counter_with_registry!(
+                "authenticator_state_update_failed",
+                "Number of failed authenticator state updates",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -1074,6 +1082,7 @@ impl AuthorityState {
         {
             if let Some(err) = &execution_error_opt {
                 error!("Authenticator state update failed: {err}");
+                self.metrics.authenticator_state_update_failed.inc();
             }
             debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
@@ -2388,30 +2397,6 @@ impl AuthorityState {
             .await?
             .expect("framework object should always exist")
             .compute_object_reference())
-    }
-
-    pub fn get_authenticator_state_start_version(&self) -> SuiResult<Option<SequenceNumber>> {
-        // should not be called if we have not reached the protocol version where this object
-        // exists
-        if self
-            .load_epoch_store_one_call_per_task()
-            .protocol_config()
-            .enable_jwk_consensus_updates()
-        {
-            let obj = self
-                .database
-                .get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?
-                .expect("Authenticator state object must exist");
-
-            match obj.owner {
-                Owner::Shared {
-                    initial_shared_version,
-                } => Ok(Some(initial_shared_version)),
-                _ => panic!("Authenticator state object must be a shared object"),
-            }
-        } else {
-            Ok(None)
-        }
     }
 
     /// This function should be called once and exactly once during reconfiguration.

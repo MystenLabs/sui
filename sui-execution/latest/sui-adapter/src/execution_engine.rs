@@ -19,7 +19,7 @@ mod checked {
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use tracing::{info, instrument, trace, warn};
+    use tracing::{error, info, instrument, trace, warn};
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
@@ -59,6 +59,7 @@ mod checked {
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
         SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
+    use tap::TapFallible;
 
     /// If a transaction digest shows up in this list, when executing such transaction,
     /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -127,10 +128,7 @@ mod checked {
             epoch_timestamp_ms,
         );
 
-        let is_epoch_change = matches!(
-            transaction_kind,
-            TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
-        );
+        let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
         let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
@@ -565,9 +563,11 @@ mod checked {
                 )
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
-                for tx in txns {
+                let len = txns.len();
+                for (i, tx) in txns.into_iter().enumerate() {
                     match tx {
                         EndOfEpochTransactionKind::ChangeEpoch(change_epoch) => {
+                            assert_eq!(i, len - 1);
                             advance_epoch(
                                 change_epoch,
                                 temporary_store,
@@ -577,6 +577,7 @@ mod checked {
                                 protocol_config,
                                 metrics.clone(),
                             )?;
+                            return Ok(Mode::empty_results());
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
                             // This can fail if the framework does not yet have the create()
@@ -593,7 +594,11 @@ mod checked {
                                 gas_charger,
                                 protocol_config,
                                 metrics.clone(),
-                            )?;
+                            )
+                            .tap_err(|e| {
+                                error!("Failed to create authenticator state: {:?}", e);
+                            })
+                            .ok();
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
                             setup_authenticator_state_expire(
@@ -609,7 +614,7 @@ mod checked {
                         }
                     }
                 }
-                Ok(Mode::empty_results())
+                unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
             }
             TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
                 setup_authenticator_state_update(
@@ -620,8 +625,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
-                )
-                .expect("AuthenticatorStateUpdate cannot fail");
+                )?;
                 Ok(Mode::empty_results())
             }
         }
