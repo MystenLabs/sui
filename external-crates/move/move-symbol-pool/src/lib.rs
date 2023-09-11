@@ -72,6 +72,12 @@ static_symbols!(
     "SUI",
     "authenticator_state",
     "AuthenticatorState",
+    "id",
+    "transfer",
+    "freeze_object",
+    "share_object",
+    "event",
+    "emit",
 );
 
 /// The global, unique cache of strings.

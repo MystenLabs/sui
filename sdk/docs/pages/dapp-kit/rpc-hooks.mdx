@@ -1,0 +1,82 @@
+# Rpc Hooks
+
+Sui dApp Kit ships with hooks for each of the rpc methods defined in the
+[JSON RPC specification](https://docs.sui.io/sui-jsonrpc)
+
+## Query hooks
+
+The majority of the rpc methods are implemented using the
+[useQuery](https://tanstack.com/query/latest/docs/react/guides/queries) hook from
+@tanstack/react-query.
+
+The hooks take the RPC calls parameters as the first argument, and optionally any `useQuery` options
+as the second argument. You can read the
+[useQuery documentation](https://tanstack.com/query/latest/docs/react/guides/queries) for more
+details on the full set of options available.
+
+```tsx
+import { useOwnedObject } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const { data, isLoading, error, refetch } = useOwnedObjects(
+		{ owner: '0x123' },
+		{
+			cacheTime: 10000,
+		},
+	);
+
+	if (isLoading) {
+		return <div>Loading...</div>;
+	}
+
+	return <pre>{JSON.stringify(data, null, 2)}</pre>;
+}
+```
+
+## Infinite Query hooks
+
+For RPC methods that support pagination dApp Kit also implements a `useInfiniteQuery` hook. For more
+details checkout out the
+[useInfiniteQuery documentation](https://tanstack.com/query/latest/docs/react/guides/infinite-queries).
+
+```tsx
+import { useOwnedObjectsInfinite } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useOwnedObjectsInfinite({
+		owner: '0x123',
+	});
+
+	if (isLoading) {
+		return <div>Loading...</div>;
+	}
+
+	return <pre>{JSON.stringify(data, null, 2)}</pre>;
+}
+```
+
+## Mutation hooks
+
+For RPC methods that mutate state dApp Kit implements a `useMutation` hook. For more details
+checkout the
+[useMutation documentation](https://tanstack.com/query/latest/docs/react/guides/mutations).
+
+```tsx
+import { useOwnedObjectInfinite } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const { mutate } = useDryRunTransactionBlock();
+
+	return (
+		<Button
+			onClick={() => {
+				mutate({
+					transactionBlock: txb,
+				});
+			}}
+		>
+			Dry run transaction
+		</Button>
+	);
+}
+```

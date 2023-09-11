@@ -10,6 +10,8 @@ use crate::types::{object::Object, sui_address::SuiAddress};
 use async_graphql::connection::Connection;
 use async_graphql::*;
 use async_trait::async_trait;
+use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_sdk::types::base_types::ObjectID;
 
 #[async_trait]
 pub(crate) trait DataProvider: Send + Sync {
@@ -24,6 +26,18 @@ pub(crate) trait DataProvider: Send + Sync {
         before: Option<String>,
         _filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>>;
+
+    async fn get_object_with_options(
+        &self,
+        object_id: ObjectID,
+        options: SuiObjectDataOptions,
+    ) -> Result<Option<Object>>;
+
+    async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<ObjectID>,
+        options: SuiObjectDataOptions,
+    ) -> Result<Vec<Object>>;
 
     async fn fetch_balance(&self, address: &SuiAddress, type_: Option<String>) -> Result<Balance>;
 
