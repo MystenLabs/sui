@@ -17,7 +17,7 @@ describe('useDisconnectWallet', () => {
 	});
 
 	test('that disconnecting works successfully', async () => {
-		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
