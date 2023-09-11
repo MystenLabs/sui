@@ -27,13 +27,8 @@ impl TransactionBlock {
         TransactionDigest::from_array(self.0.digest.into_inner())
     }
 
-    async fn effects(&self) -> Result<Option<TransactionBlockEffects>> {
-        let tx_effects = self.0.effects.as_ref();
-
-        Ok(Some(TransactionBlockEffects {
-            digest: self.0.digest,
-            tx_effects,
-        }))
+    async fn effects(&self) -> Option<TransactionBlockEffects> {
+        self.0.effects.as_ref().map(|tx_effects| tx_effects.into())
     }
 
     async fn sender(&self) -> Option<Address> {
@@ -64,53 +59,66 @@ impl TransactionBlock {
         let data_provider = ctx.data_provider();
         let system_state = data_provider.get_latest_sui_system_state().await?;
         let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
+        let epoch = convert_to_epoch(gcs.into(), &system_state, &protocol_configs)?;
         Ok(Some(epoch))
     }
 }
 
 #[derive(Clone, Eq, PartialEq)]
-pub(crate) struct TransactionBlockEffects<'a> {
+pub(crate) struct TransactionBlockEffects {
     pub digest: NativeTransactionDigest,
-    pub tx_effects: Option<&'a SuiTransactionBlockEffects>,
+    pub gas_effects: GasEffects,
+    pub status: SuiExecutionStatus,
+    // pub transaction_block: TransactionBlock,
+    // pub dependencies: Vec<TransactionBlock>,
+    // pub lamport_version: Option<u64>,
+    // pub object_reads: Vec<Object>,
+    // pub object_changes: Vec<ObjectChange>,
+    // pub balance_changes: Vec<BalanceChange>,
+    // pub epoch: Epoch
+    // pub checkpoint: Checkpoint
+}
+
+impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
+    fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+        Self {
+            digest: *tx_effects.transaction_digest(),
+            gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
+            status: tx_effects.status().clone(),
+        }
+    }
 }
 
 #[Object]
-impl TransactionBlockEffects<'_> {
+impl TransactionBlockEffects {
     async fn digest(&self) -> TransactionDigest {
         TransactionDigest::from_array(self.digest.into_inner())
     }
 
-    async fn gas_effects(&self) -> Option<GasEffects> {
-        let tx_effects = self.tx_effects.unwrap();
-        let gas_effects = GasEffects::new(tx_effects.gas_cost_summary(), tx_effects.gas_object());
-        Some(gas_effects)
-    }
-
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let tx_effects = self.tx_effects.unwrap();
-        let gcs = tx_effects.gas_cost_summary();
-        let data_provider = ctx.data_provider();
-        let system_state = data_provider.get_latest_sui_system_state().await?;
-        let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
-        Ok(Some(epoch))
-    }
-
     async fn status(&self) -> Option<ExecutionStatus> {
-        let tx_effects = self.tx_effects.unwrap();
-        Some(match tx_effects.status() {
+        Some(match self.status {
             SuiExecutionStatus::Success => ExecutionStatus::Success,
             SuiExecutionStatus::Failure { error: _ } => ExecutionStatus::Failure,
         })
     }
 
     async fn errors(&self) -> Option<String> {
-        let tx_effects = self.tx_effects.unwrap();
-        match tx_effects.status() {
+        match &self.status {
             SuiExecutionStatus::Success => None,
             SuiExecutionStatus::Failure { error } => Some(error.clone()),
         }
+    }
+
+    async fn gas_effects(&self) -> Option<GasEffects> {
+        Some(self.gas_effects)
+    }
+
+    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+        let data_provider = ctx.data_provider();
+        let system_state = data_provider.get_latest_sui_system_state().await?;
+        let protocol_configs = data_provider.fetch_protocol_config(None).await?;
+        let epoch = convert_to_epoch(self.gas_effects.gcs, &system_state, &protocol_configs)?;
+        Ok(Some(epoch))
     }
 }
 

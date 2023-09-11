@@ -48,7 +48,6 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest as NativeTransactionDigest,
-        gas::GasCostSummary as NativeGasCostSummary,
         object::Owner as NativeOwner,
         sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
@@ -404,7 +403,7 @@ pub(crate) fn convert_json_rpc_checkpoint(
     let network_total_transactions = Some(c.network_total_transactions);
     let rolling_gas_summary: GasCostSummary = (&c.epoch_rolling_gas_cost_summary).into();
     let epoch = convert_to_epoch(
-        &c.epoch_rolling_gas_cost_summary,
+        (&c.epoch_rolling_gas_cost_summary).into(),
         system_state,
         protocol_configs,
     )
@@ -484,12 +483,11 @@ fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
 }
 
 pub(crate) fn convert_to_epoch(
-    gcs: &NativeGasCostSummary,
+    gas_summary: GasCostSummary,
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
     let epoch_id = system_state.epoch;
-    let gas_summary = gcs.into();
     let active_validators = convert_to_validators(system_state.active_validators.clone())?;
 
     let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
