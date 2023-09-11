@@ -80,9 +80,7 @@ export abstract class WalletSigner {
 		clientIdentifier?: string,
 	): Promise<SignedTransaction> {
 		const bytes = await this.prepareTransactionBlock(input.transactionBlock);
-		const signature = await this.signData(
-			messageWithIntent(IntentScope.TransactionData, bcs.ser(['vector', 'u8'], bytes).toBytes()),
-		);
+		const signature = await this.signData(messageWithIntent(IntentScope.TransactionData, bytes));
 
 		return {
 			transactionBlockBytes: toB64(bytes),

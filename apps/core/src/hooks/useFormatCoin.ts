@@ -113,6 +113,7 @@ export function useFormatCoin(
 	return [formatted, isFetched ? data?.symbol || fallbackSymbol : '', queryResult];
 }
 
+/** @deprecated use coin metadata instead */
 export function getCoinSymbol(coinTypeArg: string) {
 	return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
 }
