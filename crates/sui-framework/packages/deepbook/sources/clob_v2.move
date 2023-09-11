@@ -22,6 +22,7 @@ module deepbook::clob_v2 {
     use deepbook::custodian_v2::{Self as custodian, Custodian, AccountCap, mint_account_cap, account_owner};
     use deepbook::math::Self as clob_math;
 
+    friend deepbook::order_query;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const ENotImplemented: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
@@ -1725,6 +1726,44 @@ module deepbook::clob_v2 {
         order
     }
 
+    // Methods for accessing pool data, used by the order_query package
+    public(friend) fun asks<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+        &pool.asks
+    }
+
+    public(friend) fun bids<BaseAsset, QuoteAsset>(pool: &Pool<BaseAsset, QuoteAsset>): &CritbitTree<TickLevel> {
+        &pool.bids
+    }
+
+    public(friend) fun open_orders(tick_level: &TickLevel): &LinkedTable<u64, Order> {
+        &tick_level.open_orders
+    }
+
+    public(friend) fun order_id(order: &Order): u64 {
+        order.order_id
+    }
+
+    public(friend) fun tick_level(order: &Order): u64 {
+        order.price
+    }
+
+    public(friend) fun expire_timestamp(order: &Order): u64 {
+        order.expire_timestamp
+    }
+
+    public(friend) fun clone_order(order: &Order): Order {
+        Order {
+            order_id: order.order_id,
+            client_order_id: order.client_order_id,
+            price: order.price,
+            original_quantity: order.original_quantity,
+            quantity: order.quantity,
+            is_bid: order.is_bid,
+            owner: order.owner,
+            expire_timestamp: order.expire_timestamp,
+            self_matching_prevention: order.self_matching_prevention
+        }
+    }
 
     // Note that open orders and quotes can be directly accessed by loading in the entire Pool.
 
@@ -1841,7 +1880,7 @@ module deepbook::clob_v2 {
 
 
     #[test_only]
-    public fun order_id(
+    public fun order_id_for_test(
         sequence_id: u64,
         is_bid: bool
     ): u64 {
@@ -2003,7 +2042,7 @@ module deepbook::clob_v2 {
     #[test_only]
     public fun test_construct_order(sequence_id: u64, client_order_id: u64, price: u64, original_quantity: u64, quantity: u64, is_bid: bool, owner: address): Order {
         Order {
-            order_id: order_id(sequence_id, is_bid),
+            order_id: order_id_for_test(sequence_id, is_bid),
             client_order_id,
             price,
             original_quantity,
@@ -2027,7 +2066,7 @@ module deepbook::clob_v2 {
         expire_timestamp: u64
     ): Order {
         Order {
-            order_id: order_id(sequence_id, is_bid),
+            order_id: order_id_for_test(sequence_id, is_bid),
             client_order_id,
             price,
             original_quantity,
@@ -2071,7 +2110,7 @@ module deepbook::clob_v2 {
                 &mut pool.bids,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
-                order_id(sequence_id, is_bid),
+                order_id_for_test(sequence_id, is_bid),
                 owner
             )
         } else {
@@ -2079,7 +2118,7 @@ module deepbook::clob_v2 {
                 &mut pool.asks,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
-                order_id(sequence_id, is_bid),
+                order_id_for_test(sequence_id, is_bid),
                 owner
             )
         };
@@ -2234,8 +2273,8 @@ module deepbook::clob_v2 {
                 test_scenario::ctx(&mut test)
             );
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id(3, true), 0);
-            assert!(next_ask_order_id == order_id(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
+            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,
@@ -2375,8 +2414,8 @@ module deepbook::clob_v2 {
                 test_scenario::ctx(&mut test)
             );
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id(3, true), 0);
-            assert!(next_ask_order_id == order_id(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
+            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,
@@ -2518,11 +2557,11 @@ module deepbook::clob_v2 {
             assert!(base_filled == 0, E_NULL);
             assert!(quote_filled == 0, E_NULL);
             assert!(maker_injected, E_NULL);
-            assert!(maker_order_id == order_id(0, false), E_NULL);
+            assert!(maker_order_id == order_id_for_test(0, false), E_NULL);
 
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id(3, true), 0);
-            assert!(next_ask_order_id == order_id(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
+            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,

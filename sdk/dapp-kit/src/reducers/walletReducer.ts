@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalletWithSuiFeatures, WalletAccount, Wallet } from '@mysten/wallet-standard';
+import type { WalletAccount, Wallet, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { assertUnreachable } from '../utils/assertUnreachable.js';
 
 export type WalletState = {
-	wallets: WalletWithSuiFeatures[];
-	currentWallet: WalletWithSuiFeatures | null;
+	wallets: WalletWithRequiredFeatures[];
+	currentWallet: WalletWithRequiredFeatures | null;
 	accounts: readonly WalletAccount[];
 	currentAccount: WalletAccount | null;
 	connectionStatus: 'disconnected' | 'connecting' | 'connected';
@@ -15,19 +15,42 @@ export type WalletState = {
 type WalletRegisteredAction = {
 	type: 'wallet-registered';
 	payload: {
-		updatedWallets: WalletWithSuiFeatures[];
+		updatedWallets: WalletWithRequiredFeatures[];
 	};
 };
 
 type WalletUnregisteredAction = {
 	type: 'wallet-unregistered';
 	payload: {
-		updatedWallets: WalletWithSuiFeatures[];
+		updatedWallets: WalletWithRequiredFeatures[];
 		unregisteredWallet: Wallet;
 	};
 };
 
-export type WalletAction = WalletRegisteredAction | WalletUnregisteredAction;
+type WalletConnectionStatusUpdatedAction = {
+	type: 'wallet-connection-status-updated';
+	payload: WalletState['connectionStatus'];
+};
+
+type WalletConnectedAction = {
+	type: 'wallet-connected';
+	payload: {
+		wallet: WalletWithRequiredFeatures;
+		currentAccount: WalletAccount | null;
+	};
+};
+
+type WalletDisconnectedAction = {
+	type: 'wallet-disconnected';
+	payload?: never;
+};
+
+export type WalletAction =
+	| WalletConnectionStatusUpdatedAction
+	| WalletConnectedAction
+	| WalletDisconnectedAction
+	| WalletRegisteredAction
+	| WalletUnregisteredAction;
 
 export function walletReducer(state: WalletState, { type, payload }: WalletAction): WalletState {
 	switch (type) {
@@ -51,6 +74,28 @@ export function walletReducer(state: WalletState, { type, payload }: WalletActio
 			return {
 				...state,
 				wallets: payload.updatedWallets,
+			};
+		}
+		case 'wallet-connection-status-updated':
+			return {
+				...state,
+				connectionStatus: payload,
+			};
+		case 'wallet-connected':
+			return {
+				...state,
+				currentWallet: payload.wallet,
+				accounts: payload.wallet.accounts,
+				currentAccount: payload.currentAccount,
+				connectionStatus: 'connected',
+			};
+		case 'wallet-disconnected': {
+			return {
+				...state,
+				currentWallet: null,
+				accounts: [],
+				currentAccount: null,
+				connectionStatus: 'disconnected',
 			};
 		}
 		default:

@@ -49,6 +49,13 @@
 -  [Function `get_level2_book_status_ask_side`](#0xdee9_clob_v2_get_level2_book_status_ask_side)
 -  [Function `get_level2_book_status`](#0xdee9_clob_v2_get_level2_book_status)
 -  [Function `get_order_status`](#0xdee9_clob_v2_get_order_status)
+-  [Function `asks`](#0xdee9_clob_v2_asks)
+-  [Function `bids`](#0xdee9_clob_v2_bids)
+-  [Function `open_orders`](#0xdee9_clob_v2_open_orders)
+-  [Function `order_id`](#0xdee9_clob_v2_order_id)
+-  [Function `tick_level`](#0xdee9_clob_v2_tick_level)
+-  [Function `expire_timestamp`](#0xdee9_clob_v2_expire_timestamp)
+-  [Function `clone_order`](#0xdee9_clob_v2_clone_order)
 
 
 <pre><code><b>use</b> <a href="">0x1::option</a>;
@@ -1599,7 +1606,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
+            <b>if</b> (maker_order.<a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a> &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
@@ -1807,7 +1814,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
+            <b>if</b> (maker_order.<a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a> &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.base_custodian, maker_order.owner, maker_order.quantity);
                 <a href="clob_v2.md#0xdee9_clob_v2_emit_order_canceled">emit_order_canceled</a>&lt;BaseAsset, QuoteAsset&gt;(pool_id, maker_order);
@@ -1968,7 +1975,7 @@ Emitted when user withdraw asset from custodian
             <b>let</b> maker_base_quantity = maker_order.quantity;
             <b>let</b> skip_order = <b>false</b>;
 
-            <b>if</b> (maker_order.expire_timestamp &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
+            <b>if</b> (maker_order.<a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a> &lt;= current_timestamp || account_owner(account_cap) == maker_order.owner) {
                 skip_order = <b>true</b>;
                 <b>let</b> maker_quote_quantity = clob_math::mul(maker_order.quantity, maker_order.price);
                 <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, maker_order.owner, maker_quote_quantity);
@@ -2445,7 +2452,7 @@ So please check that boolean value first before using the order id.
 
 
 <pre><code><b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_is_bid">order_is_bid</a>(order_id: u64): bool {
-    <b>return</b> order_id &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>
+    <b>return</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a> &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>
 }
 </code></pre>
 
@@ -2866,7 +2873,7 @@ and they should correspond to the order IDs one by one.
             tick_index = new_tick_index;
         };
         <b>let</b> order = <a href="clob_v2.md#0xdee9_clob_v2_remove_order">remove_order</a>&lt;BaseAsset, QuoteAsset&gt;(open_orders, usr_open_orders, tick_index, order_id, owner);
-        <b>assert</b>!(order.expire_timestamp &lt; now, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
+        <b>assert</b>!(order.<a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a> &lt; now, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
         <b>if</b> (is_bid) {
             <b>let</b> balance_locked = clob_math::mul(order.quantity, order.price);
             <a href="custodian.md#0xdee9_custodian_unlock_balance">custodian::unlock_balance</a>(&<b>mut</b> pool.quote_custodian, owner, balance_locked);
@@ -3213,12 +3220,190 @@ internal func to retrive single depth of a tick price
     <b>assert</b>!(<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_contains">linked_table::contains</a>(usr_open_order_ids, order_id), <a href="clob_v2.md#0xdee9_clob_v2_EInvalidOrderId">EInvalidOrderId</a>);
     <b>let</b> order_price = *<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(usr_open_order_ids, order_id);
     <b>let</b> open_orders =
-        <b>if</b> (order_id &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>) { &pool.bids }
+        <b>if</b> (<a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a> &lt; <a href="clob_v2.md#0xdee9_clob_v2_MIN_ASK_ORDER_ID">MIN_ASK_ORDER_ID</a>) { &pool.bids }
         <b>else</b> { &pool.asks };
     <b>let</b> tick_level = <a href="critbit.md#0xdee9_critbit_borrow_leaf_by_key">critbit::borrow_leaf_by_key</a>(open_orders, order_price);
     <b>let</b> tick_open_orders = &tick_level.open_orders;
     <b>let</b> order = <a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_borrow">linked_table::borrow</a>(tick_open_orders, order_id);
     order
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_asks"></a>
+
+## Function `asks`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_asks">asks</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_asks">asks</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt; {
+    &pool.asks
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_bids"></a>
+
+## Function `bids`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_bids">bids</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">clob_v2::Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &<a href="critbit.md#0xdee9_critbit_CritbitTree">critbit::CritbitTree</a>&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_bids">bids</a>&lt;BaseAsset, QuoteAsset&gt;(pool: &<a href="clob_v2.md#0xdee9_clob_v2_Pool">Pool</a>&lt;BaseAsset, QuoteAsset&gt;): &CritbitTree&lt;<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>&gt; {
+    &pool.bids
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_open_orders"></a>
+
+## Function `open_orders`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">clob_v2::TickLevel</a>): &<a href="../../../.././build/Sui/docs/linked_table.md#0x2_linked_table_LinkedTable">linked_table::LinkedTable</a>&lt;u64, <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_open_orders">open_orders</a>(tick_level: &<a href="clob_v2.md#0xdee9_clob_v2_TickLevel">TickLevel</a>): &LinkedTable&lt;u64, <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>&gt; {
+    &tick_level.open_orders
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_order_id"></a>
+
+## Function `order_id`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_order_id">order_id</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.order_id
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_tick_level"></a>
+
+## Function `tick_level`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_tick_level">tick_level</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_expire_timestamp"></a>
+
+## Function `expire_timestamp`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_expire_timestamp">expire_timestamp</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): u64 {
+    order.expire_timestamp
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xdee9_clob_v2_clone_order"></a>
+
+## Function `clone_order`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clone_order">clone_order</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>): <a href="clob_v2.md#0xdee9_clob_v2_Order">clob_v2::Order</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="clob_v2.md#0xdee9_clob_v2_clone_order">clone_order</a>(order: &<a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a>): <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
+    <a href="clob_v2.md#0xdee9_clob_v2_Order">Order</a> {
+        order_id: order.order_id,
+        client_order_id: order.client_order_id,
+        price: order.price,
+        original_quantity: order.original_quantity,
+        quantity: order.quantity,
+        is_bid: order.is_bid,
+        owner: order.owner,
+        expire_timestamp: order.expire_timestamp,
+        self_matching_prevention: order.self_matching_prevention
+    }
 }
 </code></pre>
 

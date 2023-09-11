@@ -1125,8 +1125,11 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
 }
 
 impl<'backing> ParentSync for TemporaryStore<'backing> {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        self.store.get_latest_parent_entry_ref(object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        _object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        unreachable!("Never called in newer protocol versions")
     }
 }
 

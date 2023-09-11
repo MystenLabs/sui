@@ -968,9 +968,7 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = executor.update_genesis_state(
+    let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
         store.clone(),
         protocol_config,
         metrics,
@@ -980,7 +978,7 @@ fn process_package(
     )?;
 
     let store = Arc::get_mut(store).expect("only one reference to store");
-    store.finish(written, deleted);
+    store.finish(written);
 
     Ok(())
 }
@@ -1054,9 +1052,7 @@ pub fn generate_genesis_system_object(
         builder.finish()
     };
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = executor.update_genesis_state(
+    let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
         store.clone(),
         &protocol_config,
         metrics,
@@ -1066,7 +1062,7 @@ pub fn generate_genesis_system_object(
     )?;
 
     let store = Arc::get_mut(store).expect("only one reference to store");
-    store.finish(written, deleted);
+    store.finish(written);
 
     Ok(())
 }

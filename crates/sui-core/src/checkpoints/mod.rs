@@ -476,6 +476,16 @@ impl CheckpointStore {
         )
     }
 
+    pub fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestPruned,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )
+    }
+
     /// Sets highest executed checkpoint to any value.
     ///
     /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.

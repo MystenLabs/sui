@@ -7,6 +7,7 @@ import { formatAddress } from '@mysten/sui.js/utils';
 
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
+import { EditableAccountName } from './EditableAccountName';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useExplorerLink } from '../../hooks/useExplorerLink';
@@ -24,11 +25,23 @@ interface AccountItemProps {
 	selected?: boolean; // whether the account is selected in the context of a multi-select
 	isActiveAccount?: boolean; // whether the account is the active account in the context of the account list
 	background?: 'gradient';
+	editable?: boolean;
 }
 
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 	(
-		{ background, selected, isActiveAccount, disabled, icon, name, address, after, ...props },
+		{
+			background,
+			selected,
+			isActiveAccount,
+			disabled,
+			icon,
+			name,
+			address,
+			after,
+			editable,
+			...props
+		},
 		ref,
 	) => {
 		const { data: accounts } = useAccounts();
@@ -59,9 +72,13 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			>
 				{icon}
 				<div className="flex flex-col gap-1 overflow-hidden items-start">
-					<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
-						{accountName}
-					</Text>
+					{!isActiveAccount && !editable ? (
+						<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
+							{accountName}
+						</Text>
+					) : (
+						<EditableAccountName accountID={account.id} name={accountName} />
+					)}
 					<div className="text-steel-dark flex gap-1.5 leading-none">
 						<Text variant="subtitle" weight="semibold" truncate>
 							{formatAddress(account.address)}

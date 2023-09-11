@@ -97,7 +97,7 @@ export class ZkAccount
 	}: {
 		provider: ZkProvider;
 	}): Promise<Omit<ZkAccountSerialized, 'id'>> {
-		const jwt = await zkLogin({ provider, prompt: 'select_account' });
+		const jwt = await zkLogin({ provider, prompt: true });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
 		if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {

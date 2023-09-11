@@ -67,6 +67,9 @@ const MAX_PROTOCOL_VERSION: u64 = 24;
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
 // Version 22: Child object format change.
+// Version 23: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+//             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
+//             value for mainnet.
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
 
@@ -1400,6 +1403,13 @@ impl ProtocolConfig {
                 }
                 23 => {
                     cfg.feature_flags.loaded_child_object_format_type = true;
+                    cfg.feature_flags.narwhal_new_leader_election_schedule = true;
+                    // Taking a baby step approach, we consider only 20% by stake as bad nodes so we
+                    // have a 80% by stake of nodes participating in the leader committee. That allow
+                    // us for more redundancy in case we have validators under performing - since the
+                    // responsibility is shared amongst more nodes. We can increase that once we do have
+                    // higher confidence.
+                    cfg.consensus_bad_nodes_stake_threshold = Some(20);
                 }
                 24 => {
                     cfg.feature_flags.simple_conservation_checks = true;
