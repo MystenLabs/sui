@@ -23,6 +23,7 @@ feature_flags:
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
+  narwhal_new_leader_election_schedule: true
   loaded_child_object_format: true
   loaded_child_object_format_type: true
 max_tx_size_bytes: 131072
@@ -188,4 +189,5 @@ hmac_hmac_sha3_256_input_cost_per_block: 2
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
 execution_version: 1
+consensus_bad_nodes_stake_threshold: 20
 
