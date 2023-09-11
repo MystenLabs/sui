@@ -17,7 +17,7 @@ describe('useDisconnectWallet', () => {
 	});
 
 	test('that disconnecting works successfully', async () => {
-		const unregister = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
@@ -29,7 +29,7 @@ describe('useDisconnectWallet', () => {
 			{ wrapper },
 		);
 
-		result.current.connectWallet.mutate({ walletName: 'Mock Wallet 1' });
+		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 		expect(result.current.walletInfo.connectionStatus).toBe('connected');
