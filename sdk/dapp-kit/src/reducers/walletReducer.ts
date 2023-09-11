@@ -35,7 +35,7 @@ type WalletConnectionStatusUpdatedAction = {
 type WalletConnectedAction = {
 	type: 'wallet-connected';
 	payload: {
-		wallet: WalletWithSuiFeatures;
+		wallet: WalletWithRequiredFeatures;
 		currentAccount: WalletAccount | null;
 	};
 };

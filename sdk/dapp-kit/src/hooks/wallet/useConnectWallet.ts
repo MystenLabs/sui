@@ -7,7 +7,7 @@ import type {
 	StandardConnectInput,
 	StandardConnectOutput,
 	WalletAccount,
-	WalletWithSuiFeatures,
+	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
 import { useWalletContext } from '../../components/WalletProvider.js';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
@@ -16,7 +16,7 @@ import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
-	wallet: WalletWithSuiFeatures;
+	wallet: WalletWithRequiredFeatures;
 
 	/** An optional account address to connect to. Defaults to the first authorized account. */
 	accountAddress?: string;
