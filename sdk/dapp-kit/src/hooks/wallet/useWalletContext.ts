@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { WalletContext } from 'dapp-kit/src/contexts/WalletContext';
+import { WalletContext } from '../../contexts/WalletContext.js';
 import { useContext } from 'react';
 
 export function useWalletContext() {
