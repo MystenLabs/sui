@@ -19,7 +19,7 @@ mod checked {
     use sui_types::metrics::LimitsMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use tracing::{error, info, instrument, trace, warn};
+    use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
@@ -59,7 +59,6 @@ mod checked {
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
         SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
     };
-    use tap::TapFallible;
 
     /// If a transaction digest shows up in this list, when executing such transaction,
     /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -507,7 +506,9 @@ mod checked {
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
+                let builder = ProgrammableTransactionBuilder::new();
                 advance_epoch(
+                    builder,
                     change_epoch,
                     temporary_store,
                     tx_ctx,
@@ -563,12 +564,14 @@ mod checked {
                 )
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
+                let mut builder = ProgrammableTransactionBuilder::new();
                 let len = txns.len();
                 for (i, tx) in txns.into_iter().enumerate() {
                     match tx {
                         EndOfEpochTransactionKind::ChangeEpoch(change_epoch) => {
                             assert_eq!(i, len - 1);
                             advance_epoch(
+                                builder,
                                 change_epoch,
                                 temporary_store,
                                 tx_ctx,
@@ -580,38 +583,15 @@ mod checked {
                             return Ok(Mode::empty_results());
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
-                            // This can fail if the framework does not yet have the create()
-                            // function.
-                            // TODO: this is an ephemeral constraint - once all production
-                            // networks have the new framework, we can add an .expect() at the
-                            // end here (because at that point this should only be called during
-                            // genesis of new networks).
-                            setup_authenticator_state_create(
-                                create,
-                                temporary_store,
-                                tx_ctx,
-                                move_vm,
-                                gas_charger,
-                                protocol_config,
-                                metrics.clone(),
-                            )
-                            .tap_err(|e| {
-                                error!("Failed to create authenticator state: {:?}", e);
-                            })
-                            .ok();
+                            assert!(protocol_config.enable_jwk_consensus_updates());
+                            builder = setup_authenticator_state_create(builder, create);
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
-                            setup_authenticator_state_expire(
-                                expire,
-                                temporary_store,
-                                tx_ctx,
-                                move_vm,
-                                gas_charger,
-                                protocol_config,
-                                metrics.clone(),
-                            )
-                            // TODO: investigate whether it is possible to tolerate this failure.
-                            .expect("AuthenticatorStateExpire cannot fail");
+                            assert!(protocol_config.enable_jwk_consensus_updates());
+
+                            // TODO: it would be nice if a failure of this function didn't cause
+                            // safe mode.
+                            builder = setup_authenticator_state_expire(builder, expire);
                         }
                     }
                 }
@@ -667,9 +647,9 @@ mod checked {
     }
 
     pub fn construct_advance_epoch_pt(
+        mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
-        let mut builder = ProgrammableTransactionBuilder::new();
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -768,6 +748,7 @@ mod checked {
     }
 
     fn advance_epoch(
+        builder: ProgrammableTransactionBuilder,
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
@@ -787,7 +768,7 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
+        let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
         let result = programmable_transactions::execution::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),
@@ -936,38 +917,19 @@ mod checked {
     }
 
     fn setup_authenticator_state_create(
+        mut builder: ProgrammableTransactionBuilder,
         _create: AuthenticatorStateCreate,
-        temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
-        gas_charger: &mut GasCharger,
-        protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
-    ) -> Result<(), ExecutionError> {
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let res = builder.move_call(
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
                 AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME.to_owned(),
                 vec![],
                 vec![],
-            );
-            assert_invariant!(
-                res.is_ok(),
-                "Unable to generate authenticator_state_create transaction!"
-            );
-            builder.finish()
-        };
-        programmable_transactions::execution::execute::<execution_mode::System>(
-            protocol_config,
-            metrics,
-            move_vm,
-            temporary_store,
-            tx_ctx,
-            gas_charger,
-            pt,
-        )
+            )
+            .expect("Unable to generate authenticator_state_create transaction!");
+        builder
     }
 
     fn setup_authenticator_state_update(
@@ -1013,19 +975,11 @@ mod checked {
     }
 
     fn setup_authenticator_state_expire(
+        mut builder: ProgrammableTransactionBuilder,
         expire: AuthenticatorStateExpire,
-        temporary_store: &mut TemporaryStore<'_>,
-        tx_ctx: &mut TxContext,
-        move_vm: &Arc<MoveVM>,
-        gas_charger: &mut GasCharger,
-        protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
-    ) -> Result<(), ExecutionError> {
-        assert!(protocol_config.enable_jwk_consensus_updates());
-
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            let res = builder.move_call(
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
                 SUI_FRAMEWORK_ADDRESS.into(),
                 AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
                 AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME.to_owned(),
@@ -1038,21 +992,8 @@ mod checked {
                     }),
                     CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
                 ],
-            );
-            assert_invariant!(
-                res.is_ok(),
-                "Unable to generate authenticator_state_expire transaction!"
-            );
-            builder.finish()
-        };
-        programmable_transactions::execution::execute::<execution_mode::System>(
-            protocol_config,
-            metrics,
-            move_vm,
-            temporary_store,
-            tx_ctx,
-            gas_charger,
-            pt,
-        )
+            )
+            .expect("Unable to generate authenticator_state_expire transaction!");
+        builder
     }
 }
