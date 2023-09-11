@@ -489,8 +489,10 @@ impl<T> ConsensusHandler<T> {
     fn authenticator_state_update_transaction(
         &self,
         round: u64,
-        new_active_jwks: Vec<ActiveJwk>,
+        mut new_active_jwks: Vec<ActiveJwk>,
     ) -> VerifiedExecutableTransaction {
+        new_active_jwks.sort();
+
         info!("creating authenticator state update transaction");
         assert!(self.epoch_store.authenticator_state_enabled());
         let transaction = VerifiedTransaction::new_authenticator_state_update(

@@ -326,7 +326,7 @@ pub struct AuthorityEpochTables {
 
     /// JWKs that are currently available for zklogin authentication, and the round in which they
     /// became active.
-    active_jwks: DBMap<u64, (JwkId, JWK)>,
+    active_jwks: DBMap<(u64, (JwkId, JWK)), ()>,
 }
 
 fn signed_transactions_table_default_config() -> DBOptions {
@@ -1306,7 +1306,10 @@ impl AuthorityPerEpochStore {
 
         if !previously_active && insert_result.is_quorum_reached() {
             info!("jwk {:?} became active at round {:?}", key, round);
-            batch.insert_batch(&self.tables.active_jwks, std::iter::once((round, key)))?;
+            batch.insert_batch(
+                &self.tables.active_jwks,
+                std::iter::once(((round, key), ())),
+            )?;
         }
 
         Ok(())
@@ -1314,12 +1317,24 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn get_new_jwks(&self, round: u64) -> SuiResult<Vec<ActiveJwk>> {
         let epoch = self.epoch();
+
+        let empty_jwk_id = JwkId::new(String::new(), String::new());
+        let empty_jwk = JWK {
+            kty: String::new(),
+            e: String::new(),
+            n: String::new(),
+            alg: String::new(),
+        };
+
+        let start = (round, (empty_jwk_id.clone(), empty_jwk.clone()));
+        let end = (round + 1, (empty_jwk_id, empty_jwk));
+
         // TODO: use a safe iterator
         Ok(self
             .tables
             .active_jwks
-            .iter_with_bounds(Some(round), Some(round + 1))
-            .map(|(r, (jwk_id, jwk))| {
+            .iter_with_bounds(Some(start), Some(end))
+            .map(|((r, (jwk_id, jwk)), _)| {
                 debug_assert!(round == r);
                 ActiveJwk { jwk_id, jwk, epoch }
             })

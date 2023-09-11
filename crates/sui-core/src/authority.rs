@@ -1072,6 +1072,10 @@ impl AuthorityState {
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().intent_message().value.kind()
         {
+            if let Some(err) = &execution_error_opt {
+                error!("Authenticator state update failed: {err}");
+            }
+            debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
         }
 
