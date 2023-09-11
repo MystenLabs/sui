@@ -83,18 +83,15 @@ export function $_INFINITE_HOOK_NAME_(
 const mutationHookTemplate = /* typescript */ `
 ${header}
 
-import type { $_METHOD_TYPE_NAME_Params } from '@mysten/sui.js/client';
 import type { UseSuiClientMutationOptions } from '../useSuiClientMutation.js';
 import { useSuiClientMutation } from '../useSuiClientMutation.js';
 
 export function $_HOOK_NAME_(
-	$_PARAMS_ARG_,
 	options?: UseSuiClientMutationOptions<'$_METHOD_NAME_'>,
 ) {
 	return useSuiClientMutation(
 		{
 			method: '$_METHOD_NAME_',
-			params,
 		},
 		options,
 	);
