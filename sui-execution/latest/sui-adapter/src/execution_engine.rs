@@ -610,6 +610,7 @@ mod checked {
                                 protocol_config,
                                 metrics.clone(),
                             )
+                            // TODO: investigate whether it is possible to tolerate this failure.
                             .expect("AuthenticatorStateExpire cannot fail");
                         }
                     }
