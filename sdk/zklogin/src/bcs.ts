@@ -7,33 +7,22 @@ import { bcs } from '@mysten/sui.js/bcs';
 
 export const zkBcs = new BCS(bcs);
 
-zkBcs.registerStructType('AddressParams', {
-	iss: BCS.STRING,
-});
-
-zkBcs.registerStructType('ZkClaim', {
-	name: BCS.STRING,
-	value_base64: BCS.STRING,
-	index_mod_4: BCS.U8,
-});
-
-type Claim = {
-	name: string;
-	value_base64: string;
-	index_mod_4: number;
+type ProofPoints = {
+	a: string[];
+	b: string[][];
+	c: string[];
 };
 
-export interface ProofPoints {
-	pi_a: string[];
-	pi_b: string[][];
-	pi_c: string[];
-}
+type IssBase64 = {
+	value: string;
+	indexMod4: number;
+};
 
 export interface ZkSignatureInputs {
-	proof_points: ProofPoints;
-	address_seed: string;
-	claims: Claim[];
-	header_base64: string;
+	proofPoints: ProofPoints;
+	issBase64Details: IssBase64;
+	headerBase64: string;
+	addressSeed: string;
 }
 
 export interface ZkSignature {
@@ -45,13 +34,16 @@ export interface ZkSignature {
 zkBcs.registerStructType('ZkSignature', {
 	inputs: {
 		proof_points: {
-			pi_a: [BCS.VECTOR, BCS.STRING],
-			pi_b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
-			pi_c: [BCS.VECTOR, BCS.STRING],
+			a: [BCS.VECTOR, BCS.STRING],
+			b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
+			c: [BCS.VECTOR, BCS.STRING],
 		},
-		address_seed: BCS.STRING,
-		claims: [BCS.VECTOR, 'ZkClaim'],
+		iss_base64_details: {
+			value: BCS.STRING,
+			index_mod_4: BCS.U8,
+		},
 		header_base64: BCS.STRING,
+		address_seed: BCS.STRING,
 	},
 	max_epoch: BCS.U64,
 	user_signature: [BCS.VECTOR, BCS.U8],
@@ -62,7 +54,15 @@ function getZkSignatureBytes({ inputs, maxEpoch, userSignature }: ZkSignature) {
 		.ser(
 			'ZkSignature',
 			{
-				inputs,
+				inputs: {
+					proof_points: inputs.proofPoints,
+					iss_base64_details: {
+						value: inputs.issBase64Details.value,
+						index_mod_4: inputs.issBase64Details.indexMod4,
+					},
+					header_base64: inputs.headerBase64,
+					address_seed: inputs.addressSeed,
+				},
 				max_epoch: maxEpoch,
 				user_signature: typeof userSignature === 'string' ? fromB64(userSignature) : userSignature,
 			},

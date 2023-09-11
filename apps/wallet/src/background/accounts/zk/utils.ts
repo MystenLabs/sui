@@ -3,7 +3,7 @@
 
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce, generateRandomness } from '@mysten/zklogin';
+import { type ZkSignatureInputs, generateNonce, generateRandomness } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
@@ -127,25 +127,11 @@ type WalletInputs = {
 	userSalt: bigint;
 	keyClaimName?: 'sub' | 'email';
 };
-type Claim = {
-	name: string;
-	value_base64: string;
-	index_mod_4: number;
-};
-type ProofPoints = {
-	pi_a: string[];
-	pi_b: string[][];
-	pi_c: string[];
-};
-export type PartialZkSignature = {
-	proof_points: ProofPoints;
-	address_seed: string;
-	claims: Claim[];
-	header_base64: string;
-};
+
+export type PartialZkSignature = Omit<ZkSignatureInputs, 'addressSeed'>;
 
 // TODO: update when we have the final production url (and a https one)
-const zkProofsServerUrl = 'http://185.209.177.123:8000';
+const zkProofsServerUrl = 'http://185.209.177.123:7000';
 
 export async function createPartialZKSignature({
 	jwt,
@@ -155,18 +141,20 @@ export async function createPartialZKSignature({
 	userSalt,
 	keyClaimName = 'sub',
 }: WalletInputs): Promise<PartialZkSignature> {
-	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/test/zkp`, {
+	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/zkp`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
 			jwt,
-			eph_public_key: toBigIntBE(Buffer.from(ephemeralPublicKey.toSuiBytes())).toString(),
-			max_epoch: maxEpoch,
-			jwt_randomness: jwtRandomness.toString(),
-			subject_pin: userSalt.toString(),
-			key_claim_name: keyClaimName,
+			extendedEphemeralPublicKey: toBigIntBE(
+				Buffer.from(ephemeralPublicKey.toSuiBytes()),
+			).toString(),
+			maxEpoch,
+			jwtRandomness: jwtRandomness.toString(),
+			salt: userSalt.toString(),
+			keyClaimName,
 		}),
 	});
 	return response.json();
