@@ -398,8 +398,10 @@ ExecutionFailureStatus:
     29:
       CertificateDenied: UNIT
     30:
-      SuiMoveVerificationTimedout: UNIT
+      InputObjectDeleted: UNIT
     31:
+      SuiMoveVerificationTimedout: UNIT
+    32:
       SharedObjectOperationNotAllowed: UNIT
 ExecutionStatus:
   ENUM:

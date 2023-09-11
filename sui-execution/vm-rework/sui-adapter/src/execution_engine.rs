@@ -267,7 +267,7 @@ mod checked {
                 ))
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
-                    ExecutionErrorKind::CertificateDenied,
+                    ExecutionErrorKind::InputObjectDeleted,
                     None,
                 ))
             } else {
