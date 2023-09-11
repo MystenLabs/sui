@@ -104,10 +104,17 @@ pub struct Script {
 pub enum Use {
     Module(ModuleIdent, Option<ModuleName>),
     Members(ModuleIdent, Vec<(Name, Option<Name>)>),
+    Fun {
+        visibility: Visibility,
+        function: NameAccessChain,
+        ty: NameAccessChain,
+        method: Name,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UseDecl {
+    pub loc: Loc,
     pub attributes: Vec<Attributes>,
     pub use_: Use,
 }
@@ -442,7 +449,7 @@ pub enum Ability_ {
 }
 pub type Ability = Spanned<Ability_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
@@ -1182,7 +1189,11 @@ impl AstDebug for ModuleMember {
 
 impl AstDebug for UseDecl {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let UseDecl { attributes, use_ } = self;
+        let UseDecl {
+            attributes,
+            loc: _,
+            use_,
+        } = self;
         attributes.ast_debug(w);
         use_.ast_debug(w);
     }
@@ -1207,6 +1218,19 @@ impl AstDebug for Use {
                         }
                     })
                 })
+            }
+            Use::Fun {
+                visibility,
+                function,
+                ty,
+                method,
+            } => {
+                visibility.ast_debug(w);
+                w.write(" use fun ");
+                function.ast_debug(w);
+                w.write(" as ");
+                ty.ast_debug(w);
+                w.write(format!(".{method}"));
             }
         }
         w.write(";")

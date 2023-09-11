@@ -92,7 +92,7 @@ impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
         pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
-        prog: &T::Program,
+        prog: &T::Program_,
     ) -> Self {
         fn add_struct_fields(
             structs: &mut UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
@@ -117,7 +117,7 @@ impl<'env> Context<'env> {
 
         let mut structs = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-            for (mident, mdef) in pre_compiled_lib.typing.modules.key_cloned_iter() {
+            for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
                 add_struct_fields(&mut structs, mident, &mdef.structs)
             }
         }
@@ -185,11 +185,11 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: T::Program,
 ) -> H::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
-    let T::Program {
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
+    let T::Program_ {
         modules: tmodules,
         scripts: tscripts,
-    } = prog;
+    } = prog.inner;
     let modules = modules(&mut context, tmodules);
     let scripts = scripts(&mut context, tscripts);
 

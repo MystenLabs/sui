@@ -18,6 +18,7 @@ use crate::{
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
+        program_info::TypingProgramInfo,
         unique_map::UniqueMap,
         *,
     },
@@ -38,11 +39,16 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: N::Program,
 ) -> T::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
     let N::Program {
-        modules: nmodules,
-        scripts: nscripts,
+        info,
+        inner: N::Program_ {
+            modules: nmodules,
+            scripts: nscripts,
+        },
     } = prog;
+    let mut context = Context::new(compilation_env, pre_compiled_lib, info);
+
+    // we extract module use funs into the module info context
     let mut modules = modules(&mut context, nmodules);
     let mut scripts = scripts(&mut context, nscripts);
 
@@ -50,13 +56,22 @@ pub fn program(
     dependency_ordering::program(context.env, &mut modules, &mut scripts);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let mut prog = T::Program { modules, scripts };
-    let module_info = core::TypingProgramInfo::new(pre_compiled_lib, &prog);
+    let mut prog = T::Program_ { modules, scripts };
+    let module_use_funs = context
+        .modules
+        .modules
+        .into_iter()
+        .map(|(mident, minfo)| (mident, minfo.use_funs))
+        .collect();
+    let module_info = TypingProgramInfo::new(pre_compiled_lib, &prog, module_use_funs);
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
         v.visit(compilation_env, &module_info, &mut prog);
     }
-    prog
+    T::Program {
+        info: module_info,
+        inner: prog,
+    }
 }
 
 fn modules(
@@ -67,16 +82,14 @@ fn modules(
     let mut typed_modules = modules.map(|ident, mdef| {
         let (typed_mdef, new_friends) = module(context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
+            let friend = Friend {
+                attributes: UniqueMap::new(),
+                loc,
+            };
             all_new_friends
                 .entry(pub_package_module)
                 .or_insert_with(BTreeMap::new)
-                .insert(
-                    ident,
-                    Friend {
-                        attributes: UniqueMap::new(),
-                        loc,
-                    },
-                );
+                .insert(ident, friend);
         }
         typed_mdef
     });
@@ -111,6 +124,7 @@ fn module(
         package_name,
         attributes,
         is_source_module,
+        use_funs,
         friends,
         mut structs,
         functions: nfunctions,
@@ -118,6 +132,7 @@ fn module(
         spec_dependencies,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    context.add_use_funs_scope(use_funs);
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
@@ -126,6 +141,7 @@ fn module(
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
     context.env.pop_warning_filter_scope();
+    context.pop_use_funs_scope();
     let typed_module = T::ModuleDefinition {
         loc,
         warning_filter,
@@ -164,17 +180,20 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         package_name,
         attributes,
         loc,
+        use_funs,
         constants: nconstants,
         function_name,
         function: nfunction,
         spec_dependencies,
     } = nscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    context.add_use_funs_scope(use_funs);
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
     context.env.pop_warning_filter_scope();
+    context.pop_use_funs_scope();
     T::Script {
         warning_filter,
         package_name,
@@ -1020,10 +1039,11 @@ enum SeqCase {
     },
 }
 
-fn sequence(context: &mut Context, seq: N::Sequence) -> T::Sequence {
+fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence {
     use N::SequenceItem_ as NS;
     use T::SequenceItem_ as TS;
 
+    context.add_use_funs_scope(use_funs);
     let mut work_queue = VecDeque::new();
     let mut resulting_sequence = T::Sequence::new();
 
@@ -1073,7 +1093,7 @@ fn sequence(context: &mut Context, seq: N::Sequence) -> T::Sequence {
             }
         }
     }
-
+    context.pop_use_funs_scope();
     resulting_sequence
 }
 

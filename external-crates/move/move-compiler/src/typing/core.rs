@@ -7,12 +7,11 @@ use crate::{
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
-        self as N, BuiltinTypeName_, FunctionSignature, StructDefinition, StructTypeParameter,
-        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, Var,
+        self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
+        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
     },
     parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, *},
-    typing::ast as T,
+    shared::{program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -22,6 +21,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
+
+struct UseFunsScope {
+    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind)>,
+    use_funs: ResolvedUseFuns,
+}
 
 pub enum Constraint {
     AbilityConstraint {
@@ -39,32 +43,6 @@ pub enum Constraint {
 pub type Constraints = Vec<Constraint>;
 pub type TParamSubst = HashMap<TParamID, Type>;
 
-pub struct FunctionInfo {
-    pub defined_loc: Loc,
-    pub visibility: Visibility,
-    pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
-}
-
-pub struct ConstantInfo {
-    pub defined_loc: Loc,
-    pub signature: Type,
-}
-
-pub struct ModuleInfo {
-    pub package: Option<Symbol>,
-    pub friends: UniqueMap<ModuleIdent, Loc>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
-    pub functions: UniqueMap<FunctionName, FunctionInfo>,
-    pub constants: UniqueMap<ConstantName, ConstantInfo>,
-}
-
-pub struct ProgramInfo<const AFTER_TYPING: bool> {
-    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
-}
-pub type NamingProgramInfo = ProgramInfo<false>;
-pub type TypingProgramInfo = ProgramInfo<true>;
-
 pub struct LoopInfo(LoopInfo_);
 
 enum LoopInfo_ {
@@ -77,6 +55,7 @@ pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
 
+    use_funs: Vec<UseFunsScope>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
@@ -98,116 +77,14 @@ pub struct Context<'env> {
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
-macro_rules! program_info {
-    ($pre_compiled_lib:ident, $prog:ident, $pass:ident) => {{
-        let all_modules = $prog
-            .modules
-            .key_cloned_iter()
-            .chain($pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .$pass
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !$prog.modules.contains_key(mident))
-            }));
-        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
-            let structs = mdef.structs.clone();
-            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
-                defined_loc: fname.loc(),
-                visibility: fdef.visibility.clone(),
-                signature: fdef.signature.clone(),
-                acquires: fdef.acquires.clone(),
-            });
-            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
-                defined_loc: cname.loc(),
-                signature: cdef.signature.clone(),
-            });
-            let minfo = ModuleInfo {
-                package: mdef.package_name,
-                friends: mdef.friends.ref_map(|_, friend| friend.loc),
-                structs,
-                functions,
-                constants,
-            };
-            (mident, minfo)
-        }))
-        .unwrap();
-        ProgramInfo { modules }
-    }};
-}
-
-impl TypingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &T::Program) -> Self {
-        program_info!(pre_compiled_lib, prog, typing)
-    }
-}
-
-impl NamingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &N::Program) -> Self {
-        program_info!(pre_compiled_lib, prog, naming)
-    }
-}
-
-impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
-    pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.modules
-            .get(m)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
-        let minfo = self.module(m);
-        minfo
-            .structs
-            .get(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
-        &self.struct_definition(m, n).abilities
-    }
-
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
-        self.struct_declared_loc_(m, &n.0.value)
-    }
-
-    pub fn struct_declared_loc_(&self, m: &ModuleIdent, n: &Symbol) -> Loc {
-        let minfo = self.module(m);
-        *minfo
-            .structs
-            .get_loc_(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_type_parameters(
-        &self,
-        m: &ModuleIdent,
-        n: &StructName,
-    ) -> &Vec<StructTypeParameter> {
-        &self.struct_definition(m, n).type_parameters
-    }
-
-    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.module(m)
-            .functions
-            .get(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
-        let constants = &self.module(m).constants;
-        constants.get(n).expect("ICE should have failed in naming")
-    }
-}
-
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
-        prog: &N::Program,
+        _pre_compiled_lib: Option<&FullyCompiledProgram>,
+        info: NamingProgramInfo,
     ) -> Self {
-        let modules = NamingProgramInfo::new(pre_compiled_lib, prog);
         Context {
+            use_funs: vec![],
             subst: Subst::empty(),
             current_module: None,
             current_function: None,
@@ -216,10 +93,58 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
-            modules,
+            modules: info,
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
+        }
+    }
+
+    pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
+        let N::UseFuns {
+            resolved: new_scope,
+            implicit_candidates,
+        } = new_scope;
+        assert!(
+            implicit_candidates.is_empty(),
+            "ICE use fun candidates should have been resolved"
+        );
+        let mut unused = BTreeMap::new();
+        let mut use_funs = self
+            .use_funs
+            .last()
+            .map(|cur| cur.use_funs.clone())
+            .unwrap_or_default();
+        for (tn, additional_methods) in new_scope {
+            for (method, nuf) in additional_methods {
+                if matches!(
+                    nuf.kind,
+                    UseFunKind::Explicit | UseFunKind::UseAlias { used: false }
+                ) {
+                    unused.insert((tn.clone(), method), (nuf.loc, nuf.kind));
+                }
+                let cur_methods = use_funs.entry(tn.clone()).or_default();
+                cur_methods.remove(&method);
+                cur_methods.add(method, nuf).unwrap();
+            }
+        }
+        self.use_funs.push(UseFunsScope { unused, use_funs })
+    }
+
+    pub fn pop_use_funs_scope(&mut self) {
+        let UseFunsScope { unused, .. } = self.use_funs.pop().unwrap();
+        for ((tn, method), (loc, kind)) in unused {
+            let msg = match kind {
+                UseFunKind::Explicit => {
+                    format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
+                }
+                UseFunKind::UseAlias { used } => {
+                    assert!(!used);
+                    format!("Unused 'use' of alias '{method}'. Consider removing it")
+                }
+                UseFunKind::FunctionDeclaration => unreachable!(),
+            };
+            self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
         }
     }
 

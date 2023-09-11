@@ -842,7 +842,13 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
 fn parse_sequence(context: &mut Context) -> Result<Sequence, Box<Diagnostic>> {
     let mut uses = vec![];
     while context.tokens.peek() == Tok::Use {
-        uses.push(parse_use_decl(vec![], context)?);
+        let start_loc = context.tokens.start_loc();
+        uses.push(parse_use_decl(
+            vec![],
+            start_loc,
+            Modifiers::empty(),
+            context,
+        )?);
     }
 
     let mut seq: Vec<SequenceItem> = vec![];
@@ -2279,32 +2285,88 @@ fn parse_friend_decl(
 //          "use" <ModuleIdent> <UseAlias> ";" |
 //          "use" <ModuleIdent> :: <UseMember> ";" |
 //          "use" <ModuleIdent> :: "{" Comma<UseMember> "}" ";"
+//          "use" "fun" <NameAccessChain> "as" <Type> "." <Identifier> ";"
 fn parse_use_decl(
     attributes: Vec<Attributes>,
+    start_loc: usize,
+    modifiers: Modifiers,
     context: &mut Context,
 ) -> Result<UseDecl, Box<Diagnostic>> {
     consume_token(context.tokens, Tok::Use)?;
-    let ident = parse_module_ident(context)?;
-    let alias_opt = parse_use_alias(context)?;
-    let use_ = match (&alias_opt, context.tokens.peek()) {
-        (None, Tok::ColonColon) => {
-            consume_token(context.tokens, Tok::ColonColon)?;
-            let sub_uses = match context.tokens.peek() {
-                Tok::LBrace => parse_comma_list(
-                    context,
-                    Tok::LBrace,
-                    Tok::RBrace,
-                    parse_use_member,
-                    "a module member alias",
-                )?,
-                _ => vec![parse_use_member(context)?],
-            };
-            Use::Members(ident, sub_uses)
+    let Modifiers {
+        visibility,
+        entry,
+        native,
+    } = modifiers;
+    if let Some(loc) = entry {
+        let msg = format!(
+            "Invalid use declaration. '{}' is used only on functions",
+            ENTRY_MODIFIER
+        );
+        context
+            .env
+            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
+    }
+    if let Some(loc) = native {
+        let msg = "Invalid use declaration. Unexpected 'native' modifier";
+        context
+            .env
+            .add_diag(diag!(Syntax::InvalidModifier, (loc, msg)));
+    }
+    let use_ = match context.tokens.peek() {
+        Tok::Fun => {
+            consume_token(context.tokens, Tok::Fun).unwrap();
+            let function = parse_name_access_chain(context, || "a function name")?;
+            consume_token(context.tokens, Tok::As)?;
+            let ty = parse_name_access_chain(context, || "a type name")?;
+            consume_token(context.tokens, Tok::Period)?;
+            let method = parse_identifier(context)?;
+            Use::Fun {
+                visibility: visibility.unwrap_or(Visibility::Internal),
+                function,
+                ty,
+                method,
+            }
         }
-        _ => Use::Module(ident, alias_opt.map(ModuleName)),
+        _ => {
+            if let Some(vis) = visibility {
+                let msg =
+                    "Invalid use declaration. Non-'use fun' declarations cannot have visibility \
+                           modifiers as they are always internal";
+                context
+                    .env
+                    .add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
+            }
+            let ident = parse_module_ident(context)?;
+            let alias_opt = parse_use_alias(context)?;
+            match (&alias_opt, context.tokens.peek()) {
+                (None, Tok::ColonColon) => {
+                    consume_token(context.tokens, Tok::ColonColon)?;
+                    let sub_uses = match context.tokens.peek() {
+                        Tok::LBrace => parse_comma_list(
+                            context,
+                            Tok::LBrace,
+                            Tok::RBrace,
+                            parse_use_member,
+                            "a module member alias",
+                        )?,
+                        _ => vec![parse_use_member(context)?],
+                    };
+                    Use::Members(ident, sub_uses)
+                }
+                _ => Use::Module(ident, alias_opt.map(ModuleName)),
+            }
+        }
     };
+
     consume_token(context.tokens, Tok::Semicolon)?;
-    Ok(UseDecl { attributes, use_ })
+    let end_loc = context.tokens.previous_end_loc();
+    let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+    Ok(UseDecl {
+        attributes,
+        loc,
+        use_,
+    })
 }
 
 // Parse an alias for a module member:
@@ -2330,9 +2392,9 @@ fn parse_use_alias(context: &mut Context) -> Result<Option<Name>, Box<Diagnostic
 //      Module =
 //          <DocComments> ( "spec" | "module") (<LeadingNameAccess>::)?<ModuleName> "{"
 //              ( <Attributes>
-//                  ( <UseDecl> | <FriendDecl> | <SpecBlock> |
+//                  ( <FriendDecl> | <SpecBlock> |
 //                    <DocComments> <ModuleMemberModifiers>
-//                        (<ConstantDecl> | <StructDecl> | <FunctionDecl>) )
+//                        (<ConstantDecl> | <StructDecl> | <FunctionDecl> | <UseDecl>) )
 //                  )
 //              )*
 //          "}"
@@ -2406,7 +2468,6 @@ fn parse_module(
                     }
                 }
                 // Regular move constructs
-                Tok::Use => ModuleMember::Use(parse_use_decl(attributes, context)?),
                 Tok::Friend => ModuleMember::Friend(parse_friend_decl(attributes, context)?),
                 _ => {
                     context.tokens.match_doc_comments();
@@ -2420,6 +2481,9 @@ fn parse_module(
                             attributes, start_loc, modifiers, context,
                         )?),
                         Tok::Struct => ModuleMember::Struct(parse_struct_decl(
+                            attributes, start_loc, modifiers, context,
+                        )?),
+                        Tok::Use => ModuleMember::Use(parse_use_decl(
                             attributes, start_loc, modifiers, context,
                         )?),
                         _ => {
@@ -2480,10 +2544,17 @@ fn parse_script(
     consume_token(context.tokens, Tok::Script)?;
     consume_token(context.tokens, Tok::LBrace)?;
 
+    // TODO better errors for modifiers
     let mut uses = vec![];
     let mut next_item_attributes = parse_attributes(context)?;
     while context.tokens.peek() == Tok::Use {
-        uses.push(parse_use_decl(next_item_attributes, context)?);
+        let start_loc = context.tokens.start_loc();
+        uses.push(parse_use_decl(
+            next_item_attributes,
+            start_loc,
+            Modifiers::empty(),
+            context,
+        )?);
         next_item_attributes = parse_attributes(context)?;
     }
     let mut constants = vec![];
@@ -2602,8 +2673,15 @@ fn parse_spec_block(
 
     consume_token(context.tokens, Tok::LBrace)?;
     let mut uses = vec![];
+    // TODO better errrors for modifiers or attributes
     while context.tokens.peek() == Tok::Use {
-        uses.push(parse_use_decl(vec![], context)?);
+        let start_loc = context.tokens.start_loc();
+        uses.push(parse_use_decl(
+            vec![],
+            start_loc,
+            Modifiers::empty(),
+            context,
+        )?);
     }
     let mut members = vec![];
     while context.tokens.peek() != Tok::RBrace {

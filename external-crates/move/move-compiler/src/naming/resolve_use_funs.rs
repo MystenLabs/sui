@@ -1,0 +1,290 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::diag;
+use crate::expansion::ast::{self as E, ModuleIdent};
+use crate::naming::ast as N;
+use crate::parser::ast::FunctionName;
+use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
+use crate::typing::core;
+use move_ir_types::location::*;
+
+//**************************************************************************************************
+// Entry
+//**************************************************************************************************
+
+struct Context<'env, 'info> {
+    env: &'env mut CompilationEnv,
+    info: &'info NamingProgramInfo,
+}
+
+impl<'env, 'info> Context<'env, 'info> {
+    fn new(env: &'env mut CompilationEnv, info: &'info NamingProgramInfo) -> Self {
+        Self { env, info }
+    }
+}
+
+//**************************************************************************************************
+// Entry
+//**************************************************************************************************
+
+pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
+    let mut context = Context::new(env, info);
+    let N::Program_ { modules, scripts } = inner;
+    for (mident, mdef) in modules.key_cloned_iter_mut() {
+        module(&mut context, mident, mdef);
+    }
+    for s in scripts.values_mut() {
+        script(&mut context, s);
+    }
+    let module_use_funs = modules
+        .key_cloned_iter()
+        .map(|(mident, mdef)| {
+            let N::UseFuns {
+                resolved,
+                implicit_candidates,
+            } = &mdef.use_funs;
+            assert!(implicit_candidates.is_empty());
+            (mident, resolved.clone())
+        })
+        .collect();
+    info.set_use_funs(module_use_funs);
+}
+
+fn module(context: &mut Context, _mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
+    use_funs(context, &mut mdef.use_funs);
+    for (_, _, c) in &mut mdef.constants {
+        constant(context, c);
+    }
+    for (_, _, f) in &mut mdef.functions {
+        function(context, f);
+    }
+}
+
+fn script(context: &mut Context, s: &mut N::Script) {
+    use_funs(context, &mut s.use_funs);
+    for (_, _, c) in &mut s.constants {
+        constant(context, c);
+    }
+    function(context, &mut s.function);
+}
+
+fn constant(context: &mut Context, c: &mut N::Constant) {
+    exp(context, &mut c.value)
+}
+
+fn function(context: &mut Context, function: &mut N::Function) {
+    if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
+        sequence(context, seq)
+    }
+}
+
+//**************************************************************************************************
+// Resolution
+//**************************************************************************************************
+
+fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
+    let N::UseFuns {
+        resolved,
+        implicit_candidates,
+    } = uf;
+    // remove any incorrect resolved functions
+    for (tn, methods) in &mut *resolved {
+        *methods = std::mem::take(methods).filter_map(|method, nuf| {
+            let N::UseFun {
+                loc,
+                target_function: (m, f),
+                kind,
+                ..
+            } = nuf;
+            assert!(kind == N::UseFunKind::Explicit);
+            let (first_ty_loc, first_ty) = first_arg_type(context, m, f);
+            let is_valid = match first_ty.as_ref().and_then(|ty| ty.value.type_name()) {
+                Some(first_tn) => first_tn == tn,
+                None => false,
+            };
+            if is_valid {
+                Some(nuf)
+            } else {
+                let msg = format!(
+                    "Invalid 'use fun' for '{tn}.{method}'. \
+                    Expected a '{tn}' type as the first argument \
+                    (either by reference '&' '&mut' or by value)",
+                );
+                let first_tn_msg = match first_ty {
+                    Some(ty) => {
+                        let tys_str = core::error_format(&ty, &core::Subst::empty());
+                        format!("But '{m}::{f}' has a first argument of type {tys_str}")
+                    }
+                    None => format!("But '{m}::{f}' takes no arguments"),
+                };
+                context.env.add_diag(diag!(
+                    Declarations::InvalidUseFun,
+                    (loc, msg),
+                    (first_ty_loc, first_tn_msg),
+                ));
+                None
+            }
+        });
+    }
+    // resolve implicit candidates, removing if
+    // - It is not a valid method (i.e. if it would be valid to declare as a 'use fun')
+    // - The name is already bound
+    for (method, implicit) in std::mem::take(implicit_candidates) {
+        let E::ImplicitUseFunCandidate {
+            loc,
+            attributes,
+            is_public,
+            function: (m, f),
+            kind,
+        } = implicit;
+        let Some(tn) = is_valid_public_method(context, m, f) else {
+            if matches!(kind, E::ImplicitUseFunKind::UseAlias { used: false }) {
+                let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
+                context.env.add_diag(diag!(
+                    UnusedItem::Alias,
+                    (method.loc, msg),
+                ))
+            }
+            continue;
+        };
+        let kind = match kind {
+            E::ImplicitUseFunKind::FunctionDeclaration => N::UseFunKind::FunctionDeclaration,
+            E::ImplicitUseFunKind::UseAlias { used } => {
+                assert!(is_public.is_none());
+                N::UseFunKind::UseAlias { used }
+            }
+        };
+        let nuf = N::UseFun {
+            loc,
+            attributes,
+            is_public,
+            target_function: (m, FunctionName(f)),
+            kind,
+        };
+        let nuf_loc = nuf.loc;
+        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
+        if let Err((_, prev)) = methods.add(method, nuf) {
+            let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
+            let tn_msg = "'use' function aliases create an implicit 'use fun' when their first \
+                        argument is a type defined in that module";
+            context.env.add_diag(diag!(
+                Declarations::DuplicateItem,
+                (nuf_loc, msg),
+                (prev, "Previously declared here"),
+                (tn.loc, tn_msg)
+            ))
+        }
+    }
+}
+
+fn is_valid_public_method(context: &mut Context, m: ModuleIdent, f: Name) -> Option<N::TypeName> {
+    let (_, first_ty) = first_arg_type(context, m, FunctionName(f));
+    let first_ty = first_ty?;
+    let tn = first_ty.value.type_name()?;
+    let defining_module = match &tn.value {
+        N::TypeName_::Multiple(_) => return None,
+        N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_)?,
+        N::TypeName_::ModuleType(m, _) => m,
+    };
+    if defining_module == &m {
+        Some(tn.clone())
+    } else {
+        None
+    }
+}
+
+fn first_arg_type(
+    context: &mut Context,
+    m: ModuleIdent,
+    f: FunctionName,
+) -> (Loc, Option<N::Type>) {
+    let finfo = context.info.function_info(&m, &f);
+    match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+        None => (finfo.defined_loc, None),
+        Some(t) => (t.loc, Some(t)),
+    }
+}
+
+//**************************************************************************************************
+// Expressions
+//**************************************************************************************************
+
+fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
+    use_funs(context, uf);
+    for sp!(_, item_) in seq {
+        match item_ {
+            N::SequenceItem_::Seq(e) | N::SequenceItem_::Bind(_, e) => exp(context, e),
+            N::SequenceItem_::Declare(_, _) => (),
+        }
+    }
+}
+
+fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
+    match e_ {
+        N::Exp_::Value(_)
+        | N::Exp_::Move(_)
+        | N::Exp_::Copy(_)
+        | N::Exp_::Use(_)
+        | N::Exp_::Constant(_, _)
+        | N::Exp_::Break
+        | N::Exp_::Continue
+        | N::Exp_::Unit { .. }
+        | N::Exp_::Spec(_, _)
+        | N::Exp_::UnresolvedError => (),
+        N::Exp_::Return(e)
+        | N::Exp_::Abort(e)
+        | N::Exp_::Dereference(e)
+        | N::Exp_::UnaryExp(_, e)
+        | N::Exp_::Cast(e, _)
+        | N::Exp_::Assign(_, e)
+        | N::Exp_::Loop(e)
+        | N::Exp_::Annotate(e, _) => exp(context, e),
+        N::Exp_::IfElse(econd, et, ef) => {
+            exp(context, econd);
+            exp(context, et);
+            exp(context, ef);
+        }
+        N::Exp_::While(econd, ebody) => {
+            exp(context, econd);
+            exp(context, ebody)
+        }
+        N::Exp_::Block(s) => sequence(context, s),
+        N::Exp_::FieldMutate(ed, e) => {
+            exp_dotted(context, ed);
+            exp(context, e)
+        }
+        N::Exp_::Mutate(el, er) | N::Exp_::BinopExp(el, _, er) => {
+            exp(context, el);
+            exp(context, er)
+        }
+        N::Exp_::Pack(_, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
+        N::Exp_::Builtin(_, sp!(_, es))
+        | N::Exp_::Vector(_, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ExpList(es) => {
+            for e in es {
+                exp(context, e)
+            }
+        }
+        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+            exp_dotted(context, ed);
+            for e in es {
+                exp(context, e)
+            }
+        }
+
+        N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => exp_dotted(context, ed),
+    }
+}
+
+fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
+    match ed_ {
+        N::ExpDotted_::Exp(e) => exp(context, e),
+        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+    }
+}

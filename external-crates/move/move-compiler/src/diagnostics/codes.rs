@@ -204,6 +204,7 @@ codes!(
         InvalidAttribute: { msg: "invalid attribute", severity: NonblockingError },
         InvalidVisibilityModifier:
             { msg: "invalid visibility modifier", severity: NonblockingError },
+        InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
