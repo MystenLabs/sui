@@ -167,6 +167,28 @@ impl Manifest {
             Manifest::V1(manifest) => manifest.next_checkpoint_seq_num,
         }
     }
+    pub fn next_checkpoint_after_epoch(&self, epoch_num: u64) -> u64 {
+        match self {
+            Manifest::V1(manifest) => {
+                let mut summary_files: Vec<_> = manifest
+                    .file_metadata
+                    .clone()
+                    .into_iter()
+                    .filter(|f| f.file_type == FileType::CheckpointSummary)
+                    .collect();
+                summary_files.sort_by_key(|f| f.checkpoint_seq_range.start);
+                assert!(summary_files
+                    .windows(2)
+                    .all(|w| w[1].checkpoint_seq_range.start == w[0].checkpoint_seq_range.end));
+                assert_eq!(summary_files.first().unwrap().checkpoint_seq_range.start, 0);
+                summary_files
+                    .iter()
+                    .find(|f| f.epoch_num > epoch_num)
+                    .map(|f| f.checkpoint_seq_range.start)
+                    .unwrap_or(u64::MAX)
+            }
+        }
+    }
     pub fn update(
         &mut self,
         epoch_num: u64,

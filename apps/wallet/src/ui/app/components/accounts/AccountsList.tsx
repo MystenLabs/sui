@@ -53,7 +53,7 @@ export function AccountsList() {
 					<Collapsible title="Current" defaultOpen shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
-								<AccountListItem account={activeAccount} />
+								<AccountListItem account={activeAccount} editable />
 							</div>
 						</ToggleGroup.Item>
 					</Collapsible>

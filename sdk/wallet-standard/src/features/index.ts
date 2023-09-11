@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
+	IdentifierRecord,
 	StandardConnectFeature,
 	StandardDisconnectFeature,
 	StandardEventsFeature,
@@ -28,6 +29,18 @@ export type WalletWithSuiFeatures = WalletWithFeatures<
 		// Disconnect is an optional feature:
 		Partial<StandardDisconnectFeature>
 >;
+
+/**
+ * Represents a wallet with the absolute minimum feature set required to function in the Sui ecosystem.
+ */
+export type WalletWithRequiredFeatures = WalletWithFeatures<
+	MinimallyRequiredFeatures &
+		Partial<SuiFeatures> &
+		Partial<StandardDisconnectFeature> &
+		IdentifierRecord<unknown>
+>;
+
+export type MinimallyRequiredFeatures = StandardConnectFeature & StandardEventsFeature;
 
 export * from './suiSignMessage';
 export * from './suiSignTransactionBlock';

@@ -73,6 +73,7 @@ aws-credential-types = { version = "0.56", default-features = false }
 aws-http = { version = "0.56", default-features = false }
 aws-runtime = { version = "0.56", default-features = false, features = ["event-stream"] }
 aws-sdk-dynamodb = { version = "0.29" }
+aws-sdk-ec2 = { version = "0.29" }
 aws-sdk-s3 = { version = "0.29" }
 aws-sdk-sso = { version = "0.30", default-features = false }
 aws-sdk-sts = { version = "0.30", default-features = false }
@@ -95,7 +96,7 @@ axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
-backtrace = { version = "0.3" }
+backtrace = { version = "0.3", features = ["gimli-symbolize"] }
 base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
@@ -104,6 +105,7 @@ base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["a
 base64-simd = { version = "0.8" }
 base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
+bcrypt-pbkdf = { version = "0.10" }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
 better_any = { version = "0.1", default-features = false }
@@ -111,7 +113,7 @@ bimap = { version = "0.6" }
 bincode = { version = "1", default-features = false }
 bip32 = { version = "0.4" }
 bit-set = { version = "0.5" }
-bit-vec = { version = "0.6", default-features = false, features = ["std"] }
+bit-vec = { version = "0.6" }
 bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
@@ -125,6 +127,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
+blowfish = { version = "0.9", default-features = false, features = ["bcrypt"] }
 blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
@@ -148,6 +151,7 @@ cast = { version = "0.3", default-features = false }
 cbc = { version = "0.1", features = ["std"] }
 cfg-expr = { version = "0.13", features = ["targets"] }
 cfg-if = { version = "1", default-features = false }
+chacha20 = { version = "0.9", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = { version = "0.6" }
 ciborium = { version = "0.2" }
@@ -161,6 +165,8 @@ clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
 collectable = { version = "0.0.2", default-features = false }
+color-eyre = { version = "0.6" }
+color-spantrace = { version = "0.2", default-features = false }
 colorchoice = { version = "1", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
@@ -192,6 +198,7 @@ crypto-mac = { version = "0.11", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
+curve25519-dalek = { version = "4", features = ["digest"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 dashmap = { version = "5", default-features = false }
@@ -214,9 +221,11 @@ diffus = { version = "0.10" }
 diffy = { version = "0.3", default-features = false }
 digest-274715c4dabd11b0 = { package = "digest", version = "0.9", default-features = false, features = ["std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-dirs = { version = "4", default-features = false }
+dirs-164d15cefe24d7eb = { package = "dirs", version = "4", default-features = false }
+dirs-cdf1610d3e1514e9 = { package = "dirs", version = "5", default-features = false }
 dirs-next = { version = "2", default-features = false }
-dirs-sys = { version = "0.3", default-features = false }
+dirs-sys-468e82937335b1c9 = { package = "dirs-sys", version = "0.3", default-features = false }
+dirs-sys-9fbad63c4bcf4a8f = { package = "dirs-sys", version = "0.4", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
@@ -225,9 +234,11 @@ duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
-ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
+ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", default-features = false, features = ["alloc", "std"] }
 either = { version = "1" }
 elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pem", "std"] }
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
@@ -297,6 +308,7 @@ headers = { version = "0.3", default-features = false }
 headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4" }
+hex-literal-9fbad63c4bcf4a8f = { package = "hex-literal", version = "0.4", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac-5ef9efb8ec2df382 = { package = "hmac", version = "0.12", default-features = false, features = ["reset", "std"] }
 hmac-a6292c17cd707f01 = { package = "hmac", version = "0.11", default-features = false }
@@ -362,6 +374,7 @@ matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
+md5 = { version = "0.7" }
 memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
@@ -450,6 +463,7 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+option-ext = { version = "0.2", default-features = false }
 ouroboros = { version = "0.17" }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
@@ -462,8 +476,10 @@ parking_lot-5ef9efb8ec2df382 = { package = "parking_lot", version = "0.12" }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
+password-hash = { version = "0.4", default-features = false, features = ["rand_core"] }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
-pbkdf2 = { version = "0.11", default-features = false }
+pbkdf2-5ef9efb8ec2df382 = { package = "pbkdf2", version = "0.12", default-features = false }
+pbkdf2-a6292c17cd707f01 = { package = "pbkdf2", version = "0.11" }
 pem = { version = "1", default-features = false }
 pem-rfc7468-3b31131e45eafb45 = { package = "pem-rfc7468", version = "0.6", default-features = false, features = ["alloc"] }
 pem-rfc7468-ca01ad9e24f5d932 = { package = "pem-rfc7468", version = "0.7", default-features = false, features = ["alloc"] }
@@ -482,6 +498,7 @@ pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
+poly1305 = { version = "0.8", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
 poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "ff7f5e05d55667b4ffba129b837da780c4c5c849", default-features = false }
@@ -498,6 +515,7 @@ primitive-types = { version = "0.10", features = ["impl-serde"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
 prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
 prost = { version = "0.11" }
 prost-types = { version = "0.11" }
@@ -545,6 +563,9 @@ rusoto_core = { version = "0.48", default-features = false, features = ["rustls"
 rusoto_credential = { version = "0.48", default-features = false }
 rusoto_kms = { version = "0.48", default-features = false, features = ["rustls"] }
 rusoto_signature = { version = "0.48", default-features = false }
+russh = { version = "0.38" }
+russh-cryptovec = { version = "0.7", default-features = false }
+russh-keys = { version = "0.38", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
@@ -613,7 +634,7 @@ static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim = { version = "0.10", default-features = false }
 strum = { version = "0.24", features = ["derive"] }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
@@ -666,6 +687,7 @@ tower-service = { version = "0.3", default-features = false }
 tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
+tracing-error = { version = "0.2" }
 tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
@@ -714,6 +736,7 @@ want = { version = "0.3", default-features = false }
 webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 whoami = { version = "1" }
+winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
 winnow = { version = "0.4" }
 wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
 wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
@@ -722,7 +745,7 @@ xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
-yasna = { version = "0.5", features = ["std", "time"] }
+yasna = { version = "0.5", features = ["bit-vec", "num-bigint", "std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zstd = { version = "0.12" }
 zstd-safe = { version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
@@ -799,6 +822,7 @@ aws-credential-types = { version = "0.56", default-features = false }
 aws-http = { version = "0.56", default-features = false }
 aws-runtime = { version = "0.56", default-features = false, features = ["event-stream"] }
 aws-sdk-dynamodb = { version = "0.29" }
+aws-sdk-ec2 = { version = "0.29" }
 aws-sdk-s3 = { version = "0.29" }
 aws-sdk-sso = { version = "0.30", default-features = false }
 aws-sdk-sts = { version = "0.30", default-features = false }
@@ -821,7 +845,7 @@ axum-core = { version = "0.3", default-features = false }
 axum-extra = { version = "0.4" }
 axum-server = { version = "0.5", default-features = false, features = ["tls-rustls"] }
 backoff = { version = "0.4", features = ["tokio"] }
-backtrace = { version = "0.3" }
+backtrace = { version = "0.3", features = ["gimli-symbolize"] }
 base-x = { version = "0.2", default-features = false }
 base16ct-6f8ce4dd05d13bba = { package = "base16ct", version = "0.2", default-features = false, features = ["alloc"] }
 base16ct-c65f7effa3be6d31 = { package = "base16ct", version = "0.1", default-features = false }
@@ -830,6 +854,7 @@ base64-647d43efb71741da = { package = "base64", version = "0.21", features = ["a
 base64-simd = { version = "0.8" }
 base64-url = { version = "2" }
 base64ct = { version = "1", default-features = false, features = ["alloc"] }
+bcrypt-pbkdf = { version = "0.10" }
 bcs = { version = "0.1", default-features = false }
 beef = { version = "0.5", features = ["impl_serde"] }
 better_any = { version = "0.1", default-features = false }
@@ -839,7 +864,7 @@ bincode = { version = "1", default-features = false }
 bindgen = { version = "0.65", default-features = false, features = ["runtime"] }
 bip32 = { version = "0.4" }
 bit-set = { version = "0.5" }
-bit-vec = { version = "0.6", default-features = false, features = ["std"] }
+bit-vec = { version = "0.6" }
 bitcoin-private = { version = "0.1" }
 bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
@@ -853,6 +878,7 @@ block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", def
 block-buffer-93f6ce9d446188ac = { package = "block-buffer", version = "0.10", default-features = false }
 block-padding-468e82937335b1c9 = { package = "block-padding", version = "0.3", default-features = false, features = ["std"] }
 block-padding-6f8ce4dd05d13bba = { package = "block-padding", version = "0.2", default-features = false }
+blowfish = { version = "0.9", default-features = false, features = ["bcrypt"] }
 blst = { version = "0.3", features = ["no-threads"] }
 brotli = { version = "3", default-features = false, features = ["std"] }
 brotli-decompressor = { version = "2", default-features = false, features = ["std"] }
@@ -879,6 +905,7 @@ cc = { version = "1", default-features = false, features = ["parallel"] }
 cexpr = { version = "0.6", default-features = false }
 cfg-expr = { version = "0.13", features = ["targets"] }
 cfg-if = { version = "1", default-features = false }
+chacha20 = { version = "0.9", default-features = false }
 chrono = { version = "0.4", features = ["serde"] }
 chrono-tz = { version = "0.6" }
 chrono-tz-build = { version = "0.0.3", default-features = false }
@@ -895,6 +922,8 @@ clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serialization"] }
 collectable = { version = "0.0.2", default-features = false }
+color-eyre = { version = "0.6" }
+color-spantrace = { version = "0.2", default-features = false }
 colorchoice = { version = "1", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
@@ -928,6 +957,7 @@ crypto-mac = { version = "0.11", default-features = false }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
+curve25519-dalek = { version = "4", features = ["digest"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 darling = { version = "0.14" }
@@ -963,9 +993,11 @@ diffus = { version = "0.10" }
 diffy = { version = "0.3", default-features = false }
 digest-274715c4dabd11b0 = { package = "digest", version = "0.9", default-features = false, features = ["std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "oid", "std"] }
-dirs = { version = "4", default-features = false }
+dirs-164d15cefe24d7eb = { package = "dirs", version = "4", default-features = false }
+dirs-cdf1610d3e1514e9 = { package = "dirs", version = "5", default-features = false }
 dirs-next = { version = "2", default-features = false }
-dirs-sys = { version = "0.3", default-features = false }
+dirs-sys-468e82937335b1c9 = { package = "dirs-sys", version = "0.3", default-features = false }
+dirs-sys-9fbad63c4bcf4a8f = { package = "dirs-sys", version = "0.4", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 displaydoc = { version = "0.2" }
 dissimilar = { version = "1", default-features = false }
@@ -975,9 +1007,11 @@ duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
 ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features = false, features = ["der", "sign", "verify"] }
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
-ed25519 = { version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-consensus = { version = "2" }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
+ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
+ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", default-features = false, features = ["alloc", "std"] }
 either = { version = "1" }
 elliptic-curve-594e8ee84c453af0 = { package = "elliptic-curve", version = "0.13", features = ["hash2curve", "hazmat", "pem", "std"] }
 elliptic-curve-5ef9efb8ec2df382 = { package = "elliptic-curve", version = "0.12", default-features = false, features = ["arithmetic", "digest", "hazmat", "sec1"] }
@@ -1052,7 +1086,8 @@ headers-core = { version = "0.2", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4" }
 hex = { version = "0.4" }
-hex-literal = { version = "0.3", default-features = false }
+hex-literal-468e82937335b1c9 = { package = "hex-literal", version = "0.3", default-features = false }
+hex-literal-9fbad63c4bcf4a8f = { package = "hex-literal", version = "0.4", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
 hmac-5ef9efb8ec2df382 = { package = "hmac", version = "0.12", default-features = false, features = ["reset", "std"] }
 hmac-a6292c17cd707f01 = { package = "hmac", version = "0.11", default-features = false }
@@ -1127,6 +1162,7 @@ matchit-ca01ad9e24f5d932 = { package = "matchit", version = "0.7" }
 matchit-d8f496e17d97b5cb = { package = "matchit", version = "0.5" }
 md-5-274715c4dabd11b0 = { package = "md-5", version = "0.9" }
 md-5-93f6ce9d446188ac = { package = "md-5", version = "0.10" }
+md5 = { version = "0.7" }
 memchr = { version = "2" }
 memoffset-ca01ad9e24f5d932 = { package = "memoffset", version = "0.7" }
 merlin = { version = "3" }
@@ -1223,6 +1259,7 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+option-ext = { version = "0.2", default-features = false }
 ouroboros = { version = "0.17" }
 ouroboros_macro = { version = "0.17", default-features = false, features = ["std"] }
 outref = { version = "0.5", default-features = false }
@@ -1238,9 +1275,11 @@ parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0.8", default-features = false }
 parse-zoneinfo = { version = "0.3", default-features = false }
+password-hash = { version = "0.4", default-features = false, features = ["rand_core"] }
 paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
-pbkdf2 = { version = "0.11", default-features = false }
+pbkdf2-5ef9efb8ec2df382 = { package = "pbkdf2", version = "0.12", default-features = false }
+pbkdf2-a6292c17cd707f01 = { package = "pbkdf2", version = "0.11" }
 peeking_take_while = { version = "0.1", default-features = false }
 pem = { version = "1", default-features = false }
 pem-rfc7468-3b31131e45eafb45 = { package = "pem-rfc7468", version = "0.6", default-features = false, features = ["alloc"] }
@@ -1265,9 +1304,11 @@ pkcs1 = { version = "0.4", default-features = false, features = ["pem", "std"] }
 pkcs8-274715c4dabd11b0 = { package = "pkcs8", version = "0.9", default-features = false, features = ["pem", "std"] }
 pkcs8-93f6ce9d446188ac = { package = "pkcs8", version = "0.10", default-features = false, features = ["pem", "std"] }
 pkg-config = { version = "0.3", default-features = false }
+platforms = { version = "3" }
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
+poly1305 = { version = "0.8", default-features = false }
 polyval = { version = "0.6", default-features = false }
 portable-atomic = { version = "0.3" }
 poseidon-ark = { git = "https://github.com/arnaucube/poseidon-ark.git", rev = "ff7f5e05d55667b4ffba129b837da780c4c5c849", default-features = false }
@@ -1291,6 +1332,7 @@ proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4" }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["span-locations"] }
 prometheus = { version = "0.13" }
 prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
 proptest-derive = { version = "0.3", default-features = false }
 prost = { version = "0.11" }
@@ -1345,6 +1387,9 @@ rusoto_core = { version = "0.48", default-features = false, features = ["rustls"
 rusoto_credential = { version = "0.48", default-features = false }
 rusoto_kms = { version = "0.48", default-features = false, features = ["rustls"] }
 rusoto_signature = { version = "0.48", default-features = false }
+russh = { version = "0.38" }
+russh-cryptovec = { version = "0.7", default-features = false }
+russh-keys = { version = "0.38", default-features = false }
 rust_decimal = { version = "1", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1" }
@@ -1425,7 +1470,7 @@ strsim = { version = "0.10", default-features = false }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = { version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -1489,6 +1534,7 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
+tracing-error = { version = "0.2" }
 tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
@@ -1544,6 +1590,7 @@ webpki = { version = "0.22", default-features = false, features = ["std"] }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 whoami = { version = "1" }
+winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
 winnow = { version = "0.4" }
 wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
 wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
@@ -1552,7 +1599,7 @@ xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }
 yaml-rust = { version = "0.4", default-features = false }
 yansi = { version = "0.5", default-features = false }
-yasna = { version = "0.5", features = ["std", "time"] }
+yasna = { version = "0.5", features = ["bit-vec", "num-bigint", "std", "time"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }
 zstd = { version = "0.12" }
@@ -1560,6 +1607,7 @@ zstd-safe = { version = "6", default-features = false, features = ["arrays", "le
 zstd-sys = { version = "2", features = ["std"] }
 
 [target.aarch64-apple-darwin.dependencies]
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.4" }
@@ -1583,6 +1631,7 @@ once_cell = { version = "1", default-features = false, features = ["unstable"] }
 pprof = { version = "0.11", features = ["frame-pointer"] }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 security-framework = { version = "2" }
 security-framework-sys = { version = "2", default-features = false, features = ["OSX_10_9"] }
@@ -1596,6 +1645,7 @@ webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", de
 
 [target.aarch64-apple-darwin.build-dependencies]
 autotools = { version = "0.2", default-features = false }
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
 core-foundation = { version = "0.9", default-features = false }
 core-foundation-sys = { version = "0.8", default-features = false }
 cpp_demangle = { version = "0.4" }
@@ -1620,6 +1670,7 @@ pprof = { version = "0.11", features = ["frame-pointer"] }
 protobuf-src = { version = "1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 security-framework = { version = "2" }
 security-framework-sys = { version = "2", default-features = false, features = ["OSX_10_9"] }
@@ -1632,6 +1683,7 @@ symbolic-demangle = { version = "10", default-features = false, features = ["cpp
 webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
 cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
 debugid = { version = "0.8", default-features = false }
@@ -1642,6 +1694,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
@@ -1654,6 +1707,7 @@ pprof = { version = "0.11", features = ["frame-pointer"] }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
@@ -1665,8 +1719,10 @@ webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", de
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 autotools = { version = "0.2", default-features = false }
+bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false, features = ["std"] }
 cpp_demangle = { version = "0.4" }
 cpufeatures = { version = "0.2", default-features = false }
+curve25519-dalek-derive = { version = "0.1", default-features = false }
 debugid = { version = "0.8", default-features = false }
 findshlibs = { version = "0.10", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
@@ -1675,6 +1731,7 @@ jemalloc-ctl = { version = "0.5" }
 jemalloc-sys = { version = "0.5" }
 libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
 linux-raw-sys-468e82937335b1c9 = { package = "linux-raw-sys", version = "0.3", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+linux-raw-sys-9fbad63c4bcf4a8f = { package = "linux-raw-sys", version = "0.4", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 linux-raw-sys-c65f7effa3be6d31 = { package = "linux-raw-sys", version = "0.1", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
 memmap2 = { version = "0.5", default-features = false }
 memoffset-3b31131e45eafb45 = { package = "memoffset", version = "0.6" }
@@ -1688,6 +1745,7 @@ protobuf-src = { version = "1", default-features = false }
 rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
 raw-cpuid = { version = "10", default-features = false }
 rustix-4e55305914c60c55 = { package = "rustix", version = "0.36", features = ["fs"] }
+rustix-d585fab2519d2d1 = { package = "rustix", version = "0.38", features = ["fs"] }
 rustix-d736d0ac4424f0f1 = { package = "rustix", version = "0.37", features = ["termios"] }
 signal-hook = { version = "0.3" }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_7", "support-v0_8"] }
@@ -1715,10 +1773,10 @@ schannel = { version = "0.1", default-features = false }
 str-buf = { version = "1", default-features = false }
 webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "minwinbase", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming"] }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }
@@ -1731,6 +1789,7 @@ cpufeatures = { version = "0.2", default-features = false }
 crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
 crossterm_winapi-c38e5c1d305a1b54 = { package = "crossterm_winapi", version = "0.8", default-features = false }
 ctor = { version = "0.1", default-features = false }
+curve25519-dalek-derive = { version = "0.1", default-features = false }
 encode_unicode-468e82937335b1c9 = { package = "encode_unicode", version = "0.3" }
 error-code = { version = "2", default-features = false }
 ipnet = { version = "2" }
@@ -1744,10 +1803,10 @@ str-buf = { version = "1", default-features = false }
 vcpkg = { version = "0.2", default-features = false }
 webpki-roots-2ffb4c3fe830441c = { package = "webpki-roots", version = "0.25", default-features = false }
 widestring = { version = "0.5" }
-winapi = { version = "0.3", default-features = false, features = ["basetsd", "cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "memoryapi", "minwinbase", "minwindef", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi = { version = "0.3", default-features = false, features = ["cfg", "combaseapi", "consoleapi", "errhandlingapi", "evntrace", "fileapi", "handleapi", "heapapi", "ifdef", "impl-default", "in6addr", "inaddr", "ioapiset", "iphlpapi", "knownfolders", "libloaderapi", "lmaccess", "lmapibuf", "lmcons", "minwinbase", "namedpipeapi", "netioapi", "ntdef", "ntlsa", "ntsecapi", "ntstatus", "objbase", "objidl", "oleauto", "pdh", "powerbase", "processenv", "processthreadsapi", "profileapi", "psapi", "rpcdce", "securitybaseapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "timezoneapi", "wbemcli", "winbase", "wincon", "windef", "winerror", "winioctl", "winnt", "winsock2", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
 winapi-util = { version = "0.1", default-features = false }
 windows-sys-b32c9ddb6d93a9d2 = { package = "windows-sys", version = "0.42", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse"] }
-windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming"] }
+windows-sys-c8eced492e86ede7 = { package = "windows-sys", version = "0.48", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Networking_WinSock", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Registry", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
 windows-targets = { version = "0.48", default-features = false }
 windows_x86_64_msvc-b32c9ddb6d93a9d2 = { package = "windows_x86_64_msvc", version = "0.42", default-features = false }
 windows_x86_64_msvc-c8eced492e86ede7 = { package = "windows_x86_64_msvc", version = "0.48", default-features = false }

@@ -28,7 +28,6 @@ const providerToLabel: Record<ZkProvider, string> = {
 	google: 'Google',
 	twitch: 'Twitch',
 	facebook: 'Facebook',
-	microsoft: 'Microsoft',
 };
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink

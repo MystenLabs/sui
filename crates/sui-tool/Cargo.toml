@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+rand = "0.8.5"
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 colored.workspace = true
@@ -27,6 +28,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
+object_store.workspace = true
 indicatif.workspace = true
 
 anemo-cli.workspace = true

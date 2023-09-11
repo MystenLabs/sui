@@ -109,7 +109,8 @@ impl ObjectStoreConfig {
         info!(bucket=?self.bucket, object_store_type="S3", "Object Store");
 
         let mut builder = AmazonS3Builder::new()
-            .with_allow_http(self.aws_allow_http)
+            .with_allow_http(true)
+            .with_virtual_hosted_style_request(true)
             .with_imdsv1_fallback();
 
         if let Some(region) = &self.aws_region {
