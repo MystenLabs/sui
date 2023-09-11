@@ -119,7 +119,7 @@ impl GasEffects {
             .data_provider()
             .get_object_with_options(self.object_id, SuiObjectDataOptions::full_content())
             .await?;
-        Ok(Some(gas_obj))
+        Ok(gas_obj)
     }
 
     async fn gas_summary(&self) -> Option<GasCostSummary> {

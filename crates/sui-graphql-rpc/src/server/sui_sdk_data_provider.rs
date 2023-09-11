@@ -176,12 +176,16 @@ impl DataProvider for SuiClient {
         &self,
         object_id: NativeObjectID,
         options: SuiObjectDataOptions,
-    ) -> Result<Object> {
+    ) -> Result<Option<Object>> {
         let obj = self
             .read_api()
             .get_object_with_options(object_id, options)
             .await?;
-        Ok(convert_obj(&obj.data.unwrap()))
+
+        if obj.error.is_some() || obj.data.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(convert_obj(&obj.data.unwrap())))
     }
 
     async fn multi_get_object_with_options(
@@ -193,10 +197,20 @@ impl DataProvider for SuiClient {
             .read_api()
             .multi_get_object_with_options(object_ids, options)
             .await?;
-        let objs = obj_responses
-            .iter()
-            .map(|x| convert_obj(x.data.as_ref().unwrap()))
-            .collect();
+
+        let mut objs = Vec::new();
+
+        for n in obj_responses.iter() {
+            if n.error.is_some() {
+                return Err(Error::MultiGet(n.error.as_ref().unwrap().to_string()).extend());
+            } else if n.data.is_none() {
+                return Err(Error::Internal(
+                    "Expected either data or error fields, received neither".to_string(),
+                )
+                .extend());
+            }
+            objs.push(convert_obj(n.data.as_ref().unwrap()));
+        }
         Ok(objs)
     }
 

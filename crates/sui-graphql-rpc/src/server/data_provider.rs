@@ -31,7 +31,7 @@ pub(crate) trait DataProvider: Send + Sync {
         &self,
         object_id: ObjectID,
         options: SuiObjectDataOptions,
-    ) -> Result<Object>;
+    ) -> Result<Option<Object>>;
 
     async fn multi_get_object_with_options(
         &self,
