@@ -3,7 +3,7 @@
 
 import type { Dispatch, ReactNode } from 'react';
 import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
-import type { Wallet } from '@mysten/wallet-standard';
+import type { Wallet, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { getWallets } from '@mysten/wallet-standard';
 import { localStorageAdapter } from '../utils/storageAdapters.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
@@ -24,7 +24,7 @@ interface WalletProviderProps {
 	storageKey?: string;
 
 	/** A list of features that are required for the dApp to function. This filters the list of wallets presented to users when selecting a wallet to connect from, ensuring that only wallets that meet the dApps requirements can connect. */
-	requiredFeatures?: string[];
+	requiredFeatures?: (keyof WalletWithRequiredFeatures['features'])[];
 
 	/** Enables automatically reconnecting to the most recently used wallet account upon mounting. */
 	autoConnect?: boolean;
