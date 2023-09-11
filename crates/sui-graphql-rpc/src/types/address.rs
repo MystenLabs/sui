@@ -3,7 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
-use crate::server::context_ext::DataProviderContextExt;
+use crate::context_data::context_ext::DataProviderContextExt;
 
 use super::name_service::NameService;
 use super::{

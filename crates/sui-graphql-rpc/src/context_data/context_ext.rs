@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::server::data_provider::DataProvider;
 use async_graphql::Context;
+
+use super::data_provider::DataProvider;
 
 pub(crate) trait DataProviderContextExt {
     fn data_provider(&self) -> &dyn DataProvider;
