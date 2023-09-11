@@ -9,7 +9,7 @@ Quick reference on best practices for Sui Network developers.
 ### General
 
 - Read about [package upgrades](https://docs.sui.io/build/package-upgrades) and write upgrade-friendly code:
-    - Packages are immutable, so buggy package code can be called forever. Add protections at the object level instead.
+    - Packages are immutable, so anyone can call buggy package code forever. Add protections at the object level instead.
     - If you upgrade a package `P` to `P'`, other packages and clients that depend on `P` will continue using `P`, not auto-update to `P'`. Both dependent packages and client code must be explicitly updated to point at `P'`.
     - Packages that expect to be extended by dependent packages can avoid breaking their extensions with each upgrade by providing a standard (unchanging) interface that all versions conform to. See this example for [message sending](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move) across a bridge from Wormhole. Extension packages that produce messages to send can use [`prepare_message`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L68-L90) from any version of the Wormhole package to produce a [`MessageTicket`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L52-L66) while client code to send the message must pass that `MessageTicket` into [`publish_message`](https://github.com/wormhole-foundation/wormhole/blob/74dea3bf22f0e27628b432c3e9eac05c85786a99/sui/wormhole/sources/publish_message.move#L92-L152) in the latest version of the package.
     - `public` function signatures cannot be deleted or changed, but `public(friend)` functions can. Use `public(friend)` or private visibility liberally unless you are exposing library functions that will live forever.
@@ -31,6 +31,34 @@ Quick reference on best practices for Sui Network developers.
 - Use [`sui::test_scenario`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) to mimic multi-transaction, multi-sender test scenarios.
 - Use the [`sui::test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move#L5) module for better test error messages via `assert_eq`, debug printing via `print`, and test-only destruction via `destroy`.
 - Use `sui move test --coverage` to compute code coverage information for your tests, and `sui move coverage source --module <name>` to see uncovered lines highlighted in red. Push coverage all the way to 100% if feasible.
+
+#### Declaring test modules as friends
+
+Consider the following module:
+
+```move
+module package::mod {
+    fun foo() {}
+}
+```
+
+If you don't intend the function `mod::foo()` to be `public`, but you want the ability to test it outside
+of `package::mod`, then create a test module and declare it a `friend` of the function's module in `package::mod`.
+
+To make the test function available, change the `mod::foo()` function declaration to `public(friend)`, as in the
+following example:
+
+```move
+module package::mod {
+    friend package::test_mod;
+
+    public(friend) fun foo() {}
+}
+```
+
+As mentioned previously, you can always change the signatures of `public(friend)` functions in future package versions.
+
+When using commands such as `sui move build` and `sui move coverage` with these modules, you must include the `--test` flag. See [Build and Test the Sui Move Package](move/build-test.md#building-your-package) for more information on building packages.
 
 # Apps
 
