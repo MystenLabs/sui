@@ -95,10 +95,10 @@ impl GasCostSummary {
 }
 
 // Struct mirroring GraphQL object contains fields needed to produce GraphQL object
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct GasEffects {
-    gcs: GasCostSummary,
-    object_id: ObjectID,
+    pub gcs: GasCostSummary,
+    pub object_id: ObjectID,
 }
 
 // From trait to convert data into GasEffects
