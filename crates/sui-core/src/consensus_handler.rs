@@ -5,9 +5,7 @@ use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithHash,
 };
 use crate::authority::AuthorityMetrics;
-use crate::checkpoints::{
-    CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
-};
+use crate::checkpoints::{CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo};
 use std::cmp::Ordering;
 
 use crate::scoring_decision::update_low_scoring_authorities;
@@ -39,7 +37,7 @@ use sui_types::messages_consensus::{
 };
 use tracing::{debug, error, info, instrument};
 
-pub struct ConsensusHandler<T> {
+pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
     epoch_store: Arc<AuthorityPerEpochStore>,
@@ -47,7 +45,7 @@ pub struct ConsensusHandler<T> {
     /// already processed transactions and also act as a chain consistency check by calculating and storing a
     /// hash chain.
     last_seen: ExecutionIndicesWithHash,
-    checkpoint_service: Arc<CheckpointService>,
+    checkpoint_service: Arc<C>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     object_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
@@ -64,10 +62,10 @@ pub struct ConsensusHandler<T> {
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
-impl<T> ConsensusHandler<T> {
+impl<T, C> ConsensusHandler<T, C> {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
-        checkpoint_service: Arc<CheckpointService>,
+        checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
         object_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
@@ -135,7 +133,9 @@ fn update_hash(
 }
 
 #[async_trait]
-impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
+impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> ExecutionState
+    for ConsensusHandler<T, C>
+{
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
@@ -474,7 +474,7 @@ impl AsyncTransactionScheduler {
     }
 }
 
-impl<T> ConsensusHandler<T> {
+impl<T, C> ConsensusHandler<T, C> {
     fn consensus_commit_prologue_transaction(
         &self,
         round: u64,
@@ -643,6 +643,15 @@ impl SequencedConsensusTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::checkpoints::CheckpointServiceNoop;
+    use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
+    use narwhal_config::AuthorityIdentifier;
+    use narwhal_test_utils::latest_protocol_version;
+    use narwhal_types::{
+        Batch, Certificate, CommittedSubDag, Header, HeaderV1Builder, ReputationScores,
+    };
+    use prometheus::Registry;
     use shared_crypto::intent::Intent;
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
@@ -650,9 +659,112 @@ mod tests {
     use sui_types::messages_consensus::{
         AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
     };
+    use sui_types::object::Object;
+    use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
     use sui_types::transaction::{
         CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     };
+
+    #[tokio::test]
+    pub async fn test_consensus_handler() {
+        // GIVEN
+        let mut objects = test_gas_objects();
+        objects.push(Object::shared_for_testing());
+
+        let latest_protocol_config = &latest_protocol_version();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_objects(objects.clone())
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let new_epoch_start_state = epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
+        let mut consensus_handler = ConsensusHandler::new(
+            epoch_store,
+            Arc::new(CheckpointServiceNoop {}),
+            state.transaction_manager().clone(),
+            state.db(),
+            Arc::new(ArcSwap::default()),
+            committee.clone(),
+            Arc::new(AuthorityMetrics::new(&Registry::new())),
+        );
+
+        // AND
+        // Create a transaction
+        let transactions = test_certificates(&state).await;
+        let mut certificates = Vec::new();
+        let mut batches = Vec::new();
+
+        for transaction in transactions.iter() {
+            let transaction_bytes: Vec<u8> = bcs::to_bytes(
+                &ConsensusTransaction::new_certificate_message(&state.name, transaction.clone()),
+            )
+            .unwrap();
+
+            let batch = Batch::new(vec![transaction_bytes], latest_protocol_config);
+
+            batches.push(vec![batch.clone()]);
+
+            // AND make batch as part of a commit
+            let header = HeaderV1Builder::default()
+                .author(AuthorityIdentifier(0))
+                .round(5)
+                .epoch(0)
+                .parents(BTreeSet::new())
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap();
+
+            let certificate =
+                Certificate::new_unsigned(&committee, Header::V1(header), vec![]).unwrap();
+
+            certificates.push(certificate);
+        }
+
+        // AND create the consensus output
+        let consensus_output = ConsensusOutput {
+            sub_dag: Arc::new(CommittedSubDag::new(
+                certificates.clone(),
+                certificates[0].clone(),
+                10,
+                ReputationScores::default(),
+                None,
+            )),
+            batches,
+        };
+
+        // AND processing the consensus output once
+        consensus_handler
+            .handle_consensus_output(consensus_output.clone())
+            .await;
+
+        // AND capturing the index
+        let last_seen_1 = consensus_handler.last_seen.clone();
+        assert_eq!(
+            last_seen_1.index.transaction_index,
+            transactions.len() as u64
+        );
+        assert_eq!(last_seen_1.index.sub_dag_index, 10_u64);
+        assert_eq!(last_seen_1.index.last_committed_round, 5_u64);
+
+        // WHEN processing the same output multiple times
+        // THEN the execution indices do not update
+        for _ in 0..2 {
+            consensus_handler
+                .handle_consensus_output(consensus_output.clone())
+                .await;
+            let last_seen_2 = consensus_handler.last_seen.clone();
+            assert_eq!(last_seen_1, last_seen_2);
+        }
+    }
 
     #[test]
     pub fn test_update_hash() {
