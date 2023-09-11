@@ -1,20 +1,20 @@
 [package]
-name = "sui-swarm-config"
-version = "0.0.0"
+name = "simulacrum"
+version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
 edition = "2021"
 
 [dependencies]
-anemo.workspace = true
 anyhow.workspace = true
+bcs.workspace = true
 fastcrypto.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+once_cell.workspace = true
 rand.workspace = true
 serde.workspace = true
-serde_with.workspace = true
-serde_yaml.workspace = true
-tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 
@@ -22,16 +22,13 @@ move-bytecode-utils.workspace = true
 narwhal-config.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
+sui-framework.workspace = true
+sui-keys.workspace = true
 sui-protocol-config.workspace = true
+sui-storage.workspace = true
 sui-types.workspace = true
 sui-genesis-builder.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
-
-[dev-dependencies]
-insta.workspace = true
-tempfile.workspace = true
-
 sui-execution.workspace = true
+sui-swarm-config.workspace = true
+sui-transaction-checks.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
