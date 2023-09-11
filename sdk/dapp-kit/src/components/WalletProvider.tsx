@@ -3,16 +3,21 @@
 
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useReducer } from 'react';
-import type { Wallet, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { getWallets } from '@mysten/wallet-standard';
+import type {
+	MinimallyRequiredFeatures,
+	Wallet,
+	WalletWithFeatures,
+	WalletWithRequiredFeatures,
+} from '@mysten/wallet-standard';
+import { getWallets, isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard';
 import { localStorageAdapter } from '../utils/storageAdapters.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
 import { walletReducer } from '../reducers/walletReducer.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
 import { WalletContext } from '../contexts/WalletContext.js';
-import { sortWallets } from '../utils/walletUtils.js';
 import { AutoConnectWallet } from './AutoConnectWallet.js';
+
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
 	preferredWallets?: string[];
@@ -100,4 +105,25 @@ export function WalletProvider({
 			)}
 		</WalletContext.Provider>
 	);
+}
+
+function sortWallets<AdditionalFeatures extends Wallet['features']>(
+	wallets: readonly Wallet[],
+	preferredWallets: string[],
+	requiredFeatures?: (keyof AdditionalFeatures)[],
+) {
+	const suiWallets = wallets.filter(
+		(wallet): wallet is WalletWithFeatures<MinimallyRequiredFeatures & AdditionalFeatures> =>
+			isWalletWithRequiredFeatureSet(wallet, requiredFeatures),
+	);
+
+	return [
+		// Preferred wallets, in order:
+		...(preferredWallets
+			.map((name) => suiWallets.find((wallet) => wallet.name === name))
+			.filter(Boolean) as WalletWithFeatures<MinimallyRequiredFeatures & AdditionalFeatures>[]),
+
+		// Wallets in default order:
+		...suiWallets.filter((wallet) => !preferredWallets.includes(wallet.name)),
+	];
 }
