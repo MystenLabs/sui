@@ -177,3 +177,17 @@ pub(crate) struct TransactionObjectEntry {
     pub(crate) input_kind: Option<InputObjectKind>,
     pub(crate) object_status: Option<ObjectStatus>,
 }
+
+// A move call expressed as a package, module and function.
+#[derive(Serialize)]
+pub(crate) struct MoveCallEntry {
+    // indexes
+    pub(crate) transaction_digest: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // move call info
+    pub(crate) package: String,
+    pub(crate) module: String,
+    pub(crate) function: String,
+}
