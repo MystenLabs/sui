@@ -17,5 +17,5 @@ $$;
 CREATE TABLE packages 
 (
     package_id                   bytea      PRIMARY KEY,
-    modules       bcs_bytes[] NOT NULL
+    modules                      bcs_bytes[] NOT NULL
 );

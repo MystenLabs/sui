@@ -18,4 +18,4 @@ CREATE TABLE objects (
 
 -- 1: Address, 2: Object, see types_v2.rs
 CREATE INDEX objects_owner ON objects (owner_type, owner_id) WHERE owner_type BETWEEN 1 AND 2 AND owner_id IS NOT NULL;
-CREATE INDEX objects_coin ON objects USING HASH (coin_type) WHERE coin_type IS NOT NULL;
+CREATE INDEX objects_coin ON objects (owner_id, coin_type) WHERE coin_type IS NOT NULL AND owner_type = 1;

@@ -13,6 +13,6 @@ CREATE TABLE events
     PRIMARY KEY(tx_sequence_number, event_sequence_number)
 );
 
-CREATE INDEX events_sender ON events USING HASH (sender);
+CREATE INDEX events_sender ON events (sender);
 CREATE INDEX events_package_module ON events (package, module);
-CREATE INDEX events_event_type ON events USING HASH (event_type);
+CREATE INDEX events_event_type ON events (event_type);

@@ -13,5 +13,6 @@ CREATE TABLE transactions (
 
 CREATE INDEX transactions_transaction_digest ON transactions USING HASH (transaction_digest);
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);
+
 -- only create index for system transactions (0). See types_v2.rs
-CREATE INDEX transactions_transaction_kind ON transactions USING HASH (transaction_kind) WHERE transaction_kind <> 0;
+CREATE INDEX transactions_transaction_kind ON transactions (transaction_kind) WHERE transaction_kind <> 0;
