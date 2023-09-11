@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
@@ -24,9 +24,11 @@ use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, object::Owner};
 use tokio::time::Instant;
 
+use ::object_store::ObjectMeta;
 use anyhow::anyhow;
 use eyre::ContextCompat;
-use indicatif::{ProgressBar, ProgressStyle};
+use futures::{StreamExt, TryStreamExt};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use prometheus::Registry;
 use sui_archival::reader::{ArchiveReader, ArchiveReaderMetrics};
 use sui_archival::{verify_archive_with_checksums, verify_archive_with_genesis_config};
@@ -34,9 +36,11 @@ use sui_config::node::ArchiveReaderConfig;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
 use sui_core::authority::AuthorityStore;
 use sui_core::checkpoints::CheckpointStore;
+use sui_core::db_checkpoint_handler::SUCCESS_MARKER;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::storage::RocksDbStore;
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::util::{copy_file, get_path};
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
     TransactionStatus,
@@ -615,6 +619,317 @@ pub async fn restore_from_db_checkpoint(
     db_checkpoint_path: &Path,
 ) -> Result<(), anyhow::Error> {
     copy_dir_all(db_checkpoint_path, config.db_path(), vec![])?;
+    Ok(())
+}
+
+pub async fn download_db_snapshot(
+    path: &Path,
+    epoch: u32,
+    genesis: &Path,
+    snapshot_store_config: ObjectStoreConfig,
+    archive_store_config: ObjectStoreConfig,
+    skip_checkpoints: bool,
+    skip_indexes: bool,
+    num_parallel_downloads: usize,
+) -> Result<(), anyhow::Error> {
+    let remote_store = snapshot_store_config.make()?;
+    let entries = remote_store.list_with_delimiter(None).await?;
+    let epoch_path = format!("epoch_{}", epoch);
+    let epoch_dir = entries
+        .common_prefixes
+        .iter()
+        .find(|entry| {
+            entry
+                .filename()
+                .map(|filename| filename == epoch_path)
+                .unwrap_or(false)
+        })
+        .ok_or(anyhow!("Epoch dir doesn't exist on the remote store"))?;
+    let success_marker = epoch_dir.child(SUCCESS_MARKER);
+    let _get_result = remote_store.get(&success_marker).await?;
+    let store_entries = remote_store
+        .list_with_delimiter(Some(&get_path(&format!("{}/store", epoch_path))))
+        .await?;
+    let perpetual_dir = store_entries
+        .common_prefixes
+        .iter()
+        .find(|entry| {
+            entry
+                .filename()
+                .map(|filename| filename == "perpetual")
+                .unwrap_or(false)
+        })
+        .ok_or(anyhow!(
+            "Perpetual dir doesn't exist under the remote epoch dir"
+        ))?;
+    let entries = remote_store
+        .list_with_delimiter(Some(&get_path(&epoch_path)))
+        .await?;
+    let committee_dir = entries
+        .common_prefixes
+        .iter()
+        .find(|entry| {
+            entry
+                .filename()
+                .map(|filename| filename == "epochs")
+                .unwrap_or(false)
+        })
+        .ok_or(anyhow!(
+            "Epochs dir doesn't exist under the remote epoch dir"
+        ))?;
+    let mut files: Vec<ObjectMeta> = vec![];
+    files.extend(
+        remote_store
+            .list_with_delimiter(Some(committee_dir))
+            .await?
+            .objects,
+    );
+    files.extend(
+        remote_store
+            .list_with_delimiter(Some(perpetual_dir))
+            .await?
+            .objects,
+    );
+    if !skip_checkpoints {
+        let checkpoints_dir = entries
+            .common_prefixes
+            .iter()
+            .find(|entry| {
+                entry
+                    .filename()
+                    .map(|filename| filename == "checkpoints")
+                    .unwrap_or(false)
+            })
+            .ok_or(anyhow!(
+                "Checkpoints dir doesn't exist under the remote epoch dir"
+            ))?;
+        files.extend(
+            remote_store
+                .list_with_delimiter(Some(checkpoints_dir))
+                .await?
+                .objects,
+        );
+    }
+    if !skip_indexes {
+        let indexes_dir = entries
+            .common_prefixes
+            .iter()
+            .find(|entry| {
+                entry
+                    .filename()
+                    .map(|filename| filename == "indexes")
+                    .unwrap_or(false)
+            })
+            .ok_or(anyhow!(
+                "Indexes dir doesn't exist under the remote epoch dir"
+            ))?;
+        files.extend(
+            remote_store
+                .list_with_delimiter(Some(indexes_dir))
+                .await?
+                .objects,
+        );
+    }
+    let total_bytes: usize = files.iter().map(|f| f.size).sum();
+    info!(
+        "Total bytes to download: {}MiB",
+        total_bytes as f64 / (1024 * 1024) as f64
+    );
+    let local_store = ObjectStoreConfig {
+        object_store: Some(ObjectStoreType::File),
+        directory: Some(path.to_path_buf()),
+        ..Default::default()
+    }
+    .make()?;
+    let m = MultiProgress::new();
+    let cloned_m = m.clone();
+    let path = path.to_path_buf();
+    let cloned_path = path.clone();
+    let genesis = genesis.to_path_buf();
+    let highest_pruned_checkpoint = Arc::new(AtomicU64::new(0));
+    let summaries_handle = if skip_checkpoints {
+        let cloned_highest_pruned_checkpoint = highest_pruned_checkpoint.clone();
+        Some(tokio::spawn(async move {
+            let genesis = Genesis::load(genesis).unwrap();
+            let genesis_committee = genesis.committee()?;
+            let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
+                path.join(format!("epoch_{}", epoch)).join("checkpoints"),
+                MetricConf::default(),
+                None,
+                None,
+            ));
+            let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
+            let committee_store = Arc::new(CommitteeStore::new(
+                path.join("epochs"),
+                &genesis_committee,
+                None,
+            ));
+            let store = AuthorityStore::open(
+                perpetual_db,
+                &genesis,
+                &committee_store,
+                usize::MAX,
+                false,
+                &Registry::default(),
+            )
+            .await?;
+            let state_sync_store =
+                RocksDbStore::new(store, committee_store, checkpoint_store.clone());
+            // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
+            if checkpoint_store
+                .get_checkpoint_by_digest(genesis.checkpoint().digest())
+                .unwrap()
+                .is_none()
+            {
+                checkpoint_store
+                    .insert_checkpoint_contents(genesis.checkpoint_contents().clone())?;
+                checkpoint_store.insert_verified_checkpoint(&genesis.checkpoint())?;
+                checkpoint_store.update_highest_synced_checkpoint(&genesis.checkpoint())?;
+            }
+            // set up download of checkpoint summaries
+            let config = ArchiveReaderConfig {
+                remote_store_config: archive_store_config,
+                download_concurrency: NonZeroUsize::new(num_parallel_downloads).unwrap(),
+                use_for_pruning_watermark: false,
+            };
+            let metrics = ArchiveReaderMetrics::new(&Registry::default());
+            let archive_reader = ArchiveReader::new(config, &metrics)?;
+            archive_reader.sync_manifest_once().await?;
+            let manifest = archive_reader.get_manifest().await?;
+            let last_checkpoint = manifest.next_checkpoint_after_epoch(epoch as u64);
+            let progress_bar = cloned_m.add(
+                ProgressBar::new(last_checkpoint).with_style(
+                    ProgressStyle::with_template(
+                        "[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})",
+                    )
+                    .unwrap(),
+                ),
+            );
+            let cloned_progress_bar = progress_bar.clone();
+            let checkpoint_counter = Arc::new(AtomicU64::new(0));
+            let instant = Instant::now();
+
+            let cloned_counter = checkpoint_counter.clone();
+            let latest_checkpoint = checkpoint_store
+                .get_highest_synced_checkpoint()?
+                .map(|c| c.sequence_number)
+                .unwrap_or(0);
+            let start = latest_checkpoint
+                .checked_add(1)
+                .context("Checkpoint overflow")
+                .map_err(|_| anyhow!("Failed to increment checkpoint"))?;
+            tokio::spawn(async move {
+                loop {
+                    if cloned_progress_bar.is_finished() {
+                        break;
+                    }
+                    let num_summaries = cloned_counter.load(Ordering::Relaxed);
+                    let total_checkpoints_per_sec =
+                        num_summaries as f64 / instant.elapsed().as_secs_f64();
+                    cloned_progress_bar.set_position(start + num_summaries);
+                    cloned_progress_bar
+                        .set_message(format!("checkpoints/s: {}", total_checkpoints_per_sec));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
+            archive_reader
+                .read_summaries(
+                    state_sync_store,
+                    start..last_checkpoint,
+                    checkpoint_counter,
+                    false,
+                )
+                .await?;
+            let checkpoint = checkpoint_store
+                .get_checkpoint_by_sequence_number(last_checkpoint - 1)?
+                .ok_or(anyhow!("Failed to read last checkpoint"))?;
+            checkpoint_store.update_highest_verified_checkpoint(&checkpoint)?;
+            checkpoint_store.update_highest_synced_checkpoint(&checkpoint)?;
+            checkpoint_store.update_highest_executed_checkpoint(&checkpoint)?;
+            checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
+            progress_bar.finish_with_message("Checkpoint summary download is complete");
+            cloned_highest_pruned_checkpoint.store(last_checkpoint, Ordering::Relaxed);
+            Ok::<(), anyhow::Error>(())
+        }))
+    } else {
+        None
+    };
+    let snapshot_handle = tokio::spawn(async move {
+        let progress_bar = m.add(
+            ProgressBar::new(files.len() as u64).with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} files done\n({msg})",
+                )
+                .unwrap(),
+            ),
+        );
+        let cloned_progress_bar = progress_bar.clone();
+        let mut instant = Instant::now();
+        let downloaded_bytes = AtomicUsize::new(0);
+        let file_counter = Arc::new(AtomicUsize::new(0));
+        futures::stream::iter(files.iter())
+            .map(|file| {
+                let local_store = local_store.clone();
+                let remote_store = remote_store.clone();
+                let counter_cloned = file_counter.clone();
+                async move {
+                    counter_cloned.fetch_add(1, Ordering::Relaxed);
+                    copy_file(
+                        file.location.clone(),
+                        file.location.clone(),
+                        remote_store.clone(),
+                        local_store.clone(),
+                    )
+                    .await?;
+                    Ok::<(::object_store::path::Path, usize), anyhow::Error>((
+                        file.location.clone(),
+                        file.size,
+                    ))
+                }
+            })
+            .boxed()
+            .buffer_unordered(num_parallel_downloads)
+            .try_for_each(|(path, bytes)| {
+                file_counter.fetch_sub(1, Ordering::Relaxed);
+                downloaded_bytes.fetch_add(bytes, Ordering::Relaxed);
+                cloned_progress_bar.inc(1);
+                cloned_progress_bar.set_message(format!(
+                    "Download speed: {} MiB/s, file: {}, #downloads_in_progress: {}",
+                    downloaded_bytes.load(Ordering::Relaxed) as f64
+                        / (1024 * 1024) as f64
+                        / instant.elapsed().as_secs_f64(),
+                    path,
+                    file_counter.load(Ordering::Relaxed)
+                ));
+                instant = Instant::now();
+                downloaded_bytes.store(0, Ordering::Relaxed);
+                futures::future::ready(Ok(()))
+            })
+            .await?;
+        progress_bar.finish_with_message("Snapshot file download is complete");
+        Ok::<(), anyhow::Error>(())
+    });
+    let mut tasks: Vec<_> = vec![Box::pin(snapshot_handle)];
+    if let Some(summary_handle) = summaries_handle {
+        tasks.push(Box::pin(summary_handle));
+    }
+    join_all(tasks).await;
+    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+        &cloned_path.join(format!("epoch_{}", epoch)).join("store"),
+        None,
+    ));
+    let highest_pruned_checkpoint = highest_pruned_checkpoint.load(Ordering::Relaxed);
+    if highest_pruned_checkpoint > 0 {
+        perpetual_db.set_highest_pruned_checkpoint_without_wb(highest_pruned_checkpoint)?;
+    }
+    let store_dir = cloned_path.join("store");
+    if store_dir.exists() {
+        fs::remove_dir_all(&store_dir)?;
+    }
+    let epochs_dir = cloned_path.join("epochs");
+    if epochs_dir.exists() {
+        fs::remove_dir_all(&epochs_dir)?;
+    }
     Ok(())
 }
 

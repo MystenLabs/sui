@@ -353,7 +353,12 @@ impl AuthorityStorePruner {
 
             let content = checkpoint_store
                 .get_checkpoint_contents(&checkpoint.content_digest)?
-                .ok_or_else(|| anyhow::anyhow!("checkpoint content data is missing"))?;
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "checkpoint content data is missing: {}",
+                        checkpoint.sequence_number
+                    )
+                })?;
             let effects = perpetual_db
                 .effects
                 .multi_get(content.iter().map(|tx| tx.effects))?;

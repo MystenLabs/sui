@@ -1,0 +1,43 @@
+[package]
+name = "sui-aws-orchestrator"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+aws-sdk-ec2.workspace = true
+aws-smithy-http.workspace = true
+aws-smithy-runtime-api.workspace = true
+russh.workspace = true
+russh-keys.workspace = true
+aws-config.workspace = true
+color-eyre.workspace = true
+glob.workspace = true
+clap.workspace = true
+eyre.workspace = true
+prettytable-rs.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+reqwest.workspace = true
+async-trait.workspace = true
+crossterm.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["full"] }
+prometheus-parse.workspace = true
+
+sui-config = { path = "../sui-config" }
+sui-types = { path = "../sui-types" }
+sui-node = { path = "../sui-node" }
+sui-swarm-config =  { path = "../sui-swarm-config" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tempfile = "3.6.0"
+
+[[bin]]
+name = "sui-aws-orchestrator"
+path = "src/main.rs"

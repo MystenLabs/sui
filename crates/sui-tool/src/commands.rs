@@ -3,11 +3,12 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, VerboseObjectOutput,
+    download_db_snapshot, get_object, get_transaction_block, make_clients,
+    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
+    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use std::env;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
@@ -19,7 +20,7 @@ use clap::*;
 use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -200,7 +201,33 @@ pub enum ToolCommand {
         db_checkpoint_path: PathBuf,
     },
 
-    #[command(name = "replay")]
+    #[clap(name = "download-db-snapshot")]
+    DownloadDBSnapshot {
+        #[clap(long = "epoch")]
+        epoch: u32,
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+        #[clap(long = "path", default_value = "/tmp")]
+        path: PathBuf,
+        // skip downloading checkpoints dir
+        #[clap(long = "skip-checkpoints")]
+        skip_checkpoints: bool,
+        // skip downloading indexes dir
+        #[clap(long = "skip-indexes")]
+        skip_indexes: bool,
+        #[clap(long = "num-parallel-downloads", default_value = "2")]
+        num_parallel_downloads: usize,
+        #[clap(long = "snapshot-bucket", default_value = "mysten-mainnet-snapshots")]
+        snapshot_bucket: String,
+        #[clap(long = "snapshot-bucket-type", default_value = "s3")]
+        snapshot_bucket_type: ObjectStoreType,
+        #[clap(long = "archive-bucket", default_value = "mysten-mainnet-archives")]
+        archive_bucket: String,
+        #[clap(long = "archive-bucket-type", default_value = "s3")]
+        archive_bucket_type: ObjectStoreType,
+    },
+
+    #[clap(name = "replay")]
     Replay {
         #[arg(long = "rpc")]
         rpc_url: Option<String>,
@@ -385,6 +412,122 @@ impl ToolCommand {
             } => {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
+            }
+            ToolCommand::DownloadDBSnapshot {
+                epoch,
+                genesis,
+                path,
+                skip_checkpoints,
+                skip_indexes,
+                num_parallel_downloads,
+                snapshot_bucket,
+                snapshot_bucket_type,
+                archive_bucket,
+                archive_bucket_type,
+            } => {
+                let snapshot_store_config = match snapshot_bucket_type {
+                    ObjectStoreType::S3 => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: Some(snapshot_bucket),
+                            aws_access_key_id: Some(env::var(
+                                "AWS_SNAPSHOT_ACCESS_KEY_ID",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_ACCESS_KEY_ID as env variable"))?),
+                            aws_secret_access_key: Some(env::var(
+                                "AWS_SNAPSHOT_SECRET_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_SECRET_ACCESS_KEY as env variable"))?),
+                            aws_region: Some(env::var(
+                                "AWS_SNAPSHOT_REGION",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_REGION as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::GCS => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: Some(snapshot_bucket),
+                            google_service_account: Some(env::var(
+                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
+                            ).map_err(|_| anyhow!("Please provide GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::Azure => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: Some(snapshot_bucket),
+                            azure_storage_account: Some(env::var(
+                                "AZURE_SNAPSHOT_STORAGE_ACCOUNT",
+                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCOUNT as env variable"))?),
+                            azure_storage_access_key: Some(env::var(
+                                "AZURE_SNAPSHOT_STORAGE_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCESS_KEY as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                };
+
+                let archive_store_config = match archive_bucket_type {
+                    ObjectStoreType::S3 => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: Some(archive_bucket),
+                            aws_access_key_id: Some(env::var(
+                                "AWS_ARCHIVE_ACCESS_KEY_ID",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_ACCESS_KEY_ID as env variable"))?),
+                            aws_secret_access_key: Some(env::var(
+                                "AWS_ARCHIVE_SECRET_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_SECRET_ACCESS_KEY as env variable"))?),
+                            aws_region: Some(env::var(
+                                "AWS_ARCHIVE_REGION",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_REGION as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::GCS => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: Some(archive_bucket),
+                            google_service_account: Some(env::var(
+                                "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
+                            ).map_err(|_| anyhow!("Please provide GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::Azure => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: Some(archive_bucket),
+                            azure_storage_account: Some(env::var(
+                                "AZURE_ARCHIVE_STORAGE_ACCOUNT",
+                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCOUNT as env variable"))?),
+                            azure_storage_access_key: Some(env::var(
+                                "AZURE_ARCHIVE_STORAGE_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCESS_KEY as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                };
+
+                download_db_snapshot(
+                    &path,
+                    epoch,
+                    &genesis,
+                    snapshot_store_config,
+                    archive_store_config,
+                    skip_checkpoints,
+                    skip_indexes,
+                    num_parallel_downloads,
+                )
+                .await?;
             }
             ToolCommand::Replay {
                 rpc_url,

@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import type { IdentifierRecord } from '@mysten/wallet-standard';
+import type {
+	IdentifierRecord,
+	StandardConnectFeature,
+	StandardEventsFeature,
+	SuiFeatures,
+} from '@mysten/wallet-standard';
 import { ReadonlyWalletAccount, SUI_CHAINS } from '@mysten/wallet-standard';
 import type { Wallet } from '@mysten/wallet-standard';
 
@@ -40,7 +45,10 @@ export class MockWallet implements Wallet {
 		return [account];
 	}
 
-	get features(): IdentifierRecord<unknown> {
+	get features(): StandardConnectFeature &
+		StandardEventsFeature &
+		SuiFeatures &
+		IdentifierRecord<unknown> {
 		return {
 			'standard:connect': {
 				version: '1.0.0',

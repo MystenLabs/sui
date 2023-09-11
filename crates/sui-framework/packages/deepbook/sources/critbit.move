@@ -8,6 +8,7 @@ module deepbook::critbit {
 
     friend deepbook::clob;
     friend deepbook::clob_v2;
+    friend deepbook::order_query;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const ENotImplemented: u64 = 1;
