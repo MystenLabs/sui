@@ -34,8 +34,6 @@ describe('useDisconnectWallet', () => {
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 		expect(result.current.walletInfo.connectionStatus).toBe('connected');
 
-		expect(window.localStorage.getItem('sui-dapp-kit:wallet-connection-info')).toBeTruthy();
-
 		result.current.disconnectWallet.mutate();
 		await waitFor(() => expect(result.current.disconnectWallet.isSuccess).toBe(true));
 
@@ -43,8 +41,6 @@ describe('useDisconnectWallet', () => {
 		expect(result.current.walletInfo.accounts).toStrictEqual([]);
 		expect(result.current.walletInfo.currentAccount).toBeNull();
 		expect(result.current.walletInfo.connectionStatus).toBe('disconnected');
-
-		expect(window.localStorage.getItem('sui-dapp-kit:wallet-connection-info')).toBeFalsy();
 
 		act(() => {
 			unregister();

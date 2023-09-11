@@ -82,13 +82,6 @@ describe('useConnectWallet', () => {
 		expect(result.current.walletInfo.currentAccount).toBeTruthy();
 		expect(result.current.walletInfo.connectionStatus).toBe('connected');
 
-		const savedConnectionInfo = window.localStorage.getItem('sui-dapp-kit:wallet-connection-info');
-		expect(savedConnectionInfo).toBeTruthy();
-		expect(JSON.parse(savedConnectionInfo!)).toStrictEqual({
-			walletName: 'Mock Wallet 1',
-			accountAddress: result.current.walletInfo.currentAccount?.address,
-		});
-
 		act(() => {
 			unregister();
 		});

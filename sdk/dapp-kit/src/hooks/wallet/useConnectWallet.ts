@@ -9,10 +9,9 @@ import type {
 	WalletAccount,
 	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
-import { useWalletContext } from '../../components/WalletProvider.js';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
-import { setMostRecentWalletConnectionInfo } from '../../utils/walletUtils.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
+import { useWalletContext } from './useWalletContext.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
@@ -36,58 +35,20 @@ export function useConnectWallet({
 	mutationKey,
 	...mutationOptions
 }: UseConnectWalletMutationOptions = {}) {
-	const { currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
+	const { currentWallet, dispatch } = useWalletContext();
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async ({ wallet, accountAddress, ...standardConnectInput }) => {
+		mutationFn: async (connectWalletArgs) => {
 			if (currentWallet) {
 				throw new WalletAlreadyConnectedError(
-					currentWallet.name === wallet.name
-						? `The user is already connected to wallet ${wallet.name}.`
+					currentWallet.name === connectWalletArgs.wallet.name
+						? `The user is already connected to wallet ${connectWalletArgs.wallet.name}.`
 						: "You must disconnect the wallet you're currently connected to before connecting to a new wallet.",
 				);
 			}
-
-			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
-
-			try {
-				const connectResult = await wallet.features['standard:connect'].connect(
-					standardConnectInput,
-				);
-				const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
-
-				dispatch({
-					type: 'wallet-connected',
-					payload: { wallet, currentAccount: selectedAccount },
-				});
-
-				await setMostRecentWalletConnectionInfo({
-					storageAdapter,
-					storageKey,
-					walletName: wallet.name,
-					accountAddress: selectedAccount?.address,
-				});
-
-				return connectResult;
-			} catch (error) {
-				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
-				throw error;
-			}
+			return await connectWallet(dispatch, storageAdapter, storageKey, connectWalletArgs);
 		},
 		...mutationOptions,
 	});
-}
-
-function getSelectedAccount(connectedAccounts: readonly WalletAccount[], accountAddress?: string) {
-	if (connectedAccounts.length === 0) {
-		return null;
-	}
-
-	if (accountAddress) {
-		const selectedAccount = connectedAccounts.find((account) => account.address === accountAddress);
-		return selectedAccount ?? connectedAccounts[0];
-	}
-
-	return connectedAccounts[0];
 }

@@ -9,9 +9,10 @@ import { localStorageAdapter } from '../utils/storageAdapters.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
 import { walletReducer } from '../reducers/walletReducer.js';
 import type { WalletAction, WalletState } from '../reducers/walletReducer.js';
-import { sortWallets } from '../utils/walletUtils.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
+import { getMostRecentWalletConnectionInfo, sortWallets } from '../utils/walletUtils.js';
+import { useConnectWallet } from '../hooks/wallet/useConnectWallet.js';
 
 interface WalletProviderProps {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -35,16 +36,8 @@ interface WalletProviderProps {
 	children: ReactNode;
 }
 
-interface WalletProviderContext extends WalletState {
-	dispatch: Dispatch<WalletAction>;
-	storageAdapter: StorageAdapter;
-	storageKey: string;
-}
-
 const SUI_WALLET_NAME = 'Sui Wallet';
 const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
-
-const WalletContext = createContext<WalletProviderContext | null>(null);
 
 export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
@@ -52,6 +45,7 @@ export function WalletProvider({
 	storageAdapter = localStorageAdapter,
 	storageKey = DEFAULT_STORAGE_KEY,
 	enableUnsafeBurner = false,
+	autoConnect = false,
 	children,
 }: WalletProviderProps) {
 	const walletsApi = getWallets();
@@ -95,19 +89,16 @@ export function WalletProvider({
 
 	// Memo-ize the context value so we don't trigger un-necessary re-renders from
 	// ancestor components higher in the component tree.
-	const contextValue = useMemo(
-		() => ({ ...walletState, storageAdapter, storageKey, dispatch }),
-		[storageAdapter, storageKey, walletState],
+	const contextValue = useMemo(() => ({ ...walletState, dispatch }), [walletState]);
+	return (
+		<WalletContext.Provider value={contextValue}>
+			{autoConnect ? (
+				<AutoConnectWallet storageAdapter={storageAdapter} storageKey={storageKey}>
+					{children}
+				</AutoConnectWallet>
+			) : (
+				children
+			)}
+		</WalletContext.Provider>
 	);
-	return <WalletContext.Provider value={contextValue}>{children}</WalletContext.Provider>;
-}
-
-export function useWalletContext() {
-	const context = useContext(WalletContext);
-	if (!context) {
-		throw new Error(
-			'Could not find WalletContext. Ensure that you have set up the WalletProvider.',
-		);
-	}
-	return context;
 }
