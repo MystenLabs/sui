@@ -8,11 +8,11 @@ import { useWalletContext } from '../hooks/wallet/useWalletContext.js';
 import type { StorageAdapter } from '../utils/storageAdapters.js';
 import type { WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 
-type AutoConnectWalletProps = {
+interface AutoConnectWalletProps {
 	storageKey: string;
 	storageAdapter: StorageAdapter;
 	children: ReactNode;
-};
+}
 
 export function AutoConnectWallet({
 	storageKey,
