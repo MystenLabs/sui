@@ -331,7 +331,7 @@ pub async fn certify_shared_obj_transaction_no_execution(
 pub async fn enqueue_all_and_execute_all(
     authority: &AuthorityState,
     certificates: Vec<VerifiedCertificate>,
-) -> Result<Vec<(TransactionEffects, Option<ExecutionError>)>, SuiError> {
+) -> Result<Vec<TransactionEffects>, SuiError> {
     authority
         .enqueue_certificates_for_execution(
             certificates.clone(),
@@ -341,9 +341,8 @@ pub async fn enqueue_all_and_execute_all(
 
     let mut output = Vec::new();
     for cert in certificates {
-        let (result, execution_error_opt) = authority.try_execute_for_test(&cert).await?;
-        let effects = result.inner().data().clone();
-        output.push((effects, execution_error_opt));
+        let effects = authority.notify_read_effects(&cert).await?;
+        output.push(effects);
     }
     Ok(output)
 }

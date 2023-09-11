@@ -1115,7 +1115,7 @@ impl AuthorityState {
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        let output_keys: Vec<_> = inner_temporary_store
+        let mut output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
             .map(|(id, obj)| {
@@ -1129,6 +1129,33 @@ impl AuthorityState {
                 }
             })
             .collect();
+
+        // add here deleted shared object Inputkeys to the outputkeys that then get sent to notify_commit
+        let mut waiting_output_keys = Vec::new();
+        let deleted_output_keys = inner_temporary_store
+            .deleted
+            .iter()
+            .filter(|(id, _)| {
+                inner_temporary_store
+                    .objects
+                    .get(id)
+                    .is_some_and(|obj| obj.is_shared())
+            })
+            .map(|(id, (seq, _))| {
+                if let Some(v) = epoch_store
+                    .multi_get_next_shared_object_versions(vec![id].into_iter())
+                    .unwrap()[0]
+                {
+                    for i in u64::from(*seq) + 1..=u64::from(v) {
+                        waiting_output_keys.push(InputKey(*id, Some(i.into())));
+                    }
+                };
+
+                InputKey(*id, Some(*seq))
+            });
+
+        output_keys.extend(deleted_output_keys);
+        output_keys.extend(waiting_output_keys);
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;

@@ -355,7 +355,7 @@ impl TestRunner {
     pub async fn enqueue_all_and_execute_all(
         &mut self,
         certificates: Vec<VerifiedCertificate>,
-    ) -> Result<Vec<(TransactionEffects, Option<ExecutionError>)>, SuiError> {
+    ) -> Result<Vec<TransactionEffects>, SuiError> {
         enqueue_all_and_execute_all(&self.authority_state, certificates).await
     }
 
@@ -541,9 +541,8 @@ async fn test_mutate_after_delete_enqueued() {
         .await
         .unwrap();
 
-    let (effects, error) = res.get(1).unwrap();
+    let effects = res.get(1).unwrap();
 
-    assert!(matches!(error.as_ref().unwrap().kind(), InputObjectDeleted));
     assert!(effects.status().is_err());
     assert_eq!(effects.deleted().len(), 0);
 
@@ -554,9 +553,7 @@ async fn test_mutate_after_delete_enqueued() {
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
 
-    let (effects, error) = res.get(2).unwrap();
-
-    assert!(matches!(error.as_ref().unwrap().kind(), InputObjectDeleted));
+    let effects = res.get(2).unwrap();
     assert!(effects.status().is_err());
     assert_eq!(effects.deleted().len(), 0);
 
