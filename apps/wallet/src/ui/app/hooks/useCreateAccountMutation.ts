@@ -118,6 +118,10 @@ export function useCreateAccountsMutation() {
 				numberOfAccounts: createdAccounts.length,
 			});
 			setAccountFormValues(null);
+			const selectedAccount = createdAccounts[0];
+			if (selectedAccount?.id) {
+				await backgroundClient.selectAccount(selectedAccount?.id);
+			}
 			return createdAccounts;
 		},
 	});
