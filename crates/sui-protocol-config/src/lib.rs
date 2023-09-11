@@ -67,6 +67,9 @@ const MAX_PROTOCOL_VERSION: u64 = 23;
 //             value. Both values are set for all the environments except mainnet.
 // Version 21: ZKLogin known providers.
 // Version 22: Child object format change.
+// Version 23: Enabling the flag `narwhal_new_leader_election_schedule` for the new narwhal leader
+//             schedule algorithm for enhanced fault tolerance and sets the bad node stake threshold
+//             value for mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
