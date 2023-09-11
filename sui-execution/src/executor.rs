@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::storage::BackingStore;
 use sui_types::{
@@ -37,7 +34,6 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
-        shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -45,7 +41,6 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
@@ -65,7 +60,6 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
-        shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -73,7 +67,6 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,

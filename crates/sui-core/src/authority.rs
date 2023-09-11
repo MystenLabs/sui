@@ -1183,8 +1183,6 @@ impl AuthorityState {
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
-        let shared_object_refs = input_objects.filter_shared_objects();
-        let transaction_dependencies = input_objects.transaction_dependencies();
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, execution_error_opt) =
@@ -1203,13 +1201,11 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
-                shared_object_refs,
                 gas,
                 gas_status,
                 kind,
                 signer,
                 tx_digest,
-                transaction_dependencies,
             );
 
         Ok((inner_temp_store, effects, execution_error_opt.err()))
@@ -1279,10 +1275,7 @@ impl AuthorityState {
             )
         };
 
-        let shared_object_refs = input_objects.filter_shared_objects();
-
         let protocol_config = epoch_store.protocol_config();
-        let transaction_dependencies = input_objects.transaction_dependencies();
         let (kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
@@ -1306,13 +1299,11 @@ impl AuthorityState {
                     .epoch_data()
                     .epoch_start_timestamp(),
                 input_objects,
-                shared_object_refs,
                 gas_object_refs,
                 gas_status,
                 kind,
                 signer,
                 transaction_digest,
-                transaction_dependencies,
             );
         let tx_digest = *effects.transaction_digest();
 
@@ -1396,7 +1387,6 @@ impl AuthorityState {
             gas_object,
         )
         .await?;
-        let shared_object_refs = input_objects.filter_shared_objects();
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
@@ -1408,7 +1398,6 @@ impl AuthorityState {
         );
         let transaction_digest = TransactionDigest::new(default_hash(&data));
         let transaction_kind = data.into_kind();
-        let transaction_dependencies = input_objects.transaction_dependencies();
         let silent = true;
         let executor = sui_execution::executor(
             protocol_config,
@@ -1430,13 +1419,11 @@ impl AuthorityState {
                 .epoch_data()
                 .epoch_start_timestamp(),
             input_objects,
-            shared_object_refs,
             vec![gas_object_ref],
             gas_status,
             transaction_kind,
             sender,
             transaction_digest,
-            transaction_dependencies,
         );
 
         let module_cache =
