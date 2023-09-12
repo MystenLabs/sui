@@ -9,30 +9,17 @@ use crate::types::balance::Balance;
 use crate::types::base64::Base64;
 use crate::types::big_int::BigInt;
 use crate::types::checkpoint::Checkpoint;
-use crate::types::committee_member::CommitteeMember;
-use crate::types::date_time::DateTime;
-use crate::types::end_of_epoch_data::EndOfEpochData;
-use crate::types::epoch::Epoch;
 use crate::types::object::{Object, ObjectFilter, ObjectKind};
 use crate::types::protocol_config::{
     ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs,
 };
-use crate::types::safe_mode::SafeMode;
-use crate::types::stake_subsidy::StakeSubsidy;
-use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
-use crate::types::system_parameters::SystemParameters;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::tx_digest::TransactionDigest;
-use crate::types::validator::Validator;
-use crate::types::validator_set::ValidatorSet;
-
-use crate::types::gas::GasCostSummary;
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::dataloader::*;
 use async_graphql::*;
 use async_trait::async_trait;
-use fastcrypto::traits::EncodeDecodeBase64;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -286,21 +273,7 @@ impl DataProvider for SuiClient {
             .map(SerdeBigInt::from);
 
         let pg = self.read_api().get_checkpoints(after, count, false).await?;
-        let system_state = self.governance_api().get_latest_sui_system_state().await?;
-        let protocol_configs = self.fetch_protocol_config(None).await?;
-
-        let data: Result<Vec<_>, _> = pg
-            .data
-            .iter()
-            .map(|c| convert_json_rpc_checkpoint(c, &system_state, &protocol_configs))
-            .collect();
-
-        let checkpoints = data.map_err(|e| {
-            Error::Internal(format!(
-                "Cannot convert the JSON RPC checkpoint into GraphQL checkpoint type: {}",
-                e.message
-            ))
-        })?;
+        let checkpoints: Vec<Checkpoint> = pg.data.iter().map(Checkpoint::from).collect();
 
         let mut connection = Connection::new(false, pg.has_next_page);
         connection.edges.extend(
@@ -388,58 +361,6 @@ pub(crate) async fn lru_cache_data_loader(
     data_loader
 }
 
-pub(crate) fn convert_json_rpc_checkpoint(
-    c: &sui_json_rpc_types::Checkpoint,
-    system_state: &SuiSystemStateSummary,
-    protocol_configs: &ProtocolConfigs,
-) -> Result<Checkpoint> {
-    let digest = c.digest.to_string();
-    let sequence_number = c.sequence_number;
-
-    let validator_signature = c.validator_signature.encode_base64();
-    let validator_signature = Some(Base64::from(validator_signature.into_bytes()));
-
-    let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
-    let network_total_transactions = Some(c.network_total_transactions);
-    let rolling_gas_summary = GasCostSummary::from(&c.epoch_rolling_gas_cost_summary);
-    let epoch = convert_to_epoch(rolling_gas_summary, system_state, protocol_configs).ok();
-
-    let end_of_epoch_data = &c.end_of_epoch_data;
-    let end_of_epoch = end_of_epoch_data.clone().map(|e| {
-        let committees = e.next_epoch_committee;
-        let new_committee = if committees.is_empty() {
-            None
-        } else {
-            Some(
-                committees
-                    .iter()
-                    .map(|c| CommitteeMember {
-                        authority_name: Some(c.0.into_concise().to_string()),
-                        stake_unit: Some(c.1),
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        };
-
-        EndOfEpochData {
-            new_committee,
-            next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
-        }
-    });
-
-    Ok(Checkpoint {
-        digest,
-        sequence_number,
-        validator_signature,
-        previous_checkpoint_digest,
-        live_object_set_digest: None, // TODO fix this
-        network_total_transactions,
-        rolling_gas_summary: Some(rolling_gas_summary),
-        epoch,
-        end_of_epoch,
-    })
-}
-
 pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     Object {
         version: s.version.into(),
@@ -468,90 +389,6 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
             NativeOwner::Immutable => ObjectKind::Immutable,
         }),
     }
-}
-
-pub(crate) fn convert_to_epoch(
-    gas_summary: GasCostSummary,
-    system_state: &SuiSystemStateSummary,
-    protocol_configs: &ProtocolConfigs,
-) -> Result<Epoch> {
-    let epoch_id = system_state.epoch;
-    let active_validators = system_state
-        .active_validators
-        .clone()
-        .into_iter()
-        .map(Validator::from)
-        .collect();
-
-    let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
-        Error::Internal(format!(
-            "Cannot convert start timestamp u64 ({}) of epoch ({epoch_id}) into i64 required by DateTime",
-            system_state.epoch_start_timestamp_ms
-        ))
-    })?;
-
-    let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
-        Error::Internal(format!(
-            "Cannot convert start timestamp ({}) of epoch ({epoch_id}) into a DateTime",
-            start_timestamp
-        ))
-    })?;
-
-    Ok(Epoch {
-        epoch_id,
-        system_state_version: Some(BigInt::from(system_state.system_state_version)),
-        reference_gas_price: Some(BigInt::from(system_state.reference_gas_price)),
-        system_parameters: Some(SystemParameters {
-            duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
-            stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
-            min_validator_count: Some(system_state.max_validator_count),
-            max_validator_count: Some(system_state.max_validator_count),
-            min_validator_joining_stake: Some(BigInt::from(
-                system_state.min_validator_joining_stake,
-            )),
-            validator_low_stake_threshold: Some(BigInt::from(
-                system_state.validator_low_stake_threshold,
-            )),
-            validator_very_low_stake_threshold: Some(BigInt::from(
-                system_state.validator_very_low_stake_threshold,
-            )),
-            validator_low_stake_grace_period: Some(BigInt::from(
-                system_state.validator_low_stake_grace_period,
-            )),
-        }),
-        stake_subsidy: Some(StakeSubsidy {
-            balance: Some(BigInt::from(system_state.stake_subsidy_balance)),
-            distribution_counter: Some(system_state.stake_subsidy_distribution_counter),
-            current_distribution_amount: Some(BigInt::from(
-                system_state.stake_subsidy_current_distribution_amount,
-            )),
-            period_length: Some(system_state.stake_subsidy_period_length),
-            decrease_rate: Some(system_state.stake_subsidy_decrease_rate as u64),
-        }),
-        validator_set: Some(ValidatorSet {
-            total_stake: Some(BigInt::from(system_state.total_stake)),
-            active_validators: Some(active_validators),
-            pending_removals: Some(system_state.pending_removals.clone()),
-            pending_active_validators_size: Some(system_state.pending_active_validators_size),
-            stake_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
-            inactive_pools_size: Some(system_state.inactive_pools_size),
-            validator_candidates_size: Some(system_state.validator_candidates_size),
-        }),
-        storage_fund: Some(StorageFund {
-            total_object_storage_rebates: Some(BigInt::from(
-                system_state.storage_fund_total_object_storage_rebates,
-            )),
-            non_refundable_balance: Some(BigInt::from(
-                system_state.storage_fund_non_refundable_balance,
-            )),
-        }),
-        safe_mode: Some(SafeMode {
-            enabled: Some(system_state.safe_mode),
-            gas_summary: Some(gas_summary),
-        }),
-        protocol_configs: Some(protocol_configs.clone()),
-        start_timestamp: Some(start_timestamp),
-    })
 }
 
 impl From<Address> for SuiAddress {

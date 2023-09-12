@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::{
-    context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch,
-};
-
 use super::{
     address::Address,
     base64::Base64,
     epoch::Epoch,
-    gas::{GasEffects, GasInput},
+    gas::{GasCostSummary, GasEffects, GasInput},
     sui_address::SuiAddress,
     tx_digest::TransactionDigest,
 };
@@ -49,21 +45,15 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
 #[ComplexObject]
 impl TransactionBlock {
-    async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
+    async fn expiration(&self) -> Result<Option<Epoch>> {
         if self.effects.is_none() {
             return Ok(None);
         }
-        let gcs = self.effects.as_ref().unwrap().gas_effects.gcs;
-        let data_provider = ctx.data_provider();
-        let system_state = data_provider.get_latest_sui_system_state().await?;
-        let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
-        Ok(Some(epoch))
+        Ok(Some(self.effects.as_ref().unwrap().epoch.clone()))
     }
 }
 
 #[derive(Clone, Eq, PartialEq, SimpleObject)]
-#[graphql(complex)]
 pub(crate) struct TransactionBlockEffects {
     pub digest: TransactionDigest,
     #[graphql(skip)]
@@ -76,8 +66,7 @@ pub(crate) struct TransactionBlockEffects {
     // pub object_reads: Vec<Object>,
     // pub object_changes: Vec<ObjectChange>,
     // pub balance_changes: Vec<BalanceChange>,
-    // pub epoch: Epoch
-    // pub checkpoint: Checkpoint
+    pub epoch: Epoch, // pub checkpoint: Checkpoint
 }
 
 impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
@@ -94,22 +83,11 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,
             errors,
+            epoch: Epoch {
+                epoch_id: tx_effects.executed_epoch(), // Should this be None or effects.executed_epoch, or something else entirely?
+                gas_cost_summary: Some(GasCostSummary::from(tx_effects.gas_cost_summary())),
+            },
         }
-    }
-}
-
-#[ComplexObject]
-impl TransactionBlockEffects {
-    async fn gas_effects(&self) -> Option<GasEffects> {
-        Some(self.gas_effects)
-    }
-
-    async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let data_provider = ctx.data_provider();
-        let system_state = data_provider.get_latest_sui_system_state().await?;
-        let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(self.gas_effects.gcs, &system_state, &protocol_configs)?;
-        Ok(Some(epoch))
     }
 }
 
