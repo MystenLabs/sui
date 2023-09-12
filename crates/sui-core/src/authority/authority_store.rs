@@ -547,30 +547,7 @@ impl AuthorityStore {
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
     ) -> Result<Vec<Object>, SuiError> {
-        let mut result = Vec::new();
-
-        fp_ensure!(
-            objects.len() <= protocol_config.max_input_objects() as usize,
-            UserInputError::SizeLimitExceeded {
-                limit: "maximum input objects in a transaction".to_string(),
-                value: protocol_config.max_input_objects().to_string()
-            }
-            .into()
-        );
-
-        for kind in objects {
-            let obj = match kind {
-                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
-                    self.get_object(id)?
-                }
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.get_object_by_key(&objref.0, objref.1)?
-                }
-            }
-            .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            result.push(obj);
-        }
-        Ok(result)
+        sui_transaction_checks::check_input_objects(self, objects, protocol_config)
     }
 
     /// Gets the input object keys and lock modes from input object kinds, by determining the

@@ -684,12 +684,12 @@ impl AuthorityState {
     ) -> SuiResult<VerifiedSignedTransaction> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            epoch_store.as_ref(),
+            epoch_store.protocol_config(),
+            epoch_store.reference_gas_price(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
-        )
-        .await?;
+        )?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -1189,8 +1189,7 @@ impl AuthorityState {
             &self.database,
             epoch_store,
             certificate,
-        )
-        .await?;
+        )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
@@ -1266,24 +1265,24 @@ impl AuthorityState {
             (
                 transaction_input_checker::check_transaction_input_with_given_gas(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 Some(gas_object_id),
             )
         } else {
             (
                 transaction_input_checker::check_transaction_input(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 None,
             )
         };
@@ -1331,13 +1330,14 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
-                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
-                    .map_err(|e| SuiError::TransactionSerializationError {
+                input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
+                    |e| SuiError::TransactionSerializationError {
                         error: format!(
                             "Failed to convert transaction to SuiTransactionBlockData: {}",
                             e
                         ),
-                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
+                    },
+                )?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1398,8 +1398,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
-        )
-        .await?;
+        )?;
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
