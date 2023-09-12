@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -140,11 +140,27 @@ pub struct ValidatorComponents {
 }
 
 #[cfg(msim)]
-struct SimState {
-    sim_node: sui_simulator::runtime::NodeHandle,
-    sim_safe_mode_expected: AtomicBool,
-    _leak_detector: sui_simulator::NodeLeakDetector,
+mod simulator {
+    use std::sync::atomic::AtomicBool;
+    pub(super) struct SimState {
+        pub sim_node: sui_simulator::runtime::NodeHandle,
+        pub sim_safe_mode_expected: AtomicBool,
+        _leak_detector: sui_simulator::NodeLeakDetector,
+    }
+
+    impl Default for SimState {
+        fn default() -> Self {
+            Self {
+                sim_node: sui_simulator::runtime::NodeHandle::current(),
+                sim_safe_mode_expected: AtomicBool::new(false),
+                _leak_detector: sui_simulator::NodeLeakDetector::new(),
+            }
+        }
+    }
 }
+
+#[cfg(msim)]
+use simulator::*;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -297,27 +313,6 @@ impl SuiNode {
                 .instrument(error_span!("jwk_updater_task", epoch)),
             ));
         }
-    }
-
-    #[cfg(not(msim))]
-    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
-        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
-        let client = reqwest::Client::new();
-        fetch_jwks(provider, &client)
-            .await
-            .map_err(|_| SuiError::JWKRetrievalError)
-    }
-
-    #[cfg(msim)]
-    #[allow(unused_variables)]
-    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
-        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
-        // Just load a default Twitch jwk for testing.
-        parse_jwks(
-            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
-            &OIDCProvider::Twitch,
-        )
-        .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     pub async fn start_async(
@@ -637,11 +632,7 @@ impl SuiNode {
             _db_checkpoint_handle: db_checkpoint_handle,
 
             #[cfg(msim)]
-            sim_state: SimState {
-                sim_node: sui_simulator::runtime::NodeHandle::current(),
-                sim_safe_mode_expected: AtomicBool::new(false),
-                _leak_detector: sui_simulator::NodeLeakDetector::new(),
-            },
+            sim_state: Default::default(),
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
@@ -661,14 +652,6 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
-    }
-
-    #[cfg(msim)]
-    pub fn set_safe_mode_expected(&self, new_value: bool) {
-        info!("Setting safe mode expected to {}", new_value);
-        self.sim_state
-            .sim_safe_mode_expected
-            .store(new_value, Ordering::Relaxed);
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -1488,13 +1471,44 @@ impl SuiNode {
         new_epoch_store
     }
 
-    #[cfg(msim)]
+    pub fn get_config(&self) -> &NodeConfig {
+        &self.config
+    }
+}
+
+#[cfg(not(msim))]
+impl SuiNode {
+    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
+        let client = reqwest::Client::new();
+        fetch_jwks(provider, &client)
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)
+    }
+}
+
+#[cfg(msim)]
+impl SuiNode {
     pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
         self.sim_state.sim_node.id()
     }
 
-    pub fn get_config(&self) -> &NodeConfig {
-        &self.config
+    pub fn set_safe_mode_expected(&self, new_value: bool) {
+        info!("Setting safe mode expected to {}", new_value);
+        self.sim_state
+            .sim_safe_mode_expected
+            .store(new_value, Ordering::Relaxed);
+    }
+
+    #[allow(unused_variables)]
+    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        // Just load a default Twitch jwk for testing.
+        parse_jwks(
+            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
+            &OIDCProvider::Twitch,
+        )
+        .map_err(|_| SuiError::JWKRetrievalError)
     }
 }
 
