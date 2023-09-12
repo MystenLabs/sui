@@ -16,59 +16,57 @@ use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI,
 };
-use sui_sdk::types::digests::TransactionDigest as NativeTransactionDigest;
 
-#[derive(Clone)]
-pub(crate) struct TransactionBlock(pub sui_json_rpc_types::SuiTransactionBlockResponse);
+#[derive(SimpleObject, Clone)]
+#[graphql(complex)]
+pub(crate) struct TransactionBlock {
+    pub digest: TransactionDigest,
+    pub effects: Option<TransactionBlockEffects>,
+    pub sender: Option<Address>,
+    pub bcs: Option<Base64>,
+    pub gas_input: Option<GasInput>,
+}
 
-#[Object]
+impl From<sui_json_rpc_types::SuiTransactionBlockResponse> for TransactionBlock {
+    fn from(tx_block: sui_json_rpc_types::SuiTransactionBlockResponse) -> Self {
+        let transaction = tx_block.transaction.as_ref();
+        let sender = transaction.map(|tx| Address {
+            address: SuiAddress::from_array(tx.data.sender().to_inner()),
+        });
+        let gas_input = transaction.map(|tx| GasInput::from(tx.data.gas_data()));
+
+        Self {
+            digest: TransactionDigest::from_array(tx_block.digest.into_inner()),
+            effects: tx_block.effects.as_ref().map(TransactionBlockEffects::from),
+            sender,
+            bcs: Some(Base64::from(&tx_block.raw_transaction)),
+            gas_input,
+        }
+    }
+}
+
+#[ComplexObject]
 impl TransactionBlock {
-    async fn digest(&self) -> TransactionDigest {
-        TransactionDigest::from_array(self.0.digest.into_inner())
-    }
-
-    async fn effects(&self) -> Option<TransactionBlockEffects> {
-        self.0.effects.as_ref().map(|tx_effects| tx_effects.into())
-    }
-
-    async fn sender(&self) -> Option<Address> {
-        Some(Address {
-            address: SuiAddress::from_array(
-                self.0
-                    .transaction
-                    .as_ref()
-                    .unwrap()
-                    .data
-                    .sender()
-                    .to_inner(),
-            ),
-        })
-    }
-
-    async fn bcs(&self) -> Option<Base64> {
-        Some(Base64::from(&self.0.raw_transaction))
-    }
-
-    async fn gas_input(&self) -> Option<GasInput> {
-        Some(self.0.transaction.as_ref().unwrap().data.gas_data().into())
-    }
-
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let tx_effects = self.0.effects.as_ref().unwrap();
-        let gcs = tx_effects.gas_cost_summary();
+        if self.effects.is_none() {
+            return Ok(None);
+        }
+        let gcs = self.effects.as_ref().unwrap().gas_effects.gcs;
+        // TODO: I'd like to have Epoch itself do the data-fetching, but requires refactoring convert_to_epoch
         let data_provider = ctx.data_provider();
         let system_state = data_provider.get_latest_sui_system_state().await?;
         let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(gcs.into(), &system_state, &protocol_configs)?;
+        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
         Ok(Some(epoch))
     }
 }
 
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct TransactionBlockEffects {
-    pub digest: NativeTransactionDigest,
+    pub digest: TransactionDigest,
     pub gas_effects: GasEffects,
-    pub status: SuiExecutionStatus,
+    pub status: ExecutionStatus,
+    pub errors: Option<String>,
     // pub transaction_block: TransactionBlock,
     // pub dependencies: Vec<TransactionBlock>,
     // pub lamport_version: Option<u64>,
@@ -81,10 +79,18 @@ pub(crate) struct TransactionBlockEffects {
 
 impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
     fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+        let (status, errors) = match tx_effects.status() {
+            SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
+            SuiExecutionStatus::Failure { error } => {
+                (ExecutionStatus::Failure, Some(error.clone()))
+            }
+        };
+
         Self {
-            digest: *tx_effects.transaction_digest(),
+            digest: TransactionDigest::from_array(tx_effects.transaction_digest().into_inner()),
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
-            status: tx_effects.status().clone(),
+            status,
+            errors,
         }
     }
 }
@@ -92,21 +98,15 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
 #[Object]
 impl TransactionBlockEffects {
     async fn digest(&self) -> TransactionDigest {
-        TransactionDigest::from_array(self.digest.into_inner())
+        self.digest
     }
 
     async fn status(&self) -> Option<ExecutionStatus> {
-        Some(match self.status {
-            SuiExecutionStatus::Success => ExecutionStatus::Success,
-            SuiExecutionStatus::Failure { error: _ } => ExecutionStatus::Failure,
-        })
+        Some(self.status)
     }
 
     async fn errors(&self) -> Option<String> {
-        match &self.status {
-            SuiExecutionStatus::Success => None,
-            SuiExecutionStatus::Failure { error } => Some(error.clone()),
-        }
+        self.errors.clone()
     }
 
     async fn gas_effects(&self) -> Option<GasEffects> {

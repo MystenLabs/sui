@@ -90,7 +90,7 @@ impl Loader<TransactionDigest> for SuiClientLoader {
             .await?
         {
             let digest = TransactionDigest::from_array(tx.digest.into_inner());
-            let mtx = convert_to_transaction_block(&self.client, tx).await?;
+            let mtx = TransactionBlock::from(tx);
             map.insert(digest, mtx);
         }
         Ok(map)
@@ -324,8 +324,7 @@ impl DataProvider for SuiClient {
                 SuiTransactionBlockResponseOptions::full_content(),
             )
             .await?;
-
-        convert_to_transaction_block(self, tx).await.map(Some)
+        Ok(Some(TransactionBlock::from(tx)))
     }
 
     async fn fetch_chain_id(&self) -> Result<String> {
