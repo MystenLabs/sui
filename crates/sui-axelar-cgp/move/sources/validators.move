@@ -4,12 +4,13 @@
 module axelar::validators {
     use std::string::{Self, String};
     use std::vector;
+
     use sui::table::{Self, Table};
     use sui::address;
-
     use sui::bcs;
     use sui::dynamic_field as df;
     use sui::ecdsa_k1 as ecdsa;
+    use sui::event;
     use sui::hash;
     use sui::object::{Self, UID};
     use sui::transfer;
@@ -54,6 +55,12 @@ module axelar::validators {
     struct Approval has store {
         /// Hash of the cmd_id, target_id, source_chain, source_address, payload_hash
         approval_hash: vector<u8>,
+    }
+
+    /// Emitted when the operatorship changes.
+    struct OperatorshipTransferred has copy, drop {
+        epoch: u64,
+        new_operators_hash: vector<u8>,
     }
 
     fun init(ctx: &mut TxContext) {
@@ -154,6 +161,10 @@ module axelar::validators {
         vec_map::insert(epoch_for_hash, new_operators_hash, epoch);
 
         set_epoch(axelar, epoch);
+        event::emit(OperatorshipTransferred {
+            epoch,
+            new_operators_hash
+        });
     }
 
     public(friend) fun add_approval(
