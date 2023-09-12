@@ -328,6 +328,12 @@ pub struct PrimaryMetrics {
     pub header_max_parent_wait_ms: IntCounter,
     /// Counts when the GC loop in synchronizer times out waiting for consensus commit.
     pub synchronizer_gc_timeout: IntCounter,
+    // Total number of fetched certificates verified directly.
+    pub fetched_certificates_verified_directly: IntCounter,
+    // Total number of fetched certificates verified indirectly.
+    pub fetched_certificates_verified_indirectly: IntCounter,
+    /// Total number of indirectly verifed certificates that were not served.
+    pub indirectly_verified_certificates_not_served: IntCounter,
 }
 
 impl PrimaryMetrics {
@@ -511,6 +517,21 @@ impl PrimaryMetrics {
             synchronizer_gc_timeout: register_int_counter_with_registry!(
                 "synchronizer_gc_timeout",
                 "Counts when the GC loop in synchronizer times out waiting for consensus commit.",
+                registry
+            ).unwrap(),
+            fetched_certificates_verified_directly: register_int_counter_with_registry!(
+                "fetched_certificates_verified_directly",
+                "Total number of fetched certificates verified directly.",
+                registry
+            ).unwrap(),
+            fetched_certificates_verified_indirectly: register_int_counter_with_registry!(
+                "fetched_certificates_verified_indirectly",
+                "Total number of fetched certificates verified indirectly.",
+                registry
+            ).unwrap(),
+            indirectly_verified_certificates_not_served: register_int_counter_with_registry!(
+                "indirectly_verified_certificates_not_served",
+                "Total number of indirectly verified certificates that were not served.",
                 registry
             ).unwrap(),
         }

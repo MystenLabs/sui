@@ -80,21 +80,18 @@ impl VotesAggregator {
                         "Failed to verify aggregated sig on certificate: {} error: {}",
                         certificate_digest, err
                     );
-                    let mut i = 0;
-                    while i < self.votes.len() {
-                        let (id, sig) = &self.votes[i];
+                    self.votes.retain(|(id, sig)| {
                         let pk = committee.authority_safe(id).protocol_key();
-                        if sig
-                            .verify_secure(&to_intent_message(certificate_digest), pk)
-                            .is_err()
+                        if let Err(_) =
+                            sig.verify_secure(&to_intent_message(certificate_digest), pk)
                         {
                             warn!("Invalid signature on header from authority: {}", id);
                             self.weight -= committee.stake(pk);
-                            self.votes.remove(i);
+                            false
                         } else {
-                            i += 1;
+                            true
                         }
-                    }
+                    });
                     return Ok(None);
                 }
                 Ok(_) => return Ok(Some(cert)),

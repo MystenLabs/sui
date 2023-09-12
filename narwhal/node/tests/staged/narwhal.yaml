@@ -1,4 +1,12 @@
 ---
+AggregateSignatureState:
+  ENUM:
+    3:
+      Unsigned:
+        NEWTYPE:
+          TUPLEARRAY:
+            CONTENT: U8
+            SIZE: 48
 AuthorityIdentifier:
   NEWTYPESTRUCT: U16
 Batch:
@@ -32,23 +40,21 @@ BatchV2:
         TYPENAME: VersionedMetadata
 Certificate:
   ENUM:
-    0:
-      V1:
+    1:
+      V2:
         NEWTYPE:
-          TYPENAME: CertificateV1
+          TYPENAME: CertificateV2
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-CertificateV1:
+CertificateV2:
   STRUCT:
     - header:
         TYPENAME: Header
-    - aggregated_signature:
-        TUPLEARRAY:
-          CONTENT: U8
-          SIZE: 48
+    - aggregate_signature_state:
+        TYPENAME: AggregateSignatureState
     - signed_authorities: BYTES
     - metadata:
         TYPENAME: Metadata

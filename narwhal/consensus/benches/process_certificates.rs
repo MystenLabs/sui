@@ -30,7 +30,7 @@ pub fn process_certificates(c: &mut Criterion) {
         let rounds: Round = *size;
 
         // process certificates for rounds, check we don't grow the dag too much
-        let genesis = Certificate::genesis(&committee)
+        let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();

@@ -6,18 +6,21 @@ use anemo::Request;
 use config::{AuthorityIdentifier, Committee};
 use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
+use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use mysten_metrics::metered_channel::Receiver;
 use mysten_metrics::{monitored_future, monitored_scope, spawn_logged_monitored_task};
 use network::PrimaryToPrimaryRpc;
 use rand::{rngs::ThreadRng, seq::SliceRandom};
+use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
 use storage::CertificateStore;
+use sui_protocol_config::ProtocolConfig;
 use tokio::task::{spawn_blocking, JoinSet};
 use tokio::{
     sync::watch,
@@ -27,8 +30,9 @@ use tokio::{
 use tracing::{debug, error, instrument, trace, warn};
 use types::{
     error::{DagError, DagResult},
-    Certificate, CertificateAPI, ConditionalBroadcastReceiver, FetchCertificatesRequest,
-    FetchCertificatesResponse, HeaderAPI, Round,
+    validate_received_certificate_version, Certificate, CertificateAPI,
+    ConditionalBroadcastReceiver, FetchCertificatesRequest, FetchCertificatesResponse, HeaderAPI,
+    Round,
 };
 
 #[cfg(test)]
@@ -68,6 +72,7 @@ pub(crate) struct CertificateFetcher {
     state: Arc<CertificateFetcherState>,
     /// The committee information.
     committee: Committee,
+    protocol_config: ProtocolConfig,
     /// Persistent storage for certificates. Read-only usage.
     certificate_store: CertificateStore,
     /// Receiver for signal of round changes.
@@ -104,6 +109,7 @@ impl CertificateFetcher {
     pub fn spawn(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: ProtocolConfig,
         network: anemo::Network,
         certificate_store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<ConsensusRound>,
@@ -124,6 +130,7 @@ impl CertificateFetcher {
                 Self {
                     state,
                     committee,
+                    protocol_config,
                     certificate_store,
                     rx_consensus_round_updates,
                     rx_shutdown,
@@ -277,6 +284,7 @@ impl CertificateFetcher {
 
         let state = self.state.clone();
         let committee = self.committee.clone();
+        let protocol_config = self.protocol_config.clone();
 
         debug!(
             "Starting task to fetch missing certificates: max target {}, gc round {:?}",
@@ -289,7 +297,15 @@ impl CertificateFetcher {
                 state.metrics.certificate_fetcher_inflight_fetch.inc();
 
                 let now = Instant::now();
-                match run_fetch_task(state.clone(), committee, gc_round, written_rounds).await {
+                match run_fetch_task(
+                    &protocol_config,
+                    state.clone(),
+                    committee,
+                    gc_round,
+                    written_rounds,
+                )
+                .await
+                {
                     Ok(_) => {
                         debug!(
                             "Finished task to fetch certificates successfully, elapsed = {}s",
@@ -313,6 +329,7 @@ impl CertificateFetcher {
 #[allow(clippy::mutable_key_type)]
 #[instrument(level = "debug", skip_all)]
 async fn run_fetch_task(
+    protocol_config: &ProtocolConfig,
     state: Arc<CertificateFetcherState>,
     committee: Committee,
     gc_round: Round,
@@ -329,7 +346,13 @@ async fn run_fetch_task(
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();
-    process_certificates_helper(response, &state.synchronizer, state.metrics.clone()).await?;
+    process_certificates_helper(
+        protocol_config,
+        response,
+        &state.synchronizer,
+        state.metrics.clone(),
+    )
+    .await?;
     state
         .metrics
         .certificate_fetcher_num_certificates_processed
@@ -421,6 +444,7 @@ async fn fetch_certificates_helper(
 
 #[instrument(level = "debug", skip_all)]
 async fn process_certificates_helper(
+    protocol_config: &ProtocolConfig,
     response: FetchCertificatesResponse,
     synchronizer: &Synchronizer,
     metrics: Arc<PrimaryMetrics>,
@@ -432,23 +456,52 @@ async fn process_certificates_helper(
             MAX_CERTIFICATES_TO_FETCH,
         ));
     }
-    // Verify certificates in parallel.
     // In PrimaryReceiverHandler, certificates already in storage are ignored.
     // The check is unnecessary here, because there is no concurrent processing of older
     // certificates. For byzantine failures, the check will not be effective anyway.
     let _verify_scope = monitored_scope("VerifyingFetchedCertificates");
-    let all_certificates = response.certificates;
+
+    // Verify certificates in parallel. If we are using CertificateV2 only verify
+    // the tip of a certificate chain and verify the parent certificates of that tip
+    // indirectly.
+    if protocol_config.narwhal_certificate_v2() {
+        process_certificates_v2_helper(protocol_config, response, synchronizer, metrics).await?;
+    } else {
+        process_certificates_v1_helper(protocol_config, response, synchronizer, metrics).await?;
+    }
+
+    trace!("Fetched certificates have been processed");
+
+    Ok(())
+}
+
+async fn process_certificates_v1_helper(
+    protocol_config: &ProtocolConfig,
+    response: FetchCertificatesResponse,
+    synchronizer: &Synchronizer,
+    metrics: Arc<PrimaryMetrics>,
+) -> DagResult<()> {
+    let mut all_certificates = response.certificates;
+    for cert in all_certificates.iter_mut() {
+        // We should not be getting mixed versions of certificates from a
+        // validator, so any individual certificate with mismatched versions
+        // should cancel processing for the entire batch of fetched certificates.
+        validate_received_certificate_version(cert, protocol_config).map_err(|err| {
+            error!("{err}");
+            DagError::Canceled
+        })?;
+    }
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
-            let certs = certs.to_vec();
+            let mut certs = certs.to_vec();
             let sync = synchronizer.clone();
             let metrics = metrics.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 let now = Instant::now();
-                for c in &certs {
-                    sync.sanitize_certificate(c)?;
+                for c in &mut certs {
+                    sync.sanitize_certificate(c, false)?;
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
@@ -473,7 +526,106 @@ async fn process_certificates_helper(
             .inc_by(now.elapsed().as_micros() as u64);
     }
 
-    trace!("Fetched certificates have been processed");
+    Ok(())
+}
+
+async fn process_certificates_v2_helper(
+    protocol_config: &ProtocolConfig,
+    response: FetchCertificatesResponse,
+    synchronizer: &Synchronizer,
+    metrics: Arc<PrimaryMetrics>,
+) -> DagResult<()> {
+    let mut all_certificates = response.certificates;
+    let mut all_parents = HashSet::new();
+    for cert in all_certificates.iter_mut() {
+        // We should not be getting mixed versions of certificates from a
+        // validator, so any individual certificate with mismatched versions
+        // should cancel processing for the entire batch of fetched certificates.
+        validate_received_certificate_version(cert, protocol_config).map_err(|err| {
+            error!("{err}");
+            DagError::Canceled
+        })?;
+
+        for parent_digest in cert.header().parents() {
+            all_parents.insert(parent_digest.clone());
+        }
+    }
+
+    let all_certificates_count = all_certificates.len() as u64;
+    let mut non_parents_count: u64 = 0;
+
+    // Classify certs as parent or non-parent but maintain the order that the
+    // certificates were received so that they can be validated in the same
+    // response order to avoid certificate suspensions
+    let mut classified_certs: Vec<(Certificate, bool)> = vec![];
+    for c in all_certificates {
+        let is_parent = all_parents.contains(&c.digest());
+        if !is_parent {
+            non_parents_count += 1;
+        }
+        classified_certs.push((c, is_parent));
+    }
+
+    let verify_tasks = classified_certs
+        .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
+        .map(|chunk| {
+            let mut certs_and_classification = chunk.to_vec();
+            let sync = synchronizer.clone();
+            let metrics = metrics.clone();
+            // Use threads dedicated to computation heavy work.
+            spawn_blocking(move || {
+                let now = Instant::now();
+                for (c, is_parent) in &mut certs_and_classification {
+                    sync.sanitize_certificate(c, *is_parent)?;
+                }
+                metrics
+                    .certificate_fetcher_total_verification_us
+                    .inc_by(now.elapsed().as_micros() as u64);
+                let certs = certs_and_classification
+                    .into_iter()
+                    .map(|(c, _)| c)
+                    .collect();
+                Ok::<Vec<Certificate>, DagError>(certs)
+            })
+        })
+        .collect_vec();
+
+    let mut sanitized_certificates = Vec::new();
+    // Process verified certificates in the same order as received. We ensure
+    // that sanitize certificate completes for all fetched certificates before
+    // accepting any certficates because we have to be sure that all non-parent
+    // certificates successfully sanitized before accepting any of the parent
+    // certificates. This is because parent certificates will be processed before
+    // non parent certificates.
+    for task in verify_tasks.into_iter() {
+        // Any certificates that fail to be verified should cancel the entire
+        // batch of fetched certficates that are being processed to protect
+        // against byzantine validators.
+        let mut certificates = task.await.map_err(|err| {
+            error!("Cancelling due to {err:?}");
+            DagError::Canceled
+        })??;
+        sanitized_certificates.append(&mut certificates);
+    }
+
+    metrics
+        .fetched_certificates_verified_directly
+        .inc_by(non_parents_count);
+    metrics
+        .fetched_certificates_verified_indirectly
+        .inc_by(all_certificates_count.saturating_sub(non_parents_count));
+
+    let now = Instant::now();
+    for cert in sanitized_certificates {
+        if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
+            // It is possible that subsequent certificates are useful,
+            // so not stopping early.
+            warn!("Failed to accept fetched certificate: {e}");
+        }
+    }
+    metrics
+        .certificate_fetcher_total_accept_us
+        .inc_by(now.elapsed().as_micros() as u64);
 
     Ok(())
 }
