@@ -15,7 +15,6 @@ use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use tap::TapFallible;
-use tokio::runtime::Handle;
 use tracing::{info, warn};
 
 /// Allows verifying the validity of transactions
@@ -105,16 +104,11 @@ impl TransactionValidator for SuiTxValidator {
         // verify the certificate signatures as a batch
         let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
-        let epoch_store = self.epoch_store.clone();
-        Handle::current()
-            .spawn_blocking(move || {
-                epoch_store
-                    .signature_verifier
-                    .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
-                    .tap_err(|e| warn!("batch verification error: {}", e))
-                    .wrap_err("Malformed batch (failed to verify)")
-            })
-            .await??;
+        self.epoch_store
+            .signature_verifier
+            .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
+            .tap_err(|e| warn!("batch verification error: {}", e))
+            .wrap_err("Malformed batch (failed to verify)")?;
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
         for ckpt in ckpt_messages {
