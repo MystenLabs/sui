@@ -1233,7 +1233,15 @@ impl DBBatch {
     }
 
     /// Deletes a range of keys between `from` (inclusive) and `to` (non-inclusive)
-    pub fn delete_range<K: Serialize, V>(
+    /// by writing a range delete tombstone in the db map
+    /// If the DBMap is configured with ignore_range_deletions set to false,
+    /// the effect of this write will be visible immediately i.e. you won't
+    /// see old values when you do a lookup or scan. But if it is configured
+    /// with ignore_range_deletions set to true, the old value are visible until
+    /// compaction actually deletes them which will happen sometime after. By
+    /// default ignore_range_deletions is set to true on a DBMap (unless it is
+    /// overriden in the config), so please use this function with caution
+    pub fn schedule_delete_range<K: Serialize, V>(
         &mut self,
         db: &DBMap<K, V>,
         from: &K,
@@ -1738,15 +1746,22 @@ where
         Ok(())
     }
 
-    /// Deletes all entries in the db map using a single delete range operation
+    /// Writes a range delete tombstone to delete all entries in the db map
+    /// If the DBMap is configured with ignore_range_deletions set to false,
+    /// the effect of this write will be visible immediately i.e. you won't
+    /// see old values when you do a lookup or scan. But if it is configured
+    /// with ignore_range_deletions set to true, the old value are visible until
+    /// compaction actually deletes them which will happen sometime after. By
+    /// default ignore_range_deletions is set to true on a DBMap (unless it is
+    /// overriden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
-    fn delete_all(&self) -> Result<(), TypedStoreError> {
+    fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
         let mut iter = self.unbounded_iter().seek_to_first();
         let first_key = iter.next().map(|(k, _v)| k);
         let last_key = iter.skip_to_last().next().map(|(k, _v)| k);
         if let Some((first_key, last_key)) = first_key.zip(last_key) {
             let mut batch = self.batch();
-            batch.delete_range(self, &first_key, &last_key)?;
+            batch.schedule_delete_range(self, &first_key, &last_key)?;
             batch.write()?;
         }
         Ok(())

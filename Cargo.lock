@@ -750,7 +750,7 @@ checksum = "0e97ce7de6cf12de5d7226c73f5ba9811622f4db3a5b91b55c53e987e5f91cba"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -787,7 +787,7 @@ checksum = "bc00ceb34980c03614e35a3a4e218276a0a824e911d07651cd0d858a51e8c0f0"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -1526,7 +1526,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -2078,7 +2078,7 @@ dependencies = [
  "heck 0.4.1",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -2594,15 +2594,15 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f711ade317dd348950a9910f81c5947e3d8907ebd2b83f76203ff1807e6a2bc2"
+checksum = "622178105f911d937a42cdb140730ba4a3ed2becd8ae6ce39c7d28b5d75d4588"
 dependencies = [
  "cfg-if",
  "cpufeatures",
  "curve25519-dalek-derive",
  "digest 0.10.6",
- "fiat-crypto",
+ "fiat-crypto 0.2.1",
  "platforms",
  "rustc_version",
  "subtle",
@@ -2617,7 +2617,7 @@ checksum = "83fdaf97f4804dcebfa5862639bc9ce4121e82140bec2a987ac5140294865b5b"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -2628,7 +2628,7 @@ checksum = "44339b9ecede7f72a0d3b012bf9bb5a616dc8bfde23ce544e42da075c87198f0"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
- "fiat-crypto",
+ "fiat-crypto 0.1.17",
  "rand_core 0.6.4",
  "subtle",
  "zeroize",
@@ -2964,7 +2964,7 @@ dependencies = [
  "diesel_table_macro_syntax",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -2984,7 +2984,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc5557efc453706fed5e4fa85006fe9817c224c3f480a34c7e5959fd700921c5"
 dependencies = [
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -3601,9 +3601,15 @@ dependencies = [
 
 [[package]]
 name = "fiat-crypto"
-version = "0.1.20"
+version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e825f6987101665dea6ec934c09ec6d721de7bc1bf92248e1d5810c8cd636b77"
+checksum = "a214f5bb88731d436478f3ae1f8a277b62124089ba9fb67f4f93fb100ef73c90"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0870c84016d4b481be5c9f323c24f65e31e901ae618f0e80f4308fb00de1d2d"
 
 [[package]]
 name = "findshlibs"
@@ -4934,9 +4940,9 @@ checksum = "d59d8c75012853d2e872fb56bc8a2e53718e2cafe1a4c823143141c6d90c322f"
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.4.5"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57bcfdad1b858c2db7c38303a6d2ad4dfaf5eb53dfeb0910128b2c26d6158503"
+checksum = "1a9bad9f94746442c783ca431b22403b519cd7fbeed0533fdd6328b2f2212128"
 
 [[package]]
 name = "lock_api"
@@ -5642,7 +5648,7 @@ dependencies = [
  "enum-compat-util",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -6909,7 +6915,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -7017,7 +7023,7 @@ dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -7609,7 +7615,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b69d39aab54d069e7f2fe8cb970493e7834601ca2d8c65fd7bbd183578080d1"
 dependencies = [
  "proc-macro2 1.0.66",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -8674,7 +8680,7 @@ dependencies = [
  "bitflags 2.3.3",
  "errno 0.3.1",
  "libc",
- "linux-raw-sys 0.4.5",
+ "linux-raw-sys 0.4.7",
  "windows-sys 0.48.0",
 ]
 
@@ -9253,7 +9259,7 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da03fa3b94cc19e3ebfc88c4229c49d8f08cdbd1228870a45f0ffdf84988e14b"
 dependencies = [
- "dirs 5.0.1",
+ "dirs 4.0.0",
 ]
 
 [[package]]
@@ -10888,7 +10894,7 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "sui-enum-compat-util",
- "syn 2.0.29",
+ "syn 2.0.32",
  "workspace-hack",
 ]
 
@@ -11763,9 +11769,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.29"
+version = "2.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c324c494eba9d92503e6f1ef2e6df781e78f6a7705a0202d9801b198807d518a"
+checksum = "239814284fd6f1a4ffe4ca893952cdd93c224b6a1571c9a9eadd670295c0c9e2"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
@@ -12061,7 +12067,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -12202,7 +12208,7 @@ checksum = "630bdcf245f78637c13ec01ffae6187cca34625e8c63150d424b59e55af2675e"
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -12212,7 +12218,7 @@ source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=e469350011
 dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
- "syn 2.0.29",
+ "syn 2.0.32",
 ]
 
 [[package]]
@@ -13759,7 +13765,7 @@ dependencies = [
  "fdlimit",
  "ff 0.12.1",
  "ff 0.13.0",
- "fiat-crypto",
+ "fiat-crypto 0.1.17",
  "findshlibs",
  "fixed-hash",
  "fixedbitset 0.2.0",
@@ -13881,7 +13887,7 @@ dependencies = [
  "linked-hash-map",
  "linux-raw-sys 0.1.4",
  "linux-raw-sys 0.3.1",
- "linux-raw-sys 0.4.5",
+ "linux-raw-sys 0.4.7",
  "lock_api",
  "log",
  "lru 0.10.0",
@@ -14228,7 +14234,7 @@ dependencies = [
  "symbolic-demangle",
  "syn 0.15.44",
  "syn 1.0.107",
- "syn 2.0.29",
+ "syn 2.0.32",
  "sync_wrapper",
  "synstructure",
  "sysinfo",
