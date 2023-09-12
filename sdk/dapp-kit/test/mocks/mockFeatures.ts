@@ -21,6 +21,6 @@ export const suiFeatures: SuiFeatures = {
 export const superCoolFeature: IdentifierRecord<unknown> = {
 	'my-dapp:super-cool-feature': {
 		version: '1.0.0',
-		superCoolFeature: () => {},
+		superCoolFeature: vi.fn(),
 	},
 };
