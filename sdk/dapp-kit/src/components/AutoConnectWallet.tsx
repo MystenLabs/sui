@@ -14,6 +14,8 @@ interface AutoConnectWalletProps {
 	children: ReactNode;
 }
 
+// TODO: Re-work this approach using Jotai for state management since this isn't very
+// optimal and is harder to reason about.
 export function AutoConnectWallet({
 	storageKey,
 	storageAdapter,
@@ -28,7 +30,8 @@ export function AutoConnectWallet({
 
 	// Instead of abstracting the previous wallet and account state logic into a generic
 	// usePrevious hook, we'll write this plainly to make it clear that this code depends
-	// on triggering shallow re-renders by updating state in the render code.
+	// on triggering shallow re-renders by updating state in the render code. This isn't
+	// super efficient in terms of render cycles.
 	if (wallet !== currentWallet) {
 		setPreviousWallet(currentWallet);
 		setCurrentWallet(wallet);
@@ -42,6 +45,7 @@ export function AutoConnectWallet({
 	useEffect(() => {
 		if (wallet !== previousWallet || account !== previousAccount) {
 			if (wallet) {
+				// We've detected a new wallet has been connected or account has been updated, so let's update storage.
 				setWalletConnectionInfo({
 					storageAdapter,
 					storageKey,
@@ -49,6 +53,7 @@ export function AutoConnectWallet({
 					accountAddress: account?.address,
 				});
 			} else {
+				// We've detected that our wallet has been disconnected or removed, so let's remove our info from storage.
 				removeWalletConnectionInfo(storageAdapter, storageKey);
 			}
 		}
