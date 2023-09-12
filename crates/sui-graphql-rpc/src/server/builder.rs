@@ -14,6 +14,7 @@ use std::any::Any;
 
 pub(crate) const DEFAULT_PORT: u16 = 8000;
 pub(crate) const DEFAULT_HOST: &str = "127.0.0.1";
+pub(crate) const DEFAULT_DEPTH_LIMIT: usize = 10;
 
 pub(crate) struct Server {
     pub server: hyper::Server<hyper::server::conn::AddrIncoming, IntoMakeService<Router>>,
@@ -57,6 +58,11 @@ impl ServerBuilder {
             self.host.as_ref().unwrap_or(&DEFAULT_HOST.to_string()),
             self.port.unwrap_or(DEFAULT_PORT)
         )
+    }
+
+    pub fn max_query_depth(mut self, max_depth: usize) -> Self {
+        self.schema = self.schema.limit_depth(max_depth);
+        self
     }
 
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
