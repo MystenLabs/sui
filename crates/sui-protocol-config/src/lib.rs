@@ -72,6 +72,7 @@ const MAX_PROTOCOL_VERSION: u64 = 24;
 //             value for mainnet.
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
+//             JWK / authenticator state flags.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
