@@ -245,15 +245,6 @@ impl Diagnostics {
         }
     }
 
-    pub fn remove(&mut self, index: usize) {
-        // this is intended to only if a diag with a given index exists
-        let diag = self.diagnostics.remove(index);
-        let c = self.severity_count.remove(&diag.info.severity()).unwrap();
-        if c > 1 {
-            self.severity_count.insert(diag.info.severity(), c - 1);
-        }
-    }
-
     pub fn extend(&mut self, other: Self) {
         let Self {
             diagnostics,
@@ -534,7 +525,7 @@ impl UnprefixedWarningFilters {
                 Some(FILTER_UNUSED_TYPE_PARAMETER),
             ),
             (
-                (unused_const_info.category() as u8, unused_const_info.code()),
+                (unused_const_info.category(), unused_const_info.code()),
                 Some(FILTER_UNUSED_CONST),
             ),
         ]);
