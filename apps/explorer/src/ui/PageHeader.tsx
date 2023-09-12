@@ -52,9 +52,9 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 							{loading ? (
 								<Placeholder rounded="lg" width="140px" />
 							) : (
-								<Heading variant="heading6/semibold" color="steel-darker">
+								<Text variant="captionSmall/semibold" color="hero-dark">
 									{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
-								</Heading>
+								</Text>
 							)}
 						</div>
 						<div className="min-w-0 break-words break-all">

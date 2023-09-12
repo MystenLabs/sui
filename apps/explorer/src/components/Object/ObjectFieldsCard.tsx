@@ -13,6 +13,8 @@ import { FieldsCard, FieldCollapsible, FieldsContainer } from '~/components/Obje
 import { Banner } from '~/ui/Banner';
 import { DescriptionItem } from '~/ui/DescriptionList';
 
+const DEFAULT_OPEN_FIELDS = 3;
+
 interface ObjectFieldsProps {
 	id: string;
 	normalizedStructData?: SuiMoveNormalizedStruct;
@@ -40,8 +42,8 @@ export function ObjectFieldsCard({
 		if (normalizedStructData?.fields) {
 			setOpenFieldsName(
 				normalizedStructData.fields.reduce(
-					(acc, { name }) => {
-						acc[name] = false;
+					(acc, { name }, index) => {
+						acc[name] = index < DEFAULT_OPEN_FIELDS;
 						return acc;
 					},
 					{} as { [name: string]: boolean },

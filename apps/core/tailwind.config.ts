@@ -194,6 +194,7 @@ export default {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
 				90: '22.5rem',
+				120: '30rem',
 				walletLogo: '4.813rem',
 			},
 			maxWidth: {
@@ -232,10 +233,13 @@ export default {
 			borderRadius: {
 				'2lg': '0.625rem',
 			},
+			aspectRatio: {
+				square: '1 / 1',
+			},
 		},
 	},
 	corePlugins: {
-		aspectRatio: false,
+		aspectRatio: true,
 	},
 	plugins: [
 		require('@headlessui/tailwindcss'),

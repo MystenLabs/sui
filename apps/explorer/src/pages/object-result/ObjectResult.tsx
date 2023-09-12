@@ -36,7 +36,7 @@ export function ObjectResult() {
 
 	const isPageError = isError || data.error || (isFetched && !data);
 
-	const resp = data ? translate(data) : null;
+	const resp = data && !isPageError ? translate(data) : null;
 	const isPackage = resp ? resp.objType === PACKAGE_TYPE_NAME : false;
 
 	return (

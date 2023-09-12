@@ -16,6 +16,8 @@ const imageStyles = cva(['z-0 flex-shrink-0 relative'], {
 			medium: 'md:h-31.5 md:w-31.5 h-16 w-16',
 			large: 'h-50 w-50',
 			xl: 'h-90 w-90',
+			xxl: 'h-120 w-120',
+			fill: 'h-full w-full',
 		},
 		disablePreview: {
 			true: '',
@@ -39,6 +41,8 @@ interface Props extends ImageStylesProps {
 	rounded?: ImageProps['rounded'];
 	disablePreview?: boolean;
 	fadeIn?: boolean;
+	imgFit?: ImageProps['fit'];
+	aspect?: ImageProps['aspect'];
 }
 
 export function ObjectVideoImage({
@@ -51,6 +55,9 @@ export function ObjectVideoImage({
 	setOpen,
 	disablePreview,
 	fadeIn,
+	imgFit,
+	aspect,
+	rounded = 'md',
 }: Props) {
 	const close = () => {
 		if (disablePreview) {
@@ -83,7 +90,15 @@ export function ObjectVideoImage({
 				alt={title}
 			/>
 			<div className={imageStyles({ variant, disablePreview })}>
-				<Image rounded="md" onClick={openPreview} alt={title} src={src} fadeIn={fadeIn} />
+				<Image
+					aspect={aspect}
+					rounded={rounded}
+					onClick={openPreview}
+					alt={title}
+					src={src}
+					fadeIn={fadeIn}
+					fit={imgFit}
+				/>
 				{video && (
 					<div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center justify-center rounded-full opacity-80">
 						<MediaPlay16 className={clsx(variant === 'large' ? 'h-8 w-8' : 'h-5 w-5')} />

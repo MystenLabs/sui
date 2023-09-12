@@ -4,14 +4,21 @@
 import { CoinFormat, useFormatCoin } from '@mysten/core';
 import { ArrowUpRight16 } from '@mysten/icons';
 import { type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js/client';
-import { parseStructTag, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import {
+	formatAddress,
+	normalizeStructTag,
+	parseStructTag,
+	SUI_TYPE_ARG,
+} from '@mysten/sui.js/utils';
 import { Heading, Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { Card } from '~/ui/Card';
-import { DescriptionItem, type DescriptionItemProps } from '~/ui/DescriptionList';
+import { type DescriptionItemProps } from '~/ui/DescriptionList';
+import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { ObjectVideoImage } from '~/ui/ObjectVideoImage';
@@ -22,21 +29,22 @@ interface HeroVideoImageProps {
 	title: string;
 	subtitle: string;
 	src: string;
-	variant: 'xl';
 	video?: string | null;
 }
 
-function HeroVideoImage({ title, subtitle, src, video, variant }: HeroVideoImageProps) {
+function HeroVideoImage({ title, subtitle, src, video }: HeroVideoImageProps) {
 	const [open, setOpen] = useState(false);
 
 	return (
-		<div className="group relative">
+		<div className="group relative h-full">
 			<ObjectVideoImage
+				imgFit="contain"
+				aspect="square"
 				title={title}
 				subtitle={subtitle}
 				src={src}
 				video={video}
-				variant={variant}
+				variant="fill"
 				open={open}
 				setOpen={setOpen}
 				rounded="xl"
@@ -56,28 +64,21 @@ function ObjectViewItem({
 	align?: DescriptionItemProps['align'];
 }) {
 	return (
-		<DescriptionItem
-			contentJustify="end"
-			labelWidth="lg"
-			align={align}
-			title={
-				<Text variant="pBodySmall/medium" color="steel-dark">
-					{title}
-				</Text>
-			}
-		>
+		<div className={clsx('flex items-start justify-between gap-10')}>
+			<Text variant="pBodySmall/medium" color="steel-dark">
+				{title}
+			</Text>
+
 			{children}
-		</DescriptionItem>
+		</div>
 	);
 }
 
 function ObjectViewCard({ children }: { children: ReactNode }) {
 	return (
-		<div>
-			<Card bg="white/80" spacing="lg" height="full">
-				<div className="flex flex-col gap-4">{children}</div>
-			</Card>
-		</div>
+		<Card bg="white/80" spacing="lg" height="full">
+			<div className="flex flex-col gap-4">{children}</div>
+		</Card>
 	);
 }
 
@@ -110,7 +111,16 @@ function DescriptionCard({
 	objectType: string;
 	objectId: string;
 }) {
-	const { address, module } = parseStructTag(objectType);
+	const { address, module, ...rest } = parseStructTag(objectType);
+
+	const formattedAddress = formatAddress(address);
+	const structTag = {
+		address: formattedAddress,
+		module,
+		...rest,
+	};
+
+	const normalizedStructTag = normalizeStructTag(structTag);
 
 	return (
 		<ObjectViewCard>
@@ -131,7 +141,7 @@ function DescriptionCard({
 
 			<ObjectViewItem title="Type" align="start">
 				<ObjectLink
-					label={<div className="text-right">{trimStdLibPrefix(objectType)}</div>}
+					label={<div className="text-right">{normalizedStructTag}</div>}
 					objectId={`${address}?module=${module}`}
 				/>
 			</ObjectViewItem>
@@ -155,63 +165,62 @@ function VersionCard({ version, digest }: { version?: string; digest: string }) 
 	);
 }
 
-function OwnerCard({ objOwner }: { objOwner?: ObjectOwner | null }) {
-	if (!objOwner) {
+function OwnerCard({
+	objOwner,
+	display,
+	storageRebate,
+}: {
+	objOwner?: ObjectOwner | null;
+	display?: {
+		[key: string]: string;
+	} | null;
+	storageRebate?: string | null;
+}) {
+	const [storageRebateFormatted] = useFormatCoin(storageRebate, SUI_TYPE_ARG, CoinFormat.FULL);
+
+	if (!objOwner && !display) {
 		return null;
 	}
 
 	return (
 		<ObjectViewCard>
-			<ObjectViewItem title="Owner">
-				{objOwner === 'Immutable' ? (
-					'Immutable'
-				) : 'Shared' in objOwner ? (
-					'Shared'
-				) : 'ObjectOwner' in objOwner ? (
-					<ObjectLink objectId={objOwner.ObjectOwner} />
-				) : (
-					<AddressLink address={objOwner.AddressOwner} />
-				)}
-			</ObjectViewItem>
-		</ObjectViewCard>
-	);
-}
+			{objOwner && (
+				<ObjectViewItem title="Owner">
+					{objOwner === 'Immutable' ? (
+						'Immutable'
+					) : 'Shared' in objOwner ? (
+						'Shared'
+					) : 'ObjectOwner' in objOwner ? (
+						<ObjectLink objectId={objOwner.ObjectOwner} />
+					) : (
+						<AddressLink address={objOwner.AddressOwner} />
+					)}
+				</ObjectViewItem>
+			)}
 
-function DisplayLinksCard({
-	display,
-}: {
-	display?: {
-		[key: string]: string;
-	} | null;
-}) {
-	return (
-		display &&
-		(display.link || display.project_url) && (
-			<ObjectViewCard>
-				{display.link && (
-					<ObjectViewItem title="Link">
-						<LinkWebsite value={display.link} />
-					</ObjectViewItem>
-				)}
+			{display && (display.link || display.project_url) && (
+				<>
+					<Divider />
 
-				{display.project_url && (
-					<ObjectViewItem title="Website">
-						<LinkWebsite value={display.project_url} />
-					</ObjectViewItem>
-				)}
-			</ObjectViewCard>
-		)
-	);
-}
+					{display.link && (
+						<ObjectViewItem title="Link">
+							<LinkWebsite value={display.link} />
+						</ObjectViewItem>
+					)}
 
-function StorageRebateCard({ storageRebate }: { storageRebate?: string | null }) {
-	const [storageRebateFormatted] = useFormatCoin(storageRebate, SUI_TYPE_ARG, CoinFormat.FULL);
+					{display.project_url && (
+						<ObjectViewItem title="Website">
+							<LinkWebsite value={display.project_url} />
+						</ObjectViewItem>
+					)}
+				</>
+			)}
 
-	return (
-		<ObjectViewCard>
+			<Divider />
+
 			<ObjectViewItem title="Storage Rebate">
 				<Text variant="pBodySmall/medium" color="steel-darker">
-					-{storageRebateFormatted}
+					-{storageRebateFormatted} SUI
 				</Text>
 			</ObjectViewItem>
 		</ObjectViewCard>
@@ -232,6 +241,15 @@ export function ObjectView({ data }: ObjectViewProps) {
 	const objOwner = data.data?.owner;
 	const storageRebate = data.data?.storageRebate;
 
+	const heroImageTitle = name || display?.description || trimStdLibPrefix(objectType);
+	const heroImageSubtitle = video ? 'Video' : fileType ?? '';
+	const heroImageProps = {
+		title: heroImageTitle,
+		subtitle: heroImageSubtitle,
+		src: imgUrl,
+		video: video,
+	};
+
 	const { data: imageData } = useQuery({
 		queryKey: ['image-file-type', imgUrl],
 		queryFn: ({ signal }) => genFileTypeMsg(imgUrl, signal!),
@@ -244,36 +262,28 @@ export function ObjectView({ data }: ObjectViewProps) {
 	}, [imageData]);
 
 	return (
-		<div className="flex gap-6">
+		<div className={clsx('address-grid-container-top', !imgUrl && 'no-image')}>
 			{imgUrl !== '' && (
-				<HeroVideoImage
-					title={name || display?.description || trimStdLibPrefix(objectType)}
-					subtitle={video ? 'Video' : fileType ?? ''}
-					src={imgUrl}
-					video={video}
-					variant="xl"
-				/>
+				<div style={{ gridArea: 'heroImage' }}>
+					<HeroVideoImage {...heroImageProps} />
+				</div>
 			)}
 
-			<div className="flex h-full w-full flex-row gap-6">
-				<div className="flex min-w-[50%] basis-1/2 flex-col gap-4">
-					<DescriptionCard
-						name={name}
-						objectType={objectType}
-						objectId={data.data?.objectId!}
-						display={display}
-					/>
+			<div style={{ gridArea: 'description' }}>
+				<DescriptionCard
+					name={name}
+					objectType={objectType}
+					objectId={data.data?.objectId!}
+					display={display}
+				/>
+			</div>
 
-					<VersionCard version={data.data?.version} digest={data.data?.previousTransaction!} />
-				</div>
+			<div style={{ gridArea: 'version' }}>
+				<VersionCard version={data.data?.version} digest={data.data?.previousTransaction!} />
+			</div>
 
-				<div className="flex min-w-[50%] basis-1/2 flex-col gap-4">
-					<OwnerCard objOwner={objOwner} />
-
-					<DisplayLinksCard display={display} />
-
-					<StorageRebateCard storageRebate={storageRebate} />
-				</div>
+			<div style={{ gridArea: 'owner' }}>
+				<OwnerCard objOwner={objOwner} display={display} storageRebate={storageRebate} />
 			</div>
 		</div>
 	);
