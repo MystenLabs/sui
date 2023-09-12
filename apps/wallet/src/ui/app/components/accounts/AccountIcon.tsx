@@ -21,7 +21,6 @@ function ProviderIcon({ provider }: { provider: string }) {
 		case 'facebook':
 			return <SocialFacebook24 height={16} width={16} />;
 		default:
-			// default to Sui for now
 			return <SuiIcon />;
 	}
 }

@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { useAccounts } from './useAccounts';
-import { defaultSortOrder, groupByType } from '../helpers/sortAccounts';
+import { defaultSortOrder, groupByType } from '../helpers/accounts';
 
 export function useAccountGroups() {
 	const { data: accounts } = useAccounts();
