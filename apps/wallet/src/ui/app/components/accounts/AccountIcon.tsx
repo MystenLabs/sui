@@ -17,7 +17,7 @@ function ProviderIcon({ provider }: { provider: string }) {
 		case 'google':
 			return <SocialGoogle24 height={16} width={16} />;
 		case 'twitch':
-			return <SocialTwitch24 height={16} width={16} />;
+			return <SocialTwitch24 color="#6441A5" height={16} width={16} />;
 		case 'facebook':
 			return <SocialFacebook24 height={16} width={16} />;
 		default:
