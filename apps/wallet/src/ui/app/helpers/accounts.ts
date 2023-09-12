@@ -18,6 +18,18 @@ export const defaultSortOrder: AccountType[] = [
 	'qredo',
 ];
 
+export function getAccountBackgroundByType(account: SerializedUIAccount) {
+	if (!isZkAccountSerializedUI(account)) return 'bg-gradients-graph-cards';
+	switch (account.provider) {
+		case 'google':
+			return 'bg-google bg-no-repeat bg-cover';
+		case 'twitch':
+			return 'bg-twitch bg-no-repeat bg-cover';
+		default:
+			return `bg-gradients-graph-cards`;
+	}
+}
+
 export function groupByType(accounts: SerializedUIAccount[]) {
 	return accounts.reduce(
 		(acc, account) => {

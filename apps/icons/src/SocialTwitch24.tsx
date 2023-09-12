@@ -7,13 +7,13 @@ const SvgSocialTwitch24 = (props: SVGProps<SVGSVGElement>) => (
 		width="1em"
 		height="1em"
 		fill="none"
-		viewBox="0 0 24 24"
+		viewBox="0 0 16 16"
 		{...props}
 	>
 		<path
-			fill="#fff"
+			fill="#6441A5"
 			fillRule="evenodd"
-			d="m16.38 15.81 3.143-3.143v-9.88H4.713V15.81h4.046v2.691l2.691-2.69h4.93ZM2 4.595 2.904 1h18.427v12.571l-7.19 7.19h-3.617L8.287 23H6.047v-2.239H2V4.595Zm9.429 7.168H9.642V6.382h1.787v5.381Zm4.95 0h-1.786V6.382h1.787v5.381Z"
+			d="m11.458 10.771 2.286-2.286V1.3H2.973v9.472h2.943v1.957l1.957-1.957h3.585ZM1 2.614 1.658 0h13.4v9.143L9.83 14.372H7.2L5.57 16H3.943v-1.628H1V2.614Zm6.857 5.214h-1.3V3.914h1.3v3.914Zm3.6 0h-1.299V3.914h1.3v3.914Z"
 			clipRule="evenodd"
 		/>
 	</svg>

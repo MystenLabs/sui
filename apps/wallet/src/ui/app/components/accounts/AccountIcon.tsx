@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { SocialGoogle24, SocialTwitch24, Sui } from '@mysten/icons';
+import { SocialFacebook24, SocialGoogle24, SocialTwitch24, Sui } from '@mysten/icons';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 
 function SuiIcon() {
 	return (
-		<div className="bg-sui-primaryBlue2023 rounded-full text-white h-4 w-4 flex items-center justify-center p-1">
+		<div className="bg-steel rounded-full text-white h-4 w-4 flex items-center justify-center p-1">
 			<Sui />
 		</div>
 	);
@@ -15,11 +15,12 @@ function SuiIcon() {
 function ProviderIcon({ provider }: { provider: string }) {
 	switch (provider) {
 		case 'google':
-			return <SocialGoogle24 />;
+			return <SocialGoogle24 height={16} width={16} />;
 		case 'twitch':
-			return <SocialTwitch24 />;
+			return <SocialTwitch24 height={16} width={16} />;
+		case 'facebook':
+			return <SocialFacebook24 height={16} width={16} />;
 		default:
-			// default to Sui for now
 			return <SuiIcon />;
 	}
 }
