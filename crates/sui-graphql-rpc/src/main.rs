@@ -24,12 +24,21 @@ async fn main() {
             rpc_url,
             port,
             host,
+            max_query_depth,
         } => {
-            let config = ServerConfig {
-                port,
-                host,
-                rpc_url,
-            };
+            let mut config = ServerConfig::default();
+            if let Some(rpc_url) = rpc_url {
+                config.rpc_url = rpc_url;
+            }
+            if let Some(port) = port {
+                config.port = port;
+            }
+            if let Some(host) = host {
+                config.host = host;
+            }
+            if let Some(max_query_depth) = max_query_depth {
+                config.max_query_depth = max_query_depth;
+            }
 
             println!("Starting server...");
             start_example_server(Some(config)).await;

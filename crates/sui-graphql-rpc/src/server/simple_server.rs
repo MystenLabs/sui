@@ -9,12 +9,13 @@ use crate::server::builder::ServerBuilder;
 
 use std::default::Default;
 
-use super::builder::{DEFAULT_HOST, DEFAULT_PORT};
+use super::builder::{DEFAULT_DEPTH_LIMIT, DEFAULT_HOST, DEFAULT_PORT};
 
 pub struct ServerConfig {
     pub port: u16,
     pub host: String,
     pub rpc_url: String,
+    pub max_query_depth: usize,
 }
 
 impl std::default::Default for ServerConfig {
@@ -23,6 +24,7 @@ impl std::default::Default for ServerConfig {
             port: DEFAULT_PORT,
             host: DEFAULT_HOST.to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
+            max_query_depth: DEFAULT_DEPTH_LIMIT,
         }
     }
 }
@@ -51,6 +53,7 @@ pub async fn start_example_server(config: Option<ServerConfig>) {
     ServerBuilder::new()
         .port(config.port)
         .host(config.host)
+        .max_query_depth(config.max_query_depth)
         .context_data(data_provider)
         .context_data(data_loader)
         .extension(Logger::default())
