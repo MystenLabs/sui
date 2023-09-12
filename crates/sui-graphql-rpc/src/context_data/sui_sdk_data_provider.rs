@@ -25,7 +25,6 @@ use crate::types::system_parameters::SystemParameters;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::tx_digest::TransactionDigest;
 use crate::types::validator::Validator;
-use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
 use crate::types::gas::GasCostSummary;
@@ -48,7 +47,6 @@ use sui_sdk::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest as NativeTransactionDigest,
         object::Owner as NativeOwner,
-        sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
     SuiClient,
 };
@@ -223,7 +221,7 @@ impl DataProvider for SuiClient {
             .coin_read_api()
             .get_balance(address.into(), type_)
             .await?;
-        Ok(convert_bal(b))
+        Ok(Balance::from(b))
     }
 
     async fn fetch_balance_connection(
@@ -258,7 +256,7 @@ impl DataProvider for SuiClient {
         connection
             .edges
             .extend(bs.into_iter().enumerate().map(|(i, b)| {
-                let balance = convert_bal(b);
+                let balance = Balance::from(b);
                 Edge::new(format!("{:032}", offset + i), balance)
             }));
         Ok(connection)
@@ -472,20 +470,18 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     }
 }
 
-fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
-    Balance {
-        coin_object_count: b.coin_object_count as u64,
-        total_balance: BigInt::from_str(&format!("{}", b.total_balance)).unwrap(),
-    }
-}
-
 pub(crate) fn convert_to_epoch(
     gas_summary: GasCostSummary,
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
     let epoch_id = system_state.epoch;
-    let active_validators = convert_to_validators(system_state.active_validators.clone())?;
+    let active_validators = system_state
+        .active_validators
+        .clone()
+        .into_iter()
+        .map(Validator::from)
+        .collect();
 
     let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
         Error::Internal(format!(
@@ -556,58 +552,6 @@ pub(crate) fn convert_to_epoch(
         protocol_configs: Some(protocol_configs.clone()),
         start_timestamp: Some(start_timestamp),
     })
-}
-
-pub(crate) fn convert_to_validators(
-    validators: Vec<SuiValidatorSummary>,
-) -> Result<Vec<Validator>> {
-    let result = validators
-        .iter()
-        .map(|v| {
-            let credentials = ValidatorCredentials {
-                protocol_pub_key: Some(Base64::from(v.protocol_pubkey_bytes.clone())),
-                network_pub_key: Some(Base64::from(v.network_pubkey_bytes.clone())),
-                worker_pub_key: Some(Base64::from(v.worker_pubkey_bytes.clone())),
-                proof_of_possession: Some(Base64::from(v.proof_of_possession_bytes.clone())),
-                net_address: Some(v.net_address.clone()),
-                p2p_address: Some(v.p2p_address.clone()),
-                primary_address: Some(v.primary_address.clone()),
-                worker_address: Some(v.worker_address.clone()),
-            };
-            Validator {
-                address: Address {
-                    address: SuiAddress::from(v.sui_address),
-                },
-                next_epoch_credentials: Some(credentials.clone()),
-                credentials: Some(credentials),
-                name: Some(v.name.clone()),
-                description: Some(v.description.clone()),
-                image_url: Some(v.image_url.clone()),
-                project_url: Some(v.project_url.clone()),
-                exchange_rates_size: Some(v.exchange_rates_size),
-
-                staking_pool_activation_epoch: Some(v.staking_pool_activation_epoch.unwrap()),
-                staking_pool_sui_balance: Some(BigInt::from(v.staking_pool_sui_balance)),
-                rewards_pool: Some(BigInt::from(v.rewards_pool)),
-                pool_token_balance: Some(BigInt::from(v.pool_token_balance)),
-                pending_stake: Some(BigInt::from(v.pending_stake)),
-                pending_total_sui_withdraw: Some(BigInt::from(v.pending_total_sui_withdraw)),
-                pending_pool_token_withdraw: Some(BigInt::from(v.pending_pool_token_withdraw)),
-                voting_power: Some(v.voting_power),
-                // stake_units: todo!(),
-                gas_price: Some(BigInt::from(v.gas_price)),
-                commission_rate: Some(v.commission_rate),
-                next_epoch_stake: Some(BigInt::from(v.next_epoch_stake)),
-                next_epoch_gas_price: Some(BigInt::from(v.next_epoch_gas_price)),
-                next_epoch_commission_rate: Some(v.next_epoch_commission_rate),
-                // at_risk: todo!(),
-                // report_records: todo!(),
-                // apy: todo!(),
-            }
-        })
-        .collect();
-
-    Ok(result)
 }
 
 impl From<Address> for SuiAddress {
