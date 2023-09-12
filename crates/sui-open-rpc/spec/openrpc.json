@@ -5365,23 +5365,19 @@
         ]
       },
       "Claim": {
-        "description": "Necessary value for claim.",
+        "description": "A claim consists of value and index_mod_4.",
         "type": "object",
         "required": [
-          "index_mod_4",
-          "name",
-          "value_base64"
+          "indexMod4",
+          "value"
         ],
         "properties": {
-          "index_mod_4": {
+          "indexMod4": {
             "type": "integer",
             "format": "uint8",
             "minimum": 0.0
           },
-          "name": {
-            "type": "string"
-          },
-          "value_base64": {
+          "value": {
             "type": "string"
           }
         }
@@ -10576,66 +10572,63 @@
         "type": "object",
         "required": [
           "inputs",
-          "max_epoch",
-          "user_signature"
+          "maxEpoch",
+          "userSignature"
         ],
         "properties": {
           "inputs": {
             "$ref": "#/components/schemas/ZkLoginInputs"
           },
-          "max_epoch": {
+          "maxEpoch": {
             "type": "integer",
             "format": "uint64",
             "minimum": 0.0
           },
-          "user_signature": {
+          "userSignature": {
             "$ref": "#/components/schemas/Signature"
           }
         }
       },
       "ZkLoginInputs": {
-        "description": "All inputs required for the zk login proof verification and other auxiliary inputs.",
+        "description": "All inputs required for the zk login proof verification and other public inputs.",
         "type": "object",
         "required": [
-          "address_seed",
-          "claims",
-          "header_base64",
-          "proof_points"
+          "addressSeed",
+          "headerBase64",
+          "issBase64Details",
+          "proofPoints"
         ],
         "properties": {
-          "address_seed": {
+          "addressSeed": {
             "type": "string"
           },
-          "claims": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Claim"
-            }
-          },
-          "header_base64": {
+          "headerBase64": {
             "type": "string"
           },
-          "proof_points": {
+          "issBase64Details": {
+            "$ref": "#/components/schemas/Claim"
+          },
+          "proofPoints": {
             "$ref": "#/components/schemas/ZkLoginProof"
           }
         }
       },
       "ZkLoginProof": {
-        "description": "The zk login proof.",
+        "description": "The struct for zk login proof.",
         "type": "object",
         "required": [
-          "pi_a",
-          "pi_b",
-          "pi_c"
+          "a",
+          "b",
+          "c"
         ],
         "properties": {
-          "pi_a": {
+          "a": {
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "pi_b": {
+          "b": {
             "type": "array",
             "items": {
               "type": "array",
@@ -10644,7 +10637,7 @@
               }
             }
           },
-          "pi_c": {
+          "c": {
             "type": "array",
             "items": {
               "type": "string"
