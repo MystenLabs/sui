@@ -1254,22 +1254,28 @@ impl State {
         &mut self,
         gc_round: Round,
     ) -> Option<((u64, CertificateDigest), Option<SuspendedCertificate>)> {
-        // Accept suspended certificates at and below gc round + 1, because their parents will not
+        // Accept suspended certificates at and below gc round because their parents will not
         // be accepted into the DAG store anymore, in sanitize_certificate().
         let Some(((round, digest), _children)) = self.missing.first_key_value() else {
             return None;
         };
         // Note that gc_round is the highest round where certificates are gc'ed, and which will
-        // never be in a consensus commit.
-        if *round > gc_round + 1 {
+        // never be in a consensus commit. It's safe to gc up to gc_round, so anything suspended on gc_round + 1
+        // can safely be accepted as their parents (of gc_round) have already been removed from the DAG.
+        // It would be dangerous to accept anything above gc_round here as this could create inconsistencies
+        // in the DAG because we have to make sure anything we accept above gc_round is able to get
+        // properly processed , stored and sent to the DAG.
+        if *round > gc_round {
             return None;
         }
+
         let mut suspended = self.suspended.remove(digest);
         if let Some(suspended) = suspended.as_mut() {
             // Clear the missing_parents field to be consistent with other accepted
             // certificates.
             suspended.missing_parents.clear();
         }
+
         // The missing children info is needed for and will be cleared in accept_children() later.
         Some(((*round, *digest), suspended))
     }
