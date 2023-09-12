@@ -314,7 +314,11 @@ impl CheckpointStore {
             .next()
         {
             let mut batch = self.locally_computed_checkpoints.batch();
-            batch.delete_range(&self.locally_computed_checkpoints, &0, &last_local_summary)?;
+            batch.schedule_delete_range(
+                &self.locally_computed_checkpoints,
+                &0,
+                &last_local_summary,
+            )?;
             batch.write()?;
             info!("Pruned local summaries up to {:?}", last_local_summary);
         }

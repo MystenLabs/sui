@@ -265,7 +265,7 @@ where
         Ok(())
     }
 
-    fn delete_all(&self) -> Result<(), TypedStoreError> {
+    fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
         let mut locked = self.rows.write().unwrap();
         locked.clear();
         Ok(())

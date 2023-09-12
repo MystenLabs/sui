@@ -373,7 +373,7 @@ impl SallyWriteBatch {
     ) -> Result<(), TypedStoreError> {
         match (self, db) {
             (SallyWriteBatch::RocksDB(db_batch), SallyColumn::RocksDB((db_map, _))) => {
-                db_batch.delete_range(db_map, from, to)
+                db_batch.schedule_delete_range(db_map, from, to)
             }
             (SallyWriteBatch::TestDB(write_batch), SallyColumn::TestDB((test_db, _))) => {
                 write_batch.delete_range(test_db, from, to)

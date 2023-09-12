@@ -392,7 +392,7 @@ impl AuthorityPerpetualTables {
         wb: &mut DBBatch,
         object: &ObjectKey,
     ) -> SuiResult<ObjectRef> {
-        wb.delete_range(
+        wb.schedule_delete_range(
             &self.owned_object_transaction_locks,
             &(object.0, object.1, ObjectDigest::MIN),
             &(object.0, object.1, ObjectDigest::MAX),
