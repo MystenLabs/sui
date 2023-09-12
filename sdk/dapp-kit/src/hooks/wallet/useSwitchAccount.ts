@@ -15,7 +15,12 @@ type SwitchAccountArgs = {
 type SwitchAccountResult = void;
 
 type UseSwitchAccountMutationOptions = Omit<
-	UseMutationOptions<SwitchAccountResult, Error, SwitchAccountArgs, unknown>,
+	UseMutationOptions<
+		SwitchAccountResult,
+		WalletNotConnectedError | WalletAccountNotFoundError | Error,
+		SwitchAccountArgs,
+		unknown
+	>,
 	'mutationFn'
 >;
 
