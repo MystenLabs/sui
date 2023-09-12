@@ -12,7 +12,7 @@ import type { Mock } from 'vitest';
 import { suiFeatures } from '../mocks/mockFeatures.js';
 
 describe('useSignPersonalMessage', () => {
-	test('should throw an error when trying to sign a message without a wallet connection', async () => {
+	test('throws an error when trying to sign a message without a wallet connection', async () => {
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useSignPersonalMessage(), { wrapper });
 
@@ -21,7 +21,7 @@ describe('useSignPersonalMessage', () => {
 		await waitFor(() => expect(result.current.error).toBeInstanceOf(WalletNotConnectedError));
 	});
 
-	test('should throw an error when trying to sign a message with a wallet that lacks feature support', async () => {
+	test('throws an error when trying to sign a message with a wallet that lacks feature support', async () => {
 		const { unregister, mockWallet } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
 		});
