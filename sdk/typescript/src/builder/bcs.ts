@@ -39,6 +39,9 @@ export const PROGRAMMABLE_CALL = 'SimpleProgrammableMoveCall';
 export type Option<T> = { some: T } | { none: true };
 
 export const builder = new BCS(bcs);
+registerFixedArray(builder, 'FixedArray[64]', 64);
+registerFixedArray(builder, 'FixedArray[33]', 33);
+registerFixedArray(builder, 'FixedArray[32]', 32);
 
 builder
 	.registerStructType(PROGRAMMABLE_TX_BLOCK, {
@@ -127,10 +130,7 @@ builder
 		sigs: [VECTOR, COMPRESSED_SIGNATURE],
 		bitmap: BCS.U16,
 		multisig_pk: MULTISIG_PUBLIC_KEY,
-	})
-	.registerFixedArray('FixedArray[64]', 64)
-	.registerFixedArray('FixedArray[33]', 33)
-	.registerFixedArray('FixedArray[32]', 32);
+	});
 /**
  * Utilities for better decoding.
  */
@@ -237,3 +237,40 @@ builder.registerType(
 		return data.target.split('::').length === 3;
 	},
 );
+
+function registerFixedArray(bcs: BCS, name: string, length: number) {
+	bcs.registerType(
+		name,
+		function encode(this: BCS, writer, data, typeParams, typeMap) {
+			if (data.length !== length) {
+				throw new Error(`Expected fixed array of length ${length}, got ${data.length}`);
+			}
+
+			if (typeParams.length !== 1) {
+				throw new Error(`Expected one type parameter in a fixed array, got ${typeParams.length}`);
+			}
+
+			let [type] = typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
+
+			for (let piece of data) {
+				this.getTypeInterface(type)._encodeRaw.call(this, writer, piece, typeParams, typeMap);
+			}
+
+			return writer;
+		},
+		function decode(this: BCS, reader, typeParams, typeMap) {
+			if (typeParams.length !== 1) {
+				throw new Error(`Expected one type parameter in a fixed array, got ${typeParams.length}`);
+			}
+
+			let result: any = [];
+			let [type] = typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
+
+			for (let i = 0; i < length; i++) {
+				result.push(this.getTypeInterface(type)._decodeRaw.call(this, reader, typeParams, typeMap));
+			}
+
+			return result;
+		},
+	);
+}

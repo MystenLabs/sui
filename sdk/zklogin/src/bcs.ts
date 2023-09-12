@@ -31,16 +31,12 @@ export interface ZkSignature {
 	userSignature: string | Uint8Array;
 }
 
-zkBcs.registerFixedArray('FixedArray[2]', 2);
-zkBcs.registerFixedArray('FixedArray[3]', 3);
-
 zkBcs.registerStructType('ZkloginSignature', {
 	inputs: {
 		proofPoints: {
-			a: ['FixedArray[3]', BCS.STRING],
-			// nested fixed array seem to not work
-			b: ['FixedArray[3]', ['FixedArray[2]', BCS.STRING]],
-			c: ['FixedArray[3]', BCS.STRING],
+			a: [BCS.VECTOR, BCS.STRING],
+			b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
+			c: [BCS.VECTOR, BCS.STRING],
 		},
 		issBase64Details: {
 			value: BCS.STRING,

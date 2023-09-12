@@ -1327,46 +1327,6 @@ export class BCS {
 
 		return { name: typeName, params };
 	}
-
-	public registerFixedArray(name: string, length: number) {
-		return this.registerType(
-			name,
-			function encode(this: BCS, writer, data, typeParams, typeMap) {
-				console.log(`registerFixedArray ${name}-${length}`, data, typeParams, typeMap);
-				if (data.length !== length) {
-					throw new Error(`Expected fixed array of length ${length}, got ${data.length}`);
-				}
-
-				if (typeParams.length !== 1) {
-					throw new Error(`Expected one type parameter in a fixed array, got ${typeParams.length}`);
-				}
-
-				let [type] = typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
-
-				for (let piece of data) {
-					this.getTypeInterface(type)._encodeRaw.call(this, writer, piece, typeParams, typeMap);
-				}
-
-				return writer;
-			},
-			function decode(this: BCS, reader, typeParams, typeMap) {
-				if (typeParams.length !== 1) {
-					throw new Error(`Expected one type parameter in a fixed array, got ${typeParams.length}`);
-				}
-
-				let result: any = [];
-				let [type] = typeof typeParams[0] === 'string' ? [typeParams[0], []] : typeParams[0];
-
-				for (let i = 0; i < length; i++) {
-					result.push(
-						this.getTypeInterface(type)._decodeRaw.call(this, reader, typeParams, typeMap),
-					);
-				}
-
-				return result;
-			},
-		);
-	}
 }
 
 /**
