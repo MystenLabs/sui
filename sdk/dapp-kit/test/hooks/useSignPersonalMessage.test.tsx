@@ -73,7 +73,7 @@ describe('useSignPersonalMessage', () => {
 			result.current.walletInfo.currentWallet!.features['sui:signPersonalMessage'];
 		const signPersonalMessageMock = signPersonalMessageFeature!.signPersonalMessage as Mock;
 
-		signPersonalMessageMock.mockReturnValue({ bytes: 'abc', signature: '123' });
+		signPersonalMessageMock.mockReturnValueOnce({ bytes: 'abc', signature: '123' });
 
 		result.current.signPersonalMessage.mutate({
 			message: new Uint8Array().fill(123),
