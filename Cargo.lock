@@ -1604,22 +1604,10 @@ version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7774144344a4faa177370406a7ff5f1da24303817368584c6206c8303eb07848"
 dependencies = [
- "funty 1.1.0",
- "radium 0.6.2",
+ "funty",
+ "radium",
  "tap",
- "wyz 0.2.0",
-]
-
-[[package]]
-name = "bitvec"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
-dependencies = [
- "funty 2.0.0",
- "radium 0.7.0",
- "tap",
- "wyz 0.5.1",
+ "wyz",
 ]
 
 [[package]]
@@ -3462,7 +3450,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.6"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=91360ec4a70afb68e3f03fa332b4c7df070476d4#91360ec4a70afb68e3f03fa332b4c7df070476d4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3493,10 +3481,6 @@ dependencies = [
  "hkdf",
  "lazy_static",
  "merlin",
- "num-bigint",
- "num-integer",
- "num-prime",
- "num-traits",
  "once_cell",
  "p256",
  "rand 0.8.5",
@@ -3507,6 +3491,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_bytes",
+ "serde_json",
  "serde_with",
  "sha2 0.10.6",
  "sha3 0.10.6",
@@ -3521,7 +3506,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=91360ec4a70afb68e3f03fa332b4c7df070476d4#91360ec4a70afb68e3f03fa332b4c7df070476d4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3532,7 +3517,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=91360ec4a70afb68e3f03fa332b4c7df070476d4#91360ec4a70afb68e3f03fa332b4c7df070476d4"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -3707,12 +3692,6 @@ name = "funty"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
-
-[[package]]
-name = "funty"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
@@ -6881,33 +6860,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-modular"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64a5fe11d4135c3bcdf3a95b18b194afa9608a5f6ff034f5d857bc9a27fb0119"
-dependencies = [
- "num-bigint",
- "num-integer",
- "num-traits",
-]
-
-[[package]]
-name = "num-prime"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f4e3bc495f6e95bc15a6c0c55ac00421504a5a43d09e3cc455d1fea7015581d"
-dependencies = [
- "bitvec 1.0.1",
- "either",
- "lru 0.7.8",
- "num-bigint",
- "num-integer",
- "num-modular",
- "num-traits",
- "rand 0.8.5",
-]
-
-[[package]]
 name = "num-rational"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7125,7 +7077,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "373b1a4c1338d9cd3d1fa53b3a11bdab5ab6bd80a20f7f7becd76953ae2be909"
 dependencies = [
  "arrayvec 0.7.2",
- "bitvec 0.20.4",
+ "bitvec",
  "byte-slice-cast",
  "impl-trait-for-tuples",
  "parity-scale-codec-derive",
@@ -8026,12 +7978,6 @@ name = "radium"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
-
-[[package]]
-name = "radium"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "radix_trie"
@@ -13635,8 +13581,7 @@ dependencies = [
  "bitflags 1.3.2",
  "bitflags 2.3.3",
  "bitmaps",
- "bitvec 0.20.4",
- "bitvec 1.0.1",
+ "bitvec",
  "blake2",
  "blake3",
  "block-buffer 0.10.3",
@@ -13825,8 +13770,7 @@ dependencies = [
  "form_urlencoded",
  "fragile",
  "fs_extra",
- "funty 1.1.0",
- "funty 2.0.0",
+ "funty",
  "futures",
  "futures-channel",
  "futures-core",
@@ -14040,8 +13984,6 @@ dependencies = [
  "num-complex",
  "num-integer",
  "num-iter",
- "num-modular",
- "num-prime",
  "num-rational",
  "num-traits",
  "num_cpus",
@@ -14147,8 +14089,7 @@ dependencies = [
  "quote 0.6.13",
  "quote 1.0.33",
  "r2d2",
- "radium 0.6.2",
- "radium 0.7.0",
+ "radium",
  "radix_trie",
  "rand 0.7.3",
  "rand 0.8.5",
@@ -14415,8 +14356,7 @@ dependencies = [
  "windows_x86_64_msvc 0.48.0",
  "winnow",
  "winreg",
- "wyz 0.2.0",
- "wyz 0.5.1",
+ "wyz",
  "x509-parser",
  "xml-rs",
  "xmlparser",
@@ -14435,15 +14375,6 @@ name = "wyz"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
-
-[[package]]
-name = "wyz"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05f360fc0b24296329c78fda852a1e9ae82de9cf7b27dae4b7f62f118f77b9ed"
-dependencies = [
- "tap",
-]
 
 [[package]]
 name = "x"

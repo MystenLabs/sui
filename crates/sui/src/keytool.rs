@@ -9,7 +9,7 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::get_oidc_url;
-use fastcrypto_zkp::bn254::zk_login::{AddressParams, OIDCProvider};
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use json_to_table::{json_to_table, Orientation};
 use num_bigint::BigUint;
 use rand::rngs::StdRng;
@@ -183,7 +183,9 @@ pub enum KeyToolCommand {
     ZkLoginSignAndExecuteTx {
         #[clap(long)]
         max_epoch: EpochId,
-        #[clap(long, default_value = "false")]
+        #[clap(long, default_value = "devnet")]
+        network: String,
+        #[clap(long, default_value = "true")]
         fixed: bool,
     },
 
@@ -199,6 +201,8 @@ pub enum KeyToolCommand {
         kp_bigint: String,
         #[clap(long)]
         ephemeral_key_identifier: SuiAddress,
+        #[clap(long, default_value = "devnet")]
+        network: String,
     },
 }
 
@@ -323,7 +327,6 @@ pub enum CommandOutput {
     DecodeTxBytes(TransactionData),
     Error(String),
     Generate(Key),
-    GenerateZkLoginAddress(SuiAddress, AddressParams),
     Import(Key),
     List(Vec<Key>),
     LoadKeypair(KeypairData),
@@ -710,7 +713,11 @@ impl KeyToolCommand {
                 CommandOutput::Show(key)
             }
 
-            KeyToolCommand::ZkLoginSignAndExecuteTx { fixed, max_epoch } => {
+            KeyToolCommand::ZkLoginSignAndExecuteTx {
+                max_epoch,
+                network,
+                fixed,
+            } => {
                 let skp = if fixed {
                     SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])))
                 } else {
@@ -772,6 +779,7 @@ impl KeyToolCommand {
                     &kp_bigint.to_string(),
                     ephemeral_key_identifier,
                     keystore,
+                    &network,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
@@ -782,6 +790,7 @@ impl KeyToolCommand {
                 jwt_randomness,
                 kp_bigint,
                 ephemeral_key_identifier,
+                network,
             } => {
                 let tx_digest = perform_zk_login_test_tx(
                     &parsed_token,
@@ -790,6 +799,7 @@ impl KeyToolCommand {
                     &kp_bigint,
                     ephemeral_key_identifier,
                     keystore,
+                    &network,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
