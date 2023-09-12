@@ -38,7 +38,6 @@ impl TypingVisitor for NativePrimitivesOnlyVisitor {
             mdef.functions
                 .key_cloned_iter()
                 .for_each(|(fname, fdef)| check_native(env, fname.value(), fdef, fname.loc()));
-            // .for_each(|(sloc, fname, fun)| check_native(env, *fname, fun, sloc));
             env.pop_warning_filter_scope();
         }
     }
