@@ -9,7 +9,7 @@ use crate::{
     },
     diag,
     diagnostics::Diagnostics,
-    hlir::ast::{Command, Command_, Exp, ExpListItem, Label, UnannotatedExp_, UnitCase},
+    hlir::ast::{Command, Command_, Exp, Label, UnannotatedExp_, UnitCase},
     shared::ast_debug::*,
 };
 use move_ir_types::location::*;
@@ -320,10 +320,9 @@ fn unreachable_loc_exp(parent_e: &Exp) -> Option<Loc> {
         | E::BorrowLocal(_, _)
         | E::Copy { .. }
         | E::Move { .. } => None,
-        E::ModuleCall(mcall) => unreachable_loc_exp(&mcall.arguments),
-        E::Builtin(_, e)
-        | E::Vector(_, _, _, e)
-        | E::Freeze(e)
+        E::ModuleCall(mcall) => mcall.arguments.iter().find_map(unreachable_loc_exp),
+        E::Builtin(_, args) | E::Vector(_, _, _, args) => args.iter().find_map(unreachable_loc_exp),
+        E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)
         | E::Borrow(_, e, _)
@@ -333,13 +332,7 @@ fn unreachable_loc_exp(parent_e: &Exp) -> Option<Loc> {
 
         E::Pack(_, _, fields) => fields.iter().find_map(|(_, _, e)| unreachable_loc_exp(e)),
 
-        E::ExpList(es) => es.iter().find_map(unreachable_loc_item),
-    }
-}
-
-fn unreachable_loc_item(item: &ExpListItem) -> Option<Loc> {
-    match item {
-        ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => unreachable_loc_exp(e),
+        E::Multiple(es) => es.iter().find_map(unreachable_loc_exp),
     }
 }
 
