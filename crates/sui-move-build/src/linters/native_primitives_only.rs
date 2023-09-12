@@ -8,7 +8,7 @@ use move_compiler::{
     diag,
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     naming::ast as N,
-    shared::CompilationEnv,
+    shared::{CompilationEnv, Identifier},
     typing::{ast as T, core::ProgramInfo, visitor::TypingVisitor},
 };
 use move_ir_types::location::Loc;
@@ -36,8 +36,9 @@ impl TypingVisitor for NativePrimitivesOnlyVisitor {
         for (_, _, mdef) in &program.modules {
             env.add_warning_filter_scope(mdef.warning_filter.clone());
             mdef.functions
-                .iter()
-                .for_each(|(sloc, fname, fun)| check_native(env, *fname, fun, sloc));
+                .key_cloned_iter()
+                .for_each(|(fname, fdef)| check_native(env, fname.value(), fdef, fname.loc()));
+            // .for_each(|(sloc, fname, fun)| check_native(env, *fname, fun, sloc));
             env.pop_warning_filter_scope();
         }
     }

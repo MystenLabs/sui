@@ -18,5 +18,10 @@ module 0x42::test1 {
 
 module 0x42::test2 {
     #[allow(unused_function)]
-    native fun should_not_complain(a:u64, b:bool, c:bool) : bool;
+    native fun should_not_complain();
+}
+
+module 0x42::test3 {
+    #[allow(unused_function)]
+    native fun compare_numbers(a:u64,b:u64) : bool;
 }
