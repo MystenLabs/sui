@@ -8084,27 +8084,12 @@
           }
         ]
       },
-      "SuiAuthenticatorStateCreate": {
-        "type": "object",
-        "required": [
-          "epoch"
-        ],
-        "properties": {
-          "epoch": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          }
-        }
-      },
       "SuiAuthenticatorStateExpire": {
         "type": "object",
         "required": [
-          "epoch",
           "min_epoch"
         ],
         "properties": {
-          "epoch": {
-            "$ref": "#/components/schemas/BigInt_for_uint64"
-          },
           "min_epoch": {
             "$ref": "#/components/schemas/BigInt_for_uint64"
           }
@@ -8284,6 +8269,12 @@
       "SuiEndOfEpochTransactionKind": {
         "oneOf": [
           {
+            "type": "string",
+            "enum": [
+              "AuthenticatorStateCreate"
+            ]
+          },
+          {
             "type": "object",
             "required": [
               "ChangeEpoch"
@@ -8291,18 +8282,6 @@
             "properties": {
               "ChangeEpoch": {
                 "$ref": "#/components/schemas/SuiChangeEpoch"
-              }
-            },
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "required": [
-              "AuthenticatorStateCreate"
-            ],
-            "properties": {
-              "AuthenticatorStateCreate": {
-                "$ref": "#/components/schemas/SuiAuthenticatorStateCreate"
               }
             },
             "additionalProperties": false

@@ -366,17 +366,12 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::ChangeEpoch(e) => {
                                 SuiEndOfEpochTransactionKind::ChangeEpoch(e.into())
                             }
-                            EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
-                                SuiEndOfEpochTransactionKind::AuthenticatorStateCreate(
-                                    SuiAuthenticatorStateCreate {
-                                        epoch: create.epoch,
-                                    },
-                                )
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateCreate
                             }
                             EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
                                 SuiEndOfEpochTransactionKind::AuthenticatorStateExpire(
                                     SuiAuthenticatorStateExpire {
-                                        epoch: expire.epoch,
                                         min_epoch: expire.min_epoch,
                                     },
                                 )
@@ -1117,24 +1112,13 @@ pub struct SuiEndOfEpochTransaction {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub enum SuiEndOfEpochTransactionKind {
     ChangeEpoch(SuiChangeEpoch),
-    AuthenticatorStateCreate(SuiAuthenticatorStateCreate),
+    AuthenticatorStateCreate,
     AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
 }
 
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct SuiAuthenticatorStateCreate {
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: u64,
-}
-
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct SuiAuthenticatorStateExpire {
-    #[schemars(with = "BigInt<u64>")]
-    #[serde_as(as = "BigInt<u64>")]
-    pub epoch: u64,
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub min_epoch: u64,

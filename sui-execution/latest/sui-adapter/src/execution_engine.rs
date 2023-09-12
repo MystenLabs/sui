@@ -46,9 +46,9 @@ mod checked {
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::InputObjects;
     use sui_types::transaction::{
-        Argument, AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
-        CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg,
-        ProgrammableTransaction, TransactionKind,
+        Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
+        Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
+        TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -580,9 +580,9 @@ mod checked {
                             )?;
                             return Ok(Mode::empty_results());
                         }
-                        EndOfEpochTransactionKind::AuthenticatorStateCreate(create) => {
+                        EndOfEpochTransactionKind::AuthenticatorStateCreate => {
                             assert!(protocol_config.enable_jwk_consensus_updates());
-                            builder = setup_authenticator_state_create(builder, create);
+                            builder = setup_authenticator_state_create(builder);
                         }
                         EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
                             assert!(protocol_config.enable_jwk_consensus_updates());
@@ -916,7 +916,6 @@ mod checked {
 
     fn setup_authenticator_state_create(
         mut builder: ProgrammableTransactionBuilder,
-        _create: AuthenticatorStateCreate,
     ) -> ProgrammableTransactionBuilder {
         builder
             .move_call(

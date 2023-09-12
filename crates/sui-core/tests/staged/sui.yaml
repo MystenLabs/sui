@@ -34,12 +34,8 @@ Argument:
         TUPLE:
           - U16
           - U16
-AuthenticatorStateCreate:
-  STRUCT:
-    - epoch: U64
 AuthenticatorStateExpire:
   STRUCT:
-    - epoch: U64
     - min_epoch: U64
     - authenticator_obj_initial_shared_version:
         TYPENAME: SequenceNumber
@@ -278,9 +274,7 @@ EndOfEpochTransactionKind:
         NEWTYPE:
           TYPENAME: ChangeEpoch
     1:
-      AuthenticatorStateCreate:
-        NEWTYPE:
-          TYPENAME: AuthenticatorStateCreate
+      AuthenticatorStateCreate: UNIT
     2:
       AuthenticatorStateExpire:
         NEWTYPE:

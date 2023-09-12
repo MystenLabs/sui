@@ -3758,7 +3758,6 @@ impl AuthorityState {
                 .expect("initial version must exist");
 
             let tx = EndOfEpochTransactionKind::new_authenticator_state_expire(
-                epoch_store.epoch(),
                 min_epoch,
                 authenticator_obj_initial_shared_version,
             );
@@ -3767,7 +3766,7 @@ impl AuthorityState {
 
             tx
         } else {
-            let tx = EndOfEpochTransactionKind::new_authenticator_state_create(epoch_store.epoch());
+            let tx = EndOfEpochTransactionKind::new_authenticator_state_create();
             info!("Creating AuthenticatorStateCreate tx");
             tx
         };

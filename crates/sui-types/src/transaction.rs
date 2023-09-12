@@ -188,19 +188,7 @@ impl GenesisObject {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct AuthenticatorStateCreate {
-    // note: epoch is not used, it exists just to give the transaction a guaranteed
-    // unique digest.
-    /// Epoch of the authenticator state create transaction
-    pub epoch: u64,
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorStateExpire {
-    // note: epoch is not used, it exists just to give the transaction a guaranteed
-    // unique digest.
-    /// Epoch of the authenticator state expiry transaction
-    pub epoch: u64,
     /// expire JWKs that have a lower epoch than this
     pub min_epoch: u64,
     /// The initial version of the authenticator object that it was shared at.
@@ -263,7 +251,7 @@ pub enum TransactionKind {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum EndOfEpochTransactionKind {
     ChangeEpoch(ChangeEpoch),
-    AuthenticatorStateCreate(AuthenticatorStateCreate),
+    AuthenticatorStateCreate,
     AuthenticatorStateExpire(AuthenticatorStateExpire),
 }
 
@@ -291,19 +279,17 @@ impl EndOfEpochTransactionKind {
     }
 
     pub fn new_authenticator_state_expire(
-        epoch: u64,
         min_epoch: u64,
         authenticator_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
         Self::AuthenticatorStateExpire(AuthenticatorStateExpire {
-            epoch,
             min_epoch,
             authenticator_obj_initial_shared_version,
         })
     }
 
-    pub fn new_authenticator_state_create(epoch: u64) -> Self {
-        Self::AuthenticatorStateCreate(AuthenticatorStateCreate { epoch })
+    pub fn new_authenticator_state_create() -> Self {
+        Self::AuthenticatorStateCreate
     }
 
     fn input_objects(&self) -> Vec<InputObjectKind> {
@@ -315,7 +301,7 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 }]
             }
-            Self::AuthenticatorStateCreate(_) => vec![],
+            Self::AuthenticatorStateCreate => vec![],
             Self::AuthenticatorStateExpire(expire) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
@@ -334,14 +320,14 @@ impl EndOfEpochTransactionKind {
                 initial_shared_version: expire.authenticator_obj_initial_shared_version(),
                 mutable: true,
             })),
-            Self::AuthenticatorStateCreate(_) => Either::Right(iter::empty()),
+            Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
         }
     }
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             Self::ChangeEpoch(_) => (),
-            Self::AuthenticatorStateCreate(_) | Self::AuthenticatorStateExpire(_) => {
+            Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_jwk_consensus_updates());
             }
@@ -377,7 +363,7 @@ impl VersionedProtocolMessage for TransactionKind {
                     for tx in txns {
                         match tx {
                             EndOfEpochTransactionKind::ChangeEpoch(_) => (),
-                            EndOfEpochTransactionKind::AuthenticatorStateCreate(_)
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate
                             | EndOfEpochTransactionKind::AuthenticatorStateExpire(_) => {
                                 if !protocol_config.enable_jwk_consensus_updates() {
                                     return Err(SuiError::UnsupportedFeatureError {
