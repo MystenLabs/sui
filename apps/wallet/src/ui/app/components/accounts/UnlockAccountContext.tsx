@@ -40,7 +40,9 @@ export const UnlockAccountProvider = ({ children }: { children: ReactNode }) => 
 				} else {
 					try {
 						// for non-password-unlockable accounts, unlock directly
+						setAccountToUnlock(account);
 						await unlockAccountMutation.mutateAsync({ id: account.id });
+						setAccountToUnlock(null);
 						toast.success('Account unlocked');
 					} catch (e) {
 						toast.error((e as Error).message || 'Failed to unlock account');

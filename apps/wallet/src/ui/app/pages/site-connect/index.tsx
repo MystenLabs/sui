@@ -127,7 +127,7 @@ function SiteConnectPage() {
 						blended
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
-						<div className="flex flex-col gap-8">
+						<div className="flex flex-col gap-8 py-6">
 							{unlockedAccounts.length > 0 && (
 								<AccountMultiSelectWithControls
 									selectedAccountIDs={accountsToConnect.map((account) => account.id)}
