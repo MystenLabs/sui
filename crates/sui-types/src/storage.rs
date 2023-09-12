@@ -15,6 +15,7 @@ use crate::messages_checkpoint::{
     VerifiedCheckpointContents,
 };
 use crate::move_package::MovePackage;
+use crate::object::Owner;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, VerifiedTransaction};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
@@ -266,6 +267,88 @@ impl<S: ParentSync> ParentSync for &mut S {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         ParentSync::get_latest_parent_entry_ref_deprecated(*self, object_id)
+    }
+}
+
+impl ChildObjectResolver for &[Object] {
+    fn read_child_object(
+        &self,
+        parent_id: &ObjectID,
+        child_id: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let child_id = *child_id;
+        let Some(child_object) = self
+            .iter()
+            .filter(|o| o.id() == child_id && o.version() <= child_version_upper_bound)
+            .max_by_key(|o| o.version())
+        else {
+            return Ok(None)
+        };
+
+        let parent_id = *parent_id;
+        if child_object.owner != Owner::ObjectOwner(parent_id.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: child_id,
+                given_parent: parent_id,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object.clone()))
+    }
+}
+
+impl ChildObjectResolver for BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)> {
+    fn read_child_object(
+        &self,
+        parent_id: &ObjectID,
+        child_id: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let child_id = *child_id;
+        let Some((_, child_object, _)) = self.get(&child_id) else {
+            return Ok(None)
+        };
+        if child_object.version() > child_version_upper_bound {
+            return Ok(None);
+        }
+
+        let parent_id = *parent_id;
+        if child_object.owner != Owner::ObjectOwner(parent_id.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: child_id,
+                given_parent: parent_id,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object.clone()))
+    }
+}
+
+impl ChildObjectResolver for BTreeMap<ObjectID, Object> {
+    fn read_child_object(
+        &self,
+        parent_id: &ObjectID,
+        child_id: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let child_id = *child_id;
+        let Some(child_object) = self.get(&child_id) else {
+            return Ok(None)
+        };
+        if child_object.version() > child_version_upper_bound {
+            return Ok(None);
+        }
+
+        let parent_id = *parent_id;
+        if child_object.owner != Owner::ObjectOwner(parent_id.into()) {
+            return Err(SuiError::InvalidChildObjectAccess {
+                object: child_id,
+                given_parent: parent_id,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some(child_object.clone()))
     }
 }
 
@@ -1170,6 +1253,9 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
     }
 }
 
+pub trait ObjectAndChildObjectStore: ObjectStore + ChildObjectResolver {}
+impl<T: ObjectStore + ChildObjectResolver> ObjectAndChildObjectStore for T {}
+
 pub trait BackingStore:
     BackingPackageStore
     + ChildObjectResolver
@@ -1177,7 +1263,7 @@ pub trait BackingStore:
     + ObjectStore
     + ParentSync
 {
-    fn as_object_store(&self) -> &dyn ObjectStore;
+    fn as_object_store(&self) -> &dyn ObjectAndChildObjectStore;
 }
 
 impl<T> BackingStore for T
@@ -1188,7 +1274,7 @@ where
     T: ObjectStore,
     T: ParentSync,
 {
-    fn as_object_store(&self) -> &dyn ObjectStore {
+    fn as_object_store(&self) -> &dyn ObjectAndChildObjectStore {
         self
     }
 }

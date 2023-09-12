@@ -7,7 +7,7 @@ use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
-use crate::storage::ObjectStore;
+use crate::storage::ObjectAndChildObjectStore;
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
 use crate::sui_system_state::get_validator_from_table;
@@ -416,7 +416,7 @@ pub fn get_validator_by_pool_id<S>(
     pool_id: ObjectID,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
-    S: ObjectStore,
+    S: ObjectAndChildObjectStore,
 {
     // First try to find in active validator set.
     let active_validator = system_state_summary

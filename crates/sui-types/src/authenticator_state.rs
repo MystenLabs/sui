@@ -9,7 +9,7 @@ use crate::base_types::SequenceNumber;
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::{SuiError, SuiResult};
 use crate::object::Owner;
-use crate::storage::ObjectStore;
+use crate::storage::{ObjectAndChildObjectStore, ObjectStore};
 use crate::{id::UID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS};
 
 pub const AUTHENTICATOR_STATE_MODULE_NAME: &IdentStr = ident_str!("authenticator_state");
@@ -105,7 +105,7 @@ impl std::cmp::Ord for ActiveJwk {
 }
 
 pub fn get_authenticator_state(
-    object_store: &dyn ObjectStore,
+    object_store: &dyn ObjectAndChildObjectStore,
 ) -> SuiResult<Option<AuthenticatorStateInner>> {
     let outer = object_store.get_object(&SUI_AUTHENTICATOR_STATE_OBJECT_ID)?;
     let Some(outer) = outer else {

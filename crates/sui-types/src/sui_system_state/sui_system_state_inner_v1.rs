@@ -10,7 +10,7 @@ use crate::crypto::AuthorityPublicKeyBytes;
 use crate::error::SuiError;
 use crate::id::ID;
 use crate::multiaddr::Multiaddr;
-use crate::storage::ObjectStore;
+use crate::storage::ObjectAndChildObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
@@ -563,7 +563,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectAndChildObjectStore>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {

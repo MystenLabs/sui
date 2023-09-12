@@ -6,7 +6,7 @@ use crate::base_types::SuiAddress;
 use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::error::SuiError;
-use crate::storage::ObjectStore;
+use crate::storage::ObjectAndChildObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use crate::sui_system_state::get_validators_from_table_vec;
 use crate::sui_system_state::sui_system_state_inner_v1::{
@@ -140,7 +140,7 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV2 {
         }
     }
 
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectAndChildObjectStore>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {

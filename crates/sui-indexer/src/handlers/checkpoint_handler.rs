@@ -243,6 +243,35 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
     }
 }
 
+impl<'a> sui_types::storage::ChildObjectResolver for CheckpointDataObjectStore<'a> {
+    fn read_child_object(
+        &self,
+        parent_id: &ObjectID,
+        child_id: &ObjectID,
+        child_version_upper_bound: sui_types::base_types::SequenceNumber,
+    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+        let child_id = *child_id;
+        let Some(child_object) = self
+                .objects
+                .iter()
+                .filter(|o| o.id() == child_id && o.version() <= child_version_upper_bound)
+                .max_by_key(|o| o.version())
+            else {
+                return Ok(None)
+            };
+
+        let parent_id = *parent_id;
+        if child_object.owner != Owner::ObjectOwner(parent_id.into()) {
+            return Err(sui_types::error::SuiError::InvalidChildObjectAccess {
+                object: child_id,
+                given_parent: parent_id,
+                actual_owner: child_object.owner,
+            });
+        }
+        Ok(Some((*child_object).clone()))
+    }
+}
+
 impl<S> CheckpointProcessor<S>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,

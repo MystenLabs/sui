@@ -8,7 +8,7 @@ use crate::dynamic_field::{
 };
 use crate::error::SuiError;
 use crate::object::{MoveObject, Object};
-use crate::storage::ObjectStore;
+use crate::storage::ObjectAndChildObjectStore;
 use crate::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use crate::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use crate::versioned::Versioned;
@@ -76,7 +76,7 @@ impl SuiSystemStateWrapper {
     pub fn advance_epoch_safe_mode(
         &self,
         params: &AdvanceEpochParams,
-        object_store: &dyn ObjectStore,
+        object_store: &dyn ObjectAndChildObjectStore,
         protocol_config: &ProtocolConfig,
     ) -> Object {
         let id = self.id.id.bytes;
@@ -171,7 +171,7 @@ pub trait SuiSystemStateTrait {
     fn safe_mode(&self) -> bool;
     fn advance_epoch_safe_mode(&mut self, params: &AdvanceEpochParams);
     fn get_current_epoch_committee(&self) -> CommitteeWithNetworkMetadata;
-    fn get_pending_active_validators<S: ObjectStore>(
+    fn get_pending_active_validators<S: ObjectAndChildObjectStore>(
         &self,
         object_store: &S,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError>;
@@ -218,7 +218,7 @@ impl SuiSystemState {
 }
 
 pub fn get_sui_system_state_wrapper(
-    object_store: &dyn ObjectStore,
+    object_store: &dyn ObjectAndChildObjectStore,
 ) -> Result<SuiSystemStateWrapper, SuiError> {
     let wrapper = object_store
         .get_object(&SUI_SYSTEM_STATE_OBJECT_ID)?
@@ -236,7 +236,9 @@ pub fn get_sui_system_state_wrapper(
     Ok(result)
 }
 
-pub fn get_sui_system_state(object_store: &dyn ObjectStore) -> Result<SuiSystemState, SuiError> {
+pub fn get_sui_system_state(
+    object_store: &dyn ObjectAndChildObjectStore,
+) -> Result<SuiSystemState, SuiError> {
     let wrapper = get_sui_system_state_wrapper(object_store)?;
     let id = wrapper.id.id.bytes;
     match wrapper.version {
@@ -320,7 +322,7 @@ pub fn get_validator_from_table<S, K>(
     key: &K,
 ) -> Result<SuiValidatorSummary, SuiError>
 where
-    S: ObjectStore,
+    S: ObjectAndChildObjectStore,
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
 {
     let field: ValidatorWrapper = get_dynamic_field_from_store(object_store, table_id, key)
@@ -381,7 +383,7 @@ pub fn get_validators_from_table_vec<S, ValidatorType>(
     table_size: u64,
 ) -> Result<Vec<ValidatorType>, SuiError>
 where
-    S: ObjectStore,
+    S: ObjectAndChildObjectStore,
     ValidatorType: Serialize + DeserializeOwned,
 {
     let mut validators = vec![];
