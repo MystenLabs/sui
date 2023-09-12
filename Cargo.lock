@@ -10036,6 +10036,7 @@ dependencies = [
  "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
+ "sui-transaction-checks",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -11553,6 +11554,19 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-transaction-checks"
+version = "0.1.0"
+dependencies = [
+ "sui-config",
+ "sui-execution",
+ "sui-macros",
+ "sui-protocol-config",
+ "sui-types",
+ "tracing",
  "workspace-hack",
 ]
 

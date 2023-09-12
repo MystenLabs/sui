@@ -134,6 +134,7 @@ members = [
     "crates/sui-tls",
     "crates/sui-tool",
     "crates/sui-transaction-builder",
+    "crates/sui-transaction-checks",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
@@ -583,6 +584,7 @@ sui-tls = { path = "crates/sui-tls" }
 sui-rest-api = { path = "crates/sui-rest-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
+sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }
