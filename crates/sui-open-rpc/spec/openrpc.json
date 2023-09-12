@@ -1359,6 +1359,7 @@
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_jwk_consensus_updates": false,
+                "end_of_epoch_transaction_supported": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
@@ -1628,6 +1629,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
                 },
@@ -8082,6 +8084,17 @@
           }
         ]
       },
+      "SuiAuthenticatorStateExpire": {
+        "type": "object",
+        "required": [
+          "min_epoch"
+        ],
+        "properties": {
+          "min_epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      },
       "SuiCallArg": {
         "oneOf": [
           {
@@ -8179,6 +8192,33 @@
           }
         ]
       },
+      "SuiChangeEpoch": {
+        "type": "object",
+        "required": [
+          "computation_charge",
+          "epoch",
+          "epoch_start_timestamp_ms",
+          "storage_charge",
+          "storage_rebate"
+        ],
+        "properties": {
+          "computation_charge": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "epoch": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "epoch_start_timestamp_ms": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storage_charge": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          },
+          "storage_rebate": {
+            "$ref": "#/components/schemas/BigInt_for_uint64"
+          }
+        }
+      },
       "SuiCoinMetadata": {
         "type": "object",
         "required": [
@@ -8225,6 +8265,40 @@
             "type": "string"
           }
         }
+      },
+      "SuiEndOfEpochTransactionKind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "AuthenticatorStateCreate"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "ChangeEpoch"
+            ],
+            "properties": {
+              "ChangeEpoch": {
+                "$ref": "#/components/schemas/SuiChangeEpoch"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "AuthenticatorStateExpire"
+            ],
+            "properties": {
+              "AuthenticatorStateExpire": {
+                "$ref": "#/components/schemas/SuiAuthenticatorStateExpire"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SuiExecutionResult": {
         "type": "object",
@@ -9994,7 +10068,7 @@
             }
           },
           {
-            "description": "An transaction which updates global authenticator state",
+            "description": "A transaction which updates global authenticator state",
             "type": "object",
             "required": [
               "epoch",
@@ -10020,6 +10094,28 @@
               },
               "round": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
+            "description": "The transaction which occurs only at the end of the epoch",
+            "type": "object",
+            "required": [
+              "kind",
+              "transactions"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "EndOfEpochTransaction"
+                ]
+              },
+              "transactions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SuiEndOfEpochTransactionKind"
+                }
               }
             }
           }

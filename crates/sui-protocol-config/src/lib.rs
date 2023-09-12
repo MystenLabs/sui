@@ -72,6 +72,7 @@ const MAX_PROTOCOL_VERSION: u64 = 24;
 //             value for mainnet.
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
+//             JWK / authenticator state flags.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -271,6 +272,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_jwk_consensus_updates: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    end_of_epoch_transaction_supported: bool,
+
     // Perform simple conservation checks keeping into account out of gas scenarios
     // while charging for storage.
     #[serde(skip_serializing_if = "is_false")]
@@ -761,6 +766,10 @@ pub struct ProtocolConfig {
     consensus_bad_nodes_stake_threshold: Option<u64>,
 
     max_jwk_votes_per_validator_per_epoch: Option<u64>,
+    // The maximum age of a JWK in epochs before it is removed from the AuthenticatorState object.
+    // Applied at the end of an epoch as a delta from the new epoch value, so setting this to 1
+    // will cause the new epoch to start with JWKs from the previous epoch still valid.
+    max_age_of_jwk_in_epochs: Option<u64>,
 }
 
 // feature flags
@@ -884,7 +893,12 @@ impl ProtocolConfig {
     }
 
     pub fn enable_jwk_consensus_updates(&self) -> bool {
-        self.feature_flags.enable_jwk_consensus_updates
+        let ret = self.feature_flags.enable_jwk_consensus_updates;
+        if ret {
+            // jwk updates required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
     }
 
     pub fn simple_conservation_checks(&self) -> bool {
@@ -893,6 +907,20 @@ impl ProtocolConfig {
 
     pub fn loaded_child_object_format_type(&self) -> bool {
         self.feature_flags.loaded_child_object_format_type
+    }
+
+    pub fn end_of_epoch_transaction_supported(&self) -> bool {
+        let ret = self.feature_flags.end_of_epoch_transaction_supported;
+        if !ret {
+            // jwk updates required end-of-epoch transactions
+            assert!(!self.feature_flags.enable_jwk_consensus_updates);
+        }
+        ret
+    }
+
+    // this function only exists for readability in the genesis code.
+    pub fn create_authenticator_state_in_genesis(&self) -> bool {
+        self.enable_jwk_consensus_updates()
     }
 }
 
@@ -1261,6 +1289,8 @@ impl ProtocolConfig {
 
             max_jwk_votes_per_validator_per_epoch: None,
 
+                max_age_of_jwk_in_epochs: None,
+
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -1414,6 +1444,15 @@ impl ProtocolConfig {
                 24 => {
                     cfg.feature_flags.simple_conservation_checks = true;
                     cfg.max_publish_or_upgrade_per_ptb = Some(5);
+
+                    cfg.feature_flags.end_of_epoch_transaction_supported = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_jwk_consensus_updates = true;
+                        // Max of 100 votes per hour
+                        cfg.max_jwk_votes_per_validator_per_epoch = Some(2400);
+                        cfg.max_age_of_jwk_in_epochs = Some(1);
+                    }
                 }
                 // Use this template when making changes:
                 //

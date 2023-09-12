@@ -29,6 +29,8 @@ feature_flags:
     - Google
     - Twitch
   loaded_child_object_format: true
+  enable_jwk_consensus_updates: true
+  end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
 max_tx_size_bytes: 131072
@@ -196,4 +198,6 @@ scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
 execution_version: 1
 consensus_bad_nodes_stake_threshold: 20
+max_jwk_votes_per_validator_per_epoch: 2400
+max_age_of_jwk_in_epochs: 1
 

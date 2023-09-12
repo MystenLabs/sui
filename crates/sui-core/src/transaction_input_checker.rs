@@ -28,8 +28,7 @@ mod checked {
         object::{Object, Owner},
     };
     use sui_types::{
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-        SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     };
     use tracing::instrument;
 
@@ -171,7 +170,7 @@ mod checked {
 
         let tx_data = &cert.data().intent_message().value;
         let input_object_kinds = tx_data.input_objects()?;
-        let input_object_data = if tx_data.is_change_epoch_tx() {
+        let input_object_data = if tx_data.is_end_of_epoch_tx() {
             // When changing the epoch, we update a the system object, which is shared, without going
             // through sequencing, so we must bypass the sequence checks here.
             store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?
@@ -358,7 +357,6 @@ mod checked {
             }
             InputObjectKind::SharedMoveObject {
                 id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
                 ..
             } => {
                 if system_transaction {
