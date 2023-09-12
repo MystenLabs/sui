@@ -1449,8 +1449,8 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_jwk_consensus_updates = true;
-                        // Max of 100 votes per hour
-                        cfg.max_jwk_votes_per_validator_per_epoch = Some(2400);
+                        // Max of 10 votes per hour
+                        cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
                 }
