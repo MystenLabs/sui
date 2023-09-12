@@ -5,7 +5,7 @@ use crate::base_types::VersionDigest;
 use crate::effects::TransactionEvents;
 use crate::{
     base_types::{ObjectID, SequenceNumber},
-    object::Object,
+    object::{Object, Owner},
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -23,7 +23,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
-    pub mutable_inputs: BTreeMap<ObjectID, VersionDigest>,
+    pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
     pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,

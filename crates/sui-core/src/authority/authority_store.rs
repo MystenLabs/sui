@@ -1012,7 +1012,7 @@ impl AuthorityStore {
         _epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            input_objects,
+            input_objects: _,
             mutable_inputs,
             written,
             events,
@@ -1026,12 +1026,8 @@ impl AuthorityStore {
 
         let owned_inputs: Vec<_> = mutable_inputs
             .into_iter()
-            .filter_map(|(id, (version, digest))| {
-                input_objects
-                    .get(&id)
-                    .unwrap()
-                    .is_address_owned()
-                    .then_some((id, version, digest))
+            .filter_map(|(id, ((version, digest), owner))| {
+                owner.is_address_owned().then_some((id, version, digest))
             })
             .collect();
 

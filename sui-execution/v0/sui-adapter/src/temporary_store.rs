@@ -48,7 +48,7 @@ pub struct TemporaryStore<'backing> {
     input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: BTreeMap<ObjectID, VersionDigest>, // Inputs that are mutable
+    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.

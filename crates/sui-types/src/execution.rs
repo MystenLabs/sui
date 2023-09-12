@@ -12,7 +12,7 @@ use move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 
 use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, VersionDigest},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
     digests::ObjectDigest,
     error::{ExecutionError, ExecutionErrorKind, SuiError},
