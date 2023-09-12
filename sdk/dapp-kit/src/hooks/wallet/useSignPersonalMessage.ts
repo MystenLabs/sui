@@ -33,12 +33,12 @@ export function useSignPersonalMessage({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signPersonalMessage(mutationKey),
-		mutationFn: async (personalMessageInput) => {
+		mutationFn: async (signPersonalMessageArgs) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
 
-			const signerAccount = personalMessageInput.account ?? currentAccount;
+			const signerAccount = signPersonalMessageArgs.account ?? currentAccount;
 			if (!signerAccount) {
 				throw new WalletNoAccountSelectedError(
 					'No wallet account is selected to sign the personal message with.',
@@ -53,7 +53,7 @@ export function useSignPersonalMessage({
 			}
 
 			return await signPersonalMessageFeature.signPersonalMessage({
-				...personalMessageInput,
+				...signPersonalMessageArgs,
 				account: signerAccount,
 			});
 		},
