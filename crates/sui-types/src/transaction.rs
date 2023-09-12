@@ -15,17 +15,13 @@ use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::{
-    AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
-    ConsensusCommitPrologue,
-};
+use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -188,6 +184,52 @@ impl GenesisObject {
         match self {
             GenesisObject::RawObject { data, .. } => data.id(),
         }
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateCreate {
+    // note: epoch is not used, it exists just to give the transaction a guaranteed
+    // unique digest.
+    /// Epoch of the authenticator state create transaction
+    pub epoch: u64,
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateExpire {
+    // note: epoch is not used, it exists just to give the transaction a guaranteed
+    // unique digest.
+    /// Epoch of the authenticator state expiry transaction
+    pub epoch: u64,
+    /// expire JWKs that have a lower epoch than this
+    pub min_epoch: u64,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+}
+
+impl AuthenticatorStateExpire {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateUpdate {
+    /// Epoch of the authenticator state update transaction
+    pub epoch: u64,
+    /// Consensus round of the authenticator state update
+    pub round: u64,
+    /// newly active jwks
+    pub new_active_jwks: Vec<ActiveJwk>,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+    // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
+    // TransactionKind.
+}
+
+impl AuthenticatorStateUpdate {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
     }
 }
 
@@ -1022,10 +1064,10 @@ impl TransactionKind {
                     mutable: true,
                 })))
             }
-            Self::AuthenticatorStateUpdate(_) => {
+            Self::AuthenticatorStateUpdate(update) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                    initial_shared_version: update.authenticator_obj_initial_shared_version,
                     mutable: true,
                 })))
             }

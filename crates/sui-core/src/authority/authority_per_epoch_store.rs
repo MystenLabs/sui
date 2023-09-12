@@ -26,8 +26,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::{
-    CertifiedTransaction, SenderSignedData, SharedInputObject, TransactionDataAPI,
-    VerifiedCertificate, VerifiedSignedTransaction,
+    AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
+    TransactionDataAPI, VerifiedCertificate, VerifiedSignedTransaction,
 };
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{
@@ -70,8 +70,8 @@ use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
 };
 use sui_types::messages_consensus::{
-    check_total_jwk_size, AuthenticatorStateUpdate, AuthorityCapabilities, ConsensusTransaction,
-    ConsensusTransactionKey, ConsensusTransactionKind,
+    check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
+    ConsensusTransactionKind,
 };
 use sui_types::storage::{transaction_input_object_keys, ObjectKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -326,6 +326,8 @@ pub struct AuthorityEpochTables {
 
     /// JWKs that are currently available for zklogin authentication, and the round in which they
     /// became active.
+    /// This would normally be stored as (JwkId, JWK) -> u64, but we need to be able to scan to
+    /// find all Jwks for a given round
     active_jwks: DBMap<(u64, (JwkId, JWK)), ()>,
 }
 

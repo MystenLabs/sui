@@ -75,15 +75,15 @@ fn string_bytes_ord(a: &str, b: &str) -> std::cmp::Ordering {
 // This must match the sort order defined by jwk_lt in authenticator_state.move
 fn jwk_ord(a: &ActiveJwk, b: &ActiveJwk) -> std::cmp::Ordering {
     // note: epoch is ignored
-    if &a.jwk_id.iss != &b.jwk_id.iss {
+    if a.jwk_id.iss != b.jwk_id.iss {
         string_bytes_ord(&a.jwk_id.iss, &b.jwk_id.iss)
-    } else if &a.jwk_id.kid != &b.jwk_id.kid {
+    } else if a.jwk_id.kid != b.jwk_id.kid {
         string_bytes_ord(&a.jwk_id.kid, &b.jwk_id.kid)
-    } else if &a.jwk.kty != &b.jwk.kty {
+    } else if a.jwk.kty != b.jwk.kty {
         string_bytes_ord(&a.jwk.kty, &b.jwk.kty)
-    } else if &a.jwk.e != &b.jwk.e {
+    } else if a.jwk.e != b.jwk.e {
         string_bytes_ord(&a.jwk.e, &b.jwk.e)
-    } else if &a.jwk.n != &b.jwk.n {
+    } else if a.jwk.n != b.jwk.n {
         string_bytes_ord(&a.jwk.n, &b.jwk.n)
     } else {
         string_bytes_ord(&a.jwk.alg, &b.jwk.alg)

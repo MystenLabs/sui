@@ -38,10 +38,7 @@ mod checked {
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
-    use sui_types::messages_consensus::{
-        AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
-        ConsensusCommitPrologue,
-    };
+    use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::BackingStore;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
@@ -49,15 +46,16 @@ mod checked {
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::InputObjects;
     use sui_types::transaction::{
-        Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisTransaction,
-        ObjectArg, ProgrammableTransaction, TransactionKind,
+        Argument, AuthenticatorStateCreate, AuthenticatorStateExpire, AuthenticatorStateUpdate,
+        CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::Object,
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-        SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
 
     /// If a transaction digest shows up in this list, when executing such transaction,
@@ -578,7 +576,7 @@ mod checked {
                                 move_vm,
                                 gas_charger,
                                 protocol_config,
-                                metrics.clone(),
+                                metrics,
                             )?;
                             return Ok(Mode::empty_results());
                         }
@@ -951,7 +949,7 @@ mod checked {
                 vec![
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                        initial_shared_version: update.authenticator_obj_initial_shared_version,
                         mutable: true,
                     }),
                     CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
@@ -987,7 +985,7 @@ mod checked {
                 vec![
                     CallArg::Object(ObjectArg::SharedObject {
                         id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                        initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                        initial_shared_version: expire.authenticator_obj_initial_shared_version,
                         mutable: true,
                     }),
                     CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
