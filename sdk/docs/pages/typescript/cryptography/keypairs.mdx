@@ -125,3 +125,17 @@ const exampleMnemonic = 'result crisp session latin ...';
 
 const keyPair = Ed25519Keypair.deriveKeypair(exampleMnemonic);
 ```
+
+## Deriving a `Keypair` from a hex encoded secret key
+
+If you have an existing secret key formatted as a hex encoded string, you can derive a `Keypair` by
+converting the secret key to a `Uint8Array` and passing it to the `fromSecretKey` method of a
+`Keypair` class.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { fromHex } from '@mysten/sui.js/utils';
+
+const secret = '0x...';
+const keypair = Ed25519Keypair.fromSecretKey(fromHex(secret));
+```
