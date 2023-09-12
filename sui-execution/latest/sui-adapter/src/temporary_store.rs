@@ -981,14 +981,14 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
         for id in results.deleted_object_ids {
             let delete_kind: DeleteKindWithOldVersion =
-                if let Some((version, _)) = results.objects_modified_at.get(&id) {
+                if let Some((version, ..)) = results.objects_modified_at.get(&id) {
                     DeleteKindWithOldVersion::Normal(*version)
                 } else {
                     DeleteKindWithOldVersion::UnwrapThenDelete
                 };
             object_changes.insert(id, ObjectChange::Delete(delete_kind));
         }
-        for (id, (version, _)) in results.objects_modified_at {
+        for (id, (version, ..)) in results.objects_modified_at {
             object_changes.entry(id).or_insert(ObjectChange::Delete(
                 DeleteKindWithOldVersion::Wrap(version),
             ));

@@ -66,6 +66,7 @@ pub(crate) struct TestInventories {
 pub struct LoadedRuntimeObject {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+    pub owner: Owner,
     pub is_modified: bool,
 }
 
@@ -418,6 +419,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
+                            owner: obj.owner,
                         },
                     )
                 })
@@ -457,6 +459,7 @@ impl ObjectRuntimeState {
                     LoadedRuntimeObject {
                         version: metadata.version,
                         digest: metadata.digest,
+                        owner: metadata.owner,
                         is_modified: false,
                     },
                 )
