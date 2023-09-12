@@ -9,7 +9,7 @@ use super::{
 };
 use crate::context_data::context_ext::DataProviderContextExt;
 
-pub(crate) struct Query;
+pub struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
 
 #[allow(unreachable_code)]

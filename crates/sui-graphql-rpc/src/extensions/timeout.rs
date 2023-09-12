@@ -30,6 +30,12 @@ pub struct Timeout {
     config: TimeoutConfig,
 }
 
+impl Timeout {
+    pub fn new(config: TimeoutConfig) -> Self {
+        Self { config }
+    }
+}
+
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(TimeoutExtension {
