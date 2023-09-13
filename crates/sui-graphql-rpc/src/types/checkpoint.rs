@@ -19,7 +19,7 @@ pub(crate) struct Checkpoint {
     pub live_object_set_digest: Option<String>,
     pub network_total_transactions: Option<u64>,
     pub rolling_gas_summary: Option<GasCostSummary>,
-    pub epoch: Epoch,
+    pub epoch: Option<Epoch>,
     pub end_of_epoch: Option<EndOfEpochData>,
     // transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
     // address_metrics: AddressMetrics,
@@ -60,10 +60,10 @@ impl From<&sui_json_rpc_types::Checkpoint> for Checkpoint {
             live_object_set_digest: None, // TODO fix this
             network_total_transactions: Some(c.network_total_transactions),
             rolling_gas_summary: Some(GasCostSummary::from(&c.epoch_rolling_gas_cost_summary)),
-            epoch: Epoch {
+            epoch: Some(Epoch {
                 epoch_id: c.epoch,
                 gas_cost_summary: Some(GasCostSummary::from(&c.epoch_rolling_gas_cost_summary)),
-            },
+            }),
             end_of_epoch,
         }
     }
