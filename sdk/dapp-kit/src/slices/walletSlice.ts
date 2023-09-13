@@ -8,6 +8,7 @@ export type WalletSlice = {
 	wallets: WalletWithRequiredFeatures[];
 	currentAccount: WalletAccount | null;
 	lastAccountAddress: string | null;
+	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		selectedAccount: WalletAccount | null,
@@ -62,6 +63,12 @@ export function createWalletSlice(
 				lastWalletName: null,
 				lastAccountAddress: null,
 				connectionStatus: 'disconnected',
+			}));
+		},
+		setAccountSwitched: (selectedAccount) => {
+			set(() => ({
+				currentAccount: selectedAccount,
+				lastAccountAddress: selectedAccount.address,
 			}));
 		},
 		setWalletRegistered: (updatedWallets) => {
