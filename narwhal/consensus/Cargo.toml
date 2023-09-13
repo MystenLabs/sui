@@ -7,9 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-arc-swap.workspace = true
 bcs.workspace = true
-match_opt.workspace = true
 rand = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
@@ -22,7 +20,6 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 storage = { path = "../storage", package = "narwhal-storage" }
 prometheus.workspace = true
 types = { path = "../types", package = "narwhal-types" }
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 cfg-if.workspace = true
 mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }

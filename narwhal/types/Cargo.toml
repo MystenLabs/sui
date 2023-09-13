@@ -7,7 +7,6 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
 [dependencies]
-async-trait.workspace = true
 base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
@@ -15,11 +14,8 @@ derive_builder.workspace = true
 enum_dispatch.workspace = true
 futures.workspace = true
 indexmap.workspace = true
-mockall.workspace = true
 prometheus.workspace = true
-proptest.workspace = true
 proptest-derive.workspace = true
-prost.workspace = true
 rand.workspace = true
 roaring.workspace = true
 serde.workspace = true
@@ -34,14 +30,12 @@ config = { path = "../config", package = "narwhal-config" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 anemo.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 sui-protocol-config.workspace = true
 once_cell.workspace = true
 
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-metrics.workspace = true
 mysten-common.workspace = true
-mysten-network.workspace = true
 mysten-util-mem.workspace = true
 
 [dev-dependencies]

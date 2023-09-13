@@ -179,16 +179,10 @@ version = "0.0.0"
 dependencies = [
  "anemo",
  "anemo-build",
- "anemo-tower",
- "anyhow",
  "clap",
- "mysten-network",
  "rand 0.8.5",
- "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -5285,8 +5279,6 @@ dependencies = [
 name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "fail",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -5654,33 +5646,21 @@ name = "move-prover"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "clap",
- "codespan",
  "codespan-reporting",
- "futures",
- "hex",
  "itertools",
  "log",
  "move-abigen",
- "move-binary-format",
  "move-command-line-common",
  "move-compiler",
- "move-core-types",
  "move-docgen",
  "move-errmapgen",
- "move-ir-types",
  "move-model",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
- "num",
  "once_cell",
- "pretty",
- "rand 0.8.5",
  "serde",
- "serde_json",
  "simplelog",
- "tokio",
  "toml 0.5.10",
 ]
 
@@ -5706,7 +5686,6 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "serde",
- "serde_json",
  "tera",
  "tokio",
 ]
@@ -5777,7 +5756,6 @@ dependencies = [
  "move-model",
  "move-stackless-bytecode",
  "num",
- "serde",
 ]
 
 [[package]]
@@ -6248,18 +6226,15 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
- "sui-protocol-config",
  "tempfile",
  "thiserror",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
 name = "narwhal-consensus"
 version = "0.1.0"
 dependencies = [
- "arc-swap",
  "bcs",
  "bincode",
  "cfg-if",
@@ -6267,7 +6242,6 @@ dependencies = [
  "fastcrypto",
  "futures",
  "indexmap",
- "match_opt",
  "mysten-metrics",
  "narwhal-config",
  "narwhal-crypto",
@@ -6284,7 +6258,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6302,7 +6275,6 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "shared-crypto",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6367,7 +6339,6 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6468,13 +6439,11 @@ dependencies = [
 name = "narwhal-storage"
 version = "0.1.0"
 dependencies = [
- "dashmap",
  "fastcrypto",
  "futures",
  "lru 0.10.0",
  "mysten-common",
  "narwhal-config",
- "narwhal-crypto",
  "narwhal-test-utils",
  "narwhal-types",
  "parking_lot 0.12.1",
@@ -6485,7 +6454,6 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6518,7 +6486,6 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6528,7 +6495,6 @@ dependencies = [
  "anemo",
  "anemo-build",
  "anyhow",
- "async-trait",
  "base64 0.21.2",
  "bcs",
  "bytes",
@@ -6538,19 +6504,15 @@ dependencies = [
  "fastcrypto",
  "futures",
  "indexmap",
- "mockall",
  "mysten-common",
  "mysten-metrics",
- "mysten-network",
  "mysten-util-mem",
  "narwhal-config",
  "narwhal-crypto",
  "narwhal-test-utils",
  "once_cell",
  "prometheus",
- "proptest",
  "proptest-derive",
- "prost",
  "prost-build",
  "protobuf-src",
  "rand 0.8.5",
@@ -6566,7 +6528,6 @@ dependencies = [
  "tonic-build",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9873,16 +9834,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bcs",
  "clap",
  "fastcrypto",
  "futures",
  "jsonrpsee",
  "move-core-types",
- "mysten-metrics",
  "prometheus",
  "reqwest",
- "serde",
  "serde_json",
  "shared-crypto",
  "sui",
@@ -9893,7 +9851,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc-types",
  "sui-keys",
- "sui-move-build",
  "sui-sdk",
  "sui-swarm",
  "sui-swarm-config",
@@ -9905,7 +9862,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9919,8 +9875,6 @@ dependencies = [
  "dirs 4.0.0",
  "fastcrypto",
  "insta",
- "move-binary-format",
- "move-core-types",
  "narwhal-config",
  "once_cell",
  "prometheus",
@@ -9928,7 +9882,6 @@ dependencies = [
  "serde",
  "serde_with",
  "serde_yaml 0.8.26",
- "shared-crypto",
  "sui-keys",
  "sui-protocol-config",
  "sui-simulator",
@@ -9936,7 +9889,6 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10203,7 +10155,6 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10549,7 +10500,6 @@ dependencies = [
  "once_cell",
  "sui-proc-macros",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10571,7 +10521,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10804,7 +10753,6 @@ dependencies = [
  "sui-types",
  "tokio",
  "versions",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10817,7 +10765,6 @@ dependencies = [
  "quote 1.0.33",
  "syn 1.0.107",
  "unescape",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10861,7 +10808,6 @@ dependencies = [
  "quote 1.0.33",
  "sui-enum-compat-util",
  "syn 2.0.32",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11441,7 +11387,6 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.24.0",
  "tower-layer",
- "workspace-hack",
  "x509-parser",
 ]
 
@@ -11513,7 +11458,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
