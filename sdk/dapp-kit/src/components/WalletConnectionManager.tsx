@@ -5,6 +5,7 @@ import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
 import type { ReactNode } from 'react';
+import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 // import { useEffect } from 'react';
 // import { useConnectWallet } from '../hooks/wallet/useConnectWallet.js';
 // import { useDAppKitStore, useDAppKitStore } from '../hooks/useDAppKitStore.js';
@@ -34,22 +35,7 @@ export function WalletConnectionManager({
 }: WalletConnectionManagerProps) {
 	useWalletsChanged(preferredWallets, requiredFeatures);
 	useUnsafeBurnerWallet(enableUnsafeBurner);
-
-	console.log(autoConnect);
-
-	// const { mutate: connectWallet } = useConnectWallet();
-
-	// useEffect(() => {
-	// 	(async function autoConnectWallet() {
-	// 		const connectionInfo = await getWalletConnectionInfo(storageAdapter, storageKey);
-	// 		const { walletName, accountAddress } = connectionInfo || {};
-	// 		const wallet = walletName ? wallets.find((wallet) => wallet.name === walletName) : null;
-
-	// 		if (wallet) {
-	// 			connectWallet({ wallet, accountAddress, silent: true });
-	// 		}
-	// 	})();
-	// }, []);
+	useAutoConnectWallet(autoConnect);
 
 	return children;
 }

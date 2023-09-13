@@ -42,6 +42,8 @@ export function createWalletSlice(
 			set(() => ({
 				currentWallet: wallet,
 				currentAccount: selectedAccount,
+				lastWalletName: wallet.name,
+				lastAccountAddress: selectedAccount?.address,
 				connectionStatus: 'connected',
 			}));
 		},
@@ -49,6 +51,8 @@ export function createWalletSlice(
 			set(() => ({
 				currentWallet: null,
 				currentAccount: null,
+				lastWalletName: null,
+				lastAccountAddress: null,
 				connectionStatus: 'disconnected',
 			}));
 		},
@@ -61,6 +65,8 @@ export function createWalletSlice(
 					wallets: updatedWallets,
 					currentWallet: null,
 					currentAccount: null,
+					lastWalletName: null,
+					lastAccountAddress: null,
 					connectionStatus: 'disconnected',
 				}));
 			} else {

@@ -24,9 +24,9 @@ export function createDAppKitStore({ wallets, storage, storageKey }: DAppKitConf
 			persist(createWalletSlice(wallets), {
 				name: storageKey,
 				storage: createJSONStorage(() => storage),
-				partialize: ({ currentWallet, currentAccount }) => ({
-					lastWalletName: currentWallet?.name,
-					lastAccountAddress: currentAccount?.address,
+				partialize: ({ lastWalletName, lastAccountAddress }) => ({
+					lastWalletName,
+					lastAccountAddress,
 				}),
 			}),
 		),

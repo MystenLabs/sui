@@ -4,7 +4,5 @@
 import { useDAppKitStore } from '../useDAppKitStore.js';
 
 export function useCurrentWallet() {
-	const a = useDAppKitStore((state) => state);
-	console.log('WHOLEST ATE', a);
 	return useDAppKitStore((state) => state.currentWallet);
 }
