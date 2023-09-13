@@ -5,6 +5,8 @@ import type { EnumTypeDefinition, StructTypeDefinition } from '@mysten/bcs';
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
 import type { SuiObjectRef } from '../types/objects.js';
 
+export { TypeTagSerializer } from './type-tag-serializer.js';
+
 /**
  * A reference to a shared object.
  */

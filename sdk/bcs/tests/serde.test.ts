@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from 'vitest';
-import { SUI_ADDRESS_LENGTH } from '../../typescript/src';
+import { SUI_ADDRESS_LENGTH } from '../../typescript/src/utils';
 import { BCS, getSuiMoveConfig } from './../src/index';
 
 describe('BCS: Serde', () => {
