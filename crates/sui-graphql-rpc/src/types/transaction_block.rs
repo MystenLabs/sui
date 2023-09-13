@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::server::{context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch};
+use crate::context_data::{
+    context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch,
+};
 
 use super::{
     address::Address,
@@ -60,9 +62,11 @@ impl TransactionBlock {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct TransactionBlockEffects {
     pub digest: TransactionDigest,
+    #[graphql(skip)]
     pub gas_effects: GasEffects,
     pub status: ExecutionStatus,
     pub errors: Option<String>,
@@ -94,20 +98,8 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
     }
 }
 
-#[Object]
+#[ComplexObject]
 impl TransactionBlockEffects {
-    async fn digest(&self) -> TransactionDigest {
-        self.digest
-    }
-
-    async fn status(&self) -> ExecutionStatus {
-        self.status
-    }
-
-    async fn errors(&self) -> Option<String> {
-        self.errors.clone()
-    }
-
     async fn gas_effects(&self) -> Option<GasEffects> {
         Some(self.gas_effects)
     }
