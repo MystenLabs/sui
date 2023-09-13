@@ -11,9 +11,10 @@
  * @property {BcsReader}
  */
 
-import { toB64, fromB64 } from './b64';
-import { toHEX, fromHEX } from './hex';
-import bs58 from 'bs58';
+import { toB58, fromB58 } from './b58.js';
+import { toB64, fromB64 } from './b64.js';
+import { toHEX, fromHEX } from './hex.js';
+import { ulebDecode, ulebEncode } from './uleb.js';
 
 const SUI_ADDRESS_LENGTH = 32;
 
@@ -27,9 +28,6 @@ function toLittleEndian(bigint: bigint, size: number) {
 	}
 	return result;
 }
-
-const toB58 = (buffer: Uint8Array) => bs58.encode(buffer);
-const fromB58 = (str: string) => bs58.decode(str);
 
 // Re-export all encoding dependencies.
 export { toB58, fromB58, toB64, fromB64, fromHEX, toHEX };
@@ -381,54 +379,6 @@ export class BcsWriter {
 	}
 }
 
-// Helper utility: write number as an ULEB array.
-// Original code is taken from: https://www.npmjs.com/package/uleb128 (no longer exists)
-function ulebEncode(num: number): number[] {
-	let arr = [];
-	let len = 0;
-
-	if (num === 0) {
-		return [0];
-	}
-
-	while (num > 0) {
-		arr[len] = num & 0x7f;
-		if ((num >>= 7)) {
-			arr[len] |= 0x80;
-		}
-		len += 1;
-	}
-
-	return arr;
-}
-
-// Helper utility: decode ULEB as an array of numbers.
-// Original code is taken from: https://www.npmjs.com/package/uleb128 (no longer exists)
-function ulebDecode(arr: number[] | Uint8Array): {
-	value: number;
-	length: number;
-} {
-	let total = 0;
-	let shift = 0;
-	let len = 0;
-
-	// eslint-disable-next-line no-constant-condition
-	while (true) {
-		let byte = arr[len];
-		len += 1;
-		total |= (byte & 0x7f) << shift;
-		if ((byte & 0x80) === 0) {
-			break;
-		}
-		shift += 7;
-	}
-
-	return {
-		value: total,
-		length: len,
-	};
-}
-
 /**
  * Set of methods that allows data encoding/decoding as standalone
  * BCS value or a part of a composed structure/vector.
@@ -526,20 +476,20 @@ export type BcsConfig = {
  * BCS implementation for Move types and few additional built-ins.
  */
 export class BCS {
-	// Prefefined types constants
-	static readonly U8: string = 'u8';
-	static readonly U16: string = 'u16';
-	static readonly U32: string = 'u32';
-	static readonly U64: string = 'u64';
-	static readonly U128: string = 'u128';
-	static readonly U256: string = 'u256';
-	static readonly BOOL: string = 'bool';
-	static readonly VECTOR: string = 'vector';
-	static readonly ADDRESS: string = 'address';
-	static readonly STRING: string = 'string';
-	static readonly HEX: string = 'hex-string';
-	static readonly BASE58: string = 'base58-string';
-	static readonly BASE64: string = 'base64-string';
+	// Predefined types constants
+	static readonly U8 = 'u8';
+	static readonly U16 = 'u16';
+	static readonly U32 = 'u32';
+	static readonly U64 = 'u64';
+	static readonly U128 = 'u128';
+	static readonly U256 = 'u256';
+	static readonly BOOL = 'bool';
+	static readonly VECTOR = 'vector';
+	static readonly ADDRESS = 'address';
+	static readonly STRING = 'string';
+	static readonly HEX = 'hex-string';
+	static readonly BASE58 = 'base58-string';
+	static readonly BASE64 = 'base64-string';
 
 	/**
 	 * Map of kind `TypeName => TypeInterface`. Holds all
