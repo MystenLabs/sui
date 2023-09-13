@@ -262,7 +262,7 @@ impl SimpleFaucet {
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
         let Ok(mut batch_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await else {
-            error!(?uuid, "Timeout when getting consumer lock");
+            error!(?uuid, "Timeout when getting batch consumer lock");
             return None;
         };
 
@@ -305,9 +305,15 @@ impl SimpleFaucet {
                 GasCoinResponse::ValidGasCoin(coin_id)
             }
 
-            Ok(Some(_)) => GasCoinResponse::GasCoinWithInsufficientBalance(coin_id),
+            Ok(Some(_)) => {
+                info!(?uuid, ?coin_id, "insufficient balance",);
+                GasCoinResponse::GasCoinWithInsufficientBalance(coin_id)
+            }
 
-            Ok(None) => GasCoinResponse::InvalidGasCoin(coin_id),
+            Ok(None) => {
+                info!(?uuid, ?coin_id, "No gas coin returned.",);
+                GasCoinResponse::InvalidGasCoin(coin_id)
+            }
 
             Err(e) => {
                 error!(?uuid, ?coin_id, "Fullnode read error: {e:?}");
@@ -353,6 +359,7 @@ impl SimpleFaucet {
         coin_id: ObjectID,
     ) -> anyhow::Result<Option<GasCoin>> {
         let gas_obj = self.get_coin(coin_id).await?;
+        info!(?coin_id, "Reading gas coin object: {:?}", gas_obj);
         Ok(gas_obj.and_then(|(owner_opt, coin)| match owner_opt {
             Some(Owner::AddressOwner(owner_addr)) if owner_addr == self.active_address => {
                 Some(coin)
@@ -437,6 +444,7 @@ impl SimpleFaucet {
 
                 // We set the inflight status to false so that the async thread that
                 // retries this transactions will attempt to try again.
+                // We should only set this inflight if we see that it's not a client error
                 if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
                     error!(
                         ?recipient,
