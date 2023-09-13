@@ -7,7 +7,7 @@ use async_graphql_axum::GraphQLResponse;
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 /// `<https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>`
-pub mod code {
+pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";

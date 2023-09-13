@@ -39,7 +39,9 @@ use sui_types::{
     object::{Data, Owner},
     signature::GenericSignature,
     storage::DeleteKind,
-    transaction::{Argument, CallArg, Command, ObjectArg, TransactionKind},
+    transaction::{
+        Argument, CallArg, Command, EndOfEpochTransactionKind, ObjectArg, TransactionKind,
+    },
 };
 use typed_store::rocks::TypedStoreError;
 
@@ -155,6 +157,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
     tracer.trace_type::<TransactionExpiration>(&samples)?;
+    tracer.trace_type::<EndOfEpochTransactionKind>(&samples)?;
 
     // uncomment once GenericSignature is added
     tracer.trace_type::<FullCheckpointContents>(&samples)?;

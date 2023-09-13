@@ -34,6 +34,11 @@ Argument:
         TUPLE:
           - U16
           - U16
+AuthenticatorStateExpire:
+  STRUCT:
+    - min_epoch: U64
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
 AuthenticatorStateUpdate:
   STRUCT:
     - epoch: U64
@@ -41,6 +46,8 @@ AuthenticatorStateUpdate:
     - new_active_jwks:
         SEQ:
           TYPENAME: ActiveJwk
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 CallArg:
@@ -260,6 +267,18 @@ EndOfEpochData:
     - epochCommitments:
         SEQ:
           TYPENAME: CheckpointCommitment
+EndOfEpochTransactionKind:
+  ENUM:
+    0:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
+    1:
+      AuthenticatorStateCreate: UNIT
+    2:
+      AuthenticatorStateExpire:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateExpire
 Envelope:
   STRUCT:
     - data:
@@ -874,6 +893,11 @@ TransactionKind:
       AuthenticatorStateUpdate:
         NEWTYPE:
           TYPENAME: AuthenticatorStateUpdate
+    5:
+      EndOfEpochTransaction:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EndOfEpochTransactionKind
 TypeArgumentError:
   ENUM:
     0:

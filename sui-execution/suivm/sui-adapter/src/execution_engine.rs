@@ -553,8 +553,11 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateUpdate(_auth_state_update) => {
-                todo!();
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                panic!("AuthenticatorStateUpdate should not exist in suivm");
+            }
+            TransactionKind::EndOfEpochTransaction(_) => {
+                panic!("EndOfEpochTransaction should not exist in suivm");
             }
         }
     }

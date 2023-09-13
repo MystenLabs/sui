@@ -384,6 +384,9 @@ async fn test_reconfig_with_failing_validator() {
         .with_restart_delay_secs(2, 4)
         .run();
 
+    // TODO: delete this - added it to try to pass flaky tests in CI.
+    sleep(Duration::from_millis(500)).await;
+
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
         .map(|v| v.parse().unwrap())

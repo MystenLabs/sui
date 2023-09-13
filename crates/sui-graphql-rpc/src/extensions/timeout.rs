@@ -27,13 +27,7 @@ impl Default for TimeoutConfig {
 
 #[derive(Clone, Debug, Default)]
 pub struct Timeout {
-    config: TimeoutConfig,
-}
-
-impl Timeout {
-    pub fn new(config: TimeoutConfig) -> Self {
-        Self { config }
-    }
+    pub config: TimeoutConfig,
 }
 
 impl ExtensionFactory for Timeout {

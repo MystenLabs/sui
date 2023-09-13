@@ -218,6 +218,9 @@ input ObjectKey {
 input EventFilter {
   sender: SuiAddress
   transactionDigest: String
+  # Enhancement (post-MVP), requires compound filters to be useful.
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   # Cascading (module requires package)
   emittingPackage: SuiAddress
@@ -228,15 +231,15 @@ input EventFilter {
   eventModule: String
   eventType: String
 
-  eventField: EventField
-
+  # Enhancement (post-MVP), requires compound filters to be useful.
   startTime: DateTime
   endTime: DateTime
-}
 
-input EventField {
-  path: String!
-  json: String!
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [EventFilter]
+  all: [EventFilter]
+  not: EventFilter
 }
 
 input TransactionBlockFilter {
@@ -246,7 +249,8 @@ input TransactionBlockFilter {
   function: String
 
   kind: TransactionBlockKindInput
-  checkpoint: Int
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   signAddress: SuiAddress
   sentAddress: SuiAddress
@@ -255,6 +259,17 @@ input TransactionBlockFilter {
 
   inputObject: SuiAddress
   changedObject: SuiAddress
+
+  # Enhancement (post-MVP), consistency with EventFilter -- timestamp
+  # comes from checkpoint timestamp.
+  startTime: DateTime
+  endTime: DateTime
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [TransactionBlockFilter]
+  all: [TransactionBlockFilter]
+  not: TransactionBlockFilter
 }
 
 input DynamicFieldFilter {

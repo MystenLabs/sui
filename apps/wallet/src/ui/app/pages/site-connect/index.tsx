@@ -7,7 +7,7 @@ import { useParams } from 'react-router-dom';
 import { SectionHeader } from '../../components/SectionHeader';
 import { AccountListItem } from '../../components/accounts/AccountListItem';
 import { AccountMultiSelectWithControls } from '../../components/accounts/AccountMultiSelect';
-import { useAccounts } from '../../hooks/useAccounts';
+import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 
 import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
@@ -34,9 +34,10 @@ function SiteConnectPage() {
 	const dispatch = useAppDispatch();
 	const permissionRequest = useAppSelector(permissionSelector);
 	const activeAccount = useActiveAccount();
-	const { data: accounts } = useAccounts();
-	const unlockedAccounts = accounts?.filter((account) => !account.isLocked) ?? [];
-	const lockedAccounts = accounts?.filter((account) => account.isLocked) ?? [];
+	const accountGroups = useAccountGroups();
+	const accounts = accountGroups.list();
+	const unlockedAccounts = accounts.filter((account) => !account.isLocked);
+	const lockedAccounts = accounts.filter((account) => account.isLocked);
 	const [accountsToConnect, setAccountsToConnect] = useState<SerializedUIAccount[]>(() =>
 		activeAccount ? [activeAccount] : [],
 	);
@@ -127,7 +128,7 @@ function SiteConnectPage() {
 						blended
 					>
 						<PageMainLayoutTitle title="Approve Connection" />
-						<div className="flex flex-col gap-8">
+						<div className="flex flex-col gap-8 py-6">
 							{unlockedAccounts.length > 0 && (
 								<AccountMultiSelectWithControls
 									selectedAccountIDs={accountsToConnect.map((account) => account.id)}

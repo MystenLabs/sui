@@ -15,14 +15,13 @@ use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
 use crate::messages_checkpoint::CheckpointTimestamp;
-use crate::messages_consensus::{AuthenticatorStateUpdate, ConsensusCommitPrologue};
+use crate::messages_consensus::ConsensusCommitPrologue;
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -188,6 +187,40 @@ impl GenesisObject {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateExpire {
+    /// expire JWKs that have a lower epoch than this
+    pub min_epoch: u64,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+}
+
+impl AuthenticatorStateExpire {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateUpdate {
+    /// Epoch of the authenticator state update transaction
+    pub epoch: u64,
+    /// Consensus round of the authenticator state update
+    pub round: u64,
+    /// newly active jwks
+    pub new_active_jwks: Vec<ActiveJwk>,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+    // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
+    // TransactionKind.
+}
+
+impl AuthenticatorStateUpdate {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
@@ -200,11 +233,107 @@ pub enum TransactionKind {
     /// It also doesn't require/use a gas object.
     /// A validator will not sign a transaction of this kind from outside. It only
     /// signs internally during epoch changes.
+    ///
+    /// The ChangeEpoch enumerant is now deprecated (but the ChangeEpoch struct is still used by
+    /// EndOfEpochTransaction below).
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
     AuthenticatorStateUpdate(AuthenticatorStateUpdate),
+
+    /// EndOfEpochTransaction replaces ChangeEpoch with a list of transactions that are allowed to
+    /// run at the end of the epoch.
+    EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
     // .. more transaction types go here
+}
+
+/// EndOfEpochTransactionKind
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
+pub enum EndOfEpochTransactionKind {
+    ChangeEpoch(ChangeEpoch),
+    AuthenticatorStateCreate,
+    AuthenticatorStateExpire(AuthenticatorStateExpire),
+}
+
+impl EndOfEpochTransactionKind {
+    pub fn new_change_epoch(
+        next_epoch: EpochId,
+        protocol_version: ProtocolVersion,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        non_refundable_storage_fee: u64,
+        epoch_start_timestamp_ms: u64,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
+    ) -> Self {
+        Self::ChangeEpoch(ChangeEpoch {
+            epoch: next_epoch,
+            protocol_version,
+            storage_charge,
+            computation_charge,
+            storage_rebate,
+            non_refundable_storage_fee,
+            epoch_start_timestamp_ms,
+            system_packages,
+        })
+    }
+
+    pub fn new_authenticator_state_expire(
+        min_epoch: u64,
+        authenticator_obj_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        Self::AuthenticatorStateExpire(AuthenticatorStateExpire {
+            min_epoch,
+            authenticator_obj_initial_shared_version,
+        })
+    }
+
+    pub fn new_authenticator_state_create() -> Self {
+        Self::AuthenticatorStateCreate
+    }
+
+    fn input_objects(&self) -> Vec<InputObjectKind> {
+        match self {
+            Self::ChangeEpoch(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
+            Self::AuthenticatorStateCreate => vec![],
+            Self::AuthenticatorStateExpire(expire) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+            }
+        }
+    }
+
+    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        match self {
+            Self::ChangeEpoch(_) => Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)),
+            Self::AuthenticatorStateExpire(expire) => Either::Left(iter::once(SharedInputObject {
+                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                mutable: true,
+            })),
+            Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
+        }
+    }
+
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        match self {
+            Self::ChangeEpoch(_) => (),
+            Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.enable_jwk_consensus_updates());
+            }
+        }
+        Ok(())
+    }
 }
 
 impl VersionedProtocolMessage for TransactionKind {
@@ -223,6 +352,30 @@ impl VersionedProtocolMessage for TransactionKind {
                     Err(SuiError::UnsupportedFeatureError {
                         error: "authenticator state updates not enabled".to_string(),
                     })
+                }
+            }
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                if !protocol_config.end_of_epoch_transaction_supported() {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "EndOfEpochTransaction is not supported".to_string(),
+                    })
+                } else {
+                    for tx in txns {
+                        match tx {
+                            EndOfEpochTransactionKind::ChangeEpoch(_) => (),
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate
+                            | EndOfEpochTransactionKind::AuthenticatorStateExpire(_) => {
+                                if !protocol_config.enable_jwk_consensus_updates() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "authenticator state updates not enabled"
+                                            .to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    Ok(())
                 }
             }
         }
@@ -846,6 +999,14 @@ impl TransactionKind {
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
                 | TransactionKind::AuthenticatorStateUpdate(_)
+                | TransactionKind::EndOfEpochTransaction(_)
+        )
+    }
+
+    pub fn is_end_of_epoch_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
     }
 
@@ -853,12 +1014,21 @@ impl TransactionKind {
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.
     pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
-        match self {
-            Self::ChangeEpoch(e) => {
-                Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+        let e = match self {
+            Self::ChangeEpoch(e) => e,
+            Self::EndOfEpochTransaction(txns) => {
+                if let EndOfEpochTransactionKind::ChangeEpoch(e) =
+                    txns.last().expect("at least one end-of-epoch txn required")
+                {
+                    e
+                } else {
+                    panic!("final end-of-epoch txn must be ChangeEpoch")
+                }
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+
+        Some((e.computation_charge + e.storage_charge, e.storage_rebate))
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -874,12 +1044,22 @@ impl TransactionKind {
             }
 
             Self::ConsensusCommitPrologue(_) => {
-                Either::Left(Either::Right(iter::once(SharedInputObject {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                     mutable: true,
                 })))
             }
+            Self::AuthenticatorStateUpdate(update) => {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: update.authenticator_obj_initial_shared_version,
+                    mutable: true,
+                })))
+            }
+            Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
+                txns.iter().flat_map(|txn| txn.shared_input_objects()),
+            )),
             Self::ProgrammableTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
             }
@@ -917,12 +1097,15 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
-            Self::AuthenticatorStateUpdate(_) => {
+            Self::AuthenticatorStateUpdate(update) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                    initial_shared_version: SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
+                    initial_shared_version: update.authenticator_obj_initial_shared_version(),
                     mutable: true,
                 }]
+            }
+            Self::EndOfEpochTransaction(txns) => {
+                txns.iter().flat_map(|txn| txn.input_objects()).collect()
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
@@ -946,6 +1129,15 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => (),
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.end_of_epoch_transaction_supported());
+
+                for tx in txns {
+                    tx.validity_check(config)?;
+                }
+            }
+
             TransactionKind::AuthenticatorStateUpdate(_) => {
                 // The transaction should have been rejected earlier if the feature is not enabled.
                 assert!(config.enable_jwk_consensus_updates());
@@ -976,6 +1168,7 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
 }
@@ -1005,6 +1198,9 @@ impl Display for TransactionKind {
             }
             Self::AuthenticatorStateUpdate(_) => {
                 writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::EndOfEpochTransaction(_) => {
+                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -1498,6 +1694,10 @@ pub trait TransactionDataAPI {
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
 
+    /// returns true if the transaction is one that is specially sequenced to run at the very end
+    /// of the epoch
+    fn is_end_of_epoch_tx(&self) -> bool;
+
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
 
@@ -1624,6 +1824,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn is_change_epoch_tx(&self) -> bool {
         matches!(self.kind, TransactionKind::ChangeEpoch(_))
+    }
+
+    fn is_end_of_epoch_tx(&self) -> bool {
+        self.is_change_epoch_tx() || matches!(self.kind, TransactionKind::EndOfEpochTransaction(_))
     }
 
     fn is_system_tx(&self) -> bool {
@@ -1984,14 +2188,20 @@ impl VerifiedTransaction {
         epoch: u64,
         round: u64,
         new_active_jwks: Vec<ActiveJwk>,
+        authenticator_obj_initial_shared_version: SequenceNumber,
     ) -> Self {
         AuthenticatorStateUpdate {
             epoch,
             round,
             new_active_jwks,
+            authenticator_obj_initial_shared_version,
         }
         .pipe(TransactionKind::AuthenticatorStateUpdate)
         .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_end_of_epoch_transaction(txns: Vec<EndOfEpochTransactionKind>) -> Self {
+        TransactionKind::EndOfEpochTransaction(txns).pipe(Self::new_system_transaction)
     }
 
     fn new_system_transaction(system_transaction: TransactionKind) -> Self {

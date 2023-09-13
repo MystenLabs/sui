@@ -119,8 +119,7 @@ bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
 bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false }
 bitmaps = { version = "2" }
-bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
-bitvec-dff4ba8e3ae991db = { package = "bitvec", version = "1" }
+bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
@@ -252,8 +251,8 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", features = ["copy_key"] }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -270,8 +269,7 @@ fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
 fs_extra = { version = "1", default-features = false }
-funty-dff4ba8e3ae991db = { package = "funty", version = "1", default-features = false }
-funty-f595c2ba2a3f28df = { package = "funty", version = "2", default-features = false }
+funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
@@ -451,8 +449,6 @@ num-bigint-dig = { version = "0.8", default-features = false, features = ["i128"
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
-num-modular = { version = "0.5", default-features = false, features = ["num-bigint"] }
-num-prime = { version = "0.4" }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
@@ -528,8 +524,7 @@ quinn-proto = { version = "0.10" }
 quinn-udp = { version = "0.4", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
-radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
-radium-ca01ad9e24f5d932 = { package = "radium", version = "0.7", default-features = false }
+radium = { version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
@@ -738,8 +733,7 @@ webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", de
 whoami = { version = "1" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
 winnow = { version = "0.4" }
-wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
-wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
+wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }
@@ -870,8 +864,7 @@ bitcoin_hashes = { version = "0.12", default-features = false }
 bitflags-dff4ba8e3ae991db = { package = "bitflags", version = "1" }
 bitflags-f595c2ba2a3f28df = { package = "bitflags", version = "2", default-features = false }
 bitmaps = { version = "2" }
-bitvec-56bd22fc3884b12 = { package = "bitvec", version = "0.20", default-features = false, features = ["std"] }
-bitvec-dff4ba8e3ae991db = { package = "bitvec", version = "1" }
+bitvec = { version = "0.20", default-features = false, features = ["std"] }
 blake2 = { version = "0.10" }
 blake3 = { version = "1" }
 block-buffer-274715c4dabd11b0 = { package = "block-buffer", version = "0.9", default-features = false, features = ["block-padding"] }
@@ -1026,9 +1019,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "91360ec4a70afb68e3f03fa332b4c7df070476d4", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", features = ["copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", default-features = false }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -1045,8 +1038,7 @@ fnv = { version = "1" }
 form_urlencoded = { version = "1", default-features = false }
 fragile = { version = "2", default-features = false }
 fs_extra = { version = "1", default-features = false }
-funty-dff4ba8e3ae991db = { package = "funty", version = "1", default-features = false }
-funty-f595c2ba2a3f28df = { package = "funty", version = "2", default-features = false }
+funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
@@ -1246,8 +1238,6 @@ num-bigint-dig = { version = "0.8", default-features = false, features = ["i128"
 num-complex = { version = "0.4", default-features = false, features = ["std"] }
 num-integer = { version = "0.1", features = ["i128"] }
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
-num-modular = { version = "0.5", default-features = false, features = ["num-bigint"] }
-num-prime = { version = "0.4" }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint-std", "std"] }
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 num_cpus = { version = "1", default-features = false }
@@ -1349,8 +1339,7 @@ quinn-udp = { version = "0.4", default-features = false }
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6" }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1" }
 r2d2 = { version = "0.8", default-features = false }
-radium-3b31131e45eafb45 = { package = "radium", version = "0.6", default-features = false }
-radium-ca01ad9e24f5d932 = { package = "radium", version = "0.7", default-features = false }
+radium = { version = "0.6", default-features = false }
 radix_trie = { version = "0.2", default-features = false }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7" }
@@ -1592,8 +1581,7 @@ which = { version = "4", default-features = false }
 whoami = { version = "1" }
 winapi = { version = "0.3", default-features = false, features = ["basetsd", "memoryapi", "minwindef"] }
 winnow = { version = "0.4" }
-wyz-6f8ce4dd05d13bba = { package = "wyz", version = "0.2", default-features = false, features = ["alloc"] }
-wyz-d8f496e17d97b5cb = { package = "wyz", version = "0.5", default-features = false }
+wyz = { version = "0.2", default-features = false, features = ["alloc"] }
 x509-parser = { version = "0.14" }
 xml-rs = { version = "0.8", default-features = false }
 xmlparser = { version = "0.13" }

@@ -14,9 +14,6 @@ use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::any::Any;
 
-pub(crate) const DEFAULT_PORT: u16 = 8000;
-pub(crate) const DEFAULT_HOST: &str = "127.0.0.1";
-
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeService<Router>>,
 }
@@ -28,37 +25,28 @@ impl Server {
 }
 
 pub(crate) struct ServerBuilder {
-    port: Option<u16>,
-    host: Option<String>,
+    port: u16,
+    host: String,
 
     schema: SchemaBuilder<Query, EmptyMutation, EmptySubscription>,
 }
 
 impl ServerBuilder {
-    pub fn new() -> Self {
+    pub fn new(port: u16, host: String) -> Self {
         Self {
-            port: None,
-            host: None,
-            schema: Schema::build(Query, EmptyMutation, EmptySubscription),
+            port,
+            host,
+            schema: async_graphql::Schema::build(Query, EmptyMutation, EmptySubscription),
         }
     }
 
-    pub fn port(mut self, port: u16) -> Self {
-        self.port = Some(port);
-        self
-    }
-
-    pub fn host(mut self, host: String) -> Self {
-        self.host = Some(host);
-        self
-    }
-
     pub fn address(&self) -> String {
-        format!(
-            "{}:{}",
-            self.host.as_ref().unwrap_or(&DEFAULT_HOST.to_string()),
-            self.port.unwrap_or(DEFAULT_PORT)
-        )
+        format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn max_query_depth(mut self, max_depth: usize) -> Self {
+        self.schema = self.schema.limit_depth(max_depth);
+        self
     }
 
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
@@ -149,14 +137,16 @@ mod tests {
         async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let schema = ServerBuilder::new()
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
-                .extension(Timeout::new(TimeoutConfig {
-                    request_timeout: timeout,
-                }))
+                .extension(Timeout {
+                    config: TimeoutConfig {
+                        request_timeout: timeout,
+                    },
+                })
                 .build_schema();
             schema.execute("{ chainIdentifier }").await
         }
