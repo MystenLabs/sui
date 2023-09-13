@@ -5512,8 +5512,6 @@ name = "move-errmapgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
- "log",
  "move-command-line-common",
  "move-core-types",
  "move-model",
@@ -6186,7 +6184,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6312,8 +6309,6 @@ dependencies = [
 name = "narwhal-executor"
 version = "0.1.0"
 dependencies = [
- "anemo",
- "anyhow",
  "async-trait",
  "bcs",
  "bincode",
@@ -6321,7 +6316,6 @@ dependencies = [
  "fastcrypto",
  "futures",
  "indexmap",
- "itertools",
  "mockall",
  "mysten-metrics",
  "narwhal-config",
@@ -6334,7 +6328,6 @@ dependencies = [
  "narwhal-test-utils",
  "narwhal-types",
  "prometheus",
- "rand 0.8.5",
  "serde",
  "sui-protocol-config",
  "telemetry-subscribers",
@@ -6344,7 +6337,6 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6420,7 +6412,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.16",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6434,7 +6425,6 @@ dependencies = [
  "async-trait",
  "backoff",
  "bcs",
- "bincode",
  "bytes",
  "dashmap",
  "fastcrypto",
@@ -6469,11 +6459,9 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "tonic",
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -6621,7 +6609,6 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9647,7 +9634,6 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
- "mysten-metrics",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -9656,9 +9642,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "tap",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9677,7 +9661,6 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-suivm",
  "move-vm-types",
- "mysten-metrics",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -9687,7 +9670,6 @@ dependencies = [
  "sui-types",
  "sui-verifier-suivm",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9715,7 +9697,6 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime-v0",
  "move-vm-types",
- "mysten-metrics",
  "once_cell",
  "parking_lot 0.12.1",
  "serde",
@@ -9725,7 +9706,6 @@ dependencies = [
  "sui-types",
  "sui-verifier-v0",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -9818,10 +9798,7 @@ dependencies = [
  "crossterm 0.25.0",
  "eyre",
  "futures",
- "glob",
- "prettytable-rs",
  "prometheus-parse",
- "rand 0.8.5",
  "reqwest",
  "russh",
  "russh-keys",
@@ -9834,7 +9811,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10012,7 +9988,6 @@ dependencies = [
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",
- "reqwest",
  "rocksdb",
  "scopeguard",
  "serde",
@@ -10049,7 +10024,6 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10142,8 +10116,6 @@ version = "0.1.0"
 dependencies = [
  "cargo_metadata",
  "move-binary-format",
- "move-bytecode-utils",
- "move-core-types",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-suivm",
@@ -10160,7 +10132,6 @@ dependencies = [
  "sui-verifier-latest",
  "sui-verifier-suivm",
  "sui-verifier-v0",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10174,7 +10145,6 @@ dependencies = [
  "thiserror",
  "toml 0.7.4",
  "toml_edit 0.19.10",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10268,7 +10238,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10499,7 +10468,6 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10692,7 +10660,6 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10712,7 +10679,6 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10732,7 +10698,6 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10789,7 +10754,6 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-network",
- "narwhal-types",
  "prometheus",
  "reqwest",
  "serde",
@@ -10816,7 +10780,6 @@ dependencies = [
  "tracing",
  "typed-store",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -10963,7 +10926,6 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11257,7 +11219,6 @@ dependencies = [
  "move-symbol-pool",
  "reqwest",
  "serde",
- "serde_json",
  "sui",
  "sui-json-rpc-types",
  "sui-move",
@@ -11273,7 +11234,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11381,7 +11341,6 @@ dependencies = [
  "tokio",
  "tonic-health",
  "tracing",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11694,9 +11653,7 @@ dependencies = [
  "move-bytecode-verifier",
  "move-core-types",
  "move-vm-config",
- "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11709,9 +11666,7 @@ dependencies = [
  "move-bytecode-verifier-suivm",
  "move-core-types",
  "move-vm-config",
- "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -11735,7 +11690,6 @@ dependencies = [
  "move-vm-config",
  "sui-protocol-config",
  "sui-types",
- "workspace-hack",
 ]
 
 [[package]]
@@ -12757,7 +12711,6 @@ dependencies = [
  "hdrhistogram",
  "itertools",
  "msim",
- "num_cpus",
  "once_cell",
  "ouroboros",
  "proc-macro2 1.0.66",
@@ -12776,7 +12729,6 @@ dependencies = [
  "tracing",
  "typed-store-derive",
  "uint",
- "workspace-hack",
 ]
 
 [[package]]

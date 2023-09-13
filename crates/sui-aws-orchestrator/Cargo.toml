@@ -14,14 +14,11 @@ russh.workspace = true
 russh-keys.workspace = true
 aws-config.workspace = true
 color-eyre.workspace = true
-glob.workspace = true
 clap.workspace = true
 eyre.workspace = true
-prettytable-rs.workspace = true
 serde_json.workspace = true
 futures.workspace = true
 thiserror.workspace = true
-rand.workspace = true
 reqwest.workspace = true
 async-trait.workspace = true
 crossterm.workspace = true
@@ -33,7 +30,6 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-node = { path = "../sui-node" }
 sui-swarm-config =  { path = "../sui-swarm-config" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tempfile = "3.6.0"
