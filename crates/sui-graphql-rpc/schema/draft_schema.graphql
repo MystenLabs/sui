@@ -156,7 +156,7 @@ type Mutation {
   #
   # Waits until the transaction has been finalised on chain and an
   # effects digest is available, and returns that.  If the
-  # transactioon could not be finalised, returns the errors that
+  # transaction could not be finalised, returns the errors that
   # prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
@@ -208,6 +208,12 @@ input ObjectFilter {
   owner: SuiAddress
   objectIds: [SuiAddress!]
   objectKeys: [ObjectKey!]
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [ObjectFilter]
+  all: [ObjectFilter]
+  not: ObjectFilter
 }
 
 input ObjectKey {
@@ -260,6 +266,8 @@ input TransactionBlockFilter {
   inputObject: SuiAddress
   changedObject: SuiAddress
 
+  transactionIDs: [TransactionBlockID!]
+
   # Enhancement (post-MVP), consistency with EventFilter -- timestamp
   # comes from checkpoint timestamp.
   startTime: DateTime
@@ -297,6 +305,7 @@ interface ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: ObjectFilter,
   ): ObjectConnection
 
@@ -347,6 +356,7 @@ type Address implements ObjectOwner {
     last: Int,
     before: String,
     relation: AddressTransactionBlockRelationship,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
@@ -386,6 +396,7 @@ type Object implements ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
@@ -436,6 +447,8 @@ type Epoch {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
 
@@ -738,6 +751,7 @@ type TransactionBlockEffects {
     after: String,
     last: Int,
     before: String,
+    # Extension (post-MVP) relies on compound filters
     filter: EventFilter,
   ): EventConnection
 
