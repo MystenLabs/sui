@@ -128,7 +128,7 @@ fn update_low_scoring_authorities_v2(
 
             metrics
                 .consensus_handler_scores
-                .with_label_values(&[&format!("{:?}", authority.hostname())])
+                .with_label_values(&[authority.hostname()])
                 .set(score as i64);
         }
     }
