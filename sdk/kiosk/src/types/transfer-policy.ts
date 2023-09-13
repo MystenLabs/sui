@@ -47,9 +47,9 @@ export type RuleResolvingParams = {
 	itemId: string;
 	price: string;
 	policyId: ObjectArgument;
+	sellerKiosk: ObjectArgument;
 	kiosk: ObjectArgument;
-	ownedKiosk: ObjectArgument;
-	ownedKioskCap: ObjectArgument;
+	kioskCap: ObjectArgument;
 	transferRequest: TransactionArgument;
 	purchasedItem: TransactionArgument;
 	packageId: string;

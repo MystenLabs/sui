@@ -42,7 +42,7 @@ export function useOwnedKiosk(address: string | undefined) {
 		} | null> => {
 			if (!address) return null;
 
-			const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks(address);
+			const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks({ address });
 
 			return {
 				caps: kioskOwnerCaps,
@@ -66,10 +66,13 @@ export function useKiosk(kioskId: string | undefined | null) {
 			items: SuiObjectResponse[];
 		}> => {
 			if (!kioskId) return { kioskData: null, items: [] };
-			const res = await kioskClient.getKiosk(kioskId, {
-				withKioskFields: true,
-				withListingPrices: true,
-				withObjects: true,
+			const res = await kioskClient.getKiosk({
+				id: kioskId,
+				options: {
+					withKioskFields: true,
+					withListingPrices: true,
+					withObjects: true,
+				},
 			});
 
 			return {

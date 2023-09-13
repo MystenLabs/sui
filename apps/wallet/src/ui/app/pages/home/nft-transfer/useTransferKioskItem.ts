@@ -10,7 +10,7 @@ import {
 	useGetObject,
 } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { KioskClient, Network } from '@mysten/kiosk';
+import { KioskClient, KioskTransaction, Network } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
 import { API_ENV } from '_src/shared/api-env';
@@ -55,17 +55,20 @@ export function useTransferKioskItem({
 			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
 				const kioskClient = new KioskClient({ client, network });
 
-				const tx = new TransactionBlock();
+				const txb = new TransactionBlock();
+				const kioskTx = new KioskTransaction({ txb, kioskClient, cap: kiosk.ownerCap });
 
-				const [kioskObj, cap, promise] = kioskClient.getOwnerCap(tx, kiosk.ownerCap);
-
-				kioskClient.transfer(tx, objectData.data.data.type as string, objectId, kioskObj, cap, to);
-
-				kioskClient.returnOwnerCap(tx, kiosk.ownerCap, cap, promise);
+				kioskTx
+					.transfer({
+						itemType: objectData.data.data.type as string,
+						itemId: objectId,
+						address: to,
+					})
+					.wrap();
 
 				return signer.signAndExecuteTransactionBlock(
 					{
-						transactionBlock: tx,
+						transactionBlock: txb,
 						options: {
 							showInput: true,
 							showEffects: true,

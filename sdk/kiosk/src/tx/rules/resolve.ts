@@ -32,26 +32,18 @@ export function resolveRoyaltyRule(params: RuleResolvingParams) {
 }
 
 export function resolveKioskLockRule(params: RuleResolvingParams) {
-	const {
-		txb,
-		packageId,
-		itemType,
-		ownedKiosk,
-		ownedKioskCap,
-		policyId,
-		purchasedItem,
-		transferRequest,
-	} = params;
+	const { txb, packageId, itemType, kiosk, kioskCap, policyId, purchasedItem, transferRequest } =
+		params;
 
-	if (!ownedKiosk || !ownedKioskCap) throw new Error('Missing Owned Kiosk or Owned Kiosk Cap');
+	if (!kiosk || !kioskCap) throw new Error('Missing Owned Kiosk or Owned Kiosk Cap');
 
-	lock(txb, itemType, ownedKiosk, ownedKioskCap, policyId, purchasedItem);
+	lock(txb, itemType, kiosk, kioskCap, policyId, purchasedItem);
 
 	// proves that the item is locked in the kiosk to the TP.
 	txb.moveCall({
 		target: `${packageId}::kiosk_lock_rule::prove`,
 		typeArguments: [itemType],
-		arguments: [transferRequest, objArg(txb, ownedKiosk)],
+		arguments: [transferRequest, objArg(txb, kiosk)],
 	});
 }
 
@@ -60,15 +52,15 @@ export function resolveKioskLockRule(params: RuleResolvingParams) {
  * @param params
  */
 export function resolvePersonalKioskRule(params: RuleResolvingParams) {
-	const { txb, packageId, itemType, ownedKiosk, transferRequest } = params;
+	const { txb, packageId, itemType, kiosk, transferRequest } = params;
 
-	if (!ownedKiosk) throw new Error('Missing owned Kiosk.');
+	if (!kiosk) throw new Error('Missing owned Kiosk.');
 
 	// proves that the destination kiosk is personal.
 	txb.moveCall({
 		target: `${packageId}::kiosk_lock_rule::prove`,
 		typeArguments: [itemType],
-		arguments: [objArg(txb, ownedKiosk), transferRequest],
+		arguments: [objArg(txb, kiosk), transferRequest],
 	});
 }
 

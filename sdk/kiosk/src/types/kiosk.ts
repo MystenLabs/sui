@@ -125,9 +125,13 @@ export type PagedKioskData = {
 };
 
 export type FetchKioskOptions = {
+	/** Include the base kiosk object, which includes the profits, the owner and the base fields. */
 	withKioskFields?: boolean;
+	/** Include the listing prices. */
 	withListingPrices?: boolean;
+	/** Include the objects for the Items in the kiosk. Defaults to `display` only. */
 	withObjects?: boolean;
+	/** Pass the data options for the objects, when fetching, in case you want to query other details. */
 	objectOptions?: SuiObjectDataOptions;
 };
 
@@ -143,3 +147,12 @@ export type KioskOwnerCap = {
 	digest: string;
 	version: string;
 };
+
+export type PurchaseOptions = {
+	extraArgs?: Record<string, any>;
+};
+
+export type ItemId = { itemType: string; itemId: string };
+export type ItemReference = { itemType: string; item: ObjectArgument };
+export type ItemValue = { itemType: string; item: TransactionArgument };
+export type Price = { price: string | bigint };

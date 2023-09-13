@@ -33,7 +33,7 @@ import {
 } from '@mysten/sui.js/utils';
 import { bcs } from '@mysten/sui.js/bcs';
 import { program } from 'commander';
-import { KIOSK_LISTING, KioskClient, Network } from '@mysten/kiosk';
+import { KIOSK_LISTING, KioskClient, KioskTransaction, Network } from '@mysten/kiosk';
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -260,9 +260,12 @@ async function showKioskContents({ id, address }) {
     // data: { items, kiosk },
     hasNextPage,
     nextCursor,
-  } = await kioskClient.getKiosk(kioskId, {
-    withListingPrices: true,
-    withKioskFields: true,
+  } = await kioskClient.getKiosk({
+    id: kioskId,
+    options: {
+      withListingPrices: true,
+      withKioskFields: true,
+    },
   });
 
   if (hasNextPage) {
@@ -321,9 +324,12 @@ async function placeItem(itemId) {
   const txb = new TransactionBlock();
   const itemArg = txb.objectRef({ ...item.data });
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    kioskClient.place(txb, item.data.type, itemArg, kiosk, cap);
-  });
+  new KioskTransaction({ txb, kioskClient, cap: kioskCap })
+    .place({
+      type: item.data.type,
+      item: itemArg,
+    })
+    .wrap();
 
   return sendTx(txb);
 }
@@ -333,10 +339,10 @@ async function placeItem(itemId) {
  * Description: Lock an item in the Kiosk owned by the sender (requires TransferPolicy)
  */
 async function lockItem(itemId) {
-  const kioskCap = await findKioskCap().catch(() => null);
+  const cap = await findKioskCap().catch(() => null);
   const owner = keypair.getPublicKey().toSuiAddress();
 
-  if (kioskCap === null) {
+  if (cap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
@@ -357,7 +363,7 @@ async function lockItem(itemId) {
     throw new Error(`Item ${itemId} is not owned by ${owner}; use \`inventory\` to see your items`);
   }
 
-  const [policy] = await kioskClient.getTransferPolicies(item.data.type);
+  const [policy] = await kioskClient.getTransferPolicies({ type: item.data.type });
 
   if (!policy) {
     throw new Error(`Item ${itemId} with type ${item.data.type} does not have a TransferPolicy`);
@@ -365,11 +371,14 @@ async function lockItem(itemId) {
 
   const txb = new TransactionBlock();
   const itemArg = txb.objectRef({ ...item.data });
-  const policyArg = txb.object(policy.id);
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    kioskClient.lock(txb, item.data.type, itemArg, policyArg, kiosk, cap);
-  });
+  new KioskTransaction({ txb, kioskClient, cap })
+    .lock({
+      itemType: item.data.type,
+      itemId: itemArg,
+      policy: policy.id,
+    })
+    .wrap();
 
   return sendTx(txb);
 }
@@ -380,7 +389,7 @@ async function lockItem(itemId) {
  * --address <address>)
  */
 async function takeItem(itemId, { address }) {
-  const kioskCap = await findKioskCap().catch(() => null);
+  const cap = await findKioskCap().catch(() => null);
   const receiver = address || keypair.getPublicKey().toSuiAddress();
 
   if (!isValidSuiAddress(receiver)) {
@@ -391,7 +400,7 @@ async function takeItem(itemId, { address }) {
     throw new Error('Invalid Item ID: "%s"', itemId);
   }
 
-  if (kioskCap === null) {
+  if (cap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
@@ -403,10 +412,13 @@ async function takeItem(itemId, { address }) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    let taken = kioskClient.take(txb, item.data.type, itemId, kiosk, cap);
-    txb.transferObjects([taken], txb.pure(receiver, 'address'));
-  });
+  new KioskTransaction({ txb, kioskClient, cap })
+    .transfer({
+      itemType: item.data.type,
+      itemId,
+      address: receiver,
+    })
+    .wrap();
 
   return sendTx(txb);
 }
@@ -415,10 +427,10 @@ async function takeItem(itemId, { address }) {
  * Command: `list`
  * Description: Lists an item in the Kiosk for the specified amount of SUI
  */
-async function listItem(itemId, amount) {
-  const kioskCap = await findKioskCap().catch(() => null);
+async function listItem(itemId, price) {
+  const cap = await findKioskCap().catch(() => null);
 
-  if (kioskCap === null) {
+  if (cap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
@@ -434,9 +446,13 @@ async function listItem(itemId, amount) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    kioskClient.list(txb, item.data.type, item.data.objectId, amount, kiosk, cap);
-  });
+  new KioskTransaction({ txb, kioskClient, cap })
+    .list({
+      itemType: item.data.type,
+      itemId,
+      price,
+    })
+    .wrap();
 
   return sendTx(txb);
 }
@@ -446,9 +462,9 @@ async function listItem(itemId, amount) {
  * Description: Delists an active listing in the Kiosk
  */
 async function delistItem(itemId) {
-  const kioskCap = await findKioskCap().catch(() => null);
+  const cap = await findKioskCap().catch(() => null);
 
-  if (kioskCap === null) {
+  if (cap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
@@ -464,9 +480,12 @@ async function delistItem(itemId) {
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    kioskClient.delist(txb, item.data.type, itemId, kiosk, cap);
-  });
+  new KioskTransaction({ txb, kioskClient, cap })
+    .delist({
+      itemType: item.data.type,
+      itemId,
+    })
+    .wrap();
 
   return sendTx(txb);
 }
@@ -542,25 +561,23 @@ async function purchaseItem(itemId, opts) {
   const price = listing.data.content.fields.value;
   const txb = new TransactionBlock();
   const fromKioskArg = txb.object(kiosk.data.objectId);
-  const kioskCap = await findKioskCap().catch(() => null);
+  const cap = await findKioskCap().catch(() => null);
 
-  if (kioskCap === null) {
+  if (cap === null) {
     throw new Error(
       'No Kiosk found for sender; use `new` to create one; cannot place item to Kiosk',
     );
   }
+  const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, async (kiosk, cap) => {
-    await kioskClient.purchaseAndResolve(
-      txb,
-      itemInfo.data.type,
-      itemInfo.data.objectId,
+  (
+    await kioskTx.purchaseAndResolve({
+      itemType: itemInfo.data.type,
+      itemId: itemInfo.data.objectId,
       price,
-      fromKioskArg,
-      kiosk,
-      cap,
-    );
-  });
+      sellerKiosk: fromKioskArg,
+    })
+  ).wrap();
 
   return sendTx(txb);
 }
@@ -616,7 +633,7 @@ async function searchPolicy(type) {
   // use known types if available;
   type = KNOWN_TYPES[type] || type;
 
-  const policies = await kioskClient.getTransferPolicies(type);
+  const policies = await kioskClient.getTransferPolicies({ type });
 
   if (policies.length === 0) {
     console.log(`No transfer policy found for type ${type}`);
@@ -640,17 +657,14 @@ async function searchPolicy(type) {
  */
 async function withdrawAll() {
   const sender = keypair.getPublicKey().toSuiAddress();
-  const kioskCap = await findKioskCap(sender).catch(() => null);
-  if (kioskCap === null) {
+  const cap = await findKioskCap(sender).catch(() => null);
+  if (cap === null) {
     throw new Error('No Kiosk found for sender; use `new` to create one');
   }
 
   const txb = new TransactionBlock();
 
-  await kioskClient.ownedKioskTx(txb, kioskCap, (kiosk, cap) => {
-    const coin = kioskClient.withdraw(txb, kiosk, cap);
-    txb.transferObjects([coin], txb.pure(sender, 'address'));
-  });
+  new KioskTransaction({ txb, kioskClient, cap }).withdraw(sender).wrap();
 
   return sendTx(txb);
 }
@@ -701,7 +715,7 @@ async function findKioskCap(address) {
     throw new Error(`Invalid address "${sender}"`);
   }
 
-  const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks(sender);
+  const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: sender });
 
   if (kioskOwnerCaps.length === 0) {
     throw new Error(`No Kiosk found for "${sender}"`);

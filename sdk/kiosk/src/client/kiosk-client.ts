@@ -6,23 +6,12 @@ import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
 import {
 	type FetchKioskOptions,
 	KioskData,
-	KioskOwnerCap,
-	ObjectArgument,
 	OwnedKiosks,
 	Network,
 	type KioskClientOptions,
 } from '../types';
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
-import * as kioskTx from '../tx/kiosk';
 import { TransferPolicyRule, PERSONAL_KIOSK_RULE_ADDRESS, rules } from '../constants';
 import { queryTransferPolicy } from '../query/transfer-policy';
-import { convertToPersonalTx } from '../tx/personal-kiosk';
-import { confirmRequest } from '../tx/transfer-policy';
-import { objArg } from '../utils';
-
-export type PurchaseOptions = {
-	extraArgs?: Record<string, any>;
-};
 
 /**
  * A Client that allows you to interact with kiosk.
@@ -32,80 +21,24 @@ export type PurchaseOptions = {
 export class KioskClient {
 	client: SuiClient;
 	network: Network;
-	#rules: TransferPolicyRule[];
+	rules: TransferPolicyRule[];
 
 	constructor(options: KioskClientOptions) {
 		this.client = options.client;
 		this.network = options.network;
-		this.#rules = rules; // add all the default rules. WIP
+		this.rules = rules; // add all the default rules.
 	}
 
-	// Someone would just have to create a `kiosk-client.ts` file in their project, initialize a KioskClient
-	// and call the `addRuleResolver` function. Each rule has a `resolve` function.
-	// The resolve function is automatically called on `purchaseAndResolve` function call.
-	addRuleResolver(rule: TransferPolicyRule) {
-		if (this.#rules.find((x) => x.rule === rule.rule))
-			throw new Error(`Rule ${rule.rule} resolver already exists.`);
-		this.#rules.push(rule);
-	}
-
-	/**
-	 * Creates a kiosk and returns both `Kiosk` and `KioskOwnerCap`.
-	 * Helpful if we want to chain some actions before sharing + transferring the cap to the specified address.
-	 */
-	create(txb: TransactionBlock): [TransactionArgument, TransactionArgument] {
-		const [kiosk, cap] = kioskTx.createKiosk(txb);
-		return [kiosk, cap];
-	}
-
-	/**
-	 * Single function way to create a kiosk, share it and transfer the cap to the specified address.
-	 */
-	createAndShare(txb: TransactionBlock, address: string) {
-		const cap = kioskTx.createKioskAndShare(txb);
-		txb.transferObjects([cap], txb.pure(address, 'address'));
-	}
-
-	/**
-	 * Should be called only after `create` is called.
-	 * It shares the kiosk & transfers the cap to the specified address.
-	 */
-	shareAndTransferCap(
-		txb: TransactionBlock,
-		kiosk: TransactionArgument,
-		cap: TransactionArgument,
-		address: string,
-	) {
-		kioskTx.shareKiosk(txb, kiosk);
-		txb.transferObjects([cap], txb.pure(address, 'address'));
-	}
-
-	/**
-	 * Wraps a kiosk transaction that depends on `kioskOwnerCap`.
-	 * @param txb The Transaction Block
-	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
-	 * @param ownerCap The `ownerCap` object as returned from the `getOwnedKiosk` function
-	 * @param callback The function you want to execute with the ownerCap.
-	 */
-	async ownedKioskTx(
-		txb: TransactionBlock,
-		cap: KioskOwnerCap,
-		callback: (kiosk: TransactionArgument, capObject: TransactionArgument) => Promise<void>,
-	): Promise<void> {
-		const [kiosk, capObject, returnPromise] = this.getOwnerCap(txb, cap);
-
-		await callback(kiosk, capObject);
-
-		this.returnOwnerCap(txb, cap, capObject, returnPromise);
-	}
+	/// Querying
 
 	/**
 	 * Get an addresses's owned kiosks.
 	 * @param address The address for which we want to retrieve the kiosks.
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
-	async getOwnedKiosks(address: string): Promise<OwnedKiosks> {
+	async getOwnedKiosks({ address }: { address: string }): Promise<OwnedKiosks> {
 		const personalPackageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
+
 		return getOwnedKiosks(this.client, address, {
 			personalKioskType: personalPackageId
 				? `${personalPackageId}::personal_kiosk::PersonalKioskCap`
@@ -115,15 +48,15 @@ export class KioskClient {
 
 	/**
 	 * Fetches the kiosk contents.
-	 * @param kioskId
-	 * @param options
+	 * @param kioskId The ID of the kiosk to fetch.
+	 * @param options Optioal
 	 * @returns
 	 */
-	async getKiosk(kioskId: string, options: FetchKioskOptions): Promise<KioskData> {
+	async getKiosk({ id, options }: { id: string; options: FetchKioskOptions }): Promise<KioskData> {
 		return (
 			await fetchKiosk(
 				this.client,
-				kioskId,
+				id,
 				{
 					limit: 1000,
 				},
@@ -134,345 +67,18 @@ export class KioskClient {
 
 	/**
 	 * Query the Transfer Policy(ies) for type `T`.
-	 * @param itemType The Type we're querying for (E.g `0xMyAddress::hero::Hero`)
+	 * @param type The Type we're querying for (E.g `0xMyAddress::hero::Hero`)
 	 */
-	async getTransferPolicies(itemType: string) {
-		return queryTransferPolicy(this.client, itemType);
+	async getTransferPolicies({ type }: { type: string }) {
+		return queryTransferPolicy(this.client, type);
 	}
 
-	/**
-	 * A function to purchase and resolve a transfer policy.
-	 * If the transfer policy has the `lock` rule, the item is locked in the kiosk.
-	 * Otherwise, the item is placed in the kiosk.
-	 * @param txb The Transaction Block
-	 * @param itemType The type of the item
-	 * @param itemId The id of the item
-	 * @param price The price of the specified item
-	 * @param kiosk The kiosk the item resides in
-	 * @param ownedKiosk The kiosk the item will be placed or locked into
-	 * @param ownedKioskCap The OwnerCap as retrieved from the `getOwnerCap` function
-	 * @param options Currently has `extraArgs`, which can be used for custom rule resolvers.
-	 */
-	async purchaseAndResolve(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		price: string,
-		kiosk: ObjectArgument,
-		ownedKiosk: ObjectArgument,
-		ownedKioskCap: ObjectArgument,
-		options?: PurchaseOptions,
-	): Promise<void> {
-		// Get a list of the transfer policies.
-		const policies = await queryTransferPolicy(this.client, itemType);
-
-		if (policies.length === 0) {
-			throw new Error(
-				`The type ${itemType} doesn't have a Transfer Policy so it can't be traded through kiosk.`,
-			);
-		}
-
-		const policy = policies[0]; // we now pick the first one. We need to add an option to define which one.
-
-		// Split the coin for the amount of the listing.
-		const coin = txb.splitCoins(txb.gas, [txb.pure(price, 'u64')]);
-
-		// initialize the purchase `kiosk::purchase`
-		const [purchasedItem, transferRequest] = kioskTx.purchase(txb, itemType, kiosk, itemId, coin);
-
-		let canTransferOutsideKiosk = true;
-
-		for (const rule of policy.rules) {
-			const ruleDefinition = this.#rules.find((x) => x.rule === rule);
-			if (!ruleDefinition) throw new Error(`No resolver for the following rule: ${rule}.`);
-			if (ruleDefinition.hasLockingRule) canTransferOutsideKiosk = false;
-
-			ruleDefinition.resolveRuleFunction({
-				packageId: ruleDefinition.packageId,
-				txb,
-				itemType,
-				itemId,
-				price,
-				kiosk,
-				policyId: policy.id,
-				transferRequest,
-				purchasedItem,
-				ownedKiosk,
-				ownedKioskCap,
-				extraArgs: options?.extraArgs || {},
-			});
-		}
-
-		confirmRequest(txb, itemType, policy.id, transferRequest);
-
-		if (canTransferOutsideKiosk)
-			this.place(txb, itemType, purchasedItem, ownedKiosk, ownedKioskCap);
-	}
-
-	/**
-	 * A function to borrow an item from a kiosk & execute any function with it.
-	 * Example: You could borrow a Fren out of a kiosk, attach an accessory (or mix), and return it.
-	 */
-	borrowTx(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		kiosk: ObjectArgument,
-		ownerCap: TransactionArgument,
-		callback: (item: TransactionArgument) => Promise<void>,
-	) {
-		const [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
-
-		callback(itemObj).finally(() => {
-			kioskTx.returnValue(txb, itemType, kiosk, itemObj, promise);
-		});
-	}
-
-	/**
-	 * Borrows an item from the kiosk.
-	 * This will fail if the item is listed for sale.
-	 *
-	 * Requires calling `return`.
-	 */
-	borrow(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		kiosk: ObjectArgument,
-		ownerCap: TransactionArgument,
-	): [TransactionArgument, TransactionArgument] {
-		const [itemObj, promise] = kioskTx.borrowValue(txb, itemType, kiosk, ownerCap, itemId);
-
-		return [itemObj, promise];
-	}
-
-	/**
-	 * Returns the item back to the kiosk.
-	 * Accepts the parameters returned from the `borrow` function.
-	 */
-	return(
-		txb: TransactionBlock,
-		itemType: string,
-		itemObj: TransactionArgument,
-		promise: TransactionArgument,
-		kiosk: ObjectArgument,
-	) {
-		kioskTx.returnValue(txb, itemType, kiosk, itemObj, promise);
-	}
-
-	/**
-	 * A function to withdraw from kiosk
-	 * @param txb The Transaction Block
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
-	 * @param amount The amount we aim to withdraw.
-	 */
-	withdraw(
-		txb: TransactionBlock,
-		kiosk: ObjectArgument,
-		kioskCap: TransactionArgument,
-		amount?: string | bigint | number,
-	): TransactionArgument {
-		return kioskTx.withdrawFromKiosk(txb, kiosk, kioskCap, amount);
-	}
-
-	/**
-	 * A function to place an item in the kiosk.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param item The ID or Transaction Argument of the item
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
-	 */
-	place(
-		txb: TransactionBlock,
-		itemType: string,
-		item: ObjectArgument,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	) {
-		kioskTx.place(txb, itemType, kiosk, kioskCap, item);
-	}
-
-	/**
-	 * A function to place an item in the kiosk and list it for sale in one transaction.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param item The ID or Transaction Argument of the item
-	 * @param price The price in MIST
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
-	 */
-	placeAndList(
-		txb: TransactionBlock,
-		itemType: string,
-		item: ObjectArgument,
-		price: string | bigint,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	) {
-		kioskTx.placeAndList(txb, itemType, kiosk, kioskCap, item, price);
-	}
-
-	/**
-	 * A function to list an item in the kiosk.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
-	 * @param price The price in MIST
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the capObject, as returned from the `getOwnerCap` function.
-	 */
-	list(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		price: string | bigint,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	) {
-		kioskTx.list(txb, itemType, kiosk, kioskCap, itemId, price);
-	}
-
-	/**
-	 * A function to delist an item from the kiosk.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
-	 * @param kiosk the Kiosk, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
-	 */
-	delist(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	) {
-		kioskTx.delist(txb, itemType, kiosk, kioskCap, itemId);
-	}
-
-	/**
-	 * A function to take an item from the kiosk. The transaction won't succeed if the item is listed or locked.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
-	 */
-	take(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	): TransactionArgument {
-		return kioskTx.take(txb, itemType, kiosk, kioskCap, itemId);
-	}
-
-	/**
-	 * Transfer a non-locked/non-listed item to an address.
-	 *
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
-	 * @param address The destination address
-	 */
-	transfer(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-		address: string,
-	) {
-		const item = this.take(txb, itemType, itemId, kiosk, kioskCap);
-		txb.transferObjects([item], txb.pure(address, 'address'));
-	}
-
-	/**
-	 * A function to take lock an item in the kiosk.
-	 * @param txb The Transaction Block
-	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
-	 * @param policy The Policy ID or Transaction Argument for item T
-	 * @param kiosk the Kiosk Object, ideally passed from the `ownedKioskTx` callback function!
-	 * @param kioskCap the KioskCap, ideally passed from the `ownedKioskTx` callback function!
-	 */
-	lock(
-		txb: TransactionBlock,
-		itemType: string,
-		itemId: string,
-		policy: ObjectArgument,
-		kiosk: ObjectArgument,
-		kioskCap: ObjectArgument,
-	) {
-		kioskTx.lock(txb, itemType, kiosk, kioskCap, policy, itemId);
-	}
-
-	/**
-	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
-	 * @param txb The Transaction Block
-	 * @param ownerCap The Kiosk Owner Cap Object as returned from the `getOwnedKiosks`, or the `kioskOwnerCap` returned from the `new` function.
-	 * @param kiosk The Kiosk Id or Object. Optional if `ownerCap` is from `getOwnedKiosks` call
-	 */
-	convertToPersonal(
-		txb: TransactionBlock,
-		ownerCap: KioskOwnerCap | ObjectArgument,
-		kiosk?: ObjectArgument,
-	) {
-		let capParam, kioskParam;
-		if (typeof ownerCap === 'object' && 'kioskId' in ownerCap && 'objectId' in ownerCap) {
-			kioskParam = ownerCap.kioskId;
-			capParam = ownerCap.objectId;
-		} else {
-			kioskParam = kiosk;
-		}
-		if (!kioskParam || !capParam) throw new Error('Kiosk or OwnerCap is not supplied');
-
-		convertToPersonalTx(txb, kioskParam, capParam, PERSONAL_KIOSK_RULE_ADDRESS[this.network]);
-	}
-
-	/**
-	 * A function to get a transaction parameter for the kiosk.
-	 * @param txb The Transaction Block
-	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
-	 * @returns An array [kioskOwnerCap, promise]. If there's a promise, you need to call `returnOwnerCap` after using the cap.
-	 */
-	getOwnerCap(
-		txb: TransactionBlock,
-		cap: KioskOwnerCap,
-	): [TransactionArgument, TransactionArgument, TransactionArgument | undefined] {
-		if (!cap.isPersonal) return [objArg(txb, cap.kioskId), objArg(txb, cap.objectId), undefined];
-
-		const [capObject, promise] = txb.moveCall({
-			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::borrow_val`,
-			arguments: [txb.object(cap.objectId)],
-		});
-
-		return [objArg(txb, cap.kioskId), capObject, promise];
-	}
-
-	/**
-	 * A function to return the `kioskOwnerCap` back to `PersonalKiosk` wrapper.
-	 * @param txb The Transaction Block
-	 * @param cap The cap as returned from `getOwnedKiosks` SDK call
-	 * @param capObject The borrowed `KioskOwnerCap`
-	 * @param promise The promise that the cap would return
-	 */
-	returnOwnerCap(
-		txb: TransactionBlock,
-		cap: KioskOwnerCap,
-		capObject: ObjectArgument,
-		promise?: TransactionArgument | undefined,
-	) {
-		if (!promise) return;
-
-		txb.moveCall({
-			target: `${PERSONAL_KIOSK_RULE_ADDRESS[this.network]}::personal_kiosk::return_val`,
-			arguments: [txb.object(cap.objectId), objArg(txb, capObject), promise],
-		});
+	// Someone would just have to create a `kiosk-client.ts` file in their project, initialize a KioskClient
+	// and call the `addRuleResolver` function. Each rule has a `resolve` function.
+	// The resolve function is automatically called on `purchaseAndResolve` function call.
+	addRuleResolver(rule: TransferPolicyRule) {
+		if (this.rules.find((x) => x.rule === rule.rule))
+			throw new Error(`Rule ${rule.rule} resolver already exists.`);
+		this.rules.push(rule);
 	}
 }

@@ -81,13 +81,16 @@ async function getSuiKioskContents(
 ) {
 	const kioskClient = new KioskClient({ client, network });
 
-	const ownedKiosks = await kioskClient.getOwnedKiosks(address);
+	const ownedKiosks = await kioskClient.getOwnedKiosks({ address });
 
 	const contents = await Promise.all(
 		ownedKiosks.kioskIds.map(async (id: string) => {
-			const kiosk = await kioskClient.getKiosk(id, {
-				withObjects: true,
-				objectOptions: { showDisplay: true, showContent: true },
+			const kiosk = await kioskClient.getKiosk({
+				id,
+				options: {
+					withObjects: true,
+					objectOptions: { showDisplay: true, showContent: true },
+				},
 			});
 			return {
 				itemIds: kiosk.itemIds,

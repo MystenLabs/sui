@@ -62,7 +62,7 @@ export function attachFloorPriceRuleTx(
 	type: string,
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
-	minPrice: string | number,
+	minPrice: string | bigint,
 	packageId: string,
 ) {
 	tx.moveCall({
