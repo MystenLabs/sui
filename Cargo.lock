@@ -9556,7 +9556,7 @@ dependencies = [
  "inquire",
  "jemalloc-ctl",
  "json_to_table",
- "move-bytecode-verifier",
+ "move-bytecode-verifier-v1",
  "move-core-types",
  "move-package",
  "num-bigint",
@@ -9574,7 +9574,7 @@ dependencies = [
  "shared-crypto",
  "shell-words",
  "signature 1.6.4",
- "sui-adapter-latest",
+ "sui-adapter-v1",
  "sui-config",
  "sui-genesis-builder",
  "sui-json",
@@ -9591,7 +9591,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
- "sui-verifier-latest",
+ "sui-verifier-v1",
  "tabled",
  "tap",
  "telemetry-subscribers",
@@ -10076,7 +10076,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sui",
- "sui-adapter-latest",
+ "sui-adapter-v1",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -10233,18 +10233,18 @@ dependencies = [
 name = "sui-framework-tests"
 version = "0.1.0"
 dependencies = [
- "move-bytecode-verifier",
+ "move-bytecode-verifier-v1",
  "move-cli",
  "move-package",
  "move-unit-test",
  "prometheus",
- "sui-adapter-latest",
+ "sui-adapter-v1",
  "sui-framework",
  "sui-move",
  "sui-move-build",
  "sui-protocol-config",
  "sui-types",
- "sui-verifier-latest",
+ "sui-verifier-v1",
  "workspace-hack",
 ]
 
@@ -10614,7 +10614,7 @@ dependencies = [
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
- "move-bytecode-verifier",
+ "move-bytecode-verifier-v1",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
@@ -10622,8 +10622,13 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
+<<<<<<< HEAD
+=======
+ "sui-adapter-v1",
+ "sui-protocol-config",
+>>>>>>> f3b7feef4b (Make v1 the prod version and latest the devnet one)
  "sui-types",
- "sui-verifier-latest",
+ "sui-verifier-v1",
  "tempfile",
  "workspace-hack",
 ]
@@ -11110,7 +11115,7 @@ dependencies = [
  "msim",
  "narwhal-network",
  "rand 0.8.5",
- "sui-adapter-latest",
+ "sui-adapter-v1",
  "sui-framework",
  "sui-move-build",
  "sui-types",
@@ -12571,6 +12576,10 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rand 0.8.5",
+<<<<<<< HEAD
+=======
+ "sui-adapter-v1",
+>>>>>>> f3b7feef4b (Make v1 the prod version and latest the devnet one)
  "sui-core",
  "sui-move-build",
  "sui-protocol-config",

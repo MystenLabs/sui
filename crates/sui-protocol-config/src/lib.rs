@@ -73,6 +73,8 @@ const MAX_PROTOCOL_VERSION: u64 = 25;
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
 //             JWK / authenticator state flags.
+// Version 25: Make latest the working directory of the execution layer and what runs
+//             on devnet. v1 is the production (testnet and mainnet) "stable" version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1455,7 +1457,13 @@ impl ProtocolConfig {
                     }
                 }
                 25 => {
-                    cfg.execution_version = Some(2);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        // run latest on devnet
+                        cfg.execution_version = Some(2);
+                    } else {
+                        // run v1 on testnet and mainnet
+                        cfg.execution_version = Some(1);
+                    }
                 }
                 // Use this template when making changes:
                 //
