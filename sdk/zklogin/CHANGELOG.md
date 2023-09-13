@@ -1,5 +1,15 @@
 # @mysten/zklogin
 
+## 0.1.4
+
+### Patch Changes
+
+- 9b3ffc7d6: - removes `AddressParams` bcs struct, now address is created by using the iss bytes
+  - updated zklogin signature bcs struct for new camelCase fields
+- d257d20ee: Improve nodejs compatibility
+- Updated dependencies [fd8589806]
+  - @mysten/sui.js@0.42.0
+
 ## 0.1.3
 
 ### Patch Changes
