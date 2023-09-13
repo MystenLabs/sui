@@ -14,6 +14,7 @@ use std::path::PathBuf;
 )]
 pub enum Command {
     GenerateSchema {
+        /// Path to output GraphQL schema to, in SDL format.
         #[clap(short, long)]
         file: Option<PathBuf>,
     },
@@ -24,11 +25,11 @@ pub enum Command {
         /// Port to bind the server to
         #[clap(short, long)]
         port: Option<u16>,
+        /// Host to bind the server to
         #[clap(long)]
         host: Option<String>,
-
-        /// Maximum depth of query
-        #[clap(long)]
-        max_query_depth: Option<usize>,
+        /// Path to TOML file containing configuration for service.
+        #[clap(short, long)]
+        config: Option<PathBuf>,
     },
 }
