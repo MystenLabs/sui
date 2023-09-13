@@ -11,7 +11,6 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.52"
-once_cell = "1.7.2"
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 ref-cast = "1.0.6"
@@ -19,11 +18,7 @@ variant_count = "1.1.0"
 move-core-types = { path = "../move-core/types" }
 serde = { version = "1.0.124", default-features = false }
 arbitrary = { version = "1.1.7", optional = true, features = ["derive"] }
-enum-compat-util = { path = "../testing-infra/enum-compat-util"}
 move-proc-macros = { path = "../testing-infra/move-proc-macros"}
-
-# wasm support (requires js feature of getrandom)
-getrandom = { version = "0.2.9", features = ["js"], optional = true }
 
 [dev-dependencies]
 proptest = "1.0.0"
