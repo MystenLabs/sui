@@ -2,13 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useConnectWallet, useDisconnectWallet, useWallet } from 'dapp-kit/src';
-import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import {
+	useConnectWallet,
+	useDisconnectWallet,
+	useCurrentAccount,
+	useCurrentWallet,
+	useConnectionStatus,
+} from 'dapp-kit/src';
+import { createDAppKitProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
 
 describe('useDisconnectWallet', () => {
 	test('that an error is thrown when trying to disconnect with no active connection', async () => {
-		const wrapper = createWalletProviderContextWrapper();
+		const wrapper = createDAppKitProviderContextWrapper();
 		const { result } = renderHook(() => useDisconnectWallet(), { wrapper });
 
 		result.current.mutate();
@@ -19,12 +25,14 @@ describe('useDisconnectWallet', () => {
 	test('that disconnecting works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrapper();
+		const wrapper = createDAppKitProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
 				disconnectWallet: useDisconnectWallet(),
-				walletInfo: useWallet(),
+				currentWallet: useCurrentWallet(),
+				currentAccount: useCurrentAccount(),
+				connectionStatus: useConnectionStatus(),
 			}),
 			{ wrapper },
 		);
@@ -32,15 +40,15 @@ describe('useDisconnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.walletInfo.connectionStatus).toBe('connected');
+		expect(result.current.connectionStatus).toBe('connected');
 
 		result.current.disconnectWallet.mutate();
 		await waitFor(() => expect(result.current.disconnectWallet.isSuccess).toBe(true));
 
-		expect(result.current.walletInfo.currentWallet).toBeNull();
-		expect(result.current.walletInfo.accounts).toStrictEqual([]);
-		expect(result.current.walletInfo.currentAccount).toBeNull();
-		expect(result.current.walletInfo.connectionStatus).toBe('disconnected');
+		expect(result.current.currentWallet).toBeFalsy();
+		expect(result.current.currentWallet?.accounts).toBeFalsy();
+		expect(result.current.currentAccount).toBeFalsy();
+		expect(result.current.connectionStatus).toBe('disconnected');
 
 		act(() => {
 			unregister();

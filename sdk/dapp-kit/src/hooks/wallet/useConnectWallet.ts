@@ -11,7 +11,8 @@ import type {
 } from '@mysten/wallet-standard';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import { useWalletContext } from './useWalletContext.js';
+import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
@@ -35,7 +36,8 @@ export function useConnectWallet({
 	mutationKey,
 	...mutationOptions
 }: UseConnectWalletMutationOptions = {}) {
-	const { currentWallet, dispatch } = useWalletContext();
+	const currentWallet = useCurrentWallet();
+	const setWalletConnected = useDAppKitStore((state) => state.setWalletConnected);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
@@ -48,24 +50,11 @@ export function useConnectWallet({
 				);
 			}
 
-			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
+			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
+			const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
 
-			try {
-				const connectResult = await wallet.features['standard:connect'].connect(
-					standardConnectInput,
-				);
-				const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
-
-				dispatch({
-					type: 'wallet-connected',
-					payload: { wallet, currentAccount: selectedAccount },
-				});
-
-				return connectResult;
-			} catch (error) {
-				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
-				throw error;
-			}
+			setWalletConnected(wallet, selectedAccount);
+			return connectResult;
 		},
 		...mutationOptions,
 	});

@@ -5,7 +5,8 @@ import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletNotConnectedError } from '../../errors/walletErrors.js';
-import { useWalletContext } from './useWalletContext.js';
+import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseDisconnectWalletMutationOptions = Omit<
 	UseMutationOptions<void, Error, void, unknown>,
@@ -19,7 +20,8 @@ export function useDisconnectWallet({
 	mutationKey,
 	...mutationOptions
 }: UseDisconnectWalletMutationOptions = {}) {
-	const { currentWallet, dispatch } = useWalletContext();
+	const currentWallet = useCurrentWallet();
+	const setWalletDisconnected = useDAppKitStore((state) => state.setWalletDisconnected);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.disconnectWallet(mutationKey),
@@ -37,7 +39,7 @@ export function useDisconnectWallet({
 				console.error('Failed to disconnect the application from the current wallet.', error);
 			}
 
-			dispatch({ type: 'wallet-disconnected' });
+			setWalletDisconnected();
 		},
 		...mutationOptions,
 	});
