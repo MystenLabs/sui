@@ -8,6 +8,7 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { type UiConnection } from '../connections/UiConnection';
 import { getDB } from '../db';
 import { type QredoConnectIdentity } from '../qredo/types';
@@ -92,6 +93,13 @@ export async function getQredoAccountSource(filter: string | QredoConnectIdentit
 	return accountSource;
 }
 
+export async function lockAllAccountSources() {
+	const allAccountSources = await getAccountSources();
+	for (const anAccountSource of allAccountSources) {
+		await anAccountSource.lock();
+	}
+}
+
 export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: UiConnection) {
 	const { payload } = msg;
 	if (isMethodPayload(payload, 'createAccountSource')) {
@@ -115,6 +123,7 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 				throw new Error('Missing password');
 			}
 			await accountSource.unlock(password);
+			await setupAutoLockAlarm();
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 			return true;
 		}

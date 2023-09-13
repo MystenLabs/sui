@@ -9,6 +9,8 @@ import { ProtectAccountForm } from '../../components/accounts/ProtectAccountForm
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import Loading from '../../components/loading';
 import { useAccounts } from '../../hooks/useAccounts';
+import { autoLockDataToMinutes } from '../../hooks/useAutoLockMinutes';
+import { useAutoLockMinutesMutation } from '../../hooks/useAutoLockMinutesMutation';
 import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
@@ -72,6 +74,7 @@ export function ProtectAccountPage() {
 		},
 		[createMutation, navigate, successRedirect],
 	);
+	const autoLockMutation = useAutoLockMinutesMutation();
 	if (!isAllowedAccountType(accountType)) {
 		return <Navigate to="/" replace />;
 	}
@@ -98,7 +101,10 @@ export function ProtectAccountPage() {
 							<ProtectAccountForm
 								cancelButtonText="Back"
 								submitButtonText="Create Wallet"
-								onSubmit={({ password }) => createAccountCallback(password.input, accountType)}
+								onSubmit={async ({ password, autoLock }) => {
+									await autoLockMutation.mutateAsync({ minutes: autoLockDataToMinutes(autoLock) });
+									await createAccountCallback(password.input, accountType);
+								}}
 							/>
 						</div>
 					</>

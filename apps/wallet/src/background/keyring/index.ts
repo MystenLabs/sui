@@ -4,7 +4,6 @@
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { fromB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
-import { throttle } from 'throttle-debounce';
 
 import { type Account, isImportedOrDerivedAccount, isQredoAccount } from './Account';
 import { DerivedAccount } from './DerivedAccount';
@@ -17,12 +16,6 @@ import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
 import { entropyToSerialized } from '_shared/utils/bip39';
-import Alarms from '_src/background/Alarms';
-import {
-	AUTO_LOCK_TIMER_MAX_MINUTES,
-	AUTO_LOCK_TIMER_MIN_MINUTES,
-	AUTO_LOCK_TIMER_STORAGE_KEY,
-} from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
@@ -83,7 +76,6 @@ export class Keyring {
 		this.#mainDerivedAccount = null;
 		this.#locked = true;
 		await VaultStorage.lock();
-		await Alarms.clearLockAlarm();
 		this.notifyLockedStatusUpdate(this.#locked);
 	}
 
@@ -274,16 +266,6 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'clear')) {
 				await this.clearVault();
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'appStatusUpdate')) {
-				const appActive = payload.args?.active;
-				if (appActive) {
-					this.postponeLock();
-				}
-			} else if (isKeyringPayload(payload, 'setLockTimeout')) {
-				if (payload.args) {
-					await this.setLockTimeout(payload.args.timeout);
-				}
-				uiConnection.send(createMessage({ type: 'done' }, id));
 			} else if (isKeyringPayload(payload, 'signData')) {
 				if (this.#locked) {
 					throw new Error('Keyring is locked. Unlock it first.');
@@ -375,26 +357,6 @@ export class Keyring {
 		this.#events.emit('lockedStatusUpdate', isLocked);
 	}
 
-	private postponeLock = throttle(
-		1000,
-		async () => {
-			if (!this.isLocked) {
-				await Alarms.setLockAlarm();
-			}
-		},
-		{ noLeading: false },
-	);
-
-	private async setLockTimeout(timeout: number) {
-		if (timeout > AUTO_LOCK_TIMER_MAX_MINUTES || timeout < AUTO_LOCK_TIMER_MIN_MINUTES) {
-			return;
-		}
-		await setToLocalStorage(AUTO_LOCK_TIMER_STORAGE_KEY, timeout);
-		if (!this.isLocked) {
-			await Alarms.setLockAlarm();
-		}
-	}
-
 	private async revive() {
 		const unlocked = await VaultStorage.revive();
 		if (unlocked) {
@@ -407,7 +369,6 @@ export class Keyring {
 		if (!mnemonicSeedHex) {
 			return;
 		}
-		Alarms.setLockAlarm();
 		const lastAccountIndex = await this.getLastDerivedIndex();
 		for (let i = 0; i <= lastAccountIndex; i++) {
 			const account = this.deriveAccount(i, mnemonicSeedHex);
