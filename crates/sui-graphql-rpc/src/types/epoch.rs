@@ -119,6 +119,7 @@ impl Epoch {
     }
 
     async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<Option<ProtocolConfigs>> {
+        // TODO: Fetch protocol configs for the epoch_id?
         Ok(Some(ctx.data_provider().fetch_protocol_config(None).await?))
     }
 }
