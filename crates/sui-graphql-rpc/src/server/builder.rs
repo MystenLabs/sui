@@ -104,7 +104,7 @@ mod tests {
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
-
+    use std::sync::Arc;
     use std::time::Duration;
 
     #[tokio::test]
@@ -114,8 +114,8 @@ mod tests {
         }
 
         impl ExtensionFactory for TimedExecuteExt {
-            fn create(&self) -> std::sync::Arc<dyn Extension> {
-                std::sync::Arc::new(TimedExecuteExt {
+            fn create(&self) -> Arc<dyn Extension> {
+                Arc::new(TimedExecuteExt {
                     min_req_delay: self.min_req_delay,
                 })
             }
