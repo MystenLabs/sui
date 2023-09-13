@@ -1362,6 +1362,7 @@ mod tests {
             state.run_gc_once(GC_ROUND).unwrap();
 
         assert_eq!(certificate_digest, certificates[0].digest()); // Ensure that only the missing certificate digest of round 1 gets garbage collected.
+        assert_eq!(round, 1);
         assert!(suspended_certificate.is_none()); // We don't have its certificate
 
         // Accept its children
