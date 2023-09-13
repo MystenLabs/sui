@@ -17,6 +17,7 @@ pub mod verifier;
 mod latest;
 mod suivm;
 mod v0;
+mod v1;
 
 #[cfg(test)]
 mod tests;
@@ -35,7 +36,13 @@ pub fn executor(
             silent,
         )?),
 
-        1 => Arc::new(latest::Executor::new(
+        1 => Arc::new(v1::Executor::new(
+            protocol_config,
+            paranoid_type_checks,
+            silent,
+        )?),
+
+        2 => Arc::new(latest::Executor::new(
             protocol_config,
             paranoid_type_checks,
             silent,
@@ -59,7 +66,8 @@ pub fn verifier<'m>(
     let version = protocol_config.execution_version_as_option().unwrap_or(0);
     match version {
         0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
-        1 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
+        1 => Box::new(v1::Verifier::new(protocol_config, is_metered, metrics)),
+        2 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
         SUIVM => Box::new(suivm::Verifier::new(protocol_config, is_metered, metrics)),
         v => panic!("Unsupported execution version {v}"),
     }
