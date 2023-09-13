@@ -12,11 +12,9 @@ export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const lastConnectedAccountAddress = useDAppKitStore((state) => state.lastConnectedAccountAddress);
 
 	useEffect(() => {
-		if (!autoConnectEnabled) return;
+		if (!autoConnectEnabled || !lastConnectedWalletName) return;
 
-		const wallet = lastConnectedWalletName
-			? wallets.find((wallet) => wallet.name === lastConnectedWalletName)
-			: null;
+		const wallet = wallets.find((wallet) => wallet.name === lastConnectedWalletName);
 		if (wallet) {
 			connectWallet({
 				wallet,
