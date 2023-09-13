@@ -14,7 +14,6 @@ bimap.workspace = true
 clap.workspace = true
 once_cell.workspace = true
 rand.workspace = true
-prometheus.workspace = true
 tempfile.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
@@ -31,13 +30,11 @@ move-transactional-test-runner.workspace = true
 move-stdlib = { path = "../../external-crates/move/move-stdlib" }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 
-sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-framework.workspace = true
 sui-protocol-config.workspace = true
 sui-types = { workspace = true, features = ["test-utils"]}
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-json-rpc-types.workspace = true
 sui-json-rpc.workspace = true
 sui-framework-snapshot.workspace = true
