@@ -21,16 +21,16 @@ export type WalletActions = {
 export type WalletSlice = {
 	wallets: WalletWithRequiredFeatures[];
 	currentAccount: WalletAccount | null;
-	lastAccountAddress: string | null;
+	lastConnectedAccountAddress: string | null;
 } & WalletActions &
 	(
 		| {
-				lastWalletName: null;
+				lastConnectedWalletName: null;
 				currentWallet: null;
 				connectionStatus: 'disconnected';
 		  }
 		| {
-				lastWalletName: string;
+				lastConnectedWalletName: string;
 				currentWallet: WalletWithRequiredFeatures;
 				connectionStatus: 'connected';
 		  }
@@ -48,15 +48,15 @@ export function createWalletSlice(
 		wallets: initialWallets,
 		currentWallet: null,
 		currentAccount: null,
-		lastAccountAddress: null,
-		lastWalletName: null,
+		lastConnectedAccountAddress: null,
+		lastConnectedWalletName: null,
 		connectionStatus: 'disconnected',
 		setWalletConnected: (wallet, selectedAccount) => {
 			set(() => ({
 				currentWallet: wallet,
 				currentAccount: selectedAccount,
-				lastWalletName: wallet.name,
-				lastAccountAddress: selectedAccount?.address,
+				lastConnectedWalletName: wallet.name,
+				lastConnectedAccountAddress: selectedAccount?.address,
 				connectionStatus: 'connected',
 			}));
 		},
@@ -64,15 +64,15 @@ export function createWalletSlice(
 			set(() => ({
 				currentWallet: null,
 				currentAccount: null,
-				lastWalletName: null,
-				lastAccountAddress: null,
+				lastConnectedWalletName: null,
+				lastConnectedAccountAddress: null,
 				connectionStatus: 'disconnected',
 			}));
 		},
 		setAccountSwitched: (selectedAccount) => {
 			set(() => ({
 				currentAccount: selectedAccount,
-				lastAccountAddress: selectedAccount.address,
+				lastConnectedAccountAddress: selectedAccount.address,
 			}));
 		},
 		setWalletRegistered: (updatedWallets) => {
@@ -84,8 +84,8 @@ export function createWalletSlice(
 					wallets: updatedWallets,
 					currentWallet: null,
 					currentAccount: null,
-					lastWalletName: null,
-					lastAccountAddress: null,
+					lastConnectedWalletName: null,
+					lastConnectedAccountAddress: null,
 					connectionStatus: 'disconnected',
 				}));
 			} else {

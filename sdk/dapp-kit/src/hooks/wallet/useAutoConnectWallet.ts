@@ -8,15 +8,27 @@ import { useConnectWallet } from './useConnectWallet.js';
 export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const { mutate: connectWallet } = useConnectWallet();
 	const wallets = useDAppKitStore((state) => state.wallets);
-	const lastWalletName = useDAppKitStore((state) => state.lastWalletName);
-	const lastAccountAddress = useDAppKitStore((state) => state.lastAccountAddress);
+	const lastConnectedWalletName = useDAppKitStore((state) => state.lastConnectedWalletName);
+	const lastConnectedAccountAddress = useDAppKitStore((state) => state.lastConnectedAccountAddress);
 
 	useEffect(() => {
 		if (!autoConnectEnabled) return;
 
-		const wallet = lastWalletName ? wallets.find((wallet) => wallet.name === lastWalletName) : null;
+		const wallet = lastConnectedWalletName
+			? wallets.find((wallet) => wallet.name === lastConnectedWalletName)
+			: null;
 		if (wallet) {
-			connectWallet({ wallet, accountAddress: lastAccountAddress || undefined, silent: true });
+			connectWallet({
+				wallet,
+				accountAddress: lastConnectedAccountAddress || undefined,
+				silent: true,
+			});
 		}
-	}, [autoConnectEnabled, connectWallet, lastAccountAddress, lastWalletName, wallets]);
+	}, [
+		autoConnectEnabled,
+		connectWallet,
+		lastConnectedAccountAddress,
+		lastConnectedWalletName,
+		wallets,
+	]);
 }
