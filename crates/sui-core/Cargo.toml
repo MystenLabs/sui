@@ -75,6 +75,7 @@ sui-macros.workspace = true
 sui-move-build.workspace = true
 sui-network.workspace = true
 sui-protocol-config.workspace = true
+sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true

@@ -8,6 +8,7 @@ import { formatAddress } from '@mysten/sui.js/utils';
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
 import { EditableAccountName } from './EditableAccountName';
+import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useExplorerLink } from '../../hooks/useExplorerLink';
@@ -20,6 +21,7 @@ interface AccountItemProps {
 	address: string;
 	icon?: ReactNode;
 	after?: ReactNode;
+	footer?: ReactNode;
 	disabled?: boolean;
 	gradient?: boolean;
 	selected?: boolean; // whether the account is selected in the context of a multi-select
@@ -39,6 +41,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			name,
 			address,
 			after,
+			footer,
 			editable,
 			...props
 		},
@@ -61,41 +64,46 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			<div
 				ref={ref}
 				className={cn(
-					'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-solid border-hero/10 cursor-pointer bg-white/40 group',
+					'flex flex-col px-4 py-3 rounded-xl gap-3 border border-solid border-hero/10 cursor-pointer bg-white/40 group',
 					'hover:bg-white/80',
 					{ 'bg-white/80 shadow-card-soft cursor-auto': selected },
-					{ 'bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
 					{ 'bg-white/80': isActiveAccount },
-					{ 'bg-gradients-graph-cards': background === 'gradient' },
+					{ '!bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
+					{
+						[getAccountBackgroundByType(account)]: background === 'gradient',
+					},
 				)}
 				{...props}
 			>
-				{icon}
-				<div className="flex flex-col gap-1 overflow-hidden items-start">
-					{!isActiveAccount && !editable ? (
-						<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
-							{accountName}
-						</Text>
-					) : (
-						<EditableAccountName accountID={account.id} name={accountName} />
-					)}
-					<div className="text-steel-dark flex gap-1.5 leading-none">
-						<Text variant="subtitle" weight="semibold" truncate>
-							{formatAddress(account.address)}
-						</Text>
-						<div className="opacity-0 group-hover:opacity-100 flex gap-1 duration-100">
-							<IconButton icon={<Copy12 />} onClick={copyAddress} />
-							{explorerHref ? (
-								<IconButton
-									title="View on Explorer"
-									href={explorerHref}
-									icon={<ArrowUpRight12 />}
-								/>
-							) : null}
+				<div className="flex items-center justify-start gap-3">
+					{icon}
+					<div className="flex flex-col gap-1 overflow-hidden items-start">
+						{!isActiveAccount && !editable ? (
+							<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
+								{accountName}
+							</Text>
+						) : (
+							<EditableAccountName accountID={account.id} name={accountName} />
+						)}
+						<div className="text-steel-dark flex gap-1.5 leading-none">
+							<Text variant="subtitle" weight="semibold" truncate>
+								{formatAddress(account.address)}
+							</Text>
+							<div className="opacity-0 group-hover:opacity-100 flex gap-1 duration-100">
+								<IconButton icon={<Copy12 />} onClick={copyAddress} />
+								{explorerHref ? (
+									<IconButton
+										title="View on Explorer"
+										href={explorerHref}
+										icon={<ArrowUpRight12 />}
+									/>
+								) : null}
+							</div>
 						</div>
 					</div>
+					{after}
 				</div>
-				{after}
+				{footer}
 			</div>
 		);
 	},

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { Coin } from '../../src';
+import { Coin } from '../../src/framework';
 import { normalizeSuiObjectId } from '../../src/utils';
 
 import { setup } from './utils/setup';

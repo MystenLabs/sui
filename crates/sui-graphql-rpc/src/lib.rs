@@ -1,14 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod commands;
+pub mod config;
+pub mod server;
+
+mod context_data;
+mod error;
+mod extensions;
+mod functional_group;
+mod types;
+
 use async_graphql::*;
 use types::owner::ObjectOwner;
-
-pub mod commands;
-pub mod error;
-pub mod extensions;
-pub mod server;
-pub mod types;
 
 use crate::types::query::Query;
 

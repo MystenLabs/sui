@@ -413,6 +413,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
+                            owner: obj.owner,
                         },
                     )
                 })

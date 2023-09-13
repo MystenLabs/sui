@@ -669,6 +669,14 @@ impl AbilitySet {
         self.0.contains_(&a)
     }
 
+    pub fn ability_loc(&self, sp!(_, a_): &Ability) -> Option<Loc> {
+        self.0.get_loc_(a_).copied()
+    }
+
+    pub fn ability_loc_(&self, a: Ability_) -> Option<Loc> {
+        self.0.get_loc_(&a).copied()
+    }
+
     // intersection of two sets. Keeps the loc of the first set
     pub fn intersect(&self, other: &Self) -> Self {
         Self(self.0.intersect(&other.0))

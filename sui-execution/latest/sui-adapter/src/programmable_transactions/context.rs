@@ -589,6 +589,7 @@ mod checked {
                     LoadedRuntimeObject {
                         version,
                         digest,
+                        owner,
                         is_modified: true,
                     },
                 );
@@ -787,7 +788,7 @@ mod checked {
                     .filter_map(|(id, loaded)| {
                         loaded
                             .is_modified
-                            .then_some((id, (loaded.version, loaded.digest)))
+                            .then_some((id, (loaded.version, loaded.digest, loaded.owner)))
                     })
                     .collect(),
                 created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),

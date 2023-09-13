@@ -20,6 +20,7 @@ move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
 move-vm-types.workspace = true
+tap.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-bytecode-verifier" }
 move-vm-runtime = { path = "../../../external-crates/move/move-vm/runtime" }

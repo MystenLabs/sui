@@ -258,6 +258,8 @@ pub struct AuthorityMetrics {
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
+
+    pub authenticator_state_update_failed: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -570,6 +572,12 @@ impl AuthorityMetrics {
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
+            authenticator_state_update_failed: register_int_counter_with_registry!(
+                "authenticator_state_update_failed",
+                "Number of failed authenticator state updates",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -676,12 +684,12 @@ impl AuthorityState {
     ) -> SuiResult<VerifiedSignedTransaction> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            epoch_store.as_ref(),
+            epoch_store.protocol_config(),
+            epoch_store.reference_gas_price(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
-        )
-        .await?;
+        )?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -1072,6 +1080,11 @@ impl AuthorityState {
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().intent_message().value.kind()
         {
+            if let Some(err) = &execution_error_opt {
+                error!("Authenticator state update failed: {err}");
+                self.metrics.authenticator_state_update_failed.inc();
+            }
+            debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
         }
 
@@ -1176,8 +1189,7 @@ impl AuthorityState {
             &self.database,
             epoch_store,
             certificate,
-        )
-        .await?;
+        )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
@@ -1253,24 +1265,24 @@ impl AuthorityState {
             (
                 transaction_input_checker::check_transaction_input_with_given_gas(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 Some(gas_object_id),
             )
         } else {
             (
                 transaction_input_checker::check_transaction_input(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 None,
             )
         };
@@ -1318,13 +1330,14 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
-                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
-                    .map_err(|e| SuiError::TransactionSerializationError {
+                input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
+                    |e| SuiError::TransactionSerializationError {
                         error: format!(
                             "Failed to convert transaction to SuiTransactionBlockData: {}",
                             e
                         ),
-                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
+                    },
+                )?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1385,8 +1398,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
-        )
-        .await?;
+        )?;
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
@@ -3725,6 +3737,41 @@ impl AuthorityState {
         (next_protocol_version, system_packages)
     }
 
+    fn create_authenticator_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_jwk_consensus_updates() {
+            info!("authenticator state transactions not enabled");
+            return None;
+        }
+
+        let authenticator_state_exists = epoch_store.authenticator_state_exists();
+        let tx = if authenticator_state_exists {
+            let next_epoch = epoch_store.epoch().checked_add(1).expect("epoch overflow");
+            let min_epoch =
+                next_epoch.saturating_sub(epoch_store.protocol_config().max_age_of_jwk_in_epochs());
+            let authenticator_obj_initial_shared_version = epoch_store
+                .epoch_start_config()
+                .authenticator_obj_initial_shared_version()
+                .expect("initial version must exist");
+
+            let tx = EndOfEpochTransactionKind::new_authenticator_state_expire(
+                min_epoch,
+                authenticator_obj_initial_shared_version,
+            );
+
+            info!(?min_epoch, "Creating AuthenticatorStateExpire tx",);
+
+            tx
+        } else {
+            let tx = EndOfEpochTransactionKind::new_authenticator_state_create();
+            info!("Creating AuthenticatorStateCreate tx");
+            tx
+        };
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -3742,6 +3789,12 @@ impl AuthorityState {
         checkpoint: CheckpointSequenceNumber,
         epoch_start_timestamp_ms: CheckpointTimestamp,
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
+        let mut txns = Vec::new();
+
+        if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+
         let next_epoch = epoch_store.epoch() + 1;
 
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
@@ -3781,16 +3834,34 @@ impl AuthorityState {
             return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
         };
 
-        let tx = VerifiedTransaction::new_change_epoch(
-            next_epoch,
-            next_epoch_protocol_version,
-            gas_cost_summary.storage_cost,
-            gas_cost_summary.computation_cost,
-            gas_cost_summary.storage_rebate,
-            gas_cost_summary.non_refundable_storage_fee,
-            epoch_start_timestamp_ms,
-            next_epoch_system_package_bytes,
-        );
+        let tx = if epoch_store
+            .protocol_config()
+            .end_of_epoch_transaction_supported()
+        {
+            txns.push(EndOfEpochTransactionKind::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            ));
+
+            VerifiedTransaction::new_end_of_epoch_transaction(txns)
+        } else {
+            VerifiedTransaction::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            )
+        };
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
             tx.clone(),

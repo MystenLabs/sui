@@ -10,18 +10,15 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { DryRunTransactionBlockParams } from '@mysten/sui.js/client';
 import type { UseSuiClientMutationOptions } from '../useSuiClientMutation.js';
 import { useSuiClientMutation } from '../useSuiClientMutation.js';
 
 export function useDryRunTransactionBlock(
-	params: DryRunTransactionBlockParams,
 	options?: UseSuiClientMutationOptions<'dryRunTransactionBlock'>,
 ) {
 	return useSuiClientMutation(
 		{
 			method: 'dryRunTransactionBlock',
-			params,
 		},
 		options,
 	);

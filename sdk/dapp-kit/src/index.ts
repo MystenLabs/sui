@@ -15,3 +15,4 @@ export * from './hooks/wallet/useDisconnectWallet.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/useSuiClientInfiniteQuery.js';
+export * from './types.js';

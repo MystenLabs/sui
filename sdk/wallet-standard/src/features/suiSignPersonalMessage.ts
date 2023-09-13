@@ -30,7 +30,9 @@ export interface SuiSignPersonalMessageInput {
 }
 
 /** Output of signing personal messages. */
-export interface SuiSignPersonalMessageOutput {
+export interface SuiSignPersonalMessageOutput extends SignedPersonalMessage {}
+
+export interface SignedPersonalMessage {
 	bytes: string;
 	signature: string;
 }

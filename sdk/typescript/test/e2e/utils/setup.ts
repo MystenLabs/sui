@@ -5,7 +5,7 @@ import { expect } from 'vitest';
 import { execSync } from 'child_process';
 import tmp from 'tmp';
 
-import { Coin } from '../../../src';
+import { Coin } from '../../../src/framework';
 import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';

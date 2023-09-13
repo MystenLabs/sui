@@ -99,7 +99,7 @@ pub fn spawn_subscriber<State: ExecutionState + Send + Sync + 'static>(
 }
 
 async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
-    state: State,
+    mut state: State,
     mut rx_notify: metered_channel::Receiver<ConsensusOutput>,
     mut rx_shutdown: ConditionalBroadcastReceiver,
 ) {

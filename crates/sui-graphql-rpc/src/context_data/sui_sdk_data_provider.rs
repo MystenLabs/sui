@@ -22,14 +22,13 @@ use crate::types::stake_subsidy::StakeSubsidy;
 use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
 use crate::types::system_parameters::SystemParameters;
-use crate::types::transaction_block::{ExecutionStatus, TransactionBlock, TransactionBlockEffects};
+use crate::types::transaction_block::TransactionBlock;
 use crate::types::tx_digest::TransactionDigest;
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
-use crate::server::data_provider::DataProvider;
-use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
+use crate::types::gas::GasCostSummary;
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::dataloader::*;
 use async_graphql::*;
@@ -37,9 +36,9 @@ use async_trait::async_trait;
 use fastcrypto::traits::EncodeDecodeBase64;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::time::Duration;
 use sui_json_rpc_types::{
-    OwnedObjectRef, SuiExecutionStatus, SuiGasData, SuiObjectDataOptions, SuiObjectResponseQuery,
-    SuiPastObjectResponse, SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI,
+    SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
     SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
@@ -48,12 +47,17 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
         digests::TransactionDigest as NativeTransactionDigest,
-        gas::GasCostSummary as NativeGasCostSummary,
         object::Owner as NativeOwner,
         sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
     SuiClient,
 };
+
+use super::data_provider::DataProvider;
+
+const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
+const MAX_CONCURRENT_REQUESTS: usize = 1_000;
+const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
 
 const DEFAULT_PAGE_SIZE: usize = 50;
 
@@ -85,7 +89,7 @@ impl Loader<TransactionDigest> for SuiClientLoader {
             .await?
         {
             let digest = TransactionDigest::from_array(tx.digest.into_inner());
-            let mtx = convert_to_transaction_block(&self.client, tx).await?;
+            let mtx = TransactionBlock::from(tx);
             map.insert(digest, mtx);
         }
         Ok(map)
@@ -170,6 +174,48 @@ impl DataProvider for SuiClient {
             Edge::new(g.object_id.to_string(), o)
         }));
         Ok(connection)
+    }
+
+    async fn get_object_with_options(
+        &self,
+        object_id: NativeObjectID,
+        options: SuiObjectDataOptions,
+    ) -> Result<Option<Object>> {
+        let obj = self
+            .read_api()
+            .get_object_with_options(object_id, options)
+            .await?;
+
+        if obj.error.is_some() || obj.data.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(convert_obj(&obj.data.unwrap())))
+    }
+
+    async fn multi_get_object_with_options(
+        &self,
+        object_ids: Vec<NativeObjectID>,
+        options: SuiObjectDataOptions,
+    ) -> Result<Vec<Object>> {
+        let obj_responses = self
+            .read_api()
+            .multi_get_object_with_options(object_ids, options)
+            .await?;
+
+        let mut objs = Vec::new();
+
+        for n in obj_responses.iter() {
+            if n.error.is_some() {
+                return Err(Error::MultiGet(n.error.as_ref().unwrap().to_string()).extend());
+            } else if n.data.is_none() {
+                return Err(Error::Internal(
+                    "Expected either data or error fields, received neither".to_string(),
+                )
+                .extend());
+            }
+            objs.push(convert_obj(n.data.as_ref().unwrap()));
+        }
+        Ok(objs)
     }
 
     async fn fetch_balance(&self, address: &SuiAddress, type_: Option<String>) -> Result<Balance> {
@@ -277,8 +323,7 @@ impl DataProvider for SuiClient {
                 SuiTransactionBlockResponseOptions::full_content(),
             )
             .await?;
-
-        convert_to_transaction_block(self, tx).await.map(Some)
+        Ok(Some(TransactionBlock::from(tx)))
     }
 
     async fn fetch_chain_id(&self) -> Result<String> {
@@ -316,6 +361,33 @@ impl DataProvider for SuiClient {
             protocol_version: cfg.protocol_version.as_u64(),
         })
     }
+
+    async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary> {
+        Ok(self.governance_api().get_latest_sui_system_state().await?)
+    }
+}
+
+pub(crate) async fn sui_sdk_client_v0(rpc_url: impl AsRef<str>) -> SuiClient {
+    sui_sdk::SuiClientBuilder::default()
+        .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
+        .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)
+        .build(rpc_url)
+        .await
+        .expect("Failed to create SuiClient")
+}
+
+pub(crate) async fn lru_cache_data_loader(
+    client: &SuiClient,
+) -> DataLoader<SuiClientLoader, LruCache> {
+    let data_loader = DataLoader::with_cache(
+        SuiClientLoader {
+            client: client.clone(),
+        },
+        tokio::spawn,
+        async_graphql::dataloader::LruCache::new(DATA_LOADER_LRU_CACHE_SIZE),
+    );
+    data_loader.enable_all_cache(true);
+    data_loader
 }
 
 pub(crate) fn convert_json_rpc_checkpoint(
@@ -331,13 +403,8 @@ pub(crate) fn convert_json_rpc_checkpoint(
 
     let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
     let network_total_transactions = Some(c.network_total_transactions);
-    let rolling_gas_summary = convert_to_gas_cost_summary(&c.epoch_rolling_gas_cost_summary).ok();
-    let epoch = convert_to_epoch(
-        &c.epoch_rolling_gas_cost_summary,
-        system_state,
-        protocol_configs,
-    )
-    .ok();
+    let rolling_gas_summary = GasCostSummary::from(&c.epoch_rolling_gas_cost_summary);
+    let epoch = convert_to_epoch(rolling_gas_summary, system_state, protocol_configs).ok();
 
     let end_of_epoch_data = &c.end_of_epoch_data;
     let end_of_epoch = end_of_epoch_data.clone().map(|e| {
@@ -369,13 +436,13 @@ pub(crate) fn convert_json_rpc_checkpoint(
         previous_checkpoint_digest,
         live_object_set_digest: None, // TODO fix this
         network_total_transactions,
-        rolling_gas_summary,
+        rolling_gas_summary: Some(rolling_gas_summary),
         epoch,
         end_of_epoch,
     })
 }
 
-fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
+pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     Object {
         version: s.version.into(),
         digest: s.digest.to_string(),
@@ -412,66 +479,12 @@ fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
     }
 }
 
-pub(crate) async fn convert_to_gas_input(
-    cl: &SuiClient,
-    gas_data: &SuiGasData,
-) -> Result<GasInput> {
-    let payment_obj_ids: Vec<_> = gas_data.payment.iter().map(|o| o.object_id).collect();
-
-    let obj_responses = cl
-        .read_api()
-        .multi_get_object_with_options(payment_obj_ids, SuiObjectDataOptions::full_content())
-        .await?;
-
-    let payment_objs = obj_responses
-        .iter()
-        .map(|x| convert_obj(x.data.as_ref().unwrap()))
-        .collect();
-
-    Ok(GasInput {
-        gas_sponsor: Some(Address::from(SuiAddress::from(gas_data.owner))),
-        gas_payment: Some(payment_objs),
-        gas_price: Some(BigInt::from(gas_data.price)),
-        gas_budget: Some(BigInt::from(gas_data.budget)),
-    })
-}
-
-pub(crate) fn convert_to_gas_cost_summary(gcs: &NativeGasCostSummary) -> Result<GasCostSummary> {
-    Ok(GasCostSummary {
-        computation_cost: Some(BigInt::from(gcs.computation_cost)),
-        storage_cost: Some(BigInt::from(gcs.storage_cost)),
-        storage_rebate: Some(BigInt::from(gcs.storage_rebate)),
-        non_refundable_storage_fee: Some(BigInt::from(gcs.non_refundable_storage_fee)),
-    })
-}
-
-pub(crate) async fn convert_to_gas_effects(
-    cl: &SuiClient,
-    gcs: &NativeGasCostSummary,
-    gas_obj_ref: &OwnedObjectRef,
-) -> Result<GasEffects> {
-    let gas_summary = convert_to_gas_cost_summary(gcs)?;
-    let gas_obj = cl
-        .read_api()
-        .get_object_with_options(
-            gas_obj_ref.object_id(),
-            SuiObjectDataOptions::full_content(),
-        )
-        .await?;
-    let gas_object = convert_obj(&gas_obj.data.unwrap());
-    Ok(GasEffects {
-        gas_object: Some(gas_object),
-        gas_summary: Some(gas_summary),
-    })
-}
-
 pub(crate) fn convert_to_epoch(
-    gcs: &NativeGasCostSummary,
+    gas_summary: GasCostSummary,
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
     let epoch_id = system_state.epoch;
-    let gas_summary = convert_to_gas_cost_summary(gcs)?;
     let active_validators = convert_to_validators(system_state.active_validators.clone())?;
 
     let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
@@ -595,45 +608,6 @@ pub(crate) fn convert_to_validators(
         .collect();
 
     Ok(result)
-}
-
-async fn convert_to_transaction_block(
-    cl: &SuiClient,
-    tx: sui_json_rpc_types::SuiTransactionBlockResponse,
-) -> Result<TransactionBlock> {
-    let tx_data = tx.transaction.as_ref().unwrap();
-    let tx_effects = tx.effects.as_ref().unwrap();
-    let sender = *tx_data.data.sender();
-    let gas_effects =
-        convert_to_gas_effects(cl, tx_effects.gas_cost_summary(), tx_effects.gas_object()).await?;
-    let gcs = tx_effects.gas_cost_summary();
-    let system_state = cl.governance_api().get_latest_sui_system_state().await?;
-    let protocol_configs = cl.fetch_protocol_config(None).await?;
-    let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
-    let txd = TransactionDigest::from_array(tx.digest.into_inner());
-    let expiration = epoch.clone();
-    Ok(TransactionBlock {
-        digest: txd,
-        effects: Some(TransactionBlockEffects {
-            digest: txd,
-            gas_effects: Some(gas_effects),
-            epoch: Some(epoch),
-            status: Some(match tx_effects.status() {
-                SuiExecutionStatus::Success => ExecutionStatus::Success,
-                SuiExecutionStatus::Failure { error: _ } => ExecutionStatus::Failure,
-            }),
-            errors: match tx_effects.status() {
-                SuiExecutionStatus::Success => None,
-                SuiExecutionStatus::Failure { error } => Some(error.clone()),
-            },
-        }),
-        sender: Some(Address {
-            address: SuiAddress::from_array(sender.to_inner()),
-        }),
-        bcs: Some(Base64::from(&tx.raw_transaction)),
-        gas_input: Some(convert_to_gas_input(cl, tx_data.data.gas_data()).await?),
-        expiration: Some(expiration),
-    })
 }
 
 impl From<Address> for SuiAddress {

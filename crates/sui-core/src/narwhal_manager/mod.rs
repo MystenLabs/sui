@@ -16,7 +16,6 @@ use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Instant;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
@@ -122,15 +121,16 @@ impl NarwhalManager {
     // is not recreated which is why we pass protocol config in at start and not at creation.
     // To ensure correct behavior an updated protocol config must be passed in at the
     // start of EACH epoch.
-    pub async fn start<State, TxValidator: TransactionValidator>(
+    pub async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
         protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
-        execution_state: Arc<State>,
+        execution_state: StateInitializer,
         tx_validator: TxValidator,
     ) where
         State: ExecutionState + Send + Sync + 'static,
+        StateInitializer: Fn() -> State,
     {
         let mut running = self.running.lock().await;
 
@@ -172,7 +172,7 @@ impl NarwhalManager {
                     worker_cache.clone(),
                     network_client.clone(),
                     &store,
-                    execution_state.clone(),
+                    execution_state(),
                 )
                 .await
             {

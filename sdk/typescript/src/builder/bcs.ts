@@ -4,8 +4,8 @@
 import type { TypeName } from '@mysten/bcs';
 import { BCS } from '@mysten/bcs';
 import { bcs } from '../bcs/index.js';
+import { TypeTagSerializer } from '../bcs/index.js';
 import type { TypeTag } from '../bcs/index.js';
-import { TypeTagSerializer } from './type-tag-serializer.js';
 import type { TransactionArgument, MoveCallTransaction } from './Transactions.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SignedTransaction } from '@mysten/sui.js';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import Browser from 'webextension-polyfill';
 
@@ -37,6 +36,7 @@ import {
 	type SignMessageRequest,
 } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 
+import { type SignedTransaction } from '_src/ui/app/WalletSigner';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';

@@ -840,7 +840,7 @@ fn extract_end_of_epoch_tx(
         .data()
         .intent_message()
         .value
-        .is_change_epoch_tx());
+        .is_end_of_epoch_tx());
 
     Some((*digests, change_epoch_tx))
 }
@@ -899,7 +899,7 @@ fn get_unexecuted_transactions(
                     change_epoch_tx_digest, checkpoint.sequence_number()
                 )
             );
-        assert!(change_epoch_tx.data().intent_message().value.is_change_epoch_tx());
+        assert!(change_epoch_tx.data().intent_message().value.is_end_of_epoch_tx());
     });
 
     let all_tx_digests: Vec<TransactionDigest> =

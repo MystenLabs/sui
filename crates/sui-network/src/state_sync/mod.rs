@@ -1034,10 +1034,17 @@ where
         debug_assert!(current.sequence_number().saturating_add(1) == next);
 
         // Verify the checkpoint
-        let checkpoint = {
+        let checkpoint = 'cp: {
             let checkpoint = maybe_checkpoint.ok_or_else(|| {
                 anyhow::anyhow!("no peers were able to help sync checkpoint {next}")
             })?;
+            // Skip verification for manually pinned checkpoints.
+            if pinned_checkpoints
+                .binary_search_by_key(checkpoint.sequence_number(), |(seq_num, _digest)| *seq_num)
+                .is_ok()
+            {
+                break 'cp VerifiedCheckpoint::new_unchecked(checkpoint);
+            }
             match verify_checkpoint(&current, &store, checkpoint) {
                 Ok(verified_checkpoint) => verified_checkpoint,
                 Err(checkpoint) => {

@@ -3,7 +3,7 @@
 
 use async_graphql::*;
 
-use crate::server::context_ext::DataProviderContextExt;
+use crate::context_data::context_ext::DataProviderContextExt;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct ProtocolConfigAttr {

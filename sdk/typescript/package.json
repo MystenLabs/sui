@@ -26,15 +26,7 @@
 		"node": ">=16"
 	},
 	"type": "commonjs",
-	"main": "./dist/cjs/index.js",
-	"module": "./dist/esm/index.js",
-	"types": "./dist/cjs/index.d.ts",
 	"exports": {
-		".": {
-			"source": "./src/index.ts",
-			"import": "./dist/esm/index.js",
-			"require": "./dist/cjs/index.js"
-		},
 		"./bcs": {
 			"source": "./src/bcs/index.ts",
 			"import": "./dist/esm/bcs/index.js",
@@ -94,10 +86,8 @@
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"codegen:version": "node genversion.mjs",
-		"dev": "pnpm build:tsup --watch",
-		"build": "node genversion.mjs && pnpm build:package && pnpm build:tsup",
+		"build": "node genversion.mjs && pnpm build:package",
 		"build:package": "build-package",
-		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap --env.NODE_ENV=production",
 		"doc": "typedoc",
 		"vitest": "vitest",
 		"test": "pnpm test:typecheck && pnpm test:unit",
@@ -122,28 +112,15 @@
 	"publishConfig": {
 		"access": "public"
 	},
-	"size-limit": [
-		{
-			"path": "dist/index.js",
-			"limit": "100 KB"
-		},
-		{
-			"path": "dist/index.mjs",
-			"limit": "100 KB"
-		}
-	],
 	"devDependencies": {
 		"@iarna/toml": "^2.2.5",
 		"@mysten/build-scripts": "workspace:*",
-		"@size-limit/preset-small-lib": "^8.2.6",
 		"@types/node": "^20.4.2",
 		"@types/tmp": "^0.2.3",
 		"cross-env": "^7.0.3",
 		"msw": "^1.2.2",
-		"size-limit": "^8.2.6",
 		"tmp": "^0.2.1",
 		"ts-retry-promise": "^0.7.0",
-		"tsup": "^7.1.0",
 		"tsx": "^3.12.7",
 		"typedoc": "^0.24.8",
 		"typescript": "^5.1.6",

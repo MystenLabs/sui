@@ -355,7 +355,7 @@ impl PrimaryNodeDetails {
                 self.worker_cache.clone(),
                 client,
                 &primary_store,
-                Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
+                SimpleExecutionState::new(tx_transaction_confirmation),
             )
             .await
             .unwrap();
