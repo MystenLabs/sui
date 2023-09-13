@@ -366,7 +366,7 @@ impl DataProvider for SuiClient {
     }
 }
 
-pub(crate) async fn sui_sdk_client_v0(rpc_url: &String) -> SuiClient {
+pub(crate) async fn sui_sdk_client_v0(rpc_url: impl AsRef<str>) -> SuiClient {
     sui_sdk::SuiClientBuilder::default()
         .request_timeout(RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD)
         .max_concurrent_requests(MAX_CONCURRENT_REQUESTS)

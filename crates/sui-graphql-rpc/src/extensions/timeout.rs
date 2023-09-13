@@ -13,7 +13,7 @@ use tokio::time::timeout;
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_millis(10_000);
 
 #[derive(Clone, Debug, Copy)]
-pub struct TimeoutConfig {
+pub(crate) struct TimeoutConfig {
     pub request_timeout: Duration,
 }
 
@@ -26,8 +26,8 @@ impl Default for TimeoutConfig {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Timeout {
-    config: TimeoutConfig,
+pub(crate) struct Timeout {
+    pub config: TimeoutConfig,
 }
 
 impl ExtensionFactory for Timeout {
