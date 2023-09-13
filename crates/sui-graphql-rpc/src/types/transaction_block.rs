@@ -14,10 +14,10 @@ use super::{
 use async_graphql::*;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
 
-#[derive(SimpleObject, Clone)]
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlock {
     pub digest: TransactionDigest,
@@ -27,7 +27,7 @@ pub(crate) struct TransactionBlock {
     pub gas_input: Option<GasInput>,
 }
 
-impl From<sui_json_rpc_types::SuiTransactionBlockResponse> for TransactionBlock {
+impl From<SuiTransactionBlockResponse> for TransactionBlock {
     fn from(tx_block: sui_json_rpc_types::SuiTransactionBlockResponse) -> Self {
         let transaction = tx_block.transaction.as_ref();
         let sender = transaction.map(|tx| Address {
@@ -52,7 +52,6 @@ impl TransactionBlock {
             return Ok(None);
         }
         let gcs = self.effects.as_ref().unwrap().gas_effects.gcs;
-        // TODO: I'd like to have Epoch itself do the data-fetching, but requires refactoring convert_to_epoch
         let data_provider = ctx.data_provider();
         let system_state = data_provider.get_latest_sui_system_state().await?;
         let protocol_configs = data_provider.fetch_protocol_config(None).await?;
@@ -101,8 +100,8 @@ impl TransactionBlockEffects {
         self.digest
     }
 
-    async fn status(&self) -> Option<ExecutionStatus> {
-        Some(self.status)
+    async fn status(&self) -> ExecutionStatus {
+        self.status
     }
 
     async fn errors(&self) -> Option<String> {

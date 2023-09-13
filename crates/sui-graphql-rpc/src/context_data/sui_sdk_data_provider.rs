@@ -400,13 +400,8 @@ pub(crate) fn convert_json_rpc_checkpoint(
 
     let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
     let network_total_transactions = Some(c.network_total_transactions);
-    let rolling_gas_summary: GasCostSummary = (&c.epoch_rolling_gas_cost_summary).into();
-    let epoch = convert_to_epoch(
-        (&c.epoch_rolling_gas_cost_summary).into(),
-        system_state,
-        protocol_configs,
-    )
-    .ok();
+    let rolling_gas_summary = GasCostSummary::from(&c.epoch_rolling_gas_cost_summary);
+    let epoch = convert_to_epoch(rolling_gas_summary, system_state, protocol_configs).ok();
 
     let end_of_epoch_data = &c.end_of_epoch_data;
     let end_of_epoch = end_of_epoch_data.clone().map(|e| {
