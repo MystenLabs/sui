@@ -1181,7 +1181,6 @@ mod checked {
             is_mutable_input,
             owner,
             version,
-            digest: obj.digest(),
         };
         let obj_value = value_from_object(vm, session, obj)?;
         let contained_uids = {

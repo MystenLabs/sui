@@ -34,7 +34,6 @@ use sui_types::{
 pub(crate) mod object_store;
 
 use object_store::ChildObjectStore;
-use sui_types::base_types::ObjectDigest;
 
 use self::object_store::{ChildObjectEffect, ObjectResult};
 
@@ -65,8 +64,6 @@ pub(crate) struct TestInventories {
 
 pub struct LoadedRuntimeObject {
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
-    pub owner: Owner,
     pub is_modified: bool,
 }
 
@@ -450,8 +447,6 @@ impl ObjectRuntimeState {
                     id,
                     LoadedRuntimeObject {
                         version: metadata.version,
-                        digest: metadata.digest,
-                        owner: metadata.owner,
                         is_modified: false,
                     },
                 )

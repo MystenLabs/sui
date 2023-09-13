@@ -483,6 +483,26 @@ impl<'backing> TemporaryStore<'backing> {
         system_state_wrapper.storage_rebate = unmetered_storage_rebate;
         self.write_object(system_state_wrapper, WriteKind::Mutate);
     }
+
+    /// Given a modified object ID, return its metadata.
+    /// A modified object must be either a mutable input, or a loaded child object.
+    /// The only exception is when we upgrade system packages, in which case the upgraded
+    /// system packages are not part of input, but are modified.
+    fn get_object_modified_at(&self, object_id: &ObjectID) -> (VersionDigest, Owner) {
+        self.mutable_input_refs
+            .get(object_id)
+            .cloned()
+            .or_else(|| {
+                self.loaded_child_objects
+                    .get(object_id)
+                    .map(|metadata| ((metadata.version, metadata.digest), metadata.owner))
+            })
+            .unwrap_or_else(|| {
+                debug_assert!(is_system_package(*object_id));
+                let obj = self.store.get_object(object_id).unwrap().unwrap();
+                ((obj.version(), obj.digest()), obj.owner)
+            })
+    }
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -969,7 +989,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         for (id, object) in results.written_objects {
             let write_kind = if results.created_object_ids.contains(&id) {
                 WriteKind::Create
-            } else if results.objects_modified_at.contains_key(&id) {
+            } else if results.modified_objects.contains(&id) {
                 WriteKind::Mutate
             } else {
                 WriteKind::Unwrap
@@ -978,17 +998,17 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         }
 
         for id in results.deleted_object_ids {
-            let delete_kind: DeleteKindWithOldVersion =
-                if let Some((version, ..)) = results.objects_modified_at.get(&id) {
-                    DeleteKindWithOldVersion::Normal(*version)
-                } else {
-                    DeleteKindWithOldVersion::UnwrapThenDelete
-                };
+            let delete_kind: DeleteKindWithOldVersion = if results.modified_objects.contains(&id) {
+                let ((version, _), _) = self.get_object_modified_at(&id);
+                DeleteKindWithOldVersion::Normal(version)
+            } else {
+                DeleteKindWithOldVersion::UnwrapThenDelete
+            };
             object_changes.insert(id, ObjectChange::Delete(delete_kind));
         }
-        for (id, (version, ..)) in results.objects_modified_at {
+        for id in results.modified_objects {
             object_changes.entry(id).or_insert(ObjectChange::Delete(
-                DeleteKindWithOldVersion::Wrap(version),
+                DeleteKindWithOldVersion::Wrap(self.get_object_modified_at(&id).0 .0),
             ));
         }
         self.apply_object_changes(object_changes);
