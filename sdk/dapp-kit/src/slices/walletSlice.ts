@@ -4,10 +4,7 @@
 import type { Wallet, WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import type { StateCreator } from 'zustand';
 
-export type WalletSlice = {
-	wallets: WalletWithRequiredFeatures[];
-	currentAccount: WalletAccount | null;
-	lastAccountAddress: string | null;
+export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
@@ -19,18 +16,25 @@ export type WalletSlice = {
 		updatedWallets: WalletWithRequiredFeatures[],
 		unregisteredWallet: Wallet,
 	) => void;
-} & (
-	| {
-			lastWalletName: null;
-			currentWallet: null;
-			connectionStatus: 'disconnected';
-	  }
-	| {
-			lastWalletName: string;
-			currentWallet: WalletWithRequiredFeatures;
-			connectionStatus: 'connected';
-	  }
-);
+};
+
+export type WalletSlice = {
+	wallets: WalletWithRequiredFeatures[];
+	currentAccount: WalletAccount | null;
+	lastAccountAddress: string | null;
+} & WalletActions &
+	(
+		| {
+				lastWalletName: null;
+				currentWallet: null;
+				connectionStatus: 'disconnected';
+		  }
+		| {
+				lastWalletName: string;
+				currentWallet: WalletWithRequiredFeatures;
+				connectionStatus: 'connected';
+		  }
+	);
 
 export function createWalletSlice(
 	initialWallets: WalletWithRequiredFeatures[],
