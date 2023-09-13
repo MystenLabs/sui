@@ -10364,6 +10364,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_with",
  "sui-config",
  "sui-core",
  "sui-json",
