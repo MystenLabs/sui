@@ -832,6 +832,15 @@ impl Object {
             None
         }
     }
+
+    /// Return the `value: u64` field of a `Coin<T>` type.
+    /// Useful for reading the coin without deserializing the object into a Move value
+    /// It is the caller's responsibility to check that `self` is a coin--this function
+    /// may panic or do something unexpected otherwise.
+    pub fn get_coin_value_unsafe(&self) -> u64 {
+        self.data.try_as_move().unwrap().get_coin_value_unsafe()
+    }
+
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// This will be slgihtly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
