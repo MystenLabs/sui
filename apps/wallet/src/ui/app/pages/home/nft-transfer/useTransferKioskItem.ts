@@ -56,9 +56,8 @@ export function useTransferKioskItem({
 				const kioskClient = new KioskClient({ client, network });
 
 				const txb = new TransactionBlock();
-				const kioskTx = new KioskTransaction({ txb, kioskClient, cap: kiosk.ownerCap });
 
-				kioskTx
+				new KioskTransaction({ txb, kioskClient, cap: kiosk.ownerCap })
 					.transfer({
 						itemType: objectData.data.data.type as string,
 						itemId: objectId,

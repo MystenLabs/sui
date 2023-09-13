@@ -36,8 +36,7 @@ export function useCreateKioskMutation({ onSuccess, onError }: MutationParams) {
 		mutationFn: () => {
 			if (!currentAccount?.address) throw new Error('You need to connect your wallet!');
 			const txb = new TransactionBlock();
-			const kioskTx = new KioskTransaction({ txb, kioskClient });
-			kioskTx.createAndShare(currentAccount?.address);
+			new KioskTransaction({ txb, kioskClient }).createAndShare(currentAccount?.address);
 			return signAndExecute({ tx: txb });
 		},
 		onSuccess,
@@ -115,9 +114,10 @@ export function usePlaceMutation({ onSuccess, onError }: MutationParams) {
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 
 			const txb = new TransactionBlock();
-			const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
-			kioskTx.place({ itemType: item.type, item: item.objectId });
-			kioskTx.wrap();
+
+			new KioskTransaction({ txb, kioskClient, cap })
+				.place({ itemType: item.type, item: item.objectId })
+				.wrap();
 
 			return signAndExecute({ tx: txb });
 		},
@@ -144,9 +144,9 @@ export function useWithdrawMutation({ onError, onSuccess }: MutationParams) {
 			if (!cap || !currentAccount?.address) throw new Error('Missing account, kiosk or kiosk cap');
 			const txb = new TransactionBlock();
 
-			const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
-			kioskTx.withdraw(currentAccount.address, profits);
-			kioskTx.wrap();
+			new KioskTransaction({ txb, kioskClient, cap })
+				.withdraw(currentAccount.address, profits)
+				.wrap();
 
 			return signAndExecute({ tx: txb });
 		},
@@ -173,15 +173,14 @@ export function useTakeMutation({ onSuccess, onError }: MutationParams) {
 
 			if (!item?.objectId) throw new Error('Missing item.');
 			const txb = new TransactionBlock();
-			const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
 
-			kioskTx.transfer({
-				itemType: item.type,
-				itemId: item.objectId,
-				address: currentAccount.address,
-			});
-
-			kioskTx.wrap();
+			new KioskTransaction({ txb, kioskClient, cap })
+				.transfer({
+					itemType: item.type,
+					itemId: item.objectId,
+					address: currentAccount.address,
+				})
+				.wrap();
 
 			return signAndExecute({ tx: txb });
 		},
@@ -210,14 +209,12 @@ export function useDelistMutation({ onSuccess, onError }: MutationParams) {
 
 			const txb = new TransactionBlock();
 
-			const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
-
-			kioskTx.delist({
-				itemType: item.type,
-				itemId: item.objectId,
-			});
-
-			kioskTx.wrap();
+			new KioskTransaction({ txb, kioskClient, cap })
+				.delist({
+					itemType: item.type,
+					itemId: item.objectId,
+				})
+				.wrap();
 
 			return signAndExecute({ tx: txb });
 		},
@@ -253,14 +250,15 @@ export function usePurchaseItemMutation({ onSuccess, onError }: MutationParams) 
 			const txb = new TransactionBlock();
 			const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
 
-			await kioskTx.purchaseAndResolve({
-				itemType: item.type,
-				itemId: item.objectId,
-				sellerKiosk: kioskId,
-				price: item.listing!.price!,
-			});
+			(
+				await kioskTx.purchaseAndResolve({
+					itemType: item.type,
+					itemId: item.objectId,
+					sellerKiosk: kioskId,
+					price: item.listing!.price!,
+				})
+			).wrap();
 
-			kioskTx.wrap();
 			return await signAndExecute({ tx: txb });
 		},
 		onSuccess,
