@@ -35,6 +35,7 @@ type DAppKitProviderProps = {
 const SUI_WALLET_NAME = 'Sui Wallet';
 const DEFUALT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
+// TODO: Fold up our SuiClientProvider logic into our Zustand-managed DAppKitProvider.
 export function DAppKitProvider({
 	preferredWallets = [SUI_WALLET_NAME],
 	requiredFeatures = [],

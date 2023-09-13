@@ -3,6 +3,9 @@
 
 import { useDAppKitStore } from '../useDAppKitStore.js';
 
+/**
+ * Retrieves the
+ */
 export function useConnectionStatus() {
 	return useDAppKitStore((state) => state.connectionStatus);
 }

@@ -3,6 +3,9 @@
 
 import { useDAppKitStore } from '../useDAppKitStore.js';
 
+/**
+ * Retrieves a list of registered wallets available to the dApp sorted by preference.
+ */
 export function useWallets() {
 	return useDAppKitStore((state) => state.wallets);
 }

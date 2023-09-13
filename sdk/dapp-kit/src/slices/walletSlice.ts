@@ -6,11 +6,8 @@ import type { StateCreator } from 'zustand';
 
 export type WalletSlice = {
 	wallets: WalletWithRequiredFeatures[];
-	lastWalletName: string | null;
-	lastAccountAddress: string | null;
-	currentWallet: WalletWithRequiredFeatures | null;
 	currentAccount: WalletAccount | null;
-	connectionStatus: 'disconnected' | 'connected';
+	lastAccountAddress: string | null;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		selectedAccount: WalletAccount | null,
@@ -21,7 +18,18 @@ export type WalletSlice = {
 		updatedWallets: WalletWithRequiredFeatures[],
 		unregisteredWallet: Wallet,
 	) => void;
-};
+} & (
+	| {
+			lastWalletName: null;
+			currentWallet: null;
+			connectionStatus: 'disconnected';
+	  }
+	| {
+			lastWalletName: string;
+			currentWallet: WalletWithRequiredFeatures;
+			connectionStatus: 'connected';
+	  }
+);
 
 export function createWalletSlice(
 	initialWallets: WalletWithRequiredFeatures[],
