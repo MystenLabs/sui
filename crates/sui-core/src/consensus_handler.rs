@@ -6,9 +6,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
-use crate::checkpoints::{
-    CheckpointService, CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo,
-};
+use crate::checkpoints::{CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo};
 use std::cmp::Ordering;
 
 use crate::scoring_decision::update_low_scoring_authorities;
@@ -22,7 +20,6 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
-use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -41,47 +38,46 @@ use sui_types::messages_consensus::{
 };
 use tracing::{debug, error, info, instrument};
 
-pub struct ConsensusHandler<T> {
+pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
     epoch_store: Arc<AuthorityPerEpochStore>,
-    last_seen: Mutex<ExecutionIndicesWithHash>,
-    checkpoint_service: Arc<CheckpointService>,
+    /// Holds the highest transaction index that has been seen so far. It is used for avoiding replaying
+    /// already processed transactions and also act as a chain consistency check by calculating and storing a
+    /// hash chain.
+    last_seen: ExecutionIndicesWithHash,
+    checkpoint_service: Arc<C>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     object_store: T,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
     committee: Committee,
-    /// Mappings used for logging and metrics
-    authority_names_to_hostnames: HashMap<AuthorityName, String>,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
     // a new metrics type here if we want to.
     metrics: Arc<AuthorityMetrics>,
     /// Lru cache to quickly discard transactions processed by consensus
-    processed_cache: Mutex<LruCache<SequencedConsensusTransactionKey, ()>>,
+    processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
 
-impl<T> ConsensusHandler<T> {
+impl<T, C> ConsensusHandler<T, C> {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
-        checkpoint_service: Arc<CheckpointService>,
+        checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
         object_store: T,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // last_consensus_index is zero at the beginning of epoch, including for hash.
+        // last_seen is zero at the beginning of epoch, including for hash.
         // It needs to be recovered on restart to ensure consistent consensus hash.
-        let last_consensus_index = epoch_store
+        let last_seen = epoch_store
             .get_last_consensus_index()
             .expect("Should be able to read last consensus index");
-        let last_seen = Mutex::new(last_consensus_index);
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
@@ -91,29 +87,38 @@ impl<T> ConsensusHandler<T> {
             object_store,
             low_scoring_authorities,
             committee,
-            authority_names_to_hostnames,
             metrics,
-            processed_cache: Mutex::new(LruCache::new(
-                NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap(),
-            )),
+            processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_scheduler,
         }
+    }
+
+    /// Updates the execution indexes based on the provided input. Some is returned when the indexes
+    /// are updated which means that the transaction has been seen for first time. None is returned
+    /// otherwise.
+    fn update_hash(
+        &mut self,
+        index: ExecutionIndices,
+        v: &[u8],
+    ) -> Option<ExecutionIndicesWithHash> {
+        if let Some(execution_indexes) = update_hash(&self.last_seen, index, v) {
+            self.last_seen = execution_indexes.clone();
+            return Some(execution_indexes);
+        }
+        None
     }
 }
 
 fn update_hash(
-    last_seen: &Mutex<ExecutionIndicesWithHash>,
+    last_seen: &ExecutionIndicesWithHash,
     index: ExecutionIndices,
     v: &[u8],
 ) -> Option<ExecutionIndicesWithHash> {
-    let mut last_seen_guard = last_seen
-        .try_lock()
-        .expect("Should not have contention on ExecutionState::update_hash");
-    if last_seen_guard.index >= index {
+    if last_seen.index >= index {
         return None;
     }
 
-    let previous_hash = last_seen_guard.hash;
+    let previous_hash = last_seen.hash;
     let mut hasher = DefaultHasher::new();
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
@@ -125,16 +130,16 @@ fn update_hash(
             index.sub_dag_index, index.transaction_index, hash
         );
     }
-    let last_seen = ExecutionIndicesWithHash { index, hash };
-    *last_seen_guard = last_seen.clone();
-    Some(last_seen)
+    Some(ExecutionIndicesWithHash { index, hash })
 }
 
 #[async_trait]
-impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
+impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> ExecutionState
+    for ConsensusHandler<T, C>
+{
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
 
         // This code no longer supports old protocol versions.
@@ -218,7 +223,6 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
             self.low_scoring_authorities.clone(),
             &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
-            self.authority_names_to_hostnames.clone(),
             &self.metrics,
             self.epoch_store.protocol_config(),
         );
@@ -275,7 +279,6 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
         let mut roots = BTreeSet::new();
 
         {
-            let mut processed_cache = self.processed_cache.lock();
             // We need a set here as well, since the processed_cache is a LRU cache and can drop
             // entries while we're iterating over the sequenced transactions.
             let mut processed_set = HashSet::new();
@@ -293,7 +296,7 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
                     transaction_index: seq as u64,
                 };
 
-                let index_with_hash = match update_hash(&self.last_seen, index, &serialized) {
+                let index_with_hash = match self.update_hash(index, &serialized) {
                     Some(i) => i,
                     None => {
                         debug!(
@@ -322,7 +325,8 @@ impl<T: ObjectStore + Send + Sync> ExecutionState for ConsensusHandler<T> {
 
                 let key = sequenced_transaction.key();
                 let in_set = !processed_set.insert(key);
-                let in_cache = processed_cache
+                let in_cache = self
+                    .processed_cache
                     .put(sequenced_transaction.key(), ())
                     .is_some();
 
@@ -472,7 +476,7 @@ impl AsyncTransactionScheduler {
     }
 }
 
-impl<T> ConsensusHandler<T> {
+impl<T, C> ConsensusHandler<T, C> {
     fn consensus_commit_prologue_transaction(
         &self,
         round: u64,
@@ -649,6 +653,15 @@ impl SequencedConsensusTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::checkpoints::CheckpointServiceNoop;
+    use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
+    use narwhal_config::AuthorityIdentifier;
+    use narwhal_test_utils::latest_protocol_version;
+    use narwhal_types::{
+        Batch, Certificate, CommittedSubDag, Header, HeaderV1Builder, ReputationScores,
+    };
+    use prometheus::Registry;
     use shared_crypto::intent::Intent;
     use sui_protocol_config::SupportedProtocolVersions;
     use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
@@ -656,9 +669,112 @@ mod tests {
     use sui_types::messages_consensus::{
         AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKind,
     };
+    use sui_types::object::Object;
+    use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
     use sui_types::transaction::{
         CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     };
+
+    #[tokio::test]
+    pub async fn test_consensus_handler() {
+        // GIVEN
+        let mut objects = test_gas_objects();
+        objects.push(Object::shared_for_testing());
+
+        let latest_protocol_config = &latest_protocol_version();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_objects(objects.clone())
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let new_epoch_start_state = epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
+        let mut consensus_handler = ConsensusHandler::new(
+            epoch_store,
+            Arc::new(CheckpointServiceNoop {}),
+            state.transaction_manager().clone(),
+            state.db(),
+            Arc::new(ArcSwap::default()),
+            committee.clone(),
+            Arc::new(AuthorityMetrics::new(&Registry::new())),
+        );
+
+        // AND
+        // Create a transaction
+        let transactions = test_certificates(&state).await;
+        let mut certificates = Vec::new();
+        let mut batches = Vec::new();
+
+        for transaction in transactions.iter() {
+            let transaction_bytes: Vec<u8> = bcs::to_bytes(
+                &ConsensusTransaction::new_certificate_message(&state.name, transaction.clone()),
+            )
+            .unwrap();
+
+            let batch = Batch::new(vec![transaction_bytes], latest_protocol_config);
+
+            batches.push(vec![batch.clone()]);
+
+            // AND make batch as part of a commit
+            let header = HeaderV1Builder::default()
+                .author(AuthorityIdentifier(0))
+                .round(5)
+                .epoch(0)
+                .parents(BTreeSet::new())
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap();
+
+            let certificate =
+                Certificate::new_unsigned(&committee, Header::V1(header), vec![]).unwrap();
+
+            certificates.push(certificate);
+        }
+
+        // AND create the consensus output
+        let consensus_output = ConsensusOutput {
+            sub_dag: Arc::new(CommittedSubDag::new(
+                certificates.clone(),
+                certificates[0].clone(),
+                10,
+                ReputationScores::default(),
+                None,
+            )),
+            batches,
+        };
+
+        // AND processing the consensus output once
+        consensus_handler
+            .handle_consensus_output(consensus_output.clone())
+            .await;
+
+        // AND capturing the index
+        let last_seen_1 = consensus_handler.last_seen.clone();
+        assert_eq!(
+            last_seen_1.index.transaction_index,
+            transactions.len() as u64
+        );
+        assert_eq!(last_seen_1.index.sub_dag_index, 10_u64);
+        assert_eq!(last_seen_1.index.last_committed_round, 5_u64);
+
+        // WHEN processing the same output multiple times
+        // THEN the execution indices do not update
+        for _ in 0..2 {
+            consensus_handler
+                .handle_consensus_output(consensus_output.clone())
+                .await;
+            let last_seen_2 = consensus_handler.last_seen.clone();
+            assert_eq!(last_seen_1, last_seen_2);
+        }
+    }
 
     #[test]
     pub fn test_update_hash() {
@@ -683,7 +799,6 @@ mod tests {
             hash: 1000,
         };
 
-        let last_seen = Mutex::new(last_seen);
         let tx = &[0];
         assert!(update_hash(&last_seen, index0, tx).is_none());
         assert!(update_hash(&last_seen, index1, tx).is_none());

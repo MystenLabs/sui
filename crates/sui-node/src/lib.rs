@@ -577,10 +577,6 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
-        let authority_names_to_hostnames = epoch_store
-            .epoch_start_state()
-            .get_authority_names_to_hostnames();
-
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
 
@@ -611,7 +607,6 @@ impl SuiNode {
                 state_sync_handle.clone(),
                 accumulator.clone(),
                 connection_monitor_status.clone(),
-                authority_names_to_hostnames,
                 &registry_service,
             )
             .await?;
@@ -929,7 +924,6 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         registry_service: &RegistryService,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
@@ -974,7 +968,6 @@ impl SuiNode {
             narwhal_manager,
             narwhal_epoch_data_remover,
             accumulator,
-            authority_names_to_hostnames,
             validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -992,7 +985,6 @@ impl SuiNode {
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -1018,16 +1010,17 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
-        let consensus_handler = Arc::new(ConsensusHandler::new(
-            epoch_store.clone(),
-            checkpoint_service.clone(),
-            state.transaction_manager().clone(),
-            state.db(),
-            low_scoring_authorities,
-            authority_names_to_hostnames,
-            committee,
-            state.metrics.clone(),
-        ));
+        let consensus_handler_initializer = || {
+            ConsensusHandler::new(
+                epoch_store.clone(),
+                checkpoint_service.clone(),
+                state.transaction_manager().clone(),
+                state.db(),
+                low_scoring_authorities.clone(),
+                committee.clone(),
+                state.metrics.clone(),
+            )
+        };
 
         let transactions_addr = &config
             .consensus_config
@@ -1041,7 +1034,7 @@ impl SuiNode {
                 new_epoch_start_state.get_narwhal_committee(),
                 epoch_store.protocol_config().clone(),
                 worker_cache,
-                consensus_handler,
+                consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),
                     checkpoint_service.clone(),
@@ -1329,9 +1322,6 @@ impl SuiNode {
             self.connection_monitor_status
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
-            let authority_names_to_hostnames =
-                new_epoch_start_state.get_authority_names_to_hostnames();
-
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
             let _ = send_trusted_peer_change(
@@ -1386,7 +1376,6 @@ impl SuiNode {
                             narwhal_manager,
                             narwhal_epoch_data_remover,
                             self.accumulator.clone(),
-                            authority_names_to_hostnames,
                             validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
@@ -1421,7 +1410,6 @@ impl SuiNode {
                             self.state_sync.clone(),
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
-                            authority_names_to_hostnames,
                             &self.registry_service,
                         )
                         .await?,
