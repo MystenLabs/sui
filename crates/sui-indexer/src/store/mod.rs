@@ -6,6 +6,7 @@ pub use pg_indexer_store::PgIndexerStore;
 
 mod indexer_store;
 mod module_resolver;
+mod module_resolver_v2;
 mod pg_indexer_store;
 mod query;
 
