@@ -33,7 +33,6 @@ indicatif.workspace = true
 
 anemo-cli.workspace = true
 anemo.workspace = true
-move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
