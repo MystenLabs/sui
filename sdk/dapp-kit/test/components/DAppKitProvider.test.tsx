@@ -32,80 +32,80 @@ describe('DAppKitProvider', () => {
 		expect(result.current.connectionStatus).toBe('disconnected');
 	});
 
-	// test('the list of wallets is ordered correctly by preference', () => {
-	// 	const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
-	// 	const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
-	// 	const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
+	test('the list of wallets is ordered correctly by preference', () => {
+		const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
+		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
+		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
 
-	// 	const wrapper = createDAppKitProviderContextWrapper({
-	// 		preferredWallets: ['Mock Wallet 2', 'Mock Wallet 1'],
-	// 	});
-	// 	const { result } = renderHook(() => useWallet(), { wrapper });
-	// 	const walletNames = result.current.wallets.map((wallet) => wallet.name);
+		const wrapper = createDAppKitProviderContextWrapper({
+			preferredWallets: ['Mock Wallet 2', 'Mock Wallet 1'],
+		});
+		const { result } = renderHook(() => useWallets(), { wrapper });
+		const walletNames = result.current.map((wallet) => wallet.name);
 
-	// 	expect(walletNames).toStrictEqual(['Mock Wallet 2', 'Mock Wallet 1', 'Mock Wallet 3']);
+		expect(walletNames).toStrictEqual(['Mock Wallet 2', 'Mock Wallet 1', 'Mock Wallet 3']);
 
-	// 	act(() => {
-	// 		unregister1();
-	// 		unregister2();
-	// 		unregister3();
-	// 	});
-	// });
+		act(() => {
+			unregister1();
+			unregister2();
+			unregister3();
+		});
+	});
 
-	// test('the unsafe burner wallet is registered when enableUnsafeBurner is set', async () => {
-	// 	const wrapper = createDAppKitProviderContextWrapper({
-	// 		enableUnsafeBurner: true,
-	// 	});
-	// 	const { result } = renderHook(() => useWallet(), { wrapper });
-	// 	const walletNames = result.current.wallets.map((wallet) => wallet.name);
+	test('the unsafe burner wallet is registered when enableUnsafeBurner is set', async () => {
+		const wrapper = createDAppKitProviderContextWrapper({
+			enableUnsafeBurner: true,
+		});
+		const { result } = renderHook(() => useWallets(), { wrapper });
+		const walletNames = result.current.map((wallet) => wallet.name);
 
-	// 	expect(walletNames).toStrictEqual(['Unsafe Burner Wallet']);
-	// });
+		expect(walletNames).toStrictEqual(['Unsafe Burner Wallet']);
+	});
 
-	// test('unregistered wallets are removed from the list of wallets', async () => {
-	// 	const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
-	// 	const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
-	// 	const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
+	test('unregistered wallets are removed from the list of wallets', async () => {
+		const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
+		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
+		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
 
-	// 	const wrapper = createDAppKitProviderContextWrapper();
-	// 	const { result } = renderHook(() => useWallet(), { wrapper });
+		const wrapper = createDAppKitProviderContextWrapper();
+		const { result } = renderHook(() => useWallets(), { wrapper });
 
-	// 	act(() => unregister2());
+		act(() => unregister2());
 
-	// 	const walletNames = result.current.wallets.map((wallet) => wallet.name);
-	// 	expect(walletNames).toStrictEqual(['Mock Wallet 1', 'Mock Wallet 3']);
+		const walletNames = result.current.map((wallet) => wallet.name);
+		expect(walletNames).toStrictEqual(['Mock Wallet 1', 'Mock Wallet 3']);
 
-	// 	act(() => {
-	// 		unregister1();
-	// 		unregister3();
-	// 	});
-	// });
+		act(() => {
+			unregister1();
+			unregister3();
+		});
+	});
 
-	// test('the list of wallets is correctly filtered by required features', () => {
-	// 	const { unregister: unregister1 } = registerMockWallet({
-	// 		walletName: 'Mock Wallet 1',
-	// 		additionalFeatures: {
-	// 			'my-dapp:super-cool-feature': {
-	// 				version: '1.0.0',
-	// 				superCoolFeature: () => {},
-	// 			},
-	// 		},
-	// 	});
-	// 	const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
+	test('the list of wallets is correctly filtered by required features', () => {
+		const { unregister: unregister1 } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			additionalFeatures: {
+				'my-dapp:super-cool-feature': {
+					version: '1.0.0',
+					superCoolFeature: () => {},
+				},
+			},
+		});
+		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 
-	// 	const wrapper = createDAppKitProviderContextWrapper({
-	// 		requiredFeatures: ['my-dapp:super-cool-feature'],
-	// 	});
-	// 	const { result } = renderHook(() => useWallet(), { wrapper });
-	// 	const walletNames = result.current.wallets.map((wallet) => wallet.name);
+		const wrapper = createDAppKitProviderContextWrapper({
+			requiredFeatures: ['my-dapp:super-cool-feature'],
+		});
+		const { result } = renderHook(() => useWallets(), { wrapper });
+		const walletNames = result.current.map((wallet) => wallet.name);
 
-	// 	expect(walletNames).toStrictEqual(['Mock Wallet 1']);
+		expect(walletNames).toStrictEqual(['Mock Wallet 1']);
 
-	// 	act(() => {
-	// 		unregister1();
-	// 		unregister2();
-	// 	});
-	// });
+		act(() => {
+			unregister1();
+			unregister2();
+		});
+	});
 
 	describe('wallet auto-connection', () => {
 		test('auto-connecting to a wallet works successfully', async () => {
@@ -126,7 +126,6 @@ describe('DAppKitProvider', () => {
 			);
 
 			// Manually connect a wallet so we have a wallet to auto-connect to later.
-
 			result.current.connectWallet.mutate({
 				wallet: mockWallet,
 				accountAddress: mockWallet.accounts[1].address,
