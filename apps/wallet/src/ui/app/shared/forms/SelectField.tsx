@@ -19,7 +19,7 @@ export const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
 				control={control}
 				name={name}
 				render={({ field }) => (
-					<Select onValueChange={field.onChange} defaultValue={field.value} {...props}>
+					<Select onValueChange={field.onChange} value={field.value} {...props}>
 						<SelectTrigger ref={forwardedRef}>
 							<SelectValue />
 						</SelectTrigger>
