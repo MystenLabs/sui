@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::{Insertable, Queryable};
-use jsonrpsee::core::__reexports::serde::Deserialize;
+use serde::Deserialize;
 
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 

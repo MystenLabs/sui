@@ -2,10 +2,13 @@
 # see https://diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/schema.rs"
-patch_file = "src/schema.patch"
+#file = "src/schema.rs"
+#patch_file = "src/schema.patch"
+file = "src/schema_v2.rs"
+patch_file = "src/schema_v2.patch"
 # exclude partitions
 filter = { except_tables = ['.*(_partition_)\d+']}
 
 [migrations_directory]
-dir = "migrations"
+#dir = "migrations"
+dir = "migrations_v2"

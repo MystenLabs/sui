@@ -38,13 +38,17 @@ pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
+pub mod models_v2;
 pub mod processors;
 pub mod schema;
+pub mod schema_v2;
 pub mod store;
 pub mod test_utils;
 pub mod types;
+pub mod types_v2;
 pub mod utils;
 
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -105,6 +109,9 @@ pub struct IndexerConfig {
     pub fullnode_sync_worker: bool,
     #[clap(long)]
     pub rpc_server_worker: bool,
+    #[clap(long)]
+    pub use_v2: bool,
+
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
@@ -161,6 +168,7 @@ impl Default for IndexerConfig {
             reset_db: false,
             fullnode_sync_worker: true,
             rpc_server_worker: true,
+            use_v2: false,
             skip_db_commit: false,
         }
     }

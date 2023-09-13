@@ -82,7 +82,7 @@ impl CheckpointFetcher {
                 Some(*checkpoint.checkpoint_summary.sequence_number());
 
             info!(
-                checkpoint = checkpoint.checkpoint_summary.sequence_number(),
+                checkpoint_seq = checkpoint.checkpoint_summary.sequence_number(),
                 "successfully downloaded checkpoint"
             );
 

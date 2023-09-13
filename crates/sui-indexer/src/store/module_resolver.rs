@@ -25,8 +25,8 @@ impl IndexerModuleResolver {
 }
 
 const LATEST_MODULE_QUERY: &str = "SELECT (t2.module).data
-FROM (SELECT UNNEST(data) AS module
-      FROM (SELECT data FROM packages WHERE package_id = $1 ORDER BY version DESC FETCH FIRST 1 ROW ONLY) t1) t2
+FROM (SELECT UNNEST(modules) AS module
+      FROM (SELECT modules FROM packages WHERE package_id = $1 DESC FETCH FIRST 1 ROW ONLY) t1) t2
 WHERE (module).name = $2;";
 
 impl ModuleResolver for IndexerModuleResolver {
@@ -38,7 +38,6 @@ impl ModuleResolver for IndexerModuleResolver {
             #[diesel(sql_type = Bytea)]
             data: Vec<u8>,
         }
-
         let package_id = ObjectID::from(*id.address()).to_string();
         let module_name = id.name().to_string();
 

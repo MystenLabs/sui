@@ -1890,6 +1890,12 @@ impl SenderSignedData {
         }])
     }
 
+    pub fn into_inner(mut self) -> SenderSignedTransaction {
+        // assert is safe - SenderSignedTransaction::verify ensures length is 1.
+        assert_eq!(self.0.len(), 1);
+        self.0.remove(0)
+    }
+
     pub fn inner(&self) -> &SenderSignedTransaction {
         // assert is safe - SenderSignedTransaction::verify ensures length is 1.
         assert_eq!(self.0.len(), 1);

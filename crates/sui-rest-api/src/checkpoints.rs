@@ -173,6 +173,30 @@ pub struct CheckpointData {
     pub transactions: Vec<CheckpointTransaction>,
 }
 
+impl CheckpointData {
+    pub fn output_objects(&self) -> Vec<&Object> {
+        self.transactions
+            .iter()
+            .flat_map(|tx| &tx.output_objects)
+            .collect()
+    }
+
+    pub fn input_objects(&self) -> Vec<&Object> {
+        self.transactions
+            .iter()
+            .flat_map(|tx| &tx.input_objects)
+            .collect()
+    }
+
+    pub fn all_objects(&self) -> Vec<&Object> {
+        self.transactions
+            .iter()
+            .flat_map(|tx| &tx.input_objects)
+            .chain(self.transactions.iter().flat_map(|tx| &tx.output_objects))
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointTransaction {
     /// The input Transaction

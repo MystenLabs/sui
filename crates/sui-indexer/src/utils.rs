@@ -9,23 +9,29 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+const MIGRATIONS_V2: EmbeddedMigrations = embed_migrations!("migrations_v2");
 
 /// Resets the database by reverting all migrations and reapplying them.
 ///
 /// If `drop_all` is set to `true`, the function will drop all tables in the database before
 /// resetting the migrations. This option is destructive and will result in the loss of all
 /// data in the tables. Use with caution, especially in production environments.
-pub fn reset_database(conn: &mut PgPoolConnection, drop_all: bool) -> Result<(), anyhow::Error> {
+pub fn reset_database(
+    conn: &mut PgPoolConnection,
+    drop_all: bool,
+    use_v2: bool,
+) -> Result<(), anyhow::Error> {
     info!("Resetting database ...");
+    let migration = if use_v2 { MIGRATIONS_V2 } else { MIGRATIONS };
     if drop_all {
         drop_all_tables(conn)
             .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
     } else {
-        conn.revert_all_migrations(MIGRATIONS)
+        conn.revert_all_migrations(migration)
             .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
     }
-
-    conn.run_migrations(&MIGRATIONS.migrations().unwrap())
+    let migration = if use_v2 { MIGRATIONS_V2 } else { MIGRATIONS };
+    conn.run_migrations(&migration.migrations().unwrap())
         .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
     info!("Reset database complete.");
     Ok(())
