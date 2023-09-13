@@ -66,7 +66,8 @@ pub(crate) struct TransactionBlockEffects {
     // pub object_reads: Vec<Object>,
     // pub object_changes: Vec<ObjectChange>,
     // pub balance_changes: Vec<BalanceChange>,
-    pub epoch: Epoch, // pub checkpoint: Checkpoint
+    pub epoch: Epoch,
+    // pub checkpoint: Checkpoint
 }
 
 impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {

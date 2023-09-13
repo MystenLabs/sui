@@ -42,6 +42,7 @@ impl Epoch {
     }
 
     async fn system_state_summary(&self, ctx: &Context<'_>) -> Result<Option<SystemStateSummary>> {
+        // TODO: Shouldn't we fetch the system state at the epoch_id instead of the latest one?
         let system_state = ctx.data_provider().get_latest_sui_system_state().await?;
         let active_validators = system_state
             .active_validators
@@ -118,10 +119,6 @@ impl Epoch {
     }
 
     async fn protocol_configs(&self, ctx: &Context<'_>) -> Result<Option<ProtocolConfigs>> {
-        Ok(Some(
-            ctx.data_provider()
-                .fetch_protocol_config(Some(self.epoch_id))
-                .await?,
-        ))
+        Ok(Some(ctx.data_provider().fetch_protocol_config(None).await?))
     }
 }
