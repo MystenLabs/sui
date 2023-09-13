@@ -45,12 +45,18 @@ type WalletDisconnectedAction = {
 	payload?: never;
 };
 
+type WalletAccountSwitchedAction = {
+	type: 'wallet-account-switched';
+	payload: WalletAccount;
+};
+
 export type WalletAction =
 	| WalletConnectionStatusUpdatedAction
 	| WalletConnectedAction
 	| WalletDisconnectedAction
 	| WalletRegisteredAction
-	| WalletUnregisteredAction;
+	| WalletUnregisteredAction
+	| WalletAccountSwitchedAction;
 
 export function walletReducer(state: WalletState, { type, payload }: WalletAction): WalletState {
 	switch (type) {
@@ -98,6 +104,11 @@ export function walletReducer(state: WalletState, { type, payload }: WalletActio
 				connectionStatus: 'disconnected',
 			};
 		}
+		case 'wallet-account-switched':
+			return {
+				...state,
+				currentAccount: payload,
+			};
 		default:
 			assertUnreachable(type);
 	}
