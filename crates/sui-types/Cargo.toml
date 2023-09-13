@@ -35,7 +35,6 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
 derivative.workspace = true
-parking_lot.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
@@ -60,7 +59,6 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
 
 typed-store.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
