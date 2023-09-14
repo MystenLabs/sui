@@ -131,7 +131,7 @@ type WalletInputs = {
 export type PartialZkSignature = Omit<ZkSignatureInputs, 'addressSeed'>;
 
 // TODO: update when we have the final production url (and a https one)
-const zkProofsServerUrl = 'http://185.209.177.123:7000';
+const zkProofsServerUrl = 'http://prover-devnet.mystenlabs.com:8080';
 
 export async function createPartialZKSignature({
 	jwt,
