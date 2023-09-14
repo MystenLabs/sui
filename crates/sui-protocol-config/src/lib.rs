@@ -1455,8 +1455,20 @@ impl ProtocolConfig {
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
                 }
+                25 => {
+                    // Enable zkLogin for all providers in all networks.
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        "Google".to_string(),
+                        "Facebook".to_string(),
+                        "Twitch".to_string(),
+                    ]);
+                    cfg.feature_flags.zklogin_auth = true;
 
-                25 => {}
+                    // Enable jwk consensus updates
+                    cfg.feature_flags.enable_jwk_consensus_updates = true;
+                    cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
+                    cfg.max_age_of_jwk_in_epochs = Some(1);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
