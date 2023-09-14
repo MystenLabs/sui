@@ -5238,6 +5238,7 @@ name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
  "anyhow",
+ "enum-compat-util",
  "move-core-types",
  "move-proc-macros",
  "ref-cast",
@@ -5409,6 +5410,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "bcs",
+ "enum-compat-util",
  "ethnum",
  "hex",
  "move-proc-macros",
@@ -5670,6 +5672,7 @@ name = "move-resource-viewer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "enum-compat-util",
  "hex",
  "move-binary-format",
  "move-bytecode-utils",

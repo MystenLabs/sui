@@ -18,6 +18,7 @@ variant_count = "1.1.0"
 move-core-types = { path = "../move-core/types" }
 serde = { version = "1.0.124", default-features = false }
 arbitrary = { version = "1.1.7", optional = true, features = ["derive"] }
+enum-compat-util = { path = "../testing-infra/enum-compat-util"}
 move-proc-macros = { path = "../testing-infra/move-proc-macros"}
 
 # wasm support (requires js feature of getrandom)
