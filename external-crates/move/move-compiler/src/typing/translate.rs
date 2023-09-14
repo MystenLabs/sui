@@ -241,6 +241,8 @@ fn function(
 
 fn function_attributes(context: &mut Context, all_attributes: &Attributes) {
     for (_, _, attr) in all_attributes {
+        // look for `ModuleAccess` that is part of `Parameterized` (there should be only one per set
+        // of attributes)
         let Attribute_::Parameterized(sp!(_, nm), attrs) = &attr.value else {
             continue;
         };
