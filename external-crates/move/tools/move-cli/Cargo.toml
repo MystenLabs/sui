@@ -18,6 +18,7 @@ clap.workspace = true
 tempfile = "3.2.0"
 walkdir = "2.3.1"
 codespan-reporting = "0.11.1"
+toml_edit =  { version = "0.14.3", features = ["easy"] }
 
 bcs.workspace = true
 

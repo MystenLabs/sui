@@ -5360,6 +5360,7 @@ dependencies = [
  "read-write-set",
  "serde_yaml 0.8.26",
  "tempfile",
+ "toml_edit 0.14.4",
  "walkdir",
 ]
 
