@@ -18,13 +18,12 @@ const descriptionItemStyles = cva(['flex flex-col gap-2 md:flex-row md:gap-10'],
 });
 
 const descriptionItemLabelStyles = cva(
-	['w-full flex flex-shrink-0 text-pBody font-medium text-steel-darker'],
+	['w-full flex-shrink-0 text-pBody font-medium text-steel-darker'],
 	{
 		variants: {
 			labelWidth: {
-				sm: 'md:w-28',
 				md: 'md:w-40',
-				lg: 'md:w-48',
+				sm: 'md:w-28',
 			},
 		},
 		defaultVariants: {
@@ -33,37 +32,21 @@ const descriptionItemLabelStyles = cva(
 	},
 );
 
-const descriptionItemContentStyles = cva(['ml-0 min-w-0 flex-1 leading-none'], {
-	variants: {
-		contentJustify: {
-			end: 'flex justify-end',
-		},
-	},
-});
-
 type DescriptionItemStylesProps = VariantProps<typeof descriptionItemStyles>;
 type DescriptionItemLabelStylesProps = VariantProps<typeof descriptionItemLabelStyles>;
-type DescriptionItemContentStylesProps = VariantProps<typeof descriptionItemContentStyles>;
 
 export interface DescriptionItemProps
 	extends DescriptionItemStylesProps,
-		DescriptionItemLabelStylesProps,
-		DescriptionItemContentStylesProps {
+		DescriptionItemLabelStylesProps {
 	title: string | ReactNode;
 	children: ReactNode;
 }
 
-export function DescriptionItem({
-	title,
-	align,
-	labelWidth,
-	contentJustify,
-	children,
-}: DescriptionItemProps) {
+export function DescriptionItem({ title, align, labelWidth, children }: DescriptionItemProps) {
 	return (
 		<div className={descriptionItemStyles({ align })}>
 			<dt className={descriptionItemLabelStyles({ labelWidth })}>{title}</dt>
-			<dd className={descriptionItemContentStyles({ contentJustify })}>{children}</dd>
+			<dd className="ml-0 min-w-0 flex-1 leading-none">{children}</dd>
 		</div>
 	);
 }

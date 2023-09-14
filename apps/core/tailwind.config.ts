@@ -180,7 +180,6 @@ export default {
 			height: {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
-				90: '22.5rem',
 				100: '25rem',
 				120: '30rem',
 				300: '75rem',
@@ -193,8 +192,6 @@ export default {
 			width: {
 				12.5: '3.125rem',
 				31.5: '7.5rem',
-				90: '22.5rem',
-				120: '30rem',
 				walletLogo: '4.813rem',
 			},
 			maxWidth: {

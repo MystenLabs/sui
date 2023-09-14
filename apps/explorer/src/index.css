@@ -126,35 +126,34 @@ body,
 		.address-grid-container-top {
 			@apply grid grid-cols-1 grid-rows-[67px,1fr,1fr,1fr] gap-4;
 			grid-template-areas:
-			'heroImage'
-			'description'
-			'owner'
-			'links'
+				'heroImage'
+				'description'
+				'owner'
+				'links';
 		}
 	}
 
 	.address-grid-container-top {
 		@apply grid grid-cols-2 gap-4;
 		grid-template-areas:
-		'heroImage heroImage'
-		'description description'
-		'version version'
-		'owner owner'
+			'heroImage heroImage'
+			'description description'
+			'version version'
+			'owner owner';
 	}
 
 	@screen md {
 		.address-grid-container-top {
 			grid-template-areas:
-			'heroImage description'
-			'heroImage description'
-			'heroImage version'
-			'owner owner'
+				'heroImage description'
+				'heroImage description'
+				'heroImage version'
+				'owner owner';
 		}
 
 		.address-grid-container-top.no-image {
 			@apply grid grid-cols-3 grid-rows-1;
-			grid-template-areas:
-			'description version owner'
+			grid-template-areas: 'description version owner';
 		}
 	}
 
@@ -162,9 +161,9 @@ body,
 		.address-grid-container-top {
 			@apply grid-cols-[360px,1fr,1fr] grid-rows-3 gap-6;
 			grid-template-areas:
-			'heroImage description owner'
-			'heroImage description owner'
-			'heroImage version version'
+				'heroImage description owner'
+				'heroImage description owner'
+				'heroImage version version';
 		}
 	}
 }

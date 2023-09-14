@@ -17,7 +17,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { Card } from '~/ui/Card';
-import { type DescriptionItemProps } from '~/ui/DescriptionList';
+import { Description } from '~/ui/Description';
 import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
@@ -50,26 +50,6 @@ function HeroVideoImage({ title, subtitle, src, video }: HeroVideoImageProps) {
 				rounded="xl"
 			/>
 			<ArrowUpRight16 className="right-5 top-5 hidden group-hover:absolute group-hover:block" />
-		</div>
-	);
-}
-
-function ObjectViewItem({
-	title,
-	align,
-	children,
-}: {
-	title: string;
-	children: ReactNode;
-	align?: DescriptionItemProps['align'];
-}) {
-	return (
-		<div className={clsx('flex items-start justify-between gap-10')}>
-			<Text variant="pBodySmall/medium" color="steel-dark">
-				{title}
-			</Text>
-
-			{children}
 		</div>
 	);
 }
@@ -135,16 +115,16 @@ function DescriptionCard({
 				</Text>
 			)}
 
-			<ObjectViewItem title="Object ID">
+			<Description title="Object ID">
 				<ObjectLink objectId={objectId} />
-			</ObjectViewItem>
+			</Description>
 
-			<ObjectViewItem title="Type" align="start">
+			<Description title="Type">
 				<ObjectLink
 					label={<div className="text-right">{normalizedStructTag}</div>}
 					objectId={`${address}?module=${module}`}
 				/>
-			</ObjectViewItem>
+			</Description>
 		</ObjectViewCard>
 	);
 }
@@ -152,15 +132,15 @@ function DescriptionCard({
 function VersionCard({ version, digest }: { version?: string; digest: string }) {
 	return (
 		<ObjectViewCard>
-			<ObjectViewItem title="Version">
+			<Description title="Version">
 				<Text variant="pBodySmall/medium" color="gray-90">
 					{version}
 				</Text>
-			</ObjectViewItem>
+			</Description>
 
-			<ObjectViewItem title="Last Transaction Block Digest">
+			<Description title="Last Transaction Block Digest">
 				<TransactionLink digest={digest} />
-			</ObjectViewItem>
+			</Description>
 		</ObjectViewCard>
 	);
 }
@@ -185,17 +165,21 @@ function OwnerCard({
 	return (
 		<ObjectViewCard>
 			{objOwner && (
-				<ObjectViewItem title="Owner">
+				<Description title="Owner">
 					{objOwner === 'Immutable' ? (
-						'Immutable'
+						<Text variant="pBodySmall/medium" color="gray-90">
+							Immutable
+						</Text>
 					) : 'Shared' in objOwner ? (
-						'Shared'
+						<Text variant="pBodySmall/medium" color="gray-90">
+							Shared
+						</Text>
 					) : 'ObjectOwner' in objOwner ? (
 						<ObjectLink objectId={objOwner.ObjectOwner} />
 					) : (
 						<AddressLink address={objOwner.AddressOwner} />
 					)}
-				</ObjectViewItem>
+				</Description>
 			)}
 
 			{display && (display.link || display.project_url) && (
@@ -203,26 +187,26 @@ function OwnerCard({
 					<Divider />
 
 					{display.link && (
-						<ObjectViewItem title="Link">
+						<Description title="Link">
 							<LinkWebsite value={display.link} />
-						</ObjectViewItem>
+						</Description>
 					)}
 
 					{display.project_url && (
-						<ObjectViewItem title="Website">
+						<Description title="Website">
 							<LinkWebsite value={display.project_url} />
-						</ObjectViewItem>
+						</Description>
 					)}
 				</>
 			)}
 
 			<Divider />
 
-			<ObjectViewItem title="Storage Rebate">
+			<Description title="Storage Rebate">
 				<Text variant="pBodySmall/medium" color="steel-darker">
 					-{storageRebateFormatted} SUI
 				</Text>
-			</ObjectViewItem>
+			</Description>
 		</ObjectViewCard>
 	);
 }

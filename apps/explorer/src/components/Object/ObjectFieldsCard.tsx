@@ -4,6 +4,7 @@
 import { Search24 } from '@mysten/icons';
 import { type SuiMoveNormalizedStruct, type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Text, LoadingIndicator, Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
+import clsx from 'clsx';
 import { useCallback, useEffect, useState } from 'react';
 
 import { FieldItem } from './FieldItem';
@@ -11,9 +12,10 @@ import { ScrollToViewCard } from './ScrollToViewCard';
 import { getFieldTypeValue } from './utils';
 import { FieldsCard, FieldCollapsible, FieldsContainer } from '~/components/Object/FieldsUtils';
 import { Banner } from '~/ui/Banner';
-import { DescriptionItem } from '~/ui/DescriptionList';
+import { Description } from '~/ui/Description';
 
 const DEFAULT_OPEN_FIELDS = 3;
+const DEFAULT_FIELDS_COUNT_TO_SHOW_SEARCH = 10;
 
 interface ObjectFieldsProps {
 	id: string;
@@ -102,28 +104,38 @@ export function ObjectFieldsCard({
 					name.toLowerCase().includes(query.toLowerCase()),
 			  );
 
+	const renderSearchBar =
+		normalizedStructData?.fields.length >= DEFAULT_FIELDS_COUNT_TO_SHOW_SEARCH;
+
 	return (
 		<FieldsContainer>
 			<div className="w-full md:w-1/5">
-				<Combobox value={query} onValueChange={setQuery}>
-					<div className="flex w-full justify-between rounded-lg border border-white/50 bg-white py-1 pl-3 shadow-dropdownContent">
-						<ComboboxInput placeholder="Search" className="w-full border-none focus:outline-0" />
-						<button className="border-none bg-inherit pr-2" type="submit">
-							<Search24 className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle text-gray-60" />
-						</button>
-					</div>
-					<ComboboxList
-						showResultsCount
-						options={filteredFieldNames.map((item) => ({
-							value: item.name,
-							label: item.name,
-						}))}
-						onSelect={({ value }) => {
-							setActiveFieldName(value);
-						}}
-					/>
-				</Combobox>
-				<div className="mt-4 flex h-80 flex-col gap-4 overflow-y-auto pl-3 pr-2">
+				{renderSearchBar && (
+					<Combobox value={query} onValueChange={setQuery}>
+						<div className="flex w-full justify-between rounded-lg border border-white/50 bg-white py-1 pl-3 shadow-dropdownContent">
+							<ComboboxInput placeholder="Search" className="w-full border-none focus:outline-0" />
+							<button className="border-none bg-inherit pr-2" type="submit">
+								<Search24 className="h-4.5 w-4.5 cursor-pointer fill-steel align-middle text-gray-60" />
+							</button>
+						</div>
+						<ComboboxList
+							showResultsCount
+							options={filteredFieldNames.map((item) => ({
+								value: item.name,
+								label: item.name,
+							}))}
+							onSelect={({ value }) => {
+								setActiveFieldName(value);
+							}}
+						/>
+					</Combobox>
+				)}
+				<div
+					className={clsx(
+						'flex h-44 flex-col gap-4 overflow-y-auto pl-3 pr-2 md:h-80',
+						renderSearchBar && 'mt-4',
+					)}
+				>
 					{normalizedStructData?.fields?.map(({ name, type }) => (
 						<button
 							type="button"
@@ -131,19 +143,11 @@ export function ObjectFieldsCard({
 							className="mt-0.5"
 							onClick={() => onFieldsNameClick(name)}
 						>
-							<DescriptionItem
-								contentJustify="end"
-								labelWidth="md"
-								title={
-									<Text variant="body/medium" color="steel-darker">
-										{name}
-									</Text>
-								}
-							>
+							<Description title={name} titleVariant="body/medium" titleColor="steel-darker">
 								<Text uppercase variant="subtitle/normal" color="steel" truncate>
 									{getFieldTypeValue(type, objectType).displayName}
 								</Text>
-							</DescriptionItem>
+							</Description>
 						</button>
 					))}
 				</div>
