@@ -119,6 +119,7 @@ fn module(
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
+    process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
@@ -203,7 +204,7 @@ fn function(
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
-    function_attributes(context, &attributes);
+    process_attributes(context, &attributes);
     function_signature(context, &signature);
     if is_script {
         let mk_msg = || {
@@ -236,35 +237,6 @@ fn function(
         signature,
         acquires,
         body,
-    }
-}
-
-fn function_attributes(context: &mut Context, all_attributes: &Attributes) {
-    for (_, _, attr) in all_attributes {
-        // look for `ModuleAccess` that is part of `Parameterized` (there should be only one per set
-        // of attributes)
-        let Attribute_::Parameterized(sp!(_, nm), attrs) = &attr.value else {
-            continue;
-        };
-        if nm.as_str() != TestingAttribute::ExpectedFailure.name() {
-            continue;
-        }
-        for (_, _, a) in attrs {
-            let Attribute_::Assigned(_, val) = &a.value else {
-                continue;
-            };
-            let AttributeValue_::ModuleAccess(mod_access) = &val.value else {
-                continue;
-            };
-            if let ModuleAccess_::ModuleAccess(mident, name) = mod_access.value {
-                // conservatively assume that each `ModuleAccess` refers to a constant name
-                context
-                    .used_module_members
-                    .entry(mident.value)
-                    .or_insert_with(BTreeSet::new)
-                    .insert(name.value);
-            }
-        }
     }
 }
 
@@ -331,6 +303,8 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         value: nvalue,
     } = nconstant;
     context.env.add_warning_filter_scope(warning_filter.clone());
+
+    process_attributes(context, &attributes);
 
     // Don't need to add base type constraint, as it is checked in `check_valid_constant::signature`
     let mut signature = core::instantiate(context, signature);
@@ -2356,6 +2330,32 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
         given.pop();
     }
     given
+}
+
+//**************************************************************************************************
+// Utils
+//**************************************************************************************************
+
+fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
+    for (_, _, attr) in all_attributes {
+        match &attr.value {
+            Attribute_::Name(_) => (),
+            Attribute_::Parameterized(_, attrs) => process_attributes(context, attrs),
+            Attribute_::Assigned(_, val) => {
+                let AttributeValue_::ModuleAccess(mod_access) = &val.value else {
+                    continue;
+                };
+                if let ModuleAccess_::ModuleAccess(mident, name) = mod_access.value {
+                    // conservatively assume that each `ModuleAccess` refers to a constant name
+                    context
+                        .used_module_members
+                        .entry(mident.value)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(name.value);
+                }
+            }
+        }
+    }
 }
 
 //**************************************************************************************************
