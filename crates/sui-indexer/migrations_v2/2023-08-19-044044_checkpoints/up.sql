@@ -19,7 +19,9 @@ CREATE TABLE checkpoints
     -- bcs serialized Vec<CheckpointCommitment> bytes
     checkpoint_commitments              bytea        NOT NULL,
     -- bcs serialized AggregateAuthoritySignature bytes
-    validator_signature                 bytea        NOT NULL
+    validator_signature                 bytea        NOT NULL,
+    -- bcs serialzied EndOfEpochData bytes, if the checkpoint marks end of an epoch
+    end_of_epoch_data                   bytea
 );
 
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch);

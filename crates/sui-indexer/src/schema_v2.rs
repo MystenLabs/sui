@@ -25,6 +25,7 @@ diesel::table! {
         non_refundable_storage_fee -> Int8,
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
+        end_of_epoch_data -> Nullable<Bytea>,
     }
 }
 
@@ -37,8 +38,18 @@ diesel::table! {
         epoch_start_timestamp -> Int8,
         reference_gas_price -> Int8,
         protocol_version -> Int8,
-        end_of_epoch_info -> Nullable<Bytea>,
-        end_of_epoch_data -> Nullable<Bytea>,
+        last_checkpoint_id -> Nullable<Int8>,
+        epoch_end_timestamp -> Nullable<Int8>,
+        storage_fund_reinvestment -> Nullable<Int8>,
+        storage_charge -> Nullable<Int8>,
+        storage_rebate -> Nullable<Int8>,
+        storage_fund_balance -> Nullable<Int8>,
+        stake_subsidy_amount -> Nullable<Int8>,
+        total_gas_fees -> Nullable<Int8>,
+        total_stake_rewards_distributed -> Nullable<Int8>,
+        leftover_storage_fund_inflow-> Nullable<Int8>,
+        new_total_stake -> Nullable<Int8>,
+        epoch_commitments -> Nullable<Bytea>,
     }
 }
 
