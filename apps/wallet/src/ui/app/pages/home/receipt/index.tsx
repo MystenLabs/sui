@@ -3,7 +3,7 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import { Check32 } from '@mysten/icons';
-import { getExecutionStatusType } from '@mysten/sui.js';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
@@ -25,7 +25,7 @@ function ReceiptPage() {
 	const fromParam = searchParams.get('from');
 	const client = useSuiClient();
 
-	const { data, isLoading, isError } = useQuery({
+	const { data, isLoading, isError } = useQuery<SuiTransactionBlockResponse>({
 		queryKey: ['transactions-by-id', transactionId],
 		queryFn: async () => {
 			return client.getTransactionBlock({
@@ -52,7 +52,7 @@ function ReceiptPage() {
 
 	const pageTitle = useMemo(() => {
 		if (data) {
-			const executionStatus = getExecutionStatusType(data);
+			const executionStatus = data.effects?.status.status;
 
 			// TODO: Infer out better name:
 			const transferName = 'Transaction';

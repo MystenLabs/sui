@@ -55,13 +55,16 @@ pub enum DeleteKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum MarkerKind {
+pub enum MarkerValue {
     /// An object was received at the given version in the transaction and is no longer able
     /// to be received at that version in subequent transactions.
     Received,
+    /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
+    /// accessed or used in subsequent transactions.
+    OwnedDeleted,
     /// A shared object was deleted by the transaction and is no longer able to be accessed or
     /// used in subsequent transactions.
-    SharedObjectDeleted,
+    SharedDeleted(TransactionDigest),
 }
 
 /// DeleteKind together with the old sequence number prior to the deletion, if available.

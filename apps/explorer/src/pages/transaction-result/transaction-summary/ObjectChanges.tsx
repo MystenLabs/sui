@@ -62,7 +62,7 @@ function Item({
 			)}
 			{label === ItemLabels.type && (
 				<div className="break-all text-right">
-					<Text variant="pBody/medium" color="steel-darker">
+					<Text mono variant="pBody/medium" color="steel-darker">
 						{typeName}
 					</Text>
 				</div>

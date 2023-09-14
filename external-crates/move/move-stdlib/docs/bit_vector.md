@@ -88,15 +88,6 @@ The maximum allowed bitvector size
 
 
 
-<a name="0x1_bit_vector_WORD_SIZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="bit_vector.md#0x1_bit_vector_WORD_SIZE">WORD_SIZE</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x1_bit_vector_new"></a>
 
 ## Function `new`

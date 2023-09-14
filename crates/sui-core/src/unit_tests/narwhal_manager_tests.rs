@@ -28,7 +28,7 @@ struct NoOpExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for NoOpExecutionState {
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
+    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         for batches in consensus_output.batches {
             for batch in batches {
                 for transaction in batch.transactions().iter() {
@@ -114,9 +114,9 @@ async fn test_narwhal_manager() {
         let narwhal_committee = system_state.get_narwhal_committee();
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
-        let execution_state = Arc::new(NoOpExecutionState {
+        let execution_state = || NoOpExecutionState {
             epoch: narwhal_committee.epoch(),
-        });
+        };
 
         let narwhal_config = NarwhalConfiguration {
             primary_keypair: config.protocol_key_pair().copy(),
@@ -137,7 +137,7 @@ async fn test_narwhal_manager() {
                 narwhal_committee.clone(),
                 latest_protocol_version(),
                 worker_cache.clone(),
-                Arc::new(execution_state.clone()),
+                execution_state,
                 TrivialTransactionValidator::default(),
             )
             .await;
@@ -189,9 +189,9 @@ async fn test_narwhal_manager() {
         let narwhal_committee = system_state.get_narwhal_committee();
         let worker_cache = system_state.get_narwhal_worker_cache(&transactions_addr);
 
-        let execution_state = Arc::new(NoOpExecutionState {
+        let execution_state = || NoOpExecutionState {
             epoch: narwhal_committee.epoch(),
-        });
+        };
 
         // start narwhal with advanced epoch
         narwhal_manager
@@ -199,7 +199,7 @@ async fn test_narwhal_manager() {
                 narwhal_committee.clone(),
                 latest_protocol_version(),
                 worker_cache.clone(),
-                Arc::new(execution_state.clone()),
+                execution_state,
                 TrivialTransactionValidator::default(),
             )
             .await;

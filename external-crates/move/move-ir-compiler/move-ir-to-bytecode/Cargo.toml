@@ -20,7 +20,6 @@ move-symbol-pool = { path = "../../move-symbol-pool" }
 move-bytecode-source-map = { path = "../move-bytecode-source-map" }
 log = "0.4.14"
 codespan-reporting = "0.11.1"
-thiserror = "1.0.24"
 ouroboros = "0.17.2"
 
 [features]

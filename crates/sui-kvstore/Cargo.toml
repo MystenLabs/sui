@@ -16,8 +16,6 @@ tokio = { workspace = true, features = ["full"] }
 anyhow = { workspace = true, features = ["backtrace"] }
 prometheus.workspace = true
 serde.workspace = true
-strum.workspace = true
-strum_macros.workspace = true
 bcs.workspace = true
 tracing.workspace = true
 mysten-metrics.workspace = true

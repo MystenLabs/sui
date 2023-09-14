@@ -23,10 +23,7 @@ use node::{
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
 };
 use prometheus::Registry;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 use storage::{CertificateStoreCacheMetrics, NodeStorage};
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_network_keypair_from_file,
@@ -318,7 +315,7 @@ async fn run(
                     worker_cache,
                     client.clone(),
                     &store,
-                    Arc::new(SimpleExecutionState::new(_tx_transaction_confirmation)),
+                    SimpleExecutionState::new(_tx_transaction_confirmation),
                 )
                 .await?;
 

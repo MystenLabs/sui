@@ -522,8 +522,8 @@ mod checked {
             self.new_packages.push(package);
         }
 
-        /// Return the last pacakge pushed in `write_package`.
-        /// This function should be used in block of codes that push a pacakge, verify
+        /// Return the last package pushed in `write_package`.
+        /// This function should be used in block of codes that push a package, verify
         /// it, run the init and in case of error will remove the package.
         /// The package has to be pushed for the init to run correctly.
         pub fn pop_package(&mut self) -> Option<MovePackage> {
@@ -580,6 +580,7 @@ mod checked {
                     LoadedRuntimeObject {
                         version,
                         digest,
+                        owner,
                         is_modified: true,
                     },
                 );
@@ -752,7 +753,7 @@ mod checked {
                     .filter_map(|(id, loaded)| {
                         loaded
                             .is_modified
-                            .then_some((id, (loaded.version, loaded.digest)))
+                            .then_some((id, (loaded.version, loaded.digest, loaded.owner)))
                     })
                     .collect(),
                 created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
@@ -1308,7 +1309,7 @@ mod checked {
 
     // Implementation of the `DataStore` trait for the Move VM.
     // When used during execution it may have a list of new packages that have
-    // just been published in the current context. Thos are used for module/type
+    // just been published in the current context. Those are used for module/type
     // resolution when executing module init.
     // It may be created with an empty slice of packages either when no publish/upgrade
     // are performed or when a type is requested not during execution.
@@ -1339,7 +1340,7 @@ mod checked {
         }
     }
 
-    // TODO: `DataStore` wil be reworked and this is likely to disappear.
+    // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
     impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
         fn link_context(&self) -> AccountAddress {

@@ -9,10 +9,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use once_cell::sync::Lazy;
-    use std::{
-        collections::{BTreeSet, HashSet},
-        sync::Arc,
-    };
+    use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -29,29 +26,37 @@ mod checked {
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_binary_format::access::ModuleAccess;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+    use sui_types::authenticator_state::{
+        AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
+        AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
+    };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
+    use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
+    use sui_types::storage::BackingStore;
     use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
+    use sui_types::transaction::InputObjects;
     use sui_types::transaction::{
-        Argument, CallArg, ChangeEpoch, Command, GenesisTransaction, ProgrammableTransaction,
+        Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
+        Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
         TransactionKind,
     };
     use sui_types::{
         base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::Object,
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
-        SUI_FRAMEWORK_ADDRESS,
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
-    use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID};
 
     /// If a transaction digest shows up in this list, when executing such transaction,
     /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
@@ -85,14 +90,14 @@ mod checked {
     }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-    pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
-        shared_object_refs: Vec<ObjectRef>,
-        mut temporary_store: TemporaryStore<'_>,
+    pub fn execute_transaction_to_effects<Mode: ExecutionMode, 'backing>(
+        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        input_objects: InputObjects,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
-        gas_charger: &mut GasCharger,
         transaction_digest: TransactionDigest,
-        mut transaction_dependencies: BTreeSet<TransactionDigest>,
         move_vm: &Arc<MoveVM>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
@@ -105,6 +110,14 @@ mod checked {
         TransactionEffects,
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
+        let shared_object_refs = input_objects.filter_shared_objects();
+        let mut transaction_dependencies = input_objects.transaction_dependencies();
+        let mut temporary_store =
+            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+
+        let mut gas_charger =
+            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
+
         let mut tx_ctx = TxContext::new_from_components(
             &transaction_signer,
             &transaction_digest,
@@ -112,13 +125,13 @@ mod checked {
             epoch_timestamp_ms,
         );
 
-        let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));
+        let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
         let deny_cert = is_certificate_denied(&transaction_digest, certificate_deny_set);
         let (gas_cost_summary, execution_result) = execute_transaction::<Mode>(
             &mut temporary_store,
             transaction_kind,
-            gas_charger,
+            &mut gas_charger,
             &mut tx_ctx,
             move_vm,
             protocol_config,
@@ -185,7 +198,7 @@ mod checked {
 
         if enable_expensive_checks && !Mode::allow_arbitrary_function_calls() {
             temporary_store
-                .check_ownership_invariants(&transaction_signer, gas_charger, is_epoch_change)
+                .check_ownership_invariants(&transaction_signer, &mut gas_charger, is_epoch_change)
                 .unwrap()
         } // else, in dev inspect mode and anything goes--don't check
 
@@ -195,10 +208,34 @@ mod checked {
             transaction_dependencies.into_iter().collect(),
             gas_cost_summary,
             status,
-            gas_charger,
+            &mut gas_charger,
             *epoch_id,
         );
         (inner, effects, execution_result)
+    }
+
+    pub fn execute_genesis_state_update(
+        store: Arc<dyn BackingStore + Send + Sync>,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        move_vm: &Arc<MoveVM>,
+        tx_context: &mut TxContext,
+        input_objects: InputObjects,
+        pt: ProgrammableTransaction,
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let mut temporary_store =
+            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
+        programmable_transactions::execution::execute::<execution_mode::Genesis>(
+            protocol_config,
+            metrics,
+            move_vm,
+            &mut temporary_store,
+            tx_context,
+            &mut gas_charger,
+            pt,
+        )?;
+        Ok(temporary_store.into_inner())
     }
 
     #[instrument(name = "tx_execute", level = "debug", skip_all)]
@@ -314,7 +351,7 @@ mod checked {
         advance_epoch_gas_summary: Option<(u64, u64)>,
     ) -> Result<(), ExecutionError> {
         let mut result: std::result::Result<(), sui_types::error::ExecutionError> = Ok(());
-        if !is_genesis_tx && !Mode::allow_arbitrary_values() {
+        if !is_genesis_tx && !Mode::skip_conservation_checks() {
             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
             let conservation_result = {
                 temporary_store
@@ -467,7 +504,9 @@ mod checked {
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
+                let builder = ProgrammableTransactionBuilder::new();
                 advance_epoch(
+                    builder,
                     change_epoch,
                     temporary_store,
                     tx_ctx,
@@ -522,8 +561,51 @@ mod checked {
                     pt,
                 )
             }
-            TransactionKind::AuthenticatorStateUpdate(_) => {
-                todo!()
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let len = txns.len();
+                for (i, tx) in txns.into_iter().enumerate() {
+                    match tx {
+                        EndOfEpochTransactionKind::ChangeEpoch(change_epoch) => {
+                            assert_eq!(i, len - 1);
+                            advance_epoch(
+                                builder,
+                                change_epoch,
+                                temporary_store,
+                                tx_ctx,
+                                move_vm,
+                                gas_charger,
+                                protocol_config,
+                                metrics,
+                            )?;
+                            return Ok(Mode::empty_results());
+                        }
+                        EndOfEpochTransactionKind::AuthenticatorStateCreate => {
+                            assert!(protocol_config.enable_jwk_consensus_updates());
+                            builder = setup_authenticator_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
+                            assert!(protocol_config.enable_jwk_consensus_updates());
+
+                            // TODO: it would be nice if a failure of this function didn't cause
+                            // safe mode.
+                            builder = setup_authenticator_state_expire(builder, expire);
+                        }
+                    }
+                }
+                unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
+            }
+            TransactionKind::AuthenticatorStateUpdate(auth_state_update) => {
+                setup_authenticator_state_update(
+                    auth_state_update,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )?;
+                Ok(Mode::empty_results())
             }
         }
     }
@@ -563,9 +645,9 @@ mod checked {
     }
 
     pub fn construct_advance_epoch_pt(
+        mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
     ) -> Result<ProgrammableTransaction, ExecutionError> {
-        let mut builder = ProgrammableTransactionBuilder::new();
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -664,6 +746,7 @@ mod checked {
     }
 
     fn advance_epoch(
+        builder: ProgrammableTransactionBuilder,
         change_epoch: ChangeEpoch,
         temporary_store: &mut TemporaryStore<'_>,
         tx_ctx: &mut TxContext,
@@ -683,7 +766,7 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        let advance_epoch_pt = construct_advance_epoch_pt(&params)?;
+        let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
         let result = programmable_transactions::execution::execute::<execution_mode::System>(
             protocol_config,
             metrics.clone(),
@@ -829,5 +912,85 @@ mod checked {
             gas_charger,
             pt,
         )
+    }
+
+    fn setup_authenticator_state_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate authenticator_state_create transaction!");
+        builder
+    }
+
+    fn setup_authenticator_state_update(
+        update: AuthenticatorStateUpdate,
+        temporary_store: &mut TemporaryStore<'_>,
+        tx_ctx: &mut TxContext,
+        move_vm: &Arc<MoveVM>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            let res = builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        initial_shared_version: update.authenticator_obj_initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&update.new_active_jwks).unwrap()),
+                ],
+            );
+            assert_invariant!(
+                res.is_ok(),
+                "Unable to generate authenticator_state_update transaction!"
+            );
+            builder.finish()
+        };
+        programmable_transactions::execution::execute::<execution_mode::System>(
+            protocol_config,
+            metrics,
+            move_vm,
+            temporary_store,
+            tx_ctx,
+            gas_charger,
+            pt,
+        )
+    }
+
+    fn setup_authenticator_state_expire(
+        mut builder: ProgrammableTransactionBuilder,
+        expire: AuthenticatorStateExpire,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                AUTHENTICATOR_STATE_MODULE_NAME.to_owned(),
+                AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![
+                    CallArg::Object(ObjectArg::SharedObject {
+                        id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        initial_shared_version: expire.authenticator_obj_initial_shared_version,
+                        mutable: true,
+                    }),
+                    CallArg::Pure(bcs::to_bytes(&expire.min_epoch).unwrap()),
+                ],
+            )
+            .expect("Unable to generate authenticator_state_expire transaction!");
+        builder
     }
 }

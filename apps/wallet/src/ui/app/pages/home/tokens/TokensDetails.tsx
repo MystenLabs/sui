@@ -4,14 +4,7 @@
 import { useFeature } from '@growthbook/growthbook-react';
 import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
 import { useAllBalances, useBalance } from '@mysten/dapp-kit';
-import {
-	Info12,
-	WalletActionBuy24,
-	WalletActionSend24,
-	Swap16,
-	Unpin16,
-	Pin16,
-} from '@mysten/icons';
+import { Info12, Unpin16, Pin16 } from '@mysten/icons';
 
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
@@ -270,7 +263,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							<>
 								<div
 									data-testid="coin-balance"
-									className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+									className="bg-hero/5 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
 								>
 									{accountHasSui ? (
 										<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
@@ -299,7 +292,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 											center
 											to="/onramp"
 											disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-											top={<WalletActionBuy24 />}
 										>
 											Buy
 										</LargeButton>
@@ -315,12 +307,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 													: ''
 											}`}
 											disabled={!tokenBalance}
-											top={<WalletActionSend24 />}
 										>
 											Send
 										</LargeButton>
 
-										<LargeButton center to="/" disabled top={<Swap16 />}>
+										<LargeButton center to="/" disabled>
 											Swap
 										</LargeButton>
 									</div>

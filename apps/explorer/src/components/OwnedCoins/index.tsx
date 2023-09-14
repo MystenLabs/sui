@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getCoinSymbol } from '@mysten/core';
 import { useAllBalances } from '@mysten/dapp-kit';
 import { Info16 } from '@mysten/icons';
-import { Coin } from '@mysten/sui.js';
 import { type CoinBalance } from '@mysten/sui.js/client';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { Heading, Text, LoadingIndicator, RadioGroup, RadioGroupItem } from '@mysten/ui';
@@ -51,23 +51,21 @@ export function OwnedCoins({ id }: { id: string }) {
 
 		const recognizedBalances = balanceData.recognizedBalances.sort((a, b) => {
 			// Make sure SUI always comes first
-			if (Coin.getCoinSymbol(a.coinType) === 'SUI') {
+			if (getCoinSymbol(a.coinType) === 'SUI') {
 				return -1;
-			} else if (Coin.getCoinSymbol(b.coinType) === 'SUI') {
+			} else if (getCoinSymbol(b.coinType) === 'SUI') {
 				return 1;
 			} else {
-				return Coin.getCoinSymbol(a.coinType).localeCompare(
-					Coin.getCoinSymbol(b.coinType),
-					undefined,
-					{ sensitivity: 'base' },
-				);
+				return getCoinSymbol(a.coinType).localeCompare(getCoinSymbol(b.coinType), undefined, {
+					sensitivity: 'base',
+				});
 			}
 		});
 
 		return {
 			recognizedBalances,
 			unrecognizedBalances: balanceData.unrecognizedBalances.sort((a, b) =>
-				Coin.getCoinSymbol(a.coinType).localeCompare(Coin.getCoinSymbol(b.coinType), undefined, {
+				getCoinSymbol(a.coinType)!.localeCompare(getCoinSymbol(b.coinType)!, undefined, {
 					sensitivity: 'base',
 				}),
 			),

@@ -7,6 +7,7 @@ export const walletMutationKeys = {
 	all: { baseScope: 'wallet' },
 	connectWallet: formMutationKeyFn('connect-wallet'),
 	disconnectWallet: formMutationKeyFn('disconnect-wallet'),
+	switchAccount: formMutationKeyFn('switch-account'),
 };
 
 function formMutationKeyFn(baseEntity: string) {

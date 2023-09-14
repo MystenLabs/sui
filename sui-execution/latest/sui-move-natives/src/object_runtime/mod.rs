@@ -66,6 +66,7 @@ pub(crate) struct TestInventories {
 pub struct LoadedRuntimeObject {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+    pub owner: Owner,
     pub is_modified: bool,
 }
 
@@ -289,7 +290,12 @@ impl<'a> ObjectRuntime<'a> {
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
         ]
         .contains(&id);
-        let transfer_result = if self.state.new_ids.contains_key(&id) || is_framework_obj {
+        let transfer_result = if self.state.new_ids.contains_key(&id) {
+            TransferResult::New
+        } else if is_framework_obj {
+            // framework objects are always created when they are transfered, but the id is
+            // hard-coded so it is not yet in new_ids
+            self.state.new_ids.insert(id, ());
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
@@ -418,6 +424,7 @@ impl<'a> ObjectRuntime<'a> {
                             version: obj.version(),
                             digest: obj.digest(),
                             storage_rebate: obj.storage_rebate,
+                            owner: obj.owner,
                         },
                     )
                 })
@@ -457,6 +464,7 @@ impl ObjectRuntimeState {
                     LoadedRuntimeObject {
                         version: metadata.version,
                         digest: metadata.digest,
+                        owner: metadata.owner,
                         is_modified: false,
                     },
                 )

@@ -63,7 +63,7 @@ export function UserApproveContainer({
 					iconUrl={originFavIcon}
 					connectedAddress={!addressHidden && address ? address : undefined}
 				/>
-				<div className="flex flex-1 flex-col p-6 bg-hero-darkest/5">{children}</div>
+				<div className="flex flex-1 flex-col px-6 bg-hero-darkest/5">{children}</div>
 			</div>
 			<div className="sticky bottom-0">
 				<div

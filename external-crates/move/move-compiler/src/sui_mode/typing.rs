@@ -6,24 +6,20 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::WarningFilters,
+    diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
     expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
-    naming::ast::{self as N, BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_, Var},
+    naming::ast::{
+        self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
+    },
     parser::ast::{Ability_, FunctionName, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
         CompilationEnv, Identifier,
     },
-    sui_mode::{
-        ASCII_MODULE_NAME, ASCII_TYPE_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME,
-        ENTRY_FUN_SIGNATURE_DIAG, ID_TYPE_NAME, INIT_CALL_DIAG, INIT_FUN_DIAG, OBJECT_MODULE_NAME,
-        OPTION_MODULE_NAME, OPTION_TYPE_NAME, OTW_DECL_DIAG, OTW_USAGE_DIAG, SCRIPT_DIAG,
-        STD_ADDR_NAME, SUI_ADDR_NAME, SUI_MODULE_NAME, TX_CONTEXT_MODULE_NAME,
-        TX_CONTEXT_TYPE_NAME, UTF_MODULE_NAME, UTF_TYPE_NAME,
-    },
+    sui_mode::*,
     typing::{
-        ast as T,
+        ast::{self as T, ModuleCall},
         core::{ability_not_satisfied_tips, error_format, error_format_, Subst, TypingProgramInfo},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
@@ -54,27 +50,34 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
     info: &'a TypingProgramInfo,
+    sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
-    upper_module: Option<Symbol>,
+    otw_name: Option<Symbol>,
     one_time_witness: Option<Result<StructName, ()>>,
     in_test: bool,
 }
 
 impl<'a> Context<'a> {
     fn new(env: &'a mut CompilationEnv, info: &'a TypingProgramInfo) -> Self {
+        let sui_module_ident = info
+            .modules
+            .key_cloned_iter()
+            .find(|(m, _)| m.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME))
+            .map(|(m, _)| m);
         Context {
             env,
-            current_module: None,
-            upper_module: None,
-            one_time_witness: None,
             info,
+            sui_transfer_ident: sui_module_ident,
+            current_module: None,
+            otw_name: None,
+            one_time_witness: None,
             in_test: false,
         }
     }
 
     fn set_module(&mut self, current_module: ModuleIdent) {
         self.current_module = Some(current_module);
-        self.upper_module = Some(Symbol::from(
+        self.otw_name = Some(Symbol::from(
             current_module.value.module.0.value.as_str().to_uppercase(),
         ));
         self.one_time_witness = None;
@@ -84,8 +87,8 @@ impl<'a> Context<'a> {
         self.current_module.as_ref().unwrap()
     }
 
-    fn upper_module(&self) -> Symbol {
-        self.upper_module.unwrap()
+    fn otw_name(&self) -> Symbol {
+        self.otw_name.unwrap()
     }
 }
 
@@ -94,6 +97,9 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
                         they have no fields (or a single boolean field), \
                         they have no type parameters, \
                         and they have only the 'drop' ability.";
+const GLOBAL_NOTE: &str = "Global storage is not used in Sui. \
+                        Instead objects (structs with the 'key' ability) are used with \
+                        programmable transaction blocks and the 'sui::transfer' functions.";
 
 //**************************************************************************************************
 // Entry
@@ -139,23 +145,27 @@ impl<'a> TypingVisitorContext for Context<'a> {
                 AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
             )
         });
-        if let Some(sdef) = mdef.structs.get_(&self.upper_module()) {
+        if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
             let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
             } else {
                 true
             };
             if valid_fields {
-                let name = mdef.structs.get_full_key_(&self.upper_module()).unwrap();
+                let name = mdef.structs.get_full_key_(&self.otw_name()).unwrap();
                 check_otw_type(self, name, sdef, None)
             }
         }
 
-        if let Some(fdef) = mdef.functions.get_(&symbol!("init")) {
-            let name = mdef.functions.get_full_key_(&symbol!("init")).unwrap();
+        if let Some(fdef) = mdef.functions.get_(&INIT_FUNCTION_NAME) {
+            let name = mdef.functions.get_full_key_(&INIT_FUNCTION_NAME).unwrap();
             init_signature(self, name, &fdef.signature)
         }
-        self.in_test = false;
+
+        for (name, sdef) in mdef.structs.key_cloned_iter() {
+            struct_def(self, name, sdef)
+        }
+
         // do not skip module
         false
     }
@@ -179,7 +189,75 @@ impl<'a> TypingVisitorContext for Context<'a> {
     }
 }
 
-//**********************************************************************************************
+//**************************************************************************************************
+// Structs
+//**************************************************************************************************
+
+fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+    let N::StructDefinition {
+        warning_filter: _,
+        index: _,
+        attributes: _,
+        abilities,
+        type_parameters: _,
+        fields,
+    } = sdef;
+    let Some(key_loc) = abilities.ability_loc_(Ability_::Key) else {
+        // not an object, no extra rules
+        return;
+    };
+
+    let StructFields::Defined(fields) = fields else { return };
+    let invalid_first_field = if fields.is_empty() {
+        // no fields
+        Some(name.loc())
+    } else {
+        fields
+            .iter()
+            .find(|(_, name, (idx, _))| *idx == 0 && **name != ID_FIELD_NAME)
+            .map(|(loc, _, _)| loc)
+    };
+    if let Some(loc) = invalid_first_field {
+        // no fields or an invalid 'id' field
+        context
+            .env
+            .add_diag(invalid_object_id_field_diag(key_loc, loc, name));
+        return;
+    };
+
+    let (_, id_field_type) = fields.get_(&ID_FIELD_NAME).unwrap();
+    let id_field_loc = fields.get_loc_(&ID_FIELD_NAME).unwrap();
+    if !id_field_type
+        .value
+        .is(SUI_ADDR_NAME, OBJECT_MODULE_NAME, UID_TYPE_NAME)
+    {
+        let actual = format!(
+            "But found type: {}",
+            error_format(id_field_type, &Subst::empty())
+        );
+        let mut diag = invalid_object_id_field_diag(key_loc, *id_field_loc, name);
+        diag.add_secondary_label((id_field_type.loc, actual));
+        context.env.add_diag(diag);
+    }
+}
+
+fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Diagnostic {
+    const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
+
+    let msg = format!(
+        "Invalid object '{}'. \
+        Structs with the '{}' ability must have '{}: {}::{}::{}' as their first field",
+        name,
+        Ability_::Key,
+        ID_FIELD_NAME,
+        SUI_ADDR_NAME,
+        OBJECT_MODULE_NAME,
+        UID_TYPE_NAME
+    );
+    diag!(OBJECT_DECL_DIAG, (loc, msg), (key_loc, KEY_MSG))
+}
+
+//**************************************************************************************************
 // Functions
 //**********************************************************************************************
 
@@ -187,7 +265,7 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
         visibility,
         signature,
-        acquires: _,
+        acquires,
         body,
         warning_filter: _,
         index: _,
@@ -205,7 +283,14 @@ fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     }) {
         context.in_test = true;
     }
-    if name.0.value == symbol!("init") {
+    if let Some(acquire_loc) = acquires.values().next() {
+        global_storage_error(
+            context,
+            *acquire_loc,
+            "Global storage acquires are not supported in Sui",
+        )
+    }
+    if name.0.value == INIT_FUNCTION_NAME {
         init_visibility(context, name, *visibility, *entry);
     }
     if let Some(entry_loc) = entry {
@@ -293,17 +378,17 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             (last_loc, msg),
         ))
     }
-    let upper_module: Symbol = context.upper_module();
+    let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1 && context.one_time_witness.is_some() {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
             "Invalid first parameter to 'init'. \
-            Expected this module's one-time witness type '{}::{upper_module}'",
+            Expected this module's one-time witness type '{}::{otw_name}'",
             context.current_module(),
         );
         let otw_loc = context
             .info
-            .struct_declared_loc_(context.current_module(), &upper_module);
+            .struct_declared_loc_(context.current_module(), &otw_name);
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
@@ -318,12 +403,12 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let is_otw = matches!(
             first_ty.value.type_name(),
             Some(sp!(_, TypeName_::ModuleType(m, n)))
-                if m == context.current_module() && n.value() == upper_module
+                if m == context.current_module() && n.value() == otw_name
         );
         if !is_otw {
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
-                Expected a one-time witness type, '{}::{upper_module}",
+                Expected a one-time witness type, '{}::{otw_name}",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
                 context.current_module(),
@@ -339,13 +424,13 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             .info
             .module(context.current_module())
             .structs
-            .get_(&upper_module)
+            .get_(&otw_name)
         {
             let name = context
                 .info
                 .module(context.current_module())
                 .structs
-                .get_full_key_(&upper_module)
+                .get_full_key_(&otw_name)
                 .unwrap();
             check_otw_type(context, name, sdef, Some(first_ty.loc))
         }
@@ -788,7 +873,27 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 );
                 context.env.add_diag(diag)
             }
+            if module.value.is(SUI_ADDR_NAME, EVENT_MODULE_NAME)
+                && name.value() == EVENT_FUNCTION_NAME
+            {
+                check_event_emit(context, e.exp.loc, mcall)
+            }
+            let is_transfer_module = module.value.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME);
+            if is_transfer_module && PRIVATE_TRANSFER_FUNCTIONS.contains(&name.value()) {
+                check_private_transfer(context, e.exp.loc, mcall)
+            }
         }
+        T::UnannotatedExp_::Builtin(b, _) => match &b.value {
+            T::BuiltinFunction_::MoveTo(_)
+            | T::BuiltinFunction_::MoveFrom(_)
+            | T::BuiltinFunction_::BorrowGlobal(_, _)
+            | T::BuiltinFunction_::Exists(_) => global_storage_error(
+                context,
+                e.exp.loc,
+                format!("Global storage primitive '{}' is not supported in Sui", b),
+            ),
+            T::BuiltinFunction_::Freeze(_) | T::BuiltinFunction_::Assert(_) => (),
+        },
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
                 && !context
@@ -809,4 +914,123 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         _ => (),
     }
+}
+
+fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
+    let current_module = context.current_module();
+    let ModuleCall {
+        module,
+        name,
+        type_arguments,
+        ..
+    } = mcall;
+    let Some(first_ty) = type_arguments.first() else {
+        // invalid arity
+        debug_assert!(false, "ICE arity should have been expanded for errors");
+        return;
+    };
+    let is_defined_in_current_module = matches!(first_ty.value.type_name(), Some(sp!(_, TypeName_::ModuleType(m, _))) if m == current_module);
+    if !is_defined_in_current_module {
+        let msg = format!(
+            "Invalid event. The function '{}::{}' must be called with a type defined in the current module",
+            module, name
+        );
+        let ty_msg = format!(
+            "The type {} is not declared in the current module",
+            error_format(first_ty, &Subst::empty()),
+        );
+        context.env.add_diag(diag!(
+            EVENT_EMIT_CALL_DIAG,
+            (loc, msg),
+            (first_ty.loc, ty_msg)
+        ));
+    }
+}
+
+fn check_private_transfer(context: &mut Context, loc: Loc, mcall: &ModuleCall) {
+    let ModuleCall {
+        module,
+        name,
+        type_arguments,
+        ..
+    } = mcall;
+    let current_module = context.current_module();
+    if current_module
+        .value
+        .is(SUI_ADDR_NAME, TRANSFER_FUNCTION_NAME)
+    {
+        // inside the transfer module, so no private transfer rules
+        return;
+    }
+    let Some(first_ty) = type_arguments.first() else {
+        // invalid arity
+        debug_assert!(false, "ICE arity should have been expanded for errors");
+        return;
+    };
+    let (in_current_module, first_ty_tn) = match first_ty.value.type_name() {
+        Some(sp!(_, TypeName_::Multiple(_))) | Some(sp!(_, TypeName_::Builtin(_))) | None => {
+            (false, None)
+        }
+        Some(sp!(_, TypeName_::ModuleType(m, n))) => (m == current_module, Some((m, n))),
+    };
+    if !in_current_module {
+        let mut msg = format!(
+            "Invalid private transfer. \
+            The function '{}::{}' is restricted to being called in the object's module",
+            module, name,
+        );
+        if let Some((first_ty_module, _)) = &first_ty_tn {
+            msg = format!("{}, '{}'", msg, first_ty_module);
+        };
+        let ty_msg = format!(
+            "The type {} is not declared in the current module",
+            error_format(first_ty, &Subst::empty()),
+        );
+        let mut diag = diag!(
+            PRIVATE_TRANSFER_CALL_DIAG,
+            (loc, msg),
+            (first_ty.loc, ty_msg)
+        );
+        if first_ty
+            .value
+            .has_ability_(Ability_::Store)
+            .is_some_and(|b| b)
+        {
+            let store_loc = if let Some((first_ty_module, first_ty_name)) = &first_ty_tn {
+                let abilities = context
+                    .info
+                    .struct_declared_abilities(first_ty_module, first_ty_name);
+                abilities.ability_loc_(Ability_::Store).unwrap()
+            } else {
+                first_ty
+                    .value
+                    .abilities(first_ty.loc)
+                    .expect("ICE abilities should have been expanded")
+                    .ability_loc_(Ability_::Store)
+                    .unwrap()
+            };
+            let store_msg = format!(
+                "The object has '{}' so '{}::public_{}' can be called instead",
+                Ability_::Store,
+                module,
+                name
+            );
+            diag.add_secondary_label((store_loc, store_msg))
+        }
+        context.env.add_diag(diag)
+    }
+}
+
+fn global_storage_error(context: &mut Context, loc: Loc, msg: impl ToString) {
+    let mut diag = diag!(GLOBAL_STORAGE_DIAG, (loc, msg));
+    let sui_transfer_loc = context
+        .sui_transfer_ident
+        .as_ref()
+        .map(|m| *context.info.modules.get_loc(m).unwrap());
+    if let Some(tloc) = sui_transfer_loc {
+        diag.add_secondary_label((tloc, GLOBAL_NOTE.to_string()))
+    } else {
+        diag.add_note(GLOBAL_NOTE)
+    }
+    context.env.add_diag(diag)
 }

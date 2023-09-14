@@ -6,7 +6,7 @@ import {
 	type SuiSignMessageOutput,
 } from '@mysten/wallet-standard';
 
-import type { SignedTransaction } from '@mysten/sui.js';
+import { type SignedTransaction } from '_src/ui/app/WalletSigner';
 import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 export type TransactionDataType = {

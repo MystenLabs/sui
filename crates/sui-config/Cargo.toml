@@ -13,19 +13,15 @@ bcs.workspace = true
 csv.workspace = true
 dirs.workspace = true
 fastcrypto.workspace = true
-move-binary-format.workspace = true
-move-core-types.workspace = true
 once_cell.workspace = true
 rand.workspace = true
 serde = { workspace = true, features = ["derive", "rc"] }
 serde_with.workspace = true
 serde_yaml.workspace = true
-tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 
 narwhal-config.workspace = true
-shared-crypto.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-storage.workspace = true

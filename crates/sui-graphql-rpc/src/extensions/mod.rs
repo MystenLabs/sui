@@ -1,5 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod logger;
-pub mod timeout;
+pub(crate) mod logger;
+pub(crate) mod timeout;

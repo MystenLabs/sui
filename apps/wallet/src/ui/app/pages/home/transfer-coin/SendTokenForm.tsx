@@ -10,7 +10,6 @@ import {
 } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
-import { Coin as CoinAPI } from '@mysten/sui.js';
 import { type CoinStruct } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
@@ -55,6 +54,13 @@ export type SendTokenFormProps = {
 	initialAmount: string;
 	initialTo: string;
 };
+
+function totalBalance(coins: CoinStruct[]): bigint {
+	return coins.reduce((partialSum, c) => partialSum + getBalanceFromCoinStruct(c), BigInt(0));
+}
+function getBalanceFromCoinStruct(coin: CoinStruct): bigint {
+	return BigInt(coin.balance);
+}
 
 function GasBudgetEstimation({
 	coinDecimals,
@@ -153,8 +159,8 @@ export function SendTokenForm({
 
 	const suiCoins = suiCoinsData;
 	const coins = coinsData;
-	const coinBalance = CoinAPI.totalBalance(coins || []);
-	const suiBalance = CoinAPI.totalBalance(suiCoins || []);
+	const coinBalance = totalBalance(coins || []);
+	const suiBalance = totalBalance(suiCoins || []);
 
 	const coinMetadata = useCoinMetadata(coinType);
 	const coinDecimals = coinMetadata.data?.decimals ?? 0;
