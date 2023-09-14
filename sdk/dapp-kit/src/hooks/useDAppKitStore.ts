@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DAppKitContext } from 'dapp-kit/src/contexts/dAppKitContext';
-import type { StoreState } from 'dapp-kit/src/store.js';
+import { DAppKitContext } from '../contexts/dAppKitContext.js';
+import type { StoreState } from '../store.js';
 import { useContext } from 'react';
 import { useStore } from 'zustand';
 
