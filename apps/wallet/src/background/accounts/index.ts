@@ -12,7 +12,6 @@ import { accountsEvents } from './events';
 import { ZkAccount } from './zk/ZkAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
-import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { type UiConnection } from '../connections/UiConnection';
 import { backupDB, getDB } from '../db';
 import { makeUniqueKey } from '../storage-utils';
@@ -214,7 +213,6 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			} else {
 				await account.unlock();
 			}
-			await setupAutoLockAlarm();
 			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 			return true;
 		}
