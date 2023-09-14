@@ -732,6 +732,17 @@ impl SuiClientCommands {
                 serialize_signed_transaction,
                 lint,
             } => {
+                if build_config.test_mode {
+                    return Err(SuiError::ModulePublishFailure {
+                        error: "The `publish` subcommand should not be used with the `--test` flag\n\
+                                \n\
+                                Library code in published packages must not depend on test code.\n\
+                                In order to fix this and publish the package without `--test`, search for, and remove \
+                                instances of e.g. test modules declared as `friend`s of modules from `sources/`.".to_string(),
+                    }
+                    .into());
+                }
+
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
