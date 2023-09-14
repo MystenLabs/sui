@@ -11,8 +11,12 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
+use fastcrypto::hash::Hash;
+use narwhal_types::BatchDigest;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
+use parking_lot::Mutex;
+use std::collections::HashSet;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use tap::TapFallible;
 use tokio::runtime::Handle;
@@ -25,6 +29,7 @@ pub struct SuiTxValidator {
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
     metrics: Arc<SuiTxValidatorMetrics>,
+    rejected_batches: Arc<Mutex<HashSet<BatchDigest>>>,
 }
 
 impl SuiTxValidator {
@@ -43,6 +48,7 @@ impl SuiTxValidator {
             checkpoint_service,
             _transaction_manager: transaction_manager,
             metrics,
+            rejected_batches: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 }
@@ -67,6 +73,15 @@ impl TransactionValidator for SuiTxValidator {
         protocol_config: &ProtocolConfig,
     ) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
+
+        if rand::random::<f64>() < 0.03 {
+            let digest = b.digest();
+            let mut rejected_batches = self.rejected_batches.lock();
+            if !rejected_batches.remove(&digest) {
+                rejected_batches.insert(digest);
+                return Err(eyre::eyre!("Rejected batch"));
+            }
+        }
 
         // TODO: Remove once we have removed BatchV1 from the codebase.
         validate_batch_version(b, protocol_config)
