@@ -25,12 +25,13 @@ export default {
 			minHeight: {
 				8: '2rem',
 				15: '3.75rem',
+				'popup-minimum': '600px',
 			},
 			spacing: {
 				7.5: '1.875rem',
 				8: '2rem',
 				15: '3.75rem',
-				'popup-height': '600px',
+				'popup-height': '680px',
 				'popup-width': '360px',
 			},
 			boxShadow: {
