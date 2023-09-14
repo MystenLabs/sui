@@ -12,6 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 signature.workspace = true
 rand.workspace = true
+tiny-bip39.workspace = true
 bip32.workspace = true
 slip10_ed25519.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }

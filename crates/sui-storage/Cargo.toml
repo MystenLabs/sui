@@ -13,6 +13,7 @@ futures.workspace = true
 num_enum.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
+rocksdb.workspace = true
 tracing.workspace = true
 byteorder.workspace = true
 anyhow.workspace = true
@@ -40,6 +41,7 @@ move-core-types.workspace = true
 sui-json-rpc-types.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
+eyre.workspace = true
 lru.workspace = true
 
 move-binary-format.workspace = true
