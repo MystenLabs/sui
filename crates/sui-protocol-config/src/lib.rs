@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use clap::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
@@ -166,7 +167,7 @@ impl SupportedProtocolVersions {
     }
 }
 
-#[derive(Clone, Serialize, Debug, PartialEq, Copy)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, ValueEnum)]
 pub enum Chain {
     Mainnet,
     Testnet,
