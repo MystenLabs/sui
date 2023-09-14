@@ -9638,6 +9638,7 @@ dependencies = [
  "sui-types",
  "sui-verifier-v0",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
