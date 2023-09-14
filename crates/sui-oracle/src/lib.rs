@@ -43,6 +43,7 @@ mod metrics;
 // TODO: allow more flexible decimals
 const DECIMAL: u8 = 6;
 const METRICS_MULTIPLIER: f64 = 10u64.pow(DECIMAL as u32) as f64;
+const UPLOAD_FAILURE_RECOVER_SEC: u64 = 10;
 static STALE_OBJ_ERROR: OnceCell<String> = OnceCell::new();
 
 pub struct OracleNode {
@@ -358,10 +359,17 @@ impl OnChainDataUploader {
             read_interval.tick().await;
             let data_points = self.collect().await;
             if !data_points.is_empty() {
-                let _ = self
-                    .upload(data_points)
-                    .await
-                    .tap_err(|err| error!("Failed to submit tx: {err}"));
+                if let Err(err) = self.upload(data_points).await {
+                    error!("Upload failure: {err}. About to resting for {UPLOAD_FAILURE_RECOVER_SEC} sec.");
+                    tokio::time::sleep(Duration::from_secs(UPLOAD_FAILURE_RECOVER_SEC)).await;
+                    self.gas_obj_ref = get_gas_obj_ref(
+                        self.client.read_api(),
+                        self.gas_obj_ref.0,
+                        self.signer_address,
+                    )
+                    .await;
+                    error!("Updated gas object reference: {:?}", self.gas_obj_ref);
+                }
             }
         }
     }
