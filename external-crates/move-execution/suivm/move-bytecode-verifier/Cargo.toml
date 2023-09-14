@@ -10,9 +10,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
 petgraph = "0.5.1"
-fail = "0.4.0"
 
 move-borrow-graph = { path = "../../../move/move-borrow-graph" }
 move-binary-format = { path = "../../../move/move-binary-format" }

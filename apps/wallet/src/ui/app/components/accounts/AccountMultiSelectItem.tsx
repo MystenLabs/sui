@@ -7,6 +7,7 @@ import { CheckFill16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
+import { AccountIcon } from './AccountIcon';
 import { AccountItem } from './AccountItem';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
@@ -22,8 +23,9 @@ export function AccountMultiSelectItem({ account, state }: AccountMultiSelectIte
 			<AccountItem
 				name={account.nickname ?? domainName ?? formatAddress(account.address)}
 				address={account.address}
-				disabled={state === 'disabled'}
 				selected={state === 'selected'}
+				disabled={state === 'disabled'}
+				icon={<AccountIcon account={account} />}
 				after={
 					<div
 						className={cn(`flex items-center justify-center ml-auto text-hero/10`, {

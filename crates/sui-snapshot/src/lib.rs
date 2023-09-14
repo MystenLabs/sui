@@ -23,6 +23,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::accumulator::Accumulator;
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
@@ -219,14 +220,19 @@ pub async fn setup_db_state(
     // This function should be called once state accumulator based hash verification
     // is complete and live object set state is downloaded to local store
     let system_state_object = get_sui_system_state(&perpetual_db)?;
+    let authenticator_state_obj_initial_shared_version =
+        get_authenticator_state_obj_initial_shared_version(&perpetual_db)?;
     let new_epoch_start_state = system_state_object.into_epoch_start_state();
     let next_epoch_committee = new_epoch_start_state.get_sui_committee();
     let last_checkpoint = checkpoint_store
         .get_epoch_last_checkpoint(epoch)
         .expect("Error loading last checkpoint for current epoch")
         .expect("Could not load last checkpoint for current epoch");
-    let epoch_start_configuration =
-        EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
+    let epoch_start_configuration = EpochStartConfiguration::new(
+        new_epoch_start_state,
+        *last_checkpoint.digest(),
+        authenticator_state_obj_initial_shared_version,
+    );
     perpetual_db
         .set_epoch_start_configuration(&epoch_start_configuration)
         .await?;

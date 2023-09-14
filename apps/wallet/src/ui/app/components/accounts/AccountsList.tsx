@@ -3,9 +3,11 @@
 
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import cn from 'classnames';
 import { useMemo } from 'react';
 import { AccountListItem } from './AccountListItem';
 import { FooterLink } from './FooterLink';
+import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
@@ -38,7 +40,12 @@ export function AccountsList() {
 	if (!accounts || !activeAccount) return null;
 
 	return (
-		<div className="bg-gradients-graph-cards flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full select-none">
+		<div
+			className={cn(
+				'flex flex-col rounded-xl p-4 gap-5 border border-solid border-hero/10 w-full select-none',
+				getAccountBackgroundByType(activeAccount),
+			)}
+		>
 			<Heading variant="heading5" weight="semibold" color="steel-darker">
 				Accounts
 			</Heading>

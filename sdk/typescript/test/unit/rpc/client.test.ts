@@ -3,13 +3,15 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
 import { JsonRpcClient } from '../../../src/rpc/client';
-import { GetOwnedObjectsResponse, SuiObjectInfo } from '../../../src';
+import { SuiObjectData } from '../../../src/client';
+import { GetOwnedObjectsResponse } from '../../../src/types';
+
 import { setupServer } from 'msw/node';
 import { rest } from 'msw';
 
-const EXAMPLE_OBJECT: SuiObjectInfo = {
+const EXAMPLE_OBJECT: SuiObjectData = {
 	objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',
-	version: 0,
+	version: '0',
 	digest: 'CI8Sf+t3Xrt5h9ENlmyR8bbMVfg6df3vSDc08Gbk9/g=',
 	owner: {
 		AddressOwner: '0x215592226abfec8d03fbbeb8b30eb0d2129c94b0',

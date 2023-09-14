@@ -89,7 +89,7 @@ pub struct ExecutionResultsV2 {
     pub written_objects: BTreeMap<ObjectID, Object>,
     /// All objects loaded with the intention to be modified, with their original sequence number and digest.
     /// If any object is not found in written_objects, they must be either deleted or wrapped.
-    pub objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest)>,
+    pub objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest, Owner)>,
     /// All object IDs created in this transaction.
     pub created_object_ids: BTreeSet<ObjectID>,
     /// All object IDs deleted in this transaction.
@@ -113,6 +113,7 @@ pub struct InputObjectMetadata {
 pub struct LoadedChildObjectMetadata {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
+    pub owner: Owner,
     pub storage_rebate: u64,
 }
 

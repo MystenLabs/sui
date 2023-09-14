@@ -69,7 +69,7 @@ impl PrimaryNodeInner {
         // TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
-        execution_state: Arc<State>,
+        execution_state: State,
     ) -> Result<(), NodeError>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -193,7 +193,7 @@ impl PrimaryNodeInner {
         // The configuration parameters.
         parameters: Parameters,
         // The state used by the client to execute transactions.
-        execution_state: Arc<State>,
+        execution_state: State,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
         // The channel to send the shutdown signal
@@ -415,7 +415,7 @@ impl PrimaryNode {
         // TODO: replace this by a path so the method can open and independent storage
         store: &NodeStorage,
         // The state used by the client to execute transactions.
-        execution_state: Arc<State>,
+        execution_state: State,
     ) -> Result<(), NodeError>
     where
         State: ExecutionState + Send + Sync + 'static,

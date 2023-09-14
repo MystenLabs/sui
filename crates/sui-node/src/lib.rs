@@ -26,6 +26,7 @@ use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
 use sui_json_rpc::api::JsonRpcMetrics;
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::digests::ChainIdentifier;
 use sui_types::message_envelope::get_google_jwk_bytes;
 use sui_types::sui_system_state::SuiSystemState;
@@ -205,6 +206,7 @@ impl SuiNode {
     }
 
     fn start_jwk_updater(
+        authority: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
@@ -220,6 +222,32 @@ impl SuiNode {
             "Starting JWK updater tasks with supported providers: {:?}",
             supported_providers
         );
+
+        fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
+            let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
+                warn!(
+                    "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
+                    id.iss,
+                    provider
+                );
+                return false;
+            };
+
+            if iss_provider != *provider {
+                warn!(
+                    "JWK iss {:?} (retrieved from {:?}) does not match provider {:?}",
+                    id.iss, provider, iss_provider
+                );
+                return false;
+            }
+
+            if !check_total_jwk_size(id, jwk) {
+                warn!("JWK {:?} (retrieved from {:?}) is too large", id, provider);
+                return false;
+            }
+
+            true
+        }
 
         for p in supported_providers.into_iter() {
             let epoch_store = epoch_store.clone();
@@ -240,8 +268,8 @@ impl SuiNode {
                             }
                             Ok(mut keys) => {
                                 keys.retain(|(id, jwk)| {
-                                    check_total_jwk_size(id, jwk) &&
-                                    !epoch_store.has_jwk(id, jwk) &&
+                                    validate_jwk(&p, id, jwk) &&
+                                    !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
                                     seen.insert((id.clone(), jwk.clone()))
                                 });
 
@@ -255,7 +283,7 @@ impl SuiNode {
                                 for (id, jwk) in keys.into_iter() {
                                     info!("Submitting JWK to consensus: {:?}", id);
 
-                                    let txn = ConsensusTransaction::new_jwk_fetched(id, jwk);
+                                    let txn = ConsensusTransaction::new_jwk_fetched(authority, id, jwk);
                                     consensus_adapter.submit(txn, None, &epoch_store)
                                         .tap_err(|e| warn!("Error when submitting JWKs to consensus {:?}", e))
                                         .ok();
@@ -549,10 +577,6 @@ impl SuiNode {
             .epoch_start_state()
             .get_authority_names_to_peer_ids();
 
-        let authority_names_to_hostnames = epoch_store
-            .epoch_start_state()
-            .get_authority_names_to_hostnames();
-
         let network_connection_metrics =
             NetworkConnectionMetrics::new("sui", &registry_service.default_registry());
 
@@ -583,7 +607,6 @@ impl SuiNode {
                 state_sync_handle.clone(),
                 accumulator.clone(),
                 connection_monitor_status.clone(),
-                authority_names_to_hostnames,
                 &registry_service,
             )
             .await?;
@@ -901,7 +924,6 @@ impl SuiNode {
         state_sync_handle: state_sync::Handle,
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         registry_service: &RegistryService,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
@@ -946,7 +968,6 @@ impl SuiNode {
             narwhal_manager,
             narwhal_epoch_data_remover,
             accumulator,
-            authority_names_to_hostnames,
             validator_server_handle,
             checkpoint_metrics,
             sui_tx_validator_metrics,
@@ -964,7 +985,6 @@ impl SuiNode {
         narwhal_manager: NarwhalManager,
         narwhal_epoch_data_remover: EpochDataRemover,
         accumulator: Arc<StateAccumulator>,
-        authority_names_to_hostnames: HashMap<AuthorityName, String>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
@@ -990,16 +1010,17 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
-        let consensus_handler = Arc::new(ConsensusHandler::new(
-            epoch_store.clone(),
-            checkpoint_service.clone(),
-            state.transaction_manager().clone(),
-            state.db(),
-            low_scoring_authorities,
-            authority_names_to_hostnames,
-            committee,
-            state.metrics.clone(),
-        ));
+        let consensus_handler_initializer = || {
+            ConsensusHandler::new(
+                epoch_store.clone(),
+                checkpoint_service.clone(),
+                state.transaction_manager().clone(),
+                state.db(),
+                low_scoring_authorities.clone(),
+                committee.clone(),
+                state.metrics.clone(),
+            )
+        };
 
         let transactions_addr = &config
             .consensus_config
@@ -1013,7 +1034,7 @@ impl SuiNode {
                 new_epoch_start_state.get_narwhal_committee(),
                 epoch_store.protocol_config().clone(),
                 worker_cache,
-                consensus_handler,
+                consensus_handler_initializer,
                 SuiTxValidator::new(
                     epoch_store.clone(),
                     checkpoint_service.clone(),
@@ -1023,8 +1044,8 @@ impl SuiNode {
             )
             .await;
 
-        if epoch_store.protocol_config().enable_jwk_consensus_updates() {
-            Self::start_jwk_updater(epoch_store.clone(), consensus_adapter.clone());
+        if epoch_store.authenticator_state_enabled() {
+            Self::start_jwk_updater(state.name, epoch_store.clone(), consensus_adapter.clone());
         }
 
         Ok(ValidatorComponents {
@@ -1301,9 +1322,6 @@ impl SuiNode {
             self.connection_monitor_status
                 .update_mapping_for_epoch(authority_names_to_peer_ids);
 
-            let authority_names_to_hostnames =
-                new_epoch_start_state.get_authority_names_to_hostnames();
-
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
             let _ = send_trusted_peer_change(
@@ -1333,6 +1351,7 @@ impl SuiNode {
 
                 let new_epoch_store = self
                     .reconfigure_state(
+                        &self.state,
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
@@ -1357,7 +1376,6 @@ impl SuiNode {
                             narwhal_manager,
                             narwhal_epoch_data_remover,
                             self.accumulator.clone(),
-                            authority_names_to_hostnames,
                             validator_server_handle,
                             checkpoint_metrics,
                             sui_tx_validator_metrics,
@@ -1371,6 +1389,7 @@ impl SuiNode {
             } else {
                 let new_epoch_store = self
                     .reconfigure_state(
+                        &self.state,
                         &cur_epoch_store,
                         next_epoch_committee.clone(),
                         new_epoch_start_state,
@@ -1391,7 +1410,6 @@ impl SuiNode {
                             self.state_sync.clone(),
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
-                            authority_names_to_hostnames,
                             &self.registry_service,
                         )
                         .await?,
@@ -1423,6 +1441,7 @@ impl SuiNode {
 
     async fn reconfigure_state(
         &self,
+        state: &Arc<AuthorityState>,
         cur_epoch_store: &AuthorityPerEpochStore,
         next_epoch_committee: Committee,
         next_epoch_start_system_state: EpochStartSystemState,
@@ -1435,8 +1454,16 @@ impl SuiNode {
             .get_epoch_last_checkpoint(cur_epoch_store.epoch())
             .expect("Error loading last checkpoint for current epoch")
             .expect("Could not load last checkpoint for current epoch");
-        let epoch_start_configuration =
-            EpochStartConfiguration::new(next_epoch_start_system_state, *last_checkpoint.digest());
+
+        let authenticator_state_obj_initial_shared_version =
+            get_authenticator_state_obj_initial_shared_version(&state.database)
+                .expect("read cannot fail");
+
+        let epoch_start_configuration = EpochStartConfiguration::new(
+            next_epoch_start_system_state,
+            *last_checkpoint.digest(),
+            authenticator_state_obj_initial_shared_version,
+        );
 
         let new_epoch_store = self
             .state

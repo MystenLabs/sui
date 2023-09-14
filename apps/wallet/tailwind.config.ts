@@ -63,6 +63,10 @@ export default {
 			fontFamily: {
 				frankfurter: ['Frankfurter Normal', 'sans-serif'],
 			},
+			backgroundImage: {
+				google: 'url(_assets/images/google-background.png)',
+				twitch: 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
+			},
 		},
 	},
 	plugins: [animatePlugin],

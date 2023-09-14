@@ -289,6 +289,7 @@ codes!(
         Function: { msg: "unused function", severity: Warning },
         StructField: { msg: "unused struct field", severity: Warning },
         FunTypeParam: { msg: "unused function type parameter", severity: Warning },
+        Constant: { msg: "unused constant", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

@@ -18,7 +18,9 @@ pub(crate) struct CSVWriter {
     transaction_object_csv: Writer<File>,
     object_csv: Writer<File>,
     event_csv: Writer<File>,
+    move_call_csv: Writer<File>,
 }
+use crate::tables::MoveCallEntry;
 use tracing::info;
 
 impl CSVWriter {
@@ -38,12 +40,14 @@ impl CSVWriter {
             dir.join(format!("transaction_object_{}.csv", starting_checkpoint));
         let object_csv = dir.join(format!("object_{}.csv", starting_checkpoint));
         let event_csv = dir.join(format!("event_{}.csv", starting_checkpoint));
+        let move_call_csv = dir.join(format!("move_call_{}.csv", starting_checkpoint));
         Ok(Self {
             checkpoint_csv: Writer::from_path(checkpoint).unwrap(),
             transaction_csv: Writer::from_path(transaction).unwrap(),
             transaction_object_csv: Writer::from_path(transaction_object).unwrap(),
             object_csv: Writer::from_path(object_csv).unwrap(),
             event_csv: Writer::from_path(event_csv).unwrap(),
+            move_call_csv: Writer::from_path(move_call_csv).unwrap(),
         })
     }
 }
@@ -87,5 +91,13 @@ impl TableWriter for CSVWriter {
             self.event_csv.serialize(entry).unwrap();
         }
         self.event_csv.flush().unwrap();
+    }
+
+    fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]) {
+        info!("Write move calls");
+        for entry in move_call_entries {
+            self.move_call_csv.serialize(entry).unwrap();
+        }
+        self.move_call_csv.flush().unwrap();
     }
 }

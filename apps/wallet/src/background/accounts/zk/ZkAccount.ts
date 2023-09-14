@@ -7,7 +7,7 @@ import {
 	toSerializedSignature,
 	type PublicKey,
 } from '@mysten/sui.js/cryptography';
-import { computeZkAddress, getZkSignature } from '@mysten/zklogin';
+import { computeZkAddress, genAddressSeed, getZkSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 import { getCurrentEpoch } from './current-epoch';
@@ -70,6 +70,14 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	 * obfuscated data that contains user info as it was in jwt
 	 */
 	claims: string;
+	/**
+	 * the addressSeed obfuscated
+	 */
+	addressSeed: string;
+	/**
+	 * the name/key of the claim in claims used for the address sub or email
+	 */
+	claimName: 'sub' | 'email';
 }
 
 export interface ZkAccountSerializedUI extends SerializedUIAccount {
@@ -117,23 +125,29 @@ export class ZkAccount
 			iss: decodedJWT.iss,
 			sub: decodedJWT.sub,
 		};
+		const claimName = 'sub';
+		const claimValue = decodedJWT.sub;
 		return {
 			type: 'zk',
 			address: computeZkAddress({
-				claimName: 'sub',
-				claimValue: decodedJWT.sub,
+				claimName,
+				claimValue,
 				iss: decodedJWT.iss,
 				aud,
 				userSalt: BigInt(salt),
 			}),
 			claims: await obfuscate(claims),
 			salt: await obfuscate(salt),
+			addressSeed: await obfuscate(
+				genAddressSeed(BigInt(salt), claimName, claimValue, aud).toString(),
+			),
 			provider,
 			publicKey: null,
 			lastUnlockedOn: null,
 			selected: false,
 			nickname: claims.email || null,
 			createdAt: Date.now(),
+			claimName,
 		};
 	}
 
@@ -220,8 +234,14 @@ export class ZkAccount
 			signatureScheme: keyPair.getKeyScheme(),
 			publicKey: keyPair.getPublicKey(),
 		});
+		const { addressSeed: addressSeedObfuscated } = await this.getStoredData();
+		const addressSeed = await deobfuscate<string>(addressSeedObfuscated);
 
-		return getZkSignature({ inputs: proofs, maxEpoch, userSignature });
+		return getZkSignature({
+			inputs: { ...proofs, addressSeed },
+			maxEpoch,
+			userSignature,
+		});
 	}
 
 	#areCredentialsValid(
@@ -272,14 +292,14 @@ export class ZkAccount
 		maxEpoch: number,
 		ephemeralPublicKey: PublicKey,
 	) {
-		const { salt: obfuscatedSalt } = await this.getStoredData();
+		const { salt: obfuscatedSalt, claimName } = await this.getStoredData();
 		const salt = await deobfuscate<string>(obfuscatedSalt);
 		return await createPartialZKSignature({
 			jwt,
 			ephemeralPublicKey,
 			userSalt: BigInt(salt),
 			jwtRandomness: randomness,
-			keyClaimName: 'sub',
+			keyClaimName: claimName,
 			maxEpoch,
 		});
 	}

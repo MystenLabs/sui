@@ -131,7 +131,9 @@ module M {
         print(&sender);
     }
 
+    #[allow(unused_const)]
     const MSG_1 : vector<u8> = b"abcdef";
+    #[allow(unused_const)]
     const MSG_2 : vector<u8> = b"123456";
 
     #[test_only]

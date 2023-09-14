@@ -223,7 +223,7 @@ above.
 
 ```typescript
 import { createTransferPolicy } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 const createPolicyForType = async () => {
 	const type = 'SomePackageId::type::MyType'; // the Type for which we're creating a Transfer Policy.
@@ -255,7 +255,7 @@ import {
 	testnetEnvironment,
 	percentageToBasisPoints,
 } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 // Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
 // as well as a kiosk lock, making the objects trade-able only from/to a kiosk.

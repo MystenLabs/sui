@@ -33,10 +33,9 @@ pub type SerializedTransactionDigest = u64;
 
 #[automock]
 #[async_trait]
-// Important - if you add method with the default implementation here make sure to update impl ExecutionState for Arc<T>
 pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput);
+    async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput);
 
     /// Load the last executed sub-dag index from storage
     async fn last_executed_sub_dag_index(&self) -> u64;
@@ -124,17 +123,4 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     }
 
     Ok(sub_dags)
-}
-
-#[async_trait]
-impl<T: ExecutionState + 'static + Send + Sync> ExecutionState for Arc<T> {
-    async fn handle_consensus_output(&self, consensus_output: ConsensusOutput) {
-        self.as_ref()
-            .handle_consensus_output(consensus_output)
-            .await
-    }
-
-    async fn last_executed_sub_dag_index(&self) -> u64 {
-        self.as_ref().last_executed_sub_dag_index().await
-    }
 }

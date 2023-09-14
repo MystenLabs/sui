@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SignedTransaction, type SignedMessage } from '@mysten/sui.js';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
 import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
@@ -35,6 +34,7 @@ import {
 	isQredoConnectPayload,
 	type QredoConnectPayload,
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
+import { type SignedTransaction, type SignedMessage } from '_src/ui/app/WalletSigner';
 
 import type { Message } from '_messages';
 import type { KeyringPayload } from '_payloads/keyring';

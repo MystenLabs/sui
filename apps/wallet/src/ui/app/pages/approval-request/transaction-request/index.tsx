@@ -70,9 +70,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 				approveTitle="Approve"
 				rejectTitle="Reject"
 				onSubmit={async (approved: boolean) => {
-					if (isLoading) {
-						return;
-					}
+					if (isLoading) return;
 					if (approved && isError) {
 						setConfirmationVisible(true);
 						return;
@@ -97,20 +95,23 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 				approveLoading={isLoading || isConfirmationVisible}
 			>
 				<PageMainLayoutTitle title="Approve Transaction" />
-
-				<div className="flex flex-col gap-4">
-					<TransactionSummary
-						isDryRun
-						isLoading={isDryRunLoading}
-						isError={isDryRunError}
-						showGasSummary={false}
-						summary={summary}
-					/>
+				<div className="flex flex-col">
+					<div className="flex flex-col gap-4">
+						<TransactionSummary
+							isDryRun
+							isLoading={isDryRunLoading}
+							isError={isDryRunError}
+							showGasSummary={false}
+							summary={summary}
+						/>
+					</div>
+					<section className=" bg-white -mx-6">
+						<div className="flex flex-col gap-4 p-6">
+							<GasFees sender={addressForTransaction} transaction={transaction} />
+							<TransactionDetails sender={addressForTransaction} transaction={transaction} />
+						</div>
+					</section>
 				</div>
-				<section className="flex flex-col gap-4">
-					<GasFees sender={addressForTransaction} transaction={transaction} />
-					<TransactionDetails sender={addressForTransaction} transaction={transaction} />
-				</section>
 			</UserApproveContainer>
 			<ConfirmationModal
 				isOpen={isConfirmationVisible}

@@ -17,8 +17,5 @@ enum-compat-util = { path = "../../testing-infra/enum-compat-util"}
 move-proc-macros = { path = "../../testing-infra/move-proc-macros"}
 serde = { version = "1.0.124", features = ["derive", "rc"] }
 
-bcs.workspace = true
-
 anyhow = "1.0.52"
-once_cell = "1.7.2"
 hex = "0.4.3"

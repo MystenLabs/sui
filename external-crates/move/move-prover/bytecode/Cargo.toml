@@ -12,9 +12,6 @@ edition = "2021"
 [dependencies]
 move-model = { path = "../../move-model" }
 move-binary-format = { path = "../../move-binary-format" }
-move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
-move-borrow-graph = { path = "../../move-borrow-graph" }
-move-ir-to-bytecode = { path = "../../move-ir-compiler/move-ir-to-bytecode" }
 move-core-types = { path = "../../move-core/types" }
 move-command-line-common = { path = "../../move-command-line-common" }
 move-read-write-set-types = { path = "../../tools/read-write-set/types" }
@@ -28,7 +25,6 @@ im = "15.0.0"
 itertools = "0.10.0"
 log = "0.4.14"
 serde = { version = "1.0.124", features = ["derive"] }
-once_cell = "1.7.2"
 paste = "1.0.5"
 petgraph = "0.5.1"
 

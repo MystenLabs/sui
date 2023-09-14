@@ -1,0 +1,8 @@
+{
+	"index": "Sui dApp Kit Quick Start",
+	"sui-client-provider": "SuiClientProvider",
+	"rpc-hooks": "RPC Hooks",
+	"wallet-provider": "WalletProvider",
+	"wallet-components": "Wallet Components",
+	"wallet-hooks": "Wallet Hooks"
+}

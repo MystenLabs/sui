@@ -5,7 +5,6 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { blake2b } from '@noble/hashes/blake2b';
 import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '@mysten/sui.js/utils';
-import { zkBcs } from './bcs.js';
 import { decodeJwt } from 'jose';
 import { genAddressSeed, toBufferBE } from './utils.js';
 
@@ -47,12 +46,12 @@ export function computeZkAddress({
 		genAddressSeed(userSalt, claimName, claimValue, aud),
 		32,
 	);
-	const addressParamBytes = zkBcs.ser('AddressParams', { iss }).toBytes();
-
-	const tmp = new Uint8Array(1 + addressSeedBytesBigEndian.length + addressParamBytes.length);
+	const addressParamBytes = Buffer.from(iss);
+	const tmp = new Uint8Array(2 + addressSeedBytesBigEndian.length + addressParamBytes.length);
 	tmp.set([SIGNATURE_SCHEME_TO_FLAG.Zk]);
-	tmp.set(addressParamBytes, 1);
-	tmp.set(addressSeedBytesBigEndian, 1 + addressParamBytes.length);
+	tmp.set([addressParamBytes.length], 1);
+	tmp.set(addressParamBytes, 2);
+	tmp.set(addressSeedBytesBigEndian, 2 + addressParamBytes.length);
 
 	return normalizeSuiAddress(
 		bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
