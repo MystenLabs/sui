@@ -23,6 +23,7 @@ sui-node.workspace = true
 sui-protocol-config.workspace = true
 sui-swarm.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
+prometheus.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true

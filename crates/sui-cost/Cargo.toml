@@ -12,6 +12,7 @@ sui-types.workspace = true
 anyhow.workspace = true
 tokio = { workspace = true, features = ["full"] }
 serde.workspace = true
+strum.workspace = true
 strum_macros.workspace = true
 bcs.workspace = true
 
