@@ -426,10 +426,12 @@ impl Synchronizer {
                         .certificates_aggregators
                         .lock()
                         .retain(|k, _| k > &gc_round);
-                    // Accept certificates at and below gc round + 1, if there is any.
+                    // Accept certificates at and below gc round, if there is any.
                     let mut state = inner.state.lock().await;
                     while let Some(((round, digest), suspended_cert)) = state.run_gc_once(gc_round)
                     {
+                        assert!(round <= gc_round, "Never gc certificates above gc_round as this can lead to missing causal history in DAG");
+
                         let suspended_children_certs = state.accept_children(round, digest);
                         // Acceptance must be in causal order.
                         for suspended in suspended_cert
@@ -1287,5 +1289,98 @@ impl State {
     #[cfg(test)]
     fn num_missing(&self) -> usize {
         self.missing.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::synchronizer::State;
+    use config::Committee;
+    use fastcrypto::{hash::Hash, traits::KeyPair};
+    use itertools::Itertools;
+    use std::collections::BTreeSet;
+    use std::num::NonZeroUsize;
+    use test_utils::{latest_protocol_version, make_optimal_signed_certificates, CommitteeFixture};
+    use types::{Certificate, Round};
+
+    // Tests that gc_once is reporting back missing certificates up to gc_round and no further.
+    #[tokio::test]
+    async fn test_run_gc_once() {
+        // GIVEN
+        const NUM_AUTHORITIES: usize = 4;
+
+        let fixture = CommitteeFixture::builder()
+            .randomize_ports(true)
+            .committee_size(NonZeroUsize::new(NUM_AUTHORITIES).unwrap())
+            .build();
+
+        let committee: Committee = fixture.committee();
+        let genesis = Certificate::genesis(&committee)
+            .iter()
+            .map(|x| x.digest())
+            .collect::<BTreeSet<_>>();
+        let keys: Vec<_> = fixture
+            .authorities()
+            .map(|a| (a.id(), a.keypair().copy()))
+            .collect();
+        let (certificates, _next_parents) = make_optimal_signed_certificates(
+            1..=3,
+            &genesis,
+            &committee,
+            &latest_protocol_version(),
+            keys.as_slice(),
+        );
+        let certificates = certificates.into_iter().collect_vec();
+
+        let mut state = State::default();
+
+        // Insert all certificates of round 2, except the first certificate.
+        // We report as missing the certificate of validator 1 from round 1.
+        let round_1_validator_1 = certificates[0].digest();
+        for cert in &certificates[NUM_AUTHORITIES + 1..NUM_AUTHORITIES * 2] {
+            state.insert(cert.clone(), vec![round_1_validator_1], true);
+        }
+
+        // Insert all certificates of round 3. We report as missing the certificate of validator 1
+        // from round 2.
+        let round_2_validator_1 = certificates[NUM_AUTHORITIES].digest();
+        for cert in &certificates[NUM_AUTHORITIES * 2..] {
+            state.insert(cert.clone(), vec![round_2_validator_1], true);
+        }
+
+        // AND
+        // Round 1 certificate of validator 1
+        // Round 2 certificate of validator 1
+        assert_eq!(state.num_missing(), 2);
+
+        // 3 certificates of round 2,
+        // 4 certificates of round 3
+        assert_eq!(state.num_suspended(), 7);
+
+        // WHEN running the gc for gc_round = 1, we expect to gc up to round = 1.
+        const GC_ROUND: Round = 1;
+
+        let ((round, certificate_digest), suspended_certificate) =
+            state.run_gc_once(GC_ROUND).unwrap();
+
+        assert_eq!(certificate_digest, certificates[0].digest()); // Ensure that only the missing certificate digest of round 1 gets garbage collected.
+        assert_eq!(round, 1);
+        assert!(suspended_certificate.is_none()); // We don't have its certificate
+
+        // Accept its children
+        let suspended_certificates = state.accept_children(round, certificate_digest);
+
+        // 3 certificates of round 2 have been unsuspended
+        assert_eq!(suspended_certificates.len(), 3);
+        assert!(suspended_certificates
+            .iter()
+            .all(|c| c.certificate.round() == 2));
+
+        // WHEN trying to trigger again for gc_round 1, it should return None
+        assert!(state.run_gc_once(GC_ROUND).is_none());
+
+        // THEN
+        assert_eq!(state.num_missing(), 1);
+        assert_eq!(state.num_suspended(), 4);
     }
 }
