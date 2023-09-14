@@ -2,3 +2,4 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod checkpoint_handler;
+pub mod tx_processor;
