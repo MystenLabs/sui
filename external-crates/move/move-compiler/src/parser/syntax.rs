@@ -13,19 +13,29 @@ use move_symbol_pool::{symbol, Symbol};
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
+    editions::FeatureGate,
     parser::{ast::*, lexer::*},
     shared::*,
     MatchedFileCommentMap,
 };
 
 struct Context<'env, 'lexer, 'input> {
+    package_name: Option<Symbol>,
     env: &'env mut CompilationEnv,
     tokens: &'lexer mut Lexer<'input>,
 }
 
 impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
-    fn new(env: &'env mut CompilationEnv, tokens: &'lexer mut Lexer<'input>) -> Self {
-        Self { env, tokens }
+    fn new(
+        env: &'env mut CompilationEnv,
+        tokens: &'lexer mut Lexer<'input>,
+        package_name: Option<Symbol>,
+    ) -> Self {
+        Self {
+            package_name,
+            env,
+            tokens,
+        }
     }
 }
 
@@ -1995,9 +2005,11 @@ fn parse_parameter(context: &mut Context) -> Result<(Var, Type), Box<Diagnostic>
 // Parse a struct definition:
 //      StructDecl =
 //          "struct" <StructDefName> ("has" <Ability> (, <Ability>)+)?
-//          ("{" Comma<FieldAnnot> "}" | ";")
+//          ("{" Comma<FieldAnnot> "}" ("has" <Ability> (, <Ability>)+;)? | ";")
 //      StructDefName =
 //          <Identifier> <OptionalTypeParameters>
+// Where the the two "has" statements are mutually exclusive -- a struct cannot be declared with
+// both infix and postfix ability declarations.
 fn parse_struct_decl(
     attributes: Vec<Attributes>,
     start_loc: usize,
@@ -2035,8 +2047,13 @@ fn parse_struct_decl(
     let name = StructName(parse_identifier(context)?);
     let type_parameters = parse_struct_type_parameters(context)?;
 
-    let abilities = if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has"
-    {
+    let infix_ability_declaration_loc =
+        if context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has" {
+            Some(current_token_loc(context.tokens))
+        } else {
+            None
+        };
+    let mut abilities = if infix_ability_declaration_loc.is_some() {
         context.tokens.advance()?;
         parse_list(
             context,
@@ -2075,6 +2092,11 @@ fn parse_struct_decl(
                 parse_field_annot,
                 "a field",
             )?;
+            parse_postfix_ability_declarations(
+                infix_ability_declaration_loc,
+                &mut abilities,
+                context,
+            )?;
             StructFields::Defined(list)
         }
     };
@@ -2102,6 +2124,63 @@ fn parse_field_annot(context: &mut Context) -> Result<(Field, Type), Box<Diagnos
     consume_token(context.tokens, Tok::Colon)?;
     let st = parse_type(context)?;
     Ok((f, st))
+}
+
+// Parse a postfix ability declaration:
+//     "has" <Ability> (, <Ability>)+;
+//  Error if:
+//      * Also has prefix ability declaration
+fn parse_postfix_ability_declarations(
+    infix_ability_declaration_loc: Option<Loc>,
+    abilities: &mut Vec<Ability>,
+    context: &mut Context,
+) -> Result<(), Box<Diagnostic>> {
+    let postfix_ability_declaration =
+        context.tokens.peek() == Tok::Identifier && context.tokens.content() == "has";
+    let has_location = current_token_loc(context.tokens);
+
+    if postfix_ability_declaration {
+        context.env.check_feature(
+            &FeatureGate::PostFixAbilities,
+            context.package_name,
+            has_location,
+        );
+
+        context.tokens.advance()?;
+
+        // Only add a diagnostic about prefix xor postfix ability declarations if the feature is
+        // supported. Otherwise we will already have an error that the `has` is not supported in
+        // that position, and the feature check diagnostic as well, so adding this additional error
+        // could be confusing.
+        if let Some(previous_declaration_loc) = infix_ability_declaration_loc {
+            let msg = "Duplicate ability declaration. Abilities can be declared before \
+                       or after the field declarations, but not both.";
+            let prev_msg = "Ability declaration previously given here";
+            context.env.add_diag(diag!(
+                Syntax::InvalidModifier,
+                (has_location, msg),
+                (previous_declaration_loc, prev_msg)
+            ));
+        }
+
+        *abilities = parse_list(
+            context,
+            |context| match context.tokens.peek() {
+                Tok::Comma => {
+                    context.tokens.advance()?;
+                    Ok(true)
+                }
+                Tok::Semicolon => Ok(false),
+                _ => Err(unexpected_token_error(
+                    context.tokens,
+                    &format!("one of: '{}' or '{}'", Tok::Comma, Tok::Semicolon),
+                )),
+            },
+            parse_ability,
+        )?;
+        consume_token(context.tokens, Tok::Semicolon)?;
+    }
+    Ok(())
 }
 
 //**************************************************************************************************
@@ -3226,13 +3305,14 @@ pub fn parse_file_string(
     env: &mut CompilationEnv,
     file_hash: FileHash,
     input: &str,
+    package: Option<Symbol>,
 ) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
     let mut tokens = Lexer::new(input, file_hash);
     match tokens.advance() {
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(..) => Ok(()),
     }?;
-    match parse_file(&mut Context::new(env, &mut tokens)) {
+    match parse_file(&mut Context::new(env, &mut tokens, package)) {
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(def) => Ok((def, tokens.check_and_get_doc_comments(env))),
     }
