@@ -14,3 +14,6 @@ sui-transactional-test-runner.workspace = true
 [[test]]
 name = "tests"
 harness = false
+
+[dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

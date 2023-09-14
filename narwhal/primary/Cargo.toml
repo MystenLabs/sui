@@ -35,6 +35,7 @@ storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros.workspace = true
 mysten-network.workspace = true
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 sui-protocol-config.workspace = true
 
 mysten-common.workspace = true

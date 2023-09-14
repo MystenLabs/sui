@@ -41,6 +41,7 @@ move-core-types.workspace = true
 sui-json-rpc-types.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre.workspace = true
 lru.workspace = true
 

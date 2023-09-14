@@ -184,6 +184,7 @@ dependencies = [
  "rand 0.8.5",
  "telemetry-subscribers",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6075,6 +6076,7 @@ dependencies = [
  "futures",
  "parking_lot 0.12.1",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6093,6 +6095,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6115,6 +6118,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6132,6 +6136,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "roaring",
  "smallvec",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6141,6 +6146,7 @@ dependencies = [
  "proc-macro2 1.0.66",
  "syn 1.0.107",
  "synstructure",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7636,6 +7642,7 @@ dependencies = [
  "anyhow",
  "prometheus",
  "protobuf",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9146,6 +9153,7 @@ dependencies = [
  "fastcrypto",
  "serde",
  "serde_repr",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9588,6 +9596,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9639,6 +9648,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9671,6 +9681,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9751,6 +9762,7 @@ dependencies = [
  "tokio-util 0.7.4",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9787,6 +9799,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9814,6 +9827,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9901,6 +9915,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "typed-store-derive",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9922,6 +9937,7 @@ dependencies = [
  "sui-types",
  "test-cluster",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]

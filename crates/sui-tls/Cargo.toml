@@ -17,6 +17,7 @@ webpki.workspace = true
 x509-parser.workspace = true
 
 fastcrypto.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 # reqwest support
 reqwest.workspace = true

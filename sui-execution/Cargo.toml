@@ -32,6 +32,8 @@ move-vm-runtime-v0 = { path = "../external-crates/move-execution/v0/move-vm/runt
 move-vm-runtime-suivm = { path = "../external-crates/move-execution/suivm/move-vm/runtime" }
 # move-vm-runtime-$CUT = { path = "../external-crates/move-execution/$CUT/move-vm/runtime" }
 
+workspace-hack = { version = "0.1", path = "../crates/workspace-hack" }
+
 [dev-dependencies]
 cargo_metadata = "0.15.4"
 petgraph = "0.5.1"

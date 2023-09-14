@@ -26,6 +26,8 @@ toml.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data
 bcs.workspace = true

@@ -20,6 +20,7 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 storage = { path = "../storage", package = "narwhal-storage" }
 prometheus.workspace = true
 types = { path = "../types", package = "narwhal-types" }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 cfg-if.workspace = true
 mysten-metrics.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
