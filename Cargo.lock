@@ -9372,6 +9372,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-analytics-indexer"
+version = "1.9.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "bcs",
+ "byteorder",
+ "bytes",
+ "chrono",
+ "clap",
+ "csv",
+ "fastcrypto",
+ "move-core-types",
+ "mysten-metrics",
+ "num_enum",
+ "object_store",
+ "prometheus",
+ "serde",
+ "strum",
+ "strum_macros",
+ "sui-indexer",
+ "sui-rest-api",
+ "sui-storage",
+ "sui-types",
+ "telemetry-subscribers",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-archival"
 version = "0.1.0"
 dependencies = [
