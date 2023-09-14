@@ -27,7 +27,7 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 	const form = useZodForm({
 		mode: 'all',
 		schema: formSchema,
-		defaultValues: {
+		values: {
 			nickname: name,
 		},
 	});

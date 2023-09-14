@@ -94,36 +94,6 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    /// WARNING! Should only be used for dry run and dev inspect!
-    /// In dry run and dev inspect, you might load a dynamic field that is actually too new for
-    /// the transaction. Ideally, we would want to load the "correct" dynamic fields, but as that
-    /// is not easily determined, we instead set the lamport version MAX, which is a valid lamport
-    /// version for any object used in the transaction (preventing internal assertions or
-    /// invariant violations from being triggered)
-    pub fn new_for_mock_transaction(
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
-        input_objects: InputObjects,
-        tx_digest: TransactionDigest,
-        protocol_config: &ProtocolConfig,
-    ) -> Self {
-        let mutable_inputs = input_objects.mutable_inputs();
-        let lamport_timestamp = SequenceNumber::MAX;
-        let objects = input_objects.into_object_map();
-        Self {
-            store,
-            tx_digest,
-            input_objects: objects,
-            lamport_timestamp,
-            mutable_input_refs: mutable_inputs,
-            written: BTreeMap::new(),
-            deleted: BTreeMap::new(),
-            events: Vec::new(),
-            protocol_config: protocol_config.clone(),
-            loaded_child_objects: BTreeMap::new(),
-            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
-        }
-    }
-
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
         &self.input_objects

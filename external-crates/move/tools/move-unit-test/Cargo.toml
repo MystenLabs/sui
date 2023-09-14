@@ -35,7 +35,6 @@ move-binary-format = { path = "../../move-binary-format" }
 move-model = { path = "../../move-model" }
 move-stackless-bytecode-interpreter = { path = "../../move-prover/interpreter" }
 move-bytecode-utils = { path = "../move-bytecode-utils" }
-primitive-types = { version = "0.10.1", optional = true }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"

@@ -7,9 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-arc-swap.workspace = true
 bcs.workspace = true
-match_opt.workspace = true
 rand = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }

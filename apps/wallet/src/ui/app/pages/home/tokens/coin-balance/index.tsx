@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 import { useFormatCoin, useSuiCoinData } from '@mysten/core';
 import { SUI_DECIMALS } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-import { CoinIcon } from '_src/ui/app/components/coin-icon';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 
@@ -34,7 +32,6 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 	return (
 		<div className="flex flex-col gap-1 items-center justify-center">
 			<div className="flex items-center justify-center gap-2">
-				<CoinIcon fill="suiPrimary2023" coinType={type} size="sm" />
 				<Heading leading="none" variant="heading1" weight="bold" color="gray-90">
 					{formatted}
 				</Heading>

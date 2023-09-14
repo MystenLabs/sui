@@ -604,15 +604,16 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 }
 
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
-/// [zklogin_flag || bcs bytes of AddressParams || address_seed in bytes] where
+/// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes] where
 /// AddressParams contains iss and aud string.
 impl From<&ZkLoginAuthenticator> for SuiAddress {
     fn from(authenticator: &ZkLoginAuthenticator) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-        // unwrap is safe here
-        hasher.update(bcs::to_bytes(&authenticator.get_address_params()).unwrap());
-        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()));
+        let iss_bytes = authenticator.get_iss().as_bytes();
+        hasher.update([iss_bytes.len() as u8]);
+        hasher.update(iss_bytes);
+        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()).unwrap());
         SuiAddress(hasher.finalize().digest)
     }
 }

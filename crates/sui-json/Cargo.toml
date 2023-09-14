@@ -9,13 +9,11 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 bcs.workspace = true
-once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
 
 sui-framework.workspace = true
-sui-protocol-config.workspace = true
 sui-types.workspace = true
 
 move-binary-format.workspace = true

@@ -779,6 +779,11 @@ export type StakeObject =
 			stakedSuiId: string;
 			status: 'Unstaked';
 	  };
+export interface SuiActiveJwk {
+	epoch: string;
+	jwk: SuiJWK;
+	jwk_id: SuiJwkId;
+}
 /** An argument to a transaction in a programmable transaction block */
 export type SuiArgument =
 	| 'GasCoin' /** One of the input objects or primitive values (from `ProgrammableTransactionBlock` inputs) */
@@ -833,6 +838,16 @@ export interface SuiExecutionResult {
 	mutableReferenceOutputs?: [SuiArgument, number[], string][];
 	/** The return values from the transaction */
 	returnValues?: [number[], string][];
+}
+export interface SuiJWK {
+	alg: string;
+	e: string;
+	kty: string;
+	n: string;
+}
+export interface SuiJwkId {
+	iss: string;
+	kid: string;
 }
 export type SuiMoveAbility = 'Copy' | 'Drop' | 'Store' | 'Key';
 export interface SuiMoveAbilitySet {
@@ -1274,6 +1289,12 @@ export type SuiTransactionBlockKind =
 			 * failure of the entire programmable transaction block.
 			 */
 			transactions: SuiTransaction[];
+	  } /** An transaction which updates global authenticator state */
+	| {
+			epoch: string;
+			kind: 'AuthenticatorStateUpdate';
+			new_active_jwks: SuiActiveJwk[];
+			round: string;
 	  };
 export interface SuiTransactionBlockResponse {
 	balanceChanges?: BalanceChange[] | null;

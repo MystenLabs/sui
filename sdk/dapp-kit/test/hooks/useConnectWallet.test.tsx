@@ -9,7 +9,7 @@ import type { Mock } from 'vitest';
 
 describe('useConnectWallet', () => {
 	test('throws an error when connecting to a wallet when a connection is already active', async () => {
-		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
@@ -34,7 +34,7 @@ describe('useConnectWallet', () => {
 	});
 
 	test('throws an error when a user fails to connect their wallet', async () => {
-		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
@@ -63,7 +63,7 @@ describe('useConnectWallet', () => {
 	});
 
 	test('connecting to a wallet works successfully', async () => {
-		const { unregister, mockWallet } = registerMockWallet('Mock Wallet 1');
+		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
 		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(

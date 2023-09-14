@@ -12,8 +12,6 @@ sui-protocol-config.workspace = true
 sui-types.workspace = true
 
 move-binary-format.workspace = true
-move-bytecode-utils.workspace = true
-move-core-types.workspace = true
 move-vm-config.workspace = true
 
 sui-adapter-latest = { path = "latest/sui-adapter" }

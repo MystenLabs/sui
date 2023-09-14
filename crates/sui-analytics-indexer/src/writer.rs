@@ -3,7 +3,8 @@
 #![allow(dead_code)]
 
 use crate::tables::{
-    CheckpointEntry, EventEntry, ObjectEntry, TransactionEntry, TransactionObjectEntry,
+    CheckpointEntry, EventEntry, MoveCallEntry, ObjectEntry, TransactionEntry,
+    TransactionObjectEntry,
 };
 
 // Trait for writing entries to a temporary store (e.g. csv files).
@@ -15,6 +16,7 @@ pub(crate) trait TableWriter {
     fn write_transaction_objects(&mut self, transaction_object_entries: &[TransactionObjectEntry]);
     fn write_objects(&mut self, object_entries: &[ObjectEntry]);
     fn write_events(&mut self, event_entries: &[EventEntry]);
+    fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]);
 }
 
 const INITIAL_CAPACITY: usize = 10_000;
@@ -30,6 +32,7 @@ pub(crate) struct CheckpointWriter {
     transaction_object_entries: Vec<TransactionObjectEntry>,
     object_entries: Vec<ObjectEntry>,
     event_entries: Vec<EventEntry>,
+    move_call_entries: Vec<MoveCallEntry>,
 }
 
 impl CheckpointWriter {
@@ -40,6 +43,7 @@ impl CheckpointWriter {
             transaction_object_entries: Vec::with_capacity(INITIAL_CAPACITY),
             object_entries: Vec::with_capacity(INITIAL_CAPACITY),
             event_entries: Vec::with_capacity(INITIAL_CAPACITY),
+            move_call_entries: Vec::with_capacity(INITIAL_CAPACITY),
         }
     }
 
@@ -50,11 +54,13 @@ impl CheckpointWriter {
         writer.write_transaction_objects(&self.transaction_object_entries);
         writer.write_objects(&self.object_entries);
         writer.write_events(&self.event_entries);
+        writer.write_move_calls(&self.move_call_entries);
         self.checkpoint_entries.clear();
         self.transaction_entries.clear();
         self.transaction_object_entries.clear();
         self.object_entries.clear();
         self.event_entries.clear();
+        self.move_call_entries.clear();
     }
 
     pub(crate) fn write_checkpoint(&mut self, entry: CheckpointEntry) {
@@ -75,5 +81,9 @@ impl CheckpointWriter {
 
     pub(crate) fn write_events(&mut self, entry: EventEntry) {
         self.event_entries.push(entry);
+    }
+
+    pub(crate) fn write_move_calls(&mut self, entry: MoveCallEntry) {
+        self.move_call_entries.push(entry);
     }
 }

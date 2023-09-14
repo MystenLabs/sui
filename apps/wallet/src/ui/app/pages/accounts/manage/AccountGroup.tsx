@@ -121,7 +121,7 @@ export function AccountGroup({
 										background="gradient"
 										address={account.address}
 										icon={<AccountIcon account={account} />}
-										after={<AccountFooter accountID={account.id} />}
+										footer={<AccountFooter accountID={account.id} />}
 									/>
 								);
 							})}

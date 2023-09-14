@@ -49,7 +49,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, error_span, info, trace, warn, Instrument};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -314,7 +314,11 @@ impl CheckpointStore {
             .next()
         {
             let mut batch = self.locally_computed_checkpoints.batch();
-            batch.delete_range(&self.locally_computed_checkpoints, &0, &last_local_summary)?;
+            batch.schedule_delete_range(
+                &self.locally_computed_checkpoints,
+                &0,
+                &last_local_summary,
+            )?;
             batch.write()?;
             info!("Pruned local summaries up to {:?}", last_local_summary);
         }
@@ -896,10 +900,12 @@ impl CheckpointBuilder {
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
-                // ConsensusCommitPrologue is guaranteed to be processed before we reach here
+                // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
+                // processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::AuthenticatorStateUpdate(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
@@ -969,6 +975,7 @@ impl CheckpointBuilder {
                         &mut signatures,
                         sequence_number,
                     )
+                    .instrument(error_span!("augment_epoch_last_checkpoint"))
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;

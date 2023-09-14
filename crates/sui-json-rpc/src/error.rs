@@ -15,7 +15,7 @@ use tokio::task::JoinError;
 
 use crate::authority_state::StateReadError;
 
-pub const TRANSIENT_ERROR_CODE: i32 = -32001;
+pub const TRANSIENT_ERROR_CODE: i32 = -32050;
 pub const TRANSACTION_EXECUTION_CLIENT_ERROR_CODE: i32 = -32002;
 
 pub type RpcInterimResult<T = ()> = Result<T, Error>;
@@ -318,7 +318,7 @@ mod tests {
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect!["Transaction timed out before reaching finality"];
             expected_message.assert_eq(error_object.message());
@@ -334,7 +334,7 @@ mod tests {
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect![
                 "Transaction failed to reach finality with transient error after 10 attempts."
@@ -468,7 +468,7 @@ mod tests {
             let rpc_error: RpcError = Error::QuorumDriverError(quorum_driver_error).into();
 
             let error_object: ErrorObjectOwned = rpc_error.into();
-            let expected_code = expect!["-32001"];
+            let expected_code = expect!["-32050"];
             expected_code.assert_eq(&error_object.code().to_string());
             let expected_message = expect!["Transaction is not processed because 10 of validators by stake are overloaded with certificates pending execution."];
             expected_message.assert_eq(error_object.message());

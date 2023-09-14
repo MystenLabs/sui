@@ -31,15 +31,12 @@ signature.workspace = true
 thiserror.workspace = true
 bcs.workspace = true
 eyre.workspace = true
-num_cpus.workspace = true
 once_cell.workspace = true
-axum-server.workspace = true
 serde_json.workspace = true
 
 tap.workspace = true
 
 sui-core.workspace = true
-sui-swarm-config.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true

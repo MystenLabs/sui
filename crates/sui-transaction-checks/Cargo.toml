@@ -1,0 +1,16 @@
+[package]
+name = "sui-transaction-checks"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+sui-macros.workspace = true
+sui-config.workspace = true
+sui-protocol-config.workspace = true
+sui-types.workspace = true
+tracing.workspace = true
+sui-execution.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

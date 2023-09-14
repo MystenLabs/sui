@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
-import type { IdentifierRecord } from '@mysten/wallet-standard';
+import type { IdentifierRecord, ReadonlyWalletAccount } from '@mysten/wallet-standard';
 import { getWallets } from '@mysten/wallet-standard';
 import { SuiClientProvider, WalletProvider } from 'dapp-kit/src';
-import { MockWallet } from './mockWallet.js';
+import { MockWallet } from './mocks/mockWallet.js';
 import type { ComponentProps } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createMockAccount } from './mocks/mockAccount.js';
 
 export function createSuiClientContextWrapper(client: SuiClient) {
 	return function SuiClientContextWrapper({ children }: { children: React.ReactNode }) {
@@ -30,12 +31,17 @@ export function createWalletProviderContextWrapper(
 	};
 }
 
-export function registerMockWallet(
-	walletName: string,
-	additionalFeatures: IdentifierRecord<unknown> = {},
-) {
+export function registerMockWallet({
+	walletName,
+	accounts = [createMockAccount()],
+	additionalFeatures = {},
+}: {
+	walletName: string;
+	accounts?: ReadonlyWalletAccount[];
+	additionalFeatures?: IdentifierRecord<unknown>;
+}) {
 	const walletsApi = getWallets();
-	const mockWallet = new MockWallet(walletName, additionalFeatures);
+	const mockWallet = new MockWallet(walletName, accounts, additionalFeatures);
 	return {
 		unregister: walletsApi.register(mockWallet),
 		mockWallet,

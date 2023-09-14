@@ -9,7 +9,6 @@ license = "Apache-2.0"
 [dependencies]
 # diem dependencies
 move-compiler = { path = "../move-compiler" }
-move-bytecode-verifier = { path = "../move-bytecode-verifier" }
 move-binary-format = { path = "../move-binary-format" }
 move-bytecode-source-map = { path = "../move-ir-compiler/move-bytecode-source-map" }
 move-ir-types = { path = "../move-ir/types" }

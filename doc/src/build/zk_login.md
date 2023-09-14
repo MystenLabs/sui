@@ -22,7 +22,7 @@ Are you a builder who wants to integrate with zkLogin into your wallet or applic
 
 If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
 
-If you are curious about the security model and the privacy considerations of zkLogin, visit this page.
+If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
 
 More questions? See [this page](#faq).
 
@@ -159,7 +159,10 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 ```typescript
 import { generateNonce, generateRandomness } from '@mysten/zklogin';
 
-const maxEpoch = currentEpoch + 2;
+const suiClient = await getActiveNetworkSuiClient();
+const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.getLatestSuiSystemState();
+
+const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now. 
 const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
@@ -209,15 +212,17 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service (the endpoint is currently experimental):
-
-```bash
-curl -X POST http://185.209.177.123:8000/test/zkp -H 'Content-Type: application/json' -d '{\"jwt\":\"$JWT_TOKEN\",\"eph_public_key\":\"84029355920633174015103288781128426107680789454168570548782290541079926444544\",\"max_epoch\":10,\"jwt_randomness\":\"100681567828351849884072155819400689117\",\"salt\":\"20465832301516329261119809412953969078\",\"key_claim_name\":\"sub\"}'
-
-Response: "{\"proof_points\":{\"pi_a\":[\"15675063703917306325241627795287749939385019512632064342667007391710348766801\",\"17181586432929941053870961220927806940602908713115856882556485894958715666224\",\"1\"],\"pi_b\":[[\"7957560505670729816220496782509944389088563119747730948580966015066725699783\",\"11716659169018092876695088851694241024612269611905606895704710420228856308439\"],[\"18606955817386159093439044748720418927075182249276458107282460969333270722832\",\"19144697919432449583198138975806802711756124977312904713863493730816522902497\"],[\"1\",\"0\"]],\"pi_c\":[\"12016781044283108691697360278171375649064474873077711188401276911089485035377\",\"10870715344064672680295536378392096158902788441186022533456372715718154947718\",\"1\"]},\"address_seed\":\"18404400811258979351843554038529324719581180024248900217069822820095974835369\",\"claims\":[{\"name\":\"iss\",\"value_base64\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"index_mod_4\":2},{\"name\":\"aud\",\"value_base64\":\"yJhdWQiOiJyczFiaDA2NWk5eWE0eWR2aWZpeGw0a3NzMHVocHQiLC\",\"index_mod_4\":1}],\"header_base64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}"
-```
+Here's an example request and response for the Mysten Labs-maintained proving service (the endpoint is currently experimental and only available in devnet).
 
 Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
+
+```bash
+curl -X POST http://prover-devnet.mystenlabs.com/zkp -H 'Content-Type: application/json' -d '{\"jwt\":\"$JWT_TOKEN\",\"extendedEphemeralPublicKey\":\"84029355920633174015103288781128426107680789454168570548782290541079926444544\",\"maxEpoch\":10,\"jwtRandomness\":\"100681567828351849884072155819400689117\",\"salt\":\"20465832301516329261119809412953969078\",\"keyClaimName\":\"sub\"}'
+
+Response: 
+
+`{"proofPoints":{"pi_a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"pi_b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"pi_c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
+```
 
 ## Assemble the zkLogin signature and submit the transaction
 
@@ -386,7 +391,7 @@ The non-interactive ZK proofs (NIZK) share a public, universal common reference 
 
 The ceremony's objective is to compute a public common reference string (CRS). Achieving this involves using the circuit description and confidentially-generated random numbers for sampling. Although these random numbers are not needed in the subsequent protocols, if they are leaked, the security of the protocols will be compromised. Therefore, we need to trust the setup process in two crucial ways: (1) ensuring a faithful sampling process, and (2) securely discarding the confidential random numbers.
 
-We adopt a distributed setup process  instead of relying on a single central party to adhere to the requirements. Through a distributed protocol involving numerous parties, we ensure the setup affords the intended security and privacy assurances. Even if only one party follows the protocol honestly, the final setup remains reliable. Refer to this page for more details.
+We adopt a distributed setup process  instead of relying on a single central party to adhere to the requirements. Through a distributed protocol involving numerous parties, we ensure the setup affords the intended security and privacy assurances. Even if only one party follows the protocol honestly, the final setup remains reliable. Refer to [this page](https://sui.io/zklogin) for more details.
 
 ### Who is participating?
 

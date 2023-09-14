@@ -19,7 +19,6 @@ sui-archival.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-config.workspace = true
-shared-crypto.workspace = true
 sui-swarm-config.workspace = true
 
 mysten-network.workspace = true

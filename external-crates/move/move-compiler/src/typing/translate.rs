@@ -10,7 +10,10 @@ use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
     editions::Flavor,
-    expansion::ast::{AttributeName_, Fields, Friend, ModuleIdent, Value_, Visibility},
+    expansion::ast::{
+        AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
+        ModuleIdent, ModuleIdent_, Value_, Visibility,
+    },
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
@@ -86,6 +89,10 @@ fn modules(
             .expect("ICE compiler added duplicate friends to public(package) friend list");
     }
 
+    for (_, mident, mdef) in &typed_modules {
+        gen_unused_warnings(context, mident, mdef);
+    }
+
     typed_modules
 }
 
@@ -95,8 +102,6 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_script_constants.is_none());
-    assert!(context.called_fns.is_empty());
-    assert!(context.new_friends.is_empty());
 
     context.current_module = Some(ident);
     let N::ModuleDefinition {
@@ -114,6 +119,7 @@ fn module(
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
+    process_attributes(context, &attributes);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
@@ -129,12 +135,8 @@ fn module(
         constants,
         functions,
     };
-    gen_unused_warnings(context, &typed_module);
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
-    // reset called functions set so that it's ready to be be populated with values from
-    // a single module only
-    context.called_fns.clear();
     (typed_module, new_friends)
 }
 
@@ -202,6 +204,7 @@ fn function(
     assert!(context.constraints.is_empty());
     context.reset_for_module_item();
     context.current_function = Some(name);
+    process_attributes(context, &attributes);
     function_signature(context, &signature);
     if is_script {
         let mk_msg = || {
@@ -300,6 +303,8 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         value: nvalue,
     } = nconstant;
     context.env.add_warning_filter_scope(warning_filter.clone());
+
+    process_attributes(context, &attributes);
 
     // Don't need to add base type constraint, as it is checked in `check_valid_constant::signature`
     let mut signature = core::instantiate(context, signature);
@@ -1241,6 +1246,13 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
 
         NE::Constant(m, c) => {
             let ty = core::make_constant_type(context, eloc, &m, &c);
+            if let Some(mident) = m {
+                context
+                    .used_module_members
+                    .entry(mident.value)
+                    .or_insert_with(BTreeSet::new)
+                    .insert(c.value());
+            }
             (ty, TE::Constant(m, c))
         }
 
@@ -2102,9 +2114,11 @@ fn module_call(
         parameter_types: params_ty_list,
         acquires,
     };
-    if context.is_current_module(&m) {
-        context.called_fns.insert(f.value());
-    }
+    context
+        .used_module_members
+        .entry(m.value)
+        .or_insert_with(BTreeSet::new)
+        .insert(f.value());
     (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
 }
 
@@ -2319,11 +2333,37 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
 }
 
 //**************************************************************************************************
+// Utils
+//**************************************************************************************************
+
+fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
+    for (_, _, attr) in all_attributes {
+        match &attr.value {
+            Attribute_::Name(_) => (),
+            Attribute_::Parameterized(_, attrs) => process_attributes(context, attrs),
+            Attribute_::Assigned(_, val) => {
+                let AttributeValue_::ModuleAccess(mod_access) = &val.value else {
+                    continue;
+                };
+                if let ModuleAccess_::ModuleAccess(mident, name) = mod_access.value {
+                    // conservatively assume that each `ModuleAccess` refers to a constant name
+                    context
+                        .used_module_members
+                        .entry(mident.value)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(name.value);
+                }
+            }
+        }
+    }
+}
+
+//**************************************************************************************************
 // Module-wide warnings
 //**************************************************************************************************
 
-/// Generates warnings for unused (private) functions.
-fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
+/// Generates warnings for unused (private) functions and unused constants.
+fn gen_unused_warnings(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
@@ -2335,6 +2375,22 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
     context
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
+
+    for (loc, name, c) in &mdef.constants {
+        context
+            .env
+            .add_warning_filter_scope(c.warning_filter.clone());
+
+        let members = context.used_module_members.get(mident);
+        if members.is_none() || !members.unwrap().contains(name) {
+            let msg = format!("The constant '{name}' is never used. Consider removing it.");
+            context
+                .env
+                .add_diag(diag!(UnusedItem::Constant, (loc, msg)))
+        }
+
+        context.env.pop_warning_filter_scope();
+    }
 
     for (loc, name, fun) in &mdef.functions {
         if fun.attributes.iter().any(|(_, n, _)| {
@@ -2350,9 +2406,11 @@ fn gen_unused_warnings(context: &mut Context, mdef: &T::ModuleDefinition) {
         context
             .env
             .add_warning_filter_scope(fun.warning_filter.clone());
-        if !context.called_fns.contains(name)
-            && fun.entry.is_none()
+
+        let members = context.used_module_members.get(mident);
+        if fun.entry.is_none()
             && matches!(fun.visibility, Visibility::Internal)
+            && (members.is_none() || !members.unwrap().contains(name))
         {
             // TODO: postponing handling of friend functions until we decide what to do with them
             // vis-a-vis ideas around package-private
