@@ -9,7 +9,6 @@ edition = "2021"
 [dependencies]
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 anyhow.workspace = true
 tokio = { workspace = true, features = ["full"] }
 serde.workspace = true

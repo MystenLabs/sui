@@ -6186,6 +6186,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6215,6 +6216,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6232,6 +6234,7 @@ dependencies = [
  "serde-reflection",
  "serde_json",
  "shared-crypto",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6266,6 +6269,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6296,6 +6300,7 @@ dependencies = [
  "tokio",
  "tower",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6340,6 +6345,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber 0.3.16",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6390,6 +6396,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6411,6 +6418,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6443,6 +6451,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6489,6 +6498,7 @@ dependencies = [
  "tonic-build",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6531,6 +6541,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9534,6 +9545,7 @@ dependencies = [
  "tokio",
  "tracing",
  "unescape",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9561,6 +9573,7 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9588,6 +9601,7 @@ dependencies = [
  "sui-types",
  "sui-verifier-suivm",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9997,6 +10011,7 @@ name = "sui-enum-compat-util"
 version = "0.1.0"
 dependencies = [
  "serde_yaml 0.8.26",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10021,6 +10036,7 @@ dependencies = [
  "sui-verifier-latest",
  "sui-verifier-suivm",
  "sui-verifier-v0",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10034,6 +10050,7 @@ dependencies = [
  "thiserror",
  "toml 0.7.4",
  "toml_edit 0.19.10",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10092,6 +10109,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10107,6 +10125,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10125,6 +10144,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10152,6 +10172,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10182,6 +10203,7 @@ dependencies = [
  "tower",
  "tracing",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10229,6 +10251,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10248,6 +10271,7 @@ dependencies = [
  "sui-move-build",
  "sui-types",
  "test-fuzz",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10297,6 +10321,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10332,6 +10357,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10358,6 +10384,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10376,6 +10403,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tiny-bip39",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10398,6 +10426,7 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10408,6 +10437,7 @@ dependencies = [
  "once_cell",
  "sui-proc-macros",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10429,6 +10459,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10493,6 +10524,7 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10512,6 +10544,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10531,6 +10564,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10550,6 +10584,7 @@ dependencies = [
  "smallvec",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10583,6 +10618,7 @@ dependencies = [
  "tonic-build",
  "tower",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10630,6 +10666,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10654,6 +10691,7 @@ dependencies = [
  "sui-types",
  "tokio",
  "versions",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10666,6 +10704,7 @@ dependencies = [
  "quote 1.0.33",
  "syn 1.0.107",
  "unescape",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10692,6 +10731,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10703,6 +10743,7 @@ dependencies = [
  "quote 1.0.33",
  "sui-enum-compat-util",
  "syn 2.0.32",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10715,6 +10756,7 @@ dependencies = [
  "serde_with",
  "sui-protocol-config-macros",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10724,6 +10766,7 @@ dependencies = [
  "proc-macro2 1.0.66",
  "quote 1.0.33",
  "syn 1.0.107",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10765,6 +10808,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10807,6 +10851,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10821,6 +10866,7 @@ dependencies = [
  "sui-core",
  "sui-types",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10863,6 +10909,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10892,6 +10939,7 @@ dependencies = [
  "tokio",
  "tonic",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10926,6 +10974,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10948,6 +10997,7 @@ dependencies = [
  "tempfile",
  "tower",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10973,6 +11023,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -10998,6 +11049,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11032,6 +11084,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11081,6 +11134,7 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
+ "workspace-hack",
  "zstd",
 ]
 
@@ -11110,6 +11164,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11134,6 +11189,7 @@ dependencies = [
  "tokio",
  "tonic-health",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11159,6 +11215,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11169,6 +11226,7 @@ dependencies = [
  "serde",
  "sui-core",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11182,6 +11240,7 @@ dependencies = [
  "sui-move-build",
  "sui-sdk",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11198,6 +11257,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11218,6 +11278,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.24.0",
  "tower-layer",
+ "workspace-hack",
  "x509-parser",
 ]
 
@@ -11260,6 +11321,7 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11276,6 +11338,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11288,6 +11351,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11323,6 +11387,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11382,6 +11447,7 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11396,6 +11462,7 @@ dependencies = [
  "move-compiler",
  "move-package",
  "sui-move-build",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11409,6 +11476,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11422,6 +11490,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11430,6 +11499,7 @@ version = "0.1.0"
 dependencies = [
  "datatest-stable",
  "sui-transactional-test-runner",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11444,6 +11514,7 @@ dependencies = [
  "move-vm-config",
  "sui-protocol-config",
  "sui-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11605,6 +11676,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber 0.3.16",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -11704,6 +11776,7 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12366,6 +12439,7 @@ dependencies = [
  "sui-types",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12468,6 +12542,7 @@ dependencies = [
  "tracing",
  "typed-store-derive",
  "uint",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -12482,6 +12557,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "typed-store",
+ "workspace-hack",
 ]
 
 [[package]]

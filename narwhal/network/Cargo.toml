@@ -24,6 +24,8 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
