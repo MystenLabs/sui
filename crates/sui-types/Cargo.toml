@@ -35,7 +35,6 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 indexmap.workspace = true
 derivative.workspace = true
-parking_lot.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

@@ -11,24 +11,15 @@ edition = "2021"
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
-backoff.workspace = true
 bcs.workspace = true
-chrono.workspace = true
 clap.workspace = true
 csv.workspace = true
-futures.workspace = true
-itertools.workspace = true
 move-core-types.workspace = true
 prometheus.workspace = true
 serde.workspace = true
-serde_json.workspace = true
-regex.workspace = true
-tap.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tokio-stream.workspace = true
-url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
@@ -37,8 +28,6 @@ sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
-
-cached.workspace = true
 
 [dev-dependencies]
 

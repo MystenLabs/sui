@@ -43,7 +43,6 @@ sui-kvstore.workspace = true
 mysten-metrics.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true
-narwhal-types.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true

@@ -10,13 +10,10 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
 criterion = "0.3.4"
 once_cell = "1.7.2"
-proptest = "1.0.0"
 criterion-cpu-time = "0.1.0"
 
-move-bytecode-verifier = { path = "../move-bytecode-verifier" }
 move-core-types = { path = "../move-core/types" }
 move-compiler = { path = "../move-compiler" }
 move-vm-runtime = { path = "../move-vm/runtime" }

@@ -9,13 +9,11 @@ publish = false
 
 [dependencies]
 tempfile.workspace = true
-dashmap.workspace = true
 fastcrypto.workspace = true
 mysten-common.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 tracing.workspace = true
-crypto = { path = "../crypto", package = "narwhal-crypto" }
 types = { path = "../types", package = "narwhal-types" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros.workspace = true
