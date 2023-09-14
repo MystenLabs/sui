@@ -35,7 +35,11 @@ use crate::metrics::IndexerMetrics;
 use crate::types_v2::IndexedPackage;
 use crate::types_v2::{IndexedObjectChange, IndexerResult};
 
-/// An in-mem cache for packages.
+/// An in-mem cache for packages. It has static lifetime.
+/// It's needed because we batch process checkpoints, it's possible that
+/// when a package is looked up, it has not been persisted in the database
+/// yet.
+/// To avoid bloating memory, we GC packages that are older than the committed checkpoints.
 pub struct InMemPackageCache {
     packages: HashMap<(ObjectID, String), (Arc<CompiledModule>, CheckpointSequenceNumber)>,
 }
