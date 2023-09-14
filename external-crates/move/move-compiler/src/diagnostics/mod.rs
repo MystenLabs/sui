@@ -11,8 +11,8 @@ use crate::{
         WellKnownFilterName,
     },
     shared::{
-        ast_debug::AstDebug, FILTER_UNUSED_FUNCTION, FILTER_UNUSED_STRUCT_FIELD,
-        FILTER_UNUSED_TYPE_PARAMETER,
+        ast_debug::AstDebug, FILTER_UNUSED_CONST, FILTER_UNUSED_FUNCTION,
+        FILTER_UNUSED_STRUCT_FIELD, FILTER_UNUSED_TYPE_PARAMETER,
     },
 };
 use codespan_reporting::{
@@ -507,6 +507,7 @@ impl UnprefixedWarningFilters {
         let unused_fun_info = UnusedItem::Function.into_info();
         let unused_field_info = UnusedItem::StructField.into_info();
         let unused_fn_tparam_info = UnusedItem::FunTypeParam.into_info();
+        let unused_const_info = UnusedItem::Constant.into_info();
         let filtered_codes = BTreeMap::from([
             (
                 (unused_fun_info.category(), unused_fun_info.code()),
@@ -522,6 +523,10 @@ impl UnprefixedWarningFilters {
                     unused_fn_tparam_info.code(),
                 ),
                 Some(FILTER_UNUSED_TYPE_PARAMETER),
+            ),
+            (
+                (unused_const_info.category(), unused_const_info.code()),
+                Some(FILTER_UNUSED_CONST),
             ),
         ]);
         Self::Specified {

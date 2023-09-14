@@ -5,7 +5,7 @@
 use crate::{
     diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructDefinition, StructTypeParameter,
         TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, Var,
@@ -88,14 +88,14 @@ pub struct Context<'env> {
 
     loop_info: LoopInfo,
 
-    /// collects all called functions in the current module
-    pub called_fns: BTreeSet<Symbol>,
-
     /// collects all friends that should be added over the course of 'public(package)' calls
     /// structured as (defining module, new friend, location) where `new friend` is usually the
     /// context's current module. Note there may be more than one location in practice, but
     /// tracking a single one is sufficient for error reporting.
     pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
+    /// collects all used module members (functions and constants) but it's a superset of these in
+    /// that it may contain other identifiers that do not in fact represent a function or a constant
+    pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
 macro_rules! program_info {
@@ -218,8 +218,8 @@ impl<'env> Context<'env> {
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
             modules,
             env,
-            called_fns: BTreeSet::new(),
             new_friends: BTreeSet::new(),
+            used_module_members: BTreeMap::new(),
         }
     }
 
