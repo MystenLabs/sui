@@ -24,6 +24,8 @@ prometheus.workspace = true
 scopeguard.workspace = true
 tap.workspace = true
 ttl_cache.workspace = true
+eyre.workspace = true
+rocksdb.workspace = true
 tempfile.workspace = true
 parking_lot.workspace = true
 
@@ -40,6 +42,7 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 shared-crypto.workspace = true
 async-recursion.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 test-cluster.workspace = true

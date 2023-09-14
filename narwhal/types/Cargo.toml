@@ -14,8 +14,11 @@ derive_builder.workspace = true
 enum_dispatch.workspace = true
 futures.workspace = true
 indexmap.workspace = true
+mockall.workspace = true
 prometheus.workspace = true
+proptest.workspace = true
 proptest-derive.workspace = true
+prost.workspace = true
 rand.workspace = true
 roaring.workspace = true
 serde.workspace = true
@@ -36,6 +39,7 @@ once_cell.workspace = true
 store = { path = "../../crates/typed-store", package = "typed-store" }
 mysten-metrics.workspace = true
 mysten-common.workspace = true
+mysten-network.workspace = true
 mysten-util-mem.workspace = true
 
 [dev-dependencies]
