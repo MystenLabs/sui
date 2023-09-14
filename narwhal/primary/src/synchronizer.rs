@@ -426,10 +426,12 @@ impl Synchronizer {
                         .certificates_aggregators
                         .lock()
                         .retain(|k, _| k > &gc_round);
-                    // Accept certificates at and below gc round + 1, if there is any.
+                    // Accept certificates at and below gc round, if there is any.
                     let mut state = inner.state.lock().await;
                     while let Some(((round, digest), suspended_cert)) = state.run_gc_once(gc_round)
                     {
+                        assert!(round <= gc_round, "Never gc certificates above gc_round as this can lead to missing causal history in DAG");
+
                         let suspended_children_certs = state.accept_children(round, digest);
                         // Acceptance must be in causal order.
                         for suspended in suspended_cert
