@@ -5,8 +5,8 @@ use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
 
 use super::big_int::BigInt;
+use super::digest::TransactionDigest;
 use super::name_service::NameService;
-use super::tx_digest::TransactionDigest;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,

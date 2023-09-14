@@ -8,10 +8,10 @@ use crate::context_data::{
 use super::{
     address::Address,
     base64::Base64,
+    digest::TransactionDigest,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
-    tx_digest::TransactionDigest,
 };
 use async_graphql::*;
 use sui_json_rpc_types::{
