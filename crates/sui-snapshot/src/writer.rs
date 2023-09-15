@@ -36,7 +36,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::debug;
 
-/// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and one REFERENCE file
+/// LiveObjectSetWriterV1 writes live object set. It creates multiple *.obj files and *.ref file
 struct LiveObjectSetWriterV1 {
     dir_path: PathBuf,
     bucket_num: u32,
@@ -57,7 +57,7 @@ impl LiveObjectSetWriterV1 {
         sender: Sender<FileMetadata>,
     ) -> Result<Self> {
         let (n, obj_file, part_num) = Self::next_object_file(dir_path.clone(), bucket_num)?;
-        let ref_file = Self::ref_file(dir_path.clone(), bucket_num)?;
+        let ref_file = Self::ref_file(dir_path.clone(), bucket_num, part_num)?;
         Ok(LiveObjectSetWriterV1 {
             dir_path,
             bucket_num,
@@ -122,9 +122,9 @@ impl LiveObjectSetWriterV1 {
         }
         Ok(max + 1)
     }
-    fn ref_file(dir_path: PathBuf, bucket_num: u32) -> Result<File> {
-        let ref_path = dir_path.join(format!("REFERENCE-{bucket_num}"));
-        let ref_tmp_path = dir_path.join(format!("REFERENCE-{bucket_num}.tmp"));
+    fn ref_file(dir_path: PathBuf, bucket_num: u32, part_num: u32) -> Result<File> {
+        let ref_path = dir_path.join(format!("{bucket_num}_{part_num}.ref"));
+        let ref_tmp_path = dir_path.join(format!("{bucket_num}_{part_num}.ref.tmp"));
         let mut f = File::create(ref_tmp_path.clone())?;
         f.rewind()?;
         let mut metab = [0u8; MAGIC_BYTES];
@@ -162,13 +162,15 @@ impl LiveObjectSetWriterV1 {
         self.ref_wbuf.get_ref().sync_data()?;
         let off = self.ref_wbuf.get_ref().stream_position()?;
         self.ref_wbuf.get_ref().set_len(off)?;
-        let file_path = self.dir_path.join(format!("REFERENCE-{}", self.bucket_num));
+        let file_path = self
+            .dir_path
+            .join(format!("{}_{}.ref", self.bucket_num, self.current_part_num));
         let file_metadata = create_file_metadata(
             &file_path,
             self.file_compression,
             FileType::Reference,
             self.bucket_num,
-            0,
+            self.current_part_num,
         )?;
         self.files.push(file_metadata.clone());
         if let Some(sender) = &self.sender {
@@ -178,12 +180,20 @@ impl LiveObjectSetWriterV1 {
     }
     fn cut(&mut self) -> Result<()> {
         self.finalize()?;
-        let delim = [0u8; OBJECT_REF_BYTES];
-        self.ref_wbuf.write_all(&delim)?;
         let (n, f, part_num) = Self::next_object_file(self.dir_path.clone(), self.bucket_num)?;
         self.n = n;
         self.current_part_num = part_num;
         self.wbuf = BufWriter::new(f);
+        Ok(())
+    }
+    fn cut_reference_file(&mut self) -> Result<()> {
+        self.finalize_ref()?;
+        let f = Self::ref_file(
+            self.dir_path.clone(),
+            self.bucket_num,
+            self.current_part_num,
+        )?;
+        self.ref_wbuf = BufWriter::new(f);
         Ok(())
     }
     fn write_object(&mut self, object: &LiveObject) -> Result<()> {
@@ -194,6 +204,7 @@ impl LiveObjectSetWriterV1 {
         let cut_new_part_file = (self.n + blob_size) > FILE_MAX_BYTES;
         if cut_new_part_file {
             self.cut()?;
+            self.cut_reference_file()?;
         }
         self.n += blob.write(&mut self.wbuf)?;
         Ok(())
@@ -261,9 +272,12 @@ impl StateSnapshotWriterV1 {
         })
     }
 
-    pub async fn write(self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
+    pub async fn write(
+        self,
+        epoch: u64,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
+    ) -> Result<()> {
         let system_state_object = get_sui_system_state(&perpetual_db)?;
-        let epoch = system_state_object.epoch();
 
         let protocol_version = system_state_object.protocol_version();
         let chain_identifier = CHAIN_IDENTIFIER

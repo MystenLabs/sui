@@ -133,7 +133,8 @@ impl StateSnapshotUploader {
                     &path_to_filesystem(self.db_checkpoint_path.clone(), db_path)?,
                     None,
                 ));
-                state_snapshot_writer.write(db).await?;
+                state_snapshot_writer.write(*epoch, db).await?;
+                info!("State snapshot creation successful for epoch: {}", *epoch);
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
                 let success_marker = db_path.child(SUCCESS_MARKER);
