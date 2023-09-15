@@ -17,21 +17,19 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use json_to_table::json_to_table;
-use move_bytecode_verifier::meter::Scope;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
 use sui_move::build::resolve_lock_file_path;
 use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
 use sui_types::{dynamic_field::DynamicFieldInfo, error::SuiError};
-use sui_verifier::meter::SuiVerifierMeter;
 
 use shared_crypto::intent::Intent;
+use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     DynamicFieldPage, SuiData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
@@ -790,32 +788,25 @@ impl SuiClientCommands {
 
                 let package = compile_package_simple(build_config, package_path)?;
                 let modules: Vec<_> = package.get_modules().cloned().collect();
-                let mut metered_verifier_config =
-                    default_verifier_config(&protocol_config, true /* enable metering */);
-                // These are the actual system limits
-                let fun_limits = metered_verifier_config.max_per_fun_meter_units.unwrap();
-                let mod_limits = metered_verifier_config.max_per_mod_meter_units.unwrap();
-                // We want the test to run unmetered so we can know the true limit
-                // Unset the limits
-                metered_verifier_config.max_per_fun_meter_units = None;
-                metered_verifier_config.max_per_mod_meter_units = None;
-                let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
-                println!("Running bytecode verifier for {} modules", modules.len());
-                run_metered_move_bytecode_verifier(
-                    &modules,
-                    &metered_verifier_config,
-                    &mut meter,
-                    &bytecode_verifier_metrics,
-                )?;
-                // Get the actual meter ticks used
-                let function = meter.get_usage(Scope::Function);
-                let module = meter.get_usage(Scope::Module);
 
+                let mut verifier =
+                    sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
+                let overrides = VerifierOverrides::new(None, None);
+                println!("Running bytecode verifier for {} modules", modules.len());
+                let verifier_values = verifier.meter_compiled_modules_with_overrides(
+                    &modules,
+                    &protocol_config,
+                    &overrides,
+                )?;
                 SuiClientCommandResult::VerifyBytecodeMeter {
-                    max_module_ticks: mod_limits,
-                    max_function_ticks: fun_limits,
-                    used_function_ticks: function,
-                    used_module_ticks: module,
+                    max_module_ticks: verifier_values
+                        .max_per_mod_meter_current
+                        .unwrap_or(u128::MAX),
+                    max_function_ticks: verifier_values
+                        .max_per_fun_meter_current
+                        .unwrap_or(u128::MAX),
+                    used_function_ticks: verifier_values.fun_meter_units_result,
+                    used_module_ticks: verifier_values.mod_meter_units_result,
                 }
             }
 
