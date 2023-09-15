@@ -331,6 +331,18 @@ where
                 debug!(?tx_digest, ?errors, "Retryable transaction error");
                 Err(None)
             }
+
+            Err(
+                AggregatorProcessTransactionError::TxAlreadyFinalizedWithDifferentUserSignatures,
+            ) => {
+                debug!(
+                    ?tx_digest,
+                    "Transaction is already finalized with different user signatures"
+                );
+                Err(Some(
+                    QuorumDriverError::TxAlreadyFinalizedWithDifferentUserSignatures,
+                ))
+            }
         }
     }
 
