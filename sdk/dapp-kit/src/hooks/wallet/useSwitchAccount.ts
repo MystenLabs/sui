@@ -4,9 +4,10 @@
 import type { WalletAccount } from '@mysten/wallet-standard';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
-import { useWalletContext } from '../../components/WalletProvider.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletAccountNotFoundError, WalletNotConnectedError } from '../../errors/walletErrors.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
+import { useWalletStore } from './useWalletStore.js';
 
 type SwitchAccountArgs = {
 	account: WalletAccount;
@@ -31,7 +32,8 @@ export function useSwitchAccount({
 	mutationKey,
 	...mutationOptions
 }: UseSwitchAccountMutationOptions = {}) {
-	const { currentWallet, dispatch } = useWalletContext();
+	const currentWallet = useCurrentWallet();
+	const setAccountSwitched = useWalletStore((state) => state.setAccountSwitched);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.switchAccount(mutationKey),
@@ -49,7 +51,7 @@ export function useSwitchAccount({
 				);
 			}
 
-			dispatch({ type: 'wallet-account-switched', payload: accountToSelect });
+			setAccountSwitched(accountToSelect);
 		},
 		...mutationOptions,
 	});

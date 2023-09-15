@@ -9,7 +9,6 @@ use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
-use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -43,7 +42,7 @@ pub struct TemporaryStore<'backing> {
     // in the input objects. They will be fetched from the backing store.
     // Also used for fetching the backing parent_sync to get the last known version for wrapped
     // objects
-    store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+    store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
@@ -71,7 +70,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// Creates a new store associated with an authority store, and populates it with
     /// initial objects.
     pub fn new(
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        store: &'backing dyn BackingStore,
         input_objects: InputObjects,
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,

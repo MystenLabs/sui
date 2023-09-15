@@ -5,8 +5,10 @@ import { toB64 } from '@mysten/sui.js/utils';
 import { useEffect, useMemo } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
+import { throttle } from 'throttle-debounce';
 import { useSuiLedgerClient } from './components/ledger/SuiLedgerClientProvider';
 import { useAccounts } from './hooks/useAccounts';
+import { useAutoLockMinutes } from './hooks/useAutoLockMinutes';
 import { useBackgroundClient } from './hooks/useBackgroundClient';
 import { useInitialPageView } from './hooks/useInitialPageView';
 
@@ -17,6 +19,8 @@ import { StorageMigrationPage } from './pages/StorageMigrationPage';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
 import { BackupMnemonicPage } from './pages/accounts/BackupMnemonicPage';
+import { ExportAccountPage } from './pages/accounts/ExportAccountPage';
+import { ExportPassphrasePage } from './pages/accounts/ExportPassphrasePage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
 import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsPage';
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
@@ -63,6 +67,8 @@ const HIDDEN_MENU_PATHS = [
 	'/send/select',
 	'/apps/disconnectapp',
 ];
+
+const notifyUserActiveInterval = 15 * 1000; // 15 seconds
 
 const App = () => {
 	const dispatch = useAppDispatch();
@@ -125,6 +131,24 @@ const App = () => {
 			}
 		})();
 	}, [allLedgerWithoutPublicKey, suiLedgerClient, backgroundClient, connectToLedger]);
+	const { data } = useAutoLockMinutes();
+	const autoLockEnabled = !!data;
+	// use mouse move and key down events to detect user activity
+	// this is used to adjust the auto-lock timeout
+	useEffect(() => {
+		if (!autoLockEnabled) {
+			return;
+		}
+		const sendUpdateThrottled = throttle(notifyUserActiveInterval, () => {
+			backgroundClient.notifyUserActive();
+		});
+		document.addEventListener('mousemove', sendUpdateThrottled);
+		document.addEventListener('keydown', sendUpdateThrottled);
+		return () => {
+			document.removeEventListener('mousemove', sendUpdateThrottled);
+			document.removeEventListener('keydown', sendUpdateThrottled);
+		};
+	}, [backgroundClient, autoLockEnabled]);
 
 	const storageMigration = useStorageMigrationStatus();
 	if (storageMigration.isLoading || !storageMigration?.data) {
@@ -172,6 +196,8 @@ const App = () => {
 					<Route path=":requestID" element={<QredoConnectInfoPage />} />
 					<Route path=":id/select" element={<SelectQredoAccountsPage />} />
 				</Route>
+				<Route path="export/:accountID" element={<ExportAccountPage />} />
+				<Route path="export/passphrase/:accountSourceID" element={<ExportPassphrasePage />} />
 			</Route>
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />

@@ -1199,7 +1199,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.database.clone(),
+                &self.database,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1300,7 +1300,7 @@ impl AuthorityState {
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                self.database.clone(),
+                &self.database,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
@@ -1420,7 +1420,7 @@ impl AuthorityState {
         .expect("Creating an executor should not fail here");
         let expensive_checks = false;
         let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
-            self.database.clone(),
+            &self.database,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             expensive_checks,

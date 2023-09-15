@@ -9,10 +9,10 @@ import type {
 	WalletAccount,
 	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
-import { useWalletContext } from '../../components/WalletProvider.js';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
-import { setMostRecentWalletConnectionInfo } from '../../utils/walletUtils.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
+import { useWalletStore } from './useWalletStore.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
 
 type ConnectWalletArgs = {
 	/** The wallet to connect to. */
@@ -36,7 +36,8 @@ export function useConnectWallet({
 	mutationKey,
 	...mutationOptions
 }: UseConnectWalletMutationOptions = {}) {
-	const { currentWallet, storageAdapter, storageKey, dispatch } = useWalletContext();
+	const currentWallet = useCurrentWallet();
+	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
@@ -49,31 +50,11 @@ export function useConnectWallet({
 				);
 			}
 
-			dispatch({ type: 'wallet-connection-status-updated', payload: 'connecting' });
+			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
+			const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
 
-			try {
-				const connectResult = await wallet.features['standard:connect'].connect(
-					standardConnectInput,
-				);
-				const selectedAccount = getSelectedAccount(connectResult.accounts, accountAddress);
-
-				dispatch({
-					type: 'wallet-connected',
-					payload: { wallet, currentAccount: selectedAccount },
-				});
-
-				await setMostRecentWalletConnectionInfo({
-					storageAdapter,
-					storageKey,
-					walletName: wallet.name,
-					accountAddress: selectedAccount?.address,
-				});
-
-				return connectResult;
-			} catch (error) {
-				dispatch({ type: 'wallet-connection-status-updated', payload: 'disconnected' });
-				throw error;
-			}
+			setWalletConnected(wallet, selectedAccount);
+			return connectResult;
 		},
 		...mutationOptions,
 	});

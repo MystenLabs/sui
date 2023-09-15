@@ -90,8 +90,8 @@ mod checked {
     }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-    pub fn execute_transaction_to_effects<Mode: ExecutionMode, 'backing>(
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+    pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
         input_objects: InputObjects,
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -215,7 +215,7 @@ mod checked {
     }
 
     pub fn execute_genesis_state_update(
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         move_vm: &Arc<MoveVM>,

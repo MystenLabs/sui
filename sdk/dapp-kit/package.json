@@ -76,7 +76,8 @@
 	},
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
-		"@mysten/wallet-standard": "workspace:*"
+		"@mysten/wallet-standard": "workspace:*",
+		"zustand": "^4.4.1"
 	},
 	"peerDependencies": {
 		"@tanstack/react-query": "^4.0.0",

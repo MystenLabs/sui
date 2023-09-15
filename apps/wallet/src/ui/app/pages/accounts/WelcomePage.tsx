@@ -39,7 +39,7 @@ export function WelcomePage() {
 						</Text>
 					</div>
 				</div>
-				<div className="w-full h-full mt-3.5 flex justify-center">
+				<div className="w-full h-full mt-3.5 flex justify-center items-center">
 					<WelcomeSplash role="img" />
 				</div>
 				<div className="flex flex-col gap-3 mt-3.5 w-full items-center">

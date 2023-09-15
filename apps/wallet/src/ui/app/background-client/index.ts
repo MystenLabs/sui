@@ -3,7 +3,7 @@
 
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
 import { type QueryKey } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
@@ -50,12 +50,6 @@ const entitiesToClientQueryKeys: Record<UIAccessibleEntityType, QueryKey> = {
 	accountSources: accountSourcesQueryKey,
 };
 
-/**
- * The duration in milliseconds that the UI sends status updates (active/inactive) to the background service.
- * Currently used to postpone auto locking keyring when the app is active.
- */
-const APP_STATUS_UPDATE_INTERVAL = 20 * 1000;
-
 export class BackgroundClient {
 	private _portStream: PortStream | null = null;
 	private _dispatch: AppDispatch | null = null;
@@ -68,8 +62,6 @@ export class BackgroundClient {
 		this._initialized = true;
 		this._dispatch = dispatch;
 		this.createPortStream();
-		this.sendAppStatus();
-		this.setupAppStatusUpdateInterval();
 		return Promise.all([
 			this.sendGetPermissionRequests(),
 			this.sendGetTransactionRequests(),
@@ -200,39 +192,6 @@ export class BackgroundClient {
 		);
 	}
 
-	public getEntropy(password?: string) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'getEntropy'>>({
-					type: 'keyring',
-					method: 'getEntropy',
-					args: password,
-					return: undefined,
-				}),
-			).pipe(
-				take(1),
-				map(({ payload }) => {
-					if (isKeyringPayload(payload, 'getEntropy') && payload.return) {
-						return payload.return;
-					}
-					throw new Error('Mnemonic not found');
-				}),
-			),
-		);
-	}
-
-	public setKeyringLockTimeout(timeout: number) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'setLockTimeout'>>({
-					type: 'keyring',
-					method: 'setLockTimeout',
-					args: { timeout },
-				}),
-			).pipe(take(1)),
-		);
-	}
-
 	public signData(addressOrID: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
@@ -313,35 +272,23 @@ export class BackgroundClient {
 		);
 	}
 
-	public exportAccount(password: string, accountAddress: string) {
+	public exportAccountKeyPair(args: MethodPayload<'getAccountKeyPair'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'exportAccount'>>({
-					type: 'keyring',
-					method: 'exportAccount',
-					args: { password, accountAddress },
+				createMessage<MethodPayload<'getAccountKeyPair'>>({
+					type: 'method-payload',
+					method: 'getAccountKeyPair',
+					args,
 				}),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
-					if (isKeyringPayload(payload, 'exportAccount') && payload.return) {
-						return payload.return.keyPair;
+					if (isMethodPayload(payload, 'getAccountKeyPairResponse')) {
+						return payload.args;
 					}
 					throw new Error('Error unknown response for export account message');
 				}),
 			),
-		);
-	}
-
-	public importPrivateKey(password: string, keyPair: ExportedKeypair) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'importPrivateKey'>>({
-					type: 'keyring',
-					method: 'importPrivateKey',
-					args: { password, keyPair },
-				}),
-			).pipe(take(1)),
 		);
 	}
 
@@ -576,13 +523,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public getAccountSourceEntropy(accountSourceID: string) {
+	public getAccountSourceEntropy(args: MethodPayload<'getAccountSourceEntropy'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<MethodPayload<'getAccountSourceEntropy'>>({
 					type: 'method-payload',
 					method: 'getAccountSourceEntropy',
-					args: { accountSourceID },
+					args,
 				}),
 			).pipe(
 				take(1),
@@ -596,20 +543,47 @@ export class BackgroundClient {
 		);
 	}
 
-	private setupAppStatusUpdateInterval() {
-		setInterval(() => {
-			this.sendAppStatus();
-		}, APP_STATUS_UPDATE_INTERVAL);
+	public getAutoLockMinutes() {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'getAutoLockMinutes'>>({
+					type: 'method-payload',
+					method: 'getAutoLockMinutes',
+					args: {},
+				}),
+			).pipe(
+				take(1),
+				map(({ payload }) => {
+					if (isMethodPayload(payload, 'getAutoLockMinutesResponse')) {
+						return payload.args.minutes;
+					}
+					throw new Error('Unexpected response type');
+				}),
+			),
+		);
 	}
 
-	private sendAppStatus() {
-		const active = document.visibilityState === 'visible';
-		this.sendMessage(
-			createMessage<KeyringPayload<'appStatusUpdate'>>({
-				type: 'keyring',
-				method: 'appStatusUpdate',
-				args: { active },
-			}),
+	public setAutoLockMinutes(args: MethodPayload<'setAutoLockMinutes'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'setAutoLockMinutes'>>({
+					type: 'method-payload',
+					method: 'setAutoLockMinutes',
+					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public notifyUserActive() {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'notifyUserActive'>>({
+					type: 'method-payload',
+					method: 'notifyUserActive',
+					args: {},
+				}),
+			).pipe(take(1)),
 		);
 	}
 
