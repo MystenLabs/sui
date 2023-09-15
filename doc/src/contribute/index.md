@@ -14,7 +14,7 @@ To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 
 To report an issue with Sui, [create an issue](https://github.com/MystenLabs/sui/issues/new/choose) in the GitHub repo. Click **Get started** to open a template for the type of issue to create.
 
-## Install Sui to contribute
+## Fork Sui to contribute
 
 To contribute to Sui source code or documentation, you need only a GitHub account. You can commit updates and then submit a PR directly from the Github website, or create a fork of the repo to your local environment and use your favorite tools to make changes. Always submit PRs to the `main` branch.
 
