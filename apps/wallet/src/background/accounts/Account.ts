@@ -5,9 +5,11 @@ import {
 	type SerializedSignature,
 	toSerializedSignature,
 	type Keypair,
+	type ExportedKeypair,
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 import { accountsEvents } from './events';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { getDB } from '../db';
 import {
 	clearEphemeralValue,
@@ -97,6 +99,7 @@ export abstract class Account<
 	}
 
 	protected async onUnlocked() {
+		await setupAutoLockAlarm();
 		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: Date.now() });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
@@ -152,6 +155,7 @@ export interface SerializedUIAccount {
 	readonly selected: boolean;
 	readonly nickname: string | null;
 	readonly isPasswordUnlockable: boolean;
+	readonly isKeyPairExportable: boolean;
 }
 
 export interface PasswordUnlockableAccount {
@@ -177,4 +181,17 @@ export interface SigningAccount {
 
 export function isSigningAccount(account: any): account is SigningAccount {
 	return 'signData' in account && 'canSign' in account && account.canSign === true;
+}
+
+export interface KeyPairExportableAccount {
+	readonly exportableKeyPair: true;
+	exportKeyPair(password: string): Promise<ExportedKeypair>;
+}
+
+export function isKeyPairExportableAccount(account: any): account is KeyPairExportableAccount {
+	return (
+		'exportKeyPair' in account &&
+		'exportableKeyPair' in account &&
+		account.exportableKeyPair === true
+	);
 }

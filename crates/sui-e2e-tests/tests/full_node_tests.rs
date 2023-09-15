@@ -1157,9 +1157,6 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    // TODO: delete this - added it to try to pass flaky tests in CI.
-    sleep(Duration::from_millis(500)).await;
-
     let checkpoint_path = test_cluster
         .fullnode_handle
         .sui_node

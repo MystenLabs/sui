@@ -27,9 +27,14 @@ function PageLayout({ forceFullscreen = false, children, className }: PageLayout
 		<UnlockAccountProvider>
 			<Loading loading={guardLoading}>
 				<div
-					className={cl('w-popup-width h-popup-height', st.container, className, {
-						[st.navHidden]: !isNavVisible,
-					})}
+					className={cl(
+						'w-popup-width min-h-popup-minimum max-h-popup-height h-screen',
+						st.container,
+						className,
+						{
+							[st.navHidden]: !isNavVisible,
+						},
+					)}
 				>
 					{children}
 					<div id="overlay-portal-container"></div>

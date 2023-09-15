@@ -16,6 +16,7 @@ import {
 import { accountSourcesEvents } from './events';
 import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { backupDB, getDB } from '../db';
 import { makeUniqueKey } from '../storage-utils';
 import {
@@ -121,9 +122,8 @@ export class MnemonicAccountSource extends AccountSource<
 	}
 
 	async unlock(password: string) {
-		const { encryptedData } = await this.getStoredData();
-		const decryptedData = await decrypt<DataDecrypted>(password, encryptedData);
-		await this.setEphemeralValue(decryptedData);
+		await this.setEphemeralValue(await this.#decryptStoredData(password));
+		await setupAutoLockAlarm();
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 
@@ -143,7 +143,7 @@ export class MnemonicAccountSource extends AccountSource<
 		const derivationPath =
 			typeof derivationPathIndex !== 'undefined'
 				? makeDerivationPath(derivationPathIndex)
-				: await this.getAvailableDerivationPath();
+				: await this.#getAvailableDerivationPath();
 		const keyPair = await this.deriveKeyPair(derivationPath);
 		return MnemonicAccount.createNew({ keyPair, derivationPath, sourceID: this.id });
 	}
@@ -165,8 +165,11 @@ export class MnemonicAccountSource extends AccountSource<
 		};
 	}
 
-	async getEntropy() {
-		const data = await this.getEphemeralValue();
+	async getEntropy(password?: string) {
+		let data = await this.getEphemeralValue();
+		if (password && !data) {
+			data = await this.#decryptStoredData(password);
+		}
 		if (!data) {
 			throw new Error(`Mnemonic account source ${this.id} is locked`);
 		}
@@ -177,7 +180,7 @@ export class MnemonicAccountSource extends AccountSource<
 		return this.getStoredData().then(({ sourceHash }) => sourceHash);
 	}
 
-	private async getAvailableDerivationPath() {
+	async #getAvailableDerivationPath() {
 		const derivationPathMap: Record<string, boolean> = {};
 		for (const anAccount of await getAllAccounts({ sourceID: this.id })) {
 			if (anAccount instanceof MnemonicAccount && (await anAccount.sourceID) === this.id) {
@@ -197,5 +200,10 @@ export class MnemonicAccountSource extends AccountSource<
 			throw new Error('Failed to find next available derivation path');
 		}
 		return derivationPath;
+	}
+
+	async #decryptStoredData(password: string) {
+		const { encryptedData } = await this.getStoredData();
+		return decrypt<DataDecrypted>(password, encryptedData);
 	}
 }

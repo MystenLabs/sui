@@ -8,6 +8,7 @@ import {
 	type PasswordUnlockableAccount,
 	type SerializedUIAccount,
 	type SigningAccount,
+	type KeyPairExportableAccount,
 } from './Account';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
@@ -36,10 +37,11 @@ type SessionStorageData = { keyPair: ExportedKeypair };
 
 export class MnemonicAccount
 	extends Account<MnemonicSerializedAccount, SessionStorageData>
-	implements PasswordUnlockableAccount, SigningAccount
+	implements PasswordUnlockableAccount, SigningAccount, KeyPairExportableAccount
 {
 	readonly unlockType = 'password' as const;
 	readonly canSign = true;
+	readonly exportableKeyPair = true;
 
 	static isOfType(serialized: SerializedAccount): serialized is MnemonicSerializedAccount {
 		return serialized.type === 'mnemonic-derived';
@@ -110,6 +112,7 @@ export class MnemonicAccount
 			selected,
 			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: true,
 		};
 	}
 
@@ -127,6 +130,13 @@ export class MnemonicAccount
 
 	get sourceID() {
 		return this.getCachedData().then(({ sourceID }) => sourceID);
+	}
+
+	async exportKeyPair(password: string): Promise<ExportedKeypair> {
+		const { derivationPath } = await this.getStoredData();
+		const mnemonicSource = await this.#getMnemonicSource();
+		await mnemonicSource.unlock(password);
+		return (await mnemonicSource.deriveKeyPair(derivationPath)).export();
 	}
 
 	async #getKeyPair() {

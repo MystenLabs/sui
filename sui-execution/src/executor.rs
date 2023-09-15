@@ -21,9 +21,9 @@ use sui_types::{
 
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
-    fn execute_transaction_to_effects<'backing>(
+    fn execute_transaction_to_effects(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -49,7 +49,7 @@ pub trait Executor {
 
     fn dev_inspect_transaction(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -75,7 +75,7 @@ pub trait Executor {
 
     fn update_genesis_state(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,

@@ -18,7 +18,7 @@ import { Text } from '_src/ui/app/shared/text';
 
 interface AccountItemProps {
 	name?: string;
-	address: string;
+	accountID: string;
 	icon?: ReactNode;
 	after?: ReactNode;
 	footer?: ReactNode;
@@ -39,7 +39,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			disabled,
 			icon,
 			name,
-			address,
+			accountID,
 			after,
 			footer,
 			editable,
@@ -48,10 +48,10 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 		ref,
 	) => {
 		const { data: accounts } = useAccounts();
-		const { data: domainName } = useResolveSuiNSName(address);
-		const account = accounts?.find((account) => account.address === address);
-		const accountName = account?.nickname ?? domainName ?? formatAddress(address);
-		const copyAddress = useCopyToClipboard(account?.address!, {
+		const account = accounts?.find((account) => account.id === accountID);
+		const { data: domainName } = useResolveSuiNSName(account?.address);
+		const accountName = account?.nickname ?? domainName ?? formatAddress(account?.address || '');
+		const copyAddress = useCopyToClipboard(account?.address || '', {
 			copySuccessMessage: 'Address copied',
 		});
 		const explorerHref = useExplorerLink({

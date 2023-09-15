@@ -189,6 +189,7 @@ export class ZkAccount
 			nickname,
 			isPasswordUnlockable: false,
 			provider,
+			isKeyPairExportable: false,
 		};
 	}
 

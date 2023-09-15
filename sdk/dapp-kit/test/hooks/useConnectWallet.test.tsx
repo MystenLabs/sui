@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useConnectWallet, useWallet } from 'dapp-kit/src';
-import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import { useConnectWallet, useCurrentWallet, useCurrentAccount } from 'dapp-kit/src';
+import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
 import { WalletAlreadyConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
 import type { Mock } from 'vitest';
 
@@ -11,22 +11,14 @@ describe('useConnectWallet', () => {
 	test('throws an error when connecting to a wallet when a connection is already active', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrapper();
-		const { result } = renderHook(
-			() => ({
-				connectWallet: useConnectWallet(),
-				walletInfo: useWallet(),
-			}),
-			{ wrapper },
-		);
+		const wrapper = createWalletProviderContextWrappe();
+		const { result } = renderHook(() => useConnectWallet(), { wrapper });
 
-		result.current.connectWallet.mutate({ wallet: mockWallet });
-		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
+		result.current.mutate({ wallet: mockWallet });
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-		result.current.connectWallet.mutate({ wallet: mockWallet });
-		await waitFor(() =>
-			expect(result.current.connectWallet.error).toBeInstanceOf(WalletAlreadyConnectedError),
-		);
+		result.current.mutate({ wallet: mockWallet });
+		await waitFor(() => expect(result.current.error).toBeInstanceOf(WalletAlreadyConnectedError));
 
 		act(() => {
 			unregister();
@@ -36,16 +28,17 @@ describe('useConnectWallet', () => {
 	test('throws an error when a user fails to connect their wallet', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrapper();
+		const wrapper = createWalletProviderContextWrappe();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				walletInfo: useWallet(),
+				currentWallet: useCurrentWallet(),
+				currentAccount: useCurrentAccount(),
 			}),
 			{ wrapper },
 		);
 
-		const connectFeature = result.current.walletInfo.wallets[0].features['standard:connect'];
+		const connectFeature = mockWallet.features['standard:connect'];
 		const mockConnect = connectFeature.connect as Mock;
 
 		mockConnect.mockRejectedValueOnce(() => {
@@ -55,7 +48,8 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isError).toBe(true));
-		expect(result.current.walletInfo.connectionStatus).toBe('disconnected');
+		expect(result.current.currentWallet).toBeFalsy();
+		expect(result.current.currentAccount).toBeFalsy();
 
 		act(() => {
 			unregister();
@@ -65,11 +59,12 @@ describe('useConnectWallet', () => {
 	test('connecting to a wallet works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrapper();
+		const wrapper = createWalletProviderContextWrappe();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				walletInfo: useWallet(),
+				currentWallet: useCurrentWallet(),
+				currentAccount: useCurrentAccount(),
 			}),
 			{ wrapper },
 		);
@@ -77,17 +72,10 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.walletInfo.currentWallet?.name).toBe('Mock Wallet 1');
-		expect(result.current.walletInfo.accounts).toHaveLength(1);
-		expect(result.current.walletInfo.currentAccount).toBeTruthy();
-		expect(result.current.walletInfo.connectionStatus).toBe('connected');
-
-		const savedConnectionInfo = window.localStorage.getItem('sui-dapp-kit:wallet-connection-info');
-		expect(savedConnectionInfo).toBeTruthy();
-		expect(JSON.parse(savedConnectionInfo!)).toStrictEqual({
-			walletName: 'Mock Wallet 1',
-			accountAddress: result.current.walletInfo.currentAccount?.address,
-		});
+		expect(result.current.currentWallet).toBeTruthy();
+		expect(result.current.currentWallet!.name).toBe('Mock Wallet 1');
+		expect(result.current.currentWallet!.accounts).toHaveLength(1);
+		expect(result.current.currentAccount).toBeTruthy();
 
 		act(() => {
 			unregister();

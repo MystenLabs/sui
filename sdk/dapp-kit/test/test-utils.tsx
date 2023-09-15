@@ -4,11 +4,12 @@
 import type { SuiClient } from '@mysten/sui.js/client';
 import type { IdentifierRecord, ReadonlyWalletAccount } from '@mysten/wallet-standard';
 import { getWallets } from '@mysten/wallet-standard';
-import { SuiClientProvider, WalletProvider } from 'dapp-kit/src';
+import { SuiClientProvider } from 'dapp-kit/src';
 import { MockWallet } from './mocks/mockWallet.js';
 import type { ComponentProps } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMockAccount } from './mocks/mockAccount.js';
+import { WalletProvider } from 'dapp-kit/src/components/WalletProvider.js';
 
 export function createSuiClientContextWrapper(client: SuiClient) {
 	return function SuiClientContextWrapper({ children }: { children: React.ReactNode }) {
@@ -16,7 +17,7 @@ export function createSuiClientContextWrapper(client: SuiClient) {
 	};
 }
 
-export function createWalletProviderContextWrapper(
+export function createWalletProviderContextWrappe(
 	providerProps: Omit<ComponentProps<typeof WalletProvider>, 'children'> = {},
 ) {
 	const queryClient = new QueryClient();

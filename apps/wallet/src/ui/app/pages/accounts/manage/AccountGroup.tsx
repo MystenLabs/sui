@@ -12,6 +12,7 @@ import { useAccountsFormContext } from '_src/ui/app/components/accounts/Accounts
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { VerifyPasswordModal } from '_src/ui/app/components/accounts/VerifyPasswordModal';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
+import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { ButtonOrLink, type ButtonOrLinkProps } from '_src/ui/app/shared/utils/ButtonOrLink';
@@ -47,12 +48,17 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 }
 
 // todo: this is slightly different than the account footer in the AccountsList - look to consolidate :(
-function AccountFooter({ accountID }: { accountID: string }) {
+function AccountFooter({ accountID, showExport }: { accountID: string; showExport?: boolean }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
 			<div className="flex gap-3 items-center">
 				<div className="w-1.5" />
 				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
+				{showExport ? (
+					<FooterLink to={`/accounts/export/${accountID}`}>
+						<div>Export Private Key</div>
+					</FooterLink>
+				) : null}
 				{/* TODO: Remove Account functionality */}
 				{/* <FooterLink to="/remove">
 					<div>Remove</div>
@@ -72,7 +78,7 @@ export function AccountGroup({
 	accountSource?: string;
 }) {
 	const createAccountMutation = useCreateAccountsMutation();
-	const showCreateNewButton = type === 'mnemonic-derived';
+	const isMnemonicDerivedGroup = type === 'mnemonic-derived';
 	const [accountsFormValues, setAccountsFormValues] = useAccountsFormContext();
 	const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
 	return (
@@ -89,18 +95,16 @@ export function AccountGroup({
 									: accountTypeToLabel[type]}
 							</Heading>
 							<div className="h-px bg-gray-45 flex flex-1 flex-shrink-0" />
-							{showCreateNewButton ? (
+							{isMnemonicDerivedGroup && accountSource ? (
 								<ButtonOrLink
 									onClick={async (e) => {
 										// prevent the collapsible from closing when clicking the "new" button
 										e.stopPropagation();
-										if (type === 'mnemonic-derived' && accountSource) {
-											setAccountsFormValues({
-												type: 'mnemonic-derived',
-												sourceID: accountSource,
-											});
-											setPasswordModalVisible(true);
-										}
+										setAccountsFormValues({
+											type: 'mnemonic-derived',
+											sourceID: accountSource,
+										});
+										setPasswordModalVisible(true);
 									}}
 									className="items-center justify-center gap-0.5 cursor-pointer appearance-none uppercase flex bg-transparent border-0 outline-none text-hero hover:text-hero-darkest"
 								>
@@ -119,12 +123,25 @@ export function AccountGroup({
 									<AccountItem
 										key={account.id}
 										background="gradient"
-										address={account.address}
+										accountID={account.id}
 										icon={<AccountIcon account={account} />}
-										footer={<AccountFooter accountID={account.id} />}
+										footer={
+											<AccountFooter
+												accountID={account.id}
+												showExport={account.isKeyPairExportable}
+											/>
+										}
 									/>
 								);
 							})}
+							{isMnemonicDerivedGroup && accountSource ? (
+								<Button
+									variant="secondary"
+									size="tall"
+									text="Export Passphrase"
+									to={`../export/passphrase/${accountSource}`}
+								/>
+							) : null}
 						</div>
 					</CollapsiblePrimitive.CollapsibleContent>
 				</div>

@@ -8,6 +8,7 @@ import {
 	type SerializedUIAccount,
 	type SigningAccount,
 	type SerializedAccount,
+	type KeyPairExportableAccount,
 } from './Account';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
@@ -34,10 +35,11 @@ export function isImportedAccountSerializedUI(
 
 export class ImportedAccount
 	extends Account<ImportedAccountSerialized, SessionStorageData>
-	implements PasswordUnlockableAccount, SigningAccount
+	implements PasswordUnlockableAccount, SigningAccount, KeyPairExportableAccount
 {
 	readonly canSign = true;
 	readonly unlockType = 'password' as const;
+	readonly exportableKeyPair = true;
 
 	static async createNew(inputs: {
 		keyPair: ExportedKeypair;
@@ -88,6 +90,7 @@ export class ImportedAccount
 			selected,
 			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: true,
 		};
 	}
 
@@ -109,6 +112,12 @@ export class ImportedAccount
 			throw new Error(`Account is locked`);
 		}
 		return this.generateSignature(data, keyPair);
+	}
+
+	async exportKeyPair(password: string): Promise<ExportedKeypair> {
+		const { encrypted } = await this.getStoredData();
+		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
+		return keyPair;
 	}
 
 	async #getKeyPair() {

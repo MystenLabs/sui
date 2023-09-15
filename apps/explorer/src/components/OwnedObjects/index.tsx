@@ -79,7 +79,7 @@ export function OwnedObjects({ id }: { id: string }) {
 
 	const { data, isError, isFetching, pagination } = useCursorPagination(ownedObjects);
 
-	const isLoading = isFetching || kioskDataFetching;
+	const isLoading = filter === FILTER_VALUES.ALL ? isFetching : kioskDataFetching;
 
 	useEffect(() => {
 		if (!isLoading && !filter) {
