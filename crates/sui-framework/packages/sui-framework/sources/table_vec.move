@@ -92,4 +92,14 @@ module sui::table_vec {
         table::add(&mut t.contents, j, element_i);
         table::add(&mut t.contents, i, element_j);
     }
+
+    /// Swap the `i`th element of the TableVec `t` with the last element and then pop the TableVec.
+    /// This is O(1), but does not preserve ordering of elements in the TableVec.
+    /// Aborts if `i` is out of bounds.
+    public fun swap_remove<Element: store>(t: &mut TableVec<Element>, i: u64): Element {
+        assert!(length(t) > i, EIndexOutOfBound);
+        let last_idx = length(t) - 1;
+        swap(t, i, last_idx);
+        pop_back(t)
+    }
 }

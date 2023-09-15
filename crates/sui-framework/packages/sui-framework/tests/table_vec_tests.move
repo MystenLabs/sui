@@ -24,10 +24,11 @@ module sui::table_vec_tests {
         table_vec::push_back(&mut table_vec, 5);
         table_vec::swap(&mut table_vec, 0, 1);
 
+        let value = table_vec::swap_remove(&mut table_vec, 0);
+        assert!(value == 5, 0);
+
         let value = table_vec::pop_back(&mut table_vec);
         assert!(value == 8, 0);
-        let value = table_vec::pop_back(&mut table_vec);
-        assert!(value == 5, 0);
         table_vec::destroy_empty(table_vec);
         ts::end(scenario);
     }
