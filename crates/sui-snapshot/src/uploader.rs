@@ -121,6 +121,7 @@ impl StateSnapshotUploader {
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                info!("Starting state snapshot creation for epoch: {}", *epoch);
                 let state_snapshot_writer = StateSnapshotWriterV1::new_from_store(
                     &self.staging_path,
                     &self.staging_store,
@@ -130,10 +131,11 @@ impl StateSnapshotUploader {
                 )
                 .await?;
                 let db = Arc::new(AuthorityPerpetualTables::open(
-                    &path_to_filesystem(self.db_checkpoint_path.clone(), db_path)?,
+                    &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
                 ));
                 state_snapshot_writer.write(db).await?;
+                info!("State snapshot creation successful for epoch: {}", *epoch);
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");
                 let success_marker = db_path.child(SUCCESS_MARKER);
