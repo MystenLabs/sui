@@ -156,9 +156,9 @@ impl BuildConfig {
             };
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
+                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX1);
                     report_warnings(&files, warning_diags);
-                    report_linter_warnings(any_linter_warnings)?;
+                    report_linter_feedback_info(any_linter_warnings)?;
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
@@ -169,7 +169,7 @@ impl BuildConfig {
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }
-                    report_linter_warnings(any_linter_warnings)?;
+                    report_linter_feedback_info(any_linter_warnings)?;
                     anyhow::bail!("Compilation error");
                 }
             }
@@ -220,7 +220,7 @@ impl BuildConfig {
     }
 }
 
-fn report_linter_warnings(report: bool) -> anyhow::Result<()> {
+fn report_linter_feedback_info(report: bool) -> anyhow::Result<()> {
     if report {
         if let Err(err) = writeln!(
             &mut std::io::stderr(),
