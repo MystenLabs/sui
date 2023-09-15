@@ -222,8 +222,9 @@ impl BuildConfig {
 
 fn report_linter_warnings(report: bool) -> anyhow::Result<()> {
     if report {
-        if let Err(err) = std::io::stderr().write_all(
-            b"Please report feedback on the linter warnings at https://forums.sui.io\n\n",
+        if let Err(err) = writeln!(
+            &mut std::io::stderr(),
+            "Please report feedback on the linter warnings at https://forums.sui.io\n"
         ) {
             anyhow::bail!("Cannot report linter warnings feedback info: {}", err);
         }
