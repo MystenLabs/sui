@@ -216,8 +216,22 @@ impl MoveObject {
         self.contents.splice(ID_END_INDEX.., value.to_le_bytes());
     }
 
+    /// Update the `timestamp_ms: u64` field of the `Clock` type.
+    pub fn set_clock_timestamp_ms(&mut self, timestamp_ms: u64) {
+        assert!(self.is_clock());
+        // 32 bytes for object ID, 8 for timestamp
+        assert!(self.contents.len() == 40);
+
+        self.contents
+            .splice(ID_END_INDEX.., timestamp_ms.to_le_bytes());
+    }
+
     pub fn is_coin(&self) -> bool {
         self.type_.is_coin()
+    }
+
+    pub fn is_clock(&self) -> bool {
+        self.type_.is(&crate::clock::Clock::type_())
     }
 
     pub fn version(&self) -> SequenceNumber {
