@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
-
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import Loading from '../../components/loading';
@@ -15,15 +13,11 @@ import Alert from '_components/alert';
 export function ExportPassphrasePage() {
 	const { accountSourceID } = useParams();
 	const { data: allAccountSources, isLoading } = useAccountSources();
-	const accountSource = useMemo(
-		() => allAccountSources?.find(({ id }) => id === accountSourceID) || null,
-		[allAccountSources, accountSourceID],
-	);
+	const accountSource = allAccountSources?.find(({ id }) => id === accountSourceID) || null;
 	const navigate = useNavigate();
 	const exportMutation = useExportPassphraseMutation();
-
 	if (!isLoading && accountSource?.type !== 'mnemonic') {
-		return <Navigate to={'/accounts/manage'} />;
+		return <Navigate to="/accounts/manage" />;
 	}
 	return (
 		<Overlay title="Export Passphrase" closeOverlay={() => navigate(-1)} showModal>
@@ -36,7 +30,7 @@ export function ExportPassphrasePage() {
 								It provides full control of all accounts derived from it.
 							</div>
 						</Alert>
-						{<HideShowDisplayBox value={exportMutation.data} copiedMessage="Passphrase copied" />}
+						<HideShowDisplayBox value={exportMutation.data} copiedMessage="Passphrase copied" />
 					</div>
 				) : (
 					<VerifyPasswordModal
