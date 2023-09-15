@@ -832,7 +832,7 @@ fn create_genesis_transaction(
         let input_objects = InputObjects::new(vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                InMemoryStorage::new(Vec::new()),
+                &InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,
                 expensive_checks,
@@ -978,7 +978,7 @@ fn process_package(
         builder.finish()
     };
     let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
-        store.clone(),
+        &*store,
         protocol_config,
         metrics,
         ctx,
@@ -1074,7 +1074,7 @@ pub fn generate_genesis_system_object(
     };
 
     let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
-        store.clone(),
+        &*store,
         &protocol_config,
         metrics,
         genesis_ctx,
