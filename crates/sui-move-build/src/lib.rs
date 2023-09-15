@@ -156,7 +156,7 @@ impl BuildConfig {
             };
             match units_res {
                 Ok((units, warning_diags)) => {
-                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX1);
+                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     report_warnings(&files, warning_diags);
                     report_linter_feedback_info(any_linter_warnings)?;
                     fn_info = Some(Self::fn_info(&units));
