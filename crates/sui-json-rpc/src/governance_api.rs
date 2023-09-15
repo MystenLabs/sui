@@ -26,8 +26,8 @@ use sui_types::id::ID;
 use sui_types::object::ObjectRead;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::sui_system_state::PoolTokenExchangeRate;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::sui_system_state::{get_sui_system_state_wrapper, PoolTokenExchangeRate};
 use sui_types::sui_system_state::{get_validator_from_table, SuiSystemState};
 
 use crate::api::{GovernanceReadApiServer, JsonRpcMetrics};
@@ -325,6 +325,7 @@ async fn exchange_rates(
     state: &Arc<dyn StateRead>,
     _current_epoch: EpochId,
 ) -> RpcInterimResult<Vec<ValidatorExchangeRates>> {
+    let (root_object_version, _) = get_sui_system_state_wrapper(state.get_db().as_ref())?;
     let system_state = state.get_system_state()?;
     let system_state_summary: SuiSystemStateSummary = system_state.into_sui_system_state_summary();
 
@@ -353,6 +354,7 @@ async fn exchange_rates(
             })?;
         let validator = get_validator_from_table(
             state.get_db().as_ref(),
+            root_object_version,
             system_state_summary.inactive_pools_id,
             &pool_id,
         )?; // TODO(wlmyng): roll this into StateReadError
@@ -380,6 +382,7 @@ async fn exchange_rates(
 
                 let exchange_rate: PoolTokenExchangeRate = get_dynamic_field_from_store(
                     state.get_db().as_ref(),
+                    root_object_version,
                     exchange_rates_id,
                     &epoch,
                 )?;

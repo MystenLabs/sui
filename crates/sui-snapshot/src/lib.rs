@@ -219,7 +219,7 @@ pub async fn setup_db_state(
 ) -> Result<()> {
     // This function should be called once state accumulator based hash verification
     // is complete and live object set state is downloaded to local store
-    let system_state_object = get_sui_system_state(&perpetual_db)?;
+    let system_state_object = get_sui_system_state(&perpetual_db)?.1;
     let authenticator_state_obj_initial_shared_version =
         get_authenticator_state_obj_initial_shared_version(&perpetual_db)?;
     let new_epoch_start_state = system_state_object.into_epoch_start_state();

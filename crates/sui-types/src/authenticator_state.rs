@@ -111,6 +111,7 @@ pub fn get_authenticator_state(
     let Some(outer) = outer else {
         return Ok(None);
     };
+    let root_object_version = outer.version();
     let move_object = outer.data.try_as_move().ok_or_else(|| {
         SuiError::SuiSystemStateReadError(
             "AuthenticatorState object must be a Move object".to_owned(),
@@ -124,12 +125,13 @@ pub fn get_authenticator_state(
 
     let id = outer.id.id.bytes;
     let inner: AuthenticatorStateInner =
-        get_dynamic_field_from_store(object_store, id, &outer.version).map_err(|err| {
-            SuiError::DynamicFieldReadError(format!(
+        get_dynamic_field_from_store(object_store, root_object_version, id, &outer.version)
+            .map_err(|err| {
+                SuiError::DynamicFieldReadError(format!(
                 "Failed to load sui system state inner object with ID {:?} and version {:?}: {:?}",
                 id, outer.version, err
             ))
-        })?;
+            })?;
 
     Ok(Some(inner))
 }

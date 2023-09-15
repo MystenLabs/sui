@@ -148,10 +148,13 @@ impl Genesis {
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
         get_sui_system_state_wrapper(&self.objects())
             .expect("Sui System State Wrapper object must always exist")
+            .1
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .1
     }
 
     pub fn authenticator_state_obj_initial_shared_version(&self) -> Option<SequenceNumber> {
@@ -321,10 +324,13 @@ impl UnsignedGenesis {
     pub fn sui_system_wrapper_object(&self) -> SuiSystemStateWrapper {
         get_sui_system_state_wrapper(&self.objects())
             .expect("Sui System State Wrapper object must always exist")
+            .1
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {
-        get_sui_system_state(&self.objects()).expect("Sui System State object must always exist")
+        get_sui_system_state(&self.objects())
+            .expect("Sui System State object must always exist")
+            .1
     }
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {

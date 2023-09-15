@@ -321,7 +321,7 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
     let epoch = if let Some(epoch) = opt.epoch {
         epoch
     } else {
-        get_sui_system_state(&perpetual_db)?.epoch()
+        get_sui_system_state(&perpetual_db)?.1.epoch()
     };
     let epoch_store = AuthorityEpochTables::open(epoch, &path.join("store"), None);
     let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {

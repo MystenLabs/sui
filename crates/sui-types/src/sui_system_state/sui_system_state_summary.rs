@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, ObjectID, SuiAddress};
+use crate::base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::dynamic_field::get_dynamic_field_from_store;
 use crate::error::SuiError;
@@ -411,6 +411,7 @@ impl Default for SuiValidatorSummary {
 /// works for validator candidates, active validators, as well as inactive validators.
 pub fn get_validator_by_pool_id<S>(
     object_store: &S,
+    root_object_version: SequenceNumber,
     system_state: &SuiSystemState,
     system_state_summary: &SuiSystemStateSummary,
     pool_id: ObjectID,
@@ -427,7 +428,8 @@ where
         return Ok(active.clone());
     }
     // Then try to find in pending active validator set.
-    let pending_active_validators = system_state.get_pending_active_validators(object_store)?;
+    let pending_active_validators =
+        system_state.get_pending_active_validators(object_store, root_object_version)?;
     let pending_active = pending_active_validators
         .iter()
         .find(|v| v.staking_pool_id == pool_id);
@@ -436,14 +438,18 @@ where
     }
     // After that try to find in inactive pools.
     let inactive_table_id = system_state_summary.inactive_pools_id;
-    if let Ok(inactive) =
-        get_validator_from_table(object_store, inactive_table_id, &ID::new(pool_id))
-    {
+    if let Ok(inactive) = get_validator_from_table(
+        object_store,
+        root_object_version,
+        inactive_table_id,
+        &ID::new(pool_id),
+    ) {
         return Ok(inactive);
     }
     // Finally look up the candidates pool.
     let candidate_address: SuiAddress = get_dynamic_field_from_store(
         object_store,
+        root_object_version,
         system_state_summary.staking_pool_mappings_id,
         &ID::new(pool_id),
     )
@@ -454,5 +460,10 @@ where
         ))
     })?;
     let candidate_table_id = system_state_summary.validator_candidates_id;
-    get_validator_from_table(object_store, candidate_table_id, &candidate_address)
+    get_validator_from_table(
+        object_store,
+        root_object_version,
+        candidate_table_id,
+        &candidate_address,
+    )
 }

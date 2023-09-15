@@ -2407,7 +2407,18 @@ impl AuthorityState {
 
     // This function is only used for testing.
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
-        self.database.get_sui_system_state_object()
+        Ok(self
+            .database
+            .get_sui_system_state_object_with_root_object_version()?
+            .1)
+    }
+
+    // This function is only used for testing.
+    pub fn get_sui_system_state_object_with_root_object_version_for_testing(
+        &self,
+    ) -> SuiResult<(SequenceNumber, SuiSystemState)> {
+        self.database
+            .get_sui_system_state_object_with_root_object_version()
     }
 
     pub fn get_transaction_checkpoint_sequence(
@@ -3907,7 +3918,8 @@ impl AuthorityState {
             .prepare_certificate(&execution_guard, &executable_tx, epoch_store)
             .await?;
         let system_obj = get_sui_system_state(&temporary_store.written)
-            .expect("change epoch tx must write to system object");
+            .expect("change epoch tx must write to system object")
+            .1;
 
         // We must write tx and effects to the state sync tables so that state sync is able to
         // deliver to the transaction to CheckpointExecutor after it is included in a certified

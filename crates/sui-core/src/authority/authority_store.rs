@@ -1610,6 +1610,12 @@ impl AuthorityStore {
     // Instead of this function use AuthorityEpochStore::epoch_start_configuration() to access this object everywhere
     // besides when we are reading fields for the current epoch
     pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+        Ok(get_sui_system_state(self.perpetual_tables.as_ref())?.1)
+    }
+
+    pub fn get_sui_system_state_object_with_root_object_version(
+        &self,
+    ) -> SuiResult<(SequenceNumber, SuiSystemState)> {
         get_sui_system_state(self.perpetual_tables.as_ref())
     }
 

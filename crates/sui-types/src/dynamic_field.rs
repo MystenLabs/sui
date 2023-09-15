@@ -282,6 +282,7 @@ where
 /// Note that this function returns the Field object itself, not the value in the field.
 pub fn get_dynamic_field_object_from_store<K>(
     object_store: &dyn ObjectAndChildObjectStore,
+    root_version: SequenceNumber,
     parent_id: ObjectID,
     key: &K,
 ) -> Result<Object, SuiError>
@@ -291,11 +292,8 @@ where
     let child_id =
         derive_dynamic_field_id(parent_id, &K::get_type_tag(), &bcs::to_bytes(key).unwrap())
             .map_err(|err| SuiError::DynamicFieldReadError(err.to_string()))?;
-    let parent = object_store.get_object(&parent_id)?.ok_or_else(|| {
-        SuiError::DynamicFieldReadError(format!("Parent object with ID={:?} not found", parent_id))
-    })?;
     let object = object_store
-        .read_child_object(&parent_id, &child_id, parent.version())?
+        .read_child_object(&parent_id, &child_id, root_version)?
         .ok_or_else(|| {
             SuiError::DynamicFieldReadError(format!(
                 "Dynamic field with key={:?} and ID={:?} not found on parent {:?}",
@@ -309,6 +307,7 @@ where
 /// the Field object itself.
 pub fn get_dynamic_field_from_store<K, V>(
     object_store: &dyn ObjectAndChildObjectStore,
+    root_version: SequenceNumber,
     parent_id: ObjectID,
     key: &K,
 ) -> Result<V, SuiError>
@@ -316,7 +315,7 @@ where
     K: MoveTypeTagTrait + Serialize + DeserializeOwned + fmt::Debug,
     V: Serialize + DeserializeOwned,
 {
-    let object = get_dynamic_field_object_from_store(object_store, parent_id, key)?;
+    let object = get_dynamic_field_object_from_store(object_store, root_version, parent_id, key)?;
     let move_object = object.data.try_as_move().ok_or_else(|| {
         SuiError::DynamicFieldReadError(format!(
             "Dynamic field {:?} is not a Move object",

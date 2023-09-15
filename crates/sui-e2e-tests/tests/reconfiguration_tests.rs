@@ -434,13 +434,14 @@ async fn test_validator_candidate_pool_read() {
         .await;
     add_validator_candidate(&test_cluster, &new_validator).await;
     test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
+        let (root_object_version, system_state) = node
             .state()
-            .get_sui_system_state_object_for_testing()
+            .get_sui_system_state_object_with_root_object_version_for_testing()
             .unwrap();
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let staking_pool_id = get_validator_from_table(
             node.state().db().as_ref(),
+            root_object_version,
             system_state_summary.validator_candidates_id,
             &address,
         )
@@ -448,6 +449,7 @@ async fn test_validator_candidate_pool_read() {
         .staking_pool_id;
         let validator = get_validator_by_pool_id(
             node.state().db().as_ref(),
+            root_object_version,
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -478,14 +480,15 @@ async fn test_inactive_validator_pool_read() {
             .staking_pool_id
     });
     test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
+        let (root_object_version, system_state) = node
             .state()
-            .get_sui_system_state_object_for_testing()
+            .get_sui_system_state_object_with_root_object_version_for_testing()
             .unwrap();
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         // Validator is active. Check that we can find its summary by staking pool id.
         let validator = get_validator_by_pool_id(
             node.state().db().as_ref(),
+            root_object_version,
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -507,9 +510,9 @@ async fn test_inactive_validator_pool_read() {
     // Check that the validator that just left now shows up in the inactive_validators,
     // and we can still deserialize it and get the inactive staking pool.
     test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
+        let (root_object_version, system_state) = node
             .state()
-            .get_sui_system_state_object_for_testing()
+            .get_sui_system_state_object_with_root_object_version_for_testing()
             .unwrap();
         assert_eq!(
             system_state
@@ -521,6 +524,7 @@ async fn test_inactive_validator_pool_read() {
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let validator = get_validator_by_pool_id(
             node.state().db().as_ref(),
+            root_object_version,
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -764,12 +768,12 @@ async fn execute_add_validator_transactions(
     new_validator: &ValidatorGenesisConfig,
 ) {
     let pending_active_count = test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
+        let (root_object_version, system_state) = node
             .state()
-            .get_sui_system_state_object_for_testing()
+            .get_sui_system_state_object_with_root_object_version_for_testing()
             .unwrap();
         system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().db().as_ref(), root_object_version)
             .unwrap()
             .len()
     });
@@ -809,12 +813,12 @@ async fn execute_add_validator_transactions(
 
     // Check that we can get the pending validator from 0x5.
     test_cluster.fullnode_handle.sui_node.with(|node| {
-        let system_state = node
+        let (root_object_version, system_state) = node
             .state()
-            .get_sui_system_state_object_for_testing()
+            .get_sui_system_state_object_with_root_object_version_for_testing()
             .unwrap();
         let pending_active_validators = system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().db().as_ref(), root_object_version)
             .unwrap();
         assert_eq!(pending_active_validators.len(), pending_active_count + 1);
         assert_eq!(

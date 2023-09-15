@@ -195,8 +195,9 @@ impl Builder {
     }
 
     fn committee(objects: &[Object]) -> Committee {
-        let sui_system_object =
-            get_sui_system_state(&objects).expect("Sui System State object must always exist");
+        let sui_system_object = get_sui_system_state(&objects)
+            .expect("Sui System State object must always exist")
+            .1;
         sui_system_object.get_current_epoch_committee().committee
     }
 

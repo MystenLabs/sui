@@ -262,7 +262,7 @@ impl StateSnapshotWriterV1 {
     }
 
     pub async fn write(self, perpetual_db: Arc<AuthorityPerpetualTables>) -> Result<()> {
-        let system_state_object = get_sui_system_state(&perpetual_db)?;
+        let system_state_object = get_sui_system_state(&perpetual_db)?.1;
         let epoch = system_state_object.epoch();
 
         let protocol_version = system_state_object.protocol_version();

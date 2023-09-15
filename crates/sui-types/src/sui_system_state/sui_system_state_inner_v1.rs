@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::balance::Balance;
-use crate::base_types::{ObjectID, SuiAddress};
+use crate::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use crate::collection_types::{Bag, Table, TableVec, VecMap, VecSet};
 use crate::committee::{Committee, CommitteeWithNetworkMetadata, NetworkMetadata};
 use crate::crypto::verify_proof_of_possession;
@@ -566,11 +566,12 @@ impl SuiSystemStateTrait for SuiSystemStateInnerV1 {
     fn get_pending_active_validators<S: ObjectAndChildObjectStore>(
         &self,
         object_store: &S,
+        root_object_version: SequenceNumber,
     ) -> Result<Vec<SuiValidatorSummary>, SuiError> {
         let table_id = self.validators.pending_active_validators.contents.id;
         let table_size = self.validators.pending_active_validators.contents.size;
         let validators: Vec<ValidatorV1> =
-            get_validators_from_table_vec(object_store, table_id, table_size)?;
+            get_validators_from_table_vec(object_store, root_object_version, table_id, table_size)?;
         Ok(validators
             .into_iter()
             .map(|v| v.into_sui_validator_summary())
