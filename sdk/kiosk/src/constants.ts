@@ -62,7 +62,7 @@ export function getBaseRules({
 	personalKioskRulePackageId,
 	floorPriceRulePackageId,
 }: BaseRulePackageIds): TransferPolicyRule[] {
-	let rules = [];
+	const rules = [];
 
 	if (royaltyRulePackageId) {
 		rules.push({

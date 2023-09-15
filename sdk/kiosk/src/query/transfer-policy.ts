@@ -123,8 +123,8 @@ export async function queryOwnedTransferPolicies(
 
 	const policies: TransferPolicyCap[] = [];
 
-	for (let item of data) {
-		let data = parseTransferPolicyCapObject(item);
+	for (const item of data) {
+		const data = parseTransferPolicyCapObject(item);
 		if (data) policies.push(data);
 	}
 

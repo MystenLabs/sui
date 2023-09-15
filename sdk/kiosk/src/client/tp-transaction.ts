@@ -58,7 +58,6 @@ export class TransferPolicyTransaction {
 	 * There's an optional `skipCheck` flag that will just create the policy
 	 * without checking
 	 *
-	 * @param tx The Transaction Block
 	 * @param type The Type (`T`) for which we're creating the transfer policy.
 	 * @param publisher The Publisher Object Id.
 	 * @param address Address to save the `TransferPolicyCap` object to.
@@ -107,7 +106,6 @@ export class TransferPolicyTransaction {
 	 * This can be called after calling the `create` function to share the `TransferPolicy`,
 	 * and transfer the `TransferPolicyCap` to the specified address
 	 *
-	 * @param txb The Transaction Block
 	 * @param address The address to transfer the `TransferPolicyCap`
 	 */
 	shareAndTransferCap(address: string) {
@@ -152,7 +150,6 @@ export class TransferPolicyTransaction {
 	 * 	You can pass 0 in either value if you want only percentage royalty, or a fixed amount fee.
 	 * 	(but you should define at least one of them for the rule to make sense).
 	 *
-	 * 	@param tx The Transaction Block
 	 * 	@param percentageBps The royalty percentage in basis points. Use `percentageToBasisPoints` helper to convert from percentage [0,100].
 	 * 	@param minAmount The minimum royalty amount per request in MIST.
 	 */
@@ -212,7 +209,6 @@ export class TransferPolicyTransaction {
 
 	/**
 	 * A function to add the floor price rule to a transfer policy.
-	 * @param txb The Transaction Block
 	 * @param minPrice The minimum price in MIST.
 	 */
 	addFloorPriceRule(minPrice: string | bigint) {
@@ -340,8 +336,8 @@ export class TransferPolicyTransaction {
 			| 'personalKioskRulePackageId'
 			| 'floorPriceRulePackageId',
 	) {
-		let rules = this.kioskClient.packageIds || {};
-		let network = this.kioskClient.network;
+		const rules = this.kioskClient.packageIds || {};
+		const network = this.kioskClient.network;
 
 		/// Check existence of rule based on network and throw an error if it's not found.
 		/// We always have a fallback for testnet or mainnet.

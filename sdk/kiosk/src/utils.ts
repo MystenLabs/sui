@@ -27,24 +27,24 @@ const DEFAULT_QUERY_LIMIT = 50;
 /**
  * Convert any valid input into a TransactionArgument.
  *
- * @param tx The Transaction Block
+ * @param txb The Transaction Block
  * @param arg The argument to convert.
  * @returns The converted TransactionArgument.
  */
 export function objArg(
-	tx: TransactionBlock,
+	txb: TransactionBlock,
 	arg: string | SharedObjectRef | SuiObjectRef | TransactionArgument,
 ): TransactionArgument {
 	if (typeof arg === 'string') {
-		return tx.object(arg);
+		return txb.object(arg);
 	}
 
 	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
-		return tx.objectRef(arg);
+		return txb.objectRef(arg);
 	}
 
 	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
-		return tx.sharedObjectRef(arg);
+		return txb.sharedObjectRef(arg);
 	}
 
 	if ('kind' in arg) {
