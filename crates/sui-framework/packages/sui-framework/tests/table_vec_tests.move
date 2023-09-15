@@ -80,4 +80,24 @@ module sui::table_vec_tests {
         table_vec::destroy_empty(table_vec);
         ts::end(scenario);
     }
+
+    #[test]
+    fun swap_same_index_succeeds() {
+        let scenario = ts::begin(TEST_SENDER_ADDR);
+        let table_vec = table_vec::singleton(1, ts::ctx(&mut scenario));
+        table_vec::swap(&mut table_vec, 0, 0);
+        table_vec::pop_back(&mut table_vec);
+        table_vec::destroy_empty(table_vec);
+        ts::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = sui::table_vec::EIndexOutOfBound)]
+    fun swap_same_index_out_of_bounds_aborts() {
+        let scenario = ts::begin(TEST_SENDER_ADDR);
+        let table_vec = table_vec::singleton(1, ts::ctx(&mut scenario));
+        table_vec::swap(&mut table_vec, 77, 77);
+        table_vec::destroy_empty(table_vec);
+        ts::end(scenario);
+    }
 }
