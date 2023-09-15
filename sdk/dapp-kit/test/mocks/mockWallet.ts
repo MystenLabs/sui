@@ -8,6 +8,7 @@ import type {
 	SuiFeatures,
 	ReadonlyWalletAccount,
 	StandardEventsChangeProperties,
+	StandardEventsOnMethod,
 } from '@mysten/wallet-standard';
 import { SUI_CHAINS } from '@mysten/wallet-standard';
 import type { Wallet } from '@mysten/wallet-standard';
@@ -24,14 +25,15 @@ export class MockWallet implements Wallet {
 	#disconnect = vi.fn();
 	#on = vi.fn((event: string, listener: (properties: StandardEventsChangeProperties) => void) => {
 		this.#eventHandlers.push({ event, listener });
-		return () => {
-			this.#eventHandlers = [];
-		};
+		return () => (this.#eventHandlers = []);
 	});
 	#signPersonalMessage = vi.fn();
 	#signTransactionBlock = vi.fn();
 	#signAndExecuteTransactionBlock = vi.fn();
-	#eventHandlers: any[];
+	#eventHandlers: {
+		event: string;
+		listener: (properties: StandardEventsChangeProperties) => void;
+	}[];
 
 	constructor(
 		name: string,
