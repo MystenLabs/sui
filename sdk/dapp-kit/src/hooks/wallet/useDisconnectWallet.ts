@@ -5,7 +5,7 @@ import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletNotConnectedError } from '../../errors/walletErrors.js';
-import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useWalletStore } from './useWalletStore.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseDisconnectWalletMutationOptions = Omit<
@@ -21,7 +21,7 @@ export function useDisconnectWallet({
 	...mutationOptions
 }: UseDisconnectWalletMutationOptions = {}) {
 	const currentWallet = useCurrentWallet();
-	const setWalletDisconnected = useDAppKitStore((state) => state.setWalletDisconnected);
+	const setWalletDisconnected = useWalletStore((state) => state.setWalletDisconnected);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.disconnectWallet(mutationKey),

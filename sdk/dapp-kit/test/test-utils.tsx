@@ -9,7 +9,7 @@ import { MockWallet } from './mocks/mockWallet.js';
 import type { ComponentProps } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMockAccount } from './mocks/mockAccount.js';
-import { DAppKitProvider } from 'dapp-kit/src/components/DAppKitProvider.js';
+import { WalletProvider } from 'dapp-kit/src/components/WalletProvider.js';
 
 export function createSuiClientContextWrapper(client: SuiClient) {
 	return function SuiClientContextWrapper({ children }: { children: React.ReactNode }) {
@@ -17,15 +17,15 @@ export function createSuiClientContextWrapper(client: SuiClient) {
 	};
 }
 
-export function createDAppKitProviderContextWrapper(
-	providerProps: Omit<ComponentProps<typeof DAppKitProvider>, 'children'> = {},
+export function createWalletProviderContextWrappe(
+	providerProps: Omit<ComponentProps<typeof WalletProvider>, 'children'> = {},
 ) {
 	const queryClient = new QueryClient();
-	return function DAppKitProviderContextWrapper({ children }: { children: React.ReactNode }) {
+	return function WalletProviderContextWrapper({ children }: { children: React.ReactNode }) {
 		return (
 			<SuiClientProvider>
 				<QueryClientProvider client={queryClient}>
-					<DAppKitProvider {...providerProps}>{children}</DAppKitProvider>;
+					<WalletProvider {...providerProps}>{children}</WalletProvider>;
 				</QueryClientProvider>
 			</SuiClientProvider>
 		);

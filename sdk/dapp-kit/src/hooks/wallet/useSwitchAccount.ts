@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletAccountNotFoundError, WalletNotConnectedError } from '../../errors/walletErrors.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
-import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useWalletStore } from './useWalletStore.js';
 
 type SwitchAccountArgs = {
 	account: WalletAccount;
@@ -33,7 +33,7 @@ export function useSwitchAccount({
 	...mutationOptions
 }: UseSwitchAccountMutationOptions = {}) {
 	const currentWallet = useCurrentWallet();
-	const setAccountSwitched = useDAppKitStore((state) => state.setAccountSwitched);
+	const setAccountSwitched = useWalletStore((state) => state.setAccountSwitched);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.switchAccount(mutationKey),

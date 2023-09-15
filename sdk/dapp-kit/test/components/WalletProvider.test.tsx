@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createDAppKitProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
 import {
 	useConnectWallet,
 	useConnectionStatus,
@@ -13,9 +13,9 @@ import {
 } from 'dapp-kit/src';
 import { createMockAccount } from '../mocks/mockAccount.js';
 
-describe('DAppKitProvider', () => {
+describe('WalletProvider', () => {
 	test('the correct wallet and account information is returned on initial render', () => {
-		const wrapper = createDAppKitProviderContextWrapper();
+		const wrapper = createWalletProviderContextWrappe();
 		const { result } = renderHook(
 			() => ({
 				connectionStatus: useConnectionStatus(),
@@ -37,7 +37,7 @@ describe('DAppKitProvider', () => {
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
 
-		const wrapper = createDAppKitProviderContextWrapper({
+		const wrapper = createWalletProviderContextWrappe({
 			preferredWallets: ['Mock Wallet 2', 'Mock Wallet 1'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -53,7 +53,7 @@ describe('DAppKitProvider', () => {
 	});
 
 	test('the unsafe burner wallet is registered when enableUnsafeBurner is set', async () => {
-		const wrapper = createDAppKitProviderContextWrapper({
+		const wrapper = createWalletProviderContextWrappe({
 			enableUnsafeBurner: true,
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -67,7 +67,7 @@ describe('DAppKitProvider', () => {
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
 
-		const wrapper = createDAppKitProviderContextWrapper();
+		const wrapper = createWalletProviderContextWrappe();
 		const { result } = renderHook(() => useWallets(), { wrapper });
 
 		act(() => unregister2());
@@ -93,7 +93,7 @@ describe('DAppKitProvider', () => {
 		});
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 
-		const wrapper = createDAppKitProviderContextWrapper({
+		const wrapper = createWalletProviderContextWrappe({
 			requiredFeatures: ['my-dapp:super-cool-feature'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -113,7 +113,7 @@ describe('DAppKitProvider', () => {
 				walletName: 'Mock Wallet 1',
 				accounts: [createMockAccount(), createMockAccount()],
 			});
-			const wrapper = createDAppKitProviderContextWrapper({
+			const wrapper = createWalletProviderContextWrappe({
 				autoConnect: true,
 			});
 
@@ -160,7 +160,7 @@ describe('DAppKitProvider', () => {
 			const { unregister, mockWallet } = registerMockWallet({
 				walletName: 'Mock Wallet 1',
 			});
-			const wrapper = createDAppKitProviderContextWrapper({
+			const wrapper = createWalletProviderContextWrappe({
 				autoConnect: true,
 			});
 

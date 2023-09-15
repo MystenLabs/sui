@@ -3,7 +3,7 @@
 
 export * from './hooks/useSuiClient.js';
 export * from './components/SuiClientProvider.js';
-export * from './components/DAppKitProvider.js';
+export * from './components/WalletProvider.js';
 export * from './hooks/useRpcApiVersion.js';
 export * from './hooks/rpc/index.js';
 export * from './hooks/wallet/useConnectionStatus.js';

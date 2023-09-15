@@ -4,7 +4,7 @@
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { getWallets } from '@mysten/wallet-standard';
 import { useEffect } from 'react';
-import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useWalletStore } from './useWalletStore.js';
 import { getRegisteredWallets } from 'dapp-kit/src/utils/walletUtils.js';
 
 /**
@@ -14,8 +14,8 @@ export function useWalletsChanged(
 	preferredWallets: string[],
 	requiredFeatures: (keyof WalletWithRequiredFeatures['features'])[],
 ) {
-	const setWalletRegistered = useDAppKitStore((state) => state.setWalletRegistered);
-	const setWalletUnregistered = useDAppKitStore((state) => state.setWalletUnregistered);
+	const setWalletRegistered = useWalletStore((state) => state.setWalletRegistered);
+	const setWalletUnregistered = useWalletStore((state) => state.setWalletUnregistered);
 
 	useEffect(() => {
 		const walletsApi = getWallets();

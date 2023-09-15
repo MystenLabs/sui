@@ -4,13 +4,15 @@
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { createDAppKitStore } from '../store.js';
+import { createWalletStore } from '../walletStore.js';
 import type { StateStorage } from 'zustand/middleware';
-import { DAppKitContext } from '../contexts/dAppKitContext.js';
 import { getRegisteredWallets } from '../utils/walletUtils.js';
-import { WalletConnectionManager } from './WalletConnectionManager.js';
+import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
+import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
+import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
+import { WalletContext } from '../contexts/walletContext.js';
 
-type DAppKitProviderProps = {
+type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
 	preferredWallets?: string[];
 
@@ -35,8 +37,7 @@ type DAppKitProviderProps = {
 const SUI_WALLET_NAME = 'Sui Wallet';
 const DEFUALT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
-// TODO: Fold up our SuiClientProvider logic into our Zustand-managed DAppKitProvider.
-export function DAppKitProvider({
+export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
 	requiredFeatures = [],
 	storage = localStorage,
@@ -44,9 +45,9 @@ export function DAppKitProvider({
 	enableUnsafeBurner = false,
 	autoConnect = false,
 	children,
-}: DAppKitProviderProps) {
+}: WalletProviderProps) {
 	const storeRef = useRef(
-		createDAppKitStore({
+		createWalletStore({
 			wallets: getRegisteredWallets(preferredWallets, requiredFeatures),
 			storageKey,
 			storage,
@@ -54,7 +55,7 @@ export function DAppKitProvider({
 	);
 
 	return (
-		<DAppKitContext.Provider value={storeRef.current}>
+		<WalletContext.Provider value={storeRef.current}>
 			<WalletConnectionManager
 				preferredWallets={preferredWallets}
 				requiredFeatures={requiredFeatures}
@@ -63,6 +64,27 @@ export function DAppKitProvider({
 			>
 				{children}
 			</WalletConnectionManager>
-		</DAppKitContext.Provider>
+		</WalletContext.Provider>
 	);
+}
+
+type WalletConnectionManagerProps = Required<
+	Pick<
+		WalletProviderProps,
+		'preferredWallets' | 'requiredFeatures' | 'enableUnsafeBurner' | 'autoConnect' | 'children'
+	>
+>;
+
+function WalletConnectionManager({
+	preferredWallets,
+	requiredFeatures,
+	enableUnsafeBurner,
+	autoConnect,
+	children,
+}: WalletConnectionManagerProps) {
+	useWalletsChanged(preferredWallets, requiredFeatures);
+	useUnsafeBurnerWallet(enableUnsafeBurner);
+	useAutoConnectWallet(autoConnect);
+
+	return children;
 }

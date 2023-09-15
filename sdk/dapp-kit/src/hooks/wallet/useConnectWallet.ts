@@ -11,7 +11,7 @@ import type {
 } from '@mysten/wallet-standard';
 import { WalletAlreadyConnectedError } from '../../errors/walletErrors.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
-import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useWalletStore } from './useWalletStore.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
 type ConnectWalletArgs = {
@@ -37,7 +37,7 @@ export function useConnectWallet({
 	...mutationOptions
 }: UseConnectWalletMutationOptions = {}) {
 	const currentWallet = useCurrentWallet();
-	const setWalletConnected = useDAppKitStore((state) => state.setWalletConnected);
+	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),

@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { useDAppKitStore } from '../useDAppKitStore.js';
+import { useWalletStore } from './useWalletStore.js';
 import { useConnectWallet } from './useConnectWallet.js';
 import { useWallets } from './useWallets.js';
 
 export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const { mutate: connectWallet } = useConnectWallet();
 	const wallets = useWallets();
-	const lastConnectedWalletName = useDAppKitStore((state) => state.lastConnectedWalletName);
-	const lastConnectedAccountAddress = useDAppKitStore((state) => state.lastConnectedAccountAddress);
+	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
+	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 
 	useEffect(() => {
 		if (!autoConnectEnabled || !lastConnectedWalletName) return;
