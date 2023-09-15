@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import {
-	useConnectWallet,
-	useConnectionStatus,
-	useCurrentWallet,
-	useCurrentAccount,
-} from 'dapp-kit/src';
+import { useConnectWallet, useCurrentWallet, useCurrentAccount } from 'dapp-kit/src';
 import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
 import { WalletAlreadyConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
 import type { Mock } from 'vitest';
@@ -37,7 +32,8 @@ describe('useConnectWallet', () => {
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				connectionStatus: useConnectionStatus(),
+				currentWallet: useCurrentWallet(),
+				currentAccount: useCurrentAccount(),
 			}),
 			{ wrapper },
 		);
@@ -52,7 +48,8 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isError).toBe(true));
-		expect(result.current.connectionStatus).toBe('disconnected');
+		expect(result.current.currentWallet).toBeFalsy();
+		expect(result.current.currentAccount).toBeFalsy();
 
 		act(() => {
 			unregister();
@@ -66,7 +63,6 @@ describe('useConnectWallet', () => {
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				connectionStatus: useConnectionStatus(),
 				currentWallet: useCurrentWallet(),
 				currentAccount: useCurrentAccount(),
 			}),
@@ -76,10 +72,10 @@ describe('useConnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.currentWallet?.name).toBe('Mock Wallet 1');
-		expect(result.current.currentWallet?.accounts).toHaveLength(1);
+		expect(result.current.currentWallet).toBeTruthy();
+		expect(result.current.currentWallet!.name).toBe('Mock Wallet 1');
+		expect(result.current.currentWallet!.accounts).toHaveLength(1);
 		expect(result.current.currentAccount).toBeTruthy();
-		expect(result.current.connectionStatus).toBe('connected');
 
 		act(() => {
 			unregister();

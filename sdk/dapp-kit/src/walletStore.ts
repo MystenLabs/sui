@@ -28,7 +28,6 @@ export type StoreState = {
 	currentAccount: WalletAccount | null;
 	lastConnectedAccountAddress: string | null;
 	lastConnectedWalletName: string | null;
-	connectionStatus: 'disconnected' | 'connecting' | 'connected';
 } & WalletActions;
 
 export type WalletConfiguration = {
@@ -53,7 +52,6 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 						currentAccount: selectedAccount,
 						lastConnectedWalletName: wallet.name,
 						lastConnectedAccountAddress: selectedAccount?.address,
-						connectionStatus: 'connected',
 					}));
 				},
 				setWalletDisconnected: () => {
@@ -62,7 +60,6 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 						currentAccount: null,
 						lastConnectedWalletName: null,
 						lastConnectedAccountAddress: null,
-						connectionStatus: 'disconnected',
 					}));
 				},
 				setAccountSwitched: (selectedAccount) => {
@@ -82,7 +79,6 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 							currentAccount: null,
 							lastConnectedWalletName: null,
 							lastConnectedAccountAddress: null,
-							connectionStatus: 'disconnected',
 						}));
 					} else {
 						set(() => ({ wallets: updatedWallets }));

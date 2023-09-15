@@ -7,7 +7,6 @@ import {
 	useDisconnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
-	useConnectionStatus,
 } from 'dapp-kit/src';
 import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
 import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
@@ -32,7 +31,6 @@ describe('useDisconnectWallet', () => {
 				disconnectWallet: useDisconnectWallet(),
 				currentWallet: useCurrentWallet(),
 				currentAccount: useCurrentAccount(),
-				connectionStatus: useConnectionStatus(),
 			}),
 			{ wrapper },
 		);
@@ -40,15 +38,14 @@ describe('useDisconnectWallet', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.connectionStatus).toBe('connected');
+		expect(result.current.currentWallet).toBeTruthy();
+		expect(result.current.currentAccount).toBeTruthy();
 
 		result.current.disconnectWallet.mutate();
 		await waitFor(() => expect(result.current.disconnectWallet.isSuccess).toBe(true));
 
 		expect(result.current.currentWallet).toBeFalsy();
-		expect(result.current.currentWallet?.accounts).toBeFalsy();
 		expect(result.current.currentAccount).toBeFalsy();
-		expect(result.current.connectionStatus).toBe('disconnected');
 
 		act(() => {
 			unregister();

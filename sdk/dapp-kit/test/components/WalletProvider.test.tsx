@@ -5,7 +5,6 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
 import {
 	useConnectWallet,
-	useConnectionStatus,
 	useCurrentAccount,
 	useCurrentWallet,
 	useDisconnectWallet,
@@ -18,7 +17,6 @@ describe('WalletProvider', () => {
 		const wrapper = createWalletProviderContextWrappe();
 		const { result } = renderHook(
 			() => ({
-				connectionStatus: useConnectionStatus(),
 				wallets: useWallets(),
 				currentWallet: useCurrentWallet(),
 				currentAccount: useCurrentAccount(),
@@ -29,7 +27,6 @@ describe('WalletProvider', () => {
 		expect(result.current.currentWallet).toBeFalsy();
 		expect(result.current.currentAccount).toBeFalsy();
 		expect(result.current.wallets).toHaveLength(0);
-		expect(result.current.connectionStatus).toBe('disconnected');
 	});
 
 	test('the list of wallets is ordered correctly by preference', () => {
@@ -113,24 +110,19 @@ describe('WalletProvider', () => {
 				walletName: 'Mock Wallet 1',
 				accounts: [createMockAccount(), createMockAccount()],
 			});
+
 			const wrapper = createWalletProviderContextWrappe({
 				autoConnect: true,
 			});
-
-			const { result, unmount } = renderHook(
-				() => ({
-					connectWallet: useConnectWallet(),
-					connectionStatus: useConnectionStatus(),
-				}),
-				{ wrapper },
-			);
+			const { result, unmount } = renderHook(() => useConnectWallet(), { wrapper });
 
 			// Manually connect a wallet so we have a wallet to auto-connect to later.
-			result.current.connectWallet.mutate({
+			result.current.mutate({
 				wallet: mockWallet,
 				accountAddress: mockWallet.accounts[1].address,
 			});
-			await waitFor(() => expect(result.current.connectionStatus).toBe('connected'));
+
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
 			// Now unmount our component tree to simulate someone leaving the page.
 			unmount();
@@ -140,7 +132,6 @@ describe('WalletProvider', () => {
 				() => ({
 					currentWallet: useCurrentWallet(),
 					currentAccount: useCurrentAccount(),
-					connectionStatus: useConnectionStatus(),
 				}),
 				{ wrapper },
 			);
@@ -148,7 +139,7 @@ describe('WalletProvider', () => {
 			await waitFor(() => expect(updatedResult.current.currentWallet).toBeTruthy());
 			expect(updatedResult.current.currentWallet!.name).toStrictEqual('Mock Wallet 1');
 
-			await waitFor(() => expect(updatedResult.current.currentAccount).toBeTruthy());
+			expect(updatedResult.current.currentAccount).toBeTruthy();
 			expect(updatedResult.current.currentAccount!.address).toStrictEqual(
 				mockWallet.accounts[1].address,
 			);
@@ -170,7 +161,6 @@ describe('WalletProvider', () => {
 					disconnectWallet: useDisconnectWallet(),
 					currentWallet: useCurrentWallet(),
 					currentAccount: useCurrentAccount(),
-					connectionStatus: useConnectionStatus(),
 				}),
 				{ wrapper },
 			);
@@ -178,18 +168,18 @@ describe('WalletProvider', () => {
 			result.current.connectWallet.mutate({
 				wallet: mockWallet,
 			});
-			await waitFor(() => expect(result.current.connectionStatus).toBe('connected'));
+			await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
 			// By disconnecting, we should remove any wallet connection info that we have stored.
 			result.current.disconnectWallet.mutate();
-			await waitFor(() => expect(result.current.connectionStatus).toBe('disconnected'));
+			await waitFor(() => expect(result.current.disconnectWallet.isSuccess).toBe(true));
 
 			// Now unmount our component tree to simulate someone leaving the page.
 			unmount();
 
 			// Render our component tree again and assert that we weren't able to auto-connect.
-			const { result: updatedResult } = renderHook(() => useConnectionStatus(), { wrapper });
-			await waitFor(() => expect(updatedResult.current).toBe('disconnected'));
+			const { result: updatedResult } = renderHook(() => useCurrentWallet(), { wrapper });
+			expect(updatedResult.current).toBeFalsy();
 
 			act(() => unregister());
 		});
