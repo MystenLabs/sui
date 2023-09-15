@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use async_trait::async_trait;
 use fastcrypto::hash::Hash as _Hash;
 use fastcrypto::traits::ToFromBytes;
@@ -19,12 +19,15 @@ use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI, TimestampMs};
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU64, NonZeroUsize};
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::authenticator_state::ActiveJwk;
@@ -36,7 +39,152 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum TrafficProfile {
+    Low,
+    High,
+}
+
+struct TrafficProfileEntry {
+    /// The traffic profile
+    profile: TrafficProfile,
+    /// The time when this traffic profile was created
+    timestamp: TimestampMs,
+    /// The calculated throughput when this profile created
+    throughput: u64,
+}
+
+#[derive(Default)]
+struct ConsensusThroughputCalculatorInner {
+    observations: VecDeque<(TimestampMs, u64)>,
+    total_transactions: u64,
+}
+
+struct ConsensusThroughputCalculator {
+    observations_window: u64,
+    traffic_profile_update_window: u64,
+    inner: Mutex<ConsensusThroughputCalculatorInner>,
+    last_traffic_profile: ArcSwapOption<TrafficProfileEntry>,
+    current_throughput: AtomicU64,
+}
+
+impl ConsensusThroughputCalculator {
+    pub fn new(observations_window: NonZeroU64, traffic_profile_update_window: NonZeroU64) -> Self {
+        Self {
+            observations_window: observations_window.get(),
+            traffic_profile_update_window: traffic_profile_update_window.get(),
+            inner: Mutex::new(ConsensusThroughputCalculatorInner::default()),
+            last_traffic_profile: ArcSwapOption::empty(), // assume high traffic so the node is more conservative on bootstrap
+            current_throughput: AtomicU64::new(0),
+        }
+    }
+
+    // Adds an observation of the number of transactions that have been sequenced after deduplication
+    // and the corresponding leader timestamp. The observation timestamps should be monotonically
+    // incremented otherwise observation will be ignored.
+    pub fn add_transactions(&self, timestamp_ms: TimestampMs, num_of_transactions: u64) {
+        let mut inner = self.inner.lock();
+
+        // First check that the timestamp is monotonically incremented - ignore any observation that is not
+        // later from previous one (it shouldn't really happen).
+        if let Some((front_ts, _)) = inner.observations.front() {
+            if timestamp_ms < *front_ts {
+                warn!("Ignoring observation of transactions:{} as has earlier timestamp than last observation {}ms < {}ms", num_of_transactions, timestamp_ms, front_ts);
+                return;
+            }
+        }
+
+        // If it's the very first observation we just use it as timestamp and don't count any transactions.
+        let num_of_transactions = if !inner.observations.is_empty() {
+            num_of_transactions
+        } else {
+            0
+        };
+        inner
+            .observations
+            .push_front((timestamp_ms, num_of_transactions));
+
+        // update total number of transactions in the observations list
+        inner.total_transactions = inner.total_transactions.saturating_add(num_of_transactions);
+
+        // If we have more values on our window of max values, remove the last one, and update the num of transactions
+        // We also update the traffic profile when we have at least MAX_VALUES in our observations.
+        if inner.observations.len() as u64 > self.observations_window {
+            let (last_element_ts, last_element_transactions) =
+                inner.observations.pop_back().unwrap();
+            inner.total_transactions = inner
+                .total_transactions
+                .saturating_sub(last_element_transactions);
+
+            println!("Total transactions: {}", inner.total_transactions);
+
+            // get the first element's timestamp to calculate the transaction rate
+            let (first_element_ts, _first_element_transactions) = inner
+                .observations
+                .front()
+                .expect("There should be at least on element in the list");
+
+            let period = first_element_ts.saturating_sub(last_element_ts) / 1_000; // Convert the milliseconds to seconds.
+
+            if period > 0 {
+                let current_throughput = inner.total_transactions / period;
+
+                self.update_traffic_profile(current_throughput, timestamp_ms);
+            } else {
+                warn!("Skip calculating throughput as time period is {}. This is very unlikely to happen, should investigate.", period);
+            }
+        }
+    }
+
+    // Calculate the traffic profile based on
+    fn update_traffic_profile(&self, throughput: u64, timestamp: TimestampMs) {
+        let profile = if throughput < 2_000u64 {
+            TrafficProfile::Low
+        } else {
+            TrafficProfile::High
+        };
+
+        let should_update_profile = self.last_traffic_profile.load().as_ref().map_or_else(
+            || true,
+            |entry| {
+                // update only when we have a new profile
+                profile != entry.profile
+                    && timestamp - entry.timestamp >= self.traffic_profile_update_window
+            },
+        );
+
+        if should_update_profile {
+            self.last_traffic_profile
+                .store(Some(Arc::new(TrafficProfileEntry {
+                    profile,
+                    timestamp,
+                    throughput,
+                })));
+        }
+
+        // Also update the current throughput
+        self.current_throughput.store(throughput, Relaxed);
+    }
+
+    // Return the current traffic profile and the corresponding throughput when this was last updated.
+    // If that is not set yet then as default the High profile is returned and the throughput will be None.
+    pub fn traffic_profile(&self) -> (TrafficProfile, u64) {
+        let profile = self.last_traffic_profile.load();
+        profile.as_ref().map_or_else(
+            || (TrafficProfile::Low, 0),
+            |entry| (entry.profile, entry.throughput),
+        )
+    }
+
+    // Returns the current (live calculated) throughput. If want to get the current throughput use
+    // this method. If want to figure out what was the throughput when the traffic profile was last
+    // calculated then use the traffic_profile() method.
+    pub fn current_throughput(&self) -> u64 {
+        self.current_throughput.load(Relaxed)
+    }
+}
 
 pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -675,6 +823,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointServiceNoop;
     use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
+    use crate::consensus_handler::TrafficProfile::{High, Low};
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -693,6 +842,74 @@ mod tests {
     use sui_types::transaction::{
         CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     };
+
+    #[tokio::test]
+    pub async fn test_consensus_throughput_calculate() {
+        let traffic_profile_update_window: NonZeroU64 = NonZeroU64::new(5_000).unwrap();
+        let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
+
+        let calculator = ConsensusThroughputCalculator::new(
+            max_observation_points,
+            traffic_profile_update_window,
+        );
+
+        // When no transactions exists, the calculator will return by default "High" to err on the
+        // assumption that there is lots of load.
+        assert_eq!(calculator.traffic_profile(), (Low, 0));
+
+        calculator.add_transactions(1000 as TimestampMs, 1_000);
+        calculator.add_transactions(2000 as TimestampMs, 1_000);
+        calculator.add_transactions(3000 as TimestampMs, 1_000);
+        calculator.add_transactions(4000 as TimestampMs, 1_000);
+
+        // We expect to have a rate of 1K tx/sec, that's < 2K limit , so traffic profile is set to "low"
+        assert_eq!(calculator.traffic_profile(), (Low, 1_000));
+
+        // We add more transactions to go over 2K tx/sec, but time window threshold not satisfied yet,
+        // and the profile is not updated yet
+        calculator.add_transactions(5_000 as TimestampMs, 2_500);
+        calculator.add_transactions(6_000 as TimestampMs, 2_800);
+        calculator.add_transactions(7_000 as TimestampMs, 2_500);
+
+        assert_eq!(calculator.traffic_profile(), (Low, 1000));
+
+        // We are adding more transactions to get over 2K tx/sec, so traffic profile should now be categorised
+        // as "high"
+        calculator.add_transactions(8_000 as TimestampMs, 2_500);
+        calculator.add_transactions(9_000 as TimestampMs, 3_000);
+
+        assert_eq!(calculator.traffic_profile(), (High, 2666));
+        assert_eq!(calculator.current_throughput(), 2666);
+
+        // Let's now add 0 transactions after 5 seconds. Since 5 seconds have passed since the last
+        // update and now the transactions are 0 we expect the traffic to be calculate as:
+        // 3000 + 2500 + 0 = 5500 / 15 - 7sec = 5500 / 8sec = 785 tx/sec
+        calculator.add_transactions(15_000 as TimestampMs, 0);
+
+        assert_eq!(calculator.traffic_profile(), (Low, 687));
+        assert_eq!(calculator.current_throughput(), 687);
+
+        // Adding zero transactions for the next 5 seconds will make throughput zero
+        // Traffic profile will remain as Low as it won't get updated.
+        calculator.add_transactions(17_000 as TimestampMs, 0);
+        assert_eq!(calculator.current_throughput(), 333);
+
+        calculator.add_transactions(19_000 as TimestampMs, 0);
+        assert_eq!(calculator.current_throughput(), 0);
+
+        calculator.add_transactions(20_000 as TimestampMs, 0);
+
+        assert_eq!(calculator.traffic_profile(), (Low, 687));
+        assert_eq!(calculator.current_throughput(), 0);
+
+        // By adding now a few entries with lots of transactions will trigger a traffic profile update
+        // since the last one happened on timestamp 15_000ms.
+        calculator.add_transactions(21_000 as TimestampMs, 1_000);
+        calculator.add_transactions(22_000 as TimestampMs, 2_000);
+        calculator.add_transactions(23_000 as TimestampMs, 3_000);
+        assert_eq!(calculator.traffic_profile(), (High, 2000));
+        assert_eq!(calculator.current_throughput(), 2000);
+    }
 
     #[tokio::test]
     pub async fn test_consensus_handler() {
