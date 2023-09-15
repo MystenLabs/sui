@@ -7,50 +7,48 @@ import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import zxcvbn from 'zxcvbn';
+import { AutoLockSelector, zodSchema } from './AutoLockSelector';
+import { parseAutoLock, useAutoLockMinutes } from '../../hooks/useAutoLockMinutes';
 import { Link } from '../../shared/Link';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
-import { SelectField } from '../../shared/forms/SelectField';
 import { TextField } from '../../shared/forms/TextField';
 import { addDot } from '../../shared/input/password/validation';
 import { Button } from '_app/shared/ButtonUI';
 import { ToS_LINK } from '_src/shared/constants';
 
-const LOCK_INTERVALS = ['Hour', 'Minute'];
-
-const formSchema = z.object({
-	password: z
-		.object({
-			input: z
-				.string()
-				.nonempty('Required')
-				.superRefine((val, ctx) => {
-					const {
-						score,
-						feedback: { warning, suggestions },
-					} = zxcvbn(val);
-					if (score <= 2) {
-						ctx.addIssue({
-							code: z.ZodIssueCode.custom,
-							message: `${addDot(warning) || 'Password is not strong enough.'}${
-								suggestions ? ` ${suggestions.join(' ')}` : ''
-							}`,
-						});
-					}
-				}),
-			confirmation: z.string().nonempty('Required'),
-		})
-		.refine(({ input, confirmation }) => input && confirmation && input === confirmation, {
-			path: ['confirmation'],
-			message: "Passwords don't match",
+const formSchema = z
+	.object({
+		password: z
+			.object({
+				input: z
+					.string()
+					.nonempty('Required')
+					.superRefine((val, ctx) => {
+						const {
+							score,
+							feedback: { warning, suggestions },
+						} = zxcvbn(val);
+						if (score <= 2) {
+							ctx.addIssue({
+								code: z.ZodIssueCode.custom,
+								message: `${addDot(warning) || 'Password is not strong enough.'}${
+									suggestions ? ` ${suggestions.join(' ')}` : ''
+								}`,
+							});
+						}
+					}),
+				confirmation: z.string().nonempty('Required'),
+			})
+			.refine(({ input, confirmation }) => input && confirmation && input === confirmation, {
+				path: ['confirmation'],
+				message: "Passwords don't match",
+			}),
+		acceptedTos: z.literal<boolean>(true, {
+			errorMap: () => ({ message: 'Please accept Terms of Service to continue' }),
 		}),
-	acceptedTos: z.literal<boolean>(true, {
-		errorMap: () => ({ message: 'Please accept Terms of Service to continue' }),
-	}),
-	enabledAutolock: z.boolean(),
-	autoLockTimer: z.coerce.number().gt(0, 'Must be greater than 0'),
-	autoLockInterval: z.enum(['Hour', 'Minute']),
-});
+	})
+	.merge(zodSchema);
 
 export type FormValues = z.infer<typeof formSchema>;
 
@@ -67,15 +65,14 @@ export function ProtectAccountForm({
 	onSubmit,
 	displayToS = true,
 }: ProtectAccountFormProps) {
+	const autoLock = useAutoLockMinutes();
 	const form = useZodForm({
 		mode: 'all',
 		schema: formSchema,
-		defaultValues: {
+		values: {
 			password: { input: '', confirmation: '' },
 			acceptedTos: !displayToS,
-			enabledAutolock: false,
-			autoLockTimer: 1,
-			autoLockInterval: 'Hour',
+			autoLock: parseAutoLock(autoLock.data || null),
 		},
 	});
 	const {
@@ -107,15 +104,9 @@ export function ProtectAccountForm({
 				label="Confirm Account Password"
 				{...register('password.confirmation')}
 			/>
-			<div className="flex flex-col gap-4">
-				<CheckboxField name="enabledAutolock" label="Auto-lock after I am inactive for" disabled />
-				<div className="flex items-start justify-between gap-2">
-					<TextField disabled type="number" {...register('autoLockTimer')} />
-					<SelectField disabled name="autoLockInterval" options={LOCK_INTERVALS} />
-				</div>
-			</div>
-
-			<div className="flex flex-col gap-5 mt-auto">
+			<AutoLockSelector />
+			<div className="flex-1" />
+			<div className="flex flex-col gap-5">
 				{displayToS ? (
 					<CheckboxField
 						name="acceptedTos"

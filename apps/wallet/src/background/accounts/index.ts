@@ -175,6 +175,13 @@ export async function addNewAccounts<T extends SerializedAccount>(accounts: Omit
 	return accountsCreated;
 }
 
+export async function lockAllAccounts() {
+	const allAccounts = await getAllAccounts();
+	for (const anAccount of allAccounts) {
+		await anAccount.lock();
+	}
+}
+
 export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConnection) {
 	const { payload } = msg;
 	if (isMethodPayload(payload, 'lockAccountSourceOrAccount')) {

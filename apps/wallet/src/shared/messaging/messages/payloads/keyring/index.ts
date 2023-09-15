@@ -59,20 +59,6 @@ type MethodToPayloads = {
 	/**
 	 * @deprecated
 	 */
-	appStatusUpdate: {
-		args: { active: boolean };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	setLockTimeout: {
-		args: { timeout: number };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
 	signData: {
 		args: { data: string; address: string };
 		return: SerializedSignature;

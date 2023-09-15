@@ -55,6 +55,10 @@ type MethodPayloads = {
 	getAccountSourceEntropy: { accountSourceID: string };
 	getAccountSourceEntropyResponse: { entropy: string };
 	clearWallet: {};
+	getAutoLockMinutes: {};
+	getAutoLockMinutesResponse: { minutes: number | null };
+	setAutoLockMinutes: { minutes: number | null };
+	notifyUserActive: {};
 };
 
 type Methods = keyof MethodPayloads;

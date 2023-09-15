@@ -16,6 +16,7 @@ import {
 import { accountSourcesEvents } from './events';
 import { getAllAccounts } from '../accounts';
 import { MnemonicAccount, type MnemonicSerializedAccount } from '../accounts/MnemonicAccount';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { backupDB, getDB } from '../db';
 import { makeUniqueKey } from '../storage-utils';
 import {
@@ -124,6 +125,7 @@ export class MnemonicAccountSource extends AccountSource<
 		const { encryptedData } = await this.getStoredData();
 		const decryptedData = await decrypt<DataDecrypted>(password, encryptedData);
 		await this.setEphemeralValue(decryptedData);
+		await setupAutoLockAlarm();
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 

@@ -8,6 +8,7 @@ import {
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 import { accountsEvents } from './events';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { getDB } from '../db';
 import {
 	clearEphemeralValue,
@@ -97,6 +98,7 @@ export abstract class Account<
 	}
 
 	protected async onUnlocked() {
+		await setupAutoLockAlarm();
 		await (await getDB()).accounts.update(this.id, { lastUnlockedOn: Date.now() });
 		accountsEvents.emit('accountStatusChanged', { accountID: this.id });
 	}
