@@ -198,9 +198,9 @@ impl From<Error> for RpcError {
                             .collect();
 
                         assert!(
-                        !new_errors.is_empty(),
-                        "NonRecoverableTransactionError should have at least one non-retryable error"
-                    );
+                            !new_errors.is_empty(),
+                            "NonRecoverableTransactionError should have at least one non-retryable error"
+                        );
 
                         let error_list = new_errors.join(", ");
                         let error_msg = format!("Transaction execution failed due to issues with transaction inputs, please review the errors and try again: {}.", error_list);

@@ -734,6 +734,8 @@ impl SuiError {
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
             SuiError::ObjectLockConflict { .. } => (false, true),
 
             _ => (false, false),
