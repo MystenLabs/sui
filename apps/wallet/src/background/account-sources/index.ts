@@ -92,6 +92,13 @@ export async function getQredoAccountSource(filter: string | QredoConnectIdentit
 	return accountSource;
 }
 
+export async function lockAllAccountSources() {
+	const allAccountSources = await getAccountSources();
+	for (const anAccountSource of allAccountSources) {
+		await anAccountSource.lock();
+	}
+}
+
 export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: UiConnection) {
 	const { payload } = msg;
 	if (isMethodPayload(payload, 'createAccountSource')) {
@@ -140,7 +147,7 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 				{
 					type: 'method-payload',
 					method: 'getAccountSourceEntropyResponse',
-					args: { entropy: await accountSource.getEntropy() },
+					args: { entropy: await accountSource.getEntropy(payload.args.password) },
 				},
 				msg.id,
 			),

@@ -4,12 +4,13 @@
 import { lte, coerce } from 'semver';
 import Browser from 'webextension-polyfill';
 
-import Alarms, { CLEAN_UP_ALARM_NAME, LOCK_ALARM_NAME } from './Alarms';
+import Alarms, { cleanUpAlarmName, autoLockAlarmName } from './Alarms';
 import NetworkEnv from './NetworkEnv';
 import Permissions from './Permissions';
 import Transactions from './Transactions';
+import { lockAllAccountSources } from './account-sources';
 import { accountSourcesEvents } from './account-sources/events';
-import { getAccountsStatusData, getAllAccounts } from './accounts';
+import { getAccountsStatusData, getAllAccounts, lockAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
 import Keyring from './keyring';
@@ -104,9 +105,10 @@ accountSourcesEvents.on('accountSourcesChanged', () => {
 });
 
 Browser.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === LOCK_ALARM_NAME) {
-		Keyring.reviveDone.finally(() => Keyring.lock());
-	} else if (alarm.name === CLEAN_UP_ALARM_NAME) {
+	if (alarm.name === autoLockAlarmName) {
+		lockAllAccounts();
+		lockAllAccountSources();
+	} else if (alarm.name === cleanUpAlarmName) {
 		Transactions.clearStaleTransactions();
 	}
 });

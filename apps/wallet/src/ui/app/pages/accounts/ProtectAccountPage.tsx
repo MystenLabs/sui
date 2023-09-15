@@ -9,6 +9,8 @@ import { ProtectAccountForm } from '../../components/accounts/ProtectAccountForm
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import Loading from '../../components/loading';
 import { useAccounts } from '../../hooks/useAccounts';
+import { autoLockDataToMinutes } from '../../hooks/useAutoLockMinutes';
+import { useAutoLockMinutesMutation } from '../../hooks/useAutoLockMinutesMutation';
 import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
@@ -72,11 +74,12 @@ export function ProtectAccountPage() {
 		},
 		[createMutation, navigate, successRedirect],
 	);
+	const autoLockMutation = useAutoLockMinutesMutation();
 	if (!isAllowedAccountType(accountType)) {
 		return <Navigate to="/" replace />;
 	}
 	return (
-		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 overflow-auto w-popup-width h-popup-height">
+		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 overflow-auto w-popup-width max-h-popup-height min-h-popup-minimum h-screen">
 			<Loading loading={showVerifyPasswordView === null}>
 				{showVerifyPasswordView ? (
 					<VerifyPasswordModal
@@ -98,7 +101,10 @@ export function ProtectAccountPage() {
 							<ProtectAccountForm
 								cancelButtonText="Back"
 								submitButtonText="Create Wallet"
-								onSubmit={({ password }) => createAccountCallback(password.input, accountType)}
+								onSubmit={async ({ password, autoLock }) => {
+									await autoLockMutation.mutateAsync({ minutes: autoLockDataToMinutes(autoLock) });
+									await createAccountCallback(password.input, accountType);
+								}}
 							/>
 						</div>
 					</>

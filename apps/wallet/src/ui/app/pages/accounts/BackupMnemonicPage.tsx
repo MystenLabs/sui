@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ArrowLeft16, Check12 } from '@mysten/icons';
-import { useMutation } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import { useAccountSources } from '../../hooks/useAccountSources';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { useExportPassphraseMutation } from '../../hooks/useExportPassphraseMutation';
 import { Button } from '_app/shared/ButtonUI';
 import { CardLayout } from '_app/shared/card-layout';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
-import { entropyToMnemonic, toEntropy } from '_src/shared/utils/bip39';
 import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 
 export function BackupMnemonicPage() {
@@ -30,22 +28,19 @@ export function BackupMnemonicPage() {
 	const [showPasswordDialog, setShowPasswordDialog] = useState(false);
 	const [passwordConfirmed, setPasswordConfirmed] = useState(false);
 	const requirePassword = !isOnboardingFlow || !!selectedSource?.isLocked;
-	const backgroundClient = useBackgroundClient();
-	const mnemonicMutation = useMutation({
-		mutationKey: ['get mnemonic'],
-		mutationFn: async ({ sourceID }: { sourceID: string }) => {
-			const { entropy } = await backgroundClient.getAccountSourceEntropy(sourceID);
-			return entropyToMnemonic(toEntropy(entropy)).split(' ');
-		},
-	});
+	const passphraseMutation = useExportPassphraseMutation();
 	useEffect(() => {
 		(async () => {
-			if ((requirePassword && !passwordConfirmed) || !mnemonicMutation.isIdle || !accountSourceID) {
+			if (
+				(requirePassword && !passwordConfirmed) ||
+				!passphraseMutation.isIdle ||
+				!accountSourceID
+			) {
 				return;
 			}
-			mnemonicMutation.mutate({ sourceID: accountSourceID });
+			passphraseMutation.mutate({ accountSourceID: accountSourceID });
 		})();
-	}, [requirePassword, passwordConfirmed, accountSourceID, mnemonicMutation]);
+	}, [requirePassword, passwordConfirmed, accountSourceID, passphraseMutation]);
 	useEffect(() => {
 		if (requirePassword && !passwordConfirmed && !showPasswordDialog) {
 			setShowPasswordDialog(true);
@@ -65,9 +60,9 @@ export function BackupMnemonicPage() {
 							navigate(-1);
 						}}
 						onVerify={async (password) => {
-							await backgroundClient.unlockAccountSourceOrAccount({
-								id: selectedSource!.id,
+							await passphraseMutation.mutateAsync({
 								password,
+								accountSourceID: selectedSource!.id,
 							});
 							setPasswordConfirmed(true);
 							setShowPasswordDialog(false);
@@ -91,12 +86,12 @@ export function BackupMnemonicPage() {
 									Your recovery phrase makes it easy to back up and restore your account.
 								</Text>
 							</div>
-							<Loading loading={mnemonicMutation.isLoading}>
-								{mnemonicMutation.data ? (
-									<HideShowDisplayBox value={mnemonicMutation.data} hideCopy />
+							<Loading loading={passphraseMutation.isLoading}>
+								{passphraseMutation.data ? (
+									<HideShowDisplayBox value={passphraseMutation.data} hideCopy />
 								) : (
 									<Alert>
-										{(mnemonicMutation.error as Error)?.message || 'Something went wrong'}
+										{(passphraseMutation.error as Error)?.message || 'Something went wrong'}
 									</Alert>
 								)}
 							</Loading>

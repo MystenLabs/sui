@@ -46,7 +46,7 @@ export function AccountListItem({ account, editable }: AccountListItemProps) {
 					</div>
 				</div>
 			}
-			address={account.address}
+			accountID={account.id}
 			editable={editable}
 		/>
 	);

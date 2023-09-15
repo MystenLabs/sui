@@ -15,7 +15,7 @@ const SelectTrigger = forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<SelectPrimitive.Trigger
 		ref={ref}
-		className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-[40px]"
+		className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-[40px] cursor-pointer disabled:cursor-default"
 		{...props}
 	>
 		{children}
@@ -31,7 +31,11 @@ const SelectContent = forwardRef<
 	React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
 >(({ className, children, ...props }, ref) => (
 	<SelectPrimitive.Portal>
-		<SelectPrimitive.Content ref={ref} className="z-10 min-w-[112px] bg-transparent" {...props}>
+		<SelectPrimitive.Content
+			ref={ref}
+			className="z-[99999] min-w-[112px] bg-transparent"
+			{...props}
+		>
 			<SelectPrimitive.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-md shadow-md">
 				{children}
 			</SelectPrimitive.Viewport>

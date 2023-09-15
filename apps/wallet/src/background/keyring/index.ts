@@ -4,7 +4,6 @@
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { fromB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
-import { throttle } from 'throttle-debounce';
 
 import { type Account, isImportedOrDerivedAccount, isQredoAccount } from './Account';
 import { DerivedAccount } from './DerivedAccount';
@@ -16,13 +15,6 @@ import { getAllQredoConnections } from '../qredo/storage';
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
-import { entropyToSerialized } from '_shared/utils/bip39';
-import Alarms from '_src/background/Alarms';
-import {
-	AUTO_LOCK_TIMER_MAX_MINUTES,
-	AUTO_LOCK_TIMER_MIN_MINUTES,
-	AUTO_LOCK_TIMER_STORAGE_KEY,
-} from '_src/shared/constants';
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
@@ -83,7 +75,6 @@ export class Keyring {
 		this.#mainDerivedAccount = null;
 		this.#locked = true;
 		await VaultStorage.lock();
-		await Alarms.clearLockAlarm();
 		this.notifyLockedStatusUpdate(this.#locked);
 	}
 
@@ -152,30 +143,6 @@ export class Keyring {
 			return null;
 		}
 		return Array.from(this.#accountsMap.values());
-	}
-
-	/**
-	 * Exports the keypair for the specified address. Verifies that the password provided is the correct one and only then returns the keypair.
-	 * This is useful to be used for exporting the to the UI for the user to backup etc. Getting accounts and keypairs is possible without using
-	 * a password by using {@link Keypair.getAccounts} or {@link Keypair.getActiveAccount} or the change events
-	 * @param address The sui address to export the keypair
-	 * @param password The current password of the vault
-	 * @returns null if locked or address not found or the exported keypair
-	 * @throws if wrong password is provided
-	 */
-	public async exportAccountKeypair(address: string, password: string) {
-		if (this.isLocked) {
-			return null;
-		}
-		if (await VaultStorage.verifyPassword(password)) {
-			const account = this.#accountsMap.get(address);
-			if (!account || !isImportedOrDerivedAccount(account)) {
-				return null;
-			}
-			return account.accountKeypair.exportKeypair();
-		} else {
-			throw new Error('Wrong password');
-		}
 	}
 
 	public async importAccountKeypair(keypair: ExportedKeypair, password: string) {
@@ -248,23 +215,6 @@ export class Keyring {
 				const { password, importedEntropy } = payload.args;
 				await this.createVault(password, importedEntropy);
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'getEntropy')) {
-				if (this.#locked) {
-					throw new Error('Keyring is locked. Unlock it first.');
-				}
-				if (!VaultStorage.entropy) {
-					throw new Error('Error vault is empty');
-				}
-				uiConnection.send(
-					createMessage<KeyringPayload<'getEntropy'>>(
-						{
-							type: 'keyring',
-							method: 'getEntropy',
-							return: entropyToSerialized(VaultStorage.entropy),
-						},
-						id,
-					),
-				);
 			} else if (isKeyringPayload(payload, 'unlock') && payload.args) {
 				await this.unlock(payload.args.password);
 				uiConnection.send(createMessage({ type: 'done' }, id));
@@ -273,16 +223,6 @@ export class Keyring {
 				uiConnection.send(createMessage({ type: 'done' }, id));
 			} else if (isKeyringPayload(payload, 'clear')) {
 				await this.clearVault();
-				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'appStatusUpdate')) {
-				const appActive = payload.args?.active;
-				if (appActive) {
-					this.postponeLock();
-				}
-			} else if (isKeyringPayload(payload, 'setLockTimeout')) {
-				if (payload.args) {
-					await this.setLockTimeout(payload.args.timeout);
-				}
 				uiConnection.send(createMessage({ type: 'done' }, id));
 			} else if (isKeyringPayload(payload, 'signData')) {
 				if (this.#locked) {
@@ -335,34 +275,6 @@ export class Keyring {
 					throw new Error('Wrong password');
 				}
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'exportAccount') && payload.args) {
-				const keyPair = await this.exportAccountKeypair(
-					payload.args.accountAddress,
-					payload.args.password,
-				);
-
-				if (!keyPair) {
-					throw new Error(`Account ${payload.args.accountAddress} not found`);
-				}
-				uiConnection.send(
-					createMessage<KeyringPayload<'exportAccount'>>(
-						{
-							type: 'keyring',
-							method: 'exportAccount',
-							return: { keyPair },
-						},
-						id,
-					),
-				);
-			} else if (isKeyringPayload(payload, 'importPrivateKey') && payload.args) {
-				const imported = await this.importAccountKeypair(
-					payload.args.keyPair,
-					payload.args.password,
-				);
-				if (!imported) {
-					throw new Error('Duplicate account not imported');
-				}
-				uiConnection.send(createMessage({ type: 'done' }, id));
 			}
 		} catch (e) {
 			uiConnection.send(
@@ -373,26 +285,6 @@ export class Keyring {
 
 	private notifyLockedStatusUpdate(isLocked: boolean) {
 		this.#events.emit('lockedStatusUpdate', isLocked);
-	}
-
-	private postponeLock = throttle(
-		1000,
-		async () => {
-			if (!this.isLocked) {
-				await Alarms.setLockAlarm();
-			}
-		},
-		{ noLeading: false },
-	);
-
-	private async setLockTimeout(timeout: number) {
-		if (timeout > AUTO_LOCK_TIMER_MAX_MINUTES || timeout < AUTO_LOCK_TIMER_MIN_MINUTES) {
-			return;
-		}
-		await setToLocalStorage(AUTO_LOCK_TIMER_STORAGE_KEY, timeout);
-		if (!this.isLocked) {
-			await Alarms.setLockAlarm();
-		}
 	}
 
 	private async revive() {
@@ -407,7 +299,6 @@ export class Keyring {
 		if (!mnemonicSeedHex) {
 			return;
 		}
-		Alarms.setLockAlarm();
 		const lastAccountIndex = await this.getLastDerivedIndex();
 		for (let i = 0; i <= lastAccountIndex; i++) {
 			const account = this.deriveAccount(i, mnemonicSeedHex);

@@ -32,13 +32,13 @@ async fn main() -> Result<(), AnalyticsIndexerError> {
     mysten_metrics::init_metrics(&registry);
     let metrics = AnalyticsMetrics::new(&registry);
 
-    // TODO: find out the last checkpoint downloaded from the database
-    //       or some stable source..
-    let last_downloaded_checkpoint = config.starting_checkpoint;
     let rest_url = config.rest_url.clone();
-    let processor = AnalyticsProcessor::new(config, metrics);
+    let processor = AnalyticsProcessor::new(config, metrics)
+        .await
+        .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
+    let last_committed_checkpoint = Some(processor.last_committed_checkpoint()).filter(|x| *x > 0);
     IndexerBuilder::new()
-        .last_downloaded_checkpoint(last_downloaded_checkpoint)
+        .last_downloaded_checkpoint(last_committed_checkpoint)
         .rest_url(&rest_url)
         .handler(processor)
         .run()

@@ -2,25 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
+use crate::writer::TableWriter;
 use crate::{
     analytics_metrics::AnalyticsMetrics,
     csv_writer::CSVWriter,
-    errors::AnalyticsIndexerError,
+    read_manifest,
     tables::{
         CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, ObjectEntry, ObjectStatus,
         OwnerType, TransactionEntry, TransactionObjectEntry,
     },
+    write_manifest,
     writer::CheckpointWriter,
-    AnalyticsIndexerConfig,
+    AnalyticsIndexerConfig, CheckpointUpdates, FileFormat, FileType, Manifest, EPOCH_DIR_PREFIX,
 };
+use anyhow::{Context, Result};
 use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::EncodeDecodeBase64,
 };
 use move_core_types::identifier::IdentStr;
+use object_store::path::Path;
+use object_store::DynObjectStore;
 use std::collections::BTreeSet;
+use std::fs;
+use std::ops::Range;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
+use strum::IntoEnumIterator;
 use sui_indexer::framework::interface::Handler;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
+use sui_storage::object_store::util::{copy_file, path_to_filesystem};
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::{
     base_types::ObjectID,
     digests::TransactionDigest,
@@ -30,6 +43,9 @@ use sui_types::{
     object::{Object, Owner},
     transaction::{TransactionData, TransactionDataAPI},
 };
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::oneshot::Sender as OneshotSender;
+use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
 // The main processor for analytics indexer.
@@ -37,8 +53,14 @@ pub struct AnalyticsProcessor {
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
     writer: CheckpointWriter,
-    data_writer: Option<CSVWriter>,
-    start_checkpoint_to_commit: u64,
+    table_writer: Box<dyn TableWriter>,
+    current_epoch: u64,
+    current_checkpoint_range: Range<u64>,
+    manifest: Manifest,
+    last_commit_instant: Instant,
+    remote_object_store: Arc<DynObjectStore>,
+    kill_sender: OneshotSender<()>,
+    sender: Sender<CheckpointUpdates>,
 }
 
 // Main callback from the indexer framework.
@@ -49,25 +71,44 @@ impl Handler for AnalyticsProcessor {
         "checkpoint-analytics-processor"
     }
 
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+        // get epoch id, checkpoint sequence number and timestamp, those are important
+        // indexes when operating on data
+        let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();
+        let checkpoint_num: u64 = *checkpoint_data.checkpoint_summary.sequence_number();
+        let timestamp: u64 = checkpoint_data.checkpoint_summary.data().timestamp_ms;
+        info!("Processing checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
+
+        if epoch
+            == self
+                .current_epoch
+                .checked_add(1)
+                .context("Epoch num overflow")?
+        {
+            self.cut().await?;
+            self.update_to_next_epoch();
+            self.create_epoch_dirs()?;
+            self.reset()?;
+        }
+
+        assert_eq!(epoch, self.current_epoch);
+
+        assert_eq!(checkpoint_num, self.current_checkpoint_range.end);
+
+        let num_checkpoints_processed =
+            self.current_checkpoint_range.end - self.current_checkpoint_range.start;
+        let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
+            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s);
+        if cut_new_files {
+            self.cut().await?;
+            self.reset()?;
+        }
+
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
             ..
         } = checkpoint_data;
-        // get epoch id, checkpoint sequence number and timestamp, those are important
-        // indexes when operating on data
-        let epoch: u64 = checkpoint_summary.epoch();
-        let checkpoint_num: u64 = *checkpoint_summary.sequence_number();
-        let timestamp: u64 = checkpoint_summary.data().timestamp_ms;
-        info!("Processing checkpoint {checkpoint_num}, eqpoch {epoch}, timestamp {timestamp}");
-
-        self.check_writer(checkpoint_num).unwrap_or_else(|e| {
-            panic!(
-                "Cannot create table writer when processing checkpoint: {:?}",
-                e
-            )
-        });
 
         self.process_checkpoints(checkpoint_summary, checkpoint_transactions);
         for checkpoint_transaction in checkpoint_transactions {
@@ -83,21 +124,81 @@ impl Handler for AnalyticsProcessor {
                 self.process_events(epoch, checkpoint_num, digest, timestamp, events);
             }
         }
-        self.save_locally(checkpoint_num);
-        self.upload_to_datastore(checkpoint_num);
+        self.save_locally()?;
+        self.current_checkpoint_range.end = self
+            .current_checkpoint_range
+            .end
+            .checked_add(1)
+            .context("Checkpoint sequence num overflow")?;
         Ok(())
     }
 }
 
 impl AnalyticsProcessor {
-    pub fn new(config: AnalyticsIndexerConfig, metrics: AnalyticsMetrics) -> Self {
-        Self {
+    pub async fn new(config: AnalyticsIndexerConfig, metrics: AnalyticsMetrics) -> Result<Self> {
+        let local_store_config = ObjectStoreConfig {
+            directory: Some(config.checkpoint_dir.clone()),
+            object_store: Some(ObjectStoreType::File),
+            ..Default::default()
+        };
+        let local_object_store = local_store_config.make()?;
+        let remote_object_store = config.remote_store_config.make()?;
+        let remote_store_is_empty = remote_object_store
+            .list_with_delimiter(None)
+            .await
+            .expect("Failed to read remote analytics store")
+            .common_prefixes
+            .is_empty();
+        info!("Remote store is empty: {remote_store_is_empty}");
+        let manifest = if remote_store_is_empty {
+            // Start from genesis
+            Manifest::new(0, 0)
+        } else {
+            read_manifest(remote_object_store.clone())
+                .await
+                .expect("Failed to read manifest")
+        };
+        let epoch = manifest.epoch_num();
+        let next_checkpoint_seq_num = manifest.next_checkpoint_seq_num();
+        info!("Manifest starting epoch = {epoch}, next_checkpoint_seq_num = {next_checkpoint_seq_num}");
+        let (kill_sender, kill_receiver) = tokio::sync::oneshot::channel::<()>();
+        let (sender, receiver) = mpsc::channel::<CheckpointUpdates>(100);
+        tokio::spawn(Self::start_syncing_with_remote(
+            remote_object_store.clone(),
+            local_object_store.clone(),
+            config.checkpoint_dir.clone(),
+            receiver,
+            kill_receiver,
+            metrics.clone(),
+        ));
+        let table_writer = match config.file_format {
+            FileFormat::CSV => Box::new(CSVWriter::new(
+                &config.checkpoint_dir,
+                epoch,
+                next_checkpoint_seq_num,
+            )?),
+        };
+        info!(
+            "{}",
+            format!("created table writer of type: {}", config.file_format)
+        );
+        Ok(Self {
             config,
             metrics,
             writer: CheckpointWriter::new(),
-            data_writer: None,
-            start_checkpoint_to_commit: 0,
-        }
+            table_writer,
+            current_epoch: epoch,
+            current_checkpoint_range: next_checkpoint_seq_num..next_checkpoint_seq_num,
+            manifest,
+            last_commit_instant: Instant::now(),
+            remote_object_store,
+            kill_sender,
+            sender,
+        })
+    }
+
+    pub fn last_committed_checkpoint(&self) -> u64 {
+        self.manifest.next_checkpoint_seq_num().saturating_sub(1)
     }
 
     // Overall checkpoint data.
@@ -404,31 +505,120 @@ impl AnalyticsProcessor {
         }
     }
 
-    // Ensure a writer is in place
-    fn check_writer(&mut self, checkpoint: u64) -> Result<(), AnalyticsIndexerError> {
-        if self.data_writer.is_none() {
-            info!("Create csv writer at checkpoint {checkpoint}");
-            self.start_checkpoint_to_commit = checkpoint;
-            self.data_writer = Some(CSVWriter::new(&self.config, checkpoint)?);
+    // Write entries to files if so desired
+    fn save_locally(&mut self) -> Result<()> {
+        // check some condition if we do not want to flush every checkpoint
+        self.writer.write(&mut self.table_writer)?;
+        Ok(())
+    }
+
+    async fn start_syncing_with_remote(
+        remote_object_store: Arc<DynObjectStore>,
+        local_object_store: Arc<DynObjectStore>,
+        local_staging_root_dir: PathBuf,
+        mut update_receiver: Receiver<CheckpointUpdates>,
+        mut recv: oneshot::Receiver<()>,
+        metrics: AnalyticsMetrics,
+    ) -> Result<()> {
+        loop {
+            tokio::select! {
+                _ = &mut recv => break,
+                updates = update_receiver.recv() => {
+                    if let Some(checkpoint_updates) = updates {
+                        info!("Received checkpoint update: {:?}", &checkpoint_updates.files);
+                        let checkpoint_seq_num = checkpoint_updates.manifest.next_checkpoint_seq_num();
+                        for file_metadata in checkpoint_updates.files().iter() {
+                            Self::sync_file_to_remote(
+                                local_staging_root_dir.clone(),
+                                file_metadata.file_path(),
+                                local_object_store.clone(),
+                                remote_object_store.clone()
+                            )
+                            .await
+                            .expect("Syncing checkpoint should not fail");
+                        }
+                        write_manifest(
+                            checkpoint_updates.manifest,
+                            remote_object_store.clone()
+                        )
+                        .await
+                        .expect("Updating manifest should not fail");
+                        metrics.last_uploaded_checkpoint.set(checkpoint_seq_num as i64);
+                    } else {
+                        info!("Terminating upload sync loop");
+                        break;
+                    }
+                },
+            }
         }
         Ok(())
     }
 
-    // Write entries to files if so desired
-    fn save_locally(&mut self, _checkpoint: u64) {
-        info!("Save data locally");
-        // check some condition if we do not want to flush every checkpoint
-        self.writer.flush(self.data_writer.as_mut().unwrap());
+    async fn sync_file_to_remote(
+        dir: PathBuf,
+        path: Path,
+        from: Arc<DynObjectStore>,
+        to: Arc<DynObjectStore>,
+    ) -> Result<()> {
+        info!("Syncing file to remote: {:?}", path);
+        copy_file(path.clone(), path.clone(), from, to).await?;
+        fs::remove_file(path_to_filesystem(dir, &path)?)?;
+        Ok(())
     }
 
-    // Upload to datastore if desired.
-    // Rotate writer and notify upload thread.
-    fn upload_to_datastore(&mut self, checkpoint: u64) {
-        if checkpoint - self.start_checkpoint_to_commit > self.config.checkpoint_interval {
-            info!("Upload to datastore and rotate writer");
-            let _data_writer = self.data_writer.take().unwrap();
-            // notify upload thread
+    async fn cut(&mut self) -> Result<()> {
+        if !self.current_checkpoint_range.is_empty() {
+            self.table_writer.flush()?;
+            let checkpoint_updates = CheckpointUpdates::new_for_epoch(
+                self.config.file_format,
+                self.current_epoch,
+                self.current_checkpoint_range.clone(),
+                &mut self.manifest,
+            );
+            self.sender.send(checkpoint_updates).await?;
         }
+        Ok(())
+    }
+
+    fn update_to_next_epoch(&mut self) {
+        self.current_epoch = self.current_epoch.saturating_add(1);
+    }
+
+    fn epoch_dir(&self, file_type: FileType) -> Result<PathBuf> {
+        let path = path_to_filesystem(
+            self.config.checkpoint_dir.to_path_buf(),
+            &file_type.dir_prefix(),
+        )?
+        .join(format!("{}{}", EPOCH_DIR_PREFIX, self.current_epoch));
+        Ok(path)
+    }
+
+    fn create_epoch_dirs(&self) -> Result<()> {
+        for file_type in FileType::iter() {
+            let epoch_dir = self.epoch_dir(file_type)?;
+            if epoch_dir.exists() {
+                fs::remove_dir_all(&epoch_dir)?;
+            }
+            fs::create_dir_all(&epoch_dir)?;
+        }
+        Ok(())
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        self.reset_checkpoint_range();
+        self.table_writer
+            .reset(self.current_epoch, self.current_checkpoint_range.start)?;
+        self.reset_last_commit_ts();
+        Ok(())
+    }
+
+    fn reset_checkpoint_range(&mut self) {
+        self.current_checkpoint_range =
+            self.current_checkpoint_range.end..self.current_checkpoint_range.end
+    }
+
+    fn reset_last_commit_ts(&mut self) {
+        self.last_commit_instant = Instant::now();
     }
 }
 

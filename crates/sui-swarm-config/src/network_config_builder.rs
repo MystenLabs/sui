@@ -408,7 +408,7 @@ mod test {
 
         let (_inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                InMemoryStorage::new(Vec::new()),
+                &InMemoryStorage::new(Vec::new()),
                 &protocol_config,
                 metrics,
                 expensive_checks,
