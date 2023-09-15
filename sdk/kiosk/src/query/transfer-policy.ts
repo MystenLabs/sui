@@ -8,8 +8,10 @@ import {
 	TRANSFER_POLICY_CREATED_EVENT,
 	TRANSFER_POLICY_TYPE,
 	TransferPolicy,
+	TransferPolicyCap,
 } from '../types';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
+import { getAllOwnedObjects, parseTransferPolicyCapObject } from '../utils';
 
 /**
  * Searches the `TransferPolicy`-s for the given type. The seach is performed via
@@ -65,30 +67,66 @@ export async function queryTransferPolicy(
  * Extra options allow pagination.
  * @returns TransferPolicyCap Object ID | undefined if not found.
  */
-export async function queryOwnedTransferPolicyCap(
+export async function queryTransferPolicyCapsByType(
 	client: SuiClient,
 	address: string,
-	itemType: string,
-): Promise<string | undefined> {
-	if (!isValidSuiAddress(address)) return;
+	type: string,
+): Promise<TransferPolicyCap[]> {
+	if (!isValidSuiAddress(address)) return [];
+
+	const filter = {
+		MatchAll: [
+			{
+				StructType: `${TRANSFER_POLICY_CAP_TYPE}<${type}>`,
+			},
+		],
+	};
 
 	// fetch owned kiosk caps, paginated.
-	const { data } = await client.getOwnedObjects({
+	const data = await getAllOwnedObjects({
+		client,
+		filter,
 		owner: address,
-		filter: {
-			MatchAll: [
-				{
-					StructType: `${TRANSFER_POLICY_CAP_TYPE}<${itemType}>`,
-				},
-			],
-		},
-		options: {
-			showContent: true,
-			showType: true,
-		},
 	});
 
-	if (data.length === 0) return;
+	return data
+		.map((item) => parseTransferPolicyCapObject(item))
+		.filter((item) => !!item) as TransferPolicyCap[];
+}
 
-	return data[0].data?.objectId;
+/**
+ * A function to fetch all the user's kiosk Caps
+ * And a list of the kiosk address ids.
+ * Returns a list of `kioskOwnerCapIds` and `kioskIds`.
+ * Extra options allow pagination.
+ * @returns TransferPolicyCap Object ID | undefined if not found.
+ */
+export async function queryOwnedTransferPolicies(
+	client: SuiClient,
+	address: string,
+): Promise<TransferPolicyCap[] | undefined> {
+	if (!isValidSuiAddress(address)) return;
+
+	const filter = {
+		MatchAll: [
+			{
+				MoveModule: {
+					module: 'transfer_policy',
+					package: '0x2',
+				},
+			},
+		],
+	};
+
+	// fetch all owned kiosk caps, paginated.
+	const data = await getAllOwnedObjects({ client, owner: address, filter });
+
+	const policies: TransferPolicyCap[] = [];
+
+	for (let item of data) {
+		let data = parseTransferPolicyCapObject(item);
+		if (data) policies.push(data);
+	}
+
+	return policies;
 }

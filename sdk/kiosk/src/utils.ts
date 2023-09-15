@@ -4,6 +4,7 @@
 import { SharedObjectRef } from '@mysten/sui.js/bcs';
 import {
 	SuiObjectData,
+	SuiObjectDataFilter,
 	SuiObjectDataOptions,
 	SuiObjectRef,
 	SuiObjectResponse,
@@ -11,7 +12,14 @@ import {
 import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { bcs } from './bcs';
-import { KIOSK_TYPE, Kiosk, KioskData, KioskListing } from './types';
+import {
+	KIOSK_TYPE,
+	Kiosk,
+	KioskData,
+	KioskListing,
+	TRANSFER_POLICY_CAP_TYPE,
+	TransferPolicyCap,
+} from './types';
 import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 const DEFAULT_QUERY_LIMIT = 50;
@@ -230,6 +238,43 @@ export async function getAllObjects(
 }
 
 /**
+ * A helper to return all owned objects, with an optional filter.
+ * It parses all the pages and returns the data.
+ */
+export async function getAllOwnedObjects({
+	client,
+	owner,
+	filter,
+	limit = DEFAULT_QUERY_LIMIT,
+	options = { showType: true, showContent: true },
+}: {
+	client: SuiClient;
+	owner: string;
+	filter?: SuiObjectDataFilter;
+	options?: SuiObjectDataOptions;
+	limit?: number;
+}) {
+	let hasNextPage = true;
+	let cursor = undefined;
+	const data: SuiObjectResponse[] = [];
+
+	while (hasNextPage) {
+		const result = await client.getOwnedObjects({
+			owner,
+			filter,
+			limit,
+			cursor,
+			options,
+		});
+		data.push(...result.data);
+		hasNextPage = result.hasNextPage;
+		cursor = result.nextCursor;
+	}
+
+	return data;
+}
+
+/**
  * Converts a number to basis points.
  * Supports up to 2 decimal points.
  * E.g 9.95 -> 995
@@ -239,4 +284,27 @@ export function percentageToBasisPoints(percentage: number) {
 	if (percentage < 0 || percentage > 100)
 		throw new Error('Percentage needs to be in the [0,100] range.');
 	return Math.ceil(percentage * 100);
+}
+
+/**
+ * A helper to parse a transfer policy Cap into a usable object.
+ */
+export function parseTransferPolicyCapObject(
+	item: SuiObjectResponse,
+): TransferPolicyCap | undefined {
+	const type = (item?.data?.content as { type: string })?.type;
+
+	//@ts-ignore-next-line
+	const policy = item?.data?.content?.fields?.policy_id as string;
+
+	if (!type.includes(TRANSFER_POLICY_CAP_TYPE)) return undefined;
+
+	// Transform 0x2::transfer_policy::TransferPolicyCap<itemType> -> itemType
+	const objectType = type.replace(TRANSFER_POLICY_CAP_TYPE + '<', '').slice(0, -1);
+
+	return {
+		policyId: policy,
+		policyCapId: item.data?.objectId!,
+		type: objectType,
+	};
 }

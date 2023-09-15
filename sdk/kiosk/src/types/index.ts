@@ -4,6 +4,7 @@
 import { type SharedObjectRef } from '@mysten/sui.js/bcs';
 import { type SuiClient, type SuiObjectRef } from '@mysten/sui.js/client';
 import { type TransactionArgument } from '@mysten/sui.js/transactions';
+import { BaseRulePackageIds } from '../constants';
 
 export * from './kiosk';
 export * from './transfer-policy';
@@ -14,11 +15,14 @@ export * from './transfer-policy';
 export type ObjectArgument = string | TransactionArgument | SharedObjectRef | SuiObjectRef;
 
 /**
- * A Network selection
+ * A Network selector.
+ * Kiosk SDK supports mainnet & testnet.
+ * Pass `custom` for any other network (devnet, localnet).
  */
 export enum Network {
 	MAINNET = 'mainnet',
 	TESTNET = 'testnet',
+	CUSTOM = 'custom',
 }
 
 /**
@@ -27,4 +31,5 @@ export enum Network {
 export type KioskClientOptions = {
 	client: SuiClient;
 	network: Network;
+	packageIds?: BaseRulePackageIds;
 };

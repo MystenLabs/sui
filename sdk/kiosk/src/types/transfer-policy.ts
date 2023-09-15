@@ -23,6 +23,15 @@ export const KIOSK_LOCK_RULE = 'kiosk_lock_rule::Rule';
 /** The Royalty rule */
 export const ROYALTY_RULE = 'royalty_rule::Rule';
 
+/**
+ * The Transfer Policy Cap in a consumable way.
+ */
+export type TransferPolicyCap = {
+	policyId: string;
+	policyCapId: string;
+	type: string;
+};
+
 /** The `TransferPolicy` object */
 export type TransferPolicy = {
 	id: string;

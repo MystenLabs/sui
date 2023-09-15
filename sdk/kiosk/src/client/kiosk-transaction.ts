@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
-import { KioskClient } from './kiosk-client';
+import { type TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import { type KioskClient } from './kiosk-client';
 import {
 	ItemId,
 	ItemReference,

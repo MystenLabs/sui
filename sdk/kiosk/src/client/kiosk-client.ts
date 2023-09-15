@@ -1,32 +1,49 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiClient } from '@mysten/sui.js/src/client';
+import { type SuiClient } from '@mysten/sui.js/client';
 import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
 import {
 	type FetchKioskOptions,
-	KioskData,
-	OwnedKiosks,
-	Network,
+	type KioskData,
+	type OwnedKiosks,
+	type Network,
 	type KioskClientOptions,
 } from '../types';
-import { TransferPolicyRule, PERSONAL_KIOSK_RULE_ADDRESS, rules } from '../constants';
-import { queryTransferPolicy } from '../query/transfer-policy';
+import {
+	type TransferPolicyRule,
+	type BaseRulePackageIds,
+	PERSONAL_KIOSK_RULE_ADDRESS,
+	rules,
+	getBaseRules,
+} from '../constants';
+import {
+	queryOwnedTransferPolicies,
+	queryTransferPolicy,
+	queryTransferPolicyCapsByType,
+} from '../query/transfer-policy';
 
 /**
  * A Client that allows you to interact with kiosk.
  * Offers utilities to query kiosk, craft transactions to edit your own kiosk,
  * purchase, manage transfer policies, create new kiosks etc.
+ * If you pass packageIds, all functionality will be managed using these packages.
  */
 export class KioskClient {
 	client: SuiClient;
 	network: Network;
 	rules: TransferPolicyRule[];
+	packageIds?: BaseRulePackageIds;
 
 	constructor(options: KioskClientOptions) {
 		this.client = options.client;
 		this.network = options.network;
 		this.rules = rules; // add all the default rules.
+		this.packageIds = options.packageIds;
+
+		// Add the custom Package Ids too on the rule list.
+		// Only adds the rules that are passed in the packageId object.
+		if (options.packageIds) this.rules.push(...getBaseRules(options.packageIds));
 	}
 
 	/// Querying
@@ -37,7 +54,8 @@ export class KioskClient {
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
 	async getOwnedKiosks({ address }: { address: string }): Promise<OwnedKiosks> {
-		const personalPackageId = PERSONAL_KIOSK_RULE_ADDRESS[this.network];
+		const personalPackageId =
+			this.packageIds?.personalKioskRulePackageId || PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 
 		return getOwnedKiosks(this.client, address, {
 			personalKioskType: personalPackageId
@@ -52,7 +70,7 @@ export class KioskClient {
 	 * @param options Optioal
 	 * @returns
 	 */
-	async getKiosk({ id, options }: { id: string; options: FetchKioskOptions }): Promise<KioskData> {
+	async getKiosk({ id, options }: { id: string; options?: FetchKioskOptions }): Promise<KioskData> {
 		return (
 			await fetchKiosk(
 				this.client,
@@ -60,7 +78,7 @@ export class KioskClient {
 				{
 					limit: 1000,
 				},
-				options,
+				options || {},
 			)
 		).data;
 	}
@@ -71,6 +89,24 @@ export class KioskClient {
 	 */
 	async getTransferPolicies({ type }: { type: string }) {
 		return queryTransferPolicy(this.client, type);
+	}
+
+	/**
+	 * Query all the owned transfer policies for an address.
+	 * Returns `TransferPolicyCap` which uncludes `policyId, policyCapId, type`.
+	 * @param address The address we're searching the owned transfer policies for.
+	 */
+	async getOwnedTransferPolicies({ address }: { address: string }) {
+		return queryOwnedTransferPolicies(this.client, address);
+	}
+
+	/**
+	 * Query the Transfer Policy Cap for type `T`, owned by `address`
+	 * @param type The Type `T` for the object
+	 * @param address The address that owns the cap.
+	 */
+	async getOwnedTransferPoliciesByType({ type, address }: { type: string; address: string }) {
+		return queryTransferPolicyCapsByType(this.client, address, type);
 	}
 
 	// Someone would just have to create a `kiosk-client.ts` file in their project, initialize a KioskClient
