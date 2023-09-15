@@ -77,7 +77,7 @@ impl<'m> Verifier<'m> {
 impl executor::Executor for Executor {
     fn execute_transaction_to_effects<'backing>(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
@@ -115,7 +115,7 @@ impl executor::Executor for Executor {
 
     fn dev_inspect_transaction(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
@@ -153,7 +153,7 @@ impl executor::Executor for Executor {
 
     fn update_genesis_state(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         tx_context: &mut TxContext,
