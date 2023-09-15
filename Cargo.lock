@@ -10247,6 +10247,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "serde_with",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
