@@ -663,13 +663,6 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
-    // TODO: Could we get rid of this strange self move?
-    #[allow(clippy::wrong_self_convention, clippy::redundant_allocation)]
-    fn to_backing_store(&mut self) -> Arc<&mut LocalExec> {
-        // Execution interface requires Arc for the store.
-        Arc::new(self)
-    }
-
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -727,12 +720,11 @@ impl LocalExec {
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
-        let store = self.to_backing_store();
         let res = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
-                store,
+                &self,
                 protocol_config,
                 metrics,
                 expensive_checks,
