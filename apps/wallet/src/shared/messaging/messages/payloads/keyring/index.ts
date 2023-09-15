@@ -19,13 +19,6 @@ type MethodToPayloads = {
 	/**
 	 * @deprecated
 	 */
-	getEntropy: {
-		args: string | undefined;
-		return: string;
-	};
-	/**
-	 * @deprecated
-	 */
 	unlock: {
 		args: { password: string };
 		return: void;

@@ -12,6 +12,7 @@ import { useAccountsFormContext } from '_src/ui/app/components/accounts/Accounts
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { VerifyPasswordModal } from '_src/ui/app/components/accounts/VerifyPasswordModal';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
+import { Button } from '_src/ui/app/shared/ButtonUI';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { ButtonOrLink, type ButtonOrLinkProps } from '_src/ui/app/shared/utils/ButtonOrLink';
@@ -77,7 +78,7 @@ export function AccountGroup({
 	accountSource?: string;
 }) {
 	const createAccountMutation = useCreateAccountsMutation();
-	const showCreateNewButton = type === 'mnemonic-derived';
+	const isMnemonicDerivedGroup = type === 'mnemonic-derived';
 	const [accountsFormValues, setAccountsFormValues] = useAccountsFormContext();
 	const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
 	return (
@@ -94,18 +95,16 @@ export function AccountGroup({
 									: accountTypeToLabel[type]}
 							</Heading>
 							<div className="h-px bg-gray-45 flex flex-1 flex-shrink-0" />
-							{showCreateNewButton ? (
+							{isMnemonicDerivedGroup && accountSource ? (
 								<ButtonOrLink
 									onClick={async (e) => {
 										// prevent the collapsible from closing when clicking the "new" button
 										e.stopPropagation();
-										if (type === 'mnemonic-derived' && accountSource) {
-											setAccountsFormValues({
-												type: 'mnemonic-derived',
-												sourceID: accountSource,
-											});
-											setPasswordModalVisible(true);
-										}
+										setAccountsFormValues({
+											type: 'mnemonic-derived',
+											sourceID: accountSource,
+										});
+										setPasswordModalVisible(true);
 									}}
 									className="items-center justify-center gap-0.5 cursor-pointer appearance-none uppercase flex bg-transparent border-0 outline-none text-hero hover:text-hero-darkest"
 								>
@@ -135,6 +134,14 @@ export function AccountGroup({
 									/>
 								);
 							})}
+							{isMnemonicDerivedGroup && accountSource ? (
+								<Button
+									variant="secondary"
+									size="tall"
+									text="Export Passphrase"
+									to={`../export/passphrase/${accountSource}`}
+								/>
+							) : null}
 						</div>
 					</CollapsiblePrimitive.CollapsibleContent>
 				</div>
