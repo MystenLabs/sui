@@ -23,10 +23,14 @@ export class MockWallet implements Wallet {
 
 	#connect = vi.fn().mockImplementation(() => ({ accounts: this.#accounts }));
 	#disconnect = vi.fn();
-	#on = vi.fn((event: string, listener: (properties: StandardEventsChangeProperties) => void) => {
-		this.#eventHandlers.push({ event, listener });
-		return () => (this.#eventHandlers = []);
+
+	#on = vi.fn((...args: Parameters<StandardEventsOnMethod>) => {
+		this.#eventHandlers.push({ event: args[0], listener: args[1] });
+		return () => {
+			this.#eventHandlers = [];
+		};
 	});
+
 	#signPersonalMessage = vi.fn();
 	#signTransactionBlock = vi.fn();
 	#signAndExecuteTransactionBlock = vi.fn();
