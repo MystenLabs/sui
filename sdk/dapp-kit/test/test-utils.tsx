@@ -17,7 +17,7 @@ export function createSuiClientContextWrapper(client: SuiClient) {
 	};
 }
 
-export function createWalletProviderContextWrappe(
+export function createWalletProviderContextWrapper(
 	providerProps: Omit<ComponentProps<typeof WalletProvider>, 'children'> = {},
 ) {
 	const queryClient = new QueryClient();

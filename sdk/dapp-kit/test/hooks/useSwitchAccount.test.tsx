@@ -3,7 +3,7 @@
 
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useConnectWallet, useCurrentAccount } from 'dapp-kit/src';
-import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import { useSwitchAccount } from 'dapp-kit/src/hooks/wallet/useSwitchAccount.js';
 import {
 	WalletAccountNotFoundError,
@@ -13,7 +13,7 @@ import { createMockAccount } from '../mocks/mockAccount.js';
 
 describe('useSwitchAccount', () => {
 	test('throws an error when trying to switch accounts with no active connection', async () => {
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useSwitchAccount(), { wrapper });
 
 		result.current.mutate({ account: createMockAccount() });
@@ -23,7 +23,7 @@ describe('useSwitchAccount', () => {
 	test('throws an error when trying to switch to a non-authorized account', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
@@ -49,7 +49,7 @@ describe('useSwitchAccount', () => {
 			accounts: [createMockAccount(), createMockAccount(), createMockAccount()],
 		});
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
