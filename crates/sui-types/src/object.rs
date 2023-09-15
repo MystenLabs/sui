@@ -359,6 +359,10 @@ impl MoveObject {
         self.to_move_struct(&self.get_layout(format, resolver)?)
     }
 
+    pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
+        bcs::from_bytes(self.contents()).ok()
+    }
+
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// For the type tag field, we serialize it on the spot to get the accurate size.
     /// This should not be very expensive since the type tag is usually simple, and
@@ -905,6 +909,10 @@ impl Object {
         // Index access safe due to checks above.
         let type_tag = move_struct.type_params[0].clone();
         Ok(type_tag)
+    }
+
+    pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
+        self.data.try_as_move().and_then(|data| data.to_rust())
     }
 }
 
