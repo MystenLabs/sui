@@ -217,7 +217,9 @@ impl MoveObject {
     }
 
     /// Update the `timestamp_ms: u64` field of the `Clock` type.
-    pub fn set_clock_timestamp_ms(&mut self, timestamp_ms: u64) {
+    ///
+    /// Panics if the object isn't a `Clock`.
+    pub fn set_clock_timestamp_ms_unsafe(&mut self, timestamp_ms: u64) {
         assert!(self.is_clock());
         // 32 bytes for object ID, 8 for timestamp
         assert!(self.contents.len() == 40);

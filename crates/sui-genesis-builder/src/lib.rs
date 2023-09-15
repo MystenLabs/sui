@@ -1081,7 +1081,7 @@ pub fn generate_genesis_system_object(
         builder.finish()
     };
 
-    let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
+    let InnerTemporaryStore { mut written, .. } = executor.update_genesis_state(
         &*store,
         &protocol_config,
         metrics,
@@ -1089,6 +1089,16 @@ pub fn generate_genesis_system_object(
         InputObjects::new(vec![]),
         pt,
     )?;
+
+    // update the value of the clock to match the chain start time
+    {
+        let object = written.get_mut(&sui_types::SUI_CLOCK_OBJECT_ID).unwrap();
+        object
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .set_clock_timestamp_ms_unsafe(genesis_chain_parameters.chain_start_timestamp_ms);
+    }
 
     let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written);
