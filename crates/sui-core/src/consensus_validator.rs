@@ -7,11 +7,10 @@ use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState};
 use crate::checkpoints::CheckpointServiceNotify;
 use crate::transaction_manager::TransactionManager;
 use async_trait::async_trait;
-use fastcrypto::hash::Hash;
 use narwhal_types::BatchDigest;
 use narwhal_types::{validate_batch_version, BatchAPI};
 use narwhal_worker::TransactionValidator;
@@ -25,6 +24,7 @@ use tracing::{info, warn};
 /// Allows verifying the validity of transactions
 #[derive(Clone)]
 pub struct SuiTxValidator {
+    state: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     _transaction_manager: Arc<TransactionManager>,
@@ -34,6 +34,7 @@ pub struct SuiTxValidator {
 
 impl SuiTxValidator {
     pub fn new(
+        state: Arc<AuthorityState>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
         transaction_manager: Arc<TransactionManager>,
@@ -44,6 +45,7 @@ impl SuiTxValidator {
             epoch_store.epoch()
         );
         Self {
+            state,
             epoch_store,
             checkpoint_service,
             _transaction_manager: transaction_manager,
@@ -74,12 +76,34 @@ impl TransactionValidator for SuiTxValidator {
     ) -> Result<(), Self::Error> {
         let _scope = monitored_scope("ValidateBatch");
 
-        if rand::random::<f64>() < 0.03 {
-            let digest = b.digest();
-            let mut rejected_batches = self.rejected_batches.lock();
-            if !rejected_batches.remove(&digest) {
-                rejected_batches.insert(digest);
-                return Err(eyre::eyre!("Rejected batch"));
+        let committee = self.epoch_store.committee().clone();
+        use fastcrypto::hash::Hash;
+        use rand::Rng;
+        use rand::SeedableRng;
+        let mut rng = rand::prelude::StdRng::from_seed(b.digest().0);
+
+        // 0.1% of batches are rejected by f stake
+        if rng.gen::<f64>() < 0.001 {
+            let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
+            let mut cumulative_stake = 0;
+            let mut found = false;
+            for v in validators.iter() {
+                if v == &self.state.name {
+                    found = true;
+                    break;
+                }
+                cumulative_stake += committee.weight(v);
+                if cumulative_stake >= committee.quorum_threshold() {
+                    break;
+                }
+            }
+            if !found {
+                let mut rejected_batches = self.rejected_batches.lock();
+                if !rejected_batches.remove(&b.digest()) {
+                    rejected_batches.insert(b.digest());
+                    tracing::error!("Rejecting batch randomly");
+                    return Err(eyre::eyre!("failing randomly on purpose"));
+                }
             }
         }
 
@@ -229,6 +253,7 @@ mod tests {
 
         let metrics = SuiTxValidatorMetrics::new(&Default::default());
         let validator = SuiTxValidator::new(
+            state.clone(),
             state.epoch_store_for_testing().clone(),
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
