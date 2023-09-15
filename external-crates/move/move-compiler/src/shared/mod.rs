@@ -364,9 +364,8 @@ impl CompilationEnv {
     }
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
-        let is_filtered = self
-            .warning_filter
-            .last()
+        let filter = self.warning_filter.last();
+        let is_filtered = filter
             .map(|filter| filter.is_filtered(&diag))
             .unwrap_or(false);
         if !is_filtered {
@@ -374,7 +373,6 @@ impl CompilationEnv {
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
                 if let Some(filter_info) = self.known_filter_names.get(&diag.info().id()) {
-                    //                    if let Some(filter_attr_name) =
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                          applied to the 'module' or module member ('const', 'fun', or 'struct')",
@@ -385,6 +383,9 @@ impl CompilationEnv {
                 }
             }
             self.diags.add(diag)
+        } else if !filter.unwrap().for_lib_code() {
+            // unwrap above is safe as the filter has been used (thus it must exist)
+            self.diags.add_user_filtered(diag)
         }
     }
 

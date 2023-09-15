@@ -57,12 +57,16 @@ pub struct Diagnostic {
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 pub struct Diagnostics {
     diagnostics: Vec<Diagnostic>,
+    // diagnostics filtered in user code
+    filtered_user_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-/// Used to filter out diagnostics, specifically used for warning suppression
-pub struct WarningFilters(BTreeMap<ExternalPrefix, UnprefixedWarningFilters>);
+/// Used to filter out diagnostics, specifically used for warning suppression. The second field
+/// determines if this filter was created to filter warnings in the user code (false) or library
+/// code (true).
+pub struct WarningFilters(BTreeMap<ExternalPrefix, UnprefixedWarningFilters>, bool);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 /// Filters split by category and code
@@ -214,6 +218,7 @@ impl Diagnostics {
     pub fn new() -> Self {
         Self {
             diagnostics: vec![],
+            filtered_user_diagnostics: vec![],
             severity_count: BTreeMap::new(),
         }
     }
@@ -245,9 +250,14 @@ impl Diagnostics {
         }
     }
 
+    pub fn add_user_filtered(&mut self, diag: Diagnostic) {
+        self.filtered_user_diagnostics.push(diag)
+    }
+
     pub fn extend(&mut self, other: Self) {
         let Self {
             diagnostics,
+            filtered_user_diagnostics: _,
             severity_count,
         } = other;
         for (sev, count) in severity_count {
@@ -293,6 +303,21 @@ impl Diagnostics {
         self.diagnostics
             .iter()
             .any(|d| d.info.external_prefix() == Some(prefix))
+    }
+
+    /// Returns the number of diags filtered in user code (an not in the library code) that have a
+    /// given prefix (first value returned) and how many different categories of diags were
+    /// filtered.
+    pub fn filtered_user_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
+        let mut filtered_diags_num = 0;
+        let mut filtered_categories = HashSet::new();
+        self.filtered_user_diagnostics.iter().for_each(|d| {
+            if d.info.external_prefix() == Some(prefix) {
+                filtered_diags_num += 1;
+                filtered_categories.insert(d.info.category());
+            }
+        });
+        (filtered_diags_num, filtered_categories.len())
     }
 }
 
@@ -380,7 +405,11 @@ macro_rules! diag {
 
 impl WarningFilters {
     pub fn new() -> Self {
-        Self(BTreeMap::new())
+        Self(BTreeMap::new(), false)
+    }
+
+    pub fn new_for_lib_code() -> Self {
+        Self(BTreeMap::new(), true)
     }
 
     pub fn is_filtered(&self, diag: &Diagnostic) -> bool {
@@ -401,6 +430,11 @@ impl WarningFilters {
                 .or_insert_with(UnprefixedWarningFilters::new)
                 .union(filters);
         }
+        // if there is a library code filter on the stack (second field of `WarningFilters` is
+        // true), it means we are filtering library code and this information must be preserved when
+        // stacking up additional filters (which involves union of the current filter with the new
+        // one)
+        self.1 = self.1 || other.1;
     }
 
     pub fn add(&mut self, filter: WarningFilter) {
@@ -428,10 +462,17 @@ impl WarningFilters {
     }
 
     pub fn unused_warnings_filter_for_test() -> Self {
-        Self(BTreeMap::from([(
-            None,
-            UnprefixedWarningFilters::unused_warnings_filter_for_test(),
-        )]))
+        Self(
+            BTreeMap::from([(
+                None,
+                UnprefixedWarningFilters::unused_warnings_filter_for_test(),
+            )]),
+            /* for_lib_code */ false,
+        )
+    }
+
+    pub fn for_lib_code(&self) -> bool {
+        self.1
     }
 }
 
@@ -561,6 +602,7 @@ impl From<Vec<Diagnostic>> for Diagnostics {
         }
         Self {
             diagnostics,
+            filtered_user_diagnostics: vec![],
             severity_count,
         }
     }

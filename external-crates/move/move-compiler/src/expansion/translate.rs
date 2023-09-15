@@ -51,7 +51,7 @@ impl<'env, 'map> Context<'env, 'map> {
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     ) -> Self {
-        let mut all_filter_alls = WarningFilters::new();
+        let mut all_filter_alls = WarningFilters::new_for_lib_code();
         for allow in compilation_env.filter_attributes() {
             for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
                 all_filter_alls.add(f);
