@@ -3,7 +3,7 @@
 
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
 import { type QueryKey } from '@tanstack/react-query';
 import { lastValueFrom, map, take } from 'rxjs';
@@ -293,35 +293,23 @@ export class BackgroundClient {
 		);
 	}
 
-	public exportAccount(password: string, accountAddress: string) {
+	public exportAccountKeyPair(args: MethodPayload<'getAccountKeyPair'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
-				createMessage<KeyringPayload<'exportAccount'>>({
-					type: 'keyring',
-					method: 'exportAccount',
-					args: { password, accountAddress },
+				createMessage<MethodPayload<'getAccountKeyPair'>>({
+					type: 'method-payload',
+					method: 'getAccountKeyPair',
+					args,
 				}),
 			).pipe(
 				take(1),
 				map(({ payload }) => {
-					if (isKeyringPayload(payload, 'exportAccount') && payload.return) {
-						return payload.return.keyPair;
+					if (isMethodPayload(payload, 'getAccountKeyPairResponse')) {
+						return payload.args;
 					}
 					throw new Error('Error unknown response for export account message');
 				}),
 			),
-		);
-	}
-
-	public importPrivateKey(password: string, keyPair: ExportedKeypair) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'importPrivateKey'>>({
-					type: 'keyring',
-					method: 'importPrivateKey',
-					args: { password, keyPair },
-				}),
-			).pipe(take(1)),
 		);
 	}
 

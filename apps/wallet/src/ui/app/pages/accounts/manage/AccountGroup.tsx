@@ -47,12 +47,17 @@ function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
 }
 
 // todo: this is slightly different than the account footer in the AccountsList - look to consolidate :(
-function AccountFooter({ accountID }: { accountID: string }) {
+function AccountFooter({ accountID, showExport }: { accountID: string; showExport?: boolean }) {
 	return (
 		<div className="flex flex-shrink-0 w-full">
 			<div className="flex gap-3 items-center">
 				<div className="w-1.5" />
 				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
+				{showExport ? (
+					<FooterLink to={`/accounts/export/${accountID}`}>
+						<div>Export Private Key</div>
+					</FooterLink>
+				) : null}
 				{/* TODO: Remove Account functionality */}
 				{/* <FooterLink to="/remove">
 					<div>Remove</div>
@@ -119,9 +124,14 @@ export function AccountGroup({
 									<AccountItem
 										key={account.id}
 										background="gradient"
-										address={account.address}
+										accountID={account.id}
 										icon={<AccountIcon account={account} />}
-										footer={<AccountFooter accountID={account.id} />}
+										footer={
+											<AccountFooter
+												accountID={account.id}
+												showExport={account.isKeyPairExportable}
+											/>
+										}
 									/>
 								);
 							})}

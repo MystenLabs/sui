@@ -59,6 +59,8 @@ type MethodPayloads = {
 	getAutoLockMinutesResponse: { minutes: number | null };
 	setAutoLockMinutes: { minutes: number | null };
 	notifyUserActive: {};
+	getAccountKeyPair: { accountID: string; password: string };
+	getAccountKeyPairResponse: { accountID: string; keyPair: ExportedKeypair };
 };
 
 type Methods = keyof MethodPayloads;

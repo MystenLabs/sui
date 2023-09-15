@@ -146,30 +146,6 @@ export class Keyring {
 		return Array.from(this.#accountsMap.values());
 	}
 
-	/**
-	 * Exports the keypair for the specified address. Verifies that the password provided is the correct one and only then returns the keypair.
-	 * This is useful to be used for exporting the to the UI for the user to backup etc. Getting accounts and keypairs is possible without using
-	 * a password by using {@link Keypair.getAccounts} or {@link Keypair.getActiveAccount} or the change events
-	 * @param address The sui address to export the keypair
-	 * @param password The current password of the vault
-	 * @returns null if locked or address not found or the exported keypair
-	 * @throws if wrong password is provided
-	 */
-	public async exportAccountKeypair(address: string, password: string) {
-		if (this.isLocked) {
-			return null;
-		}
-		if (await VaultStorage.verifyPassword(password)) {
-			const account = this.#accountsMap.get(address);
-			if (!account || !isImportedOrDerivedAccount(account)) {
-				return null;
-			}
-			return account.accountKeypair.exportKeypair();
-		} else {
-			throw new Error('Wrong password');
-		}
-	}
-
 	public async importAccountKeypair(keypair: ExportedKeypair, password: string) {
 		const currentAccounts = this.getAccounts();
 		if (this.isLocked || !currentAccounts) {
@@ -315,34 +291,6 @@ export class Keyring {
 			} else if (isKeyringPayload(payload, 'verifyPassword') && payload.args) {
 				if (!(await VaultStorage.verifyPassword(payload.args.password))) {
 					throw new Error('Wrong password');
-				}
-				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'exportAccount') && payload.args) {
-				const keyPair = await this.exportAccountKeypair(
-					payload.args.accountAddress,
-					payload.args.password,
-				);
-
-				if (!keyPair) {
-					throw new Error(`Account ${payload.args.accountAddress} not found`);
-				}
-				uiConnection.send(
-					createMessage<KeyringPayload<'exportAccount'>>(
-						{
-							type: 'keyring',
-							method: 'exportAccount',
-							return: { keyPair },
-						},
-						id,
-					),
-				);
-			} else if (isKeyringPayload(payload, 'importPrivateKey') && payload.args) {
-				const imported = await this.importAccountKeypair(
-					payload.args.keyPair,
-					payload.args.password,
-				);
-				if (!imported) {
-					throw new Error('Duplicate account not imported');
 				}
 				uiConnection.send(createMessage({ type: 'done' }, id));
 			}

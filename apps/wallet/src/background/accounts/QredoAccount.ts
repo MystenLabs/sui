@@ -93,6 +93,7 @@ export class QredoAccount
 			selected,
 			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: false,
 		};
 	}
 

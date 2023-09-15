@@ -3,7 +3,12 @@
 
 import { fromB64 } from '@mysten/sui.js/utils';
 import Dexie from 'dexie';
-import { isPasswordUnLockable, isSigningAccount, type SerializedAccount } from './Account';
+import {
+	isKeyPairExportableAccount,
+	isPasswordUnLockable,
+	isSigningAccount,
+	type SerializedAccount,
+} from './Account';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
@@ -305,6 +310,30 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				await db.accounts.update(accountID, { publicKey });
 			}
 		});
+		return true;
+	}
+	if (isMethodPayload(payload, 'getAccountKeyPair')) {
+		const { password, accountID } = payload.args;
+		const account = await getAccountByID(accountID);
+		if (!account) {
+			throw new Error(`Account with id ${accountID} not found.`);
+		}
+		if (!isKeyPairExportableAccount(account)) {
+			throw new Error(`Cannot export account with id ${accountID}.`);
+		}
+		await uiConnection.send(
+			createMessage<MethodPayload<'getAccountKeyPairResponse'>>(
+				{
+					type: 'method-payload',
+					method: 'getAccountKeyPairResponse',
+					args: {
+						accountID: account.id,
+						keyPair: await account.exportKeyPair(password),
+					},
+				},
+				msg.id,
+			),
+		);
 		return true;
 	}
 	return false;
