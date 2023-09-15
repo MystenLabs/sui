@@ -19,6 +19,7 @@ import { StorageMigrationPage } from './pages/StorageMigrationPage';
 import { AccountsPage } from './pages/accounts/AccountsPage';
 import { AddAccountPage } from './pages/accounts/AddAccountPage';
 import { BackupMnemonicPage } from './pages/accounts/BackupMnemonicPage';
+import { ExportAccountPage } from './pages/accounts/ExportAccountPage';
 import { ForgotPasswordPage } from './pages/accounts/ForgotPasswordPage';
 import { ImportLedgerAccountsPage } from './pages/accounts/ImportLedgerAccountsPage';
 import { ImportPassphrasePage } from './pages/accounts/ImportPassphrasePage';
@@ -194,6 +195,7 @@ const App = () => {
 					<Route path=":requestID" element={<QredoConnectInfoPage />} />
 					<Route path=":id/select" element={<SelectQredoAccountsPage />} />
 				</Route>
+				<Route path="export/:accountID" element={<ExportAccountPage />} />
 			</Route>
 			<Route path="/account">
 				<Route path="forgot-password" element={<ForgotPasswordPage />} />

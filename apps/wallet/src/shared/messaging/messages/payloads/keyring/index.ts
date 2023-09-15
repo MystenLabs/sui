@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from '_payloads';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
@@ -82,20 +82,6 @@ type MethodToPayloads = {
 	 */
 	verifyPassword: {
 		args: { password: string };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	exportAccount: {
-		args: { password: string; accountAddress: string };
-		return: { keyPair: ExportedKeypair };
-	};
-	/**
-	 * @deprecated
-	 */
-	importPrivateKey: {
-		args: { password: string; keyPair: ExportedKeypair };
 		return: void;
 	};
 };
