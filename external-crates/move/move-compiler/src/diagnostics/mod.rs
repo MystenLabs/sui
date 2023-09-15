@@ -288,6 +288,12 @@ impl Diagnostics {
         }
         v
     }
+
+    pub fn any_with_prefix(&self, prefix: &str) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|d| d.info.external_prefix() == Some(prefix))
+    }
 }
 
 impl Diagnostic {
