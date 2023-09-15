@@ -1103,7 +1103,7 @@ impl AuthorityState {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_cert_and_notify");
 
-        let input_object_count = inner_temporary_store.objects.len();
+        let input_object_count = inner_temporary_store.input_objects.len();
         let shared_object_count = effects.input_shared_objects().len();
         let digest = *certificate.digest();
 
@@ -1112,7 +1112,7 @@ impl AuthorityState {
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
-            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
+            .map(|(id, obj)| InputKey(*id, (!obj.is_package()).then_some(obj.version())))
             .collect();
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
@@ -1328,6 +1328,29 @@ impl AuthorityState {
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
+        let written_with_kind = effects
+            .created()
+            .into_iter()
+            .map(|(oref, _)| (oref, WriteKind::Create))
+            .chain(
+                effects
+                    .unwrapped()
+                    .into_iter()
+                    .map(|(oref, _)| (oref, WriteKind::Unwrap)),
+            )
+            .chain(
+                effects
+                    .mutated()
+                    .into_iter()
+                    .map(|(oref, _)| (oref, WriteKind::Mutate)),
+            )
+            .map(|(oref, kind)| {
+                let obj = inner_temp_store.written.get(&oref.0).unwrap();
+                // TODO: Avoid clones.
+                (oref.0, (oref, obj.clone(), kind))
+            })
+            .collect();
+
         Ok((
             DryRunTransactionBlockResponse {
                 input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
@@ -1348,7 +1371,7 @@ impl AuthorityState {
                 object_changes,
                 balance_changes,
             },
-            inner_temp_store.written,
+            written_with_kind,
             effects,
             mock_gas,
         ))
@@ -1572,10 +1595,9 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
                     let type_ = new_object
-                        .1
                         .type_()
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
@@ -1596,9 +1618,9 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, written, module_resolver)
+                    let Some(df_info) = self.try_create_dynamic_field_info(new_object, written, module_resolver)
                         .expect("try_create_dynamic_field_info should not fail.") else {
                         // Skip indexing for non dynamic field objects.
                         continue;
@@ -1655,26 +1677,25 @@ impl AuthorityState {
                 // Find the actual object from storage using the object id obtained from the wrapper.
 
                 // Try to find the object in the written objects first.
-                let (version, digest, object_type) =
-                    if let Some((_, object, _)) = written.get(&object_id) {
-                        let version = object.version();
-                        let digest = object.digest();
-                        let object_type = object.data.type_().unwrap().clone();
-                        (version, digest, object_type)
-                    } else {
-                        // If not found, try to find it in the database.
-                        let object = self
-                            .database
-                            .get_object_by_key(&object_id, o.version())?
-                            .ok_or_else(|| UserInputError::ObjectNotFound {
-                                object_id,
-                                version: Some(o.version()),
-                            })?;
-                        let version = object.version();
-                        let digest = object.digest();
-                        let object_type = object.data.type_().unwrap().clone();
-                        (version, digest, object_type)
-                    };
+                let (version, digest, object_type) = if let Some(object) = written.get(&object_id) {
+                    let version = object.version();
+                    let digest = object.digest();
+                    let object_type = object.data.type_().unwrap().clone();
+                    (version, digest, object_type)
+                } else {
+                    // If not found, try to find it in the database.
+                    let object = self
+                        .database
+                        .get_object_by_key(&object_id, o.version())?
+                        .ok_or_else(|| UserInputError::ObjectNotFound {
+                            object_id,
+                            version: Some(o.version()),
+                        })?;
+                    let version = object.version();
+                    let digest = object.digest();
+                    let object_type = object.data.type_().unwrap().clone();
+                    (version, digest, object_type)
+                };
                 DynamicFieldInfo {
                     name,
                     bcs_name,
@@ -3306,15 +3327,15 @@ impl AuthorityState {
             .written
             .iter()
             .filter_map(|(k, v)| {
-                if v.1.is_coin() {
+                if v.is_coin() {
                     Some((*k, v.clone()))
                 } else {
                     None
                 }
             })
-            .collect::<WrittenObjects>();
+            .collect();
         let input_coin_objects = inner_temporary_store
-            .objects
+            .input_objects
             .iter()
             .filter_map(|(k, v)| {
                 if v.is_coin() {
@@ -4339,7 +4360,11 @@ impl NodeStateDump {
             modified_at_versions,
             runtime_reads,
             sender_signed_data: certificate.clone().into_message(),
-            input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            input_objects: inner_temporary_store
+                .input_objects
+                .values()
+                .cloned()
+                .collect(),
             computed_effects: effects.clone(),
             expected_effects_digest,
         })

@@ -10,6 +10,7 @@ use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
@@ -29,8 +30,7 @@ use sui_types::{
     object::Owner,
     object::{Data, Object},
     storage::{
-        BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectChange, ParentSync, Storage,
-        WriteKind,
+        BackingPackageStore, ChildObjectResolver, ObjectChange, ParentSync, Storage, WriteKind,
     },
     transaction::InputObjects,
 };
@@ -47,7 +47,7 @@ pub struct TemporaryStore<'backing> {
     input_objects: BTreeMap<ObjectID, Object>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
-    mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
+    mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
     // When an object is being written, we need to ensure that a few invariants hold.
     // It's critical that we always call write_object to update `written`, instead of writing
     // into written directly.
@@ -75,7 +75,7 @@ impl<'backing> TemporaryStore<'backing> {
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
-        let mutable_inputs = input_objects.mutable_inputs();
+        let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp();
         let objects = input_objects.into_object_map();
         Self {
@@ -83,7 +83,7 @@ impl<'backing> TemporaryStore<'backing> {
             tx_digest,
             input_objects: objects,
             lamport_timestamp,
-            mutable_input_refs: mutable_inputs,
+            mutable_input_refs,
             written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
@@ -98,17 +98,13 @@ impl<'backing> TemporaryStore<'backing> {
         &self.input_objects
     }
 
-    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(self) -> InnerTemporaryStore {
+    pub fn update_object_version_and_prev_tx(&mut self) {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
         }
 
-        let mut written = BTreeMap::new();
-        let mut deleted = BTreeMap::new();
-
-        for (id, (mut obj, kind)) in self.written {
+        for (id, (obj, kind)) in self.written.iter_mut() {
             // Update the version for the written object.
             match &mut obj.data {
                 Data::Move(obj) => {
@@ -120,7 +116,7 @@ impl<'backing> TemporaryStore<'backing> {
                     // Modified packages get their version incremented (this is a special case that
                     // only applies to system packages).  All other packages can only be created,
                     // and they are left alone.
-                    if kind == WriteKind::Mutate {
+                    if *kind == WriteKind::Mutate {
                         pkg.increment_version();
                     }
                 }
@@ -133,7 +129,7 @@ impl<'backing> TemporaryStore<'backing> {
                 initial_shared_version,
             } = &mut obj.owner
             {
-                if kind == WriteKind::Create {
+                if *kind == WriteKind::Create {
                     assert_eq!(
                         *initial_shared_version,
                         SequenceNumber::new(),
@@ -142,24 +138,19 @@ impl<'backing> TemporaryStore<'backing> {
                     *initial_shared_version = self.lamport_timestamp;
                 }
             }
-            written.insert(id, (obj.compute_object_reference(), obj, kind));
         }
+    }
 
-        for (id, kind) in self.deleted {
-            // Check invariant that version must increase.
-            if let Some(version) = kind.old_version() {
-                debug_assert!(version < self.lamport_timestamp);
-            }
-            deleted.insert(id, (self.lamport_timestamp, kind.to_delete_kind()));
-        }
-
-        // Combine object events with move events.
-
+    /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
+    pub fn into_inner(self) -> InnerTemporaryStore {
         InnerTemporaryStore {
-            objects: self.input_objects,
+            input_objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
-            written,
-            deleted,
+            written: self
+                .written
+                .into_iter()
+                .map(|(id, (obj, _))| (id, obj))
+                .collect(),
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_child_objects: self
@@ -177,7 +168,7 @@ impl<'backing> TemporaryStore<'backing> {
     /// sequence number. This is required to achieve safety.
     pub(crate) fn ensure_active_inputs_mutated(&mut self) {
         let mut to_be_updated = vec![];
-        for (id, _seq, _) in &self.mutable_input_refs {
+        for id in self.mutable_input_refs.keys() {
             if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
                 // We cannot update here but have to push to `to_be_updated` and update later
                 // because the for loop is holding a reference to `self`, and calling
@@ -216,16 +207,40 @@ impl<'backing> TemporaryStore<'backing> {
             }
         });
 
-        let protocol_version = self.protocol_config.version;
-        let inner = self.into_inner();
+        self.update_object_version_and_prev_tx();
+
+        let mut deleted = vec![];
+        let mut wrapped = vec![];
+        let mut unwrapped_then_deleted = vec![];
+        for (id, kind) in &self.deleted {
+            match kind {
+                DeleteKindWithOldVersion::Normal(_) => deleted.push((
+                    *id,
+                    self.lamport_timestamp,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                )),
+                DeleteKindWithOldVersion::UnwrapThenDelete
+                | DeleteKindWithOldVersion::UnwrapThenDeleteDEPRECATED(_) => unwrapped_then_deleted
+                    .push((
+                        *id,
+                        self.lamport_timestamp,
+                        ObjectDigest::OBJECT_DIGEST_DELETED,
+                    )),
+                DeleteKindWithOldVersion::Wrap(_) => wrapped.push((
+                    *id,
+                    self.lamport_timestamp,
+                    ObjectDigest::OBJECT_DIGEST_WRAPPED,
+                )),
+            }
+        }
 
         // In the case of special transactions that don't require a gas object,
         // we don't really care about the effects to gas, just use the input for it.
         // Gas coins are guaranteed to be at least size 1 and if more than 1
         // the first coin is where all the others are merged.
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
-            let (obj_ref, object, _kind) = &inner.written[&coin_id];
-            (*obj_ref, object.owner)
+            let object = &self.written[&coin_id].0;
+            (object.compute_object_reference(), object.owner)
         } else {
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -236,32 +251,18 @@ impl<'backing> TemporaryStore<'backing> {
         let mut mutated = vec![];
         let mut created = vec![];
         let mut unwrapped = vec![];
-        for (object_ref, object, kind) in inner.written.values() {
+        for (object, kind) in self.written.values() {
+            // TODO: We should cache the object ref when we update the object for the last time.
+            let object_ref = object.compute_object_reference();
             match kind {
-                WriteKind::Mutate => mutated.push((*object_ref, object.owner)),
-                WriteKind::Create => created.push((*object_ref, object.owner)),
-                WriteKind::Unwrap => unwrapped.push((*object_ref, object.owner)),
+                WriteKind::Mutate => mutated.push((object_ref, object.owner)),
+                WriteKind::Create => created.push((object_ref, object.owner)),
+                WriteKind::Unwrap => unwrapped.push((object_ref, object.owner)),
             }
         }
 
-        let mut deleted = vec![];
-        let mut wrapped = vec![];
-        let mut unwrapped_then_deleted = vec![];
-        for (id, (version, kind)) in &inner.deleted {
-            match kind {
-                DeleteKind::Normal => {
-                    deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
-                }
-                DeleteKind::UnwrapThenDelete => unwrapped_then_deleted.push((
-                    *id,
-                    *version,
-                    ObjectDigest::OBJECT_DIGEST_DELETED,
-                )),
-                DeleteKind::Wrap => {
-                    wrapped.push((*id, *version, ObjectDigest::OBJECT_DIGEST_WRAPPED))
-                }
-            }
-        }
+        let protocol_version = self.protocol_config.version;
+        let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution(
             protocol_version,
@@ -308,9 +309,7 @@ impl<'backing> TemporaryStore<'backing> {
                 self.written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
-                self.mutable_input_refs
-                    .iter()
-                    .all(|elt| !used.insert(&elt.0))
+                self.mutable_input_refs.keys().all(|elt| !used.insert(elt))
             },
             "Mutable input neither written nor deleted."
         );
