@@ -941,7 +941,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let expect = expect![[r#"
         Err(
             ModulePublishFailure {
-                error: "The `publish` subcommand should not be used with the `--test` flag\n\nLibrary code in published packages must not depend on test code.\nIn order to fix this and publish the package without `--test`, search for, and remove instances of e.g. test modules declared as `friend`s of modules from `sources/`.",
+                error: "The `publish` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
             },
         )
     "#]];
