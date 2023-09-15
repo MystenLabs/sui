@@ -92,7 +92,7 @@ diesel::table! {
 
     packages (package_id) {
         package_id -> Bytea,
-        modules -> Array<Nullable<BcsBytes>>,
+        move_package -> Bytea,
     }
 }
 
