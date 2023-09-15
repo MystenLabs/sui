@@ -15,7 +15,6 @@ import { getAllQredoConnections } from '../qredo/storage';
 import { getFromLocalStorage, setToLocalStorage } from '../storage-utils';
 import { createMessage } from '_messages';
 import { isKeyringPayload } from '_payloads/keyring';
-import { entropyToSerialized } from '_shared/utils/bip39';
 import { type Wallet } from '_src/shared/qredo-api';
 
 import type { UiConnection } from '../connections/UiConnection';
@@ -216,23 +215,6 @@ export class Keyring {
 				const { password, importedEntropy } = payload.args;
 				await this.createVault(password, importedEntropy);
 				uiConnection.send(createMessage({ type: 'done' }, id));
-			} else if (isKeyringPayload(payload, 'getEntropy')) {
-				if (this.#locked) {
-					throw new Error('Keyring is locked. Unlock it first.');
-				}
-				if (!VaultStorage.entropy) {
-					throw new Error('Error vault is empty');
-				}
-				uiConnection.send(
-					createMessage<KeyringPayload<'getEntropy'>>(
-						{
-							type: 'keyring',
-							method: 'getEntropy',
-							return: entropyToSerialized(VaultStorage.entropy),
-						},
-						id,
-					),
-				);
 			} else if (isKeyringPayload(payload, 'unlock') && payload.args) {
 				await this.unlock(payload.args.password);
 				uiConnection.send(createMessage({ type: 'done' }, id));

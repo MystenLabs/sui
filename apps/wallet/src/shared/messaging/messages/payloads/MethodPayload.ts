@@ -52,7 +52,7 @@ type MethodPayloads = {
 	setAccountNickname: { id: string; nickname: string | null };
 	verifyPassword: { password: string };
 	storeLedgerAccountsPublicKeys: { publicKeysToStore: LedgerAccountsPublicKeys };
-	getAccountSourceEntropy: { accountSourceID: string };
+	getAccountSourceEntropy: { accountSourceID: string; password?: string };
 	getAccountSourceEntropyResponse: { entropy: string };
 	clearWallet: {};
 	getAutoLockMinutes: {};

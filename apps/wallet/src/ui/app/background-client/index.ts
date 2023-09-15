@@ -192,27 +192,6 @@ export class BackgroundClient {
 		);
 	}
 
-	public getEntropy(password?: string) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'getEntropy'>>({
-					type: 'keyring',
-					method: 'getEntropy',
-					args: password,
-					return: undefined,
-				}),
-			).pipe(
-				take(1),
-				map(({ payload }) => {
-					if (isKeyringPayload(payload, 'getEntropy') && payload.return) {
-						return payload.return;
-					}
-					throw new Error('Mnemonic not found');
-				}),
-			),
-		);
-	}
-
 	public signData(addressOrID: string, data: Uint8Array): Promise<SerializedSignature> {
 		return lastValueFrom(
 			this.sendMessage(
@@ -544,13 +523,13 @@ export class BackgroundClient {
 		);
 	}
 
-	public getAccountSourceEntropy(accountSourceID: string) {
+	public getAccountSourceEntropy(args: MethodPayload<'getAccountSourceEntropy'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
 				createMessage<MethodPayload<'getAccountSourceEntropy'>>({
 					type: 'method-payload',
 					method: 'getAccountSourceEntropy',
-					args: { accountSourceID },
+					args,
 				}),
 			).pipe(
 				take(1),

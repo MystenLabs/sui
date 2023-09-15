@@ -147,7 +147,7 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 				{
 					type: 'method-payload',
 					method: 'getAccountSourceEntropyResponse',
-					args: { entropy: await accountSource.getEntropy() },
+					args: { entropy: await accountSource.getEntropy(payload.args.password) },
 				},
 				msg.id,
 			),
