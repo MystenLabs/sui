@@ -14,7 +14,7 @@ use futures::{StreamExt, TryStreamExt};
 use integer_encoding::VarIntReader;
 use object_store::path::Path;
 use object_store::DynObjectStore;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
@@ -35,7 +35,7 @@ pub struct StateSnapshotReaderV1 {
     local_staging_dir_root: PathBuf,
     remote_object_store: Arc<DynObjectStore>,
     local_object_store: Arc<DynObjectStore>,
-    ref_files: BTreeMap<u32, FileMetadata>,
+    ref_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     object_files: BTreeMap<u32, BTreeMap<u32, FileMetadata>>,
     indirect_objects_threshold: usize,
     concurrency: usize,
@@ -100,14 +100,23 @@ impl StateSnapshotReaderV1 {
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
                 FileType::Reference => {
-                    ref_files.insert(file_metadata.bucket_num, file_metadata.clone());
+                    let entry = ref_files
+                        .entry(file_metadata.bucket_num)
+                        .or_insert_with(BTreeMap::new);
+                    entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
             }
         }
         let epoch_dir_path = Path::from(epoch_dir);
         let files: Vec<Path> = ref_files
             .values()
-            .map(|file_metadata| file_metadata.file_path(&epoch_dir_path))
+            .flat_map(|entry| {
+                let files: Vec<_> = entry
+                    .values()
+                    .map(|file_metadata| file_metadata.file_path(&epoch_dir_path))
+                    .collect();
+                files
+            })
             .collect();
         copy_files(
             &files,
@@ -141,35 +150,29 @@ impl StateSnapshotReaderV1 {
         // doesn't match but we still need to ensure that objects match references exactly.
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
-        let mut all_files: HashSet<(u32, u32)> = HashSet::new();
 
-        for bucket in self.buckets()?.iter() {
-            let mut sha3_digests = sha3_digests.lock().await;
-            let ref_iter = self.ref_iter(*bucket)?;
-            let mut hasher = Sha3_256::default();
-            let mut current_part_num = 1;
-            let mut empty = true;
-            for (object_ref, part_num) in ref_iter {
-                empty = false;
-                if part_num != current_part_num {
+        for (bucket, part_files) in self.ref_files.clone().iter() {
+            for (part, _part_file) in part_files.iter() {
+                let mut sha3_digests = sha3_digests.lock().await;
+                let ref_iter = self.ref_iter(*bucket, *part)?;
+                let mut hasher = Sha3_256::default();
+                let mut empty = true;
+                self.object_files
+                    .get(bucket)
+                    .context(format!("No bucket exists for: {bucket}"))?
+                    .get(part)
+                    .context(format!("No part exists for bucket: {bucket}, part: {part}"))?;
+                for object_ref in ref_iter {
+                    hasher.update(object_ref.2.inner());
+                    empty = false;
+                }
+                if !empty {
                     sha3_digests
                         .entry(*bucket)
                         .or_insert(BTreeMap::new())
-                        .entry(part_num.try_into().unwrap())
+                        .entry(*part)
                         .or_insert(hasher.finalize().digest);
-                    all_files.insert((*bucket, part_num.try_into().unwrap()));
-                    hasher = Sha3_256::default();
-                    current_part_num = part_num;
                 }
-                hasher.update(object_ref.2.inner());
-            }
-            if !empty {
-                sha3_digests
-                    .entry(*bucket)
-                    .or_insert(BTreeMap::new())
-                    .entry(current_part_num.try_into().unwrap())
-                    .or_insert(hasher.finalize().digest);
-                all_files.insert((*bucket, current_part_num.try_into().unwrap()));
             }
         }
 
@@ -177,19 +180,10 @@ impl StateSnapshotReaderV1 {
             .object_files
             .iter()
             .flat_map(|(bucket, parts)| {
-                let vec: Vec<_> = parts
-                    .iter()
-                    .map(|entry| {
-                        all_files.remove(&(*bucket, *entry.0));
-                        (bucket, entry)
-                    })
-                    .collect();
+                let vec: Vec<_> = parts.iter().map(|entry| (bucket, entry)).collect();
                 vec
             })
             .collect();
-        all_files.is_empty().then_some(()).ok_or(anyhow!(
-            "Number of partitions in ref file does not match with number of part files"
-        ))?;
         let epoch_dir = self.epoch_dir();
         let remote_object_store = self.remote_object_store.clone();
         let indirect_objects_threshold = self.indirect_objects_threshold;
@@ -241,11 +235,15 @@ impl StateSnapshotReaderV1 {
         .await?
     }
 
-    pub fn ref_iter(&mut self, bucket_num: u32) -> Result<ObjectRefIter> {
+    pub fn ref_iter(&mut self, bucket_num: u32, part_num: u32) -> Result<ObjectRefIter> {
         let file_metadata = self
             .ref_files
             .get(&bucket_num)
-            .context(format!("No ref files found for bucket: {bucket_num}",))?;
+            .context(format!("No ref files found for bucket: {bucket_num}"))?
+            .get(&part_num)
+            .context(format!(
+                "No ref files found for bucket: {bucket_num}, part: {part_num}"
+            ))?;
         ObjectRefIter::new(
             file_metadata,
             self.local_staging_dir_root.clone(),
@@ -293,10 +291,9 @@ impl StateSnapshotReaderV1 {
     }
 }
 
-/// An iterator over all object refs in a REFERENCE file.
+/// An iterator over all object refs in a .ref file.
 pub struct ObjectRefIter {
     reader: Box<dyn Read>,
-    part_num: u64,
 }
 
 impl ObjectRefIter {
@@ -310,44 +307,29 @@ impl ObjectRefIter {
                 magic
             ))
         } else {
-            Ok(ObjectRefIter {
-                reader,
-                part_num: 1,
-            })
+            Ok(ObjectRefIter { reader })
         }
     }
 
-    fn check_if_delimiter(&self, buf: &[u8]) -> bool {
-        let (prefix, aligned, suffix) = unsafe { buf.align_to::<u128>() };
-        prefix.iter().all(|&x| x == 0)
-            && suffix.iter().all(|&x| x == 0)
-            && aligned.iter().all(|&x| x == 0)
-    }
-
-    fn next_ref(&mut self) -> Result<(ObjectRef, u64)> {
+    fn next_ref(&mut self) -> Result<ObjectRef> {
         let mut buf = [0u8; OBJECT_REF_BYTES];
         self.reader.read_exact(&mut buf)?;
-        if self.check_if_delimiter(&buf) {
-            self.part_num += 1;
-            self.next_ref()
-        } else {
-            let object_id = &buf[0..OBJECT_ID_BYTES];
-            let sequence_number = &buf[OBJECT_ID_BYTES..OBJECT_ID_BYTES + SEQUENCE_NUM_BYTES]
-                .reader()
-                .read_u64::<BigEndian>()?;
-            let sha3_digest = &buf[OBJECT_ID_BYTES + SEQUENCE_NUM_BYTES..OBJECT_REF_BYTES];
-            let object_ref: ObjectRef = (
-                ObjectID::from_bytes(object_id)?,
-                SequenceNumber::from_u64(*sequence_number),
-                ObjectDigest::try_from(sha3_digest)?,
-            );
-            Ok((object_ref, self.part_num))
-        }
+        let object_id = &buf[0..OBJECT_ID_BYTES];
+        let sequence_number = &buf[OBJECT_ID_BYTES..OBJECT_ID_BYTES + SEQUENCE_NUM_BYTES]
+            .reader()
+            .read_u64::<BigEndian>()?;
+        let sha3_digest = &buf[OBJECT_ID_BYTES + SEQUENCE_NUM_BYTES..OBJECT_REF_BYTES];
+        let object_ref: ObjectRef = (
+            ObjectID::from_bytes(object_id)?,
+            SequenceNumber::from_u64(*sequence_number),
+            ObjectDigest::try_from(sha3_digest)?,
+        );
+        Ok(object_ref)
     }
 }
 
 impl Iterator for ObjectRefIter {
-    type Item = (ObjectRef, u64);
+    type Item = ObjectRef;
     fn next(&mut self) -> Option<Self::Item> {
         self.next_ref().ok()
     }
