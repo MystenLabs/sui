@@ -358,7 +358,7 @@ impl ProcessTransactionState {
         &self,
         quorum_threshold: StakeUnit,
     ) -> bool {
-        // In some edge cases, the client may sent the same transaction multiple times but with different user signatures.
+        // In some edge cases, the client may send the same transaction multiple times but with different user signatures.
         // When this happens, the "minority" tx will fail in safe_client because the certificate verification would fail
         // and return Sui::FailedToVerifyTxCertWithExecutedEffects.
         // Here, we check if there are 2f+1 validators return this error. If so, the transaction is already finalized
