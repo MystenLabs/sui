@@ -373,6 +373,9 @@ pub enum SuiError {
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
 
+    #[error("Invalid digest length. Expected {expected}, got {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
+
     #[error("Unexpected message.")]
     UnexpectedMessage,
 
