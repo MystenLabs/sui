@@ -93,6 +93,7 @@ pub struct SignatureVerifier {
     committee: Arc<Committee>,
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
+    proofs_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
@@ -132,6 +133,10 @@ impl SignatureVerifier {
                 metrics.certificate_signatures_cache_evictions.clone(),
             ),
             signed_data_cache: VerifiedDigestCache::new(
+                metrics.signed_data_cache_hits.clone(),
+                metrics.signed_data_cache_evictions.clone(),
+            ),
+            proofs_cache: VerifiedDigestCache::new(
                 metrics.signed_data_cache_hits.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
