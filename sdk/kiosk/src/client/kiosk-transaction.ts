@@ -85,7 +85,8 @@ export class KioskTransaction {
 			this.txb,
 			this.kiosk!,
 			this.kioskCap!,
-			PERSONAL_KIOSK_RULE_ADDRESS[this.kioskClient.network],
+			this.kioskClient.packageIds?.personalKioskRulePackageId ||
+				PERSONAL_KIOSK_RULE_ADDRESS[this.kioskClient.network],
 		);
 	}
 
