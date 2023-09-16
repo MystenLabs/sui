@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 24;
+const MAX_PROTOCOL_VERSION: u64 = 25;
 
 // Record history of protocol version allocations here:
 //
@@ -73,6 +73,7 @@ const MAX_PROTOCOL_VERSION: u64 = 24;
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
 //             JWK / authenticator state flags.
+// Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1454,6 +1455,8 @@ impl ProtocolConfig {
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
                 }
+
+                25 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
