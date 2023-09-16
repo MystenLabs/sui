@@ -58,7 +58,7 @@ export function resolvePersonalKioskRule(params: RuleResolvingParams) {
 
 	// proves that the destination kiosk is personal.
 	txb.moveCall({
-		target: `${packageId}::kiosk_lock_rule::prove`,
+		target: `${packageId}::personal_kiosk_rule::prove`,
 		typeArguments: [itemType],
 		arguments: [objArg(txb, kiosk), transferRequest],
 	});

@@ -1290,12 +1290,30 @@ importers:
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
+      tmp:
+        specifier: ^0.2.1
+        version: 0.2.1
+      ts-retry-promise:
+        specifier: ^0.7.0
+        version: 0.7.0
       tsup:
         specifier: ^7.1.0
         version: 7.1.0(ts-node@10.9.1)(typescript@5.1.6)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
+      vitest:
+        specifier: ^0.33.0
+        version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
+      wait-on:
+        specifier: ^7.0.1
+        version: 7.0.1(debug@4.3.4)
 
   sdk/ledgerjs-hw-app-sui:
     dependencies:
@@ -12140,6 +12158,7 @@ packages:
   /cross-env@7.0.3:
     resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
     engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
+    hasBin: true
     dependencies:
       cross-spawn: 7.0.3
     dev: true

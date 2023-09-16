@@ -12,11 +12,10 @@ import {
 	Price,
 	PurchaseOptions,
 } from '../types';
-import { objArg } from '../utils';
-import { PERSONAL_KIOSK_RULE_ADDRESS } from '../constants';
+import { getNormalizedRuleType, objArg } from '../utils';
 import * as kioskTx from '../tx/kiosk';
 import { confirmRequest } from '../tx/transfer-policy';
-import { convertToPersonalTx } from '../tx/personal-kiosk';
+import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
 
 export type KioskTransactionParams = {
 	/** The TransactionBlock for this run */
@@ -39,10 +38,16 @@ export type KioskTransactionParams = {
 export class KioskTransaction {
 	txb: TransactionBlock;
 	kioskClient: KioskClient;
-	cap?: KioskOwnerCap;
 	kiosk?: TransactionArgument;
 	kioskCap?: TransactionArgument;
+	// If we're pending `share` of a new kiosk, `wrap()` will share it.
+	#pendingShare?: boolean;
+	// If we're pending transferring of the cap, `wrap()` will either error or transfer the cap if it's a new personal.
+	#pendingTransfer?: boolean;
+	// The promise that the personalCap will be returned on `wrap()`.
 	#promise?: TransactionArgument | undefined;
+	// The personal kiosk argument.
+	#personalCap?: TransactionArgument;
 
 	constructor({ txb, kioskClient, cap }: KioskTransactionParams) {
 		this.txb = txb;
@@ -53,11 +58,15 @@ export class KioskTransaction {
 	}
 
 	/**
-	 * Creates a kiosk and returns both `Kiosk` and `KioskOwnerCap`.
+	 * Creates a kiosk and saves `kiosk` and `kioskOwnerCap` in state.
 	 * Helpful if we want to chain some actions before sharing + transferring the cap to the specified address.
+	 * @param borrow If true, the `kioskOwnerCap` is borrowed from the `PersonalKioskCap` to be used in next transactions.
 	 */
 	create() {
-		this.cap = undefined; // reset cap, as we now operate on the newly created kiosk.
+		this.#setPendingStatuses({
+			share: true,
+			transfer: true,
+		});
 		const [kiosk, cap] = kioskTx.createKiosk(this.txb);
 		this.kiosk = kiosk;
 		this.kioskCap = cap;
@@ -67,27 +76,33 @@ export class KioskTransaction {
 	/**
 	 * Creates a personal kiosk & shares it.
 	 * The `PersonalKioskCap` is transferred to the signer.
+	 * @param borrow If true, the `kioskOwnerCap` is borrowed from the `PersonalKioskCap` to be used in next transactions.
 	 */
-	createPersonal() {
-		this.create().convertToPersonal();
-		kioskTx.shareKiosk(this.txb, this.kiosk!);
+	createPersonal(borrow?: boolean) {
+		this.#pendingShare = true;
+		return this.create().convertToPersonal(borrow);
 	}
 
 	/**
 	 * Converts a kiosk to a Personal (Soulbound) Kiosk.
 	 * Requires initialization by either calling `ktxb.create()` or `ktxb.setCap()`.
 	 */
-	convertToPersonal() {
+	convertToPersonal(borrow?: boolean) {
 		this.#validateKioskIsSet();
-		if (this.cap && this.cap.isPersonal) throw new Error('This kiosk is already personal');
 
-		convertToPersonalTx(
+		const cap = convertToPersonalTx(
 			this.txb,
 			this.kiosk!,
 			this.kioskCap!,
-			this.kioskClient.packageIds?.personalKioskRulePackageId ||
-				PERSONAL_KIOSK_RULE_ADDRESS[this.kioskClient.network],
+			this.kioskClient.getRulePackageId('personalKioskRulePackageId'),
 		);
+
+		// if we enable `borrow`, we borrow the kioskCap from the cap.
+		if (borrow) this.#borrowFromPersonalCap(cap);
+		else this.#personalCap = cap;
+
+		this.#setPendingStatuses({ transfer: true });
+		return this;
 	}
 
 	/**
@@ -99,12 +114,23 @@ export class KioskTransaction {
 	}
 
 	/**
+	 * Shares the kiosk.
+	 */
+	share() {
+		this.#validateKioskIsSet();
+		this.#setPendingStatuses({ share: false });
+		kioskTx.shareKiosk(this.txb, this.kiosk!);
+	}
+
+	/**
 	 * Should be called only after `create` is called.
 	 * It shares the kiosk & transfers the cap to the specified address.
 	 */
 	shareAndTransferCap(address: string) {
-		this.#validateKioskIsSet();
-		kioskTx.shareKiosk(this.txb, this.kiosk!);
+		if (this.#personalCap)
+			throw new Error('You can only call `shareAndTransferCap` on a non-personal kiosk.');
+		this.#setPendingStatuses({ transfer: false });
+		this.share();
 		this.txb.transferObjects([this.kioskCap!], this.txb.pure(address, 'address'));
 	}
 
@@ -112,7 +138,7 @@ export class KioskTransaction {
 	 * A function to borrow an item from a kiosk & execute any function with it.
 	 * Example: You could borrow a Fren out of a kiosk, attach an accessory (or mix), and return it.
 	 */
-	borrowTx({ itemType, itemId }: ItemId, callback: (item: TransactionArgument) => Promise<void>) {
+	borrowTx({ itemType, itemId }: ItemId, callback: (item: TransactionArgument) => void) {
 		this.#validateKioskIsSet();
 		const [itemObj, promise] = kioskTx.borrowValue(
 			this.txb,
@@ -122,9 +148,9 @@ export class KioskTransaction {
 			itemId,
 		);
 
-		callback(itemObj).finally(() => {
-			this.return({ itemType, item: itemObj, promise });
-		});
+		callback(itemObj);
+
+		this.return({ itemType, item: itemObj, promise });
 	}
 
 	/**
@@ -297,8 +323,11 @@ export class KioskTransaction {
 		let canTransferOutsideKiosk = true;
 
 		for (const rule of policy.rules) {
-			const ruleDefinition = this.kioskClient.rules.find((x) => x.rule === rule);
+			const ruleDefinition = this.kioskClient.rules.find(
+				(x) => getNormalizedRuleType(x.rule) === getNormalizedRuleType(rule),
+			);
 			if (!ruleDefinition) throw new Error(`No resolver for the following rule: ${rule}.`);
+
 			if (ruleDefinition.hasLockingRule) canTransferOutsideKiosk = false;
 
 			ruleDefinition.resolveRuleFunction({
@@ -331,24 +360,12 @@ export class KioskTransaction {
 	 */
 	setCap(cap: KioskOwnerCap) {
 		this.kiosk = objArg(this.txb, cap.kioskId);
-		console.log(this.kiosk);
 		if (!cap.isPersonal) {
 			this.kioskCap = objArg(this.txb, cap.objectId);
 			return;
 		}
 
-		const [kioskCap, promise] = this.txb.moveCall({
-			target: `${
-				PERSONAL_KIOSK_RULE_ADDRESS[this.kioskClient.network]
-			}::personal_kiosk::borrow_val`,
-			arguments: [objArg(this.txb, cap.objectId)],
-		});
-
-		this.cap = cap;
-		this.kioskCap = kioskCap;
-		this.#promise = promise;
-
-		return this;
+		return this.#borrowFromPersonalCap(cap.objectId);
 	}
 
 	/**
@@ -357,18 +374,41 @@ export class KioskTransaction {
 	 */
 	wrap() {
 		this.#validateKioskIsSet();
-		if (!this.cap || !this.#promise || !this.cap.isPersonal) return;
+		// If we're pending the sharing of the new kiosk, share it.
+		if (this.#pendingShare) this.share();
 
-		this.txb.moveCall({
-			target: `${
-				PERSONAL_KIOSK_RULE_ADDRESS[this.kioskClient.network]
-			}::personal_kiosk::return_val`,
-			arguments: [
-				objArg(this.txb, this.cap.objectId),
-				objArg(this.txb, this.kioskCap!),
-				this.#promise,
-			],
-		});
+		// If we're operating on a non-personal kiosk, we don't need to do anything else.
+		if (!this.#personalCap) {
+			// If we're pending transfer though, we inform user to call `shareAndTransferCap()`.
+			if (this.#pendingTransfer)
+				throw new Error(
+					'You need to transfer the `kioskOwnerCap` by calling `shareAndTransferCap()` before wrap',
+				);
+			return;
+		}
+
+		const packageId = this.kioskClient.getRulePackageId('personalKioskRulePackageId');
+
+		// if we have a promise, return the `ownerCap` back to the personal cap.
+		if (this.#promise) {
+			this.txb.moveCall({
+				target: `${packageId}::personal_kiosk::return_val`,
+				arguments: [this.#personalCap, objArg(this.txb, this.kioskCap!), this.#promise!],
+			});
+		}
+
+		// If we are pending transferring the personalCap, we do it here.
+		if (this.#pendingTransfer) transferPersonalCapTx(this.txb, this.#personalCap, packageId);
+	}
+
+	// Some setters
+
+	setKioskCap(cap: TransactionArgument) {
+		this.kioskCap = cap;
+	}
+
+	setKiosk(kiosk: TransactionArgument) {
+		this.kiosk = kiosk;
 	}
 
 	// Some getters
@@ -385,11 +425,28 @@ export class KioskTransaction {
 	getKioskCap() {
 		return this.kioskCap;
 	}
-	/*
-	 * If operating over an existing kiosk, returns the active cap
+
+	/**
+	 * A function to borrow from `personalCap`.
 	 */
-	getCap() {
-		return this.cap;
+	#borrowFromPersonalCap(personalCap: ObjectArgument) {
+		const [kioskCap, promise] = this.txb.moveCall({
+			target: `${this.kioskClient.getRulePackageId(
+				'personalKioskRulePackageId',
+			)}::personal_kiosk::borrow_val`,
+			arguments: [objArg(this.txb, personalCap)],
+		});
+
+		this.kioskCap = kioskCap;
+		this.#personalCap = objArg(this.txb, personalCap);
+		this.#promise = promise;
+
+		return this;
+	}
+
+	#setPendingStatuses({ share, transfer }: { share?: boolean; transfer?: boolean }) {
+		if (transfer !== undefined) this.#pendingTransfer = transfer;
+		if (share !== undefined) this.#pendingShare = share;
 	}
 
 	#validateKioskIsSet() {

@@ -21,6 +21,7 @@ import {
 	TransferPolicyCap,
 } from './types';
 import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 const DEFAULT_QUERY_LIMIT = 50;
 
@@ -307,4 +308,11 @@ export function parseTransferPolicyCapObject(
 		policyCapId: item.data?.objectId!,
 		type: objectType,
 	};
+}
+
+// Normalizes the packageId part of a rule's type.
+export function getNormalizedRuleType(rule: string) {
+	const normalizedRuleAddress = rule.split('::');
+	normalizedRuleAddress[0] = normalizeSuiAddress(normalizedRuleAddress[0]);
+	return normalizedRuleAddress.join('::');
 }

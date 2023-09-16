@@ -15,14 +15,7 @@ import {
 	shareTransferPolicy,
 	withdrawFromPolicy,
 } from '../tx/transfer-policy';
-import { type ObjectArgument, TransferPolicyCap, Network } from '../types';
-
-import {
-	FLOOR_PRICE_RULE_ADDRESS,
-	KIOSK_LOCK_RULE_ADDRESS,
-	PERSONAL_KIOSK_RULE_ADDRESS,
-	ROYALTY_RULE_ADDRESS,
-} from '../constants';
+import { type ObjectArgument, TransferPolicyCap } from '../types';
 import { KioskClient } from './kiosk-client';
 
 export type TransferPolicyBaseParams = {
@@ -169,7 +162,7 @@ export class TransferPolicyTransaction {
 			this.policyCap!,
 			percentageBps,
 			minAmount,
-			this.#getPackageId('royaltyRulePackageId'),
+			this.kioskClient.getRulePackageId('royaltyRulePackageId'),
 		);
 		return this;
 	}
@@ -186,7 +179,7 @@ export class TransferPolicyTransaction {
 			this.type!,
 			this.policy!,
 			this.policyCap!,
-			this.#getPackageId('kioskLockRulePackageId'),
+			this.kioskClient.getRulePackageId('kioskLockRulePackageId'),
 		);
 		return this;
 	}
@@ -202,7 +195,7 @@ export class TransferPolicyTransaction {
 			this.type!,
 			this.policy!,
 			this.policyCap!,
-			this.#getPackageId('personalKioskRulePackageId'),
+			this.kioskClient.getRulePackageId('personalKioskRulePackageId'),
 		);
 		return this;
 	}
@@ -220,7 +213,7 @@ export class TransferPolicyTransaction {
 			this.policy!,
 			this.policyCap!,
 			minPrice,
-			this.#getPackageId('floorPriceRulePackageId'),
+			this.kioskClient.getRulePackageId('floorPriceRulePackageId'),
 		);
 		return this;
 	}
@@ -249,7 +242,7 @@ export class TransferPolicyTransaction {
 	removeLockRule() {
 		this.#validateInputs();
 
-		const packageId = this.#getPackageId('kioskLockRulePackageId');
+		const packageId = this.kioskClient.getRulePackageId('kioskLockRulePackageId');
 
 		removeTransferPolicyRule(
 			this.txb,
@@ -268,7 +261,7 @@ export class TransferPolicyTransaction {
 	removeRoyaltyRule() {
 		this.#validateInputs();
 
-		const packageId = this.#getPackageId('royaltyRulePackageId');
+		const packageId = this.kioskClient.getRulePackageId('royaltyRulePackageId');
 
 		removeTransferPolicyRule(
 			this.txb,
@@ -284,7 +277,7 @@ export class TransferPolicyTransaction {
 	removePersonalKioskRule() {
 		this.#validateInputs();
 
-		const packageId = this.#getPackageId('personalKioskRulePackageId');
+		const packageId = this.kioskClient.getRulePackageId('personalKioskRulePackageId');
 
 		removeTransferPolicyRule(
 			this.txb,
@@ -300,7 +293,7 @@ export class TransferPolicyTransaction {
 	removeFloorPriceRule() {
 		this.#validateInputs();
 
-		const packageId = this.#getPackageId('floorPriceRulePackageId');
+		const packageId = this.kioskClient.getRulePackageId('floorPriceRulePackageId');
 
 		removeTransferPolicyRule(
 			this.txb,
@@ -323,38 +316,6 @@ export class TransferPolicyTransaction {
 			throw new Error(
 				`${genericErrorMessage} Missing: Transfer Policy object type (e.g. {packageId}::item::Item)`,
 			);
-	}
-
-	/**
-	 * A convenient helper to get the packageIds for our supported ruleset,
-	 * based on `kioskClient` configuration.
-	 */
-	#getPackageId(
-		rule:
-			| 'kioskLockRulePackageId'
-			| 'royaltyRulePackageId'
-			| 'personalKioskRulePackageId'
-			| 'floorPriceRulePackageId',
-	) {
-		const rules = this.kioskClient.packageIds || {};
-		const network = this.kioskClient.network;
-
-		/// Check existence of rule based on network and throw an error if it's not found.
-		/// We always have a fallback for testnet or mainnet.
-		if (!rules[rule] && network !== Network.MAINNET && network !== Network.TESTNET) {
-			throw new Error(`Missing packageId for rule ${rule}`);
-		}
-
-		switch (rule) {
-			case 'kioskLockRulePackageId':
-				return rules[rule] || KIOSK_LOCK_RULE_ADDRESS[network];
-			case 'royaltyRulePackageId':
-				return rules[rule] || ROYALTY_RULE_ADDRESS[network];
-			case 'personalKioskRulePackageId':
-				return rules[rule] || PERSONAL_KIOSK_RULE_ADDRESS[network];
-			case 'floorPriceRulePackageId':
-				return rules[rule] || FLOOR_PRICE_RULE_ADDRESS[network];
-		}
 	}
 
 	/**

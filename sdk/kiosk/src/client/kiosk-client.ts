@@ -7,7 +7,7 @@ import {
 	type FetchKioskOptions,
 	type KioskData,
 	type OwnedKiosks,
-	type Network,
+	Network,
 	type KioskClientOptions,
 } from '../types';
 import {
@@ -16,6 +16,9 @@ import {
 	PERSONAL_KIOSK_RULE_ADDRESS,
 	rules,
 	getBaseRules,
+	ROYALTY_RULE_ADDRESS,
+	KIOSK_LOCK_RULE_ADDRESS,
+	FLOOR_PRICE_RULE_ADDRESS,
 } from '../constants';
 import {
 	queryOwnedTransferPolicies,
@@ -116,5 +119,37 @@ export class KioskClient {
 		if (this.rules.find((x) => x.rule === rule.rule))
 			throw new Error(`Rule ${rule.rule} resolver already exists.`);
 		this.rules.push(rule);
+	}
+
+	/**
+	 * A convenient helper to get the packageIds for our supported ruleset,
+	 * based on `kioskClient` configuration.
+	 */
+	getRulePackageId(
+		rule:
+			| 'kioskLockRulePackageId'
+			| 'royaltyRulePackageId'
+			| 'personalKioskRulePackageId'
+			| 'floorPriceRulePackageId',
+	) {
+		const rules = this.packageIds || {};
+		const network = this.network;
+
+		/// Check existence of rule based on network and throw an error if it's not found.
+		/// We always have a fallback for testnet or mainnet.
+		if (!rules[rule] && network !== Network.MAINNET && network !== Network.TESTNET) {
+			throw new Error(`Missing packageId for rule ${rule}`);
+		}
+
+		switch (rule) {
+			case 'kioskLockRulePackageId':
+				return rules[rule] || KIOSK_LOCK_RULE_ADDRESS[network];
+			case 'royaltyRulePackageId':
+				return rules[rule] || ROYALTY_RULE_ADDRESS[network];
+			case 'personalKioskRulePackageId':
+				return rules[rule] || PERSONAL_KIOSK_RULE_ADDRESS[network];
+			case 'floorPriceRulePackageId':
+				return rules[rule] || FLOOR_PRICE_RULE_ADDRESS[network];
+		}
 	}
 }
