@@ -56,12 +56,12 @@ impl LiveObjectSetWriterV1 {
         file_compression: FileCompression,
         sender: Sender<FileMetadata>,
     ) -> Result<Self> {
-        let (n, obj_file, part_num) = Self::next_object_file(dir_path.clone(), bucket_num)?;
-        let ref_file = Self::ref_file(dir_path.clone(), bucket_num, part_num)?;
+        let (n, obj_file) = Self::object_file(dir_path.clone(), bucket_num, 1)?;
+        let ref_file = Self::ref_file(dir_path.clone(), bucket_num, 1)?;
         Ok(LiveObjectSetWriterV1 {
             dir_path,
             bucket_num,
-            current_part_num: part_num,
+            current_part_num: 1,
             wbuf: BufWriter::new(obj_file),
             ref_wbuf: BufWriter::new(ref_file),
             n,
@@ -82,8 +82,7 @@ impl LiveObjectSetWriterV1 {
         self.sender = None;
         Ok(self.files.clone())
     }
-    fn next_object_file(dir_path: PathBuf, bucket_num: u32) -> Result<(usize, File, u32)> {
-        let part_num = Self::next_object_file_number(dir_path.clone(), bucket_num)?;
+    fn object_file(dir_path: PathBuf, bucket_num: u32, part_num: u32) -> Result<(usize, File)> {
         let next_part_file_path = dir_path.join(format!("{bucket_num}_{part_num}.obj"));
         let next_part_file_tmp_path = dir_path.join(format!("{bucket_num}_{part_num}.obj.tmp"));
         let mut f = File::create(next_part_file_tmp_path.clone())?;
@@ -95,32 +94,7 @@ impl LiveObjectSetWriterV1 {
         fs::rename(next_part_file_tmp_path, next_part_file_path.clone())?;
         let mut f = OpenOptions::new().append(true).open(next_part_file_path)?;
         f.seek(SeekFrom::Start(n as u64))?;
-        Ok((n, f, part_num))
-    }
-    fn next_object_file_number(dir: PathBuf, bucket: u32) -> Result<u32> {
-        let files = read_dir(&dir)?;
-        let mut max = 0u32;
-        for file_path in files {
-            let entry = file_path?;
-            let file_name = format!("{:?}", entry.file_name());
-            if !file_name.ends_with(".obj") {
-                continue;
-            }
-            let (bucket_num, part_num) = file_name
-                .strip_suffix(".obj")
-                .context(format!("Invalid object file {file_name} in snapshot dir {}, should be named <bucket_num>_<part_num>.obj", dir.display()))?
-                .split_once('_')
-                .map(|(b, p)| (b.parse::<u32>(), (p.parse::<u32>())))
-                .ok_or(anyhow!("Failed to parse object file name: {file_name} in dir {}", dir.display()))?;
-            if bucket_num? != bucket {
-                continue;
-            }
-            let part_num = part_num?;
-            if part_num > max {
-                max = part_num;
-            }
-        }
-        Ok(max + 1)
+        Ok((n, f))
     }
     fn ref_file(dir_path: PathBuf, bucket_num: u32, part_num: u32) -> Result<File> {
         let ref_path = dir_path.join(format!("{bucket_num}_{part_num}.ref"));
@@ -180,9 +154,12 @@ impl LiveObjectSetWriterV1 {
     }
     fn cut(&mut self) -> Result<()> {
         self.finalize()?;
-        let (n, f, part_num) = Self::next_object_file(self.dir_path.clone(), self.bucket_num)?;
+        let (n, f) = Self::object_file(
+            self.dir_path.clone(),
+            self.bucket_num,
+            self.current_part_num + 1,
+        )?;
         self.n = n;
-        self.current_part_num = part_num;
         self.wbuf = BufWriter::new(f);
         Ok(())
     }
@@ -191,7 +168,7 @@ impl LiveObjectSetWriterV1 {
         let f = Self::ref_file(
             self.dir_path.clone(),
             self.bucket_num,
-            self.current_part_num,
+            self.current_part_num + 1,
         )?;
         self.ref_wbuf = BufWriter::new(f);
         Ok(())
@@ -205,6 +182,7 @@ impl LiveObjectSetWriterV1 {
         if cut_new_part_file {
             self.cut()?;
             self.cut_reference_file()?;
+            self.current_part_num += 1;
         }
         self.n += blob.write(&mut self.wbuf)?;
         Ok(())
