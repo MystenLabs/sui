@@ -446,9 +446,9 @@ However, a JWT leak does not mean loss of funds as long as the corresponding eph
 
 ## User Salt
 
-If the user loses the user salt, he loses access to the zkLogin wallet. The user salt is essential for both ZK proof generation and zkLogin address derivation.
+The user salt is required to get access to the zkLogin wallet. This value is essential for both ZK proof generation and zkLogin address derivation.
 
-The leak of user salt does not mean loss of funds, but it enables the attacker to associate the user's subject identifier (i.e. `sub`) with the Sui address. This can be problematic depending on whether pairwise or public subject identifiers are in use. In particular, there is no problem if pairwise IDs are used (e.g., Facebook) as the subject identifier is unique per RP. However, with public IDs (e.g., Google and Twitch), the globally unique sub value can be used to identify users.
+The leak of user salt does not mean loss of funds, but it enables the attacker to associate the user's subject identifier (i.e. `sub`) with the Sui address. This can be problematic depending on whether pairwise or public subject identifiers are in use. In particular, there is no problem if pairwise IDs are used (e.g., Facebook) as the subject identifier is unique per RP. However, with public reusable IDs (e.g., Google and Twitch), the globally unique sub value can be used to identify users.
 
 ## Ephemeral Private Key
 
@@ -485,21 +485,23 @@ Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or dist
 
 zkLogin does not split any individual private keys, but ephemeral private keys are registered using a fresh nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
 
-Interestingly though, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA.
+Interestingly though, a zkLogin address automatically simulates a 2-of-2 setting, where the first part is user's OAuth account and the second is user's salt.
+
+Furthermore, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA in k-of-N settings.
 
 ## Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
 
 A forgotten OAuth credential can typically be recovered by resetting the password in that provider.
-It is always recommended to use 2FA in any OAuth provider, but in the unfortunate event where a user's OAuth credentials get compromised, an adversary will still require to obtain `user_salt`, but also learn which wallet is used in order to take over that account.
+In the unfortunate event where user's OAuth credentials get compromised, an adversary will still require to obtain `user_salt`, but also learn which wallet is used in order to take over that account. Note that modern `user_salt` providers may have additional 2FA security measures in place to prevent provision of user's salt even to entities that present a valid, non-expired JWT.
 
-Due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet, targeted attacks by just monitoring the blockchain are more difficult.
-Indeed, in single-key addresses, if one loses access to their OAuth account permanently, access to that wallet is lost. If recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to use native Sui Multisig functionality to add a backup method to the wallet. Note that it's even possible to have a Multisig wallet that all signers are zkLogin related, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
+It's also important to highlight that due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet used, targeted attacks by just monitoring the blockchain are more difficult.
+Finally, on the unfortunate event where one loses access to their OAuth account permanently, access to that wallet is lost. But if recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to support the native Sui Multisig functionality and add a backup method. Note that it's even possible to have a Multisig wallet that all signers are using zkLogin, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
 
 ## Can I convert or merge a traditional private key wallet into a zkLogin one?
 
 No. The zkLogin wallet address is derived differently compared to a private key address. Currently, the zkLogin wallet lacks portability, necessitating asset transfers between a zkLogin wallet and a traditional one.
 
-## Will my zkLogin Address ever change?
+## Will my zkLogin address ever change?
 
 zkLogin address is derived from `sub`, `iss`, `aud` and `user_salt`.
 
@@ -511,13 +513,17 @@ In addition, each wallet or application maintains its own `user_salt`, so loggin
 
 See more on address [definition](#address-definition).
 
+## Can I have multiple addresses with the same OAuth provider?
+
+Yes, this is possible by using a different wallet provider or different `user_salt` for each account. This is useful for separating funds between different accounts.
+
 ## Is a zkLogin Wallet custodial?
 
 A zkLogin wallet is a non-custodial or unhosted wallet.
 
 A custodial or hosted wallet is where a third party (the custodian) controls the private keys on behalf of a wallet user. No such third-party exists for zkLogin wallets.
 
-Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two credentials are the user's OAuth credentials (maintained by the user) and the salt. In other words, neither the OAuth provider, the ZK proving service or the salt service provider (if not maintained by the user) is a custodian.
+Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two credentials are the user's OAuth credentials (maintained by the user) and the salt. In other words, neither the OAuth provider, the wallet vendor, the ZK proving service or the salt service provider is a custodian.
 
 ## Generating a ZK proof is expensive, is a new proof required to be generated for every transaction?
 
@@ -525,7 +531,7 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 
 ## Does zkLogin work on mobile?
 
-zkLogin works with any wallet that is whitelisted and has completed integration with it, including mobile wallets.
+zkLogin is a a Sui native primitive and not a privilege of a particular wallet provider, and thus it can be integrated to any wallet provider, including mobile wallets.
 
 ## Can I run my own ZK Proving Service?
 
