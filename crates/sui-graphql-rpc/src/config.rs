@@ -122,7 +122,7 @@ mod tests {
         let actual = ServiceConfig::read(
             r#" disabled-features = [
                   "coins",
-                  "name-server",
+                  "name-service",
                 ]
             "#,
         )
@@ -131,7 +131,7 @@ mod tests {
         use FunctionalGroup as G;
         let expect = ServiceConfig {
             limits: Limits::default(),
-            disabled_features: BTreeSet::from([G::Coins, G::NameServer]),
+            disabled_features: BTreeSet::from([G::Coins, G::NameService]),
             experiments: Experiments::default(),
         };
 
