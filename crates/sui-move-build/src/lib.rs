@@ -58,6 +58,7 @@ use crate::linters::{
     coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
     custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
     known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    LINT_WARNING_PREFIX,
 };
 
 #[cfg(test)]
@@ -155,15 +156,23 @@ impl BuildConfig {
             };
             match units_res {
                 Ok((units, warning_diags)) => {
+                    let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     report_warnings(&files, warning_diags);
+                    if any_linter_warnings {
+                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
+                    }
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
                 Err(error_diags) => {
                     assert!(!error_diags.is_empty());
+                    let any_linter_warnings = error_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
+                    if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+                    }
+                    if any_linter_warnings {
+                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
                     }
                     anyhow::bail!("Compilation error");
                 }
