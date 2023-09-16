@@ -94,8 +94,6 @@ pub struct Script {
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
@@ -126,11 +124,6 @@ pub struct ModuleDefinition {
     pub attributes: Attributes,
     pub loc: Loc,
     pub is_source_module: bool,
-    /// `dependency_order` is the topological order/rank in the dependency graph.
-    /// `dependency_order` is initialized at `0` and set in the uses pass
-    pub dependency_order: usize,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
@@ -146,12 +139,6 @@ pub struct ModuleDefinition {
 pub struct Friend {
     pub attributes: Attributes,
     pub loc: Loc,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Neighbor {
-    Dependency,
-    Friend,
 }
 
 //**************************************************************************************************
@@ -811,15 +798,6 @@ impl fmt::Display for Address {
     }
 }
 
-impl fmt::Display for Neighbor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Neighbor::Dependency => write!(f, "neighbor#dependency"),
-            Neighbor::Friend => write!(f, "neighbor#friend"),
-        }
-    }
-}
-
 impl fmt::Display for AttributeName_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -962,8 +940,6 @@ impl AstDebug for Script {
             package_name,
             attributes,
             loc: _loc,
-            immediate_neighbors,
-            used_addresses,
             constants,
             function_name,
             function,
@@ -975,14 +951,6 @@ impl AstDebug for Script {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{} {};", neighbor, mident));
-            w.new_line();
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -1002,9 +970,6 @@ impl AstDebug for ModuleDefinition {
             attributes,
             loc: _loc,
             is_source_module,
-            dependency_order,
-            immediate_neighbors,
-            used_addresses,
             friends,
             structs,
             functions,
@@ -1022,15 +987,6 @@ impl AstDebug for ModuleDefinition {
         } else {
             "library module"
         });
-        w.writeln(&format!("dependency order #{}", dependency_order));
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{} {};", neighbor, mident));
-            w.new_line();
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();

@@ -4,8 +4,10 @@
 
 use crate::{
     diagnostics::{codes::*, Diagnostic},
-    expansion::ast::{self as E, Address, ModuleIdent},
+    expansion::ast::{Address, ModuleIdent, Value_},
+    naming::ast::{self as N, Neighbor, Neighbor_},
     shared::{unique_map::UniqueMap, *},
+    typing::ast as T,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -16,10 +18,10 @@ use std::collections::{BTreeMap, BTreeSet};
 // Entry
 //**************************************************************************************************
 
-pub fn verify(
+pub fn program(
     compilation_env: &mut CompilationEnv,
-    modules: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
-    scripts: &mut BTreeMap<Symbol, E::Script>,
+    modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    scripts: &mut BTreeMap<Symbol, T::Script>,
 ) {
     let imm_modules = &modules;
     let mut context = Context::new(imm_modules);
@@ -85,7 +87,7 @@ enum NodeIdent {
 }
 
 struct Context<'a> {
-    modules: &'a UniqueMap<ModuleIdent, E::ModuleDefinition>,
+    modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
     // - if A friends B, add edge B -> A
@@ -93,7 +95,7 @@ struct Context<'a> {
     // and a script cannot declare friends. Hence, is no way to form a cyclic dependency via scripts
     module_neighbors: BTreeMap<ModuleIdent, BTreeMap<ModuleIdent, BTreeMap<DepType, Loc>>>,
     // A summary of neighbors keyed by module or script
-    neighbors_by_node: BTreeMap<NodeIdent, UniqueMap<ModuleIdent, E::Neighbor>>,
+    neighbors_by_node: BTreeMap<NodeIdent, UniqueMap<ModuleIdent, Neighbor>>,
     // All addresses used by a node
     addresses_by_node: BTreeMap<NodeIdent, BTreeSet<Address>>,
     // The module or script we are currently exploring
@@ -101,7 +103,7 @@ struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new(modules: &'a UniqueMap<ModuleIdent, E::ModuleDefinition>) -> Self {
+    fn new(modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>) -> Self {
         Context {
             modules,
             module_neighbors: BTreeMap::new(),
@@ -125,9 +127,9 @@ impl<'a> Context<'a> {
             return;
         }
 
-        let neighbor = match dep_type {
-            DepType::Use => E::Neighbor::Dependency,
-            DepType::Friend => E::Neighbor::Friend,
+        let neighbor_ = match dep_type {
+            DepType::Use => Neighbor_::Dependency,
+            DepType::Friend => Neighbor_::Friend,
         };
         let current_neighbors = self
             .neighbors_by_node
@@ -138,7 +140,7 @@ impl<'a> Context<'a> {
             .entry(current.clone())
             .or_insert_with(BTreeSet::new);
         current_neighbors.remove(&mident);
-        current_neighbors.add(mident, neighbor).unwrap();
+        current_neighbors.add(mident, sp(loc, neighbor_)).unwrap();
         current_used_addresses.insert(mident.value.address);
 
         match current {
@@ -264,13 +266,13 @@ fn cycle_error(
 // Modules
 //**************************************************************************************************
 
-fn module_defs(context: &mut Context, modules: &UniqueMap<ModuleIdent, E::ModuleDefinition>) {
+fn module_defs(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>) {
     modules
         .key_cloned_iter()
         .for_each(|(mident, mdef)| module(context, mident, mdef))
 }
 
-fn module(context: &mut Context, mident: ModuleIdent, mdef: &E::ModuleDefinition) {
+fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition) {
     context.current_node = Some(NodeIdent::Module(mident));
     mdef.friends
         .key_cloned_iter()
@@ -281,9 +283,13 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &E::ModuleDefinition
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
-    mdef.specs
-        .iter()
-        .for_each(|sblock| spec_block(context, sblock));
+    for (mident, sp!(loc, neighbor_)) in &mdef.spec_dependencies {
+        let dep = match neighbor_ {
+            Neighbor_::Dependency => DepType::Use,
+            Neighbor_::Friend => DepType::Friend,
+        };
+        context.add_neighbor(*mident, dep, *loc);
+    }
 }
 
 //**************************************************************************************************
@@ -293,52 +299,46 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &E::ModuleDefinition
 // Scripts cannot affect the dependency graph because 1) a script cannot friend anything and 2)
 // nothing can depends on a script. Therefore, we iterate over the scripts just to collect their
 // immediate dependencies.
-fn script_defs(context: &mut Context, scripts: &BTreeMap<Symbol, E::Script>) {
+fn script_defs(context: &mut Context, scripts: &BTreeMap<Symbol, T::Script>) {
     scripts
         .iter()
         .for_each(|(sname, sdef)| script(context, *sname, sdef))
 }
 
-fn script(context: &mut Context, sname: Symbol, sdef: &E::Script) {
+fn script(context: &mut Context, sname: Symbol, sdef: &T::Script) {
     context.current_node = Some(NodeIdent::Script(sname));
     function(context, &sdef.function);
-    sdef.specs
-        .iter()
-        .for_each(|sblock| spec_block(context, sblock));
+    for (mident, sp!(loc, neighbor_)) in &sdef.spec_dependencies {
+        let dep = match neighbor_ {
+            Neighbor_::Dependency => DepType::Use,
+            Neighbor_::Friend => DepType::Friend,
+        };
+        context.add_neighbor(*mident, dep, *loc);
+    }
 }
 
 //**************************************************************************************************
 // Function
 //**************************************************************************************************
 
-fn function(context: &mut Context, fdef: &E::Function) {
+fn function(context: &mut Context, fdef: &T::Function) {
     function_signature(context, &fdef.signature);
-    function_acquires(context, &fdef.acquires);
-    if let E::FunctionBody_::Defined(seq) = &fdef.body.value {
+    if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
         sequence(context, seq)
     }
-    fdef.specs
-        .values()
-        .for_each(|sblock| spec_block(context, sblock));
 }
 
-fn function_signature(context: &mut Context, sig: &E::FunctionSignature) {
+fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
     types(context, sig.parameters.iter().map(|(_, st)| st));
     type_(context, &sig.return_type)
-}
-
-fn function_acquires(context: &mut Context, acqs: &[E::ModuleAccess]) {
-    for acq in acqs {
-        module_access(context, acq);
-    }
 }
 
 //**************************************************************************************************
 // Struct
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, sdef: &E::StructDefinition) {
-    if let E::StructFields::Defined(fields) = &sdef.fields {
+fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
+    if let N::StructFields::Defined(fields) = &sdef.fields {
         fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
     }
 }
@@ -347,38 +347,32 @@ fn struct_def(context: &mut Context, sdef: &E::StructDefinition) {
 // Types
 //**************************************************************************************************
 
-fn module_access(context: &mut Context, sp!(loc, ma_): &E::ModuleAccess) {
-    if let E::ModuleAccess_::ModuleAccess(m, _) = ma_ {
-        context.add_usage(*m, *loc)
-    }
-}
-
-fn types<'a>(context: &mut Context, tys: impl IntoIterator<Item = &'a E::Type>) {
+fn types<'a>(context: &mut Context, tys: impl IntoIterator<Item = &'a N::Type>) {
     tys.into_iter().for_each(|ty| type_(context, ty))
 }
 
-fn types_opt(context: &mut Context, tys_opt: &Option<Vec<E::Type>>) {
-    tys_opt.iter().for_each(|tys| types(context, tys))
-}
-
-fn type_(context: &mut Context, sp!(_, ty_): &E::Type) {
-    use E::Type_ as T;
+fn type_(context: &mut Context, sp!(_, ty_): &N::Type) {
+    use N::Type_ as T;
     match ty_ {
-        T::Apply(tn, tys) => {
-            module_access(context, tn);
+        T::Apply(_, tn, tys) => {
+            type_name(context, tn);
             types(context, tys);
-        }
-        T::Multiple(tys) => types(context, tys),
-        T::Fun(tys, ret_ty) => {
-            types(context, tys);
-            type_(context, ret_ty)
         }
         T::Ref(_, t) => type_(context, t),
-        T::Unit | T::UnresolvedError => (),
+        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => (),
     }
 }
 
-fn type_opt(context: &mut Context, t_opt: &Option<E::Type>) {
+fn type_name(context: &mut Context, sp!(loc, tn_): &N::TypeName) {
+    match tn_ {
+        N::TypeName_::Multiple(_) | N::TypeName_::Builtin(_) => (),
+        N::TypeName_::ModuleType(m, _) => {
+            context.add_usage(*m, *loc);
+        }
+    }
+}
+
+fn type_opt(context: &mut Context, t_opt: &Option<N::Type>) {
     t_opt.iter().for_each(|t| type_(context, t))
 }
 
@@ -386,199 +380,130 @@ fn type_opt(context: &mut Context, t_opt: &Option<E::Type>) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, sequence: &E::Sequence) {
-    use E::SequenceItem_ as SI;
+fn sequence(context: &mut Context, sequence: &T::Sequence) {
+    use T::SequenceItem_ as SI;
     for sp!(_, item_) in sequence {
         match item_ {
             SI::Seq(e) => exp(context, e),
-            SI::Declare(bl, ty_opt) => {
-                lvalues(context, &bl.value);
-                type_opt(context, ty_opt);
+            SI::Declare(sp!(_, lvs_)) => {
+                lvalues(context, lvs_);
             }
-            SI::Bind(bl, e) => {
-                lvalues(context, &bl.value);
+            SI::Bind(sp!(_, lvs_), ty_opts, e) => {
+                lvalues(context, lvs_);
+                for ty_opt in ty_opts {
+                    type_opt(context, ty_opt);
+                }
                 exp(context, e)
             }
         }
     }
 }
 
-fn lvalues<'a>(context: &mut Context, al: impl IntoIterator<Item = &'a E::LValue>) {
+fn lvalues<'a>(context: &mut Context, al: impl IntoIterator<Item = &'a T::LValue>) {
     al.into_iter().for_each(|a| lvalue(context, a))
 }
 
-fn lvalues_with_range(context: &mut Context, sp!(_, ll): &E::LValueWithRangeList) {
-    ll.iter().for_each(|lrange| {
-        let sp!(_, (l, e)) = lrange;
-        lvalue(context, l);
-        exp(context, e);
-    })
-}
-
-fn lvalue(context: &mut Context, sp!(_loc, a_): &E::LValue) {
-    use E::LValue_ as L;
-    if let L::Unpack(m, bs_opt, f) = a_ {
-        module_access(context, m);
-        types_opt(context, bs_opt);
-        lvalues(context, f.iter().map(|(_, _, (_, b))| b));
-    }
-}
-
-fn exp(context: &mut Context, sp!(_loc, e_): &E::Exp) {
-    use crate::expansion::ast::{Exp_ as E, Value_ as V};
-    match e_ {
-        E::Value(sp!(_, V::Address(a))) => context.add_address_usage(*a),
-
-        E::Unit { .. }
-        | E::UnresolvedError
-        | E::Break
-        | E::Continue
-        | E::Spec(_, _)
-        | E::Value(_)
-        | E::Move(_)
-        | E::Copy(_) => (),
-
-        E::Name(ma, tys_opt) => {
-            module_access(context, ma);
-            types_opt(context, tys_opt)
-        }
-        E::Call(ma, _is_macro, tys_opt, sp!(_, args_)) => {
-            module_access(context, ma);
-            types_opt(context, tys_opt);
-            args_.iter().for_each(|e| exp(context, e))
-        }
-        E::Pack(ma, tys_opt, fields) => {
-            module_access(context, ma);
-            types_opt(context, tys_opt);
-            fields.iter().for_each(|(_, _, (_, e))| exp(context, e))
-        }
-        E::Vector(_vec_loc, tys_opt, sp!(_, args_)) => {
-            types_opt(context, tys_opt);
-            args_.iter().for_each(|e| exp(context, e))
-        }
-
-        E::IfElse(ec, et, ef) => {
-            exp(context, ec);
-            exp(context, et);
-            exp(context, ef)
-        }
-
-        E::BinopExp(e1, _, e2) | E::Mutate(e1, e2) | E::While(e1, e2) | E::Index(e1, e2) => {
-            exp(context, e1);
-            exp(context, e2)
-        }
-        E::Block(seq) => sequence(context, seq),
-        E::Assign(al, e) => {
-            lvalues(context, &al.value);
-            exp(context, e)
-        }
-        E::FieldMutate(edotted, e) => {
-            exp_dotted(context, edotted);
-            exp(context, e);
-        }
-
-        E::Loop(e)
-        | E::Return(e)
-        | E::Abort(e)
-        | E::Dereference(e)
-        | E::UnaryExp(_, e)
-        | E::Borrow(_, e) => exp(context, e),
-
-        E::ExpList(es) => es.iter().for_each(|e| exp(context, e)),
-
-        E::ExpDotted(edotted) => exp_dotted(context, edotted),
-
-        E::Cast(e, ty) | E::Annotate(e, ty) => {
-            exp(context, e);
-            type_(context, ty)
-        }
-
-        E::Lambda(ll, e) => {
-            lvalues(context, &ll.value);
-            exp(context, e)
-        }
-        E::Quant(_, binds, es_vec, eopt, e) => {
-            lvalues_with_range(context, binds);
-            es_vec
-                .iter()
-                .for_each(|es| es.iter().for_each(|e| exp(context, e)));
-            eopt.iter().for_each(|e| exp(context, e));
-            exp(context, e)
-        }
-    }
-}
-
-fn exp_dotted(context: &mut Context, sp!(_, ed_): &E::ExpDotted) {
-    use E::ExpDotted_ as D;
-    match ed_ {
-        D::Exp(e) => exp(context, e),
-        D::Dot(edotted, _) => exp_dotted(context, edotted),
-    }
-}
-
-//**************************************************************************************************
-// Specs
-//**************************************************************************************************
-
-fn spec_block(context: &mut Context, sp!(_, sb_): &E::SpecBlock) {
-    sb_.members
-        .iter()
-        .for_each(|sbm| spec_block_member(context, sbm))
-}
-
-fn spec_block_member(context: &mut Context, sp!(_, sbm_): &E::SpecBlockMember) {
-    use E::SpecBlockMember_ as M;
-    match sbm_ {
-        M::Condition {
-            exp: e,
-            additional_exps: es,
-            ..
-        } => {
-            exp(context, e);
-            es.iter().for_each(|e| exp(context, e))
-        }
-        M::Function { body, .. } => {
-            if let E::FunctionBody_::Defined(seq) = &body.value {
-                sequence(context, seq)
+fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
+    use T::LValue_ as L;
+    match lv_ {
+        L::Ignore => (),
+        L::Var { ty, .. } => type_(context, ty),
+        L::Unpack(m, _, tys, fields) | L::BorrowUnpack(_, m, _, tys, fields) => {
+            context.add_usage(*m, *loc);
+            types(context, tys);
+            for (_, _, (_, (_, field))) in fields {
+                lvalue(context, field)
             }
         }
-        M::Let { def: e, .. } | M::Include { exp: e, .. } | M::Apply { exp: e, .. } => {
+    }
+}
+
+fn exp(context: &mut Context, e: &T::Exp) {
+    use T::UnannotatedExp_ as E;
+    match &e.exp.value {
+        E::Value(sp!(_, Value_::Address(a))) => context.add_address_usage(*a),
+
+        E::ModuleCall(c) => {
+            let T::ModuleCall {
+                module,
+                type_arguments,
+                arguments,
+                ..
+            } = &**c;
+            context.add_usage(*module, e.exp.loc);
+            types(context, type_arguments);
+            exp(context, arguments);
+        }
+        E::Builtin(_, e) => exp(context, e),
+        E::Vector(_, _, ty, e) => {
+            type_(context, ty);
+            exp(context, e);
+        }
+        E::IfElse(e1, e2, e3) => {
+            exp(context, e1);
+            exp(context, e2);
+            exp(context, e3);
+        }
+        E::While(e1, e2) => {
+            exp(context, e1);
+            exp(context, e2);
+        }
+        E::Loop { has_break: _, body } => exp(context, body),
+        E::Block(seq) => sequence(context, seq),
+        E::Assign(sp!(_, lvs_), ty_opts, e) => {
+            lvalues(context, lvs_);
+            for ty_opt in ty_opts {
+                type_opt(context, ty_opt);
+            }
             exp(context, e)
         }
-        M::Update { lhs, rhs } => {
-            exp(context, lhs);
-            exp(context, rhs);
+        E::Mutate(e1, e2) => {
+            exp(context, e1);
+            exp(context, e2);
         }
-        // A special treatment to the `pragma friend` declarations.
-        //
-        // The `pragma friend = <address::module_name::function_name>` notion exists before the
-        // `friend` feature is implemented as a language feature. And it may still have a use case,
-        // that is, to friend a module that is compiled with other modules but not published.
-        //
-        // To illustrate, suppose we have module `A` and `B` compiled and proved together locally,
-        // but for some reason, module `A` is not published on-chain. In this case, we cannot
-        // declare `friend A;` in module `B` because that will lead to a linking error (the loader
-        // is unable to find module `A`). But the prover side still needs to know that `A` is a
-        // friend of `B` (e.g., to verify global invariants). So, the `pragma friend = ...` syntax
-        // might need to stay for this purpose. And for that, we need to add the module that is
-        // declared as a friend in the `immediate_neighbors`.
-        M::Pragma { properties } => {
-            for prop in properties {
-                let pragma = &prop.value;
-                if pragma.name.value.as_str() == "friend" {
-                    match &pragma.value {
-                        None => (),
-                        Some(E::PragmaValue::Literal(_)) => (),
-                        Some(E::PragmaValue::Ident(maccess)) => match &maccess.value {
-                            E::ModuleAccess_::Name(_) => (),
-                            E::ModuleAccess_::ModuleAccess(mident, _) => {
-                                context.add_friend(*mident, maccess.loc);
-                            }
-                        },
-                    }
+        E::Return(e) => exp(context, e),
+        E::Abort(e) => exp(context, e),
+        E::Dereference(e) => exp(context, e),
+        E::UnaryExp(_, e) => exp(context, e),
+        E::BinopExp(e1, _, _, e2) => {
+            exp(context, e1);
+            exp(context, e2);
+        }
+        E::Pack(m, _, tys, fields) => {
+            context.add_usage(*m, e.exp.loc);
+            types(context, tys);
+            for (_, _, (_, (_, e))) in fields {
+                exp(context, e)
+            }
+        }
+        E::ExpList(list) => {
+            for l in list {
+                match l {
+                    T::ExpListItem::Single(e, _) => exp(context, e),
+                    T::ExpListItem::Splat(_, e, _) => exp(context, e),
                 }
             }
         }
-        M::Variable { .. } => (),
+        E::Borrow(_, e, _) => exp(context, e),
+        E::TempBorrow(_, e) => exp(context, e),
+        E::Cast(e, ty) => {
+            exp(context, e);
+            type_(context, ty)
+        }
+        E::Annotate(e, ty) => {
+            exp(context, e);
+            type_(context, ty)
+        }
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::Use(_)
+        | E::Constant(..)
+        | E::Break
+        | E::Continue
+        | E::BorrowLocal(..)
+        | E::Spec(..)
+        | E::UnresolvedError => (),
     }
 }
