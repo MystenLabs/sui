@@ -130,7 +130,7 @@ impl StateSnapshotUploader {
                 )
                 .await?;
                 let db = Arc::new(AuthorityPerpetualTables::open(
-                    &path_to_filesystem(self.db_checkpoint_path.clone(), db_path)?,
+                    &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
                 ));
                 state_snapshot_writer.write(*epoch, db).await?;
