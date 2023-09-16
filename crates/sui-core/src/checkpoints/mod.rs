@@ -1505,6 +1505,7 @@ impl CheckpointServiceNotify for CheckpointService {
     ) -> SuiResult {
         if let Some(pending) = epoch_store.get_pending_checkpoint(&checkpoint.height())? {
             if pending.roots != checkpoint.roots {
+                error!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
                 panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
             }
             debug!(

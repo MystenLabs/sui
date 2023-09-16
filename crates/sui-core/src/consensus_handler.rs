@@ -207,9 +207,13 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .expect("Unrecoverable error in consensus handler");
 
         if !new_jwks.is_empty() {
-            debug!("adding AuthenticatorStateUpdate tx: {:?}", new_jwks);
             let authenticator_state_update_transaction =
-                self.authenticator_state_update_transaction(round, new_jwks);
+                self.authenticator_state_update_transaction(round, new_jwks.clone());
+            debug!(
+                digest =? authenticator_state_update_transaction.digest(),
+                ?new_jwks,
+                "adding AuthenticatorStateUpdate tx"
+            );
 
             transactions.push((
                 vec![],

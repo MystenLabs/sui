@@ -1332,7 +1332,7 @@ impl AuthorityPerEpochStore {
         let end = (round + 1, (empty_jwk_id, empty_jwk));
 
         // TODO: use a safe iterator
-        Ok(self
+        let ret = self
             .tables
             .active_jwks
             .iter_with_bounds(Some(start), Some(end))
@@ -1340,7 +1340,10 @@ impl AuthorityPerEpochStore {
                 debug_assert!(round == r);
                 ActiveJwk { jwk_id, jwk, epoch }
             })
-            .collect())
+            .collect();
+
+        debug!("get_new_jwks: {}, {:?}", round, ret);
+        Ok(ret)
     }
 
     pub fn jwk_active_in_current_epoch(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
