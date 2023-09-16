@@ -162,7 +162,7 @@ import { generateNonce, generateRandomness } from '@mysten/zklogin';
 const suiClient = await getActiveNetworkSuiClient();
 const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.getLatestSuiSystemState();
 
-const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now. 
+const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now.
 const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
@@ -219,7 +219,7 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
 ```bash
 curl -X POST http://prover-devnet.mystenlabs.com:8080/zkp -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
 
-Response: 
+Response:
 
 `{"proofPoints":{"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
 ```
@@ -477,7 +477,7 @@ zkLogin can support providers that work with OpenID Connect built on top of the 
 
 Traditional private key wallets demand users to consistently recall mnemonics and passphrases, necessitating secure storage to prevent fund loss from private key compromise.
 
-On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting ephemeral keys alone does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
+On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting an ephemeral key does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
 
 ## How is zkLogin different from MPC or Multisig wallets?
 
@@ -485,9 +485,17 @@ Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or dist
 
 zkLogin does not split any individual private keys, but ephemeral private keys are registered using a fresh nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
 
-Interestingly though, a zkLogin address automatically simulates a 2-of-2 setting, where the first part is user's OAuth account and the second is user's salt.
+You can think of zkLogin as a 2FA scheme for an address, where the first part is user's OAuth account and the second is the user's salt.
 
 Furthermore, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA in k-of-N settings.
+
+## If my OAuth account is compromised, what happens to my zkLogin address?
+
+Because zkLogin is a 2FA system, an attacker that has compromised your OAuth account cannot access your zkLogin address unless they have separately compromised your salt.
+
+## If I lose access to my OAuth account, do I lose access to my zkLogin address?
+
+Yes. You must be able to log into your OAuth account and produce a current JWT in order to use zkLogin.
 
 ## Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
 
@@ -497,9 +505,9 @@ In the unfortunate event where user's OAuth credentials get compromised, an adve
 It's also important to highlight that due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet used, targeted attacks by just monitoring the blockchain are more difficult.
 Finally, on the unfortunate event where one loses access to their OAuth account permanently, access to that wallet is lost. But if recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to support the native Sui Multisig functionality and add a backup method. Note that it's even possible to have a Multisig wallet that all signers are using zkLogin, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
 
-## Can I convert or merge a traditional private key wallet into a zkLogin one?
+## Can I convert or merge a traditional private key wallet into a zkLogin one, or vice versa?
 
-No. The zkLogin wallet address is derived differently compared to a private key address. Currently, the zkLogin wallet lacks portability, necessitating asset transfers between a zkLogin wallet and a traditional one.
+No. The zkLogin wallet address is derived differently compared to a private key address.
 
 ## Will my zkLogin address ever change?
 
@@ -531,7 +539,7 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 
 ## Does zkLogin work on mobile?
 
-zkLogin is a a Sui native primitive and not a privilege of a particular wallet provider, and thus it can be integrated to any wallet provider, including mobile wallets.
+zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
 
 ## Can I run my own ZK Proving Service?
 
