@@ -158,7 +158,9 @@ impl BuildConfig {
                 Ok((units, warning_diags)) => {
                     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     report_warnings(&files, warning_diags);
-                    report_linter_feedback_info(any_linter_warnings)?;
+                    if any_linter_warnings {
+                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
+                    }
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
@@ -169,7 +171,9 @@ impl BuildConfig {
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
                     }
-                    report_linter_feedback_info(any_linter_warnings)?;
+                    if any_linter_warnings {
+                        eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
+                    }
                     anyhow::bail!("Compilation error");
                 }
             }
@@ -218,18 +222,6 @@ impl BuildConfig {
             error: format!("{:?}", err),
         })
     }
-}
-
-fn report_linter_feedback_info(report: bool) -> anyhow::Result<()> {
-    if report {
-        if let Err(err) = writeln!(
-            &mut std::io::stderr(),
-            "Please report feedback on the linter warnings at https://forums.sui.io\n"
-        ) {
-            anyhow::bail!("Cannot report linter warnings feedback info: {}", err);
-        }
-    }
-    Ok(())
 }
 
 pub fn build_from_resolution_graph(
