@@ -745,7 +745,7 @@ impl KeyToolCommand {
                     OIDCProvider::Google,
                     &eph_pk_bytes,
                     max_epoch,
-                    "575519204237-msop9ep45u2uo98hapqmngv8d84qdc8k.apps.googleusercontent.com",
+                    "25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com",
                     "https://sui.io/",
                     &jwt_randomness,
                 )?;

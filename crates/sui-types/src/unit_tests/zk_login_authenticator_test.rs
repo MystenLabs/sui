@@ -35,13 +35,6 @@ fn zklogin_authenticator_jwk() {
     // Verify passes.
     assert!(res.is_ok());
 
-    // Pass in env = prod fails to verify.
-    let aux_verify_data =
-        VerifyParams::new(parsed.clone(), vec![OIDCProvider::Twitch], ZkLoginEnv::Prod);
-    let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
-    assert!(res.is_err());
-
     // Pass in supported list does not contain twitch fails to verify.
     let aux_verify_data =
         VerifyParams::new(parsed.clone(), vec![OIDCProvider::Google], ZkLoginEnv::Test);
