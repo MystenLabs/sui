@@ -11,6 +11,7 @@ use crate::types::big_int::BigInt;
 use crate::types::checkpoint::Checkpoint;
 use crate::types::committee_member::CommitteeMember;
 use crate::types::date_time::DateTime;
+use crate::types::digest::Digest;
 use crate::types::end_of_epoch_data::EndOfEpochData;
 use crate::types::epoch::Epoch;
 use crate::types::object::{Object, ObjectFilter, ObjectKind};
@@ -23,7 +24,6 @@ use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
 use crate::types::system_parameters::SystemParameters;
 use crate::types::transaction_block::TransactionBlock;
-use crate::types::tx_digest::TransactionDigest;
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
@@ -41,12 +41,12 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
     SuiTransactionBlockResponseOptions,
 };
+use sui_sdk::types::digests::TransactionDigest;
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
 use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
-        digests::TransactionDigest as NativeTransactionDigest,
         object::Owner as NativeOwner,
         sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
@@ -66,18 +66,15 @@ pub(crate) struct SuiClientLoader {
 }
 
 #[async_trait::async_trait]
-impl Loader<TransactionDigest> for SuiClientLoader {
+impl Loader<Digest> for SuiClientLoader {
     type Value = TransactionBlock;
     type Error = async_graphql::Error;
 
-    async fn load(
-        &self,
-        keys: &[TransactionDigest],
-    ) -> Result<HashMap<TransactionDigest, Self::Value>, Self::Error> {
+    async fn load(&self, keys: &[Digest]) -> Result<HashMap<Digest, Self::Value>, Self::Error> {
         let mut map = HashMap::new();
         let keys: Vec<_> = keys
             .iter()
-            .map(|x| NativeTransactionDigest::new(x.into_array()))
+            .map(|x| TransactionDigest::new(x.into_array()))
             .collect();
         for tx in self
             .client
@@ -88,7 +85,7 @@ impl Loader<TransactionDigest> for SuiClientLoader {
             )
             .await?
         {
-            let digest = TransactionDigest::from_array(tx.digest.into_inner());
+            let digest = Digest::from_array(tx.digest.into_inner());
             let mtx = TransactionBlock::from(tx);
             map.insert(digest, mtx);
         }
@@ -314,18 +311,6 @@ impl DataProvider for SuiClient {
         Ok(connection)
     }
 
-    async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>> {
-        let tx_digest = NativeTransactionDigest::from_str(digest)?;
-        let tx = self
-            .read_api()
-            .get_transaction_with_options(
-                tx_digest,
-                SuiTransactionBlockResponseOptions::full_content(),
-            )
-            .await?;
-        Ok(Some(TransactionBlock::from(tx)))
-    }
-
     async fn fetch_chain_id(&self) -> Result<String> {
         Ok(self.read_api().get_chain_identifier().await?)
     }
@@ -445,7 +430,7 @@ pub(crate) fn convert_json_rpc_checkpoint(
 pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     Object {
         version: s.version.into(),
-        digest: s.digest.to_string(),
+        digest: s.digest.base58_encode(),
         storage_rebate: s.storage_rebate.map(BigInt::from),
         address: SuiAddress::from_array(**s.object_id),
         owner: s
@@ -458,9 +443,9 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
             SuiRawData::Package(raw_package) => Base64::from(bcs::to_bytes(raw_package).unwrap()),
             SuiRawData::MoveObject(raw_object) => Base64::from(&raw_object.bcs_bytes),
         }),
-        previous_transaction: Some(TransactionDigest::from_array(
-            s.previous_transaction.unwrap().into_inner(),
-        )),
+        previous_transaction: s
+            .previous_transaction
+            .map(|x| Digest::from_array(x.into_inner())),
         kind: Some(match s.owner.unwrap() {
             NativeOwner::AddressOwner(_) => ObjectKind::Owned,
             NativeOwner::ObjectOwner(_) => ObjectKind::Child,

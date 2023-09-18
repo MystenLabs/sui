@@ -8,10 +8,10 @@ use crate::context_data::{
 use super::{
     address::Address,
     base64::Base64,
+    digest::Digest,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
-    tx_digest::TransactionDigest,
 };
 use async_graphql::*;
 use sui_json_rpc_types::{
@@ -22,7 +22,8 @@ use sui_json_rpc_types::{
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlock {
-    pub digest: TransactionDigest,
+    #[graphql(skip)]
+    pub digest: Digest,
     pub effects: Option<TransactionBlockEffects>,
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
@@ -38,7 +39,7 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
         let gas_input = transaction.map(|tx| GasInput::from(tx.data.gas_data()));
 
         Self {
-            digest: TransactionDigest::from_array(tx_block.digest.into_inner()),
+            digest: Digest::from_array(tx_block.digest.into_inner()),
             effects: tx_block.effects.as_ref().map(TransactionBlockEffects::from),
             sender,
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
@@ -49,6 +50,10 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
 #[ComplexObject]
 impl TransactionBlock {
+    async fn digest(&self) -> String {
+        self.digest.to_string()
+    }
+
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
         if self.effects.is_none() {
             return Ok(None);
@@ -65,7 +70,8 @@ impl TransactionBlock {
 #[derive(Clone, Eq, PartialEq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct TransactionBlockEffects {
-    pub digest: TransactionDigest,
+    #[graphql(skip)]
+    pub digest: Digest,
     #[graphql(skip)]
     pub gas_effects: GasEffects,
     pub status: ExecutionStatus,
@@ -90,7 +96,8 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
         };
 
         Self {
-            digest: TransactionDigest::from_array(tx_effects.transaction_digest().into_inner()),
+            // TODO: This is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
+            digest: Digest::from_array(tx_effects.transaction_digest().into_inner()),
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,
             errors,
@@ -100,6 +107,10 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
 
 #[ComplexObject]
 impl TransactionBlockEffects {
+    async fn digest(&self) -> String {
+        self.digest.to_string()
+    }
+
     async fn gas_effects(&self) -> Option<GasEffects> {
         Some(self.gas_effects)
     }
