@@ -65,7 +65,10 @@ use sui_core::checkpoints::{
 use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
-use sui_core::consensus_handler::{ConsensusHandler, ConsensusThroughputCalculator};
+use sui_core::consensus_handler::ConsensusHandler;
+use sui_core::consensus_throughput_calculator::{
+    ConsensusThroughputCalculator, TrafficProfile, TrafficProfileRangesBuilder,
+};
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -1058,10 +1061,17 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
+        // TODO: move configuration to protocol-config and potentially differentiate for each environment.
+        let ranges = TrafficProfileRangesBuilder::default()
+            .add_profile(2_000, TrafficProfile::Low)
+            .add_max_threshold_profile(TrafficProfile::High)
+            .build();
+
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
             None,
             state.metrics.clone(),
+            ranges,
         ));
 
         let consensus_handler_initializer = || {
