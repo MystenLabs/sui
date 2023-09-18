@@ -11,7 +11,6 @@ import { ListView } from '~/components/OwnedObjects/ListView';
 import { SmallThumbnailsView } from '~/components/OwnedObjects/SmallThumbnailsView';
 import { ThumbnailsView } from '~/components/OwnedObjects/ThumbnailsView';
 import { OBJECT_VIEW_MODES } from '~/components/OwnedObjects/utils';
-import { AddressResultEmptyState } from '~/pages/address-result/AddressResultEmptyState';
 import { Pagination, useCursorPagination } from '~/ui/Pagination';
 
 const PAGE_SIZES = [10, 20, 30, 40, 50];
@@ -198,7 +197,13 @@ export function OwnedObjects({ id }: { id: string }) {
 						)}
 					</div>
 
-					{noAssets && <AddressResultEmptyState copy="No Assets owned" />}
+					{noAssets && (
+						<div className="flex h-20 items-center justify-center md:h-coinsAndAssetsContainer">
+							<Text variant="body/medium" color="steel-dark">
+								No Assets owned
+							</Text>
+						</div>
+					)}
 
 					{viewMode === OBJECT_VIEW_MODES.LIST && (
 						<ListView loading={isLoading} data={sortedDataByDisplayImages} />
