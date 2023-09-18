@@ -116,8 +116,8 @@ fn lock_file_missing_dependency() {
     let commit = tmp.path().join("Move.lock");
     let lock = LockFile::new(
         pkg.clone(),
-        /* manifest_digest */ "0x42".to_string(),
-        /* deps_digest */ "0x7".to_string(),
+        /* manifest_digest */ "42".to_string(),
+        /* deps_digest */ "7".to_string(),
     )
     .expect("Creating new lock file");
 
@@ -572,15 +572,15 @@ fn dev_dep_test_package() -> PathBuf {
 const EMPTY_LOCK: &str = r#"
 [move]
 version = 0
-manifest_digest = "0x42"
+manifest_digest = "42"
 deps_digest = ""
 "#;
 
 const A_LOCK: &str = r#"
 [move]
 version = 0
-manifest_digest = "0x42"
-deps_digest = "0x7"
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]
@@ -593,8 +593,8 @@ source = { local = "./A" }
 const AB_LOCK: &str = r#"
 [move]
 version = 0
-manifest_digest = "0x42"
-deps_digest = "0x7"
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
     { name = "B" },
@@ -612,8 +612,8 @@ source = { local = "./B" }
 const A_DEP_B_LOCK: &str = r#"
 [move]
 version = 0
-manifest_digest = "0x42"
-deps_digest = "0x7"
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]

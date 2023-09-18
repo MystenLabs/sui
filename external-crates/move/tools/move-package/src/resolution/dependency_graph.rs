@@ -228,38 +228,30 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             DependencyMode::DevOnly,
             &root_manifest.dev_dependencies,
         )?;
+
         let dev_dep_lock_files = dev_dep_graphs
             .values()
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
-
         let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
-
-        let (manifest_digest, deps_digest) = match old_manifest_digest_opt {
-            None => (new_manifest_digest, new_deps_digest),
-            Some(old_manifest_digest) => {
-                if old_manifest_digest == new_manifest_digest {
-                    // manifest digests match - see if dependency digests match as well
-                    if let Some(old_deps_digest) = old_deps_digest_opt {
-                        // old dependencies digest exist - see if it matches
-                        if old_deps_digest == new_deps_digest {
-                            // both manifest digest and dependency digest match - we can simply read
-                            // the old lock file
-                            return Ok((
-                                DependencyGraph::read_from_lock(
-                                    root_path,
-                                    root_manifest.package.name,
-                                    &mut lock_string.unwrap().as_bytes(), // safe since old_deps_digest exists
-                                    None,
-                                )?,
-                                false,
-                            ));
-                        } // else dependency digests do not match - re-assemble the graph
-                    } // else dependency digest in the lock file does not exist - re-assemble the graph
-                } // else manifest digests do not match - re-assemble the graph
-                (new_manifest_digest, new_deps_digest)
-            }
-        };
+        let (manifest_digest, deps_digest) =
+            match (old_manifest_digest_opt, old_deps_digest_opt, lock_string) {
+                (Some(old_manifest_digest), Some(old_deps_digest), Some(lock_string))
+                    if old_manifest_digest == new_manifest_digest
+                        && old_deps_digest == new_deps_digest =>
+                {
+                    return Ok((
+                        DependencyGraph::read_from_lock(
+                            root_path,
+                            root_manifest.package.name,
+                            &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                            None,
+                        )?,
+                        false,
+                    ));
+                }
+                _ => (new_manifest_digest, new_deps_digest),
+            };
 
         dep_graphs.extend(dev_dep_graphs);
 

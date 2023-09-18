@@ -18,8 +18,8 @@ fn commit() {
     {
         let mut lock = LockFile::new(
             pkg.path().to_path_buf(),
-            /* manifest_digest */ "0x42".to_string(),
-            /* deps_digest */ "0x7".to_string(),
+            /* manifest_digest */ "42".to_string(),
+            /* deps_digest */ "7".to_string(),
         )
         .unwrap();
         writeln!(lock, "# Write and commit").unwrap();
@@ -51,8 +51,8 @@ fn discard() {
     {
         let mut lock = LockFile::new(
             pkg.path().to_path_buf(),
-            /* manifest_digest */ "0x42".to_string(),
-            /* deps_digest */ "0x7".to_string(),
+            /* manifest_digest */ "42".to_string(),
+            /* deps_digest */ "7".to_string(),
         )
         .unwrap();
         writeln!(lock, "# Write but don't commit").unwrap();

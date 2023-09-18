@@ -172,7 +172,7 @@ impl BuildConfig {
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
-            path.clone(),
+            path,
             manifest_string,
             lock_string,
         )?;
