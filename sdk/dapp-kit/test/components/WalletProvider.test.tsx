@@ -12,6 +12,7 @@ import {
 	useWallets,
 } from 'dapp-kit/src';
 import { createMockAccount } from '../mocks/mockAccount.js';
+import { superCoolFeature } from '../mocks/mockFeatures.js';
 
 describe('WalletProvider', () => {
 	test('the correct wallet and account information is returned on initial render', () => {
@@ -82,12 +83,7 @@ describe('WalletProvider', () => {
 	test('the list of wallets is correctly filtered by required features', () => {
 		const { unregister: unregister1 } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
-			additionalFeatures: {
-				'my-dapp:super-cool-feature': {
-					version: '1.0.0',
-					superCoolFeature: () => {},
-				},
-			},
+			features: superCoolFeature,
 		});
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 

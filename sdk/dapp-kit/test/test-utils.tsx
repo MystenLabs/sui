@@ -35,14 +35,14 @@ export function createWalletProviderContextWrapper(
 export function registerMockWallet({
 	walletName,
 	accounts = [createMockAccount()],
-	additionalFeatures = {},
+	features = {},
 }: {
 	walletName: string;
 	accounts?: ReadonlyWalletAccount[];
-	additionalFeatures?: IdentifierRecord<unknown>;
+	features?: IdentifierRecord<unknown>;
 }) {
 	const walletsApi = getWallets();
-	const mockWallet = new MockWallet(walletName, accounts, additionalFeatures);
+	const mockWallet = new MockWallet(walletName, accounts, features);
 	return {
 		unregister: walletsApi.register(mockWallet),
 		mockWallet,
