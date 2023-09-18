@@ -5,7 +5,6 @@ import type { SuiSignPersonalMessageInput } from '@mysten/wallet-standard';
 import type { SuiSignPersonalMessageOutput } from '@mysten/wallet-standard';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
-import { useWalletContext } from '../../components/WalletProvider.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import {
 	WalletFeatureNotSupportedError,
@@ -13,12 +12,19 @@ import {
 	WalletNotConnectedError,
 } from '../..//errors/walletErrors.js';
 import type { PartialBy } from '../../types/utilityTypes.js';
+import { useCurrentAccount } from './useCurrentAccount.js';
+import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseSignPersonalMessageArgs = PartialBy<SuiSignPersonalMessageInput, 'account'>;
 type UseSignPersonalMessageResult = SuiSignPersonalMessageOutput;
 
 type UseSignPersonalMessageMutationOptions = Omit<
-	UseMutationOptions<UseSignPersonalMessageResult, Error, UseSignPersonalMessageArgs, unknown>,
+	UseMutationOptions<
+		UseSignPersonalMessageResult,
+		WalletFeatureNotSupportedError | WalletNoAccountSelectedError | WalletNotConnectedError | Error,
+		UseSignPersonalMessageArgs,
+		unknown
+	>,
 	'mutationFn'
 >;
 
@@ -29,7 +35,8 @@ export function useSignPersonalMessage({
 	mutationKey,
 	...mutationOptions
 }: UseSignPersonalMessageMutationOptions = {}) {
-	const { currentWallet, currentAccount } = useWalletContext();
+	const currentWallet = useCurrentWallet();
+	const currentAccount = useCurrentAccount();
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signPersonalMessage(mutationKey),

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { renderHook, waitFor, act } from '@testing-library/react';
-import { useConnectWallet, useSignPersonalMessage, useWallet } from 'dapp-kit/src';
+import { useConnectWallet, useSignPersonalMessage } from 'dapp-kit/src';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import {
 	WalletFeatureNotSupportedError,
@@ -59,7 +59,6 @@ describe('useSignPersonalMessage', () => {
 			() => ({
 				connectWallet: useConnectWallet(),
 				signPersonalMessage: useSignPersonalMessage(),
-				walletInfo: useWallet(),
 			}),
 			{ wrapper },
 		);
@@ -67,10 +66,8 @@ describe('useSignPersonalMessage', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
-		expect(result.current.walletInfo.connectionStatus).toBe('connected');
 
-		const signPersonalMessageFeature =
-			result.current.walletInfo.currentWallet!.features['sui:signPersonalMessage'];
+		const signPersonalMessageFeature = mockWallet.features['sui:signPersonalMessage'];
 		const signPersonalMessageMock = signPersonalMessageFeature!.signPersonalMessage as Mock;
 
 		signPersonalMessageMock.mockReturnValueOnce({ bytes: 'abc', signature: '123' });
