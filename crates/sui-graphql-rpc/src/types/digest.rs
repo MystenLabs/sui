@@ -25,7 +25,9 @@ impl std::str::FromStr for Digest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; BASE58_DIGEST_LENGTH];
-        result.copy_from_slice(&Base58::decode(s).map_err(InputValueError::custom)?);
+        result.copy_from_slice(
+            &Base58::decode(s).map_err(|r| InputValueError::custom(format!("{r}")))?,
+        );
         Ok(Digest(result))
     }
 }
@@ -69,5 +71,25 @@ impl fmt::UpperHex for Digest {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn test_base58_digest() {
+        let digest = [
+            183u8, 119, 223, 39, 204, 68, 220, 4, 126, 234, 232, 146, 106, 249, 98, 12, 170, 209,
+            98, 203, 243, 77, 154, 225, 177, 216, 169, 101, 51, 116, 79, 223,
+        ];
+        assert_eq!(
+            Digest::from_str("DMBdBZnpYR4EeTXzXL8A6BtVafqGjAWGsFZhP2zJYmXU").unwrap(),
+            Digest(digest)
+        );
+        assert!(Digest::from_str("ILoveBase58").is_err());
     }
 }

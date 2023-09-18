@@ -41,12 +41,12 @@ use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
     SuiTransactionBlockResponseOptions,
 };
+use sui_sdk::types::digests::TransactionDigest;
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
 use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_sdk::{
     types::{
         base_types::{ObjectID as NativeObjectID, SuiAddress as NativeSuiAddress},
-        digests::TransactionDigest,
         object::Owner as NativeOwner,
         sui_system_state::sui_system_state_summary::SuiValidatorSummary,
     },
