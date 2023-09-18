@@ -19,12 +19,19 @@ type UseSignAndExecuteTransactionBlockArgs = PartialBy<
 	SuiSignAndExecuteTransactionBlockInput,
 	'account'
 >;
+
 type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockOutput;
+
+type UseSignAndExecuteTransactionBlockError =
+	| WalletFeatureNotSupportedError
+	| WalletNoAccountSelectedError
+	| WalletNotConnectedError
+	| Error;
 
 type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 	UseMutationOptions<
 		UseSignAndExecuteTransactionBlockResult,
-		WalletFeatureNotSupportedError | WalletNoAccountSelectedError | WalletNotConnectedError | Error,
+		UseSignAndExecuteTransactionBlockError,
 		UseSignAndExecuteTransactionBlockArgs,
 		unknown
 	>,
