@@ -4,7 +4,7 @@
 import { useGetDynamicFields, useOnScreen } from '@mysten/core';
 import { type DynamicFieldInfo } from '@mysten/sui.js/client';
 import { LoadingIndicator } from '@mysten/ui';
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 
 import { UnderlyingObjectCard } from './UnderlyingObjectCard';
 import { FieldsCard, FieldCollapsible, FieldsContainer } from '~/components/Object/FieldsUtils';
@@ -55,6 +55,7 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 	const observerElem = useRef<HTMLDivElement | null>(null);
 	const { isIntersecting } = useOnScreen(observerElem);
 	const isSpinnerVisible = isFetchingNextPage && hasNextPage;
+	const flattenedData = useMemo(() => data?.pages.flatMap((page) => page.data), [data]);
 
 	useEffect(() => {
 		if (isIntersecting && hasNextPage && !isFetchingNextPage) {
@@ -73,18 +74,15 @@ export function DynamicFieldsCard({ id }: { id: string }) {
 	return (
 		<FieldsContainer>
 			<FieldsCard>
-				{data?.pages.map(({ data }) =>
-					// Show the field name and type is it is not an object
-					data.map((result, index) => (
-						<DynamicFieldRow
-							key={result.objectId}
-							defaultOpen={index === 0}
-							noMarginBottom={index === data.length - 1}
-							id={id}
-							result={result}
-						/>
-					)),
-				)}
+				{flattenedData?.map((result, index) => (
+					<DynamicFieldRow
+						key={result.objectId}
+						defaultOpen={index === 0}
+						noMarginBottom={index === flattenedData.length - 1}
+						id={id}
+						result={result}
+					/>
+				))}
 
 				<div ref={observerElem}>
 					{isSpinnerVisible ? (
