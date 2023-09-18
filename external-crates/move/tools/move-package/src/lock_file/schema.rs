@@ -63,13 +63,14 @@ pub struct Dependency {
 #[derive(Serialize, Deserialize)]
 pub struct Header {
     pub version: u64,
-    /// A hash of the manifest file content this lock file was generated from (if any) computed
-    /// using SHA-256 hashing algorithm.
-    pub manifest_digest: Option<String>,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on (if any),
-    /// computed by first hashing all lock files using SHA-256 hashing algorithm and then combining
-    /// them into a single digest using SHA-256 hasher (similarly to the package digest is computed)
-    pub deps_digest: Option<String>,
+    /// A hash of the manifest file content this lock file was generated from computed using SHA-256
+    /// hashing algorithm.
+    pub manifest_digest: String,
+    /// A hash of all the dependencies (their lock file content) this lock file depends on, computed
+    /// by first hashing all lock files using SHA-256 hashing algorithm and then combining them into
+    /// a single digest using SHA-256 hasher (similarly to the package digest is computed). If there
+    /// are no dependencies, it's an empty string.
+    pub deps_digest: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,8 +116,8 @@ pub fn read_header(contents: &String) -> Result<Header> {
 /// Write the initial part of the lock file.
 pub(crate) fn write_prologue(
     file: &mut NamedTempFile,
-    manifest_digest: Option<String>,
-    deps_digest: Option<String>,
+    manifest_digest: String,
+    deps_digest: String,
 ) -> Result<()> {
     writeln!(
         file,
