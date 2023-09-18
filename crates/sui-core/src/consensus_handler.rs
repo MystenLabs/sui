@@ -41,8 +41,11 @@ use sui_types::messages_consensus::{
 };
 use tracing::{debug, error, info, instrument, warn};
 
+const DEFAULT_OBSERVATIONS_WINDOW: u64 = 120; // number of observations to use to calculate the past traffic
+const DEFAULT_TRAFFIC_PROFILE_UPDATE_WINDOW_SECS: u64 = 60; // seconds that need to pass between two consenqutive traffic profile updates
+
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum TrafficProfile {
+pub enum TrafficProfile {
     Low,
     High,
 }
@@ -59,7 +62,7 @@ impl TrafficProfile {
 pub type TimestampSecs = u64;
 
 #[derive(Debug)]
-struct TrafficProfileEntry {
+pub struct TrafficProfileEntry {
     /// The traffic profile
     profile: TrafficProfile,
     /// The time when this traffic profile was created
@@ -75,8 +78,16 @@ struct ConsensusThroughputCalculatorInner {
     total_transactions: u64,
 }
 
-struct ConsensusThroughputCalculator {
+pub struct ConsensusThroughputCalculator {
+    /// The number of transaction traffic observations that should be stored within the observations
+    /// vector in the ConsensusThroughputCalculatorInner. Those observations will be used to calculate
+    /// the current transactions throughput. We want to select a number that give us enough observations
+    /// so we better calculate the throughput and protected against spikes. A large enough value though
+    /// will make us less reactive to traffic changes.
     observations_window: u64,
+    /// The time that should be passed between two consecutive traffic profile updates. For example, if
+    /// we switch at point T to profile "Low", there will need to be passed at least `traffic_profile_update_window`
+    /// seconds until the traffic profile gets updated to a different value.
     traffic_profile_update_window: TimestampSecs,
     inner: Mutex<ConsensusThroughputCalculatorInner>,
     last_traffic_profile: ArcSwapOption<TrafficProfileEntry>,
@@ -86,17 +97,23 @@ struct ConsensusThroughputCalculator {
 
 impl ConsensusThroughputCalculator {
     pub fn new(
-        observations_window: NonZeroU64,
-        traffic_profile_update_window: TimestampSecs,
+        observations_window: Option<NonZeroU64>,
+        traffic_profile_update_window: Option<TimestampSecs>,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
+        let traffic_profile_update_window =
+            traffic_profile_update_window.unwrap_or(DEFAULT_TRAFFIC_PROFILE_UPDATE_WINDOW_SECS);
+        let observations_window = observations_window
+            .unwrap_or(NonZeroU64::new(DEFAULT_OBSERVATIONS_WINDOW).unwrap())
+            .get();
+
         assert!(
             traffic_profile_update_window > 0,
             "traffic_profile_update_window should be >= 0"
         );
 
         Self {
-            observations_window: observations_window.get(),
+            observations_window,
             traffic_profile_update_window,
             inner: Mutex::new(ConsensusThroughputCalculatorInner::default()),
             last_traffic_profile: ArcSwapOption::empty(), // assume high traffic so the node is more conservative on bootstrap
@@ -156,8 +173,6 @@ impl ConsensusThroughputCalculator {
                 .total_transactions
                 .saturating_sub(last_element_transactions);
 
-            //println!("Total transactions: {}", inner.total_transactions);
-
             // get the first element's timestamp to calculate the transaction rate
             let (first_element_ts, _first_element_transactions) = inner
                 .observations
@@ -176,7 +191,12 @@ impl ConsensusThroughputCalculator {
         }
     }
 
-    // Calculate the traffic profile based on
+    // Calculate and update the traffic profile based on the provided throughput. The traffic profile
+    // will only get updated when a different value has been calculated. For example, if the
+    // `last_traffic_profile` is `Low` , and again we calculate it as `Low` based on input, then we'll
+    // not update the profile or the timestamp. We do care to perform updates only when profiles differ.
+    // To ensure that we are protected against traffic profile change fluctuations, we only change a
+    // traffic profile when `traffic_profile_update_window` seconds have passed since last update.
     fn update_traffic_profile(&self, throughput: u64, timestamp: TimestampSecs) {
         let profile = if throughput < 2_000u64 {
             TrafficProfile::Low
@@ -255,7 +275,7 @@ pub struct ConsensusHandler<T, C> {
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
     /// Using the throughput calculator to identify the traffic profile
-    throughput_calculator: ConsensusThroughputCalculator,
+    throughput_calculator: Arc<ConsensusThroughputCalculator>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -269,6 +289,7 @@ impl<T, C> ConsensusHandler<T, C> {
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
+        throughput_calculator: Arc<ConsensusThroughputCalculator>,
     ) -> Self {
         // last_seen is zero at the beginning of epoch, including for hash.
         // It needs to be recovered on restart to ensure consistent consensus hash.
@@ -277,8 +298,6 @@ impl<T, C> ConsensusHandler<T, C> {
             .expect("Should be able to read last consensus index");
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
-        let throughput_calculator =
-            ConsensusThroughputCalculator::new(NonZeroU64::new(120).unwrap(), 60, metrics.clone());
         Self {
             epoch_store,
             last_seen,
@@ -906,8 +925,8 @@ mod tests {
         let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
-            max_observation_points,
-            traffic_profile_update_window,
+            Some(max_observation_points),
+            Some(traffic_profile_update_window),
             metrics,
         );
 
@@ -991,6 +1010,9 @@ mod tests {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput_calculator = ConsensusThroughputCalculator::new(None, None, metrics.clone());
+
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
@@ -998,7 +1020,8 @@ mod tests {
             state.db(),
             Arc::new(ArcSwap::default()),
             committee.clone(),
-            Arc::new(AuthorityMetrics::new(&Registry::new())),
+            metrics,
+            Arc::new(throughput_calculator),
         );
 
         // AND
