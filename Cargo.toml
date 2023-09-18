@@ -78,6 +78,7 @@ members = [
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/simulacrum",
+    "crates/simulacrum-node",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-analytics-indexer",
@@ -532,6 +533,8 @@ mysten-util-mem = { path = "crates/mysten-util-mem" }
 mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
+simulacrum = { path = "crates/simulacrum" }
+simulacrum-node = { path = "crates/simulacrum-node" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }

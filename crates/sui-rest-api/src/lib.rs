@@ -49,6 +49,7 @@ where
 }
 
 pub fn rest_router(state: std::sync::Arc<sui_core::authority::AuthorityState>) -> Router {
+    let object_router = objects::router(state.database.clone());
     Router::new()
         .route("/", get(health_check))
         .route(
@@ -63,12 +64,13 @@ pub fn rest_router(state: std::sync::Arc<sui_core::authority::AuthorityState>) -
             checkpoints::GET_LATEST_CHECKPOINT_PATH,
             get(checkpoints::get_latest_checkpoint),
         )
-        .route(objects::GET_OBJECT_PATH, get(objects::get_object))
-        .route(
-            objects::GET_OBJECT_WITH_VERSION_PATH,
-            get(objects::get_object_with_version),
-        )
         .with_state(state)
+        .merge(object_router)
+    // .route(objects::GET_OBJECT_PATH, get(objects::get_object))
+    // .route(
+    //     objects::GET_OBJECT_WITH_VERSION_PATH,
+    //     get(objects::get_object_with_version),
+    // )
 }
 
 pub async fn start_service(

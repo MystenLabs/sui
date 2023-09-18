@@ -9288,6 +9288,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "simulacrum-node"
+version = "0.1.0"
+dependencies = [
+ "simulacrum",
+]
+
+[[package]]
 name = "siphasher"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
