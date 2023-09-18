@@ -11,6 +11,7 @@ import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
 import { WalletContext } from '../contexts/walletContext.js';
+import { useWalletPropertiesChanged } from '../hooks/wallet/useWalletPropertiesChanged.js';
 
 type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -83,6 +84,7 @@ function WalletConnectionManager({
 	children,
 }: WalletConnectionManagerProps) {
 	useWalletsChanged(preferredWallets, requiredFeatures);
+	useWalletPropertiesChanged();
 	useUnsafeBurnerWallet(enableUnsafeBurner);
 	useAutoConnectWallet(autoConnect);
 

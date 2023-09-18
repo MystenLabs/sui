@@ -8,12 +8,12 @@ import {
 	useCurrentAccount,
 	useCurrentWallet,
 } from 'dapp-kit/src';
-import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
 
 describe('useDisconnectWallet', () => {
 	test('that an error is thrown when trying to disconnect with no active connection', async () => {
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useDisconnectWallet(), { wrapper });
 
 		result.current.mutate();
@@ -24,7 +24,7 @@ describe('useDisconnectWallet', () => {
 	test('that disconnecting works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
