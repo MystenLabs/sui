@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[lint_allow(custom_state_change)]
 module linter::suppression_stats {
     use sui::object::UID;
