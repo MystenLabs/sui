@@ -1,0 +1,105 @@
+# `KioskTransaction`
+
+`KioskTransaction` is the client to build transactions that involve kiosk. It's used similar to
+`TransactionBlock`, and helps in building a transaction.
+
+You need to instatiate it once in every Programmable Transaction Block (PTB) that you're building.
+
+There are two flows to follow, the first being managing an existing kiosk, and the second is
+creating a new one. It hides all the complexity between a personal and a non-personal kiosk.
+
+## Using an existing kiosk
+
+If you have already retrieved a kiosk from `kioskClient.getOwnedKiosks()`, you can pass a cap.
+
+> You must always call `kioskTx.wrap()` before signing & executing the transaction, as your last
+> command.
+
+```typescript
+// initiliazed somewhere in the app.
+const kioskClient = new KioskClient({...});
+const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xMyAddress'});
+
+const txb = new TransactionBlock();
+const kioskTx = new KioskTransaction({ txb, kioskClient, cap: kioskOwnerCaps[0] });
+
+// now we can do whatever we want with kioskTx
+// for example, we could withdraw the profits from the kiosk.
+kioskTx.withdraw('0xMyAddress', 100_000_000n);
+
+// We could also chain some other functionality if we want to.
+kioskTx
+    .place({
+        itemType: '0xMyItemType',
+        item: '0xMyItem',
+    })
+    .list({
+        itemType: '0xMyItemType',
+        itemId: '0xMyItem',
+        price: 10000n
+    });
+
+// always called as our last kioskTx interaction.
+kioskTx.wrap();
+
+// sign and execute transaction block.
+await signAndExecuteTransactionBlock({tx: txb});
+```
+
+## Creating a new kiosk
+
+If you don't have a kiosk yet, you can create one using `create()`. The `KioskTransaction` allows to
+use the newly created kiosk to execute some functionality in the same PTB.
+
+```typescript
+// initiliazed somewhere in the app.
+const kioskClient = new KioskClient({...});
+
+const txb = new TransactionBlock();
+const kioskTx = new KioskTransaction({ txb, kioskClient });
+
+// calls the creation function.
+kioskTx.create();
+
+// we can use the kiosk for some action.
+// e.g. placing an item in the newly created kiosk.
+kioskTx.place({
+    itemType: '0x...::hero::Hero',
+    item: '0xAHero',
+});
+
+// shares the kiosk & transfers the `KioskOwnerCap` to the owner.
+kioskTx.shareAndTransferCap('0xMyAddress');
+
+// always called as our last kioskTx interaction.
+kioskTx.wrap();
+
+// sign and execute transaction block.
+await signAndExecuteTransactionBlock({tx: txb});
+```
+
+## Creating a new personal kiosk
+
+`KioskTransaction` makes it easy to create a new personal kiosk, and use it in the same PTB.
+
+```typescript
+// initiliazed somewhere in the app.
+const kioskClient = new KioskClient({...});
+
+const txb = new TransactionBlock();
+const kioskTx = new KioskTransaction({ txb, kioskClient });
+
+// an example that creates a personal kiosk, uses it to place an item, and shares it.
+// The `PersonalKioskCap` is automatically transferred to the sender when calling `.wrap()`.
+// The `Kiosk` is automatically shared when calling `.wrap()`.
+kioskTx
+    .createPersonal(true) // `true` allows us to reuse the kiosk in the same PTB. If we pass false, we can only call `kioskTx.wrap()`.
+    .place({
+        itemType: '0x...::hero::Hero',
+        item: '0xAHero',
+    })
+    .wrap(); // wrap is always our last call.
+
+// sign and execute transaction block.
+await signAndExecuteTransactionBlock({tx: txb});
+```

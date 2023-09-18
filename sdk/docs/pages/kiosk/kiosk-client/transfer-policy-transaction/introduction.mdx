@@ -1,0 +1,76 @@
+# `TransferPolicyTransaction`
+
+`TransferPolicyTransaction` is the client to build transactions that involves transfer policy
+management. It's used similar to `KioskTransaction`, and helps in crafting transactions to manage a
+transfer policy.
+
+You need to instatiate it once in every Programmable Transaction Block (PTB) that you're building.
+
+Similar to `KioskTransaction`, you can either create a new transfer policy, or use an existing one.
+
+## Using an existing Transfer Policy
+
+If you have already retrieved a transfer policy from `kioskClient.getOwnedTransferPolicies()`, or
+`kioskClient.getOwnedTransferPoliciesByType()`, you can pass a `TransferPolicyCap` result when
+instatiating.
+
+```typescript
+// initiliazed somewhere in the app.
+const kioskClient = new KioskClient({...});
+
+// We could have more than 1 caps, since we can create more than 1 transfer policies.
+const heroPolicyCaps = await kioskClient.getOwnedTransferPoliciesByType({
+    type: `${packageId}::hero::Hero`,
+    address: '0xConnectedAddress',
+});
+
+const txb = new TransactionBlock();
+// We can choose to use any of the caps we have. Let's use the first one for simplicity.
+const tpTx = new TransferPolicyTransaction({ kioskClient, txb, cap: heroPolicyCaps[0] });
+
+// A demonstration of us using all the available rule add/remove functions.
+// We can chain these commands.
+tpTx
+    .addFloorPriceRule(10n)
+    .addLockRule()
+    .addRoyaltyRule(percentageToBasisPoints(10), 0)
+    .addPersonalKioskRule()
+    // .removeFloorPriceRule()
+    // .removeLockRule()
+    // .removeRoyaltyRule()
+    // .removePersonalKioskRule()
+
+// sign and execute transaction block.
+await signAndExecuteTransactionBlock({tx: txb});
+```
+
+## Creating a new Transfer Policy
+
+If you don't have an existing transfer policy, you can create a new one. You can also attach rules
+in the same PTB.
+
+```typescript
+const publisher = '0xPackagePublisherObject';
+const txb = new TransactionBlock();
+
+const tpTx = new TransferPolicyTransaction({ kioskClient, txb });
+
+// We are making an async call here, as the SDK protects from accidently creating
+// a second Transfer Policy.
+// You can skip this check by passing `skipCheck: true`
+await tpTx.create({
+	type: `${heroPackageId}::hero::Hero`,
+	publisher,
+});
+
+tpTx
+	.addLockRule()
+	.addFloorPriceRule(1000n)
+	.addRoyaltyRule(percentageToBasisPoints(10), 100)
+	.addPersonalKioskRule()
+	// Transfers the `TransferPolicyCap` to the user and shares the transfer policy.
+	.shareAndTransferCap('address_to_transfer_cap_to');
+
+// sign and execute transaction block.
+await signAndExecuteTransactionBlock({ tx: txb });
+```
