@@ -155,11 +155,18 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .index
             .last_committed_round;
 
+        let round = consensus_output.sub_dag.leader_round();
+
+        assert!(round >= last_committed_round);
+        if last_committed_round == round {
+            // we can receive the same commit twice under certain circumstances.
+            return;
+        }
+
         let mut sequenced_transactions = Vec::new();
         let mut end_of_publish_transactions = Vec::new();
 
         let mut bytes = 0usize;
-        let round = consensus_output.sub_dag.leader_round();
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
