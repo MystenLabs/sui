@@ -8,6 +8,7 @@ export const walletMutationKeys = {
 	connectWallet: formMutationKeyFn('connect-wallet'),
 	disconnectWallet: formMutationKeyFn('disconnect-wallet'),
 	signPersonalMessage: formMutationKeyFn('sign-personal-message'),
+	signTransactionBlock: formMutationKeyFn('sign-transaction-block'),
 	switchAccount: formMutationKeyFn('switch-account'),
 };
 
