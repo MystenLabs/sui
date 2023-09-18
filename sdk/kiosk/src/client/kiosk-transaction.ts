@@ -401,14 +401,15 @@ export class KioskTransaction {
 		if (this.#pendingTransfer) transferPersonalCapTx(this.txb, this.#personalCap, packageId);
 	}
 
-	// Some setters
-
+	// Some setters in case we want custom behavior.
 	setKioskCap(cap: TransactionArgument) {
 		this.kioskCap = cap;
+		return this;
 	}
 
 	setKiosk(kiosk: TransactionArgument) {
 		this.kiosk = kiosk;
+		return this;
 	}
 
 	// Some getters
@@ -416,6 +417,7 @@ export class KioskTransaction {
 	 * Returns the active transaction's kiosk, or undefined if `setCap` or `create()` hasn't been called yet.
 	 */
 	getKiosk() {
+		if (!this.kiosk) throw new Error('Kiosk is not set.');
 		return this.kiosk;
 	}
 
@@ -423,6 +425,7 @@ export class KioskTransaction {
 	 * Returns the active transaction's kioskOwnerCap, or undefined if `setCap` or `create()` hasn't been called yet.
 	 */
 	getKioskCap() {
+		if (!this.kioskCap) throw new Error('Kiosk cap is not set');
 		return this.kioskCap;
 	}
 

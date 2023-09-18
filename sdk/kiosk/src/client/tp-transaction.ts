@@ -306,6 +306,16 @@ export class TransferPolicyTransaction {
 		return this;
 	}
 
+	getPolicy() {
+		if (!this.policy) throw new Error('Policy not set.');
+		return this.policy;
+	}
+
+	getPolicyCap() {
+		if (!this.policyCap) throw new Error('Transfer Policy Cap not set.');
+		return this.policyCap;
+	}
+
 	// Internal function that that the policy's Id + Cap + type have been set.
 	#validateInputs() {
 		const genericErrorMessage = `Please use 'setCap()' to setup the TransferPolicy.`;
