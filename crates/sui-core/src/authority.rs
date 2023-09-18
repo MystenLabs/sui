@@ -237,6 +237,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_certificates: IntCounterVec,
+    pub consensus_calculated_throughput: IntGauge,
+    pub consensus_calculated_traffic_profile: IntGauge,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -562,6 +564,16 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            consensus_calculated_throughput: register_int_gauge_with_registry!(
+                "consensus_calculated_throughput",
+                "The calculated throughput from consensus output. Result is calculated based on unique transactions.",
+                registry,
+            ).unwrap(),
+            consensus_calculated_traffic_profile: register_int_gauge_with_registry!(
+                "consensus_calculated_traffic_profile",
+                "The current active calculated traffic profile",
+                registry
+            ).unwrap()
         }
     }
 }

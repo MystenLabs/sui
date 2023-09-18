@@ -47,37 +47,60 @@ enum TrafficProfile {
     High,
 }
 
+impl TrafficProfile {
+    fn as_int(&self) -> usize {
+        match self {
+            TrafficProfile::Low => 0,
+            TrafficProfile::High => 1,
+        }
+    }
+}
+
+pub type TimestampSecs = u64;
+
+#[derive(Debug)]
 struct TrafficProfileEntry {
     /// The traffic profile
     profile: TrafficProfile,
     /// The time when this traffic profile was created
-    timestamp: TimestampMs,
+    timestamp: TimestampSecs,
     /// The calculated throughput when this profile created
     throughput: u64,
 }
 
 #[derive(Default)]
 struct ConsensusThroughputCalculatorInner {
-    observations: VecDeque<(TimestampMs, u64)>,
+    observations: VecDeque<(TimestampSecs, u64)>,
     total_transactions: u64,
 }
 
 struct ConsensusThroughputCalculator {
     observations_window: u64,
-    traffic_profile_update_window: u64,
+    traffic_profile_update_window: TimestampSecs,
     inner: Mutex<ConsensusThroughputCalculatorInner>,
     last_traffic_profile: ArcSwapOption<TrafficProfileEntry>,
     current_throughput: AtomicU64,
+    metrics: Arc<AuthorityMetrics>,
 }
 
 impl ConsensusThroughputCalculator {
-    pub fn new(observations_window: NonZeroU64, traffic_profile_update_window: NonZeroU64) -> Self {
+    pub fn new(
+        observations_window: NonZeroU64,
+        traffic_profile_update_window: TimestampSecs,
+        metrics: Arc<AuthorityMetrics>,
+    ) -> Self {
+        assert!(
+            traffic_profile_update_window > 0,
+            "traffic_profile_update_window should be >= 0"
+        );
+
         Self {
             observations_window: observations_window.get(),
-            traffic_profile_update_window: traffic_profile_update_window.get(),
+            traffic_profile_update_window,
             inner: Mutex::new(ConsensusThroughputCalculatorInner::default()),
             last_traffic_profile: ArcSwapOption::empty(), // assume high traffic so the node is more conservative on bootstrap
             current_throughput: AtomicU64::new(0),
+            metrics,
         }
     }
 
@@ -86,15 +109,7 @@ impl ConsensusThroughputCalculator {
     // incremented otherwise observation will be ignored.
     pub fn add_transactions(&self, timestamp_ms: TimestampMs, num_of_transactions: u64) {
         let mut inner = self.inner.lock();
-
-        // First check that the timestamp is monotonically incremented - ignore any observation that is not
-        // later from previous one (it shouldn't really happen).
-        if let Some((front_ts, _)) = inner.observations.front() {
-            if timestamp_ms < *front_ts {
-                warn!("Ignoring observation of transactions:{} as has earlier timestamp than last observation {}ms < {}ms", num_of_transactions, timestamp_ms, front_ts);
-                return;
-            }
-        }
+        let timestamp_secs: TimestampSecs = timestamp_ms / 1_000; // lowest bucket we care is seconds
 
         // If it's the very first observation we just use it as timestamp and don't count any transactions.
         let num_of_transactions = if !inner.observations.is_empty() {
@@ -102,15 +117,37 @@ impl ConsensusThroughputCalculator {
         } else {
             0
         };
-        inner
-            .observations
-            .push_front((timestamp_ms, num_of_transactions));
+
+        if let Some((front_ts, transactions)) = inner.observations.pop_front() {
+            // First check that the timestamp is monotonically incremented - ignore any observation that is not
+            // later from previous one (it shouldn't really happen).
+            if timestamp_secs < front_ts {
+                warn!("Ignoring observation of transactions:{} as has earlier timestamp than last observation {}s < {}s", num_of_transactions, timestamp_secs, front_ts);
+                return;
+            }
+
+            // Not very likely, but if transactions refer to same second we add to the last element.
+            if timestamp_secs == front_ts {
+                inner
+                    .observations
+                    .push_front((front_ts, transactions + num_of_transactions));
+            } else {
+                inner.observations.push_front((front_ts, transactions));
+                inner
+                    .observations
+                    .push_front((timestamp_secs, num_of_transactions));
+            }
+        } else {
+            inner
+                .observations
+                .push_front((timestamp_secs, num_of_transactions));
+        }
 
         // update total number of transactions in the observations list
         inner.total_transactions = inner.total_transactions.saturating_add(num_of_transactions);
 
         // If we have more values on our window of max values, remove the last one, and update the num of transactions
-        // We also update the traffic profile when we have at least MAX_VALUES in our observations.
+        // We also update the traffic profile when we have at least observations_window values in our observations.
         if inner.observations.len() as u64 > self.observations_window {
             let (last_element_ts, last_element_transactions) =
                 inner.observations.pop_back().unwrap();
@@ -118,7 +155,7 @@ impl ConsensusThroughputCalculator {
                 .total_transactions
                 .saturating_sub(last_element_transactions);
 
-            println!("Total transactions: {}", inner.total_transactions);
+            //println!("Total transactions: {}", inner.total_transactions);
 
             // get the first element's timestamp to calculate the transaction rate
             let (first_element_ts, _first_element_transactions) = inner
@@ -126,12 +163,12 @@ impl ConsensusThroughputCalculator {
                 .front()
                 .expect("There should be at least on element in the list");
 
-            let period = first_element_ts.saturating_sub(last_element_ts) / 1_000; // Convert the milliseconds to seconds.
+            let period = first_element_ts.saturating_sub(last_element_ts);
 
             if period > 0 {
                 let current_throughput = inner.total_transactions / period;
 
-                self.update_traffic_profile(current_throughput, timestamp_ms);
+                self.update_traffic_profile(current_throughput, timestamp_secs);
             } else {
                 warn!("Skip calculating throughput as time period is {}. This is very unlikely to happen, should investigate.", period);
             }
@@ -139,7 +176,7 @@ impl ConsensusThroughputCalculator {
     }
 
     // Calculate the traffic profile based on
-    fn update_traffic_profile(&self, throughput: u64, timestamp: TimestampMs) {
+    fn update_traffic_profile(&self, throughput: u64, timestamp: TimestampSecs) {
         let profile = if throughput < 2_000u64 {
             TrafficProfile::Low
         } else {
@@ -156,16 +193,23 @@ impl ConsensusThroughputCalculator {
         );
 
         if should_update_profile {
-            self.last_traffic_profile
-                .store(Some(Arc::new(TrafficProfileEntry {
-                    profile,
-                    timestamp,
-                    throughput,
-                })));
+            let p = TrafficProfileEntry {
+                profile,
+                timestamp,
+                throughput,
+            };
+            info!("Updating traffic profile to {:?}", p);
+            self.last_traffic_profile.store(Some(Arc::new(p)));
+            self.metrics
+                .consensus_calculated_traffic_profile
+                .set(profile.as_int() as i64);
         }
 
         // Also update the current throughput
         self.current_throughput.store(throughput, Relaxed);
+        self.metrics
+            .consensus_calculated_throughput
+            .set(throughput as i64);
     }
 
     // Return the current traffic profile and the corresponding throughput when this was last updated.
@@ -845,12 +889,14 @@ mod tests {
 
     #[tokio::test]
     pub async fn test_consensus_throughput_calculate() {
-        let traffic_profile_update_window: NonZeroU64 = NonZeroU64::new(5_000).unwrap();
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let traffic_profile_update_window: TimestampSecs = 5;
         let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
             max_observation_points,
             traffic_profile_update_window,
+            metrics,
         );
 
         // When no transactions exists, the calculator will return by default "High" to err on the
