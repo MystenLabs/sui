@@ -26,5 +26,7 @@ mod tracing;
 #[cfg(any(debug_assertions, feature = "debugging"))]
 mod debug;
 
+mod paranoid_type_checker;
+mod plugin;
 #[cfg(test)]
 mod unit_tests;
