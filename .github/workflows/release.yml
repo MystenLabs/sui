@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted]
+        os: [macos-13-xl]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -52,6 +52,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ env.sui_tag }}
+
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+
+      - name: Setup caching
+        uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths          
       
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.sui_tag != 'main'  }}
