@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -17,8 +18,6 @@ use sui_types::object::{Object, Owner};
 use sui_types::sui_serde::SuiStructTag;
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
 use sui_types::transaction::SenderSignedData;
-
-use crate::errors::IndexerError;
 
 pub type IndexerResult<T> = Result<T, IndexerError>;
 
