@@ -1,30 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ChevronRight12, ChevronRight16 } from '@mysten/icons';
-import { Heading, Text } from '@mysten/ui';
+import { ChevronRight16 } from '@mysten/icons';
+import { Heading } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
-import { useState, type ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import { Card, type CardProps } from '~/ui/Card';
-import { Divider } from '~/ui/Divider';
 
 type Size = 'md' | 'sm';
 
-interface TransactionBlockCardHeaderProps {
+interface CollapsibleCardHeaderProps {
 	open: boolean;
 	size: Size;
 	title?: string | ReactNode;
 	collapsible?: boolean;
 }
 
-function TransactionBlockCardHeader({
-	open,
-	size,
-	title,
-	collapsible,
-}: TransactionBlockCardHeaderProps) {
+function CollapsibleCardHeader({ open, size, title, collapsible }: CollapsibleCardHeaderProps) {
 	if (!title) {
 		return null;
 	}
@@ -65,44 +59,7 @@ function TransactionBlockCardHeader({
 	return <>{headerContent}</>;
 }
 
-interface TransactionBlockCardSectionProps {
-	children: ReactNode;
-	defaultOpen?: boolean;
-	title?: string | ReactNode;
-}
-
-export function TransactionBlockCardSection({
-	title,
-	defaultOpen = true,
-	children,
-}: TransactionBlockCardSectionProps) {
-	const [open, setOpen] = useState(defaultOpen);
-	return (
-		<Collapsible.Root open={open} onOpenChange={setOpen} className="flex w-full flex-col gap-3">
-			{title && (
-				<Collapsible.Trigger>
-					<div className="flex items-center gap-2">
-						{typeof title === 'string' ? (
-							<Text color="steel-darker" variant="body/semibold">
-								{title}
-							</Text>
-						) : (
-							title
-						)}
-						<Divider />
-						<ChevronRight12
-							className={clsx('h-4 w-4 cursor-pointer text-gray-45', open && 'rotate-90')}
-						/>
-					</div>
-				</Collapsible.Trigger>
-			)}
-
-			<Collapsible.Content>{children}</Collapsible.Content>
-		</Collapsible.Root>
-	);
-}
-
-export interface TransactionBlockCardProps extends Omit<CardProps, 'size'> {
+export interface CollapsibleCardProps extends Omit<CardProps, 'size'> {
 	children: ReactNode;
 	title?: string | ReactNode;
 	footer?: ReactNode;
@@ -111,7 +68,7 @@ export interface TransactionBlockCardProps extends Omit<CardProps, 'size'> {
 	initialClose?: boolean;
 }
 
-export function TransactionBlockCard({
+export function CollapsibleCard({
 	title,
 	footer,
 	collapsible,
@@ -119,7 +76,7 @@ export function TransactionBlockCard({
 	children,
 	initialClose,
 	...cardProps
-}: TransactionBlockCardProps) {
+}: CollapsibleCardProps) {
 	const [open, setOpen] = useState(!initialClose);
 	return (
 		<div className="relative w-full">
@@ -129,12 +86,7 @@ export function TransactionBlockCard({
 					onOpenChange={setOpen}
 					className={clsx(size === 'md' ? 'px-6 py-7' : 'px-4 py-4.5')}
 				>
-					<TransactionBlockCardHeader
-						open={open}
-						size={size}
-						title={title}
-						collapsible={collapsible}
-					/>
+					<CollapsibleCardHeader open={open} size={size} title={title} collapsible={collapsible} />
 
 					<Collapsible.Content>{children}</Collapsible.Content>
 				</Collapsible.Root>
