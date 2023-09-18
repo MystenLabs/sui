@@ -278,7 +278,7 @@ impl<T, C> ConsensusHandler<T, C> {
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         let throughput_calculator =
-            ConsensusThroughputCalculator::new(NonZeroU64::new(60).unwrap(), 60, metrics.clone());
+            ConsensusThroughputCalculator::new(NonZeroU64::new(120).unwrap(), 60, metrics.clone());
         Self {
             epoch_store,
             last_seen,
