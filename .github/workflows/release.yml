@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 60
     strategy:
       matrix:
-        os: [macos-13-xl]
+        os: [macos-latest-xl]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
