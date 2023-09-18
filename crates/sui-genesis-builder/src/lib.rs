@@ -909,7 +909,6 @@ fn create_genesis_objects(
     }
 
     {
-        let store = Arc::get_mut(&mut store).expect("only one reference to store");
         for object in input_objects {
             store.insert_object(object.to_owned());
         }
@@ -926,12 +925,11 @@ fn create_genesis_objects(
     )
     .unwrap();
 
-    let store = Arc::try_unwrap(store).expect("only one reference to store");
     store.into_inner().into_values().collect()
 }
 
 fn process_package(
-    store: &mut Arc<InMemoryStorage>,
+    store: &mut InMemoryStorage,
     executor: &dyn Executor,
     ctx: &mut TxContext,
     modules: &[CompiledModule],
@@ -994,14 +992,13 @@ fn process_package(
         pt,
     )?;
 
-    let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written);
 
     Ok(())
 }
 
 pub fn generate_genesis_system_object(
-    store: &mut Arc<InMemoryStorage>,
+    store: &mut InMemoryStorage,
     executor: &dyn Executor,
     genesis_validators: &[GenesisValidatorMetadata],
     genesis_ctx: &mut TxContext,
@@ -1100,7 +1097,6 @@ pub fn generate_genesis_system_object(
             .set_clock_timestamp_ms_unsafe(genesis_chain_parameters.chain_start_timestamp_ms);
     }
 
-    let store = Arc::get_mut(store).expect("only one reference to store");
     store.finish(written);
 
     Ok(())
