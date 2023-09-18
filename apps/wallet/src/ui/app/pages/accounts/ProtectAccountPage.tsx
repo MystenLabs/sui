@@ -12,7 +12,6 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { autoLockDataToMinutes } from '../../hooks/useAutoLockMinutes';
 import { useAutoLockMinutesMutation } from '../../hooks/useAutoLockMinutesMutation';
 import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
-import { useDeleteAccountSourceMutation } from '../../hooks/useDeleteAccountSourceMutation';
 import { Heading } from '../../shared/heading';
 import { Text } from '_app/shared/text';
 import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
@@ -36,11 +35,9 @@ export function ProtectAccountPage() {
 	const [searchParams] = useSearchParams();
 	const accountType = searchParams.get('accountType') || '';
 	const successRedirect = searchParams.get('successRedirect') || '/tokens';
-	const isResetting = Boolean(searchParams.get('reset')) || false;
 	const navigate = useNavigate();
 	const { data: accounts } = useAccounts();
 	const createMutation = useCreateAccountsMutation();
-	const deleteMutation = useDeleteAccountSourceMutation();
 	const hasPasswordAccounts = useMemo(
 		() => accounts && accounts.some(({ isPasswordUnlockable }) => isPasswordUnlockable),
 		[accounts],
@@ -51,15 +48,12 @@ export function ProtectAccountPage() {
 			typeof hasPasswordAccounts !== 'undefined' &&
 			!(createMutation.isSuccess || createMutation.isLoading)
 		) {
-			setShowVerifyPasswordView(hasPasswordAccounts && !isResetting);
+			setShowVerifyPasswordView(hasPasswordAccounts);
 		}
-	}, [hasPasswordAccounts, createMutation.isSuccess, createMutation.isLoading, isResetting]);
+	}, [hasPasswordAccounts, createMutation.isSuccess, createMutation.isLoading]);
 	const createAccountCallback = useCallback(
 		async (password: string, type: CreateType) => {
 			try {
-				if (isResetting && type.includes('mnemonic')) {
-					await deleteMutation.mutateAsync({ type: 'mnemonic' });
-				}
 				const createdAccounts = await createMutation.mutateAsync({
 					type,
 					password,
@@ -78,7 +72,7 @@ export function ProtectAccountPage() {
 				toast.error((e as Error).message ?? 'Failed to create account');
 			}
 		},
-		[createMutation, navigate, successRedirect, deleteMutation, isResetting],
+		[createMutation, navigate, successRedirect],
 	);
 	const autoLockMutation = useAutoLockMinutesMutation();
 	if (!isAllowedAccountType(accountType)) {
@@ -107,12 +101,11 @@ export function ProtectAccountPage() {
 						<div className="mt-6 w-full grow">
 							<ProtectAccountForm
 								cancelButtonText="Back"
-								submitButtonText={isResetting ? 'Reset Password ' : 'Create Wallet'}
+								submitButtonText="Create Wallet"
 								onSubmit={async ({ password, autoLock }) => {
 									await autoLockMutation.mutateAsync({ minutes: autoLockDataToMinutes(autoLock) });
 									await createAccountCallback(password.input, accountType);
 								}}
-								displayToS={!isResetting}
 							/>
 						</div>
 					</>

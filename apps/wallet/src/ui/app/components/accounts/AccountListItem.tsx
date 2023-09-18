@@ -14,11 +14,10 @@ import { type SerializedUIAccount } from '_src/background/accounts/Account';
 type AccountListItemProps = {
 	account: SerializedUIAccount;
 	editable?: boolean;
-	selected?: boolean;
-	showLocked?: boolean;
+	showLock?: boolean;
 };
 
-export function AccountListItem({ account, editable, showLocked = true }: AccountListItemProps) {
+export function AccountListItem({ account, editable, showLock = false }: AccountListItemProps) {
 	const activeAccount = useActiveAccount();
 	const { data: domainName } = useResolveSuiNSName(account?.address);
 	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
@@ -29,7 +28,7 @@ export function AccountListItem({ account, editable, showLocked = true }: Accoun
 			name={account.nickname || domainName || formatAddress(account.address)}
 			isActiveAccount={account.address === activeAccount?.address}
 			after={
-				showLocked ? (
+				showLock ? (
 					<div className="ml-auto">
 						<div className="flex items-center justify-center">
 							<LockUnlockButton

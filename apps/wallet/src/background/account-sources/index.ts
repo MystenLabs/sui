@@ -29,11 +29,11 @@ function toAccountSource(accountSource: AccountSourceSerialized) {
 	throw new Error(`Unknown account source of type ${accountSource.type}`);
 }
 
-export async function getAccountSources(filter?: { type: AccountSourceType[] }) {
+export async function getAccountSources(filter?: { type: AccountSourceType }) {
 	const db = await getDB();
 	return (
 		await (filter?.type
-			? await db.accountSources.where('type').anyOf(filter.type).sortBy('createdAt')
+			? await db.accountSources.where('type').equals(filter.type).sortBy('createdAt')
 			: await db.accountSources.toCollection().sortBy('createdAt'))
 	).map(toAccountSource);
 }
@@ -66,32 +66,6 @@ async function createAccountSource({
 					}),
 				)
 			).toUISerialized();
-		default: {
-			throw new Error(`Unknown Account source type ${type}`);
-		}
-	}
-}
-
-async function deleteAccountSourceByType({
-	type,
-}: MethodPayload<'deleteAccountSourceByType'>['args']) {
-	switch (type) {
-		case 'mnemonic':
-			try {
-				const sourceIds = await (await getDB()).accountSources
-					.where('type')
-					.anyOf(['mnemonic', 'imported'])
-					.primaryKeys();
-				const accountIds = await (await getDB()).accounts
-					.where('sourceID')
-					.anyOf(sourceIds)
-					.primaryKeys();
-				await (await getDB()).accounts.bulkDelete(accountIds);
-				await (await getDB()).accountSources.bulkDelete(accountIds);
-				return true;
-			} catch (e) {
-				throw new Error(`Failed to delete Account source of type: ${type}`);
-			}
 		default: {
 			throw new Error(`Unknown Account source type ${type}`);
 		}
@@ -141,20 +115,6 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 		return true;
 	}
 
-	if (isMethodPayload(payload, 'deleteAccountSourceByType')) {
-		await uiConnection.send(
-			createMessage<MethodPayload<'deleteAccountSourceByTypeResponse'>>(
-				{
-					method: 'deleteAccountSourceByTypeResponse',
-					type: 'method-payload',
-					args: { success: await deleteAccountSourceByType(payload.args) },
-				},
-				msg.id,
-			),
-		);
-		return true;
-	}
-
 	if (isMethodPayload(payload, 'unlockAccountSourceOrAccount')) {
 		const { id, password } = payload.args;
 		const accountSource = await getAccountSourceByID(id);
@@ -193,6 +153,19 @@ export async function accountSourcesHandleUIMessage(msg: Message, uiConnection: 
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'verifyPasswordRecoveryData')) {
+		const { accountSourceID, entropy } = payload.args.data;
+		const accountSource = await getAccountSourceByID(accountSourceID);
+		if (!accountSource) {
+			throw new Error('Account source not found');
+		}
+		if (!(accountSource instanceof MnemonicAccountSource)) {
+			throw new Error('Invalid account source type');
+		}
+		await accountSource.verifyRecoveryData(entropy);
+		uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
 	return false;

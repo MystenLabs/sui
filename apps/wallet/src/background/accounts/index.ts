@@ -65,22 +65,6 @@ export async function getAccountByID(id: string) {
 	return toAccount(serializedAccount);
 }
 
-export async function getAccountsBySourceID(id: string) {
-	const accountSources = await (await getDB()).accounts.where({ sourceID: id }).toArray();
-	if (!accountSources) {
-		return null;
-	}
-	return accountSources;
-}
-
-export async function getAccountsByType(accountType: string) {
-	const accountSources = await (await getDB()).accounts.where({ type: accountType }).toArray();
-	if (!accountSources) {
-		return null;
-	}
-	return accountSources;
-}
-
 export async function getAccountsByAddress(address: string) {
 	return (await (await getDB()).accounts.where('address').equals(address).toArray()).map(toAccount);
 }

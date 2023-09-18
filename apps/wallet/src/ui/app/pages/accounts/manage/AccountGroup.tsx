@@ -31,6 +31,13 @@ const providerToLabel: Record<ZkProvider, string> = {
 	facebook: 'Facebook',
 };
 
+export function getGroupTitle(aGroupAccount: SerializedUIAccount) {
+	// TODO: revisit this logic for determining account provider
+	return isZkAccountSerializedUI(aGroupAccount)
+		? providerToLabel[aGroupAccount?.provider] ?? 'zkLogin'
+		: accountTypeToLabel[aGroupAccount?.type] || '';
+}
+
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
 // components - we should look to add these to base components somewhere
 function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
@@ -89,10 +96,7 @@ export function AccountGroup({
 						<div className="flex gap-2 w-full items-center justify-center cursor-pointer flex-shrink-0 group [&>*]:select-none">
 							<ArrowBgFill16 className="h-4 w-4 group-data-[state=open]:rotate-90 text-hero-darkest/20" />
 							<Heading variant="heading5" weight="semibold" color="steel-darker">
-								{/* TODO: revisit this logic for determining account provider */}
-								{isZkAccountSerializedUI(accounts[0])
-									? providerToLabel[accounts[0]?.provider] ?? 'zkLogin'
-									: accountTypeToLabel[type]}
+								{getGroupTitle(accounts[0])}
 							</Heading>
 							<div className="h-px bg-gray-45 flex flex-1 flex-shrink-0" />
 							{isMnemonicDerivedGroup && accountSource ? (

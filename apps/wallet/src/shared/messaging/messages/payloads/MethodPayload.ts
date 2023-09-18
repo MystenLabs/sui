@@ -15,6 +15,7 @@ export type LedgerAccountsPublicKeys = {
 	accountID: string;
 	publicKey: string;
 }[];
+export type PasswordRecoveryData = { type: 'mnemonic'; accountSourceID: string; entropy: string };
 
 type MethodPayloads = {
 	getStoredEntities: { type: UIAccessibleEntityType };
@@ -41,9 +42,7 @@ type MethodPayloads = {
 				type: 'zk';
 				provider: ZkProvider;
 		  };
-	deleteAccountSourceByType: { type: 'mnemonic' };
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
-	deleteAccountSourceByTypeResponse: { success: boolean };
 	signData: { data: string; id: string };
 	signDataResponse: { signature: SerializedSignature };
 	entitiesUpdated: { type: UIAccessibleEntityType };
@@ -63,6 +62,13 @@ type MethodPayloads = {
 	notifyUserActive: {};
 	getAccountKeyPair: { accountID: string; password: string };
 	getAccountKeyPairResponse: { accountID: string; keyPair: ExportedKeypair };
+	resetPassword: {
+		password: string;
+		recoveryData: PasswordRecoveryData[];
+	};
+	verifyPasswordRecoveryData: {
+		data: PasswordRecoveryData;
+	};
 };
 
 type Methods = keyof MethodPayloads;
