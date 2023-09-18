@@ -132,7 +132,7 @@ export function ObjectFieldsCard({
 				)}
 				<div
 					className={clsx(
-						'flex h-44 flex-col gap-4 overflow-y-auto pl-3 pr-2 md:h-80',
+						'flex max-h-44 flex-col gap-4 overflow-y-auto pl-3 pr-2 md:max-h-80',
 						renderSearchBar && 'mt-4',
 					)}
 				>
