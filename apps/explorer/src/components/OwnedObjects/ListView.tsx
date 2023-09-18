@@ -104,23 +104,25 @@ interface ListViewProps {
 export function ListView({ data, loading }: ListViewProps) {
 	return (
 		<div className="flex flex-col overflow-auto">
-			<div className="mb-3.5 flex w-full justify-around">
-				<div className="max-w-[66%] basis-8/12 md:max-w-[25%] md:basis-3/12">
-					<Text variant="caption/medium" color="steel-dark">
-						ASSET
-					</Text>
+			{(!!data?.length || loading) && (
+				<div className="mb-3.5 flex w-full justify-around">
+					<div className="max-w-[66%] basis-8/12 md:max-w-[25%] md:basis-3/12">
+						<Text variant="caption/medium" color="steel-dark">
+							ASSET
+						</Text>
+					</div>
+					<div className="hidden basis-6/12 md:block">
+						<Text variant="caption/medium" color="steel-dark">
+							TYPE
+						</Text>
+					</div>
+					<div className="basis-3/12">
+						<Text variant="caption/medium" color="steel-dark">
+							OBJECT ID
+						</Text>
+					</div>
 				</div>
-				<div className="hidden basis-6/12 md:block">
-					<Text variant="caption/medium" color="steel-dark">
-						TYPE
-					</Text>
-				</div>
-				<div className="basis-3/12">
-					<Text variant="caption/medium" color="steel-dark">
-						OBJECT ID
-					</Text>
-				</div>
-			</div>
+			)}
 			{loading &&
 				new Array(10)
 					.fill(0)

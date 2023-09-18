@@ -71,7 +71,7 @@ function AddressResult({ address }: { address: string }) {
 							<div className="my-8">
 								<Divider />
 							</div>
-							<div className="h-coinsAndAssetsContainer">{rightPane.panel}</div>
+							{rightPane.panel}
 						</>
 					)}
 				</ErrorBoundary>
