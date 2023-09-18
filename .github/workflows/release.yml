@@ -35,10 +35,10 @@ env:
 
 jobs:
   release-build:
-    timeout-minutes: 60
+    timeout-minutes: 80
     strategy:
       matrix:
-        os: [macos-latest-xl]
+        os: [windows-ghcloud, ubuntu-ghcloud, macos-latest-xl, macos-arm64-self-hosted]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
