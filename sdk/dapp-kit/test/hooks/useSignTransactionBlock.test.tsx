@@ -1,0 +1,95 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { useConnectWallet, useSignTransactionBlock } from 'dapp-kit/src';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import {
+	WalletFeatureNotSupportedError,
+	WalletNotConnectedError,
+} from 'dapp-kit/src/errors/walletErrors.js';
+import type { Mock } from 'vitest';
+import { suiFeatures } from '../mocks/mockFeatures.js';
+
+describe('useSignTransactionBlock', () => {
+	test('throws an error when trying to sign a transaction block without a wallet connection', async () => {
+		const wrapper = createWalletProviderContextWrapper();
+		const { result } = renderHook(() => useSignTransactionBlock(), { wrapper });
+
+		result.current.mutate({ transactionBlock: new TransactionBlock(), chain: 'sui:testnet' });
+
+		await waitFor(() => expect(result.current.error).toBeInstanceOf(WalletNotConnectedError));
+	});
+
+	test('throws an error when trying to sign a transaction block with a wallet that lacks feature support', async () => {
+		const { unregister, mockWallet } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+		});
+
+		const wrapper = createWalletProviderContextWrapper();
+		const { result } = renderHook(
+			() => ({
+				connectWallet: useConnectWallet(),
+				signTransactionBlock: useSignTransactionBlock(),
+			}),
+			{ wrapper },
+		);
+
+		result.current.connectWallet.mutate({ wallet: mockWallet });
+		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
+
+		result.current.signTransactionBlock.mutate({
+			transactionBlock: new TransactionBlock(),
+			chain: 'sui:testnet',
+		});
+		await waitFor(() =>
+			expect(result.current.signTransactionBlock.error).toBeInstanceOf(
+				WalletFeatureNotSupportedError,
+			),
+		);
+
+		act(() => unregister());
+	});
+
+	test('signing a transaction block from the currently connected account works successfully', async () => {
+		const { unregister, mockWallet } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			features: suiFeatures,
+		});
+
+		const wrapper = createWalletProviderContextWrapper();
+		const { result } = renderHook(
+			() => ({
+				connectWallet: useConnectWallet(),
+				signTransactionBlock: useSignTransactionBlock(),
+			}),
+			{ wrapper },
+		);
+
+		result.current.connectWallet.mutate({ wallet: mockWallet });
+
+		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
+
+		const signTransactionBlockFeature = mockWallet.features['sui:signTransactionBlock'];
+		const signTransactionBlockMock = signTransactionBlockFeature!.signTransactionBlock as Mock;
+
+		signTransactionBlockMock.mockReturnValueOnce({
+			transactionBlockBytes: 'abc',
+			signature: '123',
+		});
+
+		result.current.signTransactionBlock.mutate({
+			transactionBlock: new TransactionBlock(),
+			chain: 'sui:testnet',
+		});
+
+		await waitFor(() => expect(result.current.signTransactionBlock.isSuccess).toBe(true));
+		expect(result.current.signTransactionBlock.data).toStrictEqual({
+			transactionBlockBytes: 'abc',
+			signature: '123',
+		});
+
+		act(() => unregister());
+	});
+});
