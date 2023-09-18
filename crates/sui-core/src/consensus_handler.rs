@@ -62,6 +62,7 @@ struct TrafficProfileEntry {
     /// The time when this traffic profile was created
     timestamp: TimestampSecs,
     /// The calculated throughput when this profile created
+    #[allow(unused)]
     throughput: u64,
 }
 
@@ -197,9 +198,6 @@ impl ConsensusThroughputCalculator {
             };
             info!("Updating traffic profile to {:?}", p);
             self.last_traffic_profile.store(Some(Arc::new(p)));
-            self.metrics
-                .consensus_calculated_traffic_profile
-                .set(profile.as_int() as i64);
         }
 
         // Also update the current throughput
@@ -207,6 +205,10 @@ impl ConsensusThroughputCalculator {
         self.metrics
             .consensus_calculated_throughput
             .set(throughput as i64);
+
+        self.metrics
+            .consensus_calculated_traffic_profile
+            .set(self.traffic_profile().0.as_int() as i64);
     }
 
     // Return the current traffic profile and the corresponding throughput when this was last updated.
@@ -222,6 +224,7 @@ impl ConsensusThroughputCalculator {
     // Returns the current (live calculated) throughput. If want to get the current throughput use
     // this method. If want to figure out what was the throughput when the traffic profile was last
     // calculated then use the traffic_profile() method.
+    #[allow(unused)]
     pub fn current_throughput(&self) -> u64 {
         self.current_throughput.load(Relaxed)
     }
@@ -248,6 +251,8 @@ pub struct ConsensusHandler<T, C> {
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
+    /// Using the throughput calculator to identify the traffic profile
+    throughput_calculator: ConsensusThroughputCalculator,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -272,6 +277,8 @@ impl<T, C> ConsensusHandler<T, C> {
         }
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
+        let throughput_calculator =
+            ConsensusThroughputCalculator::new(NonZeroU64::new(60).unwrap(), 60, metrics.clone());
         Self {
             epoch_store,
             last_consensus_stats,
@@ -282,6 +289,7 @@ impl<T, C> ConsensusHandler<T, C> {
             metrics,
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_scheduler,
+            throughput_calculator,
         }
     }
 
@@ -560,6 +568,10 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             )
             .await
             .expect("Unrecoverable error in consensus handler");
+
+        // update the calculated throughput
+        self.throughput_calculator
+            .add_transactions(timestamp, transactions_to_schedule.len() as u64);
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
