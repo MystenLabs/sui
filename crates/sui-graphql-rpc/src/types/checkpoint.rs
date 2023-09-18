@@ -29,23 +29,17 @@ impl From<&sui_json_rpc_types::Checkpoint> for Checkpoint {
     fn from(c: &sui_json_rpc_types::Checkpoint) -> Self {
         let end_of_epoch_data = &c.end_of_epoch_data;
         let end_of_epoch = end_of_epoch_data.clone().map(|e| {
-            let committees = e.next_epoch_committee;
-            let new_committee = if committees.is_empty() {
-                None
-            } else {
-                Some(
-                    committees
-                        .iter()
-                        .map(|c| CommitteeMember {
-                            authority_name: Some(c.0.into_concise().to_string()),
-                            stake_unit: Some(c.1),
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            };
+            let committee: Vec<_> = e
+                .next_epoch_committee
+                .iter()
+                .map(|(authority, stake)| CommitteeMember {
+                    authority_name: Some(authority.into_concise().to_string()),
+                    stake_unit: Some(*stake),
+                })
+                .collect();
 
             EndOfEpochData {
-                new_committee,
+                new_committee: Some(committee),
                 next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
             }
         });

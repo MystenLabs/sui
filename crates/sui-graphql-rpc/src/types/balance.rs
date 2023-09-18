@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use super::big_int::BigInt;
 use crate::types::owner::Owner;
 use async_graphql::*;
@@ -18,7 +16,7 @@ impl From<sui_json_rpc_types::Balance> for Balance {
     fn from(balance: sui_json_rpc_types::Balance) -> Self {
         Self {
             coin_object_count: balance.coin_object_count as u64,
-            total_balance: BigInt::from_str(&format!("{}", balance.total_balance)).unwrap(),
+            total_balance: BigInt::from(balance.total_balance),
         }
     }
 }

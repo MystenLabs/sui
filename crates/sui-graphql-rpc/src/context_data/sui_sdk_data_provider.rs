@@ -273,7 +273,7 @@ impl DataProvider for SuiClient {
             .map(SerdeBigInt::from);
 
         let pg = self.read_api().get_checkpoints(after, count, false).await?;
-        let checkpoints: Vec<Checkpoint> = pg.data.iter().map(Checkpoint::from).collect();
+        let checkpoints: Vec<_> = pg.data.iter().map(Checkpoint::from).collect();
 
         let mut connection = Connection::new(false, pg.has_next_page);
         connection.edges.extend(

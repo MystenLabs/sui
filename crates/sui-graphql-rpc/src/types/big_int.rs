@@ -49,11 +49,20 @@ impl FromStr for BigInt {
     }
 }
 
-impl From<u64> for BigInt {
-    fn from(value: u64) -> Self {
-        BigInt::from_str(&value.to_string()).expect("Cannot parse u64 into BigInt")
-    }
+macro_rules! impl_from_for_bigint {
+    ($($t:ty),*) => {
+        $(
+            impl From<$t> for BigInt {
+                fn from(value: $t) -> Self {
+                    BigInt::from_str(&value.to_string())
+                          .expect(&format!("Cannot parse {} into BigInt", stringify!($t)))
+                }
+            }
+        )*
+    };
 }
+
+impl_from_for_bigint!(u64, u128, i32);
 
 #[cfg(test)]
 mod tests {
