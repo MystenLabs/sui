@@ -3,10 +3,11 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { LoadingIndicator, Text } from '@mysten/ui';
+import { LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 
 import { genTableDataFromTxData } from './TxCardUtils';
+import { AddressResultEmptyState } from '~/pages/address-result/AddressResultEmptyState';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
 
@@ -75,13 +76,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 	const hasTxns = data?.length > 0;
 
 	if (!hasTxns) {
-		return (
-			<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-				<Text variant="body/medium" color="steel-dark">
-					No transactions found
-				</Text>
-			</div>
-		);
+		return <AddressResultEmptyState copy="No transactions found" />;
 	}
 
 	return <TableCard noBorderBottom data={tableData.data} columns={tableData.columns} />;

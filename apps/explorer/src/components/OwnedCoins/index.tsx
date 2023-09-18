@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 
 import OwnedCoinView from './OwnedCoinView';
 import { useRecognizedPackages } from '~/hooks/useRecognizedPackages';
+import { AddressResultEmptyState } from '~/pages/address-result/AddressResultEmptyState';
 import { Pagination } from '~/ui/Pagination';
 
 export type CoinBalanceVerified = CoinBalance & {
@@ -198,13 +199,7 @@ export function OwnedCoins({ id }: { id: string }) {
 						</>
 					)}
 
-					{!hasCoinsBalance && (
-						<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-							<Text variant="body/medium" color="steel-dark">
-								No Coins owned
-							</Text>
-						</div>
-					)}
+					{!hasCoinsBalance && <AddressResultEmptyState copy="No Coins owned" />}
 				</div>
 			)}
 		</div>
