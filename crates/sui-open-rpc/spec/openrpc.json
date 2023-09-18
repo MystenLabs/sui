@@ -1630,6 +1630,12 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "check_zklogin_id_cost_base": {
+                  "u64": "200"
+                },
+                "check_zklogin_iss_cost_base": {
+                  "u64": "200"
+                },
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"

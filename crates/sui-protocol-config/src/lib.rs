@@ -761,6 +761,11 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
 
+    // zklogin::check_zklogin_id
+    check_zklogin_id_cost_base: Option<u64>,
+    // zklogin::check_zklogin_iss
+    check_zklogin_iss_cost_base: Option<u64>,
+
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
     scoring_decision_mad_divisor: Option<f64>,
@@ -1282,6 +1287,10 @@ impl ProtocolConfig {
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
             hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+            // zklogin::check_zklogin_id
+            check_zklogin_id_cost_base: Some(200),
+            // zklogin::check_zklogin_iss
+            check_zklogin_iss_cost_base: Some(200),
 
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,

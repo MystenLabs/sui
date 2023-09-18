@@ -33,6 +33,8 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::zklogin;
+use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssCostParams};
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -137,6 +139,10 @@ pub struct NativesCostTable {
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
+
+    // zklogin
+    pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
+    pub check_zklogin_iss_cost_params: CheckZkloginIssCostParams,
 
     // Receive object
     pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
@@ -482,6 +488,12 @@ impl NativesCostTable {
                     .unwrap_or(0)
                     .into(),
             },
+            check_zklogin_id_cost_params: CheckZkloginIdCostParams {
+                check_zklogin_id_cost_base: protocol_config.check_zklogin_id_cost_base().into(),
+            },
+            check_zklogin_iss_cost_params: CheckZkloginIssCostParams {
+                check_zklogin_iss_cost_base: protocol_config.check_zklogin_iss_cost_base().into(),
+            },
         }
     }
 }
@@ -678,6 +690,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "test_utils",
             "create_one_time_witness",
             make_native!(test_utils::create_one_time_witness),
+        ),
+        (
+            "zklogin",
+            "check_zklogin_id_internal",
+            make_native!(zklogin::check_zklogin_id_internal),
+        ),
+        (
+            "zklogin",
+            "check_zklogin_iss_internal",
+            make_native!(zklogin::check_zklogin_iss_internal),
         ),
     ];
     let sui_framework_natives_iter =
