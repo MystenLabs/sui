@@ -87,9 +87,9 @@ pub struct ExecutionResultsV1 {
 pub struct ExecutionResultsV2 {
     /// All objects written regardless of whether they were mutated, created, or unwrapped.
     pub written_objects: BTreeMap<ObjectID, Object>,
-    /// All objects loaded with the intention to be modified, with their original sequence number and digest.
-    /// If any object is not found in written_objects, they must be either deleted or wrapped.
-    pub objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest, Owner)>,
+    /// All objects that existed prior to this transaction, and are modified in this transaction.
+    /// This includes any type of modification, including mutated, wrapped and deleted objects.
+    pub modified_objects: BTreeSet<ObjectID>,
     /// All object IDs created in this transaction.
     pub created_object_ids: BTreeSet<ObjectID>,
     /// All object IDs deleted in this transaction.
@@ -97,7 +97,6 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
-    // TODO: capture loaded child objects if we want to.
 }
 
 #[derive(Clone, Debug)]
@@ -106,7 +105,6 @@ pub struct InputObjectMetadata {
     pub is_mutable_input: bool,
     pub owner: Owner,
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
 }
 
 #[derive(Debug, PartialEq, Eq)]
