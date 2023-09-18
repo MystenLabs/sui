@@ -22,3 +22,8 @@ export class WalletNoAccountSelectedError extends Error {}
  * An error that is instantiated when someone attempts to perform an action that isn't supported by a wallet.
  */
 export class WalletFeatureNotSupportedError extends Error {}
+
+/**
+ * An error that is instantiated when a wallet account can't be found for a specific wallet.
+ */
+export class WalletAccountNotFoundError extends Error {}
