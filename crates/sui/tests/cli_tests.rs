@@ -2043,8 +2043,8 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
     Ok(())
 }
 
-#[test]
-fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
+#[tokio::test]
+async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--lint", "--path", "tests/data/linter"];
     let output = cmd
