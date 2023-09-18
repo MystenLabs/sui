@@ -4,7 +4,7 @@ title: About zkLogin
 
 zkLogin is a Sui primitive that lets wallets and apps link Sui objects with an OAuth credential—enabling users to perform transactions using both the credential and attached objects.
 
-zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, an zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
+zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, a zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
 
 zkLogin is designed with the following principles in mind:
 
@@ -20,7 +20,7 @@ zkLogin is designed with the following principles in mind:
 
 Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
 
-If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
+If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies a zkLogin transaction, see [this section](#how-zklogin-works).
 
 If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
 
@@ -28,7 +28,7 @@ More questions? See [this page](#faq).
 
 ## OpenID providers
 
-The following tables lists the OpenID providers and that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
+The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
 | Provider     | Can support? | Comments |
 | ------------ | ----------   | -------- |
@@ -95,7 +95,7 @@ const params = new URLSearchParams({
    // Test Client ID for devnet / testnet:
    client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
    redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
-   respond_type: 'id_token',
+   response_type: 'id_token',
    scope: 'openid',
    // See below for details about generation of the nonce
    nonce: nonce,
