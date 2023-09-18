@@ -408,8 +408,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         Ok(hashed_lock_files)
     }
 
-    /// Computes a digest of all dependencies in a manifest file but may return None if information
-    /// about some dependencies is not available.
+    /// Computes a digest of all dependencies in a manifest file (or digest of empty list if there
+    /// are no dependencies).
     fn dependency_digest(
         &mut self,
         dep_lock_files: Vec<LockFile>,
@@ -420,7 +420,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let dev_dep_hashes = self.dependency_hashes(dev_dep_lock_files)?;
 
         if dep_hashes.is_empty() && dev_dep_hashes.is_empty() {
-            Ok("".to_string())
+            Ok(digest_str(&[]))
         } else {
             dep_hashes.extend(dev_dep_hashes);
             Ok(hashed_files_digest(dep_hashes))
