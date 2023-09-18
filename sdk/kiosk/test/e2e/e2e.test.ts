@@ -30,6 +30,7 @@ import {
 	testLockItemFlow,
 } from './helper';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 /**
  * Important: We have 2 types so we can easily test transfer policy management without interference.
@@ -168,6 +169,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({
 			address: toolbox.address(),
 		});
+
 		const personalKiosk = kioskOwnerCaps.find((x) => x.isPersonal);
 		const nonPersonalKiosk = kioskOwnerCaps.find((x) => !x.isPersonal);
 
@@ -230,5 +232,26 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			.withdraw(toolbox.address());
 
 		await executeTransactionBlock(toolbox, txb);
+	});
+
+	it('Should fetch a kiosk by id', async () => {
+		const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({
+			address: toolbox.address(),
+		});
+
+		const kiosk = await kioskClient.getKiosk({
+			id: kioskOwnerCaps[0].kioskId,
+			options: {
+				withKioskFields: true, // this flag also returns the `kiosk` object in the response, which includes the base setup
+				withListingPrices: true, // this flag returns the listing prices for listed items.
+				withObjects: true, // this flag enables fetching of the objects within the kiosk (`multiGetObjects`).
+				objectOptions: { showDisplay: true, showContent: true }, // works with `withObjects` flag, specifies the options of the fetching.
+			},
+		});
+
+		expect(kiosk).toHaveProperty('kiosk');
+		expect(normalizeSuiAddress(kiosk.kiosk?.owner || '')).toBe(
+			normalizeSuiAddress(toolbox.address()),
+		);
 	});
 });
