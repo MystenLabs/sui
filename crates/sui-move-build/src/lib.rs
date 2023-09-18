@@ -158,12 +158,14 @@ impl BuildConfig {
                 Ok((units, warning_diags)) => {
                     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     let (filtered_diags_num, filtered_categories) =
-                        warning_diags.filtered_user_diags_with_prefix(LINT_WARNING_PREFIX);
+                        warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
                     report_warnings(&files, warning_diags);
                     if any_linter_warnings {
                         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
                     }
-                    report_suppressed_linter_warnings(filtered_diags_num, filtered_categories)?;
+                    if filtered_diags_num > 0 {
+                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+                    }
                     fn_info = Some(Self::fn_info(&units));
                     Ok((files, units))
                 }
@@ -171,7 +173,7 @@ impl BuildConfig {
                     assert!(!error_diags.is_empty());
                     let any_linter_warnings = error_diags.any_with_prefix(LINT_WARNING_PREFIX);
                     let (filtered_diags_num, filtered_categories) =
-                        error_diags.filtered_user_diags_with_prefix(LINT_WARNING_PREFIX);
+                        error_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
                     let diags_buf = report_diagnostics_to_color_buffer(&files, error_diags);
                     if let Err(err) = std::io::stderr().write_all(&diags_buf) {
                         anyhow::bail!("Cannot output compiler diagnostics: {}", err);
@@ -179,7 +181,9 @@ impl BuildConfig {
                     if any_linter_warnings {
                         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
                     }
-                    report_suppressed_linter_warnings(filtered_diags_num, filtered_categories)?;
+                    if filtered_diags_num > 0 {
+                        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+                    }
                     anyhow::bail!("Compilation error");
                 }
             }
@@ -228,21 +232,6 @@ impl BuildConfig {
             error: format!("{:?}", err),
         })
     }
-}
-
-fn report_suppressed_linter_warnings(
-    filtered_diags_num: usize,
-    filtered_categories: usize,
-) -> anyhow::Result<()> {
-    if filtered_diags_num > 0 {
-        if let Err(err) = writeln!(
-            &mut std::io::stderr(),
-            "Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})\n"
-        ) {
-            anyhow::bail!("Cannot report linter warnings suppression info: {}", err);
-        }
-    }
-    Ok(())
 }
 
 pub fn build_from_resolution_graph(

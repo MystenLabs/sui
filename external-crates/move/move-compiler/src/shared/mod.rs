@@ -383,9 +383,9 @@ impl CompilationEnv {
                 }
             }
             self.diags.add(diag)
-        } else if !filter.unwrap().for_lib_code() {
+        } else if !filter.unwrap().for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
-            self.diags.add_user_filtered(diag)
+            self.diags.add_source_filtered(diag)
         }
     }
 
@@ -693,7 +693,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFilters::new(),
+            warning_filter: WarningFilters::new_for_source(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
