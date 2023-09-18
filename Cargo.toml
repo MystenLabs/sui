@@ -2,6 +2,9 @@
 resolver = "2"
 
 exclude = [
+    "external-crates/move-execution/interpreter_plugins/move-bytecode-verifier",
+    "external-crates/move-execution/interpreter_plugins/move-stdlib",
+    "external-crates/move-execution/interpreter_plugins/move-vm/runtime",
     "external-crates/move-execution/suivm/move-bytecode-verifier",
     "external-crates/move-execution/suivm/move-stdlib",
     "external-crates/move-execution/suivm/move-vm/runtime",
@@ -159,6 +162,9 @@ members = [
     "narwhal/worker",
     "sui-execution",
     "sui-execution/cut",
+    "sui-execution/interpreter_plugins/sui-adapter",
+    "sui-execution/interpreter_plugins/sui-move-natives",
+    "sui-execution/interpreter_plugins/sui-verifier",
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",

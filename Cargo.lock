@@ -5289,6 +5289,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-interpreter_plugins"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-verifier-suivm"
 version = "0.1.0"
 dependencies = [
@@ -5743,6 +5755,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-interpreter_plugins"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-interpreter_plugins",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-stdlib-suivm"
 version = "0.1.1"
 dependencies = [
@@ -5878,6 +5911,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-interpreter_plugins"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-interpreter_plugins",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -9550,6 +9602,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-interpreter_plugins"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-interpreter_plugins",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-interpreter_plugins",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-interpreter_plugins",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-interpreter_plugins",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-adapter-latest"
 version = "0.1.0"
 dependencies = [
@@ -10035,17 +10115,21 @@ dependencies = [
  "move-binary-format",
  "move-vm-config",
  "move-vm-runtime",
+ "move-vm-runtime-interpreter_plugins",
  "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
  "petgraph 0.5.1",
+ "sui-adapter-interpreter_plugins",
  "sui-adapter-latest",
  "sui-adapter-suivm",
  "sui-adapter-v0",
+ "sui-move-natives-interpreter_plugins",
  "sui-move-natives-latest",
  "sui-move-natives-suivm",
  "sui-move-natives-v0",
  "sui-protocol-config",
  "sui-types",
+ "sui-verifier-interpreter_plugins",
  "sui-verifier-latest",
  "sui-verifier-suivm",
  "sui-verifier-v0",
@@ -10538,6 +10622,26 @@ dependencies = [
  "sui-types",
  "sui-verifier-latest",
  "tempfile",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives-interpreter_plugins"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-interpreter_plugins",
+ "move-vm-runtime-interpreter_plugins",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -11477,6 +11581,20 @@ dependencies = [
  "move-compiler",
  "move-package",
  "sui-move-build",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-interpreter_plugins"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-interpreter_plugins",
+ "move-core-types",
+ "move-vm-config",
+ "sui-types",
  "workspace-hack",
 ]
 
@@ -13722,6 +13840,7 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-interpreter_plugins",
  "move-bytecode-verifier-suivm",
  "move-bytecode-verifier-v0",
  "move-bytecode-viewer",
@@ -13747,6 +13866,7 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-interpreter_plugins",
  "move-stdlib-suivm",
  "move-stdlib-v0",
  "move-symbol-pool",
@@ -13755,6 +13875,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
+ "move-vm-runtime-interpreter_plugins",
  "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
  "move-vm-test-utils",

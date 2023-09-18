@@ -14,6 +14,7 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+mod interpreter_plugins;
 mod latest;
 mod suivm;
 mod v0;
@@ -21,7 +22,8 @@ mod v0;
 #[cfg(test)]
 mod tests;
 
-pub const SUIVM: u64 = u64::MAX;
+pub const INTERPRETER_PLUGINS: u64 = u64::MAX;
+pub const SUIVM: u64 = u64::MAX - 1;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,
@@ -36,6 +38,12 @@ pub fn executor(
         )?),
 
         1 => Arc::new(latest::Executor::new(
+            protocol_config,
+            paranoid_type_checks,
+            silent,
+        )?),
+
+        INTERPRETER_PLUGINS => Arc::new(interpreter_plugins::Executor::new(
             protocol_config,
             paranoid_type_checks,
             silent,
@@ -60,6 +68,11 @@ pub fn verifier<'m>(
     match version {
         0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
         1 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
+        INTERPRETER_PLUGINS => Box::new(interpreter_plugins::Verifier::new(
+            protocol_config,
+            is_metered,
+            metrics,
+        )),
         SUIVM => Box::new(suivm::Verifier::new(protocol_config, is_metered, metrics)),
         v => panic!("Unsupported execution version {v}"),
     }
