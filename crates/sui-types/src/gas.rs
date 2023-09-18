@@ -211,10 +211,25 @@ pub mod checked {
     impl std::fmt::Display for GasCostSummary {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
-            f,
-            "computation_cost: {}, storage_cost: {},  storage_rebate: {}, non_refundable_storage_fee: {}",
-            self.computation_cost, self.storage_cost, self.storage_rebate, self.non_refundable_storage_fee,
-        )
+                f,
+                "computation_cost: {}, storage_cost: {},  storage_rebate: {}, non_refundable_storage_fee: {}",
+                self.computation_cost, self.storage_cost, self.storage_rebate, self.non_refundable_storage_fee,
+            )
+        }
+    }
+
+    impl std::ops::AddAssign<&Self> for GasCostSummary {
+        fn add_assign(&mut self, other: &Self) {
+            self.computation_cost += other.computation_cost;
+            self.storage_cost += other.storage_cost;
+            self.storage_rebate += other.storage_rebate;
+            self.non_refundable_storage_fee += other.non_refundable_storage_fee;
+        }
+    }
+
+    impl std::ops::AddAssign<Self> for GasCostSummary {
+        fn add_assign(&mut self, other: Self) {
+            self.add_assign(&other)
         }
     }
 
