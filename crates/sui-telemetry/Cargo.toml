@@ -9,9 +9,8 @@ edition = "2021"
 [dependencies]
 serde.workspace = true
 reqwest.workspace = true
-tokio = { workspace = true, features = ["full", "tracing"] }
 tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 sui-core.workspace = true
-fastcrypto.workspace = true
+

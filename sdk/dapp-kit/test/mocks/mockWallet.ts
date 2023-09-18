@@ -5,6 +5,8 @@ import type {
 	IdentifierRecord,
 	ReadonlyWalletAccount,
 	WalletWithRequiredFeatures,
+	StandardEventsChangeProperties,
+	StandardEventsOnMethod,
 } from '@mysten/wallet-standard';
 import { SUI_CHAINS } from '@mysten/wallet-standard';
 import type { Wallet } from '@mysten/wallet-standard';
@@ -13,13 +15,24 @@ export class MockWallet implements Wallet {
 	version = '1.0.0' as const;
 	icon = `data:image/png;base64,` as const;
 	chains = SUI_CHAINS;
+
 	#walletName: string;
 	#accounts: ReadonlyWalletAccount[];
 	#features: IdentifierRecord<unknown>;
+	#eventHandlers: {
+		event: string;
+		listener: (properties: StandardEventsChangeProperties) => void;
+	}[];
 
 	#connect = vi.fn().mockImplementation(() => ({ accounts: this.#accounts }));
 	#disconnect = vi.fn();
-	#on = vi.fn();
+
+	#on = vi.fn((...args: Parameters<StandardEventsOnMethod>) => {
+		this.#eventHandlers.push({ event: args[0], listener: args[1] });
+		return () => {
+			this.#eventHandlers = [];
+		};
+	});
 
 	constructor(
 		name: string,
@@ -29,6 +42,7 @@ export class MockWallet implements Wallet {
 		this.#walletName = name;
 		this.#accounts = accounts;
 		this.#features = features;
+		this.#eventHandlers = [];
 	}
 
 	get name() {
@@ -55,5 +69,12 @@ export class MockWallet implements Wallet {
 			},
 			...this.#features,
 		};
+	}
+
+	deleteFirstAccount() {
+		this.#accounts.splice(0, 1);
+		this.#eventHandlers.forEach(({ listener }) => {
+			listener({ accounts: this.#accounts });
+		});
 	}
 }

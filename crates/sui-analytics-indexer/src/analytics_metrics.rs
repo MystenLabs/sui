@@ -4,7 +4,10 @@
 
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use mysten_metrics::RegistryService;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry, TextEncoder};
+use prometheus::{
+    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
+    Registry, TextEncoder,
+};
 use std::net::SocketAddr;
 
 const METRICS_ROUTE: &str = "/metrics";
@@ -16,6 +19,7 @@ pub struct AnalyticsMetrics {
     pub total_transaction_object_received: IntCounter,
     pub total_object_received: IntCounter,
     pub total_event_received: IntCounter,
+    pub last_uploaded_checkpoint: IntGauge,
 }
 
 impl AnalyticsMetrics {
@@ -48,6 +52,12 @@ impl AnalyticsMetrics {
             total_event_received: register_int_counter_with_registry!(
                 "total_event_received",
                 "Total number of events received",
+                registry,
+            )
+            .unwrap(),
+            last_uploaded_checkpoint: register_int_gauge_with_registry!(
+                "last_uploaded_checkpoint",
+                "Last checkpoint uploaded to remote store",
                 registry,
             )
             .unwrap(),

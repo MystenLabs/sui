@@ -463,10 +463,10 @@ type TransactionBlockEdge {
 
 type TransactionBlockEffects {
 	digest: TransactionDigest!
+	status: ExecutionStatus!
+	errors: String
 	gasEffects: GasEffects
 	epoch: Epoch
-	status: ExecutionStatus
-	errors: String
 }
 
 input TransactionBlockFilter {
@@ -538,4 +538,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-

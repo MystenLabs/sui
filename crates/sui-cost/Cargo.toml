@@ -15,7 +15,6 @@ serde.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 bcs.workspace = true
-sui-core.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

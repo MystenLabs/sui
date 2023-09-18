@@ -18,7 +18,6 @@ prometheus.workspace = true
 git-version.workspace = true
 const-str.workspace = true
 
-fastcrypto.workspace = true
 move-binary-format.workspace = true
 move-cli.workspace = true
 move-disassembler.workspace = true
@@ -27,7 +26,6 @@ move-package.workspace = true
 move-prover-boogie-backend.workspace = true
 move-prover.workspace = true
 move-unit-test.workspace = true
-move-vm-test-utils.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

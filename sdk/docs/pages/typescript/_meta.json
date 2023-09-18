@@ -5,5 +5,6 @@
 	"faucet": "Faucet",
 	"sui-client": "SuiClient",
 	"transaction-building": "Transaction Building",
-	"cryptography": "Cryptography"
+	"cryptography": "Cryptography",
+	"utils": "Utils"
 }

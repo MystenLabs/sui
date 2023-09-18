@@ -272,6 +272,34 @@ impl TestCluster {
         .expect("Timed out waiting for cluster to target epoch")
     }
 
+    pub async fn wait_for_protocol_version(
+        &self,
+        target_protocol_version: ProtocolVersion,
+    ) -> SuiSystemState {
+        self.wait_for_protocol_version_with_timeout(
+            target_protocol_version,
+            Duration::from_secs(60),
+        )
+        .await
+    }
+
+    pub async fn wait_for_protocol_version_with_timeout(
+        &self,
+        target_protocol_version: ProtocolVersion,
+        timeout_dur: Duration,
+    ) -> SuiSystemState {
+        timeout(timeout_dur, async move {
+            loop {
+                let system_state = self.wait_for_epoch(None).await;
+                if system_state.protocol_version() >= target_protocol_version.as_u64() {
+                    return system_state;
+                }
+            }
+        })
+        .await
+        .expect("Timed out waiting for cluster to target protocol version")
+    }
+
     /// Ask 2f+1 validators to close epoch actively, and wait for the entire network to reach the next
     /// epoch. This requires waiting for both the fullnode and all validators to reach the next epoch.
     pub async fn trigger_reconfiguration(&self) {

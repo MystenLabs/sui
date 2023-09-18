@@ -25,12 +25,13 @@ export default {
 			minHeight: {
 				8: '2rem',
 				15: '3.75rem',
+				'popup-minimum': '600px',
 			},
 			spacing: {
 				7.5: '1.875rem',
 				8: '2rem',
 				15: '3.75rem',
-				'popup-height': '600px',
+				'popup-height': '680px',
 				'popup-width': '360px',
 			},
 			boxShadow: {
@@ -62,6 +63,10 @@ export default {
 			},
 			fontFamily: {
 				frankfurter: ['Frankfurter Normal', 'sans-serif'],
+			},
+			backgroundImage: {
+				google: 'url(_assets/images/google-background.png)',
+				twitch: 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
 			},
 		},
 	},

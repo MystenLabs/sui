@@ -139,10 +139,8 @@ ResolvedGraph {
             "E",
             "Root",
         },
-        manifest_digest: Some(
-            "B21BB5840BBEC6FAE6E54214639AD38EEB3D4B93BCA11A832654296C14DA0467",
-        ),
-        deps_digest: None,
+        manifest_digest: "B21BB5840BBEC6FAE6E54214639AD38EEB3D4B93BCA11A832654296C14DA0467",
+        deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
     },
     build_options: BuildConfig {
         dev_mode: true,

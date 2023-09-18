@@ -9,6 +9,7 @@ pub mod id_leak;
 pub mod typing;
 
 pub const INIT_FUNCTION_NAME: Symbol = symbol!("init");
+pub const ID_FIELD_NAME: Symbol = symbol!("id");
 
 pub const STD_ADDR_NAME: Symbol = symbol!("std");
 pub const OPTION_MODULE_NAME: Symbol = symbol!("option");
@@ -40,6 +41,20 @@ pub const SUI_CLOCK_CREATE: Symbol = symbol!("create");
 pub const AUTHENTICATOR_STATE_MODULE_NAME: Symbol = symbol!("authenticator_state");
 pub const AUTHENTICATOR_STATE_TYPE_NAME: Symbol = symbol!("AuthenticatorState");
 pub const AUTHENTICATOR_STATE_CREATE: Symbol = symbol!("create");
+
+pub const EVENT_MODULE_NAME: Symbol = symbol!("event");
+pub const EVENT_FUNCTION_NAME: Symbol = symbol!("emit");
+
+pub const TRANSFER_MODULE_NAME: Symbol = symbol!("transfer");
+pub const TRANSFER_FUNCTION_NAME: Symbol = symbol!("transfer");
+pub const FREEZE_FUNCTION_NAME: Symbol = symbol!("freeze_object");
+pub const SHARE_FUNCTION_NAME: Symbol = symbol!("share_object");
+
+pub const PRIVATE_TRANSFER_FUNCTIONS: &[Symbol] = &[
+    TRANSFER_FUNCTION_NAME,
+    FREEZE_FUNCTION_NAME,
+    SHARE_FUNCTION_NAME,
+];
 
 //**************************************************************************************************
 // Diagnostics
@@ -100,4 +115,32 @@ pub const INIT_CALL_DIAG: DiagnosticInfo = custom(
     /* category */ TYPING,
     /* code */ 6,
     "invalid 'init' call",
+);
+pub const OBJECT_DECL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 7,
+    "invalid object declaration",
+);
+pub const EVENT_EMIT_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 8,
+    "invalid event",
+);
+pub const PRIVATE_TRANSFER_CALL_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 9,
+    "invalid private transfer call",
+);
+pub const GLOBAL_STORAGE_DIAG: DiagnosticInfo = custom(
+    SUI_DIAG_PREFIX,
+    Severity::NonblockingError,
+    /* category */ TYPING,
+    /* code */ 9,
+    "global storage is not supported in Sui",
 );

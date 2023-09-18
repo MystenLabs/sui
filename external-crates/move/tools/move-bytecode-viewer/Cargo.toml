@@ -14,9 +14,7 @@ regex = "1.5.5"
 tui = "0.17.0"
 crossterm = "0.21"
 
-move-command-line-common = { path = "../../move-command-line-common" }
 move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
-move-ir-types = { path = "../../move-ir/types" }
 move-binary-format = { path = "../../move-binary-format" }
 move-disassembler = { path = "../move-disassembler" }
 

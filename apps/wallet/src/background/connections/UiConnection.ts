@@ -11,7 +11,8 @@ import {
 	accountSourcesHandleUIMessage,
 } from '../account-sources';
 import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
-import { getDB } from '../db';
+import { getAutoLockMinutes, notifyUserActive, setAutoLockMinutes } from '../auto-lock-accounts';
+import { getDB, settingsKeys } from '../db';
 import {
 	acceptQredoConnection,
 	getUIQredoInfo,
@@ -220,7 +221,28 @@ export class UiConnection extends Connection {
 				const db = await getDB();
 				await db.delete();
 				await db.open();
+				// prevents future run of auto backup process of the db (we removed everything nothing to backup after logout)
+				await db.settings.put({ setting: settingsKeys.isPopulated, value: true });
 				this.send(createMessage({ type: 'done' }, id));
+			} else if (isMethodPayload(payload, 'getAutoLockMinutes')) {
+				await this.send(
+					createMessage<MethodPayload<'getAutoLockMinutesResponse'>>(
+						{
+							type: 'method-payload',
+							method: 'getAutoLockMinutesResponse',
+							args: { minutes: await getAutoLockMinutes() },
+						},
+						msg.id,
+					),
+				);
+			} else if (isMethodPayload(payload, 'setAutoLockMinutes')) {
+				await setAutoLockMinutes(payload.args.minutes);
+				await this.send(createMessage({ type: 'done' }, msg.id));
+				return true;
+			} else if (isMethodPayload(payload, 'notifyUserActive')) {
+				await notifyUserActive();
+				await this.send(createMessage({ type: 'done' }, msg.id));
+				return true;
 			} else {
 				throw new Error(
 					`Unhandled message ${msg.id}. (${JSON.stringify(

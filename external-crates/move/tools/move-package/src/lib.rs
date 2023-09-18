@@ -163,17 +163,21 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        let mut dep_graph_builder =
-            DependencyGraphBuilder::new(self.skip_fetch_latest_git_deps, writer);
+        let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
+
+        let mut dep_graph_builder = DependencyGraphBuilder::new(
+            self.skip_fetch_latest_git_deps,
+            writer,
+            install_dir.clone(),
+        );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),
-            path.clone(),
+            path,
             manifest_string,
             lock_string,
         )?;
 
         if modified {
-            let install_dir = self.install_dir.as_ref().unwrap_or(&path).to_owned();
             let lock = dependency_graph.write_to_lock(install_dir)?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;

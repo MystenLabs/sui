@@ -6,14 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import {
-	Connection,
-	JsonRpcProvider,
-	TransactionBlock,
-	devnetConnection,
-	mainnetConnection,
-	testnetConnection,
-} from '@mysten/sui.js';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiClient, SuiClientOptions, getFullnodeUrl } from '@mysten/sui.js/client';
 import { useWalletKit } from '@mysten/wallet-kit';
 import { AlertCircle, Terminal } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -34,11 +28,11 @@ export default function OfflineSigner() {
 		},
 	});
 
-	// supported connections.
-	const connections: Record<`${string}:${string}`, Connection> = {
-		'sui:testnet': testnetConnection,
-		'sui:mainnet': mainnetConnection,
-		'sui:devnet': devnetConnection,
+	// supported networks.
+	const clientOptions: Record<`${string}:${string}`, SuiClientOptions> = {
+		'sui:testnet': { url: getFullnodeUrl('testnet') },
+		'sui:mainnet': { url: getFullnodeUrl('mainnet') },
+		'sui:devnet': { url: getFullnodeUrl('devnet') },
 	};
 
 	// runs a dry-run for the transaction based on the connected wallet.
@@ -52,11 +46,11 @@ export default function OfflineSigner() {
 		mutationKey: ['dry-run'],
 		mutationFn: async () => {
 			if (!currentAccount?.chains[0]) throw new Error('No chain detected for the account.');
-			const provider = new JsonRpcProvider(
-				connections[currentAccount?.chains.filter((x) => x.startsWith('sui'))[0]],
+			const client = new SuiClient(
+				clientOptions[currentAccount?.chains.filter((x) => x.startsWith('sui'))[0]],
 			);
 
-			return await provider.dryRunTransactionBlock({
+			return await client.dryRunTransactionBlock({
 				transactionBlock: bytes,
 			});
 		},

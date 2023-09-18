@@ -15,7 +15,8 @@ import { useMemo } from 'react';
 import { Banner } from '~/ui/Banner';
 import { Coin } from '~/ui/CoinsStack';
 import { AddressLink } from '~/ui/InternalLink';
-import { TransactionBlockCard, TransactionBlockCardSection } from '~/ui/TransactionBlockCard';
+import { CollapsibleCard } from '~/ui/collapsible/CollapsibleCard';
+import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';
 
 interface BalanceChangesProps {
 	changes: BalanceChangeSummary;
@@ -80,7 +81,7 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 	);
 
 	return (
-		<TransactionBlockCard
+		<CollapsibleCard
 			title={
 				<div className="flex w-full flex-wrap items-center justify-between gap-y-2">
 					<Heading variant="heading6/semibold" color="steel-darker">
@@ -105,21 +106,21 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 		>
 			<div className="flex flex-col gap-2">
 				{recognizedTokenChanges.map((change, index) => (
-					<TransactionBlockCardSection key={index + change.coinType}>
+					<CollapsibleSection key={index + change.coinType}>
 						<BalanceChangeEntry change={change} />
-					</TransactionBlockCardSection>
+					</CollapsibleSection>
 				))}
 				{unRecognizedTokenChanges.length > 0 && (
 					<div className="flex flex-col gap-2 border-t border-gray-45 pt-2">
 						{unRecognizedTokenChanges.map((change, index) => (
-							<TransactionBlockCardSection key={index + change.coinType}>
+							<CollapsibleSection key={index + change.coinType}>
 								<BalanceChangeEntry change={change} />
-							</TransactionBlockCardSection>
+							</CollapsibleSection>
 						))}
 					</div>
 				)}
 			</div>
-		</TransactionBlockCard>
+		</CollapsibleCard>
 	);
 }
 

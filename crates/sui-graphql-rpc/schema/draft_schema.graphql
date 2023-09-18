@@ -156,7 +156,7 @@ type Mutation {
   #
   # Waits until the transaction has been finalised on chain and an
   # effects digest is available, and returns that.  If the
-  # transactioon could not be finalised, returns the errors that
+  # transaction could not be finalised, returns the errors that
   # prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
@@ -208,6 +208,12 @@ input ObjectFilter {
   owner: SuiAddress
   objectIds: [SuiAddress!]
   objectKeys: [ObjectKey!]
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [ObjectFilter]
+  all: [ObjectFilter]
+  not: ObjectFilter
 }
 
 input ObjectKey {
@@ -218,6 +224,9 @@ input ObjectKey {
 input EventFilter {
   sender: SuiAddress
   transactionDigest: String
+  # Enhancement (post-MVP), requires compound filters to be useful.
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   # Cascading (module requires package)
   emittingPackage: SuiAddress
@@ -228,15 +237,15 @@ input EventFilter {
   eventModule: String
   eventType: String
 
-  eventField: EventField
-
+  # Enhancement (post-MVP), requires compound filters to be useful.
   startTime: DateTime
   endTime: DateTime
-}
 
-input EventField {
-  path: String!
-  json: String!
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [EventFilter]
+  all: [EventFilter]
+  not: EventFilter
 }
 
 input TransactionBlockFilter {
@@ -246,7 +255,8 @@ input TransactionBlockFilter {
   function: String
 
   kind: TransactionBlockKindInput
-  checkpoint: Int
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   signAddress: SuiAddress
   sentAddress: SuiAddress
@@ -255,6 +265,19 @@ input TransactionBlockFilter {
 
   inputObject: SuiAddress
   changedObject: SuiAddress
+
+  transactionIDs: [TransactionBlockID!]
+
+  # Enhancement (post-MVP), consistency with EventFilter -- timestamp
+  # comes from checkpoint timestamp.
+  startTime: DateTime
+  endTime: DateTime
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [TransactionBlockFilter]
+  all: [TransactionBlockFilter]
+  not: TransactionBlockFilter
 }
 
 input DynamicFieldFilter {
@@ -282,6 +305,7 @@ interface ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: ObjectFilter,
   ): ObjectConnection
 
@@ -332,6 +356,7 @@ type Address implements ObjectOwner {
     last: Int,
     before: String,
     relation: AddressTransactionBlockRelationship,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
@@ -371,6 +396,7 @@ type Object implements ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
@@ -421,6 +447,8 @@ type Epoch {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
 
@@ -723,6 +751,7 @@ type TransactionBlockEffects {
     after: String,
     last: Int,
     before: String,
+    # Extension (post-MVP) relies on compound filters
     filter: EventFilter,
   ): EventConnection
 

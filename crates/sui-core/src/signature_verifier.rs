@@ -33,6 +33,8 @@ use tokio::{
     sync::oneshot,
     time::{timeout, Duration},
 };
+use tracing::debug;
+
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
 
@@ -307,6 +309,7 @@ impl SignatureVerifier {
     /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
     /// been inserted.
     pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
+        debug!("insert JWK with kid: {:?}", jwk_id);
         let mut jwks = self.jwks.write();
         jwks.insert(jwk_id.clone(), jwk.clone());
     }

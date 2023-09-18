@@ -88,9 +88,14 @@ pub struct AllowlistedPeer {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct StateSyncConfig {
-    /// State sync will reject checkpoints with digests that don't match pinned values.
+    /// List of "known-good" checkpoints that state sync will be forced to use. State sync will
+    /// skip verification of pinned checkpoints, and reject checkpoints with digests that don't
+    /// match pinned values for a given sequence number.
     ///
-    /// This can be used in case of a fork to prevent the node from syncing to the wrong chain.
+    /// This can be used:
+    /// - in case of a fork, to prevent the node from syncing to the wrong chain.
+    /// - in case of a network stall, to force the node to proceed with a manually-injected
+    ///   checkpoint.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pinned_checkpoints: Vec<(CheckpointSequenceNumber, CheckpointDigest)>,
 

@@ -104,6 +104,7 @@ export class LedgerAccount
 			selected,
 			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: false,
 		};
 	}
 }

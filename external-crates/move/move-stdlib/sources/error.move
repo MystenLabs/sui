@@ -48,6 +48,7 @@ module std::error {
   /// Out of gas or other forms of quota (http: 429)
   const RESOURCE_EXHAUSTED: u64 = 0x9;
 
+  #[allow(unused_const)]
   /// Request cancelled by the client (http: 499)
   const CANCELLED: u64 = 0xA;
 

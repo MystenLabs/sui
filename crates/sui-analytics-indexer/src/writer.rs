@@ -6,17 +6,24 @@ use crate::tables::{
     CheckpointEntry, EventEntry, MoveCallEntry, ObjectEntry, TransactionEntry,
     TransactionObjectEntry,
 };
+use anyhow::Result;
+use sui_types::base_types::EpochId;
 
 // Trait for writing entries to a temporary store (e.g. csv files).
 // The entries are collected and written in batches.
 // Eventually, they are uploaded to the database.
-pub(crate) trait TableWriter {
-    fn write_checkpoints(&mut self, checkpoint_entries: &[CheckpointEntry]);
-    fn write_transactions(&mut self, transaction_entries: &[TransactionEntry]);
-    fn write_transaction_objects(&mut self, transaction_object_entries: &[TransactionObjectEntry]);
-    fn write_objects(&mut self, object_entries: &[ObjectEntry]);
-    fn write_events(&mut self, event_entries: &[EventEntry]);
-    fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]);
+pub(crate) trait TableWriter: Send + Sync + 'static {
+    fn write_checkpoints(&mut self, checkpoint_entries: &[CheckpointEntry]) -> Result<()>;
+    fn write_transactions(&mut self, transaction_entries: &[TransactionEntry]) -> Result<()>;
+    fn write_transaction_objects(
+        &mut self,
+        transaction_object_entries: &[TransactionObjectEntry],
+    ) -> Result<()>;
+    fn write_objects(&mut self, object_entries: &[ObjectEntry]) -> Result<()>;
+    fn write_events(&mut self, event_entries: &[EventEntry]) -> Result<()>;
+    fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]) -> Result<()>;
+    fn flush(&mut self) -> Result<()>;
+    fn reset(&mut self, epoch_num: EpochId, checkpoint_seq_num: u64) -> Result<()>;
 }
 
 const INITIAL_CAPACITY: usize = 10_000;
@@ -48,19 +55,20 @@ impl CheckpointWriter {
     }
 
     // Write all collected entries to files, via the given writer. Reset the entries after writing.
-    pub(crate) fn flush(&mut self, writer: &mut impl TableWriter) {
-        writer.write_checkpoints(&self.checkpoint_entries);
-        writer.write_transactions(&self.transaction_entries);
-        writer.write_transaction_objects(&self.transaction_object_entries);
-        writer.write_objects(&self.object_entries);
-        writer.write_events(&self.event_entries);
-        writer.write_move_calls(&self.move_call_entries);
+    pub(crate) fn write(&mut self, writer: &mut Box<dyn TableWriter>) -> Result<()> {
+        writer.write_checkpoints(&self.checkpoint_entries)?;
+        writer.write_transactions(&self.transaction_entries)?;
+        writer.write_transaction_objects(&self.transaction_object_entries)?;
+        writer.write_objects(&self.object_entries)?;
+        writer.write_events(&self.event_entries)?;
+        writer.write_move_calls(&self.move_call_entries)?;
         self.checkpoint_entries.clear();
         self.transaction_entries.clear();
         self.transaction_object_entries.clear();
         self.object_entries.clear();
         self.event_entries.clear();
         self.move_call_entries.clear();
+        Ok(())
     }
 
     pub(crate) fn write_checkpoint(&mut self, entry: CheckpointEntry) {

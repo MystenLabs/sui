@@ -57,6 +57,8 @@ pub enum QuorumDriverError {
         overloaded_stake: StakeUnit,
         errors: GroupedErrors,
     },
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSignatures,
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature, type ExportedKeypair } from '@mysten/sui.js/cryptography';
+import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from '_payloads';
 import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
@@ -15,13 +15,6 @@ type MethodToPayloads = {
 	create: {
 		args: { password: string; importedEntropy?: string };
 		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	getEntropy: {
-		args: string | undefined;
-		return: string;
 	};
 	/**
 	 * @deprecated
@@ -59,20 +52,6 @@ type MethodToPayloads = {
 	/**
 	 * @deprecated
 	 */
-	appStatusUpdate: {
-		args: { active: boolean };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	setLockTimeout: {
-		args: { timeout: number };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
 	signData: {
 		args: { data: string; address: string };
 		return: SerializedSignature;
@@ -96,20 +75,6 @@ type MethodToPayloads = {
 	 */
 	verifyPassword: {
 		args: { password: string };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	exportAccount: {
-		args: { password: string; accountAddress: string };
-		return: { keyPair: ExportedKeypair };
-	};
-	/**
-	 * @deprecated
-	 */
-	importPrivateKey: {
-		args: { password: string; keyPair: ExportedKeypair };
 		return: void;
 	};
 };

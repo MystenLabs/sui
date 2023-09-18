@@ -14,18 +14,22 @@ use std::path::PathBuf;
 )]
 pub enum Command {
     GenerateSchema {
+        /// Path to output GraphQL schema to, in SDL format.
         #[clap(short, long)]
         file: Option<PathBuf>,
     },
     StartServer {
         /// URL of the RPC server for data fetching
-        #[clap(short, long, default_value = "https://fullnode.testnet.sui.io:443/")]
-        rpc_url: String,
+        #[clap(short, long)]
+        rpc_url: Option<String>,
         /// Port to bind the server to
-        #[clap(short, long, default_value = "8000")]
-        port: u16,
+        #[clap(short, long)]
+        port: Option<u16>,
         /// Host to bind the server to
-        #[clap(long, default_value = "127.0.0.1")]
-        host: String,
+        #[clap(long)]
+        host: Option<String>,
+        /// Path to TOML file containing configuration for service.
+        #[clap(short, long)]
+        config: Option<PathBuf>,
     },
 }

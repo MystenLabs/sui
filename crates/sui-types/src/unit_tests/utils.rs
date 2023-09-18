@@ -160,7 +160,7 @@ mod zk_login {
 
     fn get_inputs() -> ZkLoginInputs {
         thread_local! {
-            static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proof_points\":{\"pi_a\":[\"2639684184680217707167754014000719722348206659392422133035933088167295844621\",\"15411697389380103098050765723042580180772223011905582881833041447034179685161\",\"1\"],\"pi_b\":[[\"18356546416649273600365508068279984662879338153955858345242905260545040887165\",\"14180424108251071134157931909030745068063443512539428703047837797454965825626\"],[\"13156473667176810581893653079638435272252026941153836815590225135710650196382\",\"21239978751364084281206642892186667820382067271473352046319441969708281386102\"],[\"1\",\"0\"]],\"pi_c\":[\"10224668151896969767148853455746517578322339166888897843411999928700401320418\",\"10920763695594894441298491254988284677195769983974208707015444852382653532723\",\"1\"]},\"address_seed\":\"21483285397923302977910340636259412155696585453250993383687293995976400590480\",\"claims\":[{\"name\":\"iss\",\"value_base64\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"index_mod_4\":2},{\"name\":\"aud\",\"value_base64\":\"yJhdWQiOiJyczFiaDA2NWk5eWE0eWR2aWZpeGw0a3NzMHVocHQiLC\",\"index_mod_4\":1}],\"header_base64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}").unwrap().init().unwrap();
+            static ZKLOGIN_INPUTS: ZkLoginInputs = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"17173380871402423388851336690560194075550283259841052262988876947368545509050\",\"9279549838504642682461963541043158574797293197316040203984373498124460932563\",\"1\"],\"b\":[[\"13090271074046807496093484597730531433039018139599421786856175867458948045863\",\"18534942705540952623250291310826323943267592899470838920040694963756854235363\"],[\"2843151759308241136529151680961703935769533737515884139233293772180792529886\",\"1823438237862022212220768945069366537277694138612275485890721031778785644443\"],[\"1\",\"0\"]],\"c\":[\"10419586366042369241402601405785045456131620269008599147240767440792708038393\",\"17182144907499900090926514872809878898161366227023467974088824891242013806474\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "16657007263003735230240998439420301694514420923267872433517882233836276100450").unwrap();
         }
         ZKLOGIN_INPUTS.with(|a| a.clone())
     }
@@ -168,11 +168,14 @@ mod zk_login {
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
             static USER_ADDRESS: SuiAddress = {
-                // Derive user address manually: Blake2b_256 hash of [zklogin_flag || bcs bytes of AddressParams || address seed in bytes])
+                // Derive user address manually: Blake2b_256 hash of [zklogin_flag || iss_bytes_length || iss_bytes || address seed in bytes])
                 let mut hasher = DefaultHash::default();
                 hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-                hasher.update(bcs::to_bytes(&get_inputs().get_address_params()).unwrap());
-                hasher.update(big_int_str_to_bytes(get_inputs().get_address_seed()));
+                let inputs = get_inputs();
+                let iss_bytes = inputs.get_iss().as_bytes();
+                hasher.update([iss_bytes.len() as u8]);
+                hasher.update(iss_bytes);
+                hasher.update(big_int_str_to_bytes(inputs.get_address_seed()).unwrap());
                 SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
             };
         }

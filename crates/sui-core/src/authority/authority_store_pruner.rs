@@ -152,7 +152,7 @@ impl AuthorityStorePruner {
             );
             let start_range = ObjectKey(object_id, min_version);
             let end_range = ObjectKey(object_id, (max_version.value() + 1).into());
-            wb.delete_range(&perpetual_db.objects, &start_range, &end_range)?;
+            wb.schedule_delete_range(&perpetual_db.objects, &start_range, &end_range)?;
         }
 
         if !indirect_objects.is_empty() {
@@ -203,7 +203,7 @@ impl AuthorityStorePruner {
 
             if let Some(event_digest) = effects.events_digest() {
                 if let Some(next_digest) = event_digest.next_lexicographical() {
-                    perpetual_batch.delete_range(
+                    perpetual_batch.schedule_delete_range(
                         &perpetual_db.events,
                         &(*event_digest, 0),
                         &(next_digest, 0),

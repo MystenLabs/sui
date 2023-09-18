@@ -25,6 +25,9 @@ pub trait ExecutionMode {
     ///  In other words, you can instantiate any struct or object or other value with its BCS byte
     fn allow_arbitrary_values() -> bool;
 
+    /// Do not perform conservation checks after execution.
+    fn skip_conservation_checks() -> bool;
+
     /// If not set, the package ID should be calculated like an object and an
     /// UpgradeCap is produced
     fn packages_are_predefined() -> bool;
@@ -60,6 +63,10 @@ impl ExecutionMode for Normal {
     }
 
     fn allow_arbitrary_values() -> bool {
+        false
+    }
+
+    fn skip_conservation_checks() -> bool {
         false
     }
 
@@ -109,6 +116,10 @@ impl ExecutionMode for Genesis {
         true
     }
 
+    fn skip_conservation_checks() -> bool {
+        false
+    }
+
     fn empty_arguments() -> Self::ArgumentUpdates {}
 
     fn empty_results() -> Self::ExecutionResults {}
@@ -147,6 +158,12 @@ impl ExecutionMode for System {
     }
 
     fn allow_arbitrary_values() -> bool {
+        // For AuthenticatorStateUpdate, we need to be able to pass in a vector of
+        // JWKs, so we need to allow arbitrary values.
+        true
+    }
+
+    fn skip_conservation_checks() -> bool {
         false
     }
 
@@ -196,6 +213,10 @@ impl ExecutionMode for DevInspect {
     }
 
     fn allow_arbitrary_values() -> bool {
+        true
+    }
+
+    fn skip_conservation_checks() -> bool {
         true
     }
 

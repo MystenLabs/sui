@@ -258,6 +258,8 @@ pub struct AuthorityMetrics {
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
+
+    pub authenticator_state_update_failed: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -570,6 +572,12 @@ impl AuthorityMetrics {
                 .unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
+            authenticator_state_update_failed: register_int_counter_with_registry!(
+                "authenticator_state_update_failed",
+                "Number of failed authenticator state updates",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -676,12 +684,12 @@ impl AuthorityState {
     ) -> SuiResult<VerifiedSignedTransaction> {
         let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
             &self.database,
-            epoch_store.as_ref(),
+            epoch_store.protocol_config(),
+            epoch_store.reference_gas_price(),
             &transaction.data().intent_message().value,
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
-        )
-        .await?;
+        )?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -1072,6 +1080,11 @@ impl AuthorityState {
         if let TransactionKind::AuthenticatorStateUpdate(auth_state) =
             certificate.data().intent_message().value.kind()
         {
+            if let Some(err) = &execution_error_opt {
+                error!("Authenticator state update failed: {err}");
+                self.metrics.authenticator_state_update_failed.inc();
+            }
+            debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
         }
 
@@ -1090,7 +1103,7 @@ impl AuthorityState {
         let _scope: Option<mysten_metrics::MonitoredScopeGuard> =
             monitored_scope("Execution::commit_cert_and_notify");
 
-        let input_object_count = inner_temporary_store.objects.len();
+        let input_object_count = inner_temporary_store.input_objects.len();
         let shared_object_count = effects.input_shared_objects().len();
         let digest = *certificate.digest();
 
@@ -1099,7 +1112,7 @@ impl AuthorityState {
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
-            .map(|(_, ((id, seq, _), obj, _))| InputKey(*id, (!obj.is_package()).then_some(*seq)))
+            .map(|(id, obj)| InputKey(*id, (!obj.is_package()).then_some(obj.version())))
             .collect();
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
@@ -1176,8 +1189,7 @@ impl AuthorityState {
             &self.database,
             epoch_store,
             certificate,
-        )
-        .await?;
+        )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
@@ -1187,7 +1199,7 @@ impl AuthorityState {
         let (kind, signer, gas) = transaction_data.execution_parts();
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
-                self.database.clone(),
+                &self.database,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
@@ -1253,24 +1265,24 @@ impl AuthorityState {
             (
                 transaction_input_checker::check_transaction_input_with_given_gas(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 Some(gas_object_id),
             )
         } else {
             (
                 transaction_input_checker::check_transaction_input(
                     &self.database,
-                    epoch_store.as_ref(),
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
                     &transaction,
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
-                )
-                .await?,
+                )?,
                 None,
             )
         };
@@ -1288,7 +1300,7 @@ impl AuthorityState {
         let expensive_checks = false;
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                self.database.clone(),
+                &self.database,
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
@@ -1316,15 +1328,39 @@ impl AuthorityState {
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let balance_changes = Vec::new();
 
+        let written_with_kind = effects
+            .created()
+            .into_iter()
+            .map(|(oref, _)| (oref, WriteKind::Create))
+            .chain(
+                effects
+                    .unwrapped()
+                    .into_iter()
+                    .map(|(oref, _)| (oref, WriteKind::Unwrap)),
+            )
+            .chain(
+                effects
+                    .mutated()
+                    .into_iter()
+                    .map(|(oref, _)| (oref, WriteKind::Mutate)),
+            )
+            .map(|(oref, kind)| {
+                let obj = inner_temp_store.written.get(&oref.0).unwrap();
+                // TODO: Avoid clones.
+                (oref.0, (oref, obj.clone(), kind))
+            })
+            .collect();
+
         Ok((
             DryRunTransactionBlockResponse {
-                input: SuiTransactionBlockData::try_from(transaction.clone(), &module_cache)
-                    .map_err(|e| SuiError::TransactionSerializationError {
+                input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
+                    |e| SuiError::TransactionSerializationError {
                         error: format!(
                             "Failed to convert transaction to SuiTransactionBlockData: {}",
                             e
                         ),
-                    })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
+                    },
+                )?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -1335,7 +1371,7 @@ impl AuthorityState {
                 object_changes,
                 balance_changes,
             },
-            inner_temp_store.written,
+            written_with_kind,
             effects,
             mock_gas,
         ))
@@ -1385,8 +1421,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
-        )
-        .await?;
+        )?;
 
         let gas_budget = max_tx_gas;
         let data = TransactionData::new(
@@ -1408,7 +1443,7 @@ impl AuthorityState {
         .expect("Creating an executor should not fail here");
         let expensive_checks = false;
         let (inner_temp_store, effects, execution_result) = executor.dev_inspect_transaction(
-            self.database.clone(),
+            &self.database,
             protocol_config,
             self.metrics.limits_metrics.clone(),
             expensive_checks,
@@ -1560,10 +1595,9 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
                     let type_ = new_object
-                        .1
                         .type_()
                         .map(|type_| ObjectType::Struct(type_.clone()))
                         .unwrap_or(ObjectType::Package);
@@ -1584,9 +1618,9 @@ impl AuthorityState {
                     let new_object = written.get(id).unwrap_or_else(
                         || panic!("tx_digest={:?}, error processing object owner index, written does not contain object {:?}", tx_digest, id)
                     );
-                    assert_eq!(new_object.0.1, oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.0.1, oref.1);
+                    assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(&new_object.1, written, module_resolver)
+                    let Some(df_info) = self.try_create_dynamic_field_info(new_object, written, module_resolver)
                         .expect("try_create_dynamic_field_info should not fail.") else {
                         // Skip indexing for non dynamic field objects.
                         continue;
@@ -1643,26 +1677,25 @@ impl AuthorityState {
                 // Find the actual object from storage using the object id obtained from the wrapper.
 
                 // Try to find the object in the written objects first.
-                let (version, digest, object_type) =
-                    if let Some((_, object, _)) = written.get(&object_id) {
-                        let version = object.version();
-                        let digest = object.digest();
-                        let object_type = object.data.type_().unwrap().clone();
-                        (version, digest, object_type)
-                    } else {
-                        // If not found, try to find it in the database.
-                        let object = self
-                            .database
-                            .get_object_by_key(&object_id, o.version())?
-                            .ok_or_else(|| UserInputError::ObjectNotFound {
-                                object_id,
-                                version: Some(o.version()),
-                            })?;
-                        let version = object.version();
-                        let digest = object.digest();
-                        let object_type = object.data.type_().unwrap().clone();
-                        (version, digest, object_type)
-                    };
+                let (version, digest, object_type) = if let Some(object) = written.get(&object_id) {
+                    let version = object.version();
+                    let digest = object.digest();
+                    let object_type = object.data.type_().unwrap().clone();
+                    (version, digest, object_type)
+                } else {
+                    // If not found, try to find it in the database.
+                    let object = self
+                        .database
+                        .get_object_by_key(&object_id, o.version())?
+                        .ok_or_else(|| UserInputError::ObjectNotFound {
+                            object_id,
+                            version: Some(o.version()),
+                        })?;
+                    let version = object.version();
+                    let digest = object.digest();
+                    let object_type = object.data.type_().unwrap().clone();
+                    (version, digest, object_type)
+                };
                 DynamicFieldInfo {
                     name,
                     bcs_name,
@@ -3294,15 +3327,15 @@ impl AuthorityState {
             .written
             .iter()
             .filter_map(|(k, v)| {
-                if v.1.is_coin() {
+                if v.is_coin() {
                     Some((*k, v.clone()))
                 } else {
                     None
                 }
             })
-            .collect::<WrittenObjects>();
+            .collect();
         let input_coin_objects = inner_temporary_store
-            .objects
+            .input_objects
             .iter()
             .filter_map(|(k, v)| {
                 if v.is_coin() {
@@ -3725,6 +3758,41 @@ impl AuthorityState {
         (next_protocol_version, system_packages)
     }
 
+    fn create_authenticator_state_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_jwk_consensus_updates() {
+            info!("authenticator state transactions not enabled");
+            return None;
+        }
+
+        let authenticator_state_exists = epoch_store.authenticator_state_exists();
+        let tx = if authenticator_state_exists {
+            let next_epoch = epoch_store.epoch().checked_add(1).expect("epoch overflow");
+            let min_epoch =
+                next_epoch.saturating_sub(epoch_store.protocol_config().max_age_of_jwk_in_epochs());
+            let authenticator_obj_initial_shared_version = epoch_store
+                .epoch_start_config()
+                .authenticator_obj_initial_shared_version()
+                .expect("initial version must exist");
+
+            let tx = EndOfEpochTransactionKind::new_authenticator_state_expire(
+                min_epoch,
+                authenticator_obj_initial_shared_version,
+            );
+
+            info!(?min_epoch, "Creating AuthenticatorStateExpire tx",);
+
+            tx
+        } else {
+            let tx = EndOfEpochTransactionKind::new_authenticator_state_create();
+            info!("Creating AuthenticatorStateCreate tx");
+            tx
+        };
+        Some(tx)
+    }
+
     /// Creates and execute the advance epoch transaction to effects without committing it to the database.
     /// The effects of the change epoch tx are only written to the database after a certified checkpoint has been
     /// formed and executed by CheckpointExecutor.
@@ -3742,6 +3810,12 @@ impl AuthorityState {
         checkpoint: CheckpointSequenceNumber,
         epoch_start_timestamp_ms: CheckpointTimestamp,
     ) -> anyhow::Result<(SuiSystemState, TransactionEffects)> {
+        let mut txns = Vec::new();
+
+        if let Some(tx) = self.create_authenticator_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+
         let next_epoch = epoch_store.epoch() + 1;
 
         let buffer_stake_bps = epoch_store.get_effective_buffer_stake_bps();
@@ -3781,16 +3855,34 @@ impl AuthorityState {
             return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
         };
 
-        let tx = VerifiedTransaction::new_change_epoch(
-            next_epoch,
-            next_epoch_protocol_version,
-            gas_cost_summary.storage_cost,
-            gas_cost_summary.computation_cost,
-            gas_cost_summary.storage_rebate,
-            gas_cost_summary.non_refundable_storage_fee,
-            epoch_start_timestamp_ms,
-            next_epoch_system_package_bytes,
-        );
+        let tx = if epoch_store
+            .protocol_config()
+            .end_of_epoch_transaction_supported()
+        {
+            txns.push(EndOfEpochTransactionKind::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            ));
+
+            VerifiedTransaction::new_end_of_epoch_transaction(txns)
+        } else {
+            VerifiedTransaction::new_change_epoch(
+                next_epoch,
+                next_epoch_protocol_version,
+                gas_cost_summary.storage_cost,
+                gas_cost_summary.computation_cost,
+                gas_cost_summary.storage_rebate,
+                gas_cost_summary.non_refundable_storage_fee,
+                epoch_start_timestamp_ms,
+                next_epoch_system_package_bytes,
+            )
+        };
 
         let executable_tx = VerifiedExecutableTransaction::new_from_checkpoint(
             tx.clone(),
@@ -4268,7 +4360,11 @@ impl NodeStateDump {
             modified_at_versions,
             runtime_reads,
             sender_signed_data: certificate.clone().into_message(),
-            input_objects: inner_temporary_store.objects.values().cloned().collect(),
+            input_objects: inner_temporary_store
+                .input_objects
+                .values()
+                .cloned()
+                .collect(),
             computed_effects: effects.clone(),
             expected_effects_digest,
         })

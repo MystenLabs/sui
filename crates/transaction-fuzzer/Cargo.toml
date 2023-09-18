@@ -13,13 +13,9 @@ proptest.workspace = true
 proptest-derive.workspace = true
 rand.workspace = true
 move-core-types.workspace = true
-move-binary-format.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-
-test-cluster.workspace = true
 once_cell.workspace = true
 sui-core.workspace = true
 sui-protocol-config.workspace = true

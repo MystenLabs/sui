@@ -27,7 +27,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
@@ -303,6 +303,15 @@ impl Builder {
                 return;
             }
         };
+
+        let protocol_config = get_genesis_protocol_config(ProtocolVersion::new(protocol_version));
+
+        if protocol_config.create_authenticator_state_in_genesis() {
+            let authenticator_state = unsigned_genesis.authenticator_state_object().unwrap();
+            assert!(authenticator_state.active_jwks.is_empty());
+        } else {
+            assert!(unsigned_genesis.authenticator_state_object().is_none());
+        }
 
         assert_eq!(
             self.validators.len(),
@@ -675,6 +684,15 @@ fn create_genesis_context(
     )
 }
 
+fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
+    // We have a circular dependency here. Protocol config depends on chain ID, which
+    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
+    // depends on protocol config.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    ProtocolConfig::get_for_version(version, Chain::Unknown)
+}
+
 fn build_unsigned_genesis_data(
     parameters: &GenesisCeremonyParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
@@ -719,13 +737,7 @@ fn build_unsigned_genesis_data(
         metrics.clone(),
     );
 
-    // We have a circular dependency here. Protocol config depends on chain ID, which
-    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
-    // depends on protocol config.
-    // However since we know there are no chain specific protocol config options in genesis,
-    // we use Chain::Unknown here.
-    let protocol_config =
-        ProtocolConfig::get_for_version(parameters.protocol_version, Chain::Unknown);
+    let protocol_config = get_genesis_protocol_config(parameters.protocol_version);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, metrics, &epoch_data);
@@ -820,7 +832,7 @@ fn create_genesis_transaction(
         let input_objects = InputObjects::new(vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                InMemoryStorage::new(Vec::new()),
+                &InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,
                 expensive_checks,
@@ -834,18 +846,15 @@ fn create_genesis_transaction(
                 signer,
                 genesis_digest,
             );
-        assert!(inner_temp_store.objects.is_empty());
+        assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
-        assert!(inner_temp_store.deleted.is_empty());
+        assert!(effects.mutated().is_empty());
+        assert!(effects.unwrapped().is_empty());
+        assert!(effects.deleted().is_empty());
+        assert!(effects.wrapped().is_empty());
+        assert!(effects.unwrapped_then_deleted().is_empty());
 
-        let objects = inner_temp_store
-            .written
-            .into_iter()
-            .map(|(_, (_, o, kind))| {
-                assert_eq!(kind, sui_types::storage::WriteKind::Create);
-                o
-            })
-            .collect();
+        let objects = inner_temp_store.written.into_values().collect();
         (effects, inner_temp_store.events, objects)
     };
 
@@ -966,7 +975,7 @@ fn process_package(
         builder.finish()
     };
     let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
-        store.clone(),
+        &*store,
         protocol_config,
         metrics,
         ctx,
@@ -1017,7 +1026,19 @@ pub fn generate_genesis_system_object(
             vec![],
         )?;
 
-        // Step 3: Mint the supply of SUI.
+        // Step 3: Create the AuthenticatorState object, unless it has been disabled (which only
+        // happens in tests).
+        if protocol_config.create_authenticator_state_in_genesis() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("authenticator_state").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+
+        // Step 4: Mint the supply of SUI.
         let sui_supply = builder.programmable_move_call(
             SUI_FRAMEWORK_ADDRESS.into(),
             ident_str!("sui").to_owned(),
@@ -1026,7 +1047,7 @@ pub fn generate_genesis_system_object(
             vec![],
         );
 
-        // Step 4: Run genesis.
+        // Step 5: Run genesis.
         // The first argument is the system state uid we got from step 1 and the second one is the SUI supply we
         // got from step 3.
         let mut arguments = vec![sui_system_state_uid, sui_supply];
@@ -1050,7 +1071,7 @@ pub fn generate_genesis_system_object(
     };
 
     let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
-        store.clone(),
+        &*store,
         &protocol_config,
         metrics,
         genesis_ctx,

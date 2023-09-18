@@ -18,12 +18,10 @@ signature.workspace = true
 camino.workspace = true
 tokio = { workspace = true, features = ["full"] }
 async-trait.workspace = true
-serde_with.workspace = true
 tracing.workspace = true
 bcs.workspace = true
 clap.workspace = true
 bip32.workspace = true
-prettytable-rs.workspace = true
 rand.workspace = true
 tap.workspace = true
 inquire.workspace = true
@@ -62,7 +60,6 @@ rustyline-derive.workspace = true
 colored.workspace = true
 unescape.workspace = true
 shell-words.workspace = true
-rocksdb.workspace = true
 
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
