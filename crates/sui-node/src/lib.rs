@@ -1065,7 +1065,8 @@ impl SuiNode {
         let ranges = TrafficProfileRangesBuilder::default()
             .add_profile(2_000, TrafficProfile::Low)
             .add_max_threshold_profile(TrafficProfile::High)
-            .build();
+            .build()
+            .unwrap();
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
