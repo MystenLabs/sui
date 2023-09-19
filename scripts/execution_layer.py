@@ -401,7 +401,7 @@ def cut_directories(f):
 
 def impl(feature):
     """Path to the impl module for this feature"""
-    return Path() / "sui-execution" / "src" / (feature + ".rs")
+    return Path() / "sui-execution" / "src" / (feature.replace("-", "_") + ".rs")
 
 
 def clean_up_cut(feature):
@@ -443,7 +443,7 @@ def generate_impls(feature, copy):
     orig = Path() / "sui-execution" / "src" / "latest.rs"
     with open(orig, mode="r") as orig, open(copy, mode="w") as copy:
         for line in orig:
-            line = re.sub(r"^use (.*)_latest::", rf"use \1_{feature}::", line)
+            line = re.sub(r"^use (.*)_latest::", rf"use \1_{feature.replace('-', '_')}::", line)
             copy.write(line)
 
 
@@ -591,7 +591,8 @@ def discover_cuts():
     # assigned versions in lexicographical order.
     for i, feature in enumerate(features):
         version = f"u64::MAX - {i}" if i > 0 else "u64::MAX"
-        cuts.append((version, feature.stem.upper(), feature.stem))
+        feature_stem = feature.stem.replace("-", "_")
+        cuts.append((version, feature_stem.upper(), feature_stem))
 
     return cuts
 
