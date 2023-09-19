@@ -1,10 +1,9 @@
-#! /usr/bin/env tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 import { promises as fs, existsSync } from 'fs';
 import * as path from 'path';
-import { build } from 'esbuild';
+import { BuildOptions, build } from 'esbuild';
 import { execSync } from 'child_process';
 
 interface PackageJSON {
@@ -21,17 +20,12 @@ interface PackageJSON {
 
 const ignorePatterns = [/\.test.ts$/];
 
-buildPackage().catch((error) => {
-	console.error(error);
-	process.exit(1);
-});
-
-async function buildPackage() {
+export async function buildPackage(buildOptions?: BuildOptions) {
 	const allFiles = await findAllFiles(path.join(process.cwd(), 'src'));
 	const packageJson = await readPackageJson();
 	await clean();
-	await buildCJS(allFiles, packageJson);
-	await buildESM(allFiles, packageJson);
+	await buildCJS(allFiles, packageJson, buildOptions);
+	await buildESM(allFiles, packageJson, buildOptions);
 	await buildImportDirectories(packageJson);
 }
 
@@ -53,7 +47,11 @@ async function clean() {
 	await createEmptyDir(path.join(process.cwd(), 'dist'));
 }
 
-async function buildCJS(entryPoints: string[], { sideEffects }: PackageJSON) {
+async function buildCJS(
+	entryPoints: string[],
+	{ sideEffects }: PackageJSON,
+	buildOptions?: BuildOptions,
+) {
 	await build({
 		format: 'cjs',
 		logLevel: 'error',
@@ -61,6 +59,7 @@ async function buildCJS(entryPoints: string[], { sideEffects }: PackageJSON) {
 		entryPoints,
 		outdir: 'dist/cjs',
 		sourcemap: true,
+		...buildOptions,
 	});
 	await buildTypes('tsconfig.json');
 
@@ -79,7 +78,11 @@ async function buildCJS(entryPoints: string[], { sideEffects }: PackageJSON) {
 	);
 }
 
-async function buildESM(entryPoints: string[], { sideEffects }: PackageJSON) {
+async function buildESM(
+	entryPoints: string[],
+	{ sideEffects }: PackageJSON,
+	buildOptions?: BuildOptions,
+) {
 	await build({
 		format: 'esm',
 		logLevel: 'error',
@@ -87,6 +90,7 @@ async function buildESM(entryPoints: string[], { sideEffects }: PackageJSON) {
 		entryPoints,
 		outdir: 'dist/esm',
 		sourcemap: true,
+		...buildOptions,
 	});
 	await buildTypes('tsconfig.esm.json');
 
