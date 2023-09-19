@@ -130,8 +130,7 @@ type WalletInputs = {
 
 export type PartialZkSignature = Omit<ZkSignatureInputs, 'addressSeed'>;
 
-// TODO: update when we have the final production url (and a https one)
-const zkProofsServerUrl = 'http://185.209.177.123:7000';
+const zkProofsServerUrl = 'https://prover.mystenlabs.com/v1';
 
 export async function createPartialZKSignature({
 	jwt,
@@ -141,7 +140,7 @@ export async function createPartialZKSignature({
 	userSalt,
 	keyClaimName = 'sub',
 }: WalletInputs): Promise<PartialZkSignature> {
-	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/zkp`, {
+	const response = await fetchWithSentry('createZKProofs', zkProofsServerUrl, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
