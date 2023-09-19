@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// This file is used to test linter suppression stats output (the test itself is part of CLI tests
+// in the sui crate)
+
 #[lint_allow(custom_state_change)]
 module linter::suppression_stats {
     use sui::object::UID;
