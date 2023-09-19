@@ -14,6 +14,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), AnalyticsIndexerError> {
+
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();

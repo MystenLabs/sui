@@ -1712,29 +1712,46 @@ impl AuthorityPerEpochStore {
         self.tables.last_consensus_index.batch()
     }
 
+    #[cfg(test)]
+    pub fn db_batch_for_test(&self) -> DBBatch {
+        self.db_batch()
+    }
+
     pub(crate) async fn process_consensus_transactions_and_commit_boundary<
+        'a,
         C: CheckpointServiceNotify,
     >(
-        &self,
+        self: &'a Arc<Self>,
         transactions: &[VerifiedSequencedConsensusTransaction],
-        end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
+        end_of_publish_transactions: Vec<VerifiedSequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
         object_store: impl ObjectStore,
-    ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
+    ) -> SuiResult<(
+        Vec<VerifiedExecutableTransaction>,
+        ConsensusCommitBatch<'a, C>,
+    )> {
         let mut batch = self.db_batch();
-        let (executable_txns, notifications, _lock) = self
+        let (transactions_to_schedule, notifications, lock_and_final_round) = self
             .process_consensus_transactions(
                 &mut batch,
                 transactions,
-                end_of_publish_transactions,
+                &end_of_publish_transactions,
                 checkpoint_service,
                 object_store,
             )
             .await?;
-        batch.write()?;
 
-        self.process_notifications(&notifications, end_of_publish_transactions);
-        Ok(executable_txns)
+        Ok((
+            transactions_to_schedule,
+            ConsensusCommitBatch {
+                epoch_store: self.clone(),
+                checkpoint_service: checkpoint_service.clone(),
+                batch,
+                notifications,
+                end_of_publish_transactions,
+                lock_and_final_round,
+            },
+        ))
     }
 
     #[cfg(any(test, feature = "test-utils"))]
@@ -1793,7 +1810,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
-        Option<parking_lot::RwLockWriteGuard<ReconfigState>>,
+        Option<(parking_lot::RwLockWriteGuard<ReconfigState>, u64)>,
     )> {
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
@@ -1850,17 +1867,23 @@ impl AuthorityPerEpochStore {
             shared_input_next_versions.into_iter(),
         )?;
 
-        let lock = self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
+        let lock_and_final_round =
+            self.process_end_of_publish_transactions(batch, end_of_publish_transactions)?;
 
-        Ok((verified_certificates, notifications, lock))
+        Ok((verified_certificates, notifications, lock_and_final_round))
     }
 
     fn process_end_of_publish_transactions(
         &self,
         write_batch: &mut DBBatch,
         transactions: &[VerifiedSequencedConsensusTransaction],
-    ) -> SuiResult<Option<parking_lot::RwLockWriteGuard<ReconfigState>>> {
-        let mut write_lock = None;
+    ) -> SuiResult<
+        Option<(
+            parking_lot::RwLockWriteGuard<ReconfigState>,
+            u64, /* final checkpoint round */
+        )>,
+    > {
+        let mut ret = None;
 
         for transaction in transactions {
             let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -1878,7 +1901,7 @@ impl AuthorityPerEpochStore {
 
                 // It is ok to just release lock here as this function is the only place that transition into RejectAllCerts state
                 // And this function itself is always executed from consensus task
-                let collected_end_of_publish = if write_lock.is_none()
+                let collected_end_of_publish = if ret.is_none()
                     && self
                         .get_reconfig_state_read_lock_guard()
                         .should_accept_consensus_certs()
@@ -1894,7 +1917,7 @@ impl AuthorityPerEpochStore {
                 };
 
                 if collected_end_of_publish {
-                    assert!(write_lock.is_none());
+                    assert!(ret.is_none());
                     debug!(
                         "Collected enough end_of_publish messages with last message from validator {:?}",
                         authority.concise()
@@ -1911,7 +1934,7 @@ impl AuthorityPerEpochStore {
                         )],
                     )?;
                     // Holding this lock until end of this function where we write batch to DB
-                    write_lock = Some(lock);
+                    ret = Some((lock, consensus_index.index.last_committed_round));
                 };
                 // Important: we actually rely here on fact that ConsensusHandler panics if it's operation returns error
                 // If some day we won't panic in ConsensusHandler on error we need to figure out here how
@@ -1927,7 +1950,7 @@ impl AuthorityPerEpochStore {
                 );
             }
         }
-        Ok(write_lock)
+        Ok(ret)
     }
 
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
@@ -2103,6 +2126,40 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    pub(crate) fn write_pending_checkpoint(
+        &self,
+        batch: &mut DBBatch,
+        checkpoint: &PendingCheckpoint,
+    ) -> SuiResult {
+        if let Some(pending) = self.get_pending_checkpoint(&checkpoint.height())? {
+            if pending.roots != checkpoint.roots {
+                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
+            }
+            debug!(
+                checkpoint_commit_height = checkpoint.height(),
+                "Ignoring duplicate checkpoint notification",
+            );
+            return Ok(());
+        }
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
+            checkpoint.roots.len(),
+        );
+        trace!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Transaction roots for pending checkpoint: {:?}",
+            checkpoint.roots
+        );
+
+        batch.insert_batch(
+            &self.tables.pending_checkpoints,
+            std::iter::once((checkpoint.height(), checkpoint)),
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointCommitHeight>,
@@ -2121,14 +2178,6 @@ impl AuthorityPerEpochStore {
         index: &CheckpointCommitHeight,
     ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
         self.tables.pending_checkpoints.get(index)
-    }
-
-    pub fn insert_pending_checkpoint(
-        &self,
-        index: &CheckpointCommitHeight,
-        checkpoint: &PendingCheckpoint,
-    ) -> Result<(), TypedStoreError> {
-        self.tables.pending_checkpoints.insert(index, checkpoint)
     }
 
     pub fn process_pending_checkpoint(
@@ -2351,6 +2400,36 @@ impl AuthorityPerEpochStore {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             self.signature_verifier.insert_jwk(jwk_id, jwk);
         }
+    }
+}
+
+pub(crate) struct ConsensusCommitBatch<'a, C> {
+    epoch_store: Arc<AuthorityPerEpochStore>,
+    checkpoint_service: Arc<C>,
+    batch: DBBatch,
+    notifications: Vec<SequencedConsensusTransactionKey>,
+    end_of_publish_transactions: Vec<VerifiedSequencedConsensusTransaction>,
+    lock_and_final_round: Option<(parking_lot::RwLockWriteGuard<'a, ReconfigState>, u64)>,
+}
+
+impl<'a, C: CheckpointServiceNotify> ConsensusCommitBatch<'a, C> {
+    pub fn commit(mut self, pending_checkpoint: PendingCheckpoint) -> SuiResult {
+        self.epoch_store
+            .write_pending_checkpoint(&mut self.batch, &pending_checkpoint)?;
+
+        self.batch.write()?;
+
+        self.epoch_store
+            .process_notifications(&self.notifications, &self.end_of_publish_transactions);
+
+        self.checkpoint_service
+            .notify_checkpoint(&pending_checkpoint)
+    }
+
+    pub fn final_checkpoint_round(&self) -> Option<u64> {
+        self.lock_and_final_round
+            .as_ref()
+            .map(|(_, final_round)| *final_round)
     }
 }
 
