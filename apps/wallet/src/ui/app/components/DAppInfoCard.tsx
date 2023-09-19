@@ -87,6 +87,8 @@ export function DAppInfoCard({
 							/>
 						</div>
 					}
+					hideCopy
+					hideExplorerLink
 				/>
 			) : null}
 			{permissions?.length ? (

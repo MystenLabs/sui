@@ -31,6 +31,8 @@ export function AccountMultiSelectItem({ account, state }: AccountMultiSelectIte
 						<CheckFill16 className={cn('h-4 w-4', { 'opacity-50': state === 'disabled' })} />
 					</div>
 				}
+				hideCopy
+				hideExplorerLink
 			/>
 		</ToggleGroup.Item>
 	);
