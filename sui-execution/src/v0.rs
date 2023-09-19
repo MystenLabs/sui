@@ -21,6 +21,7 @@ use sui_types::{
     type_resolver::LayoutResolver,
 };
 
+use move_bytecode_verifier_v0::meter::Scope;
 use move_vm_runtime_v0::move_vm::MoveVM;
 use sui_adapter_v0::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
@@ -35,6 +36,7 @@ use sui_verifier_v0::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
+use crate::verifier::{VerifierMeteredValues, VerifierOverrides};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -192,5 +194,33 @@ impl<'m> verifier::Verifier for Verifier<'m> {
             &mut self.meter,
             self.metrics,
         )
+    }
+
+    fn meter_compiled_modules_with_overrides(
+        &mut self,
+        modules: &[CompiledModule],
+        protocol_config: &ProtocolConfig,
+        config_overrides: &VerifierOverrides,
+    ) -> SuiResult<VerifierMeteredValues> {
+        let mut config = self.config.clone();
+        let max_per_fun_meter_current = config.max_per_fun_meter_units;
+        let max_per_mod_meter_current = config.max_per_mod_meter_units;
+        config.max_per_fun_meter_units = config_overrides.max_per_fun_meter_units;
+        config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
+        run_metered_move_bytecode_verifier(
+            modules,
+            protocol_config,
+            &config,
+            &mut self.meter,
+            self.metrics,
+        )?;
+        let fun_meter_units_result = self.meter.get_usage(Scope::Function);
+        let mod_meter_units_result = self.meter.get_usage(Scope::Function);
+        Ok(VerifierMeteredValues::new(
+            max_per_fun_meter_current,
+            max_per_mod_meter_current,
+            fun_meter_units_result,
+            mod_meter_units_result,
+        ))
     }
 }
