@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 24;
+const MAX_PROTOCOL_VERSION: u64 = 25;
 
 // Record history of protocol version allocations here:
 //
@@ -73,6 +73,7 @@ const MAX_PROTOCOL_VERSION: u64 = 24;
 // Version 24: Re-enable simple gas conservation checks.
 //             Package publish/upgrade number in a single transaction limited.
 //             JWK / authenticator state flags.
+// Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1453,6 +1454,20 @@ impl ProtocolConfig {
                         cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
+                }
+                25 => {
+                    // Enable zkLogin for all providers in all networks.
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::from([
+                        "Google".to_string(),
+                        "Facebook".to_string(),
+                        "Twitch".to_string(),
+                    ]);
+                    cfg.feature_flags.zklogin_auth = true;
+
+                    // Enable jwk consensus updates
+                    cfg.feature_flags.enable_jwk_consensus_updates = true;
+                    cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
+                    cfg.max_age_of_jwk_in_epochs = Some(1);
                 }
                 // Use this template when making changes:
                 //

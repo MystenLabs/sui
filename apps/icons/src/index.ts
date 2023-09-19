@@ -99,6 +99,7 @@ export { default as NftType3D24 } from './NftType3D24';
 export { default as NftTypeAudio24 } from './NftTypeAudio24';
 export { default as NftTypeImage24 } from './NftTypeImage24';
 export { default as NftTypeVideo24 } from './NftTypeVideo24';
+export { default as ObjectDetailsHeader } from './ObjectDetailsHeader';
 export { default as Ooo16 } from './Ooo16';
 export { default as Ooo24 } from './Ooo24';
 export { default as PaginationFirst24 } from './PaginationFirst24';

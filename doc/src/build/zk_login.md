@@ -4,7 +4,7 @@ title: About zkLogin
 
 zkLogin is a Sui primitive that lets wallets and apps link Sui objects with an OAuth credential—enabling users to perform transactions using both the credential and attached objects.
 
-zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, an zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
+zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, a zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
 
 zkLogin is designed with the following principles in mind:
 
@@ -20,7 +20,7 @@ zkLogin is designed with the following principles in mind:
 
 Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
 
-If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
+If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies a zkLogin transaction, see [this section](#how-zklogin-works).
 
 If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
 
@@ -28,7 +28,7 @@ More questions? See [this page](#faq).
 
 ## OpenID providers
 
-The following tables lists the OpenID providers and that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
+The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
 | Provider     | Can support? | Comments |
 | ------------ | ----------   | -------- |
@@ -66,7 +66,7 @@ To use the zkLogin TypeScript SDK in your project, run the following command in 
 npm install @mysten/zklogin
 
 # If you want to use the latest experimental version:
-npm install @mysten/zklogin@experimental
+        npm install @mysten/zklogin@experimental
 ```
 
 ## Configure a developer account with OpenID provider
@@ -88,17 +88,17 @@ For example, the following TypeScript code can be used in Devnet and Testnet to 
 const REDIRECT_URI = '<YOUR_SITE_URL>';
 
 const params = new URLSearchParams({
-  // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
-  state: new URLSearchParams({
-    redirect_uri: REDIRECT_URI
-  }).toString(),
-  // Test Client ID for devnet / testnet:
-  client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
-  redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
-  respond_type: 'id_token',
-  scope: 'openid',
-  // See below for details about generation of the nonce
-  nonce: nonce,
+   // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
+   state: new URLSearchParams({
+      redirect_uri: REDIRECT_URI
+   }).toString(),
+   // Test Client ID for devnet / testnet:
+   client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
+   redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
+   response_type: 'id_token',
+   scope: 'openid',
+   // See below for details about generation of the nonce
+   nonce: nonce,
 });
 
 const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
@@ -162,13 +162,13 @@ import { generateNonce, generateRandomness } from '@mysten/zklogin';
 const suiClient = await getActiveNetworkSuiClient();
 const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.getLatestSuiSystemState();
 
-const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now. 
+const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now.
 const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 ```
 
-The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce` as follows: 
+The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce` as follows:
 
 | Provider | URL |
 | ----------- | ----------- |
@@ -180,11 +180,11 @@ The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce`
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
 1. Client Side:
-    - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
-    - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
+   - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
+   - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
 2. Backend service that exposes an endpoint that returns a unique salt for each user consistently.
-    - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
-    - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
+   - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
+   - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
 Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
 
@@ -219,7 +219,7 @@ Note that only valid JWT token authenticated with dev-only client ID is supporte
 ```bash
 curl -X POST http://prover-devnet.mystenlabs.com:8080/zkp -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
 
-Response: 
+Response:
 
 `{"proofPoints":{"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
 ```
@@ -230,33 +230,33 @@ First, sign the transaction bytes with the ephemeral private key. This is the sa
   ```typescript
   const ephemeralKeyPair = new Ed25519Keypair();
 
-  const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
+const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
-  const txb = new TransactionBlock();
+const txb = new TransactionBlock();
 
-  const { bytes, signature: userSignature } = await txb.sign({
-    client,
-    signer: ephemeralKeyPair,
-  });
+const { bytes, signature: userSignature } = await txb.sign({
+   client,
+   signer: ephemeralKeyPair,
+});
   ```
-  
+
 Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
   ```typescript
   import { getZkSignature } from "@mysten/zklogin";
 
-  const zkSignature = getZkSignature({
-    inputs,
-    maxEpoch,
-    userSignature,
-  });
+const zkSignature = getZkSignature({
+   inputs,
+   maxEpoch,
+   userSignature,
+});
   ```
 
 Finally, execute the transaction.
   ```typescript
   client.executeTransactionBlock({
-    transactionBlock: bytes,
-    signature: zkSignature,
-  });
+   transactionBlock: bytes,
+   signature: zkSignature,
+});
   ```
 
 ## Add sponsored transaction support
@@ -446,9 +446,9 @@ However, a JWT leak does not mean loss of funds as long as the corresponding eph
 
 ## User Salt
 
-If the user loses the user salt, he loses access to the zkLogin wallet. The user salt is essential for both ZK proof generation and zkLogin address derivation.
+The user salt is required to get access to the zkLogin wallet. This value is essential for both ZK proof generation and zkLogin address derivation.
 
-The leak of user salt does not mean loss of funds, but it enables the attacker to associate the user's subject identifier (i.e. `sub`) with the Sui address. This can be problematic depending on whether pairwise or public subject identifiers are in use. In particular, there is no problem if pairwise IDs are used (e.g., Facebook) as the subject identifier is unique per RP. However, with public IDs (e.g., Google and Twitch), the globally unique sub value can be used to identify users.
+The leak of user salt does not mean loss of funds, but it enables the attacker to associate the user's subject identifier (i.e. `sub`) with the Sui address. This can be problematic depending on whether pairwise or public subject identifiers are in use. In particular, there is no problem if pairwise IDs are used (e.g., Facebook) as the subject identifier is unique per RP. However, with public reusable IDs (e.g., Google and Twitch), the globally unique sub value can be used to identify users.
 
 ## Ephemeral Private Key
 
@@ -477,23 +477,39 @@ zkLogin can support providers that work with OpenID Connect built on top of the 
 
 Traditional private key wallets demand users to consistently recall mnemonics and passphrases, necessitating secure storage to prevent fund loss from private key compromise.
 
-On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. A loss of ephemeral keys alone does not mean a loss of funds.
+On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting an ephemeral key does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
 
 ## How is zkLogin different from MPC or Multisig wallets?
 
 Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or distributing multiple key shares and then defining a threshold value for accepting a signature.
 
-zkLogin does not split any individual private keys, but ephemeral private keys are registered using nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
+zkLogin does not split any individual private keys, but ephemeral private keys are registered using a fresh nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
+
+You can think of zkLogin as a 2FA scheme for an address, where the first part is user's OAuth account and the second is the user's salt.
+
+Furthermore, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA in k-of-N settings.
+
+## If my OAuth account is compromised, what happens to my zkLogin address?
+
+Because zkLogin is a 2FA system, an attacker that has compromised your OAuth account cannot access your zkLogin address unless they have separately compromised your salt.
+
+## If I lose access to my OAuth account, do I lose access to my zkLogin address?
+
+Yes. You must be able to log into your OAuth account and produce a current JWT in order to use zkLogin.
 
 ## Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
 
-Yes. If someone gains access to the user's OAuth credentials, they can log in, obtain a legitimate JWT token, and subsequently forge valid ephemeral signatures and proofs using any ephemeral key. This means a loss of funds.
+A forgotten OAuth credential can typically be recovered by resetting the password in that provider.
+In the unfortunate event where user's OAuth credentials get compromised, an adversary will still require to obtain `user_salt`, but also learn which wallet is used in order to take over that account. Note that modern `user_salt` providers may have additional 2FA security measures in place to prevent provision of user's salt even to entities that present a valid, non-expired JWT.
 
-## Can I convert or merge a traditional private key wallet into a zkLogin one?
+It's also important to highlight that due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet used, targeted attacks by just monitoring the blockchain are more difficult.
+Finally, on the unfortunate event where one loses access to their OAuth account permanently, access to that wallet is lost. But if recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to support the native Sui Multisig functionality and add a backup method. Note that it's even possible to have a Multisig wallet that all signers are using zkLogin, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
 
-No. The zkLogin wallet address is derived differently compared to a private key address.  Currently, the zkLogin wallet lacks portability, necessitating asset transfers between a zkLogin wallet and a traditional one.
+## Can I convert or merge a traditional private key wallet into a zkLogin one, or vice versa?
 
-## Will my zkLogin Address ever change?
+No. The zkLogin wallet address is derived differently compared to a private key address.
+
+## Will my zkLogin address ever change?
 
 zkLogin address is derived from `sub`, `iss`, `aud` and `user_salt`.
 
@@ -505,13 +521,17 @@ In addition, each wallet or application maintains its own `user_salt`, so loggin
 
 See more on address [definition](#address-definition).
 
+## Can I have multiple addresses with the same OAuth provider?
+
+Yes, this is possible by using a different wallet provider or different `user_salt` for each account. This is useful for separating funds between different accounts.
+
 ## Is a zkLogin Wallet custodial?
 
 A zkLogin wallet is a non-custodial or unhosted wallet.
 
 A custodial or hosted wallet is where a third party (the custodian) controls the private keys on behalf of a wallet user. No such third-party exists for zkLogin wallets.
 
-Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two credentials are the user's OAuth credentials (maintained by the user) and the salt. In other words, neither the OAuth provider, the ZK proving service or the salt service provider (if not maintained by the user) is a custodian.
+Instead, a zkLogin wallet can be viewed as a 2-out-of-2 Multisig where the two credentials are the user's OAuth credentials (maintained by the user) and the salt. In other words, neither the OAuth provider, the wallet vendor, the ZK proving service or the salt service provider is a custodian.
 
 ## Generating a ZK proof is expensive, is a new proof required to be generated for every transaction?
 
@@ -519,7 +539,7 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 
 ## Does zkLogin work on mobile?
 
-zkLogin works with any wallet that is whitelisted and has completed integration with it, including mobile wallets.
+zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
 
 ## Can I run my own ZK Proving Service?
 

@@ -27,7 +27,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
@@ -846,18 +846,15 @@ fn create_genesis_transaction(
                 signer,
                 genesis_digest,
             );
-        assert!(inner_temp_store.objects.is_empty());
+        assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
-        assert!(inner_temp_store.deleted.is_empty());
+        assert!(effects.mutated().is_empty());
+        assert!(effects.unwrapped().is_empty());
+        assert!(effects.deleted().is_empty());
+        assert!(effects.wrapped().is_empty());
+        assert!(effects.unwrapped_then_deleted().is_empty());
 
-        let objects = inner_temp_store
-            .written
-            .into_iter()
-            .map(|(_, (_, o, kind))| {
-                assert_eq!(kind, sui_types::storage::WriteKind::Create);
-                o
-            })
-            .collect();
+        let objects = inner_temp_store.written.into_values().collect();
         (effects, inner_temp_store.events, objects)
     };
 
