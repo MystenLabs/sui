@@ -24,6 +24,7 @@ import {
 	entropyToSerialized,
 	entropyToMnemonic,
 	validateEntropy,
+	toEntropy,
 } from '_shared/utils/bip39';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 
@@ -67,14 +68,10 @@ export class MnemonicAccountSource extends AccountSource<
 		if (!validateEntropy(entropy)) {
 			throw new Error("Can't create Mnemonic account source, invalid entropy");
 		}
-		const decryptedData: DataDecrypted = {
-			entropyHex: entropyToSerialized(entropy),
-			mnemonicSeedHex: mnemonicToSeedHex(entropyToMnemonic(entropy)),
-		};
 		const dataSerialized: MnemonicAccountSourceSerialized = {
 			id: makeUniqueKey(),
 			type: 'mnemonic',
-			encryptedData: await encrypt(password, decryptedData),
+			encryptedData: await MnemonicAccountSource.createEncryptedData(entropy, password),
 			sourceHash: bytesToHex(sha256(entropy)),
 			createdAt: Date.now(),
 		};
@@ -111,6 +108,14 @@ export class MnemonicAccountSource extends AccountSource<
 			accountSourcesEvents.emit('accountSourcesChanged');
 		}
 		return new MnemonicAccountSource(serialized.id);
+	}
+
+	static createEncryptedData(entropy: Uint8Array, password: string) {
+		const decryptedData: DataDecrypted = {
+			entropyHex: entropyToSerialized(entropy),
+			mnemonicSeedHex: mnemonicToSeedHex(entropyToMnemonic(entropy)),
+		};
+		return encrypt(password, decryptedData);
 	}
 
 	constructor(id: string) {
@@ -178,6 +183,14 @@ export class MnemonicAccountSource extends AccountSource<
 
 	get sourceHash() {
 		return this.getStoredData().then(({ sourceHash }) => sourceHash);
+	}
+
+	async verifyRecoveryData(entropy: string) {
+		const newEntropyHash = bytesToHex(sha256(toEntropy(entropy)));
+		if (newEntropyHash !== (await this.sourceHash)) {
+			throw new Error("Wrong passphrase, doesn't match the existing one");
+		}
+		return true;
 	}
 
 	async #getAvailableDerivationPath() {

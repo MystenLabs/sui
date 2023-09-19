@@ -1,75 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { isBasePayload } from '_payloads';
-import { type SerializedLedgerAccount } from '_src/background/keyring/LedgerAccount';
 
 import type { BasePayload, Payload } from '_payloads';
-import type { SerializedAccount } from '_src/background/keyring/Account';
 
 type MethodToPayloads = {
-	/**
-	 * @deprecated
-	 */
-	create: {
-		args: { password: string; importedEntropy?: string };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	unlock: {
-		args: { password: string };
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	walletStatusUpdate: {
-		args: void;
-		return: {
-			isLocked: boolean;
-			isInitialized: boolean;
-			accounts: SerializedAccount[];
-			activeAddress: string | null;
-		};
-	};
-	/**
-	 * @deprecated
-	 */
-	lock: {
-		args: void;
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	clear: {
-		args: void;
-		return: void;
-	};
-	/**
-	 * @deprecated
-	 */
-	signData: {
-		args: { data: string; address: string };
-		return: SerializedSignature;
-	};
-	/**
-	 * @deprecated
-	 */
-	deriveNextAccount: {
-		args: void;
-		return: { accountAddress: string };
-	};
-	/**
-	 * @deprecated
-	 */
-	importLedgerAccounts: {
-		args: { ledgerAccounts: SerializedLedgerAccount[] };
-		return: void;
-	};
 	/**
 	 * @deprecated
 	 */

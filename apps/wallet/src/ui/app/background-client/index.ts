@@ -16,7 +16,6 @@ import { createMessage } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
 import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
-import { isKeyringPayload } from '_payloads/keyring';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
@@ -143,43 +142,6 @@ export class BackgroundClient {
 		);
 	}
 
-	public createVault(password: string, importedEntropy?: string) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'create'>>({
-					type: 'keyring',
-					method: 'create',
-					args: { password, importedEntropy },
-					return: undefined,
-				}),
-			).pipe(take(1)),
-		);
-	}
-
-	public unlockWallet(password: string) {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'unlock'>>({
-					type: 'keyring',
-					method: 'unlock',
-					args: { password },
-					return: undefined,
-				}),
-			).pipe(take(1)),
-		);
-	}
-
-	public lockWallet() {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'lock'>>({
-					type: 'keyring',
-					method: 'lock',
-				}),
-			).pipe(take(1)),
-		);
-	}
-
 	public clearWallet() {
 		return lastValueFrom(
 			this.sendMessage(
@@ -232,25 +194,6 @@ export class BackgroundClient {
 					args: { accountID },
 				}),
 			).pipe(take(1)),
-		);
-	}
-
-	public deriveNextAccount() {
-		return lastValueFrom(
-			this.sendMessage(
-				createMessage<KeyringPayload<'deriveNextAccount'>>({
-					type: 'keyring',
-					method: 'deriveNextAccount',
-				}),
-			).pipe(
-				take(1),
-				map(({ payload }) => {
-					if (isKeyringPayload(payload, 'deriveNextAccount') && payload.return) {
-						return payload.return.accountAddress;
-					}
-					throw new Error('Error unknown response for derive account message');
-				}),
-			),
 		);
 	}
 
@@ -582,6 +525,30 @@ export class BackgroundClient {
 					type: 'method-payload',
 					method: 'notifyUserActive',
 					args: {},
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public resetPassword(args: MethodPayload<'resetPassword'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'resetPassword'>>({
+					type: 'method-payload',
+					method: 'resetPassword',
+					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
+	public verifyPasswordRecoveryData(args: MethodPayload<'verifyPasswordRecoveryData'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'verifyPasswordRecoveryData'>>({
+					type: 'method-payload',
+					method: 'verifyPasswordRecoveryData',
+					args,
 				}),
 			).pipe(take(1)),
 		);

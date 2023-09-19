@@ -142,7 +142,7 @@ function SiteConnectPage() {
 								<div className="flex flex-col gap-3">
 									<SectionHeader title="Locked & Unavailable" />
 									{lockedAccounts?.map((account) => (
-										<AccountListItem key={account.id} selected={false} account={account} />
+										<AccountListItem key={account.id} account={account} showLock />
 									))}
 								</div>
 							)}
