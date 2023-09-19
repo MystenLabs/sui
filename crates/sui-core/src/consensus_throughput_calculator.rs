@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::AuthorityMetrics;
-use arc_swap::ArcSwapOption;
+use arc_swap::ArcSwap;
 use narwhal_types::TimestampMs;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, VecDeque};
@@ -12,20 +12,35 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 const DEFAULT_OBSERVATIONS_WINDOW: u64 = 120; // number of observations to use to calculate the past traffic
-const DEFAULT_TRAFFIC_PROFILE_UPDATE_WINDOW_SECS: u64 = 60; // seconds that need to pass between two consenqutive traffic profile updates
+const DEFAULT_TRAFFIC_PROFILE_UPDATE_WINDOW_SECS: u64 = 60; // seconds that need to pass between two consecutive traffic profile updates
+const DEFAULT_TRAFFIC_PROFILE_COOL_DOWN_THROUGHPUT_THRESHOLD: u64 = 10; // 10% of throughput
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialOrd)]
 pub enum TrafficProfile {
-    Low,
-    High,
+    Low(u64),
+    High(u64),
 }
 
 impl TrafficProfile {
     fn as_int(&self) -> usize {
         match self {
-            TrafficProfile::Low => 0,
-            TrafficProfile::High => 1,
+            TrafficProfile::Low(_) => 0,
+            TrafficProfile::High(_) => 1,
         }
+    }
+
+    /// The throughput threshold is the upper throughput bound that this profile is supporting.
+    fn throughput_threshold(&self) -> u64 {
+        match self {
+            TrafficProfile::Low(throughput) => *throughput,
+            TrafficProfile::High(throughput) => *throughput,
+        }
+    }
+}
+
+impl PartialEq<TrafficProfile> for TrafficProfile {
+    fn eq(&self, other: &TrafficProfile) -> bool {
+        self.as_int() == other.as_int()
     }
 }
 
@@ -35,27 +50,30 @@ pub struct TrafficProfileRangesBuilder {
 }
 
 impl TrafficProfileRangesBuilder {
-    /// Adds a new profile with its upper range threshold. Ex if the values (2000, TrafficProfile::MIN) are provided,
+    /// Adds a new profile with its upper range throughput. Ex if the TrafficProfile::MIN(2000) are provided,
     /// then for provided throughput <= 2000 the traffic profile MIN will be returned.
-    pub fn add_profile(
-        mut self,
-        upper_threshold: u64,
-        profile: TrafficProfile,
-    ) -> TrafficProfileRangesBuilder {
+    pub fn add_profile(mut self, profile: TrafficProfile) -> TrafficProfileRangesBuilder {
         assert!(
-            self.profiles.insert(upper_threshold, profile).is_none(),
+            self.profiles
+                .insert(profile.throughput_threshold(), profile)
+                .is_none(),
             "{}",
             format!(
                 "Attempted to add overriding profile for same upper threshold {} {:?}",
-                upper_threshold, profile
+                profile.throughput_threshold(),
+                profile
             )
         );
         self
     }
 
     /// Adds a traffic profile that should be returned after the penultimate profile.
-    pub fn add_max_threshold_profile(self, profile: TrafficProfile) -> TrafficProfileRangesBuilder {
-        self.add_profile(u64::MAX, profile)
+    pub fn add_last_throughput_profile(
+        self,
+        profile: TrafficProfile,
+    ) -> TrafficProfileRangesBuilder {
+        assert_eq!(profile.throughput_threshold(), u64::MAX); // last throughput profile should always be the maximum value
+        self.add_profile(profile)
     }
 
     pub fn build(self) -> Result<TrafficProfileRanges, String> {
@@ -72,16 +90,24 @@ impl TrafficProfileRangesBuilder {
 }
 
 pub struct TrafficProfileRanges {
+    /// Holds the traffic profiles by the traffic range (upper_throughput, cool_down_threshold)
     profiles: BTreeMap<u64, TrafficProfile>,
 }
 
 impl TrafficProfileRanges {
+    pub fn lowest_profile(&self) -> TrafficProfile {
+        *self
+            .profiles
+            .first_key_value()
+            .expect("Should contain at least one traffic profile")
+            .1
+    }
     /// Resolves the traffic profile that corresponds to the provided throughput. The method guarantees
     /// to always return a profile if the TrafficProfileRangesBuilder has been used to create the
     /// TrafficProfileRanges. In any other case a panic will be raised.
-    pub fn resolve(&self, throughput: u64) -> TrafficProfile {
+    pub fn resolve(&self, current_throughput: u64) -> TrafficProfile {
         for (threshold, profile) in &self.profiles {
-            if *threshold >= throughput {
+            if current_throughput <= *threshold {
                 return *profile;
             }
         }
@@ -92,8 +118,8 @@ impl TrafficProfileRanges {
 impl Default for TrafficProfileRanges {
     fn default() -> Self {
         TrafficProfileRangesBuilder::default()
-            .add_profile(2_000, TrafficProfile::Low)
-            .add_max_threshold_profile(TrafficProfile::High)
+            .add_profile(TrafficProfile::Low(2_000))
+            .add_last_throughput_profile(TrafficProfile::High(u64::MAX))
             .build()
             .unwrap()
     }
@@ -129,8 +155,12 @@ pub struct ConsensusThroughputCalculator {
     /// we switch at point T to profile "Low", there will need to be passed at least `traffic_profile_update_window`
     /// seconds until the traffic profile gets updated to a different value.
     traffic_profile_update_window: TimestampSecs,
+    /// When current throughput (A) is lower than previous (B), we'll change to the lower profile
+    /// only when (A) <= (B) * (100 - traffic_profile_cool_down_throughput_threshold) / 100. Otherwise we'll stick to the previous profile.
+    /// We want to do that to avoid any jittery behaviour that alternates between two profiles.
+    traffic_profile_cool_down_throughput_threshold: u64,
     inner: Mutex<ConsensusThroughputCalculatorInner>,
-    last_traffic_profile: ArcSwapOption<TrafficProfileEntry>,
+    last_traffic_profile: ArcSwap<TrafficProfileEntry>,
     current_throughput: AtomicU64,
     metrics: Arc<AuthorityMetrics>,
     profile_ranges: TrafficProfileRanges,
@@ -140,6 +170,7 @@ impl ConsensusThroughputCalculator {
     pub fn new(
         observations_window: Option<NonZeroU64>,
         traffic_profile_update_window: Option<TimestampSecs>,
+        traffic_profile_cool_down_throughput_threshold: Option<u64>,
         metrics: Arc<AuthorityMetrics>,
         profile_ranges: TrafficProfileRanges,
     ) -> Self {
@@ -148,18 +179,31 @@ impl ConsensusThroughputCalculator {
         let observations_window = observations_window
             .unwrap_or(NonZeroU64::new(DEFAULT_OBSERVATIONS_WINDOW).unwrap())
             .get();
+        let traffic_profile_cool_down_throughput_threshold =
+            traffic_profile_cool_down_throughput_threshold
+                .unwrap_or(DEFAULT_TRAFFIC_PROFILE_COOL_DOWN_THROUGHPUT_THRESHOLD);
 
         assert!(
             traffic_profile_update_window > 0,
             "traffic_profile_update_window should be >= 0"
         );
 
+        assert!(
+            (0..=30).contains(&traffic_profile_cool_down_throughput_threshold),
+            "Out of bounds provided cool down threshold offset"
+        );
+
         Self {
             observations_window,
             traffic_profile_update_window,
             inner: Mutex::new(ConsensusThroughputCalculatorInner::default()),
-            last_traffic_profile: ArcSwapOption::empty(), // assume high traffic so the node is more conservative on bootstrap
+            last_traffic_profile: ArcSwap::from_pointee(TrafficProfileEntry {
+                profile: profile_ranges.lowest_profile(),
+                timestamp: 0,
+                throughput: 0,
+            }), // assume high traffic so the node is more conservative on bootstrap
             current_throughput: AtomicU64::new(0),
+            traffic_profile_cool_down_throughput_threshold,
             metrics,
             profile_ranges,
         }
@@ -241,16 +285,26 @@ impl ConsensusThroughputCalculator {
     // To ensure that we are protected against traffic profile change fluctuations, we only change a
     // traffic profile when `traffic_profile_update_window` seconds have passed since last update.
     fn update_traffic_profile(&self, throughput: u64, timestamp: TimestampSecs) {
+        let last_profile = self.last_traffic_profile.load();
         let profile = self.profile_ranges.resolve(throughput);
 
-        let should_update_profile = self.last_traffic_profile.load().as_ref().map_or_else(
-            || true,
-            |entry| {
-                // update only when we have a new profile
-                profile != entry.profile
-                    && timestamp - entry.timestamp >= self.traffic_profile_update_window
-            },
-        );
+        // update only when we have a new profile & minimum time has been passed since last update
+        let should_update_profile = if profile != last_profile.profile
+            && timestamp - last_profile.timestamp >= self.traffic_profile_update_window
+        {
+            if profile < last_profile.profile {
+                // If new profile is smaller than previous one, then make sure the cool down threshold is respected
+                let min_throughput = profile
+                    .throughput_threshold()
+                    .saturating_mul(100 - self.traffic_profile_cool_down_throughput_threshold)
+                    / 100;
+                throughput <= min_throughput
+            } else {
+                true
+            }
+        } else {
+            false
+        };
 
         if should_update_profile {
             let p = TrafficProfileEntry {
@@ -259,8 +313,7 @@ impl ConsensusThroughputCalculator {
                 throughput,
             };
             info!("Updating traffic profile to {:?}", p);
-            println!("Updating traffic profile to {:?}", p);
-            self.last_traffic_profile.store(Some(Arc::new(p)));
+            self.last_traffic_profile.store(Arc::new(p));
         }
 
         // Also update the current throughput
@@ -278,16 +331,12 @@ impl ConsensusThroughputCalculator {
     // If that is not set yet then as default the High profile is returned and the throughput will be None.
     pub fn traffic_profile(&self) -> (TrafficProfile, u64) {
         let profile = self.last_traffic_profile.load();
-        profile.as_ref().map_or_else(
-            || (TrafficProfile::Low, 0),
-            |entry| (entry.profile, entry.throughput),
-        )
+        (profile.profile, profile.throughput)
     }
 
     // Returns the current (live calculated) throughput. If want to get the current throughput use
     // this method. If want to figure out what was the throughput when the traffic profile was last
     // calculated then use the traffic_profile() method.
-    #[allow(unused)]
     pub fn current_throughput(&self) -> u64 {
         self.current_throughput.load(Relaxed)
     }
@@ -302,19 +351,19 @@ mod tests {
     #[test]
     pub fn test_traffic_profile_ranges_builder() {
         let ranges = TrafficProfileRangesBuilder::default()
-            .add_profile(2_000, Low)
-            .add_max_threshold_profile(High)
+            .add_profile(Low(2_000))
+            .add_last_throughput_profile(High(u64::MAX))
             .build()
             .unwrap();
 
-        assert_eq!(ranges.resolve(0), Low);
-        assert_eq!(ranges.resolve(1_000), Low);
-        assert_eq!(ranges.resolve(2_000), Low);
-        assert_eq!(ranges.resolve(2_001), High);
-        assert_eq!(ranges.resolve(u64::MAX), High);
+        assert_eq!(ranges.resolve(0), Low(2_000));
+        assert_eq!(ranges.resolve(1_000), Low(2_000));
+        assert_eq!(ranges.resolve(2_000), Low(2_000));
+        assert_eq!(ranges.resolve(2_001), High(u64::MAX));
+        assert_eq!(ranges.resolve(u64::MAX), High(u64::MAX));
 
         // When omitting to add the max threshold profile, the build method should return an error
-        let builder = TrafficProfileRangesBuilder::default().add_profile(2_000, Low);
+        let builder = TrafficProfileRangesBuilder::default().add_profile(Low(2_000));
 
         assert!(builder.build().is_err());
     }
@@ -324,67 +373,59 @@ mod tests {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let traffic_profile_update_window: TimestampSecs = 5;
         let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
+        let traffic_profile_cool_down_throughput_threshold: u64 = 10;
 
         let ranges = TrafficProfileRangesBuilder::default()
-            .add_profile(2_000, Low)
-            .add_max_threshold_profile(High)
+            .add_profile(Low(2_000))
+            .add_last_throughput_profile(High(u64::MAX))
             .build()
             .unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
             Some(max_observation_points),
             Some(traffic_profile_update_window),
+            Some(traffic_profile_cool_down_throughput_threshold),
             metrics,
             ranges,
         );
 
         // When no transactions exists, the calculator will return by default "High" to err on the
         // assumption that there is lots of load.
-        assert_eq!(calculator.traffic_profile(), (Low, 0));
+        assert_eq!(calculator.traffic_profile(), (Low(2_000), 0));
 
         calculator.add_transactions(1000 as TimestampMs, 1_000);
         calculator.add_transactions(2000 as TimestampMs, 1_000);
         calculator.add_transactions(3000 as TimestampMs, 1_000);
         calculator.add_transactions(4000 as TimestampMs, 1_000);
 
-        // We expect to have a rate of 1K tx/sec, that's < 2K limit , so traffic profile is set to "low"
-        assert_eq!(calculator.traffic_profile(), (Low, 1_000));
-
-        // We add more transactions to go over 2K tx/sec, but time window threshold not satisfied yet,
-        // and the profile is not updated yet
-        calculator.add_transactions(5_000 as TimestampMs, 2_500);
-        calculator.add_transactions(6_000 as TimestampMs, 2_800);
-        calculator.add_transactions(7_000 as TimestampMs, 2_500);
-
-        assert_eq!(calculator.traffic_profile(), (Low, 1000));
+        // We expect to have a rate of 1K tx/sec, that's < 2K limit , so traffic profile remains to "low" - nothing gets updated
+        assert_eq!(calculator.traffic_profile(), (Low(2_000), 0));
 
         // We are adding more transactions to get over 2K tx/sec, so traffic profile should now be categorised
         // as "high"
-        calculator.add_transactions(8_000 as TimestampMs, 2_500);
-        calculator.add_transactions(9_000 as TimestampMs, 3_000);
-
-        assert_eq!(calculator.traffic_profile(), (High, 2666));
-        assert_eq!(calculator.current_throughput(), 2666);
+        calculator.add_transactions(5_000 as TimestampMs, 2_500);
+        calculator.add_transactions(6_000 as TimestampMs, 2_800);
+        assert_eq!(calculator.traffic_profile(), (High(u64::MAX), 2100));
 
         // Let's now add 0 transactions after 5 seconds. Since 5 seconds have passed since the last
         // update and now the transactions are 0 we expect the traffic to be calculate as:
-        // 3000 + 2500 + 0 = 5500 / 15 - 7sec = 5500 / 8sec = 687 tx/sec
+        // 2800 + 2500 + 0 = 5300 / 15 - 4sec = 5300 / 11sec = 302 tx/sec
         calculator.add_transactions(15_000 as TimestampMs, 0);
 
-        assert_eq!(calculator.traffic_profile(), (Low, 687));
-        assert_eq!(calculator.current_throughput(), 687);
+        assert_eq!(calculator.traffic_profile(), (Low(2_000), 481));
+        assert_eq!(calculator.current_throughput(), 481);
 
         // Adding zero transactions for the next 5 seconds will make throughput zero
         // Traffic profile will remain as Low as it won't get updated.
         calculator.add_transactions(17_000 as TimestampMs, 0);
-        assert_eq!(calculator.current_throughput(), 333);
+        assert_eq!(calculator.current_throughput(), 233);
 
         calculator.add_transactions(19_000 as TimestampMs, 0);
         assert_eq!(calculator.current_throughput(), 0);
 
         calculator.add_transactions(20_000 as TimestampMs, 0);
 
-        assert_eq!(calculator.traffic_profile(), (Low, 687));
+        assert_eq!(calculator.traffic_profile(), (Low(2_000), 481));
         assert_eq!(calculator.current_throughput(), 0);
 
         // By adding now a few entries with lots of transactions will trigger a traffic profile update
@@ -393,7 +434,49 @@ mod tests {
         calculator.add_transactions(22_000 as TimestampMs, 2_000);
         calculator.add_transactions(23_000 as TimestampMs, 3_100);
         assert_eq!(calculator.current_throughput(), 2033);
-        assert_eq!(calculator.traffic_profile(), (High, 2033));
+        assert_eq!(calculator.traffic_profile(), (High(u64::MAX), 2033));
+    }
+
+    #[test]
+    pub fn test_consensus_throughput_calculator_cool_down() {
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let traffic_profile_update_window: TimestampSecs = 3;
+        let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
+        let traffic_profile_cool_down_throughput_threshold: u64 = 10;
+
+        let ranges = TrafficProfileRangesBuilder::default()
+            .add_profile(Low(2_000))
+            .add_last_throughput_profile(High(u64::MAX))
+            .build()
+            .unwrap();
+
+        let calculator = ConsensusThroughputCalculator::new(
+            Some(max_observation_points),
+            Some(traffic_profile_update_window),
+            Some(traffic_profile_cool_down_throughput_threshold),
+            metrics,
+            ranges,
+        );
+
+        // Adding 4 observations of 3_000 tx/sec, so in the end traffic profile should be flagged as high
+        for i in 1..=4 {
+            calculator.add_transactions(i * 1_000, 3_000);
+        }
+        assert_eq!(calculator.traffic_profile(), (High(u64::MAX), 3_000));
+
+        // Now let's add some transactions to bring throughput little bit bellow the upper Low threshold (2000 tx/sec)
+        // but still above the 10% offset which is 1800 tx/sec.
+        calculator.add_transactions(5_000, 1_900);
+        calculator.add_transactions(6_000, 1_900);
+        calculator.add_transactions(7_000, 1_900);
+
+        assert_eq!(calculator.traffic_profile(), (High(u64::MAX), 3_000));
+
+        // Let's bring down more throughput - now the traffic profile should get updated
+        calculator.add_transactions(8_000, 1_500);
+        calculator.add_transactions(9_000, 1_500);
+
+        assert_eq!(calculator.traffic_profile(), (Low(2_000), 1766));
     }
 
     #[test]
@@ -403,14 +486,15 @@ mod tests {
         let max_observation_points: NonZeroU64 = NonZeroU64::new(2).unwrap();
 
         let ranges = TrafficProfileRangesBuilder::default()
-            .add_profile(100, Low)
-            .add_max_threshold_profile(High)
+            .add_profile(Low(100))
+            .add_last_throughput_profile(High(u64::MAX))
             .build()
             .unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
             Some(max_observation_points),
             Some(traffic_profile_update_window),
+            None,
             metrics,
             ranges,
         );
@@ -424,12 +508,12 @@ mod tests {
         }
 
         // should not produce more than one record to trigger a throughput change
-        assert_eq!(calculator.traffic_profile().0, Low);
+        assert_eq!(calculator.traffic_profile().0, Low(100));
 
         // Adding now one observation will trigger a profile change
-        calculator.add_transactions(4_000, 0);
+        calculator.add_transactions(5_000, 0);
 
-        assert_eq!(calculator.traffic_profile().0, High);
-        assert_eq!(calculator.current_throughput(), 333);
+        assert_eq!(calculator.traffic_profile().0, High(u64::MAX));
+        assert_eq!(calculator.current_throughput(), 250);
     }
 }
