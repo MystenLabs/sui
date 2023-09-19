@@ -5,8 +5,8 @@ use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
 
 use super::big_int::BigInt;
+use super::digest::Digest;
 use super::name_service::NameService;
-use super::tx_digest::TransactionDigest;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -23,7 +23,7 @@ pub(crate) struct Object {
     pub storage_rebate: Option<BigInt>,
     pub owner: Option<SuiAddress>,
     pub bcs: Option<Base64>,
-    pub previous_transaction: Option<TransactionDigest>,
+    pub previous_transaction: Option<Digest>,
     pub kind: Option<ObjectKind>,
 }
 

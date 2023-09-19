@@ -47,10 +47,8 @@ ResolvedGraph {
             "D",
             "test",
         },
-        manifest_digest: Some(
-            "2108F9760A5B783CE76062DC34B8D077F9EEC6D3422472558BE25966949EEC35",
-        ),
-        deps_digest: None,
+        manifest_digest: "2108F9760A5B783CE76062DC34B8D077F9EEC6D3422472558BE25966949EEC35",
+        deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
         dev_mode: true,

@@ -6,6 +6,7 @@ use std::os::unix::prelude::FileExt;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
 
 use expect_test::expect;
+use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
@@ -899,6 +900,52 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
         "{}",
         err
     );
+    Ok(())
+}
+
+#[sim_test]
+async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(address, None, None, None)
+        .await?
+        .data;
+
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("module_publish_with_nonexistent_dependency");
+    let mut build_config: MoveBuildConfig = BuildConfig::new_for_testing().config;
+    // this would have been the result of calling `sui client publish --test`
+    build_config.test_mode = true;
+
+    let result = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        gas: Some(gas_obj_id),
+        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        skip_dependency_verification: false,
+        with_unpublished_dependencies: false,
+        serialize_unsigned_transaction: false,
+        serialize_signed_transaction: false,
+        lint: false,
+    }
+    .execute(context)
+    .await;
+
+    let expect = expect![[r#"
+        Err(
+            ModulePublishFailure {
+                error: "The `publish` subcommand should not be used with the `--test` flag\n\nCode in published packages must not depend on test code.\nIn order to fix this and publish the package without `--test`, remove any non-test dependencies on test-only code.\nYou can ensure all test-only dependencies have been removed by compiling the package normally with `sui move build`.",
+            },
+        )
+    "#]];
+    expect.assert_debug_eq(&result);
     Ok(())
 }
 

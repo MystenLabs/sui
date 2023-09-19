@@ -2386,7 +2386,7 @@ impl InputObjects {
             .collect()
     }
 
-    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
+    pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
         self.objects
             .iter()
             .filter_map(|(kind, object)| match kind {
@@ -2395,12 +2395,13 @@ impl InputObjects {
                     if object.is_immutable() {
                         None
                     } else {
-                        Some(*object_ref)
+                        Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
                     }
                 }
                 InputObjectKind::SharedMoveObject { mutable, .. } => {
                     if *mutable {
-                        Some(object.compute_object_reference())
+                        let oref = object.compute_object_reference();
+                        Some((oref.0, ((oref.1, oref.2), object.owner)))
                     } else {
                         None
                     }

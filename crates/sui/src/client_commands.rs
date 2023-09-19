@@ -732,6 +732,21 @@ impl SuiClientCommands {
                 serialize_signed_transaction,
                 lint,
             } => {
+                if build_config.test_mode {
+                    return Err(SuiError::ModulePublishFailure {
+                        error:
+                            "The `publish` subcommand should not be used with the `--test` flag\n\
+                            \n\
+                            Code in published packages must not depend on test code.\n\
+                            In order to fix this and publish the package without `--test`, \
+                            remove any non-test dependencies on test-only code.\n\
+                            You can ensure all test-only dependencies have been removed by \
+                            compiling the package normally with `sui move build`."
+                                .to_string(),
+                    }
+                    .into());
+                }
+
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 

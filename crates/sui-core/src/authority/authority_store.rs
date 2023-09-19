@@ -23,7 +23,7 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectKey, ObjectStore,
+    get_module_by_id, BackingPackageStore, ChildObjectResolver, ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -943,6 +943,7 @@ impl AuthorityStore {
         self.update_objects_and_locks(
             &mut write_batch,
             inner_temporary_store,
+            effects,
             transaction,
             epoch_id,
         )
@@ -991,8 +992,8 @@ impl AuthorityStore {
         // concurrent transaction executions produce independent ref count increments and don't corrupt the state
         let digests = inner_temporary_store
             .written
-            .iter()
-            .filter_map(|(_, (_, object, _))| {
+            .values()
+            .filter_map(|object| {
                 let StoreObjectPair(_, indirect_object) =
                     get_store_object_pair(object.clone(), self.indirect_objects_threshold);
                 indirect_object.map(|obj| obj.inner().digest())
@@ -1006,50 +1007,59 @@ impl AuthorityStore {
         &self,
         write_batch: &mut DBBatch,
         inner_temporary_store: InnerTemporaryStore,
+        effects: &TransactionEffects,
         _transaction: &VerifiedTransaction,
         _epoch_id: EpochId,
     ) -> SuiResult {
         let InnerTemporaryStore {
-            objects,
-            mutable_inputs: active_inputs,
+            input_objects: _,
+            mutable_inputs,
             written,
-            deleted,
             events,
             max_binary_format_version: _,
             loaded_child_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
         } = inner_temporary_store;
-        trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
+        trace!(written =? written.iter().map(|(obj_id, obj)| (obj_id, obj.version())).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
-        let owned_inputs: Vec<_> = active_inputs
-            .iter()
-            .filter(|(id, _, _)| objects.get(id).unwrap().is_address_owned())
-            .cloned()
+        let owned_inputs: Vec<_> = mutable_inputs
+            .into_iter()
+            .filter_map(|(id, ((version, digest), owner))| {
+                owner.is_address_owned().then_some((id, version, digest))
+            })
             .collect();
 
-        write_batch.insert_batch(
-            &self.perpetual_tables.objects,
-            deleted.iter().map(|(object_id, (version, kind))| {
-                let tombstone: StoreObjectWrapper = if *kind == DeleteKind::Wrap {
-                    StoreObject::Wrapped.into()
-                } else {
-                    StoreObject::Deleted.into()
-                };
-                (ObjectKey(*object_id, *version), tombstone)
-            }),
-        )?;
+        let tombstones = effects
+            .deleted()
+            .into_iter()
+            .chain(effects.unwrapped_then_deleted())
+            .map(|oref| (oref, StoreObject::Deleted))
+            .chain(
+                effects
+                    .wrapped()
+                    .into_iter()
+                    .map(|oref| (oref, StoreObject::Wrapped)),
+            )
+            .map(|(oref, store_object)| {
+                (
+                    ObjectKey::from(oref),
+                    StoreObjectWrapper::from(store_object),
+                )
+            });
+        write_batch.insert_batch(&self.perpetual_tables.objects, tombstones)?;
 
         // Insert each output object into the stores
         let (new_objects, new_indirect_move_objects): (Vec<_>, Vec<_>) = written
             .iter()
-            .map(|(_, (obj_ref, new_object, _))| {
-                debug!(?obj_ref, "writing object");
+            .map(|(id, new_object)| {
+                let version = new_object.version();
+                debug!(?id, ?version, "writing object");
                 let StoreObjectPair(store_object, indirect_object) =
                     get_store_object_pair(new_object.clone(), self.indirect_objects_threshold);
                 (
-                    (ObjectKey::from(obj_ref), store_object),
+                    (ObjectKey(*id, version), store_object),
                     indirect_object.map(|obj| (obj.inner().digest(), obj)),
                 )
             })
@@ -1093,10 +1103,10 @@ impl AuthorityStore {
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
 
         let new_locks_to_init: Vec<_> = written
-            .iter()
-            .filter_map(|(_, (object_ref, new_object, _kind))| {
+            .values()
+            .filter_map(|new_object| {
                 if new_object.is_address_owned() {
-                    Some(*object_ref)
+                    Some(new_object.compute_object_reference())
                 } else {
                     None
                 }

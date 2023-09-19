@@ -9,10 +9,8 @@ ResolvedGraph {
         always_deps: {
             "name",
         },
-        manifest_digest: Some(
-            "FC0696A769A6ACA88ED23495C9051F1D8389D2A70675D9C35E54DC67C793DFC7",
-        ),
-        deps_digest: None,
+        manifest_digest: "FC0696A769A6ACA88ED23495C9051F1D8389D2A70675D9C35E54DC67C793DFC7",
+        deps_digest: "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
     },
     build_options: BuildConfig {
         dev_mode: true,

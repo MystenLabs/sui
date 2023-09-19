@@ -34,7 +34,6 @@ use sui_types::{
 pub(crate) mod object_store;
 
 use object_store::ChildObjectStore;
-use sui_types::base_types::ObjectDigest;
 
 use self::object_store::{ChildObjectEffect, ObjectResult};
 
@@ -65,8 +64,6 @@ pub(crate) struct TestInventories {
 
 pub struct LoadedRuntimeObject {
     pub version: SequenceNumber,
-    pub digest: ObjectDigest,
-    pub owner: Owner,
     pub is_modified: bool,
 }
 
@@ -293,7 +290,7 @@ impl<'a> ObjectRuntime<'a> {
         let transfer_result = if self.state.new_ids.contains_key(&id) {
             TransferResult::New
         } else if is_framework_obj {
-            // framework objects are always created when they are transfered, but the id is
+            // framework objects are always created when they are transferred, but the id is
             // hard-coded so it is not yet in new_ids
             self.state.new_ids.insert(id, ());
             TransferResult::New
@@ -463,8 +460,6 @@ impl ObjectRuntimeState {
                     id,
                     LoadedRuntimeObject {
                         version: metadata.version,
-                        digest: metadata.digest,
-                        owner: metadata.owner,
                         is_modified: false,
                     },
                 )

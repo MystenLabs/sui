@@ -79,10 +79,10 @@ pub struct DependencyGraph {
     /// `DependencyMode::Always` edges in `package_graph`).
     pub always_deps: BTreeSet<PM::PackageName>,
 
-    /// A hash of the manifest file content this lock file was generated from, if any.
-    pub manifest_digest: Option<String>,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
-    pub deps_digest: Option<String>,
+    /// A hash of the manifest file content this lock file was generated from.
+    pub manifest_digest: String,
+    /// A hash of all the dependencies (their lock file content) this lock file depends on.
+    pub deps_digest: String,
 }
 
 /// A helper to store additional information about a dependency graph
@@ -163,88 +163,52 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     pub progress_output: Progress,
     /// A chain of visited dependencies used for cycle detection
     visited_dependencies: VecDeque<(PM::PackageName, PM::InternalDependency)>,
+    /// Installation directory for compiled artifacts (from BuildConfig).
+    install_dir: PathBuf,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
-    pub fn new(skip_fetch_latest_git_deps: bool, progress_output: Progress) -> Self {
+    pub fn new(
+        skip_fetch_latest_git_deps: bool,
+        progress_output: Progress,
+        install_dir: PathBuf,
+    ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
+            install_dir,
         }
     }
 
-    /// Get a graph from the Move.lock file, if Move.lock file is present and up-to-date
-    /// (additionally returning false), otherwise compute a new graph based on the content of the
-    /// Move.toml (manifest) file (additionally returning true).
+    /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
+    /// which case also return false) or by computing a new graph based on the content of the
+    /// Move.toml (manifest) file (in which case also return true).
     pub fn get_graph(
         &mut self,
         parent: &PM::DependencyKind,
         root_path: PathBuf,
         manifest_string: String,
-        lock_string: Option<String>,
+        lock_string_opt: Option<String>,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
-        let manifest = parse_source_manifest(toml_manifest)?;
+        let root_manifest = parse_source_manifest(toml_manifest)?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
-        let new_manifest_digest_opt = Some(digest_str(manifest_string.into_bytes().as_slice()));
+        let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
+        let (old_manifest_digest_opt, old_deps_digest_opt, lock_string) = match lock_string_opt {
+            Some(lock_string) => match schema::read_header(&lock_string) {
+                Ok(header) => (
+                    Some(header.manifest_digest),
+                    Some(header.deps_digest),
+                    Some(lock_string),
+                ),
+                Err(_) => (None, None, None), // malformed header - regenerate lock file
+            },
+            None => (None, None, None),
+        };
 
-        let new_deps_digest_opt = self.dependency_digest(root_path.clone(), &manifest)?;
-        if let Some(lock_contents) = lock_string {
-            let schema::Header {
-                version: _,
-                manifest_digest: manifest_digest_opt,
-                deps_digest: deps_digest_opt,
-            } = schema::read_header(&lock_contents)?;
-
-            // check if manifest file and dependencies haven't changed and we can use existing lock
-            // file to create the dependency graph
-            if new_manifest_digest_opt == manifest_digest_opt {
-                // manifest file hasn't changed
-                if let Some(deps_digest) = deps_digest_opt {
-                    // dependencies digest exists in the lock file
-                    if Some(deps_digest) == new_deps_digest_opt {
-                        // dependencies have not changed
-                        return Ok((
-                            DependencyGraph::read_from_lock(
-                                root_path,
-                                manifest.package.name,
-                                &mut lock_contents.as_bytes(),
-                                None,
-                            )?,
-                            false,
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok((
-            self.new_graph(
-                parent,
-                &manifest,
-                root_path,
-                new_manifest_digest_opt,
-                new_deps_digest_opt,
-            )?,
-            true,
-        ))
-    }
-
-    /// Build a graph from the transitive dependencies and dev-dependencies of `root_package`.
-    ///
-    /// `progress_output` is an output stream that is written to while generating the graph, to
-    /// provide human-readable progress updates.
-    pub fn new_graph(
-        &mut self,
-        parent: &PM::DependencyKind,
-        root_manifest: &PM::SourceManifest,
-        root_path: PathBuf,
-        manifest_digest: Option<String>,
-        deps_digest: Option<String>,
-    ) -> Result<DependencyGraph> {
         // collect sub-graphs for "regular" and "dev" dependencies
         let mut dep_graphs = self.collect_graphs(
             parent,
@@ -253,6 +217,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             DependencyMode::Always,
             &root_manifest.dependencies,
         )?;
+        let dep_lock_files = dep_graphs
+            .values()
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            .collect::<Result<Vec<LockFile>>>()?;
         let dev_dep_graphs = self.collect_graphs(
             parent,
             root_manifest.package.name,
@@ -260,6 +228,30 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             DependencyMode::DevOnly,
             &root_manifest.dev_dependencies,
         )?;
+
+        let dev_dep_lock_files = dev_dep_graphs
+            .values()
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            .collect::<Result<Vec<LockFile>>>()?;
+        let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
+        let (manifest_digest, deps_digest) =
+            match (old_manifest_digest_opt, old_deps_digest_opt, lock_string) {
+                (Some(old_manifest_digest), Some(old_deps_digest), Some(lock_string))
+                    if old_manifest_digest == new_manifest_digest
+                        && old_deps_digest == new_deps_digest =>
+                {
+                    return Ok((
+                        DependencyGraph::read_from_lock(
+                            root_path,
+                            root_manifest.package.name,
+                            &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                            None,
+                        )?,
+                        false,
+                    ));
+                }
+                _ => (new_manifest_digest, new_deps_digest),
+            };
 
         dep_graphs.extend(dev_dep_graphs);
 
@@ -309,7 +301,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
 
-        Ok(combined_graph)
+        Ok((combined_graph, true))
     }
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
@@ -405,66 +397,33 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         Ok((pkg_graph, is_override, is_external))
     }
 
-    /// Computes dependency hashes but may return None if information about some dependencies is not
-    /// available or if there are no dependencies.
-    fn dependency_hashes(
-        &mut self,
-        root_path: PathBuf,
-        dependencies: &PM::Dependencies,
-    ) -> Result<Option<Vec<String>>> {
+    /// Computes dependency hashes.
+    fn dependency_hashes(&mut self, lock_files: Vec<LockFile>) -> Result<Vec<String>> {
         let mut hashed_lock_files = Vec::new();
-
-        for (pkg_name, dep) in dependencies {
-            let internal_dep = match dep {
-                // bail if encountering external dependency that would require running the external
-                // resolver
-                // TODO: should we consider handling this here?
-                PM::Dependency::External(_) => return Ok(None),
-                PM::Dependency::Internal(d) => d,
-            };
-
-            self.dependency_cache
-                .download_and_update_if_remote(
-                    *pkg_name,
-                    &internal_dep.kind,
-                    &mut self.progress_output,
-                )
-                .with_context(|| format!("Fetching '{}'", *pkg_name))?;
-            let pkg_path = root_path.join(local_path(&internal_dep.kind));
-
-            let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
-                return Ok(None);
-            };
-            hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
+        for mut lock_file in lock_files {
+            let mut lock_string: String = "".to_string();
+            lock_file.read_to_string(&mut lock_string)?;
+            hashed_lock_files.push(digest_str(lock_string.as_bytes()));
         }
-
-        Ok(if hashed_lock_files.is_empty() {
-            None
-        } else {
-            Some(hashed_lock_files)
-        })
+        Ok(hashed_lock_files)
     }
 
-    /// Computes a digest of all dependencies in a manifest file but may return None if information
-    /// about some dependencies is not available.
+    /// Computes a digest of all dependencies in a manifest file (or digest of empty list if there
+    /// are no dependencies).
     fn dependency_digest(
         &mut self,
-        root_path: PathBuf,
-        manifest: &PM::SourceManifest,
-    ) -> Result<Option<String>> {
-        let mut dep_hashes = self
-            .dependency_hashes(root_path.clone(), &manifest.dependencies)?
-            .unwrap_or_default();
+        dep_lock_files: Vec<LockFile>,
+        dev_dep_lock_files: Vec<LockFile>,
+    ) -> Result<String> {
+        let mut dep_hashes = self.dependency_hashes(dep_lock_files)?;
 
-        let dev_dep_hashes = self
-            .dependency_hashes(root_path, &manifest.dev_dependencies)?
-            .unwrap_or_default();
+        let dev_dep_hashes = self.dependency_hashes(dev_dep_lock_files)?;
 
-        if dep_hashes.is_empty() {
-            Ok(None)
+        if dep_hashes.is_empty() && dev_dep_hashes.is_empty() {
+            Ok(digest_str(&[]))
         } else {
             dep_hashes.extend(dev_dep_hashes);
-            Ok(Some(hashed_files_digest(dep_hashes)))
+            Ok(hashed_files_digest(dep_hashes))
         }
     }
 }

@@ -3446,7 +3446,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.6"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3502,7 +3502,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3513,7 +3513,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=eb77c7556c1996aac9610f0475742a3277f26a3f#eb77c7556c1996aac9610f0475742a3277f26a3f"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -9481,7 +9481,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -9644,7 +9644,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10068,7 +10068,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -10221,7 +10221,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10478,7 +10478,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -10637,7 +10637,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -10685,7 +10685,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -10723,7 +10723,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -10928,7 +10928,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10958,7 +10958,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -11155,7 +11155,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -11299,7 +11299,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "anemo",
  "anemo-cli",
