@@ -374,12 +374,6 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.1
         version: 3.1.1
-      '@vanilla-extract/css':
-        specifier: ^1.13.0
-        version: 1.13.0
-      '@vanilla-extract/vite-plugin':
-        specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4)
@@ -1158,18 +1152,9 @@ importers:
       '@mysten/wallet-standard':
         specifier: workspace:*
         version: link:../wallet-standard
-      '@radix-ui/react-dialog':
-        specifier: ^1.0.4
-        version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
-      '@radix-ui/react-dropdown-menu':
-        specifier: ^2.0.5
-        version: 2.0.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
       '@vanilla-extract/css':
         specifier: ^1.13.0
         version: 1.13.0
-      vite:
-        specifier: ^4.4.4
-        version: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
       zustand:
         specifier: ^4.4.1
         version: 4.4.1(@types/react@18.2.15)(react@18.2.0)
@@ -1204,9 +1189,6 @@ importers:
       '@vanilla-extract/esbuild-plugin':
         specifier: ^2.3.0
         version: 2.3.0(@types/node@20.4.2)
-      '@vanilla-extract/vite-plugin':
-        specifier: ^3.9.0
-        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       happy-dom:
         specifier: ^10.5.1
         version: 10.5.1
@@ -1231,8 +1213,6 @@ importers:
       vitest:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
-
-  sdk/dapp-kit/src/styles.css: {}
 
   sdk/deepbook:
     dependencies:
@@ -9798,28 +9778,6 @@ packages:
 
   /@vanilla-extract/private@1.0.3:
     resolution: {integrity: sha512-17kVyLq3ePTKOkveHxXuIJZtGYs+cSoev7BlP+Lf4916qfDhk/HBjvlYDe8egrea7LNPHKwSZJK/bzZC+Q6AwQ==}
-
-  /@vanilla-extract/vite-plugin@3.9.0(@types/node@20.4.2)(vite@4.4.4):
-    resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
-    peerDependencies:
-      vite: ^2.2.3 || ^3.0.0 || ^4.0.3
-    dependencies:
-      '@vanilla-extract/integration': 6.2.2(@types/node@20.4.2)
-      outdent: 0.8.0
-      postcss: 8.4.26
-      postcss-load-config: 3.1.4(postcss@8.4.26)
-      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
-    transitivePeerDependencies:
-      - '@types/node'
-      - less
-      - lightningcss
-      - sass
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - ts-node
-    dev: true
 
   /@visx/axis@3.3.0(react@18.2.0):
     resolution: {integrity: sha512-O7fPQtpum4NEsb8u2/eTeOSt8CvAczoehVQbJtDLyDNio6yLvytfHtRKxOsl/FHjFnPYgBjkQtwiKiR5oSjP3g==}
@@ -19419,23 +19377,6 @@ packages:
       '@csstools/css-tokenizer': 2.1.1
       '@csstools/postcss-progressive-custom-properties': 3.0.0(postcss@8.4.26)
       postcss: 8.4.26
-    dev: true
-
-  /postcss-load-config@3.1.4(postcss@8.4.26):
-    resolution: {integrity: sha512-6DiM4E7v4coTE4uzA8U//WhtPwyhiim3eyjEMFCnUpzbrkK9wJHgKDT2mR+HbtSrd/NubVaYTOpSpjUl8NQeRg==}
-    engines: {node: '>= 10'}
-    peerDependencies:
-      postcss: '>=8.0.9'
-      ts-node: '>=9.0.0'
-    peerDependenciesMeta:
-      postcss:
-        optional: true
-      ts-node:
-        optional: true
-    dependencies:
-      lilconfig: 2.1.0
-      postcss: 8.4.26
-      yaml: 2.3.1
     dev: true
 
   /postcss-load-config@4.0.1(postcss@8.4.26)(ts-node@10.9.1):
