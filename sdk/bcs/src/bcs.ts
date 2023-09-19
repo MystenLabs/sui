@@ -106,7 +106,7 @@ export const bcs = {
 		});
 	},
 
-	bytes<T extends number>(size: T, options?: BcsTypeOptions<Uint8Array>) {
+	bytes<T extends number>(size: T, options?: BcsTypeOptions<Uint8Array, Iterable<number>>) {
 		return new FixedSizeBcsType<Uint8Array>({
 			name: `bytes[${size}]`,
 			size,
@@ -156,6 +156,24 @@ export const bcs = {
 		});
 	},
 
+	array<T, Input>(size: number, type: BcsType<T, Input>) {
+		return new BcsType<T[], Iterable<Input> & { length: number }>({
+			name: `${type.name}[${size}]`,
+			read: (reader) => {
+				const result: T[] = new Array(size);
+				for (let i = 0; i < size; i++) {
+					result[i] = type.read(reader);
+				}
+				return result;
+			},
+			write: (value, writer) => {
+				for (const item of value) {
+					type.write(item, writer);
+				}
+			},
+		});
+	},
+
 	option<T, Input>(type: BcsType<T, Input>) {
 		return bcs.optionEnum(type).transform({
 			input: (value: Input | null | undefined) => {
@@ -195,24 +213,6 @@ export const bcs = {
 			},
 			write: (value, writer) => {
 				writer.writeULEB(value.length);
-				for (const item of value) {
-					type.write(item, writer);
-				}
-			},
-		});
-	},
-
-	array<T, Input>(size: number, type: BcsType<T, Input>) {
-		return new BcsType<T[], Iterable<Input> & { length: number }>({
-			name: `${type.name}[${size}]`,
-			read: (reader) => {
-				const result: T[] = new Array(size);
-				for (let i = 0; i < size; i++) {
-					result[i] = type.read(reader);
-				}
-				return result;
-			},
-			write: (value, writer) => {
 				for (const item of value) {
 					type.write(item, writer);
 				}

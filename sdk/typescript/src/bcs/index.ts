@@ -136,7 +136,7 @@ const bcs = {
 	string_u64: (options?: BcsTypeOptions<number>) => {
 		return originalBcs
 			.u64({
-				name: 'unsafe_u64',
+				name: 'string_u64',
 				...(options as object),
 			})
 			.transform({
@@ -179,9 +179,9 @@ const bcs = {
 };
 
 type Normalize<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
-const Address = bcs.array(SUI_ADDRESS_LENGTH, bcs.u8()).transform({
+const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	input: (val: string | Uint8Array) => (typeof val === 'string' ? fromHEX(val) : val),
-	output: (val) => toHEX(Uint8Array.from(val)),
+	output: (val) => toHEX(val),
 });
 const ObjectDigest = bcs.base58({ name: 'ObjectDigest' });
 const SuiObjectRef = bcs.struct('SuiObjectRef', {
@@ -493,3 +493,22 @@ bcsRegistry.registerBcsType('enumKind', (T) => bcs.enumKind(T));
 });
 
 export { bcs, bcsRegistry, BCS };
+
+type Merge<T> = T extends infer U ? { [K in keyof U]: U[K] } : never;
+type EnumKindTransform<T> = T extends infer U
+	? Merge<(U[keyof U] extends null | boolean ? object : U[keyof U]) & { kind: keyof U }>
+	: never;
+
+function enumKind<T extends object, Input extends object>(type: BcsType<T, Input>) {
+	return type.transform({
+		input: ({ kind, ...val }: EnumKindTransform<Input>) =>
+			({
+				[kind]: val,
+			}) as Input,
+		output: (val) => {
+			const key = Object.keys(val)[0] as keyof T;
+
+			return { kind: key, ...val[key] } as EnumKindTransform<T>;
+		},
+	});
+}
