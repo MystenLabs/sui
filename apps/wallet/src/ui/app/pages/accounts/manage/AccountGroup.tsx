@@ -85,7 +85,7 @@ function AccountFooter({ accountID, showExport }: { accountID: string; showExpor
 	return (
 		<>
 			<div className="flex flex-shrink-0 w-full">
-				<div className="flex gap-0.5 items-center">
+				<div className="flex gap-0.5 items-center whitespace-nowrap">
 					<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
 					{showExport ? (
 						<FooterLink to={`/accounts/export/${accountID}`}>Export Private Key</FooterLink>
