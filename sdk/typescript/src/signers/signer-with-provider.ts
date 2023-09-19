@@ -75,10 +75,7 @@ export abstract class SignerWithProvider implements Signer {
 	 */
 	async signMessage(input: { message: Uint8Array }): Promise<SignedMessage> {
 		const signature = await this.signData(
-			messageWithIntent(
-				IntentScope.PersonalMessage,
-				bcs.ser(['vector', 'u8'], input.message).toBytes(),
-			),
+			messageWithIntent(IntentScope.PersonalMessage, bcs.vector(bcs.u8()).serialize(input.message)),
 		);
 
 		return {

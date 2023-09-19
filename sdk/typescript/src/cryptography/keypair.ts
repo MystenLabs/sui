@@ -57,10 +57,7 @@ export abstract class BaseSigner {
 	 * Signs provided personal message by calling `signWithIntent()` with a `PersonalMessage` provided as intent scope
 	 */
 	async signPersonalMessage(bytes: Uint8Array) {
-		return this.signWithIntent(
-			bcs.ser(['vector', 'u8'], bytes).toBytes(),
-			IntentScope.PersonalMessage,
-		);
+		return this.signWithIntent(bcs.vector(bcs.u8()).serialize(bytes), IntentScope.PersonalMessage);
 	}
 
 	/**
