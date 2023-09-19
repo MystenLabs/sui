@@ -33,5 +33,5 @@ export {
 	splitGenericParameters,
 	BcsReader,
 	BcsWriter,
-	BcsWriterOptions,
+	type BcsWriterOptions,
 };
