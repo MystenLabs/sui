@@ -39,12 +39,15 @@ export function UnderlyingObjectCard({
 		struct: functionName,
 	});
 
+	const isDataLoading = isLoading || loadingNormalizedStruct;
+
 	// Check for error first before showing the loading spinner to avoid infinite loading if GetDynamicFieldObject fails
 	if (
-		isError ||
-		(data && data.error) ||
-		(isFetched && !data) ||
-		(!normalizedStruct && normalizedStructFetched)
+		!isDataLoading &&
+		(isError ||
+			(data && data.error) ||
+			(isFetched && !data) ||
+			(!normalizedStruct && normalizedStructFetched))
 	) {
 		return (
 			<Banner variant="error" spacing="lg" fullWidth>
@@ -53,7 +56,7 @@ export function UnderlyingObjectCard({
 		);
 	}
 
-	if (isLoading || loadingNormalizedStruct) {
+	if (isDataLoading) {
 		return (
 			<div className="mt-3 flex w-full justify-center pt-3">
 				<LoadingIndicator text="Loading data" />
@@ -62,7 +65,7 @@ export function UnderlyingObjectCard({
 	}
 
 	const fieldsData =
-		data.data?.content?.dataType === 'moveObject' ? data.data?.content.fields : null;
+		data?.data?.content?.dataType === 'moveObject' ? data.data?.content.fields : null;
 	// Return null if there are no fields
 	if (!fieldsData || !normalizedStruct?.fields || !objectType) {
 		return null;

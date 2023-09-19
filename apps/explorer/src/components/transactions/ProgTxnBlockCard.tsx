@@ -5,7 +5,7 @@ import clsx from 'clsx';
 import { type ReactNode } from 'react';
 
 import { ExpandableList, ExpandableListControl, ExpandableListItems } from '~/ui/ExpandableList';
-import { TransactionBlockCard } from '~/ui/TransactionBlockCard';
+import { CollapsibleCard } from '~/ui/collapsible/CollapsibleCard';
 
 interface ProgrammableTxnBlockCardProps {
 	items: ReactNode[];
@@ -31,7 +31,7 @@ export function ProgrammableTxnBlockCard({
 	const cardTitle = count ? `${count} ${itemsLabel}` : itemsLabel;
 
 	return (
-		<TransactionBlockCard collapsible initialClose={initialClose} title={cardTitle}>
+		<CollapsibleCard collapsible initialClose={initialClose} title={cardTitle}>
 			<ExpandableList items={items} defaultItemsToShow={defaultItemsToShow} itemsLabel={itemsLabel}>
 				<div
 					className={clsx(
@@ -48,6 +48,6 @@ export function ProgrammableTxnBlockCard({
 					</div>
 				)}
 			</ExpandableList>
-		</TransactionBlockCard>
+		</CollapsibleCard>
 	);
 }

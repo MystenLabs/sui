@@ -76,7 +76,7 @@ export function TransactionsForAddress({ address, type }: Props) {
 
 	if (!hasTxns) {
 		return (
-			<div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+			<div className="flex h-20 items-center justify-center md:h-full">
 				<Text variant="body/medium" color="steel-dark">
 					No transactions found
 				</Text>

@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::VersionNumber;
+use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::get_module_by_id;
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, WriteKind},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -180,8 +181,8 @@ impl InMemoryStorage {
         self.persistent
     }
 
-    pub fn finish(&mut self, written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>) {
-        for (_id, (_, new_object, _)) in written {
+    pub fn finish(&mut self, written: WrittenObjects) {
+        for (_id, new_object) in written {
             debug_assert!(new_object.id() == _id);
             self.insert_object(new_object);
         }

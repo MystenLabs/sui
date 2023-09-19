@@ -578,7 +578,7 @@ mod checked {
                     object_metadata: Some(InputObjectMetadata {
                         // We are only interested in mutable inputs.
                         is_mutable_input: true,
-                        id, owner, version, digest,
+                        id, version, owner,
                     }),
                     inner: ResultValue { value, .. },
                 } = input else {
@@ -588,8 +588,6 @@ mod checked {
                     id,
                     LoadedRuntimeObject {
                         version,
-                        digest,
-                        owner,
                         is_modified: true,
                     },
                 );
@@ -783,13 +781,9 @@ mod checked {
 
             Ok(ExecutionResults::V2(ExecutionResultsV2 {
                 written_objects,
-                objects_modified_at: loaded_runtime_objects
+                modified_objects: loaded_runtime_objects
                     .into_iter()
-                    .filter_map(|(id, loaded)| {
-                        loaded
-                            .is_modified
-                            .then_some((id, (loaded.version, loaded.digest, loaded.owner)))
-                    })
+                    .filter_map(|(id, loaded)| loaded.is_modified.then_some(id))
                     .collect(),
                 created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
                 deleted_object_ids: deleted_object_ids.into_iter().map(|(id, _)| id).collect(),
@@ -1130,7 +1124,6 @@ mod checked {
             is_mutable_input,
             owner,
             version,
-            digest: obj.digest(),
         };
         let obj_value = value_from_object(vm, session, obj)?;
         let contained_uids = {

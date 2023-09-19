@@ -17,7 +17,7 @@ export function createSuiClientContextWrapper(client: SuiClient) {
 	};
 }
 
-export function createWalletProviderContextWrappe(
+export function createWalletProviderContextWrapper(
 	providerProps: Omit<ComponentProps<typeof WalletProvider>, 'children'> = {},
 ) {
 	const queryClient = new QueryClient();
@@ -35,14 +35,14 @@ export function createWalletProviderContextWrappe(
 export function registerMockWallet({
 	walletName,
 	accounts = [createMockAccount()],
-	additionalFeatures = {},
+	features = {},
 }: {
 	walletName: string;
 	accounts?: ReadonlyWalletAccount[];
-	additionalFeatures?: IdentifierRecord<unknown>;
+	features?: IdentifierRecord<unknown>;
 }) {
 	const walletsApi = getWallets();
-	const mockWallet = new MockWallet(walletName, accounts, additionalFeatures);
+	const mockWallet = new MockWallet(walletName, accounts, features);
 	return {
 		unregister: walletsApi.register(mockWallet),
 		mockWallet,

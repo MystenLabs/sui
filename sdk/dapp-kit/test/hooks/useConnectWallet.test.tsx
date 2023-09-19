@@ -3,7 +3,7 @@
 
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useConnectWallet, useCurrentWallet, useCurrentAccount } from 'dapp-kit/src';
-import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import { WalletAlreadyConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
 import type { Mock } from 'vitest';
 
@@ -11,7 +11,7 @@ describe('useConnectWallet', () => {
 	test('throws an error when connecting to a wallet when a connection is already active', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useConnectWallet(), { wrapper });
 
 		result.current.mutate({ wallet: mockWallet });
@@ -28,7 +28,7 @@ describe('useConnectWallet', () => {
 	test('throws an error when a user fails to connect their wallet', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
@@ -59,7 +59,7 @@ describe('useConnectWallet', () => {
 	test('connecting to a wallet works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),

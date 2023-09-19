@@ -2,12 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
-pub mod sql_types {
-    #[derive(diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "bcs_bytes"))]
-    pub struct BcsBytes;
-}
-
 diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
@@ -15,7 +9,6 @@ diesel::table! {
         epoch -> Int8,
         network_total_transactions -> Int8,
         previous_checkpoint_digest -> Nullable<Bytea>,
-        end_of_epoch -> Bool,
         tx_digests -> Array<Nullable<Bytea>>,
         timestamp_ms -> Int8,
         total_gas_cost -> Int8,
@@ -50,6 +43,8 @@ diesel::table! {
         leftover_storage_fund_inflow-> Nullable<Int8>,
         new_total_stake -> Nullable<Int8>,
         epoch_commitments -> Nullable<Bytea>,
+        next_epoch_reference_gas_price -> Nullable<Int8>,
+        next_epoch_protocol_version -> Nullable<Int8>,
     }
 }
 
@@ -87,9 +82,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    use diesel::sql_types::*;
-    use super::sql_types::BcsBytes;
-
     packages (package_id) {
         package_id -> Bytea,
         move_package -> Bytea,

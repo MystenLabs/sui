@@ -362,6 +362,15 @@ pub enum SuiError {
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
         effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
+    #[error(
+        "Failed to verify Tx certificate with executed effects, error: {error:?}, validator: {validator_name:?}"
+    )]
+    FailedToVerifyTxCertWithExecutedEffects {
+        validator_name: AuthorityName,
+        error: String,
+    },
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSigs,
     #[error("System Transaction not accepted")]
     InvalidSystemTransaction,
 
@@ -372,6 +381,9 @@ pub enum SuiError {
     InvalidAddress,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+
+    #[error("Invalid digest length. Expected {expected}, got {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
 
     #[error("Unexpected message.")]
     UnexpectedMessage,
@@ -725,6 +737,8 @@ impl SuiError {
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
             SuiError::ObjectLockConflict { .. } => (false, true),
 
             _ => (false, false),

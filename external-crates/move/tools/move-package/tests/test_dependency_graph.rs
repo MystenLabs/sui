@@ -14,7 +14,7 @@ use move_package::{
         DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
     },
     source_package::{
-        manifest_parser::parse_move_manifest_from_file,
+        layout::SourcePackageLayout,
         parsed_manifest::{Dependency, DependencyKind, InternalDependency},
     },
 };
@@ -32,16 +32,19 @@ macro_rules! assert_error_contains {
 fn no_dep_graph() {
     let pkg = no_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dep_graph_builder =
-        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
-    let graph = dep_graph_builder
-        .new_graph(
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            manifest_string,
+            /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
 
@@ -111,7 +114,12 @@ fn lock_file_missing_dependency() {
     let pkg = one_dep_test_package();
 
     let commit = tmp.path().join("Move.lock");
-    let lock = LockFile::new(pkg.clone(), None, None).expect("Creating new lock file");
+    let lock = LockFile::new(
+        pkg.clone(),
+        /* manifest_digest */ "42".to_string(),
+        /* deps_digest */ "7".to_string(),
+    )
+    .expect("Creating new lock file");
 
     // Write a reference to a dependency that there isn't package information for.
     writeln!(&*lock, r#"dependencies = [{{ name = "OtherDep" }}]"#).unwrap();
@@ -137,16 +145,19 @@ fn lock_file_missing_dependency() {
 fn always_deps() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dep_graph_builder =
-        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
-    let graph = dep_graph_builder
-        .new_graph(
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            manifest_string,
+            /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
 
@@ -498,16 +509,19 @@ fn merge_overlapping_different_deps() {
 fn immediate_dependencies() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dep_graph_builder =
-        DependencyGraphBuilder::new(/* skip_fetch_latest_git_deps */ true, std::io::sink());
-    let graph = dep_graph_builder
-        .new_graph(
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
             &DependencyKind::default(),
-            &manifest,
             pkg,
-            /* manifest_digest */ None,
-            /* deps_digest */ None,
+            manifest_string,
+            /* lock_string_opt */ None,
         )
         .expect("Creating DependencyGraph");
 
@@ -558,11 +572,15 @@ fn dev_dep_test_package() -> PathBuf {
 const EMPTY_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = ""
 "#;
 
 const A_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]
@@ -575,6 +593,8 @@ source = { local = "./A" }
 const AB_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
     { name = "B" },
@@ -592,6 +612,8 @@ source = { local = "./B" }
 const A_DEP_B_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]

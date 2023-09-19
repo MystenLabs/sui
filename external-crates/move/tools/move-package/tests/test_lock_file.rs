@@ -16,7 +16,12 @@ fn commit() {
     let lock_path = pkg.path().join("Move.lock");
 
     {
-        let mut lock = LockFile::new(pkg.path().to_path_buf(), None, None).unwrap();
+        let mut lock = LockFile::new(
+            pkg.path().to_path_buf(),
+            /* manifest_digest */ "42".to_string(),
+            /* deps_digest */ "7".to_string(),
+        )
+        .unwrap();
         writeln!(lock, "# Write and commit").unwrap();
         lock.commit(&lock_path).unwrap();
     }
@@ -44,7 +49,12 @@ fn discard() {
     let pkg = create_test_package().unwrap();
 
     {
-        let mut lock = LockFile::new(pkg.path().to_path_buf(), None, None).unwrap();
+        let mut lock = LockFile::new(
+            pkg.path().to_path_buf(),
+            /* manifest_digest */ "42".to_string(),
+            /* deps_digest */ "7".to_string(),
+        )
+        .unwrap();
         writeln!(lock, "# Write but don't commit").unwrap();
     }
 
