@@ -97,8 +97,6 @@
 		"@types/react": "^18.2.15",
 		"@types/react-dom": "^18.2.7",
 		"@types/topojson-client": "^3.1.1",
-		"@vanilla-extract/css": "^1.13.0",
-		"@vanilla-extract/vite-plugin": "^3.9.0",
 		"@vitejs/plugin-react": "^4.0.3",
 		"@vitest/ui": "^0.33.0",
 		"autoprefixer": "^10.4.14",
