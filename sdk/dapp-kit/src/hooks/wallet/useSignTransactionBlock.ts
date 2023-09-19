@@ -16,12 +16,19 @@ import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseSignTransactionBlockArgs = PartialBy<SuiSignTransactionBlockInput, 'account'>;
+
 type UseSignTransactionBlockResult = SuiSignTransactionBlockOutput;
+
+type UseSignTransactionBlockError =
+	| WalletFeatureNotSupportedError
+	| WalletNoAccountSelectedError
+	| WalletNotConnectedError
+	| Error;
 
 type UseSignTransactionBlockMutationOptions = Omit<
 	UseMutationOptions<
 		UseSignTransactionBlockResult,
-		WalletFeatureNotSupportedError | WalletNoAccountSelectedError | WalletNotConnectedError | Error,
+		UseSignTransactionBlockError,
 		UseSignTransactionBlockArgs,
 		unknown
 	>,
