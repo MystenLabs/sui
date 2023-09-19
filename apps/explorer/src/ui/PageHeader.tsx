@@ -61,14 +61,18 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 							{loading ? (
 								<Placeholder rounded="lg" width="540px" height="20px" />
 							) : (
-								<div className="flex items-center">
-									<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
-										{title}
-									</Heading>
-									<div className="ml-2 h-4 w-4 self-start md:h-6 md:w-6">
-										<CopyToClipboard size="lg" color="steel" copyText={title} />
-									</div>
-								</div>
+								<>
+									{title && (
+										<div className="flex items-center">
+											<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
+												{title}
+											</Heading>
+											<div className="ml-2 h-4 w-4 self-start md:h-6 md:w-6">
+												<CopyToClipboard size="lg" color="steel" copyText={title} />
+											</div>
+										</div>
+									)}
+								</>
 							)}
 						</div>
 						{subtitle && (
