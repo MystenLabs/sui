@@ -7,6 +7,9 @@ use serde::Deserialize;
 
 use crate::functional_group::FunctionalGroup;
 
+const MAX_QUERY_DEPTH: usize = 10;
+const MAX_QUERY_NODES: usize = 100;
+
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 pub struct ConnectionConfig {
     pub(crate) port: u16,
@@ -33,6 +36,8 @@ pub struct ServiceConfig {
 pub struct Limits {
     #[serde(default)]
     pub(crate) max_query_depth: usize,
+    #[serde(default)]
+    pub(crate) max_query_nodes: usize,
 }
 
 #[derive(Deserialize, Debug, Eq, PartialEq, Default)]
@@ -74,7 +79,8 @@ impl Default for ConnectionConfig {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_query_depth: 10,
+            max_query_depth: MAX_QUERY_DEPTH,
+            max_query_nodes: MAX_QUERY_NODES,
         }
     }
 }
@@ -95,6 +101,7 @@ mod tests {
         let actual = ServiceConfig::read(
             r#" [limits]
                 max-query-depth = 100
+                max-query-nodes = 300
             "#,
         )
         .unwrap();
@@ -102,6 +109,7 @@ mod tests {
         let expect = ServiceConfig {
             limits: Limits {
                 max_query_depth: 100,
+                max_query_nodes: 300,
             },
             ..Default::default()
         };
@@ -154,6 +162,7 @@ mod tests {
 
                 [limits]
                 max-query-depth = 42
+                max-query-nodes = 320
 
                 [experiments]
                 test-flag = true
@@ -164,6 +173,7 @@ mod tests {
         let expect = ServiceConfig {
             limits: Limits {
                 max_query_depth: 42,
+                max_query_nodes: 320,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

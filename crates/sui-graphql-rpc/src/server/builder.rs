@@ -49,6 +49,11 @@ impl ServerBuilder {
         self
     }
 
+    pub fn max_query_nodes(mut self, max_nodes: usize) -> Self {
+        self.schema = self.schema.limit_complexity(max_nodes);
+        self
+    }
+
     pub fn context_data(mut self, context_data: impl Any + Send + Sync) -> Self {
         self.schema = self.schema.data(context_data);
         self
@@ -190,6 +195,39 @@ mod tests {
         assert!(resp.is_err());
         let resp = exec_query_depth_limit(
             2,
+            "{ chainIdentifier protocolConfig { configs { value key }} }",
+        )
+        .await;
+        assert!(resp.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_query_node_limit() {
+        async fn exec_query_node_limit(nodes: usize, query: &str) -> Response {
+            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
+            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+                .context_data(data_provider)
+                .max_query_nodes(nodes)
+                .build_schema();
+            schema.execute(query).await
+        }
+
+        // Should complete successfully
+        let resp = exec_query_node_limit(1, "{ chainIdentifier }").await;
+        assert!(resp.is_ok());
+        let resp = exec_query_node_limit(
+            5,
+            "{ chainIdentifier protocolConfig { configs { value key }} }",
+        )
+        .await;
+        assert!(resp.is_ok());
+
+        // Should fail
+        let resp = exec_query_node_limit(0, "{ chainIdentifier }").await;
+        assert!(resp.is_err());
+        let resp = exec_query_node_limit(
+            4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
         .await;
