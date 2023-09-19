@@ -38,8 +38,8 @@ function useAddress(linkConfig: ExplorerLinkConfig) {
 export function useExplorerLink(linkConfig: ExplorerLinkConfig) {
 	const { type } = linkConfig;
 	const address = useAddress(linkConfig);
-	const [selectedApiEnv, customRPC] = useAppSelector(({ app }) => [app.apiEnv, app.customRPC]);
-
+	const selectedApiEnv = useAppSelector(({ app }) => app.apiEnv);
+	const customRPC = useAppSelector(({ app }) => app.customRPC);
 	const objectID = type === ExplorerLinkType.object ? linkConfig.objectID : null;
 	const transactionID = type === ExplorerLinkType.transaction ? linkConfig.transactionID : null;
 	const validator = type === ExplorerLinkType.validator ? linkConfig.validator : null;
