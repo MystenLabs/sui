@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::NativesCostTable;
-use fastcrypto::error::FastCryptoError;
+use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::gas_algebra::InternalGas;
@@ -91,14 +91,18 @@ fn verify_zk_login_id_internal(
     iss: &[u8],
     pin_hash: &U256,
 ) -> Result<bool, FastCryptoError> {
-    fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_id(
+    match fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_id(
         &address.into_bytes(),
         std::str::from_utf8(kc_name).map_err(|_| FastCryptoError::InvalidInput)?,
         std::str::from_utf8(kc_value).map_err(|_| FastCryptoError::InvalidInput)?,
         std::str::from_utf8(aud).map_err(|_| FastCryptoError::InvalidInput)?,
         std::str::from_utf8(iss).map_err(|_| FastCryptoError::InvalidInput)?,
         &pin_hash.to_string(),
-    )
+    ) {
+        Ok(_) => Ok(true),
+        Err(FastCryptoError::InvalidProof) => Ok(false),
+        Err(_) => Err(FastCryptoError::InvalidInput),
+    }
 }
 
 #[derive(Clone)]
@@ -157,9 +161,13 @@ fn verify_zk_login_iss_internal(
     address_seed: &U256,
     iss: &[u8],
 ) -> Result<bool, FastCryptoError> {
-    fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_iss(
+    match fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_iss(
         &address.into_bytes(),
         &address_seed.to_string(),
         std::str::from_utf8(iss).map_err(|_| FastCryptoError::InvalidInput)?,
-    )
+    ) {
+        Ok(_) => Ok(true),
+        Err(FastCryptoError::InvalidProof) => Ok(false),
+        Err(_) => Err(FastCryptoError::InvalidInput),
+    }
 }
