@@ -1063,12 +1063,13 @@ impl SuiNode {
 
         // TODO: move configuration to protocol-config and potentially differentiate for each environment.
         let ranges = TrafficProfileRangesBuilder::default()
-            .add_profile(2_000, TrafficProfile::Low)
-            .add_max_threshold_profile(TrafficProfile::High)
+            .add_profile(TrafficProfile::Low(2_000))
+            .add_last_throughput_profile(TrafficProfile::High(u64::MAX))
             .build()
             .unwrap();
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
+            None,
             None,
             None,
             state.metrics.clone(),
