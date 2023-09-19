@@ -13,6 +13,7 @@ import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
 import { useAccountsFormContext } from '_src/ui/app/components/accounts/AccountsFormContext';
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { VerifyPasswordModal } from '_src/ui/app/components/accounts/VerifyPasswordModal';
+import { useAccountSources } from '_src/ui/app/hooks/useAccountSources';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
@@ -143,16 +144,18 @@ function AccountFooter({ accountID, showExport }: { accountID: string; showExpor
 export function AccountGroup({
 	accounts,
 	type,
-	accountSource,
+	accountSourceID,
 }: {
 	accounts: SerializedUIAccount[];
 	type: AccountType;
-	accountSource?: string;
+	accountSourceID?: string;
 }) {
 	const createAccountMutation = useCreateAccountsMutation();
 	const isMnemonicDerivedGroup = type === 'mnemonic-derived';
 	const [accountsFormValues, setAccountsFormValues] = useAccountsFormContext();
 	const [isPasswordModalVisible, setPasswordModalVisible] = useState(false);
+	const { data: accountSources } = useAccountSources();
+	const accountSource = accountSources?.find(({ id }) => id === accountSourceID);
 	return (
 		<>
 			<CollapsiblePrimitive.Root defaultOpen asChild>
@@ -166,14 +169,19 @@ export function AccountGroup({
 							<div className="h-px bg-gray-45 flex flex-1 flex-shrink-0" />
 							{isMnemonicDerivedGroup && accountSource ? (
 								<ButtonOrLink
+									loading={createAccountMutation.isLoading}
 									onClick={async (e) => {
 										// prevent the collapsible from closing when clicking the "new" button
 										e.stopPropagation();
 										setAccountsFormValues({
 											type: 'mnemonic-derived',
-											sourceID: accountSource,
+											sourceID: accountSource.id,
 										});
-										setPasswordModalVisible(true);
+										if (accountSource.isLocked) {
+											setPasswordModalVisible(true);
+										} else {
+											createAccountMutation.mutate({ type: 'mnemonic-derived' });
+										}
 									}}
 									className="items-center justify-center gap-0.5 cursor-pointer appearance-none uppercase flex bg-transparent border-0 outline-none text-hero hover:text-hero-darkest"
 								>
@@ -208,7 +216,7 @@ export function AccountGroup({
 									variant="secondary"
 									size="tall"
 									text="Export Passphrase"
-									to={`../export/passphrase/${accountSource}`}
+									to={`../export/passphrase/${accountSource.id}`}
 								/>
 							) : null}
 						</div>
