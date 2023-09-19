@@ -212,9 +212,6 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		const account = await getAccountByID(id);
 		if (account) {
 			if (isPasswordUnLockable(account)) {
-				if (!password) {
-					throw new Error('Missing password to unlock the account');
-				}
 				await account.passwordUnlock(password);
 			} else {
 				await account.unlock();
