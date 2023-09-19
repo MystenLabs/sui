@@ -1,12 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { AccountAddress } from './AccountAddress';
+import { CheckFill16 } from '@mysten/icons';
+import cn from 'classnames';
 import { DAppPermissionsList } from './DAppPermissionsList';
 import { SummaryCard } from './SummaryCard';
+import { AccountIcon } from './accounts/AccountIcon';
+import { AccountItem } from './accounts/AccountItem';
+import { LockUnlockButton } from './accounts/LockUnlockButton';
+import { useUnlockAccount } from './accounts/UnlockAccountContext';
+import { useAccountByAddress } from '../hooks/useAccountByAddress';
 import { Link } from '../shared/Link';
 import { Heading } from '../shared/heading';
-import { Text } from '../shared/text';
 import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
 import { getValidDAppUrl } from '_src/shared/utils';
 
@@ -27,6 +32,8 @@ export function DAppInfoCard({
 }: DAppInfoCardProps) {
 	const validDAppUrl = getValidDAppUrl(url);
 	const appHostname = validDAppUrl?.hostname ?? url;
+	const { data: account } = useAccountByAddress(connectedAddress);
+	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
 
 	return (
 		<div className="bg-white p-6 flex flex-col gap-5">
@@ -34,11 +41,13 @@ export function DAppInfoCard({
 				<div className="flex items-stretch h-15 w-15 overflow-hidden bg-steel/20 shrink-0 grow-0 rounded-2xl">
 					{iconUrl ? <img className="flex-1" src={iconUrl} alt={name} /> : null}
 				</div>
-				<div className="flex flex-col justify-start flex-nowrap gap-1">
-					<Heading variant="heading4" weight="semibold" color="gray-100">
-						{name}
-					</Heading>
-					<div className="self-start">
+				<div className="flex flex-col items-start flex-nowrap gap-1 overflow-hidden">
+					<div className="max-w-full overflow-hidden">
+						<Heading variant="heading4" weight="semibold" color="gray-100" truncate>
+							{name}
+						</Heading>
+					</div>
+					<div className="max-w-full overflow-hidden">
 						<Link
 							href={validDAppUrl?.toString() ?? url}
 							title={name}
@@ -49,14 +58,36 @@ export function DAppInfoCard({
 					</div>
 				</div>
 			</div>
-			{connectedAddress ? (
-				<div className="flex flex-nowrap flex-row items-center pt-3 gap-3">
-					<Text variant="bodySmall" weight="medium" color="steel-darker" truncate>
-						Connected account
-					</Text>
-					<div className="flex-1" />
-					<AccountAddress copyable address={connectedAddress} />
-				</div>
+			{connectedAddress && account ? (
+				<AccountItem
+					icon={<AccountIcon account={account} />}
+					accountID={account.id}
+					disabled={account.isLocked}
+					after={
+						<div className="flex flex-1 items-center justify-end gap-1">
+							{account.isLocked ? (
+								<div className="h-4">
+									<LockUnlockButton
+										isLocked={account.isLocked}
+										isLoading={isLoading && accountToUnlock?.id === account.id}
+										onClick={(e) => {
+											// prevent the account from being selected when clicking the lock button
+											e.stopPropagation();
+											if (account.isLocked) {
+												unlockAccount(account);
+											} else {
+												lockAccount(account);
+											}
+										}}
+									/>
+								</div>
+							) : null}
+							<CheckFill16
+								className={cn('h-4 w-4', account.isLocked ? 'text-hero/10' : 'text-success')}
+							/>
+						</div>
+					}
+				/>
 			) : null}
 			{permissions?.length ? (
 				<SummaryCard
