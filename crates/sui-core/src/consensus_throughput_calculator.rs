@@ -58,17 +58,16 @@ impl TrafficProfileRangesBuilder {
         self.add_profile(u64::MAX, profile)
     }
 
-    pub fn build(self) -> TrafficProfileRanges {
+    pub fn build(self) -> Result<TrafficProfileRanges, String> {
         // ensure that we have added a profile to cover the throughput up to max, otherwise might end up
         // not able to figure out the profile during runtime.
-        assert!(
-            self.profiles.contains_key(&u64::MAX),
-            "No profile found to cover the max throughput case"
-        );
-
-        TrafficProfileRanges {
-            profiles: self.profiles,
+        if !self.profiles.contains_key(&u64::MAX) {
+            return Err("Builder should always include the profile for max value".to_string());
         }
+
+        Ok(TrafficProfileRanges {
+            profiles: self.profiles,
+        })
     }
 }
 
@@ -96,6 +95,7 @@ impl Default for TrafficProfileRanges {
             .add_profile(2_000, TrafficProfile::Low)
             .add_max_threshold_profile(TrafficProfile::High)
             .build()
+            .unwrap()
     }
 }
 
@@ -300,6 +300,26 @@ mod tests {
     use prometheus::Registry;
 
     #[test]
+    pub fn test_traffic_profile_ranges_builder() {
+        let ranges = TrafficProfileRangesBuilder::default()
+            .add_profile(2_000, Low)
+            .add_max_threshold_profile(High)
+            .build()
+            .unwrap();
+
+        assert_eq!(ranges.resolve(0), Low);
+        assert_eq!(ranges.resolve(1_000), Low);
+        assert_eq!(ranges.resolve(2_000), Low);
+        assert_eq!(ranges.resolve(2_001), High);
+        assert_eq!(ranges.resolve(u64::MAX), High);
+
+        // When omitting to add the max threshold profile, the build method should return an error
+        let builder = TrafficProfileRangesBuilder::default().add_profile(2_000, Low);
+
+        assert!(builder.build().is_err());
+    }
+
+    #[test]
     pub fn test_consensus_throughput_calculator() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         let traffic_profile_update_window: TimestampSecs = 5;
@@ -308,7 +328,8 @@ mod tests {
         let ranges = TrafficProfileRangesBuilder::default()
             .add_profile(2_000, Low)
             .add_max_threshold_profile(High)
-            .build();
+            .build()
+            .unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
             Some(max_observation_points),
@@ -384,7 +405,8 @@ mod tests {
         let ranges = TrafficProfileRangesBuilder::default()
             .add_profile(100, Low)
             .add_max_threshold_profile(High)
-            .build();
+            .build()
+            .unwrap();
 
         let calculator = ConsensusThroughputCalculator::new(
             Some(max_observation_points),
