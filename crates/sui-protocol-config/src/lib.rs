@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 27;
+const MAX_PROTOCOL_VERSION: u64 = 28;
 
 // Record history of protocol version allocations here:
 //
@@ -1507,6 +1507,9 @@ impl ProtocolConfig {
                     }
                 }
                 27 => {
+                    cfg.gas_model_version = Some(8);
+                }
+                28 => {
                     // zklogin::check_zklogin_id
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
