@@ -1288,11 +1288,6 @@ impl ProtocolConfig {
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
             hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
-            // zklogin::check_zklogin_id
-            check_zklogin_id_cost_base: Some(200),
-            // zklogin::check_zklogin_iss
-            check_zklogin_iss_cost_base: Some(200),
-
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
@@ -1500,6 +1495,9 @@ impl ProtocolConfig {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
                     }
+
+                    cfg.check_zklogin_id_cost_base = Some(200);
+                    cfg.check_zklogin_iss_cost_base = Some(200);
                 }
                 // Use this template when making changes:
                 //
