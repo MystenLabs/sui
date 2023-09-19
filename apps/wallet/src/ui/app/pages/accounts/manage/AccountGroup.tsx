@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { ArrowBgFill16, Plus12 } from '@mysten/icons';
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { forwardRef, useState } from 'react';
+import toast from 'react-hot-toast';
 import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
@@ -11,8 +13,18 @@ import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
 import { useAccountsFormContext } from '_src/ui/app/components/accounts/AccountsFormContext';
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { VerifyPasswordModal } from '_src/ui/app/components/accounts/VerifyPasswordModal';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '_src/ui/app/shared/Dialog';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { ButtonOrLink, type ButtonOrLinkProps } from '_src/ui/app/shared/utils/ButtonOrLink';
@@ -40,38 +52,91 @@ export function getGroupTitle(aGroupAccount: SerializedUIAccount) {
 
 // todo: we probbaly have some duplication here with the various FooterLink / ButtonOrLink
 // components - we should look to add these to base components somewhere
-function FooterLink({ children, to, ...props }: ButtonOrLinkProps) {
-	return (
-		<ButtonOrLink
-			className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
-			to={to}
-			{...props}
-		>
-			<Text variant="captionSmallExtra" weight="medium">
-				{children}
-			</Text>
-		</ButtonOrLink>
-	);
-}
+const FooterLink = forwardRef<HTMLAnchorElement | HTMLButtonElement, ButtonOrLinkProps>(
+	({ children, to, ...props }, ref) => {
+		return (
+			<ButtonOrLink
+				ref={ref}
+				className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
+				to={to}
+				{...props}
+			>
+				<Text variant="captionSmallExtra" weight="medium">
+					{children}
+				</Text>
+			</ButtonOrLink>
+		);
+	},
+);
 
 // todo: this is slightly different than the account footer in the AccountsList - look to consolidate :(
 function AccountFooter({ accountID, showExport }: { accountID: string; showExport?: boolean }) {
+	const allAccounts = useAccounts();
+	const totalAccounts = allAccounts?.data?.length || 0;
+	const backgroundClient = useBackgroundClient();
+	const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
+	const removeAccountMutation = useMutation({
+		mutationKey: ['remove account mutation', accountID],
+		mutationFn: async () => {
+			await backgroundClient.removeAccount({ accountID });
+			setIsConfirmationVisible(false);
+		},
+	});
 	return (
-		<div className="flex flex-shrink-0 w-full">
-			<div className="flex gap-3 items-center">
-				<div className="w-1.5" />
-				<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
-				{showExport ? (
-					<FooterLink to={`/accounts/export/${accountID}`}>
-						<div>Export Private Key</div>
-					</FooterLink>
-				) : null}
-				{/* TODO: Remove Account functionality */}
-				{/* <FooterLink to="/remove">
-					<div>Remove</div>
-				</FooterLink> */}
+		<>
+			<div className="flex flex-shrink-0 w-full">
+				<div className="flex gap-0.5 items-center whitespace-nowrap">
+					<NicknameDialog accountID={accountID} trigger={<FooterLink>Edit Nickname</FooterLink>} />
+					{showExport ? (
+						<FooterLink to={`/accounts/export/${accountID}`}>Export Private Key</FooterLink>
+					) : null}
+					{allAccounts.isLoading ? null : (
+						<FooterLink
+							onClick={() => setIsConfirmationVisible(true)}
+							disabled={isConfirmationVisible}
+						>
+							Remove
+						</FooterLink>
+					)}
+				</div>
 			</div>
-		</div>
+			<Dialog open={isConfirmationVisible}>
+				<DialogContent onPointerDownOutside={(e) => e.preventDefault()}>
+					<DialogHeader>
+						<DialogTitle>Are you sure you want to remove this account?</DialogTitle>
+					</DialogHeader>
+					{totalAccounts === 1 ? (
+						<div className="text-center">
+							<DialogDescription>
+								Removing this account will require you to set up your Sui wallet again.
+							</DialogDescription>
+						</div>
+					) : null}
+					<DialogFooter>
+						<div className="flex gap-2.5">
+							<Button
+								variant="outline"
+								size="tall"
+								text="Cancel"
+								onClick={() => setIsConfirmationVisible(false)}
+							/>
+							<Button
+								variant="warning"
+								size="tall"
+								text="Remove"
+								loading={removeAccountMutation.isLoading}
+								onClick={() => {
+									removeAccountMutation.mutate(undefined, {
+										onSuccess: () => toast.success('Account removed'),
+										onError: (e) => toast.error((e as Error)?.message || 'Something went wrong'),
+									});
+								}}
+							/>
+						</div>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
 	);
 }
 

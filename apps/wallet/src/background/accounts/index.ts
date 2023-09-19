@@ -17,6 +17,7 @@ import { accountsEvents } from './events';
 import { ZkAccount } from './zk/ZkAccount';
 import { getAccountSourceByID } from '../account-sources';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
+import { accountSourcesEvents } from '../account-sources/events';
 import { type UiConnection } from '../connections/UiConnection';
 import { backupDB, getDB } from '../db';
 import { makeUniqueKey } from '../storage-utils';
@@ -82,7 +83,7 @@ export async function getAccountsStatusData(
 ): Promise<Required<WalletStatusChange>['accounts']> {
 	const allAccounts = await (await getDB()).accounts.toArray();
 	return allAccounts
-		.filter(({ address }) => !accountsFilter?.length || accountsFilter.includes(address))
+		.filter(({ address }) => !accountsFilter || accountsFilter.includes(address))
 		.map(({ address, publicKey }) => ({ address, publicKey }));
 }
 
@@ -334,6 +335,33 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 				msg.id,
 			),
 		);
+		return true;
+	}
+	if (isMethodPayload(payload, 'removeAccount')) {
+		const { accountID } = payload.args;
+		const db = await getDB();
+		await db.transaction('rw', db.accounts, db.accountSources, async () => {
+			const account = await db.accounts.get(accountID);
+			if (!account) {
+				throw new Error(`Account with id ${accountID} not found.`);
+			}
+			const accountSourceID =
+				'sourceID' in account && typeof account.sourceID === 'string' && account.sourceID;
+			await db.accounts.delete(account.id);
+			if (accountSourceID) {
+				const totalSameSourceAccounts = await db.accounts
+					.where('sourceID')
+					.equals(accountSourceID)
+					.count();
+				if (totalSameSourceAccounts === 0) {
+					await db.accountSources.delete(accountSourceID);
+				}
+			}
+		});
+		await backupDB();
+		accountsEvents.emit('accountsChanged');
+		accountSourcesEvents.emit('accountSourcesChanged');
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
 	return false;

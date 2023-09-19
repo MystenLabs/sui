@@ -554,6 +554,18 @@ export class BackgroundClient {
 		);
 	}
 
+	public removeAccount(args: MethodPayload<'removeAccount'>['args']) {
+		return lastValueFrom(
+			this.sendMessage(
+				createMessage<MethodPayload<'removeAccount'>>({
+					type: 'method-payload',
+					method: 'removeAccount',
+					args,
+				}),
+			).pipe(take(1)),
+		);
+	}
+
 	private loadFeatures() {
 		return lastValueFrom(
 			this.sendMessage(
