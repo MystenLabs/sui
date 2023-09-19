@@ -651,6 +651,7 @@ mod tests {
         let throughput_calculator = ConsensusThroughputCalculator::new(
             None,
             None,
+            None,
             metrics.clone(),
             TrafficProfileRanges::default(),
         );
