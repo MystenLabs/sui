@@ -18,7 +18,7 @@ import { BcsReader } from './reader.js';
 import { BcsWriter, BcsWriterOptions } from './writer.js';
 import { bcs } from './bcs.js';
 import { encodeStr, decodeStr, splitGenericParameters } from './utils.js';
-import { BcsType, BcsTypeOptions } from './bcs-type.js';
+import { BcsType, BcsTypeOptions, SerializedBcs } from './bcs-type.js';
 
 export * from './legacy-registry.js';
 
@@ -27,6 +27,7 @@ export {
 	bcs,
 	BcsType,
 	type BcsTypeOptions,
+	SerializedBcs,
 	toB58,
 	fromB58,
 	toB64,
