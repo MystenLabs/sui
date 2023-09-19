@@ -17,7 +17,6 @@ import { ExplorerLinkType } from '../explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
 
 interface AccountItemProps {
-	name?: string;
 	accountID: string;
 	icon?: ReactNode;
 	after?: ReactNode;
@@ -38,7 +37,6 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			isActiveAccount,
 			disabled,
 			icon,
-			name,
 			accountID,
 			after,
 			footer,
