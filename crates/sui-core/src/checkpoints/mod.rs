@@ -49,8 +49,8 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, error_span, info, trace, warn, Instrument};
-use typed_store::rocks::{DBBatch, DBMap, MetricConf, TypedStoreError};
+use tracing::{debug, error, error_span, info, warn, Instrument};
+use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
 use typed_store_derive::DBMapUtils;
@@ -1376,13 +1376,6 @@ pub trait CheckpointServiceNotify {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
-    fn write_pending_checkpoint(
-        &self,
-        batch: &mut DBBatch,
-        epoch_store: &AuthorityPerEpochStore,
-        checkpoint: &PendingCheckpoint,
-    ) -> SuiResult;
-
     fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult;
 }
 
@@ -1464,7 +1457,7 @@ impl CheckpointService {
         checkpoint: PendingCheckpoint,
     ) -> SuiResult {
         let mut batch = epoch_store.db_batch_for_test();
-        self.write_pending_checkpoint(&mut batch, epoch_store, &checkpoint)?;
+        epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
         batch.write()?;
         self.notify_checkpoint(&checkpoint)?;
         Ok(())
@@ -1514,36 +1507,6 @@ impl CheckpointServiceNotify for CheckpointService {
         Ok(())
     }
 
-    fn write_pending_checkpoint(
-        &self,
-        batch: &mut DBBatch,
-        epoch_store: &AuthorityPerEpochStore,
-        checkpoint: &PendingCheckpoint,
-    ) -> SuiResult {
-        if let Some(pending) = epoch_store.get_pending_checkpoint(&checkpoint.height())? {
-            if pending.roots != checkpoint.roots {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
-            }
-            debug!(
-                checkpoint_commit_height = checkpoint.height(),
-                "Ignoring duplicate checkpoint notification",
-            );
-            return Ok(());
-        }
-        debug!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Pending checkpoint has {} roots",
-            checkpoint.roots.len(),
-        );
-        trace!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Transaction roots for pending checkpoint: {:?}",
-            checkpoint.roots
-        );
-        epoch_store.insert_pending_checkpoint(batch, &checkpoint.height(), checkpoint)?;
-        Ok(())
-    }
-
     fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
@@ -1561,15 +1524,6 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
         &self,
         _: &AuthorityPerEpochStore,
         _: &CheckpointSignatureMessage,
-    ) -> SuiResult {
-        Ok(())
-    }
-
-    fn write_pending_checkpoint(
-        &self,
-        _: &mut DBBatch,
-        _: &AuthorityPerEpochStore,
-        _: &PendingCheckpoint,
     ) -> SuiResult {
         Ok(())
     }

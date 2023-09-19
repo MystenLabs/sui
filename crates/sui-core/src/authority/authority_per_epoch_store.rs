@@ -2126,6 +2126,40 @@ impl AuthorityPerEpochStore {
         }
     }
 
+    pub(crate) fn write_pending_checkpoint(
+        &self,
+        batch: &mut DBBatch,
+        checkpoint: &PendingCheckpoint,
+    ) -> SuiResult {
+        if let Some(pending) = self.get_pending_checkpoint(&checkpoint.height())? {
+            if pending.roots != checkpoint.roots {
+                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
+            }
+            debug!(
+                checkpoint_commit_height = checkpoint.height(),
+                "Ignoring duplicate checkpoint notification",
+            );
+            return Ok(());
+        }
+        debug!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Pending checkpoint has {} roots",
+            checkpoint.roots.len(),
+        );
+        trace!(
+            checkpoint_commit_height = checkpoint.height(),
+            "Transaction roots for pending checkpoint: {:?}",
+            checkpoint.roots
+        );
+
+        batch.insert_batch(
+            &self.tables.pending_checkpoints,
+            std::iter::once((checkpoint.height(), checkpoint)),
+        )?;
+
+        Ok(())
+    }
+
     pub fn get_pending_checkpoints(
         &self,
         last: Option<CheckpointCommitHeight>,
@@ -2144,19 +2178,6 @@ impl AuthorityPerEpochStore {
         index: &CheckpointCommitHeight,
     ) -> Result<Option<PendingCheckpoint>, TypedStoreError> {
         self.tables.pending_checkpoints.get(index)
-    }
-
-    pub fn insert_pending_checkpoint(
-        &self,
-        batch: &mut DBBatch,
-        index: &CheckpointCommitHeight,
-        checkpoint: &PendingCheckpoint,
-    ) -> Result<(), TypedStoreError> {
-        batch.insert_batch(
-            &self.tables.pending_checkpoints,
-            std::iter::once((index, checkpoint)),
-        )?;
-        Ok(())
     }
 
     pub fn process_pending_checkpoint(
@@ -2393,11 +2414,8 @@ pub(crate) struct ConsensusCommitBatch<'a, C> {
 
 impl<'a, C: CheckpointServiceNotify> ConsensusCommitBatch<'a, C> {
     pub fn commit(mut self, pending_checkpoint: PendingCheckpoint) -> SuiResult {
-        self.checkpoint_service.write_pending_checkpoint(
-            &mut self.batch,
-            &self.epoch_store,
-            &pending_checkpoint,
-        )?;
+        self.epoch_store
+            .write_pending_checkpoint(&mut self.batch, &pending_checkpoint)?;
 
         self.batch.write()?;
 
