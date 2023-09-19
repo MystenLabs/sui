@@ -1,5 +1,5 @@
 ---
-title: RPC Best Practice for Sui
+title: RPC Best Practices for Sui
 ---
 
 This topic provides some best practices for configuring your RPC settings to ensure a reliable infrastructure for your projects and services built on Sui.
