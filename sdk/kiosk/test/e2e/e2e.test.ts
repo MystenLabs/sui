@@ -123,7 +123,11 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		});
 
 		const txb = new TransactionBlock();
-		const kioskTx = new KioskTransaction({ kioskClient, txb, cap: kioskOwnerCaps[0] });
+		const kioskTx = new KioskTransaction({
+			kioskClient,
+			transactionBlock: txb,
+			cap: kioskOwnerCaps[0],
+		});
 
 		kioskTx.place({
 			itemType: heroType,
@@ -159,7 +163,7 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 			},
 		);
 
-		kioskTx.wrap();
+		kioskTx.finalize();
 		await executeTransactionBlock(toolbox, txb);
 	});
 
@@ -218,7 +222,11 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		});
 
 		const txb = new TransactionBlock();
-		const tpTx = new TransferPolicyTransaction({ kioskClient, txb, cap: villainPolicyCaps[0] });
+		const tpTx = new TransferPolicyTransaction({
+			kioskClient,
+			transactionBlock: txb,
+			cap: villainPolicyCaps[0],
+		});
 
 		tpTx
 			.addFloorPriceRule(10n)
@@ -252,6 +260,18 @@ describe('Testing Kiosk SDK transaction building & querying e2e', () => {
 		expect(kiosk).toHaveProperty('kiosk');
 		expect(normalizeSuiAddress(kiosk.kiosk?.owner || '')).toBe(
 			normalizeSuiAddress(toolbox.address()),
+		);
+	});
+
+	it('Should error when trying to call any function after calling finalize()', async () => {
+		const kioskTx = new KioskTransaction({
+			transactionBlock: new TransactionBlock(),
+			kioskClient,
+		});
+		kioskTx.createPersonal().finalize();
+
+		expect(() => kioskTx.withdraw(toolbox.address())).toThrowError(
+			"You can't add more transactions to a finalized kiosk transaction block.",
 		);
 	});
 });

@@ -158,7 +158,7 @@ export async function mintVillain(toolbox: TestToolbox, packageId: string): Prom
 export async function createKiosk(toolbox: TestToolbox, kioskClient: KioskClient) {
 	const txb = new TransactionBlock();
 
-	new KioskTransaction({ txb, kioskClient }).createAndShare(toolbox.address());
+	new KioskTransaction({ transactionBlock: txb, kioskClient }).createAndShare(toolbox.address());
 
 	await executeTransactionBlock(toolbox, txb);
 }
@@ -166,7 +166,7 @@ export async function createKiosk(toolbox: TestToolbox, kioskClient: KioskClient
 // Create a personal Kiosk.
 export async function createPersonalKiosk(toolbox: TestToolbox, kioskClient: KioskClient) {
 	const txb = new TransactionBlock();
-	new KioskTransaction({ txb, kioskClient }).createPersonal().wrap();
+	new KioskTransaction({ transactionBlock: txb, kioskClient }).createPersonal().finalize();
 
 	await executeTransactionBlock(toolbox, txb);
 }

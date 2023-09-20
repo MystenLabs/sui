@@ -25,7 +25,7 @@ export async function prepareHeroRuleset({
 	/// Do a full rule setup for `Hero` type.
 	const publisher = await getPublisherObject(toolbox);
 	const txb = new TransactionBlock();
-	const tpTx = new TransferPolicyTransaction({ kioskClient, txb });
+	const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
 
 	await tpTx.create({
 		type: `${heroPackageId}::hero::Hero`,
@@ -55,7 +55,7 @@ export async function prepareVillainTransferPolicy({
 	/// Do a plain TP creation for `Villain` type.
 	const publisher = await getPublisherObject(toolbox);
 	const txb = new TransactionBlock();
-	const tpTx = new TransferPolicyTransaction({ kioskClient, txb });
+	const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
 
 	await tpTx.createAndShare({
 		type: `${heroPackageId}::hero::Villain`,
@@ -74,7 +74,7 @@ export async function testLockItemFlow(
 	itemId: string,
 ) {
 	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 	const policies = await kioskClient.getTransferPolicies({ type: itemType });
 	expect(policies).toHaveLength(1);
@@ -85,7 +85,7 @@ export async function testLockItemFlow(
 			itemId,
 			policy: policies[0].id,
 		})
-		.wrap();
+		.finalize();
 
 	await executeTransactionBlock(toolbox, txb);
 }
@@ -99,7 +99,7 @@ export async function existingKioskManagementFlow(
 	itemId: string,
 ) {
 	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 	kioskTx
 		.place({
@@ -137,7 +137,7 @@ export async function existingKioskManagementFlow(
 			address: toolbox.address(),
 		})
 		.withdraw(toolbox.address())
-		.wrap();
+		.finalize();
 
 	await executeTransactionBlock(toolbox, txb);
 }
@@ -159,13 +159,13 @@ export async function purchaseFlow(
 	 */
 	const SALE_PRICE = 100000n;
 	const sellTxb = new TransactionBlock();
-	new KioskTransaction({ txb: sellTxb, kioskClient, cap: sellerCap })
+	new KioskTransaction({ transactionBlock: sellTxb, kioskClient, cap: sellerCap })
 		.placeAndList({
 			itemType,
 			item: itemId,
 			price: SALE_PRICE,
 		})
-		.wrap();
+		.finalize();
 
 	await executeTransactionBlock(toolbox, sellTxb);
 
@@ -173,7 +173,11 @@ export async function purchaseFlow(
 	 * Purchases the item using a different kiosk (must be personal)
 	 */
 	const purchaseTxb = new TransactionBlock();
-	const purchaseTx = new KioskTransaction({ txb: purchaseTxb, kioskClient, cap: buyerCap });
+	const purchaseTx = new KioskTransaction({
+		transactionBlock: purchaseTxb,
+		kioskClient,
+		cap: buyerCap,
+	});
 
 	(
 		await purchaseTx.purchaseAndResolve({
@@ -182,7 +186,7 @@ export async function purchaseFlow(
 			sellerKiosk: sellerCap.kioskId,
 			price: SALE_PRICE,
 		})
-	).wrap();
+	).finalize();
 
 	await executeTransactionBlock(toolbox, purchaseTxb);
 }
@@ -200,13 +204,13 @@ export async function purchaseOnNewKiosk(
 	 */
 	const SALE_PRICE = 100000n;
 	const sellTxb = new TransactionBlock();
-	new KioskTransaction({ txb: sellTxb, kioskClient, cap: sellerCap })
+	new KioskTransaction({ transactionBlock: sellTxb, kioskClient, cap: sellerCap })
 		.placeAndList({
 			itemType,
 			item: itemId,
 			price: SALE_PRICE,
 		})
-		.wrap();
+		.finalize();
 
 	await executeTransactionBlock(toolbox, sellTxb);
 
@@ -214,7 +218,7 @@ export async function purchaseOnNewKiosk(
 	 * Purchases the item using a different kiosk (must be personal)
 	 */
 	const purchaseTxb = new TransactionBlock();
-	const purchaseTx = new KioskTransaction({ txb: purchaseTxb, kioskClient });
+	const purchaseTx = new KioskTransaction({ transactionBlock: purchaseTxb, kioskClient });
 
 	// create personal kiosk (`true` means that we can use this kiosk for extra transactions)
 	if (personal) purchaseTx.createPersonal(true);
@@ -228,7 +232,7 @@ export async function purchaseOnNewKiosk(
 		price: SALE_PRICE,
 	});
 	if (!personal) purchaseTx.shareAndTransferCap(toolbox.address());
-	purchaseTx.wrap();
+	purchaseTx.finalize();
 
 	await executeTransactionBlock(toolbox, purchaseTxb);
 }

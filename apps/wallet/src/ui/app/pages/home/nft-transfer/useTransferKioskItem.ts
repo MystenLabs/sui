@@ -57,13 +57,13 @@ export function useTransferKioskItem({
 
 				const txb = new TransactionBlock();
 
-				new KioskTransaction({ txb, kioskClient, cap: kiosk.ownerCap })
+				new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kiosk.ownerCap })
 					.transfer({
 						itemType: objectData.data.data.type as string,
 						itemId: objectId,
 						address: to,
 					})
-					.wrap();
+					.finalize();
 
 				return signer.signAndExecuteTransactionBlock(
 					{
