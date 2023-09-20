@@ -10238,6 +10238,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sui-indexer",
  "sui-json-rpc-types",
  "sui-sdk",
  "telemetry-subscribers",
