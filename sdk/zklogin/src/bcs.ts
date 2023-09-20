@@ -3,9 +3,9 @@
 
 import { BCS, fromB64, toB64 } from '@mysten/bcs';
 import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcsRegistry } from '@mysten/sui.js/bcs';
 
-export const zkBcs = new BCS(bcs);
+export const zkBcs = new BCS(bcsRegistry);
 
 type ProofPoints = {
 	a: string[];
