@@ -607,7 +607,7 @@ type TransactionBlock {
   id: ID!
   digest: String!
 
-  sender: Address
+  senders: [Address]
   gasInput: GasInput
   kind: TransactionBlockKind
   signatures: [TransactionSignature]
@@ -795,7 +795,7 @@ type Event {
   # Type of the event being sent
   eventType: MoveType
 
-  sender: Address
+  senders: [Address]
   timestamp: DateTime
 
   json: String
