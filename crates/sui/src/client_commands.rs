@@ -1595,30 +1595,29 @@ impl Display for SuiClientCommandResult {
                 used_function_ticks,
                 used_module_ticks,
             } => {
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "", "Module", "Function"
-                )?;
-                writeln!(writer, "------------------------------------------------")?;
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "Max", max_module_ticks, max_function_ticks,
-                )?;
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "Used", used_module_ticks, used_function_ticks,
-                )?;
-
+                let mut builder = TableBuilder::default();
+                builder.set_header(vec!["", "Module", "Function"]);
+                builder.push_record(vec![
+                    "Max".to_string(),
+                    max_module_ticks.to_string(),
+                    max_function_ticks.to_string(),
+                ]);
+                builder.push_record(vec![
+                    "Used".to_string(),
+                    used_module_ticks.to_string(),
+                    used_function_ticks.to_string(),
+                ]);
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
                 if (used_module_ticks > max_module_ticks)
                     || (used_function_ticks > max_function_ticks)
                 {
-                    writeln!(writer, "Module will NOT pass metering check!")?;
+                    table.with(TablePanel::header("Module will NOT pass metering check!"));
                 } else {
-                    writeln!(writer, "Module will pass metering check!")?;
+                    table.with(TablePanel::header("Module will pass metering check!"));
                 }
+                table.with(tabled::settings::style::BorderSpanCorrection);
+                writeln!(f, "{}", table)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
