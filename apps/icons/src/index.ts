@@ -91,7 +91,6 @@ export { default as LedgerLogo17 } from './LedgerLogo17';
 export { default as LockLocked16 } from './LockLocked16';
 export { default as LockUnlocked16 } from './LockUnlocked16';
 export { default as LogoGoogle } from './LogoGoogle';
-export { default as LogoLedger } from './LogoLedger';
 export { default as LogoQredo } from './LogoQredo';
 export { default as LogoTwitch } from './LogoTwitch';
 export { default as Logout24 } from './Logout24';

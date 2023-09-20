@@ -7,7 +7,7 @@ import {
 	LogoTwitch,
 	Sui,
 	LogoQredo,
-	LogoLedger,
+	LedgerLogo17,
 } from '@mysten/icons';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
@@ -41,7 +41,7 @@ export function AccountIcon({ account }: { account: SerializedUIAccount }) {
 		return <LogoQredo className="h-4 w-4" />;
 	}
 	if (account.type === 'ledger') {
-		return <LogoLedger className="h-4 w-4" />;
+		return <LedgerLogo17 className="h-4 w-4" />;
 	}
 	return <SuiIcon />;
 }
