@@ -30,7 +30,7 @@
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"build": "build-package-with-vanilla-extract",
+		"build": "build-dapp-kit",
 		"test": "pnpm test:typecheck && pnpm vitest",
 		"test:typecheck": "tsc -p ./test",
 		"prepublishOnly": "pnpm build",

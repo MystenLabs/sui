@@ -9,8 +9,8 @@
 		"node": ">=16"
 	},
 	"bin": {
-		"build-package": "./src/run-build-package.ts",
-		"build-package-with-vanilla-extract": "./src/run-build-package-with-vanilla-extract.ts"
+		"build-package": "./src/build-package.ts",
+		"build-dapp-kit": "./src/build-dapp-kit.ts"
 	},
 	"scripts": {
 		"prettier:check": "prettier -c --ignore-unknown .",
@@ -23,7 +23,9 @@
 	},
 	"devDependencies": {
 		"@vanilla-extract/esbuild-plugin": "^2.3.0",
+		"autoprefixer": "^10.4.14",
 		"esbuild": "^0.17.6",
+		"postcss": "^8.4.26",
 		"typescript": "^5.1.6"
 	},
 	"dependencies": {

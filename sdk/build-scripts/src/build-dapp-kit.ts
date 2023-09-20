@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { buildPackage } from './build-package';
+import { buildPackage } from './utils/buildPackage';
 import { vanillaExtractPlugin } from '@vanilla-extract/esbuild-plugin';
 
 buildPackage({
