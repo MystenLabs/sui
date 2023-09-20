@@ -20,8 +20,8 @@ const styles = cva(
 				microsoft:
 					'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
 				google: 'bg-white text-steel-dark border border-solid border-steel hover:border-steel-dark',
-				facebook: 'bg-[#1877F2] border-none text-white',
-				twitch: 'bg-[#6441A5] border-none text-white',
+				facebook: 'bg-facebook border-none text-white',
+				twitch: 'bg-twitch border-none text-white',
 			},
 		},
 	},

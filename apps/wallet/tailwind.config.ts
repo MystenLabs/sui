@@ -21,6 +21,8 @@ export default {
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
+				facebook: '#1877F2',
+				twitch: '#6441A5',
 			},
 			minHeight: {
 				8: '2rem',
@@ -66,7 +68,7 @@ export default {
 			},
 			backgroundImage: {
 				google: 'url(_assets/images/google-background.png)',
-				twitch: 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
+				'twitch-image': 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
 			},
 		},
 	},
