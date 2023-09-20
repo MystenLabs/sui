@@ -17,7 +17,7 @@ use sui_config::genesis::{
     UnsignedGenesis,
 };
 use sui_execution::{self, Executor};
-use sui_framework::BuiltInFramework;
+use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
@@ -664,13 +664,14 @@ fn create_genesis_context(
     genesis_chain_parameters: &GenesisChainParameters,
     genesis_validators: &[GenesisValidatorMetadata],
     token_distribution_schedule: &TokenDistributionSchedule,
+    system_packages: &[SystemPackage],
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
     hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
     hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
     hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
-    for system_package in BuiltInFramework::iter_system_packages() {
+    for system_package in system_packages {
         hasher.update(&bcs::to_bytes(system_package.bytes()).unwrap());
     }
 
@@ -717,11 +718,19 @@ fn build_unsigned_genesis_data(
 
     let epoch_data = EpochData::new_genesis(genesis_chain_parameters.chain_start_timestamp_ms);
 
+    // Get the correct system packages for our protocol version. If we cannot find the snapshot
+    // that means that we must be at the latest version and we should use the latest version of the
+    // framework.
+    let system_packages =
+        sui_framework_snapshot::load_bytecode_snapshot(parameters.protocol_version.as_u64())
+            .unwrap_or_else(|_| BuiltInFramework::iter_system_packages().cloned().collect());
+
     let mut genesis_ctx = create_genesis_context(
         &epoch_data,
         &genesis_chain_parameters,
         &genesis_validators,
         token_distribution_schedule,
+        &system_packages,
     );
 
     // Use a throwaway metrics registry for genesis transaction execution.
@@ -734,6 +743,7 @@ fn build_unsigned_genesis_data(
         &genesis_validators,
         &genesis_chain_parameters,
         token_distribution_schedule,
+        system_packages,
         metrics.clone(),
     );
 
@@ -867,6 +877,7 @@ fn create_genesis_objects(
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
+    system_packages: Vec<SystemPackage>,
     metrics: Arc<LimitsMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
@@ -884,7 +895,7 @@ fn create_genesis_objects(
     let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
         .expect("Creating an executor should not fail here");
 
-    for system_package in BuiltInFramework::iter_system_packages() {
+    for system_package in system_packages.into_iter() {
         process_package(
             &mut store,
             executor.as_ref(),
