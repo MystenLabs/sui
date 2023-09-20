@@ -71,9 +71,9 @@ export const SocialButton = forwardRef(
 				aria-label={showLabel ? undefined : label}
 				{...otherProps}
 			>
-				<IconComponent width={24} height={24} />
+				<IconComponent className="h-6 w-6" />
 				{showLabel && (
-					<Text variant="pBodySmall" weight="semibold">
+					<Text variant="pBody" weight="semibold">
 						{label}
 					</Text>
 				)}
