@@ -491,12 +491,12 @@ impl NativesCostTable {
             check_zklogin_id_cost_params: CheckZkloginIdCostParams {
                 check_zklogin_id_cost_base: protocol_config
                     .check_zklogin_id_cost_base_as_option()
-                    .map(|x| x.into()),
+                    .map(Into::into),
             },
             check_zklogin_iss_cost_params: CheckZkloginIssCostParams {
                 check_zklogin_iss_cost_base: protocol_config
                     .check_zklogin_iss_cost_base_as_option()
-                    .map(|x| x.into()),
+                    .map(Into::into),
             },
         }
     }

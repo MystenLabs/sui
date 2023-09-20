@@ -1414,12 +1414,8 @@
                 "buffer_stake_for_protocol_upgrade_bps": {
                   "u64": "5000"
                 },
-                "check_zklogin_id_cost_base": {
-                  "u64": "200"
-                },
-                "check_zklogin_iss_cost_base": {
-                  "u64": "200"
-                },
+                "check_zklogin_id_cost_base": null,
+                "check_zklogin_iss_cost_base": null,
                 "consensus_bad_nodes_stake_threshold": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
