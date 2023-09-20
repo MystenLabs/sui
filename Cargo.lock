@@ -5301,6 +5301,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-bytecode-verifier-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph 0.5.1",
+]
+
+[[package]]
 name = "move-bytecode-viewer"
 version = "0.1.0"
 dependencies = [
@@ -5752,6 +5764,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stdlib-vm-rework"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-vm-rework",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
 name = "move-symbol-pool"
 version = "0.1.0"
 dependencies = [
@@ -5864,6 +5897,25 @@ dependencies = [
  "fail",
  "move-binary-format",
  "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "sha3 0.9.1",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "better_any",
+ "fail",
+ "move-binary-format",
+ "move-bytecode-verifier-vm-rework",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -9560,6 +9612,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-adapter-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-vm-rework",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-vm-rework",
+ "move-vm-types",
+ "parking_lot 0.12.1",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-vm-rework",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-vm-rework",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-analytics-indexer"
 version = "1.11.0"
 dependencies = [
@@ -9951,18 +10030,23 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-vm-rework",
  "move-vm-config",
  "move-vm-runtime",
  "move-vm-runtime-v0",
+ "move-vm-runtime-vm-rework",
  "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
+ "sui-adapter-vm-rework",
  "sui-move-natives-latest",
  "sui-move-natives-v0",
+ "sui-move-natives-vm-rework",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
  "sui-verifier-v0",
+ "sui-verifier-vm-rework",
  "workspace-hack",
 ]
 
@@ -10490,6 +10574,26 @@ dependencies = [
  "move-core-types",
  "move-stdlib-v0",
  "move-vm-runtime-v0",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-vm-rework",
+ "move-vm-runtime-vm-rework",
  "move-vm-types",
  "smallvec",
  "sui-protocol-config",
@@ -11409,6 +11513,20 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-vm-rework",
+ "move-core-types",
+ "move-vm-config",
  "sui-types",
  "workspace-hack",
 ]
@@ -13604,6 +13722,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-vm-rework",
  "move-bytecode-viewer",
  "move-cli",
  "move-command-line-common",
@@ -13628,6 +13747,7 @@ dependencies = [
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-stdlib-v0",
+ "move-stdlib-vm-rework",
  "move-symbol-pool",
  "move-transactional-test-runner",
  "move-unit-test",
@@ -13635,6 +13755,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-runtime-v0",
+ "move-vm-runtime-vm-rework",
  "move-vm-test-utils",
  "move-vm-types",
  "multer",
