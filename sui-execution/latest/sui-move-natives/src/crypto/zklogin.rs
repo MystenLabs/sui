@@ -19,7 +19,7 @@ pub const INVALID_INPUT: u64 = 0;
 #[derive(Clone)]
 pub struct CheckZkloginIdCostParams {
     /// Base cost for invoking the `check_zklogin_id` function
-    pub check_zklogin_id_cost_base: InternalGas,
+    pub check_zklogin_id_cost_base: Option<InternalGas>,
 }
 /***************************************************************************************************
  * native fun check_zklogin_id
@@ -41,7 +41,9 @@ pub fn check_zklogin_id_internal(
     // Charge the base cost for this operation
     native_charge_gas_early_exit!(
         context,
-        check_zklogin_id_cost_params.check_zklogin_id_cost_base
+        check_zklogin_id_cost_params
+            .check_zklogin_id_cost_base
+            .expect("cost table missing")
     );
 
     debug_assert!(ty_args.is_empty());
@@ -108,7 +110,7 @@ fn verify_zk_login_id_internal(
 #[derive(Clone)]
 pub struct CheckZkloginIssCostParams {
     /// Base cost for invoking the `check_zklogin_iss` function
-    pub check_zklogin_iss_cost_base: InternalGas,
+    pub check_zklogin_iss_cost_base: Option<InternalGas>,
 }
 /***************************************************************************************************
  * native fun check_zklogin_iss
@@ -130,7 +132,9 @@ pub fn check_zklogin_iss_internal(
     // Charge the base cost for this operation
     native_charge_gas_early_exit!(
         context,
-        check_zklogin_id_cost_params.check_zklogin_iss_cost_base
+        check_zklogin_id_cost_params
+            .check_zklogin_iss_cost_base
+            .expect("cost table missing")
     );
 
     debug_assert!(ty_args.is_empty());
