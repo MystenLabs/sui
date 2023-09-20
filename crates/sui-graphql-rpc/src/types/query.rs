@@ -45,6 +45,7 @@ impl Query {
         ctx: &Context<'_>,
         digest: String,
     ) -> Result<Option<TransactionBlock>> {
+        // TODO: might benefit from having a mapping from StoredTransaction to graphql::TransactionBlock
         let result = ctx.data_unchecked::<PgManager>().fetch_tx(digest).await?;
         Ok(result.map(|tx| tx.into()))
     }

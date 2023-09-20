@@ -70,6 +70,7 @@ impl PgManager {
         }
     }
 
+    // Lifted directly from https://github.com/MystenLabs/sui/blob/4e847ee6cbef7e667199d15e67af28e54322273c/crates/sui-indexer/src/store/pg_indexer_store_v2.rs#L747
     pub(crate) async fn fetch_tx(
         &self,
         digest: String,
