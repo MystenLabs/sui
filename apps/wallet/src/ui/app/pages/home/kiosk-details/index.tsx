@@ -13,6 +13,7 @@ import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import Loading from '_src/ui/app/components/loading';
 import { NFTDisplayCard } from '_src/ui/app/components/nft-display';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { Collapsible } from '_src/ui/app/shared/collapse';
 
@@ -23,6 +24,10 @@ function KioskDetailsPage() {
 	const { data: kioskData, isLoading } = useGetKioskContents(accountAddress);
 	const kiosk = kioskData?.kiosks.get(kioskId!);
 	const items = kiosk?.items;
+
+	if (useUnlockedGuard()) {
+		return null;
+	}
 
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap gap-3.75 mb-10">

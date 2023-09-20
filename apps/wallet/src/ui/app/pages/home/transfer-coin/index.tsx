@@ -24,6 +24,7 @@ import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { useSigner } from '_src/ui/app/hooks/useSigner';
 
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import type { SubmitProps } from './SendTokenForm';
 
 function TransferCoinPage() {
@@ -106,6 +107,10 @@ function TransferCoinPage() {
 			}
 		},
 	});
+
+	if (useUnlockedGuard()) {
+		return null;
+	}
 
 	if (!coinType) {
 		return <Navigate to="/" replace={true} />;
