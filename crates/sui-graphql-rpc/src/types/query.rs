@@ -1,13 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use async_graphql::{connection::Connection, *};
 
 use super::{
-    address::Address, checkpoint::Checkpoint, object::Object, owner::ObjectOwner,
-    protocol_config::ProtocolConfigs, sui_address::SuiAddress,
+    address::Address,
+    checkpoint::Checkpoint,
+    digest::Digest,
+    object::Object,
+    owner::ObjectOwner,
+    protocol_config::ProtocolConfigs,
+    sui_address::SuiAddress,
+    transaction_block::{TransactionBlock, TransactionBlockV2},
 };
-use crate::context_data::context_ext::DataProviderContextExt;
+use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -38,6 +46,18 @@ impl Query {
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
+    }
+
+    async fn transaction_block(
+        &self,
+        ctx: &Context<'_>,
+        digest: String,
+    ) -> Result<TransactionBlockV2> {
+        Ok(ctx
+            .data_unchecked::<PgManager>()
+            .fetch_tx(digest)
+            .await?
+            .into())
     }
 
     async fn checkpoint_connection(

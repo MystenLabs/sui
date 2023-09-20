@@ -10228,6 +10228,7 @@ dependencies = [
  "bcs",
  "chrono",
  "clap",
+ "diesel",
  "expect-test",
  "fastcrypto",
  "hex",

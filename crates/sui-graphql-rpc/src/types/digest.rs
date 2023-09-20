@@ -5,7 +5,7 @@ use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use std::fmt;
 
-const BASE58_DIGEST_LENGTH: usize = 32;
+pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Copy)]
 pub(crate) struct Digest([u8; BASE58_DIGEST_LENGTH]);
