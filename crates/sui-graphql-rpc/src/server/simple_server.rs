@@ -24,6 +24,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
 
     builder
         .max_query_depth(service_config.limits.max_query_depth)
+        .max_query_nodes(service_config.limits.max_query_nodes)
         .context_data(data_provider)
         .context_data(data_loader)
         .context_data(service_config)
