@@ -14,10 +14,12 @@ use super::{
     sui_address::SuiAddress,
 };
 use async_graphql::*;
+use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
+use sui_sdk::types::transaction::SenderSignedData;
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
@@ -31,7 +33,7 @@ pub(crate) struct TransactionBlock {
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {
-    fn from(tx_block: sui_json_rpc_types::SuiTransactionBlockResponse) -> Self {
+    fn from(tx_block: SuiTransactionBlockResponse) -> Self {
         let transaction = tx_block.transaction.as_ref();
         let sender = transaction.map(|tx| Address {
             address: SuiAddress::from_array(tx.data.sender().to_inner()),
@@ -47,6 +49,20 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
         }
     }
 }
+
+// impl From<StoredTransaction> for TransactionBlock {
+//     fn from(tx: StoredTransaction) -> Self {
+//         let sender: SenderSignedData = bcs::from_bytes(&tx.raw_transaction).unwrap();
+
+//         Self {
+//             digest: Digest::try_from(tx.transaction_digest),
+//             effects: tx.raw_effects,
+//             sender: None,
+//             bcs: Some(Base64::from(&tx.raw_transaction)),
+//             gas_input: None,
+//         }
+//     }
+// }
 
 #[ComplexObject]
 impl TransactionBlock {

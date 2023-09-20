@@ -12,7 +12,7 @@ use sui_indexer::models_v2::packages::StoredPackage;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::types::move_package::MovePackage;
 
-use super::db_data_provider::diesel_marco::read_only_blocking;
+use super::db_data_provider::diesel_macro::read_only_blocking;
 use super::db_data_provider::PgConnectionPool;
 
 use crate::error::Error;
@@ -37,12 +37,18 @@ impl ModuleResolver for PgModuleResolver {
 
         // Note: this implementation is potentially vulnerable to package upgrade race conditions
         // for framework packages because they reuse the same package IDs.
-        let stored_package: StoredPackage = read_only_blocking!(&self.pool, |conn| {
-            packages::dsl::packages
-                .filter(packages::dsl::package_id.eq(package_id))
-                .first::<StoredPackage>(conn)
-        })
-        .map_err(|_| Error::Internal("Error reading module.".to_string()))?;
+        let stored_package_result: Option<StoredPackage> =
+            read_only_blocking!(&self.pool, |conn| {
+                packages::dsl::packages
+                    .filter(packages::dsl::package_id.eq(package_id))
+                    .first::<StoredPackage>(conn)
+            })?;
+
+        if stored_package_result.is_none() {
+            return Err(Error::Internal("Could not find module".to_string()));
+        }
+
+        let stored_package = stored_package_result.unwrap();
 
         let move_package =
             bcs::from_bytes::<MovePackage>(&stored_package.move_package).map_err(|e| {

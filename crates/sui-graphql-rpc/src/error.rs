@@ -45,6 +45,8 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 pub enum Error {
     #[error("String is not valid base58: {0}")]
     InvalidBase58(String),
+    #[error("Invalid digest length: expected {expected}, actual {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
@@ -57,7 +59,7 @@ pub enum Error {
     CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
-    #[error("Internal error occurred while processing request: {0}")]
+    #[error("Internal error occurred while processing request")]
     Internal(String),
 }
 
@@ -70,7 +72,8 @@ impl ErrorExtensions for Error {
             | Error::InvalidCursor(_)
             | Error::CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
-            | Error::InvalidBase58(_) => {
+            | Error::InvalidBase58(_)
+            | Error::InvalidDigestLength { .. } => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

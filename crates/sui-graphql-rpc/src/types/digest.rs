@@ -16,8 +16,26 @@ impl Digest {
         self.0
     }
 
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
     pub fn from_array(arr: [u8; BASE58_DIGEST_LENGTH]) -> Self {
         Digest(arr)
+    }
+}
+
+impl TryFrom<Vec<u8>> for Digest {
+    type Error = Error;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let bytes: [u8; BASE58_DIGEST_LENGTH] = <[u8; BASE58_DIGEST_LENGTH]>::try_from(&bytes[..])
+            .map_err(|_| Error::InvalidDigestLength {
+                expected: BASE58_DIGEST_LENGTH,
+                actual: bytes.len(),
+            })?;
+
+        Ok(Self::from_array(bytes))
     }
 }
 

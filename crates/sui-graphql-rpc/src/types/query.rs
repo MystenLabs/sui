@@ -44,12 +44,9 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         digest: String,
-    ) -> Result<TransactionBlock> {
-        Ok(ctx
-            .data_unchecked::<PgManager>()
-            .fetch_tx(digest)
-            .await?
-            .into())
+    ) -> Result<Option<TransactionBlock>> {
+        let result = ctx.data_unchecked::<PgManager>().fetch_tx(digest).await?;
+        Ok(result.map(|tx| tx.into()))
     }
 
     async fn checkpoint_connection(

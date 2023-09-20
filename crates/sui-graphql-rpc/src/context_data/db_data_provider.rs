@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    context_data::db_data_provider::diesel_marco::read_only_blocking, error::Error,
+    context_data::db_data_provider::diesel_macro::read_only_blocking, error::Error,
     types::digest::Digest,
 };
 use diesel::{
@@ -20,16 +20,20 @@ use async_graphql::Result;
 
 use super::module_resolver::PgModuleResolver;
 
-pub(crate) mod diesel_marco {
+pub(crate) mod diesel_macro {
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
             let mut pg_pool_conn =
                 crate::context_data::db_data_provider::get_pg_pool_connection($pool)?;
-            pg_pool_conn
-                .build_transaction()
-                .read_only()
-                .run($query)
-                .map_err(|e| Error::Internal(e.to_string()))
+            let result = pg_pool_conn.build_transaction().read_only().run($query);
+
+            match result {
+                Ok(value) => Ok(Some(value)),
+                Err(e) => match e {
+                    diesel::result::Error::NotFound => Ok(None),
+                    _ => Err(Error::Internal(e.to_string())),
+                },
+            }
         }};
     }
     pub(crate) use read_only_blocking;
@@ -66,15 +70,25 @@ impl PgManager {
         }
     }
 
-    pub(crate) async fn fetch_tx(&self, digest: String) -> Result<SuiTransactionBlockResponse> {
+    pub(crate) async fn fetch_tx(
+        &self,
+        digest: String,
+    ) -> Result<Option<SuiTransactionBlockResponse>> {
         let digest = Digest::from_str(&digest)?;
-        let result: StoredTransaction = read_only_blocking!(&self.pool, |conn| {
+        let result: Option<StoredTransaction> = read_only_blocking!(&self.pool, |conn| {
             transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_digest.eq(digest.into_array().to_vec()))
+                .filter(transactions::dsl::transaction_digest.eq(digest.into_vec()))
                 .first::<StoredTransaction>(conn)
         })?;
-        Ok(result
-            .try_into_sui_transaction_block_response(&self.module_cache)
-            .map_err(Error::from)?)
+
+        match result {
+            Some(stored_tx) => {
+                let transformed = stored_tx
+                    .try_into_sui_transaction_block_response(&self.module_cache)
+                    .map_err(Error::from)?;
+                Ok(Some(transformed))
+            }
+            None => Ok(None),
+        }
     }
 }
