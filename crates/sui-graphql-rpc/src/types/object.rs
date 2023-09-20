@@ -3,6 +3,8 @@
 
 use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
+use sui_indexer::models_v2::objects::StoredObject;
+use sui_sdk::types::object::{Data, Object as SuiObject};
 
 use super::big_int::BigInt;
 use super::digest::Digest;
@@ -13,6 +15,7 @@ use super::{
 };
 use crate::context_data::context_ext::DataProviderContextExt;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
+use crate::error::Error;
 use crate::types::base64::Base64;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -27,6 +30,60 @@ pub(crate) struct Object {
     pub kind: Option<ObjectKind>,
 }
 
+impl TryFrom<StoredObject> for Object {
+    type Error = Error;
+
+    // TODO (wlmyng): Refactor into resolvers once we retire sui-sdk data provider
+    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
+        let version = o.object_version as u64;
+        let (object_id, _sequence_number, digest) = &o.get_object_ref()?;
+        let object: SuiObject = o.try_into()?;
+
+        let kind = if object.owner.is_immutable() {
+            Some(ObjectKind::Immutable)
+        } else if object.owner.is_shared() {
+            Some(ObjectKind::Shared)
+        } else if object.owner.is_child_object() {
+            Some(ObjectKind::Child)
+        } else if object.owner.is_address_owned() {
+            Some(ObjectKind::Owned)
+        } else {
+            None
+        };
+
+        let owner_address = object.owner.get_owner_address().ok();
+        if matches!(kind, Some(ObjectKind::Immutable) | Some(ObjectKind::Shared))
+            && owner_address.is_some()
+        {
+            return Err(Error::Internal(
+                "Immutable or Shared object should not have an owner_id".to_string(),
+            ));
+        }
+
+        let bcs = match object.data {
+            // Do we BCS serialize packages?
+            Data::Package(package) => Base64::from(
+                bcs::to_bytes(&package)
+                    .map_err(|e| Error::Internal(format!("Failed to serialize package: {e}")))?,
+            ),
+            Data::Move(move_object) => Base64::from(&move_object.into_contents()),
+        };
+
+        Ok(Self {
+            address: SuiAddress::from_array(***object_id),
+            version,
+            digest: digest.base58_encode(),
+            storage_rebate: Some(BigInt::from(object.storage_rebate)),
+            owner: owner_address.map(SuiAddress::from),
+            bcs: Some(bcs),
+            previous_transaction: Some(Digest::from_array(
+                object.previous_transaction.into_inner(),
+            )),
+            kind: None,
+        })
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectKind {
     Owned,
@@ -37,13 +94,13 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
-    package: Option<SuiAddress>,
-    module: Option<String>,
-    ty: Option<String>,
+    pub package: Option<SuiAddress>,
+    pub module: Option<String>,
+    pub ty: Option<String>,
 
-    owner: Option<SuiAddress>,
-    object_ids: Option<Vec<SuiAddress>>,
-    object_keys: Option<Vec<ObjectKey>>,
+    pub owner: Option<SuiAddress>,
+    pub object_ids: Option<Vec<SuiAddress>>,
+    pub object_keys: Option<Vec<ObjectKey>>,
 }
 
 #[derive(InputObject)]
