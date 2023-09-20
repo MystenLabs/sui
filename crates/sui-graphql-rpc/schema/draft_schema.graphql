@@ -587,7 +587,14 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  transactionBlockConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
+  ): TransactionBlockConnection
 
   # NB. Will be moved into a private, explorer-specific extension.
   addressMetrics: AddressMetrics
