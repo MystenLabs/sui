@@ -20,7 +20,7 @@ export function ManageAccountsPage() {
 							<AccountGroup
 								key={`${type}-${key}`}
 								accounts={accounts}
-								accountSource={key}
+								accountSourceID={key}
 								type={type as AccountType}
 							/>
 						);
