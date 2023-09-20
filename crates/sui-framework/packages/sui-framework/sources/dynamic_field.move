@@ -14,13 +14,17 @@ module sui::dynamic_field {
 
     friend sui::dynamic_object_field;
 
+    #[allow(unused_const)]
     /// The object already has a dynamic field with this name (with the value and type specified)
     const EFieldAlreadyExists: u64 = 0;
+    #[allow(unused_const)]
     /// Cannot load dynamic field.
     /// The object does not have a dynamic field with this name (with the value and type specified)
     const EFieldDoesNotExist: u64 = 1;
+    #[allow(unused_const)]
     /// The object has a field with that name, but the value type does not match
     const EFieldTypeMismatch: u64 = 2;
+    #[allow(unused_const)]
     /// Failed to serialize the field's name
     const EBCSSerializationFailure: u64 = 3;
 
@@ -193,6 +197,7 @@ module sui::dynamic_field {
         (id, object::id_to_address(value))
     }
 
+    /// May abort with `EBCSSerializationFailure`.
     public(friend) native fun hash_type_and_key<K: copy + drop + store>(parent: address, k: K): address;
 
     spec hash_type_and_key {
@@ -212,7 +217,8 @@ module sui::dynamic_field {
     }
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
-    /// or throws `EFieldTypeMismatch` if the type does not match
+    /// or throws `EFieldTypeMismatch` if the type does not match,
+    /// and may also abort with `EBCSSerializationFailure`
     /// we need two versions to return a reference or a mutable reference
     public(friend) native fun borrow_child_object<Child: key>(object: &UID, id: address): &Child;
 
@@ -233,7 +239,8 @@ module sui::dynamic_field {
     }
 
     /// throws `EFieldDoesNotExist` if a child does not exist with that ID
-    /// or throws `EFieldTypeMismatch` if the type does not match
+    /// or throws `EFieldTypeMismatch` if the type does not match,
+    /// and may also abort with `EBCSSerializationFailure`.
     public(friend) native fun remove_child_object<Child: key>(parent: address, id: address): Child;
 
     spec remove_child_object {

@@ -11,6 +11,7 @@ module deepbook::custodian {
     friend deepbook::clob;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
+    #[test_only]
     const EUserBalanceDoesNotExist: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -147,6 +148,7 @@ module deepbook::custodian {
         table::borrow_mut(&mut custodian.account_balances, user)
     }
 
+    #[test_only]
     fun borrow_account_balance<T>(
         custodian: &Custodian<T>,
         user: ID,
