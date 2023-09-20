@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::functional_group::FunctionalGroup;
 
@@ -18,7 +18,7 @@ pub struct ConnectionConfig {
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
-#[derive(Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct ServiceConfig {
     pub(crate) experiments: Experiments,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
@@ -40,7 +40,7 @@ pub struct Limits {
     pub(crate) max_query_nodes: usize,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
