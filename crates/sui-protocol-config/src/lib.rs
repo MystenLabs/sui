@@ -1469,6 +1469,9 @@ impl ProtocolConfig {
                     cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
                     cfg.max_age_of_jwk_in_epochs = Some(1);
                 }
+                26 => {
+                    cfg.gas_model_version = Some(7);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
