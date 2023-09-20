@@ -6,6 +6,7 @@ This document is focused on running the Sui Node software as a Validator.
 
 ## Contents
 
+- [Requirements](#requirements)
 - [Deployment](#deployment)
 - [Configuration](#configuration)
 - [Connectivity](#connectivity)
@@ -19,6 +20,14 @@ This document is focused on running the Sui Node software as a Validator.
 - [State Sync](#state-sync)
 - [Chain Operations](#chain-operations)
 - [Private Security Fixes](#private-security-fixes)
+
+## Requirements
+
+To run a Sui Validator a machine with the following is required:
+- CPU: 24 physical cores (or 48 virtual cores)
+- Memory: 128 GB
+- Storage: 4 TB NVME
+- Network: 1 Gbps
 
 ## Deployment
 
