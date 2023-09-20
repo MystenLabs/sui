@@ -15,10 +15,26 @@ warning[W09005]: dead or unreachable code
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:4:9
+  │
+4 │         return << 0;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/parser/return_in_binop.move:5:9
   │
 5 │         return || false;
   │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:5:9
+  │
+5 │         return || false;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -31,10 +47,26 @@ warning[W09005]: dead or unreachable code
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:6:9
+  │
+6 │         return && false;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/parser/return_in_binop.move:7:9
   │
 7 │         return + 0;
   │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:7:9
+  │
+7 │         return + 0;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -47,10 +79,26 @@ warning[W09005]: dead or unreachable code
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:8:9
+  │
+8 │         return - 0;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
   ┌─ tests/move_check/parser/return_in_binop.move:9:9
   │
 9 │         return % 0;
   │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/parser/return_in_binop.move:9:9
+  │
+9 │         return % 0;
+  │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -63,10 +111,26 @@ warning[W09005]: dead or unreachable code
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:10:9
+   │
+10 │         return / 1;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/return_in_binop.move:11:9
    │
 11 │         return < 0;
    │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:11:9
+   │
+11 │         return < 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -79,10 +143,26 @@ warning[W09005]: dead or unreachable code
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:12:9
+   │
+12 │         return > 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/return_in_binop.move:13:9
    │
 13 │         return <= 0;
    │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:13:9
+   │
+13 │         return <= 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -95,10 +175,26 @@ warning[W09005]: dead or unreachable code
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:14:9
+   │
+14 │         return == 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/return_in_binop.move:15:9
    │
 15 │         return >= 0;
    │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:15:9
+   │
+15 │         return >= 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -111,10 +207,26 @@ warning[W09005]: dead or unreachable code
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:16:9
+   │
+16 │         return != 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/return_in_binop.move:17:9
    │
 17 │         return | 0;
    │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:17:9
+   │
+17 │         return | 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -125,4 +237,24 @@ warning[W09005]: dead or unreachable code
    │         ^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/parser/return_in_binop.move:18:9
+   │
+18 │         return ^ 0;
+   │         ^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/parser/return_in_binop.move:18:19
+   │
+18 │         return ^ 0;
+   │         ------    ^
+   │         │         │
+   │         │         Invalid trailing ';'
+   │         │         A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │         Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

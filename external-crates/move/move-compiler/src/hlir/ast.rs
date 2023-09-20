@@ -471,11 +471,19 @@ impl Exp {
     pub fn is_unit(&self) -> bool {
         self.exp.value.is_unit()
     }
+
+    pub fn is_unreachable(&self) -> bool {
+        self.exp.value.is_unreachable()
+    }
 }
 
 impl UnannotatedExp_ {
     pub fn is_unit(&self) -> bool {
         matches!(self, UnannotatedExp_::Unit { case: _case })
+    }
+
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, UnannotatedExp_::Unreachable)
     }
 }
 

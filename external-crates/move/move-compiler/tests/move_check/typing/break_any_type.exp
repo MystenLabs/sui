@@ -6,6 +6,18 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[W09004]: unnecessary trailing semicolon
+  ┌─ tests/move_check/typing/break_any_type.move:6:22
+  │
+6 │             0 + break;
+  │                 -----^
+  │                 │    │
+  │                 │    Invalid trailing ';'
+  │                 │    A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │                 Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/typing/break_any_type.move:12:17
    │

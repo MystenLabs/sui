@@ -20,3 +20,15 @@ warning[W09005]: dead or unreachable code
   │
   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+warning[W09004]: unnecessary trailing semicolon
+  ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_bind_type.move:6:34
+  │
+6 │         let _x: CupC<R> = abort 0;
+  │                           -------^
+  │                           │      │
+  │                           │      Invalid trailing ';'
+  │                           │      A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │                           Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
