@@ -9777,6 +9777,7 @@ dependencies = [
  "clap",
  "comfy-table",
  "duration-str",
+ "fastcrypto-zkp",
  "futures",
  "hdrhistogram",
  "indicatif",
