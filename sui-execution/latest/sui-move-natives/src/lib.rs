@@ -502,8 +502,8 @@ impl NativesCostTable {
     }
 }
 
-pub fn all_natives(silent: bool) -> NativeFunctionTable {
-    let sui_framework_natives: &[(&str, &str, NativeFunction)] = &[
+pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunctionTable {
+    let mut sui_framework_natives: Vec<(&str, &str, NativeFunction)> = vec![
         ("address", "from_bytes", make_native!(address::from_bytes)),
         ("address", "to_u256", make_native!(address::to_u256)),
         ("address", "from_u256", make_native!(address::from_u256)),
@@ -695,17 +695,26 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "create_one_time_witness",
             make_native!(test_utils::create_one_time_witness),
         ),
-        (
+    ];
+
+    // Hack: Only add the check_zklogin_id_internal and check_zklogin_iss_internal native functions
+    // if their cost base is set in the protocol config which happened from protocol version 26.
+    if protocol_config
+        .check_zklogin_id_cost_base_as_option()
+        .is_some()
+    {
+        sui_framework_natives.push((
             "zklogin",
             "check_zklogin_id_internal",
             make_native!(zklogin::check_zklogin_id_internal),
-        ),
-        (
+        ));
+        sui_framework_natives.push((
             "zklogin",
             "check_zklogin_iss_internal",
             make_native!(zklogin::check_zklogin_iss_internal),
-        ),
-    ];
+        ));
+    }
+
     let sui_framework_natives_iter =
         sui_framework_natives
             .iter()

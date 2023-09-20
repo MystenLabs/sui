@@ -53,7 +53,7 @@ impl Executor {
         silent: bool,
     ) -> Result<Self, SuiError> {
         Ok(Executor(Arc::new(new_move_vm(
-            all_natives(silent),
+            all_natives(silent, protocol_config),
             protocol_config,
             paranoid_type_checks,
         )?)))

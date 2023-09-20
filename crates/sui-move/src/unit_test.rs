@@ -118,7 +118,10 @@ pub fn run_move_unit_tests(
             ignore_compile_warnings: true,
             ..config
         },
-        sui_move_natives::all_natives(/* silent */ false),
+        sui_move_natives::all_natives(
+            /* silent */ false,
+            &ProtocolConfig::get_for_max_version_UNSAFE(),
+        ),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::sink(),
@@ -136,11 +139,11 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         store,
         BTreeMap::new(),
         false,
-        &ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
         metrics,
         0, // epoch id
     ));
     ext.add(NativesCostTable::from_protocol_config(
-        &ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
     ));
 }
