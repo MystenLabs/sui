@@ -98,6 +98,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 										title="View on Explorer"
 										href={explorerHref}
 										icon={<ArrowUpRight12 />}
+										onClick={(e) => e.stopPropagation()}
 									/>
 								)}
 							</div>
