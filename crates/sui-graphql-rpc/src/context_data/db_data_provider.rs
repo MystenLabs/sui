@@ -59,37 +59,5 @@ pub fn establish_connection_pool() -> PgConnectionPool {
 pub(crate) struct PgManager {
     pub pool: PgConnectionPool,
     pub module_cache: Arc<SyncModuleCache<PgModuleResolver>>,
-}
-
-impl PgManager {
-    pub(crate) fn new() -> Self {
-        let pool = establish_connection_pool();
-        Self {
-            pool: pool.clone(),
-            module_cache: Arc::new(SyncModuleCache::new(PgModuleResolver::new(pool))),
-        }
-    }
-
-    // Lifted directly from https://github.com/MystenLabs/sui/blob/4e847ee6cbef7e667199d15e67af28e54322273c/crates/sui-indexer/src/store/pg_indexer_store_v2.rs#L747
-    pub(crate) async fn fetch_tx(
-        &self,
-        digest: String,
-    ) -> Result<Option<SuiTransactionBlockResponse>> {
-        let digest = Digest::from_str(&digest)?;
-        let result: Option<StoredTransaction> = read_only_blocking!(&self.pool, |conn| {
-            transactions::dsl::transactions
-                .filter(transactions::dsl::transaction_digest.eq(digest.into_vec()))
-                .first::<StoredTransaction>(conn)
-        })?;
-
-        match result {
-            Some(stored_tx) => {
-                let transformed = stored_tx
-                    .try_into_sui_transaction_block_response(&self.module_cache)
-                    .map_err(Error::from)?;
-                Ok(Some(transformed))
-            }
-            None => Ok(None),
-        }
     }
 }
