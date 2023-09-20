@@ -3,6 +3,7 @@
 
 use crate::config::{ConnectionConfig, ServiceConfig};
 use crate::context_data::data_provider::DataProvider;
+use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0};
 use crate::extensions::feature_gate::FeatureGate;
 use crate::extensions::limits_info::LimitsInfo;
@@ -22,6 +23,8 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
     let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
+    let pg_conn_pool = PgManager::new();
+
     let builder = ServerBuilder::new(conn.port, conn.host);
     println!("Launch GraphiQL IDE at: http://{}", builder.address());
 
@@ -31,6 +34,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_provider)
         .context_data(data_loader)
         .context_data(service_config)
+        .context_data(pg_conn_pool)
         .extension(QueryLimitsChecker)
         .extension(FeatureGate)
         .extension(LimitsInfo)
