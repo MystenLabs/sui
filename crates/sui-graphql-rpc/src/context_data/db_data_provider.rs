@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(dead_code)]
 
 use crate::{error::Error, types::digest::Digest};
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
@@ -7,9 +8,9 @@ use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, transactions::StoredTransaction,
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, transactions::StoredTransaction, objects::StoredObject,        
     },
-    schema_v2::{checkpoints, epochs, transactions},
+    schema_v2::{checkpoints, epochs, transactions, objects, tx_indices},
     PgConnectionPoolConfig,
 };
 
@@ -118,5 +119,171 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredCheckpoint>(conn).optional())
             .await
+    }
+
+    pub(crate) async fn fetch_txs(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Option<(Vec<(String, StoredTransaction)>, bool)>, Error> {
+        let mut query =
+            transactions::dsl::transactions
+                .inner_join(tx_indices::dsl::tx_indices.on(
+                    transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
+                ))
+                .into_boxed();
+        if let Some(after) = after {
+            let after: i64 = after.parse().expect("Failed to parse string to i64");
+            query = query
+                .filter(transactions::dsl::tx_sequence_number.gt(after))
+                .order(transactions::dsl::tx_sequence_number.asc());
+        } else if let Some(before) = before {
+            let before: i64 = before.parse().expect("Failed to parse string to i64");
+            query = query
+                .filter(transactions::dsl::tx_sequence_number.lt(before))
+                .order(transactions::dsl::tx_sequence_number.desc());
+        }
+
+        if let Some(filter) = filter {
+            // Filters for transaction table
+            if let Some(kind) = filter.kind {
+                query = query.filter(transactions::dsl::transaction_kind.eq(kind as i16));
+            }
+            if let Some(checkpoint) = filter.checkpoint {
+                query = query
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
+            }
+
+            // Filters for tx_indices table
+            match (filter.package, filter.module, filter.function) {
+                (Some(p), None, None) => {
+                    query = query.filter(
+                        tx_indices::dsl::packages.contains(vec![Some(p.into_array().to_vec())]),
+                    );
+                }
+                (Some(p), Some(m), None) => {
+                    query = query.filter(
+                        tx_indices::dsl::package_modules
+                            .contains(vec![Some(format!("{}::{}", p, m))]),
+                    );
+                }
+                (Some(p), Some(m), Some(f)) => {
+                    query = query.filter(
+                        tx_indices::dsl::package_module_functions
+                            .contains(vec![Some(format!("{}::{}::{}", p, m, f))]),
+                    );
+                }
+                _ => {}
+            }
+            if let Some(sender) = filter.sent_address {
+                query = query.filter(tx_indices::dsl::senders.contains(vec![sender.into_vec()]));
+            }
+            if let Some(receiver) = filter.recv_address {
+                query =
+                    query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
+            }
+            // TODO: sign_, paid_address, input_, changed_object
+        };
+
+        let limit = first.or(last).unwrap_or(10) as i64;
+        query = query.limit(limit + 1);
+
+        let result: Option<Vec<StoredTransaction>> = read_only_blocking!(&self.pool, |conn| {
+            query
+                .select(transactions::all_columns)
+                .load(conn)
+                .optional()
+        })?;
+
+        result
+            .map(|mut stored_txs| {
+                let has_next_page = stored_txs.len() as i64 > limit;
+                if has_next_page {
+                    stored_txs.pop();
+                }
+
+                let transformed = stored_txs
+                    .into_iter()
+                    .map(|stored_tx| {
+                        let cursor = stored_tx.tx_sequence_number.to_string();
+                        (cursor, stored_tx)
+                    })
+                    .collect();
+
+                Ok((transformed, has_next_page))
+            })
+            .transpose()
+    }
+
+    pub(crate) async fn fetch_objs(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<ObjectFilter>,
+    ) -> Result<Option<(Vec<(String, StoredObject)>, bool)>, Error> {
+        let mut query = objects::dsl::objects.into_boxed();
+
+        if let Some(filter) = filter {
+            if let Some(object_ids) = filter.object_ids {
+                query = query.filter(
+                    objects::dsl::object_id.eq_any(
+                        object_ids
+                            .into_iter()
+                            .map(|id| id.into_vec())
+                            .collect::<Vec<_>>(),
+                    ),
+                );
+            }
+
+            if let Some(_object_keys) = filter.object_keys {
+                // TODO: Temporary table? Probably better than a long list of ORs
+            }
+
+            if let Some(owner) = filter.owner {
+                query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
+            }
+        }
+
+        // TODO: for demonstration purposes only, not finalized and assumes checkpoint sequence number for now.
+        if let Some(after) = after {
+            let after: i64 = after.parse().expect("Failed to parse string to i64");
+            query = query
+                .filter(objects::dsl::checkpoint_sequence_number.gt(after))
+                .order(objects::dsl::checkpoint_sequence_number.asc());
+        } else if let Some(before) = before {
+            let before: i64 = before.parse().expect("Failed to parse string to i64");
+            query = query
+                .filter(objects::dsl::checkpoint_sequence_number.lt(before))
+                .order(objects::dsl::checkpoint_sequence_number.desc());
+        }
+
+        let limit = first.or(last).unwrap_or(10) as i64;
+        query = query.limit(limit + 1);
+
+        let result: Option<Vec<StoredObject>> =
+            read_only_blocking!(&self.pool, |conn| { query.load(conn).optional() })?;
+
+        result
+            .map(|mut stored_objs| {
+                let has_next_page = stored_objs.len() as i64 > limit;
+                if has_next_page {
+                    stored_objs.pop();
+                }
+
+                let transformed = stored_objs
+                    .into_iter()
+                    .map(|stored_obj| {
+                        let cursor = stored_obj.checkpoint_sequence_number.to_string();
+                        (cursor, stored_obj)
+                    })
+                    .collect();
+                Ok((transformed, has_next_page))
+            })
+            .transpose()
     }
 }
