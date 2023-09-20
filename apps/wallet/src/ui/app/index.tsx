@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/sui.js/utils';
+import cn from 'classnames';
 import { useEffect, useMemo } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -54,7 +55,7 @@ import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccoun
 import { RestrictedPage } from './pages/restricted';
 import SiteConnectPage from './pages/site-connect';
 import { AppType } from './redux/slices/app/AppType';
-import PageMainLayout from './shared/page-main-layout';
+import { PageMainLayout } from './shared/page-main-layout/PageMainLayout';
 import { Staking } from './staking/home';
 
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -159,65 +160,75 @@ const App = () => {
 	if (storageMigration.isLoading || !storageMigration?.data) {
 		return null;
 	}
-	if (storageMigration.data !== 'ready') {
-		return <StorageMigrationPage />;
-	}
 	return (
-		<Routes>
-			<Route path="restricted" element={<RestrictedPage />} />
-			<Route path="/*" element={<HomePage />}>
-				<Route path="apps/*" element={<AppsPage />} />
-				<Route path="kiosk" element={<KioskDetailsPage />} />
-				<Route path="nft-details" element={<NFTDetailsPage />} />
-				<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
-				<Route path="nfts/*" element={<AssetsPage />} />
-				<Route path="onramp" element={<OnrampPage />} />
-				<Route path="receipt" element={<ReceiptPage />} />
-				<Route path="send" element={<TransferCoinPage />} />
-				<Route path="send/select" element={<CoinsSelectorPage />} />
-				<Route path="stake/*" element={<Staking />} />
-				<Route path="tokens/*" element={<TokenDetailsPage />} />
-				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
-				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />
-			</Route>
-			<Route path="accounts/*" element={<AccountsPage />}>
-				<Route path="welcome" element={<WelcomePage />} />
-				<Route path="add-account" element={<AddAccountPage />} />
-				<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
-				<Route path="import-passphrase" element={<ImportPassphrasePage />} />
-				<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
-				<Route path="manage" element={<ManageAccountsPage />} />
-				<Route path="protect-account" element={<ProtectAccountPage />} />
-				<Route path="backup/:accountSourceID" element={<BackupMnemonicPage />} />
-				<Route
-					path="qredo-connect/*"
-					element={
-						<PageMainLayout>
-							<Outlet />
-						</PageMainLayout>
-					}
-				>
-					<Route path=":requestID" element={<QredoConnectInfoPage />} />
-					<Route path=":id/select" element={<SelectQredoAccountsPage />} />
-				</Route>
-				<Route path="export/:accountID" element={<ExportAccountPage />} />
-				<Route path="export/passphrase/:accountSourceID" element={<ExportPassphrasePage />} />
-				<Route path="forgot-password" element={<ForgotPasswordPage />}>
-					<Route index element={<ForgotPasswordIndexPage />} />
-					<Route path="recover" element={<RecoverPage />} />
-					<Route path="recover-many" element={<RecoverManyPage />} />
-					<Route path="warning" element={<ResetWarningPage />} />
-					<Route path="reset" element={<ResetPasswordPage />} />
-				</Route>
-			</Route>
-			<Route path="/dapp/*" element={<HomePage disableNavigation />}>
-				<Route path="connect/:requestID" element={<SiteConnectPage />} />
-				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
-			</Route>
-			{process.env.NODE_ENV === 'development' ? (
-				<Route path="/accounts-dev" element={<AccountsDev />} />
-			) : null}
-		</Routes>
+		<div
+			className={cn(
+				'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
+				!isPopup && 'shadow-lg rounded-xl',
+			)}
+		>
+			{storageMigration.data !== 'ready' ? (
+				<StorageMigrationPage />
+			) : (
+				<Routes>
+					<Route path="restricted" element={<RestrictedPage />} />
+					<Route path="/*" element={<HomePage />}>
+						<Route path="apps/*" element={<AppsPage />} />
+						<Route path="kiosk" element={<KioskDetailsPage />} />
+						<Route path="nft-details" element={<NFTDetailsPage />} />
+						<Route path="nft-transfer/:nftId" element={<NftTransferPage />} />
+						<Route path="nfts/*" element={<AssetsPage />} />
+						<Route path="onramp" element={<OnrampPage />} />
+						<Route path="receipt" element={<ReceiptPage />} />
+						<Route path="send" element={<TransferCoinPage />} />
+						<Route path="send/select" element={<CoinsSelectorPage />} />
+						<Route path="stake/*" element={<Staking />} />
+						<Route path="tokens/*" element={<TokenDetailsPage />} />
+						<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
+						<Route path="*" element={<Navigate to="/tokens" replace={true} />} />
+					</Route>
+					<Route path="accounts/*" element={<AccountsPage />}>
+						<Route path="welcome" element={<WelcomePage />} />
+						<Route path="add-account" element={<AddAccountPage />} />
+						<Route path="import-ledger-accounts" element={<ImportLedgerAccountsPage />} />
+						<Route path="import-passphrase" element={<ImportPassphrasePage />} />
+						<Route path="import-private-key" element={<ImportPrivateKeyPage />} />
+						<Route path="manage" element={<ManageAccountsPage />} />
+						<Route path="protect-account" element={<ProtectAccountPage />} />
+						<Route path="backup/:accountSourceID" element={<BackupMnemonicPage />} />
+						<Route
+							path="qredo-connect/*"
+							element={
+								<PageMainLayout>
+									<Outlet />
+								</PageMainLayout>
+							}
+						>
+							<Route path=":requestID" element={<QredoConnectInfoPage />} />
+							<Route path=":id/select" element={<SelectQredoAccountsPage />} />
+						</Route>
+						<Route path="export/:accountID" element={<ExportAccountPage />} />
+						<Route path="export/passphrase/:accountSourceID" element={<ExportPassphrasePage />} />
+						<Route path="forgot-password" element={<ForgotPasswordPage />}>
+							<Route index element={<ForgotPasswordIndexPage />} />
+							<Route path="recover" element={<RecoverPage />} />
+							<Route path="recover-many" element={<RecoverManyPage />} />
+							<Route path="warning" element={<ResetWarningPage />} />
+							<Route path="reset" element={<ResetPasswordPage />} />
+						</Route>
+					</Route>
+					<Route path="/dapp/*" element={<HomePage disableNavigation />}>
+						<Route path="connect/:requestID" element={<SiteConnectPage />} />
+						<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
+					</Route>
+					{process.env.NODE_ENV === 'development' ? (
+						<Route path="/accounts-dev" element={<AccountsDev />} />
+					) : null}
+				</Routes>
+			)}
+			<div id="overlay-portal-container"></div>
+			<div id="toaster-portal-container"></div>
+		</div>
 	);
 };
 

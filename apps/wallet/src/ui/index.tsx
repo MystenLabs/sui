@@ -13,6 +13,7 @@ import { HashRouter } from 'react-router-dom';
 
 import App from './app';
 import { AccountsFormProvider } from './app/components/accounts/AccountsFormContext';
+import { UnlockAccountProvider } from './app/components/accounts/UnlockAccountContext';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
@@ -77,9 +78,11 @@ function AppWrapper() {
 						>
 							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
 								<AccountsFormProvider>
-									<ErrorBoundary>
-										<App />
-									</ErrorBoundary>
+									<UnlockAccountProvider>
+										<ErrorBoundary>
+											<App />
+										</ErrorBoundary>
+									</UnlockAccountProvider>
 								</AccountsFormProvider>
 							</SuiClientProvider>
 						</PersistQueryClientProvider>

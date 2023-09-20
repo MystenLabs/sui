@@ -88,7 +88,7 @@ function NftsPage() {
 					</div>
 				)}
 			</Loading>
-			<div className="mb-5" ref={observerElem}>
+			<div ref={observerElem}>
 				{isSpinnerVisible ? (
 					<div className="mt-1 flex w-full justify-center">
 						<LoadingSpinner />

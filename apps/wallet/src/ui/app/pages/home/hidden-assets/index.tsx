@@ -74,7 +74,7 @@ function HiddenNftsPage() {
 					</Alert>
 				) : null}
 				{filteredAndSortedNfts?.length ? (
-					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
+					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2">
 						{filteredAndSortedNfts.map((nft) => {
 							const { objectId, type } = nft.data!;
 							return (

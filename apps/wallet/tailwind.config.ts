@@ -35,6 +35,7 @@ export default {
 				15: '3.75rem',
 				'popup-height': '680px',
 				'popup-width': '360px',
+				'nav-height': '80px',
 			},
 			boxShadow: {
 				'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
@@ -55,7 +56,6 @@ export default {
 			},
 			height: {
 				header: '4.25rem',
-				'nav-height': '76px',
 			},
 			maxWidth: {
 				'popup-width': '360px',
