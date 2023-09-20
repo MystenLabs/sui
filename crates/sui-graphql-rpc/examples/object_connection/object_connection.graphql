@@ -1,0 +1,20 @@
+{
+  objectConnection {
+    nodes {
+      version
+      digest
+      storageRebate
+      previousTransactionBlock {
+        digest, sender {
+          defaultNameServiceName
+        }, gasInput {
+          gasPrice
+          gasBudget
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+    }
+  }
+}

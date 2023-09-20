@@ -43,6 +43,10 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Requires package and module")]
+    RequiresPackageAndModule,
+    #[error("Requires package")]
+    RequiresPackage,
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
     #[error("String is not valid base58: {0}")]
@@ -68,7 +72,9 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::InvalidCheckpointQuery
+            Error::RequiresPackageAndModule
+            | Error::RequiresPackage
+            | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::CursorNoReversePagination
