@@ -14,12 +14,10 @@ use super::{
     sui_address::SuiAddress,
 };
 use async_graphql::*;
-use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
 };
-use sui_sdk::types::transaction::SenderSignedData;
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
 #[graphql(complex)]
