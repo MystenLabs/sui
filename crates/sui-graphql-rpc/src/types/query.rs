@@ -1,19 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use async_graphql::{connection::Connection, *};
 
 use super::{
-    address::Address,
-    checkpoint::Checkpoint,
-    digest::Digest,
-    object::Object,
-    owner::ObjectOwner,
-    protocol_config::ProtocolConfigs,
-    sui_address::SuiAddress,
-    transaction_block::{TransactionBlock, TransactionBlockV2},
+    address::Address, checkpoint::Checkpoint, object::Object, owner::ObjectOwner,
+    protocol_config::ProtocolConfigs, sui_address::SuiAddress, transaction_block::TransactionBlock,
 };
 use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 
@@ -52,7 +44,7 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         digest: String,
-    ) -> Result<TransactionBlockV2> {
+    ) -> Result<TransactionBlock> {
         Ok(ctx
             .data_unchecked::<PgManager>()
             .fetch_tx(digest)

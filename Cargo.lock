@@ -10235,6 +10235,7 @@ dependencies = [
  "hyper",
  "insta",
  "move-bytecode-utils",
+ "move-core-types",
  "once_cell",
  "serde",
  "serde_json",

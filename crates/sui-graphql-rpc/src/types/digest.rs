@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::Error;
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use std::fmt;
@@ -21,13 +22,12 @@ impl Digest {
 }
 
 impl std::str::FromStr for Digest {
-    type Err = InputValueError<String>;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; BASE58_DIGEST_LENGTH];
-        result.copy_from_slice(
-            &Base58::decode(s).map_err(|r| InputValueError::custom(format!("{r}")))?,
-        );
+        result
+            .copy_from_slice(&Base58::decode(s).map_err(|r| Error::InvalidBase58(format!("{r}")))?);
         Ok(Digest(result))
     }
 }

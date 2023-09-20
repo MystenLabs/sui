@@ -7,17 +7,20 @@ use crate::{
 };
 use diesel::{
     r2d2::{self, ConnectionManager},
-    sql_types::{BigInt, Bytea},
-    PgConnection, QueryableByName, RunQueryDsl,
+    ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
 };
-use fastcrypto::encoding::{Base58, Encoding};
-use std::{env, str::FromStr};
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use std::{env, str::FromStr, sync::Arc};
+use sui_indexer::models_v2::transactions::StoredTransaction;
+use sui_indexer::schema_v2::transactions;
+use sui_json_rpc_types::SuiTransactionBlockResponse;
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
-use async_graphql::{Error as GQLError, Result};
-// TODO: use schema from indexerV2
+use async_graphql::Result;
 
-mod diesel_marco {
+use super::module_resolver::PgModuleResolver;
+
+pub(crate) mod diesel_marco {
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
             let mut pg_pool_conn =
@@ -29,21 +32,7 @@ mod diesel_marco {
                 .map_err(|e| Error::Internal(e.to_string()))
         }};
     }
-
-    macro_rules! transactional_blocking {
-        ($pool:expr, $query:expr) => {{
-            let mut pg_pool_conn =
-                crate::context_data::db_data_provider::get_pg_pool_connection($pool)?;
-            pg_pool_conn
-                .build_transaction()
-                .serializable()
-                .read_write()
-                .run($query)
-                .map_err(|e| Error::Internal(e.to_string()))
-        }};
-    }
     pub(crate) use read_only_blocking;
-    pub(crate) use transactional_blocking;
 }
 
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, Error> {
@@ -63,36 +52,29 @@ pub fn establish_connection_pool() -> PgConnectionPool {
         .expect("Failed to create pool.")
 }
 
-const TRANSACTION_QUERY: &str = "SELECT * FROM transactions WHERE transaction_digest=$1";
-#[derive(QueryableByName)]
-pub(crate) struct PgTransaction {
-    #[sql_type = "BigInt"]
-    pub tx_sequence_number: i64,
-    #[sql_type = "Bytea"]
-    pub transaction_digest: Vec<u8>,
-    #[sql_type = "BigInt"]
-    pub checkpoint_sequence_number: i64,
-}
-
 pub(crate) struct PgManager {
-    pool: PgConnectionPool,
+    pub pool: PgConnectionPool,
+    pub module_cache: Arc<SyncModuleCache<PgModuleResolver>>,
 }
 
 impl PgManager {
     pub(crate) fn new() -> Self {
+        let pool = establish_connection_pool();
         Self {
-            pool: establish_connection_pool(),
+            pool: pool.clone(),
+            module_cache: Arc::new(SyncModuleCache::new(PgModuleResolver::new(pool))),
         }
     }
 
-    pub(crate) async fn fetch_tx(&self, digest: String) -> Result<PgTransaction> {
-        let digest =
-            Digest::from_str(&digest).map_err(|e| Error::Internal("whatever".to_string()))?;
-        let result = read_only_blocking!(&self.pool, |conn| {
-            diesel::sql_query(TRANSACTION_QUERY)
-                .bind::<Bytea, _>(digest.into_array().to_vec())
-                .get_result::<PgTransaction>(conn)
+    pub(crate) async fn fetch_tx(&self, digest: String) -> Result<SuiTransactionBlockResponse> {
+        let digest = Digest::from_str(&digest)?;
+        let result: StoredTransaction = read_only_blocking!(&self.pool, |conn| {
+            transactions::dsl::transactions
+                .filter(transactions::dsl::transaction_digest.eq(digest.into_array().to_vec()))
+                .first::<StoredTransaction>(conn)
         })?;
-        Ok(result)
+        Ok(result
+            .try_into_sui_transaction_block_response(&self.module_cache)
+            .map_err(Error::from)?)
     }
 }

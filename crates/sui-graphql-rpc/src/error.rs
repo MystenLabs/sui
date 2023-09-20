@@ -3,6 +3,7 @@
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
+use sui_indexer::errors::IndexerError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -42,6 +43,8 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("String is not valid base58: {0}")]
+    InvalidBase58(String),
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
@@ -66,12 +69,19 @@ impl ErrorExtensions for Error {
             | Error::CursorNoReversePagination
             | Error::InvalidCursor(_)
             | Error::CursorConnectionFetchFailed(_)
-            | Error::MultiGet(_) => {
+            | Error::MultiGet(_)
+            | Error::InvalidBase58(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {
                 e.set("code", code::INTERNAL_SERVER_ERROR);
             }
         })
+    }
+}
+
+impl From<IndexerError> for Error {
+    fn from(e: IndexerError) -> Self {
+        Error::Internal(e.to_string())
     }
 }
