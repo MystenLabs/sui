@@ -12,9 +12,17 @@ type AccountListItemProps = {
 	account: SerializedUIAccount;
 	editable?: boolean;
 	showLock?: boolean;
+	hideCopy?: boolean;
+	hideExplorerLink?: boolean;
 };
 
-export function AccountListItem({ account, editable, showLock = false }: AccountListItemProps) {
+export function AccountListItem({
+	account,
+	editable,
+	showLock,
+	hideCopy,
+	hideExplorerLink,
+}: AccountListItemProps) {
 	const activeAccount = useActiveAccount();
 	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
 
@@ -45,6 +53,8 @@ export function AccountListItem({ account, editable, showLock = false }: Account
 			}
 			accountID={account.id}
 			editable={editable}
+			hideCopy={hideCopy}
+			hideExplorerLink={hideExplorerLink}
 		/>
 	);
 }

@@ -27,6 +27,8 @@ interface AccountItemProps {
 	isActiveAccount?: boolean; // whether the account is the active account in the context of the account list
 	background?: 'gradient';
 	editable?: boolean;
+	hideExplorerLink?: boolean;
+	hideCopy?: boolean;
 }
 
 export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
@@ -41,6 +43,8 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 			after,
 			footer,
 			editable,
+			hideExplorerLink,
+			hideCopy,
 			...props
 		},
 		ref,
@@ -88,14 +92,14 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 								{formatAddress(account.address)}
 							</Text>
 							<div className="opacity-0 group-hover:opacity-100 flex gap-1 duration-100">
-								<IconButton icon={<Copy12 />} onClick={copyAddress} />
-								{explorerHref ? (
+								{hideCopy ? null : <IconButton icon={<Copy12 />} onClick={copyAddress} />}
+								{hideExplorerLink || !explorerHref ? null : (
 									<IconButton
 										title="View on Explorer"
 										href={explorerHref}
 										icon={<ArrowUpRight12 />}
 									/>
-								) : null}
+								)}
 							</div>
 						</div>
 					</div>
