@@ -9,6 +9,7 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
+        date_time::DateTime,
         digest::Digest,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
@@ -36,7 +37,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::{
     digests::ChainIdentifier,
     effects::TransactionEffects,
-    messages_checkpoint::CheckpointDigest,
+    messages_checkpoint::{CheckpointCommitment, CheckpointDigest},
     object::{Data, Object as SuiObject},
     transaction::{SenderSignedData, TransactionDataAPI},
 };
@@ -182,7 +183,6 @@ impl PgManager {
                     transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
                 ))
                 .into_boxed();
-
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -714,15 +714,33 @@ impl PgManager {
 impl TryFrom<StoredCheckpoint> for Checkpoint {
     type Error = Error;
     fn try_from(c: StoredCheckpoint) -> Result<Self, Self::Error> {
+        let checkpoint_commitments: Vec<CheckpointCommitment> =
+            bcs::from_bytes(&c.checkpoint_commitments).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
+                ))
+            })?;
+
+        // TODO: validate this
+        let live_object_set_digest =
+            checkpoint_commitments
+                .last()
+                .map(|commitment| match commitment {
+                    CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
+                        Digest::from_array(digest.digest.into_inner()).to_string()
+                    }
+                });
+
         Ok(Self {
             digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
             sequence_number: c.sequence_number as u64,
+            timestamp: DateTime::from_ms(c.timestamp_ms),
             validator_signature: Some(c.validator_signature.into()),
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
                 .map(|d| Digest::try_from(d).map(|digest| digest.to_string()))
                 .transpose()?,
-            live_object_set_digest: None,
+            live_object_set_digest,
             network_total_transactions: Some(c.network_total_transactions as u64),
             rolling_gas_summary: Some(GasCostSummary {
                 computation_cost: c.computation_cost as u64,

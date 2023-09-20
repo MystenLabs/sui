@@ -16,6 +16,51 @@
   }
 }
 
+# with timestamp, liveObjectSetDigest, and transaction block data for the latest checkpoint
+{
+  checkpoint {
+    digest
+    sequenceNumber
+    timestamp
+    liveObjectSetDigest
+    transactionBlockConnection {
+      edges {
+        node {
+          digest
+          sender {
+            location
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+    }
+  }
+}
+
+# Get data for the first two transaction blocks of checkpoint at sequence number 10
+{
+  checkpoint(id: {sequenceNumber: 10}) {
+    transactionBlockConnection(first: 2) {
+      edges {
+        node {
+          digest
+          sender {
+            location
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+      pageInfo {
+        startCursor
+      }
+    }
+  }
+}
+
 # At a particular sequence number
 {
   checkpoint(id: {

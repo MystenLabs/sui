@@ -29,7 +29,10 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        ctx.data_provider().fetch_chain_id().await
+        ctx.data_unchecked::<PgManager>()
+            .fetch_chain_identifier()
+            .await
+            .extend()
     }
 
     /// Configuration for this RPC service
