@@ -93,7 +93,6 @@ impl PgManager {
                 .bind::<Bytea, _>(digest.into_array().to_vec())
                 .get_result::<PgTransaction>(conn)
         })?;
-
         Ok(result)
     }
 }
