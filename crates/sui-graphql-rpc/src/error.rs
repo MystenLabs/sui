@@ -45,8 +45,11 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 pub enum Error {
     #[error("String is not valid base58: {0}")]
     InvalidBase58(String),
+<<<<<<< HEAD
     #[error("Invalid digest length: expected {expected}, actual {actual}")]
     InvalidDigestLength { expected: usize, actual: usize },
+=======
+>>>>>>> d2080f6382 (damn that's a lot of stuff. Digest::from_str use crate::error::Error. need module_resolver to resolve - well, not the only approach and not the ideal approach. Finish setting up query.transaction_block)
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
