@@ -306,12 +306,19 @@ impl SignatureVerifier {
         });
     }
 
-    /// Insert a JWK into the verifier state based on provider. Returns true if the kid of the JWK has not already
-    /// been inserted.
+    /// Insert a JWK into the verifier state. Pre-existing entries for a given JwkId will not be
+    /// overwritten.
     pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
-        debug!("insert JWK with kid: {:?}", jwk_id);
         let mut jwks = self.jwks.write();
-        jwks.insert(jwk_id.clone(), jwk.clone());
+        match jwks.entry(jwk_id.clone()) {
+            im::hashmap::Entry::Occupied(_) => {
+                debug!("JWK with kid {:?} already exists", jwk_id);
+            }
+            im::hashmap::Entry::Vacant(entry) => {
+                debug!("inserting JWK with kid: {:?}", jwk_id);
+                entry.insert(jwk.clone());
+            }
+        }
     }
 
     pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
