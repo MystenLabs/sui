@@ -3,6 +3,7 @@
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
+use sui_indexer::errors::IndexerError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -42,6 +43,12 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Provide one of digest or sequence_number, not both")]
+    InvalidCheckpointQuery,
+    #[error("String is not valid base58: {0}")]
+    InvalidBase58(String),
+    #[error("Invalid digest length: expected {expected}, actual {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
     #[error("'before' and 'after' must not be used together")]
     CursorNoBeforeAfter,
     #[error("'first' and 'last' must not be used together")]
@@ -54,24 +61,33 @@ pub enum Error {
     CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
-    #[error("Internal error occurred while processing request.")]
+    #[error("Internal error occurred while processing request")]
     Internal(String),
 }
 
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::CursorNoBeforeAfter
+            Error::InvalidCheckpointQuery
+            | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::CursorNoReversePagination
             | Error::InvalidCursor(_)
             | Error::CursorConnectionFetchFailed(_)
-            | Error::MultiGet(_) => {
+            | Error::MultiGet(_)
+            | Error::InvalidBase58(_)
+            | Error::InvalidDigestLength { .. } => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {
                 e.set("code", code::INTERNAL_SERVER_ERROR);
             }
         })
+    }
+}
+
+impl From<IndexerError> for Error {
+    fn from(e: IndexerError) -> Self {
+        Error::Internal(e.to_string())
     }
 }
