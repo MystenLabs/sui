@@ -1571,13 +1571,20 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "Added new Sui env [{}] to config.", env.alias)?;
             }
             SuiClientCommandResult::Envs(envs, active) => {
+                let mut builder = TableBuilder::default();
+                builder.set_header(["alias", "url", "active"]);
                 for env in envs {
-                    write!(writer, "{} => {}", env.alias, env.rpc)?;
-                    if Some(env.alias.as_str()) == active.as_deref() {
-                        write!(writer, " (active)")?;
-                    }
-                    writeln!(writer)?;
+                    builder.push_record(vec![env.alias.clone(), env.rpc.clone(), {
+                        if Some(env.alias.as_str()) == active.as_deref() {
+                            "*".to_string()
+                        } else {
+                            "".to_string()
+                        }
+                    }]);
                 }
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
+                write!(f, "{}", table)?
             }
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
