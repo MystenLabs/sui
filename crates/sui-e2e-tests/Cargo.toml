@@ -34,6 +34,7 @@ move-binary-format.workspace = true
 move-package.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-core-types.workspace = true
 
 sui-core.workspace = true

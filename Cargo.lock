@@ -10004,6 +10004,7 @@ dependencies = [
  "clap",
  "expect-test",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "futures",
  "indexmap",

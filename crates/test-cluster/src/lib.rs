@@ -604,6 +604,7 @@ pub struct TestClusterBuilder {
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
     num_unpruned_validators: Option<usize>,
+    jwk_fetch_interval: Option<Duration>,
     config_dir: Option<PathBuf>,
 }
 
@@ -621,6 +622,7 @@ impl TestClusterBuilder {
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
             num_unpruned_validators: None,
+            jwk_fetch_interval: None,
             config_dir: None,
         }
     }
@@ -695,6 +697,11 @@ impl TestClusterBuilder {
 
     pub fn with_supported_protocol_versions(mut self, c: SupportedProtocolVersions) -> Self {
         self.validator_supported_protocol_versions_config = ProtocolVersionsConfig::Global(c);
+        self
+    }
+
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
         self
     }
 
@@ -816,6 +823,10 @@ impl TestClusterBuilder {
         }
         if let Some(num_unpruned_validators) = self.num_unpruned_validators {
             builder = builder.with_num_unpruned_validators(num_unpruned_validators);
+        }
+
+        if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
+            builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
         }
 
         if let Some(config_dir) = self.config_dir.take() {

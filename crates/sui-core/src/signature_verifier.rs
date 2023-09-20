@@ -319,6 +319,10 @@ impl SignatureVerifier {
         jwks.get(jwk_id) == Some(jwk)
     }
 
+    pub fn get_jwks(&self) -> ImHashMap<JwkId, JWK> {
+        self.jwks.read().clone()
+    }
+
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {

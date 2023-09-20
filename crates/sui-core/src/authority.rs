@@ -75,6 +75,7 @@ use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
 use sui_types::digests::ChainIdentifier;
@@ -1069,6 +1070,28 @@ impl AuthorityState {
             }
             debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
+
+            // double check that the signature verifier always matches the authenticator state
+            if cfg!(debug_assertions) {
+                let authenticator_state = get_authenticator_state(&self.database)
+                    .expect("Read cannot fail")
+                    .expect("Authenticator state must exist");
+
+                let mut sys_jwks: Vec<_> = authenticator_state
+                    .active_jwks
+                    .into_iter()
+                    .map(|jwk| (jwk.jwk_id, jwk.jwk))
+                    .collect();
+                let mut active_jwks: Vec<_> = epoch_store
+                    .signature_verifier
+                    .get_jwks()
+                    .into_iter()
+                    .collect();
+                sys_jwks.sort();
+                active_jwks.sort();
+
+                assert_eq!(sys_jwks, active_jwks);
+            }
         }
 
         Ok((effects, execution_error_opt))

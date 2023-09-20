@@ -5,7 +5,11 @@
 use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration};
 
+use futures::StreamExt;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_json_rpc_types::TransactionFilter;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::base_types::ObjectID;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
@@ -175,5 +179,85 @@ async fn test_create_authenticator_state_object() {
                 .unwrap()
                 .expect("auth state object should exist");
         });
+    }
+}
+
+// This test is intended to look for forks caused by conflicting / repeated JWK votes from
+// validators.
+#[cfg(msim)]
+#[sim_test]
+async fn test_conflicting_jwks() {
+    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+    use std::collections::HashSet;
+    use std::sync::{Arc, Mutex};
+    use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+
+    sui_node::set_jwk_injector(Arc::new(|_authority, provider| {
+        use rand::Rng;
+        // generate random (and possibly conflicting) id/key pairings.
+        let id_num = rand::thread_rng().gen_range(1..=4);
+        let key_num = rand::thread_rng().gen_range(1..=4);
+
+        let id = JwkId {
+            iss: provider.get_config().iss,
+            kid: format!("kid{}", id_num),
+        };
+
+        let jwk = JWK {
+            kty: "kty".to_string(),
+            e: format!("e{}", key_num),
+            n: "n".to_string(),
+            alg: "alg".to_string(),
+        };
+
+        Ok(vec![(id, jwk)])
+    }));
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(45000)
+        .with_jwk_fetch_interval(Duration::from_secs(5))
+        .build()
+        .await;
+
+    let jwks = Arc::new(Mutex::new(Vec::new()));
+    let jwks_clone = jwks.clone();
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let mut txns = node.state().subscription_handler.subscribe_transactions(
+            TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
+        );
+        let state = node.state();
+
+        tokio::spawn(async move {
+            while let Some(tx) = txns.next().await {
+                let digest = *tx.transaction_digest();
+                let tx = state
+                    .database
+                    .get_transaction_block(&digest)
+                    .unwrap()
+                    .unwrap();
+                match &tx.data().intent_message().value.kind() {
+                    TransactionKind::EndOfEpochTransaction(_) => (),
+                    TransactionKind::AuthenticatorStateUpdate(update) => {
+                        let jwks = &mut *jwks_clone.lock().unwrap();
+                        for jwk in &update.new_active_jwks {
+                            jwks.push(jwk.clone());
+                        }
+                    }
+                    _ => panic!("{:?}", tx),
+                }
+            }
+        });
+    });
+
+    for _ in 0..5 {
+        test_cluster.wait_for_epoch(None).await;
+    }
+
+    let mut seen_jwks = HashSet::new();
+
+    // ensure no jwk is repeated.
+    for jwk in jwks.lock().unwrap().iter() {
+        assert!(seen_jwks.insert((jwk.jwk_id.clone(), jwk.jwk.clone(), jwk.epoch)));
     }
 }
