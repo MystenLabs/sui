@@ -82,8 +82,8 @@ impl TransactionValidator for SuiTxValidator {
         use rand::SeedableRng;
         let mut rng = rand::prelude::StdRng::from_seed(b.digest().0);
 
-        // 0.1% of batches are rejected by f stake
-        if rng.gen::<f64>() < 0.001 {
+        // 1% of batches are rejected by f stake
+        if rng.gen::<f64>() < 0.01 {
             let validators = committee.shuffle_by_stake_with_rng(None, None, &mut rng);
             let mut cumulative_stake = 0;
             let mut found = false;
