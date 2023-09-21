@@ -11,7 +11,7 @@ You can follow the example to create a `KioskClient`. The client currently suppo
 `TESTNET`. View next section for usage in other networks.
 
 _Mysten Kiosk rules and extensions are not supported in Devnet due to network wipes (that would
-require constantly changing the package ids)._
+require constantly changing the package IDs)._
 
 ```typescript
 import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
@@ -30,7 +30,7 @@ const kioskClient = new KioskClient({
 
 ### Using KioskClient on devnet or localnet
 
-In order to use all the functionality of `Kiosk SDK` outside of `MAINNET` and `TESTNET`, you need to
+To use all the functionality of Kiosk SDK outside of `MAINNET` and `TESTNET`,
 use `Network.CUSTOM` as the network, and pass the `packageIds` for the rules and extensions you want
 to use.
 

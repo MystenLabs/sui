@@ -1,22 +1,22 @@
 # Examples
 
-Here are some more complete examples on how you'd use the SDK to interact, and we'll focus on dApps.
+The following dApp-focused examples demonstrate how to use the SDK to interact with Kiosk.
 
-## Minting into kiosk example
+## Minting into Kiosk example
 
-For every scenario when we're using Kiosk in dApps, the user who has connected their wallet will
-either have a kiosk already (and could have more than one) or we will have to create it for them.
+For every scenario using Kiosk in dApps, the user who has connected their wallet
+either has at least one kiosk already or you must create it for them.
 
-The SDK supports the scenario of `silently` creating the kiosk, as part of our PTBs.
+The SDK supports the scenario of `silently` creating the kiosk, as part of our Programmable Transaction Blocks.
 
-Let's assume that the mint function of the contract is:
+Assume that the mint function of the contract is:
 
 `public fun mint(coin: Coin<SUI>, kiosk: &mut Kiosk, cap: &KioskOwnerCap){...}`
 
 ### When the user has a kiosk
 
 ```typescript
-// let's assume that we have created the client somewhere else.
+// Assume that we have created the client somewhere else.
 const kioskClient = new KioskClient({...});
 const connectedAddress = '0xAnAddress';
 
@@ -24,18 +24,18 @@ const connectedAddress = '0xAnAddress';
 // We should re-use the same `KioskClient` instance throughout our dApp.
 const getCap = async () => {
     let { kioskOwnerCaps } = await kioskClient.getOwnedKiosks(address);
-    // let's assume that the user has only 1 kiosk.
-    // Here, we would need to do some more checks in a realistic scneario.
-    // And also possible give the user in our dApp a selector for which kiosk he wants to interact with (if he owns more than 1).
+    // Assume that the user has only 1 kiosk.
+    // Here, you need to do some more checks in a realistic scenario.
+    // And possibly give the user in our dApp a kiosk selector to choose which one they want to interact with (if they own more than one).
     return kioskOwnerCaps[0];
 }
 
-// The mint function could be like.
+// The mint function could be like the following.
 const mint = async () => {
     const txb = new TransactionBlock();
     const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap: await getCap() }});
 
-    // We'll assume it costs 1 SUI
+    // Assume it costs one SUI
     let coin = txb.splitCoins(txb.gas, [txb.pure(1_000_000_000)]);
 
     // A function that mints directly into the kiosk.
@@ -50,7 +50,7 @@ const mint = async () => {
 
     kioskTx.finalize();
 
-    // sign and execute transaction block.
+    // Sign and execute transaction block.
     await signAndExecuteTransactionBlock({ tx: txb });
 }
 ```
@@ -58,7 +58,7 @@ const mint = async () => {
 ### When the user doesn't have a kiosk (silent creation)
 
 ```typescript
-// let's assume that we have created the client somewhere else.
+// Assume the client exists somewhere else.
 const kioskClient = new KioskClient({...});
 
 // Our mint function.
@@ -66,7 +66,7 @@ const mint = async () => {
     const txb = new TransactionBlock();
     const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb }});
 
-    // creates a kiosk.
+    // Creates a kiosk.
     kioskTx.create();
 
     // We'll assume it costs 1 SUI
@@ -85,7 +85,7 @@ const mint = async () => {
     kioskTx.shareAndTransferCap('0xAddressToTransferCapTo');
     kioskTx.finalize();
 
-    // sign and execute transaction block.
+    // Sign and execute transaction block.
     await signAndExecuteTransactionBlock({ tx: txb });
 }
 ```
@@ -106,7 +106,7 @@ const levelUp = async (object) => {
 		})
 		.finalize();
 
-	// sign and execute transaction block.
+	// Sign and execute transaction block.
 	await signAndExecuteTransactionBlock({ tx: txb });
 };
 
