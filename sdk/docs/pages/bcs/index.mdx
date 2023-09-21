@@ -38,7 +38,7 @@ const bcsBytes = Coin.serialize({
 const coin = Coin.parse(bcsBytes);
 
 // serialization: Object into bytes - an Option with <T = Coin>
-const hex = bcs.optionEnum(Coin).serialize({ some: coin }).toHex();
+const hex = bcs.option(Coin).serialize(coin).toHex();
 
 console.log(hex);
 ```
@@ -66,9 +66,6 @@ following table lists the primitive types available:
 | `u64`, `u128`, `u256` | `string`     | `number \| string \| bigint` | Unsigned Integer types, decoded as `string` to allow for JSON serialization |
 | `uleb128`             | `number`     | `number`                     | Unsigned LEB128 integer type                                                |
 | `string`              | `string`     | `string`                     | UTF-8 encoded string                                                        |
-| `hex`                 | `string`     | `string`                     | Variable length bytes represented as a HEX string                           |
-| `base64`              | `string`     | `string`                     | Variable length bytes represented as a Base64                               |
-| `base58`              | `string`     | `string`                     | Variable length bytes represented as a Base58                               |
 | `bytes(size)`         | `Uint8Array` | `Iterable<number>`           | Fixed length bytes                                                          |
 
 ```ts
@@ -100,16 +97,15 @@ const parsedBytes = bcs.bytes(4).parse(bytes);
 For most use-cases you'll want to combine primitive types into more complex types like `vectors`,
 `structs` and `enums`. The following table lists methods available for creating compound types:
 
-| Method                 | Description                                              |
-| ---------------------- | -------------------------------------------------------- |
-| `vector(type: T)`      | A variable length list of values of type `T`             |
-| `fixedArray(size, T)`  | A fixed length array of values of type `T`               |
-| `option(type: T)`      | A value of type `T` or `null`                            |
-| `optionEnum(type: T)`  | An enum with variants `{ None: null }` and `{ Some: T }` |
-| `enum(name, values)`   | An enum value representing one of the provided values    |
-| `struct(name, fields)` | A struct with named fields of the provided types         |
-| `tuple(types)`         | A tuple of the provided types                            |
-| `map(K, V)`            | A map of keys of type `K` to values of type `V`          |
+| Method                 | Description                                           |
+| ---------------------- | ----------------------------------------------------- |
+| `vector(type: T)`      | A variable length list of values of type `T`          |
+| `fixedArray(size, T)`  | A fixed length array of values of type `T`            |
+| `option(type: T)`      | A value of type `T` or `null`                         |
+| `enum(name, values)`   | An enum value representing one of the provided values |
+| `struct(name, fields)` | A struct with named fields of the provided types      |
+| `tuple(types)`         | A tuple of the provided types                         |
+| `map(K, V)`            | A map of keys of type `K` to values of type `V`       |
 
 ```ts
 import { bcs } from '@mysten/bcs';
@@ -125,8 +121,6 @@ const stringArray = bcs.array(3, bcs.string()).serialize(['a', 'b', 'c']).toByte
 // Option
 const option = bcs.option(bcs.string()).serialize('some value').toBytes();
 const nullOption = bcs.option(bcs.string()).serialize(null).toBytes();
-const optionEnum = bcs.optionEnum(bcs.u8()).serialize({ Some: 100 }).toBytes();
-const none = bcs.optionEnum(bcs.u8()).serialize({ None: null }).toBytes();
 
 // Enum
 const MyEnum = bcs.enum('MyEnum', {
@@ -170,8 +164,6 @@ const parsedIntArray = bcs.array(4, bcs.u8()).parse(intArray);
 // Option
 const parsedOption = bcs.option(bcs.string()).parse(option);
 const parsedNullOption = bcs.option(bcs.string()).parse(nullOption);
-const parsedOptionEnum = bcs.optionEnum(bcs.u8()).parse(optionEnum);
-const parsedNone = bcs.optionEnum(bcs.u8()).parse(none);
 
 // Enum
 const parsedNoTypeEnum = MyEnum.parse(noTypeEnum);
