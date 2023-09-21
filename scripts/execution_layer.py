@@ -9,7 +9,7 @@ import re
 from shutil import which, rmtree
 import subprocess
 from sys import stderr, stdout
-from typing import TextIO
+from typing import TextIO, Union
 
 
 def parse_args():
@@ -168,17 +168,6 @@ def do_generate_lib(args):
         lib_path = Path() / "sui-execution" / "src" / "lib.rs"
         with open(lib_path, mode="w") as lib:
             generate_lib(lib)
-
-        try:
-            subprocess.run(["cargo", "fmt", lib_path], check=True)
-        except subprocess.CalledProcessError as e:
-            print(
-                f"Failed to format {lib_path}, you may need to run "
-                "`cargo fmt` manually.",
-                file=stderr,
-            )
-            exit(e.returncode)
-
 
 def do_merge(args):
     from_module = impl(args.feature)
@@ -526,6 +515,20 @@ def generate_lib(output_file: TextIO):
             flags=re.MULTILINE,
         ),
     )
+
+    if output_file is not stdout:
+        format_file(output_file.name)
+
+
+def format_file(file: Union[str, Path]):
+    """Format a file with rustfmt."""
+    try:
+        subprocess.run(["rustfmt", file], check=True)
+    except subprocess.CalledProcessError:
+        print(
+            f"Failed to format {file}, you may need to run `rustfmt` manually.",
+            file=stderr,
+        )
 
 
 # Modules in `sui-execution` that don't count as "cuts" (they are
