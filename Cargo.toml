@@ -364,7 +364,7 @@ prost = "0.11.8"
 prost-build = "0.11.8"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
-quinn-proto = "^0.10.0"
+quinn-proto = "^0.10.5"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
