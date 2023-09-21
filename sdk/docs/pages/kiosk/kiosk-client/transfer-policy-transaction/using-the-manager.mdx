@@ -1,7 +1,7 @@
-# How to Use
+# How to use
 
 After following the introduction steps on how to initialize a transfer policy transaction you can
-call any of the available functions to prepare your PTB.
+call any of the available functions to prepare your Programmable Transaction Block (PTB).
 
 ## Available functions
 
@@ -15,7 +15,7 @@ After setting up the manager, you can withdraw profits from the specified transf
 
 ```typescript
 // ... tp transaction is initialized and policy is set.
-// withdraw 10 SUI from the policy. Leave last parameter empty to withdraw all profits.
+// Withdraw 10 SUI from the policy. Leave last parameter empty to withdraw all profits.
 tpTx.withdraw('address_to_transfer_coin', 10_000_000_000);
 ```
 
@@ -23,17 +23,17 @@ tpTx.withdraw('address_to_transfer_coin', 10_000_000_000);
 
 > You can chain the actions when you're calling them, to add multiple rules.
 
-After setting up the transaction, you can go ahead and add any of the supported rules to the policy.
+After setting up the transaction, you can add any of the supported rules to the policy.
 
-#### Royalty Rule
+#### Royalty rule
 
 `addRoyaltyRule(percentage, minAmount)`
 
 You can add the royalty rule like the following example.
 
-`percentageToBasisPoints` is a helper to convert a percentage (0.00-100%) to basis Points.
+`percentageToBasisPoints` is a helper to convert a percentage (0.00-100%) to basis points.
 
-`minAmount` allows to set a minimum amount per transaction, so that the royalty paid is
+Use `minAmount` to set a minimum amount per transaction, so that the royalty paid is
 **MAX(percentage, min_amount)**. Use 0 for no minimum amount.
 
 ```typescript
@@ -47,7 +47,7 @@ You can remove the rule by calling:
 tpTx.removeRoyaltyRule();
 ```
 
-#### Kiosk Lock rule
+#### Kiosk lock rule
 
 `addLockRule()`
 
@@ -64,7 +64,7 @@ You can remove the rule by calling:
 tpTx.removeLockRule();
 ```
 
-#### Personal Kiosk rule
+#### Personal kiosk rule
 
 `addPersonalKioskRule()`
 
@@ -81,7 +81,7 @@ You can remove the rule by calling:
 tpTx.removePersonalKioskRule();
 ```
 
-#### Floor Price rule
+#### Floor price rule
 
 `addFloorPriceRule(price)`
 
