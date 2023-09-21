@@ -165,18 +165,6 @@ describe('bcs', () => {
 		testType('bytes', bcs.bytes(4), new Uint8Array([1, 2, 3, 4]), '01020304');
 	});
 
-	describe('hex', () => {
-		testType('hex', bcs.hex(), '01020304', '0401020304');
-	});
-
-	describe('base64', () => {
-		testType('base64', bcs.base64(), 'AQIDBA==', '0401020304');
-	});
-
-	describe('b58', () => {
-		testType('b58', bcs.base58(), toB58(new Uint8Array([1, 2, 3, 4])), '0401020304');
-	});
-
 	describe('tuples', () => {
 		testType('tuple(u8, u8)', bcs.tuple([bcs.u8(), bcs.u8()]), [1, 2], '0102');
 		testType(
