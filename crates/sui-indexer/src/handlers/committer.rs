@@ -113,12 +113,12 @@ async fn commit_checkpoints<S>(
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
         futures::future::join_all(vec![
-            state.persist_transactions(tx_batch, metrics.clone()),
-            state.persist_tx_indices(tx_indices_batch, metrics.clone()),
-            state.persist_events(events_batch, metrics.clone()),
-            state.persist_packages(packages_batch, metrics.clone()),
-            state.persist_objects(object_changes_batch, metrics.clone()),
-            state.persist_epoch(epochs_batch, metrics.clone()),
+            state.persist_transactions(tx_batch),
+            state.persist_tx_indices(tx_indices_batch),
+            state.persist_events(events_batch),
+            state.persist_packages(packages_batch),
+            state.persist_objects(object_changes_batch),
+            state.persist_epoch(epochs_batch),
         ])
         .await
         .into_iter()
@@ -133,7 +133,7 @@ async fn commit_checkpoints<S>(
     }
 
     state
-        .persist_checkpoints(checkpoint_batch, metrics.clone())
+        .persist_checkpoints(checkpoint_batch)
         .await
         .tap_err(|e| {
             error!(

@@ -11,7 +11,6 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
-use crate::metrics::IndexerMetrics;
 
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
@@ -35,44 +34,25 @@ pub trait IndexerStoreV2 {
     async fn persist_objects(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,
-        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError>;
 
     async fn persist_checkpoints(
         &self,
         checkpoints: Vec<IndexedCheckpoint>,
-        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError>;
 
     async fn persist_transactions(
         &self,
         transactions: Vec<IndexedTransaction>,
-        metrics: IndexerMetrics,
     ) -> Result<(), IndexerError>;
 
-    async fn persist_tx_indices(
-        &self,
-        indices: Vec<TxIndex>,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError>;
+    async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError>;
 
-    async fn persist_events(
-        &self,
-        events: Vec<IndexedEvent>,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError>;
+    async fn persist_events(&self, events: Vec<IndexedEvent>) -> Result<(), IndexerError>;
 
-    async fn persist_packages(
-        &self,
-        packages: Vec<IndexedPackage>,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError>;
+    async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError>;
 
-    async fn persist_epoch(
-        &self,
-        data: Vec<EpochToCommit>,
-        metrics: IndexerMetrics,
-    ) -> Result<(), IndexerError>;
+    async fn persist_epoch(&self, data: Vec<EpochToCommit>) -> Result<(), IndexerError>;
 
     async fn get_network_total_transactions_by_end_of_epoch(
         &self,

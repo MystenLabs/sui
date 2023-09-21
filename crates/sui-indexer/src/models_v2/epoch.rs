@@ -34,8 +34,8 @@ pub struct StoredEpochInfo {
     pub next_epoch_protocol_version: Option<i64>,
 }
 
-impl From<&IndexedEpochInfo> for StoredEpochInfo {
-    fn from(e: &IndexedEpochInfo) -> Self {
+impl StoredEpochInfo {
+    pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
         Self {
             epoch: e.epoch as i64,
             validators: e
@@ -43,11 +43,18 @@ impl From<&IndexedEpochInfo> for StoredEpochInfo {
                 .iter()
                 .map(|v| Some(bcs::to_bytes(v).unwrap()))
                 .collect(),
-            epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             first_checkpoint_id: e.first_checkpoint_id as i64,
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
             protocol_version: e.protocol_version as i64,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_epoch_end_info(e: &IndexedEpochInfo) -> Self {
+        Self {
+            epoch: e.epoch as i64,
+            epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             last_checkpoint_id: e.last_checkpoint_id.map(|v| v as i64),
             epoch_end_timestamp: e.epoch_end_timestamp.map(|v| v as i64),
             storage_fund_reinvestment: e.storage_fund_reinvestment.map(|v| v as i64),
@@ -65,6 +72,16 @@ impl From<&IndexedEpochInfo> for StoredEpochInfo {
                 .map(|v| bcs::to_bytes(&v).unwrap()),
             next_epoch_reference_gas_price: e.next_epoch_reference_gas_price.map(|v| v as i64),
             next_epoch_protocol_version: e.next_epoch_protocol_version.map(|v| v as i64),
+
+            // For the following fields:
+            // we don't update these columns when persisting EndOfEpoch data.
+            // However if the data is partial, diesel would interpret them
+            // as Null and hence cause errors.
+            validators: vec![],
+            first_checkpoint_id: 0,
+            epoch_start_timestamp: 0,
+            reference_gas_price: 0,
+            protocol_version: 0,
         }
     }
 }
