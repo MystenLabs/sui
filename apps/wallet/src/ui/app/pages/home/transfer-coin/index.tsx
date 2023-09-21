@@ -122,7 +122,7 @@ function TransferCoinPage() {
 			title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
 			closeOverlay={() => navigate('/')}
 		>
-			<div className="flex flex-col w-full mt-2.5">
+			<div className="flex flex-col w-full h-full">
 				{showTransactionPreview && formData ? (
 					<BottomMenuLayout>
 						<Content>
