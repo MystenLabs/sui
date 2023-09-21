@@ -9,6 +9,7 @@ import re
 from shutil import which, rmtree
 import subprocess
 from sys import stderr, stdout
+from typing import TextIO
 
 
 def parse_args():
@@ -167,6 +168,16 @@ def do_generate_lib(args):
         lib_path = Path() / "sui-execution" / "src" / "lib.rs"
         with open(lib_path, mode="w") as lib:
             generate_lib(lib)
+
+        try:
+            subprocess.run(["cargo", "fmt", lib_path], check=True)
+        except subprocess.CalledProcessError as e:
+            print(
+                f"Failed to format {lib_path}, you may need to run "
+                "`cargo fmt` manually.",
+                file=stderr,
+            )
+            exit(e.returncode)
 
 
 def do_merge(args):
@@ -447,7 +458,7 @@ def generate_impls(feature, copy):
             copy.write(line)
 
 
-def generate_lib(output_file):
+def generate_lib(output_file: TextIO):
     """Expose all `Executor` and `Verifier` impls via lib.rs
 
     Generates the contents of sui-execution/src/lib.rs to assign a numeric
