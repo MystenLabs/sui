@@ -12,7 +12,7 @@ use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 #[diesel(table_name = epochs)]
 pub struct StoredEpochInfo {
     pub epoch: i64,
-    pub validators: Vec<Vec<u8>>,
+    pub validators: Vec<Option<Vec<u8>>>,
     pub epoch_total_transactions: i64,
     pub first_checkpoint_id: i64,
     pub epoch_start_timestamp: i64,
@@ -41,7 +41,7 @@ impl From<&IndexedEpochInfo> for StoredEpochInfo {
             validators: e
                 .validators
                 .iter()
-                .map(|v| bcs::to_bytes(v).unwrap())
+                .map(|v| Some(bcs::to_bytes(v).unwrap()))
                 .collect(),
             epoch_total_transactions: e.epoch_total_transactions as i64,
             first_checkpoint_id: e.first_checkpoint_id as i64,
@@ -101,6 +101,7 @@ impl TryInto<EpochInfo> for StoredEpochInfo {
         let validators = self
             .validators
             .into_iter()
+            .flatten()
             .map(|v| {
                 bcs::from_bytes(&v).map_err(|_| {
                     IndexerError::PersistentStorageDataCorruptionError(format!(
