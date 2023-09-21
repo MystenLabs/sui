@@ -15,7 +15,6 @@ pub mod consensus_validator;
 pub mod db_checkpoint_handler;
 pub mod epoch;
 mod execution_driver;
-mod math;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
