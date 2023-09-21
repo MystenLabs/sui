@@ -3,6 +3,7 @@
 
 import { fromB58, toB58 } from './b58.js';
 import { fromB64, toB64 } from './b64.js';
+import { BcsType } from './bcs-type.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
 import { Encoding } from './types.js';
@@ -378,6 +379,84 @@ export class BCS {
 				return decodeCb.call(this, reader, typeParams, typeMap);
 			},
 		} as TypeInterface);
+
+		return this;
+	}
+
+	/**
+	 * Method to register BcsType instances to the registry
+	 * Types are registered with a callback that provides BcsType instances for each generic
+	 * passed to the type.
+	 *
+	 * - createType(...generics) - Return a BcsType instance
+	 *
+	 * @example
+	 * // our type would be a string that consists only of numbers
+	 * bcs.registerType('Box<T>', (T) => {
+	 * 		return bcs.struct({
+	 * 			value: T
+	 * 		});
+	 * });
+
+	 * console.log(Array.from(bcs.ser('Box<string>', '12345').toBytes()) == [5,1,2,3,4,5]);
+	 *
+	 * @param name
+	 * @param createType a Callback to create the BcsType with any passed in generics
+	 */
+	public registerBcsType(
+		typeName: TypeName,
+		createType: (...params: BcsType<any>[]) => BcsType<any>,
+	) {
+		this.registerType(
+			typeName,
+			(writer, data, typeParams) => {
+				const generics = typeParams.map(
+					(param) =>
+						new BcsType<unknown>({
+							name: String(param),
+							write: (data, writer) => {
+								const { name, params } = this.parseTypeName(param);
+								const typeInterface = this.getTypeInterface(name);
+
+								const typeMap = (params as string[]).reduce((acc: any, value: string, index) => {
+									return Object.assign(acc, { [value]: typeParams[index] });
+								}, {});
+
+								return typeInterface._encodeRaw.call(this, writer, data, params, typeMap);
+							},
+							read: () => {
+								throw new Error('Not implemented');
+							},
+						}),
+				);
+
+				createType(...generics).write(data, writer);
+				return writer;
+			},
+			(reader, typeParams) => {
+				const generics = typeParams.map(
+					(param) =>
+						new BcsType<unknown>({
+							name: String(param),
+							write: (data, writer) => {
+								throw new Error('Not implemented');
+							},
+							read: (reader) => {
+								const { name, params } = this.parseTypeName(param);
+								const typeInterface = this.getTypeInterface(name);
+
+								const typeMap = (params as string[]).reduce((acc: any, value: string, index) => {
+									return Object.assign(acc, { [value]: typeParams[index] });
+								}, {});
+
+								return typeInterface._decodeRaw.call(this, reader, params, typeMap);
+							},
+						}),
+				);
+
+				return createType(...generics).read(reader);
+			},
+		);
 
 		return this;
 	}
