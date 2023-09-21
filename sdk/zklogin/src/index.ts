@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export { computeZkAddress, jwtToAddress } from './address.js';
-export type { ComputeZKAddressOptions } from './address.js';
+export { computeZkLoginAddress, jwtToAddress } from './address.js';
+export type { ComputeZkLoginAddressOptions } from './address.js';
 
 export { getZkLoginSignature } from '@mysten/sui.js/zklogin';
 

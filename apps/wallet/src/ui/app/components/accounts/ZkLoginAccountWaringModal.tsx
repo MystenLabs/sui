@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { zkProviderDataMap, type ZkProvider } from '_src/background/accounts/zk/providers';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import {
+	zkLoginProviderDataMap,
+	type ZkLoginProvider,
+} from '_src/background/accounts/zklogin/providers';
+import { isZkLoginAccountSerializedUI } from '_src/background/accounts/zklogin/ZkLoginAccount';
 import { type MethodPayload } from '_src/shared/messaging/messages/payloads/MethodPayload';
 import {
 	Dialog,
@@ -20,7 +23,7 @@ import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
 import { Link } from '../../shared/Link';
 
-const providerToName: Record<ZkProvider, string> = {
+const providerToName: Record<ZkLoginProvider, string> = {
 	google: 'Google',
 	facebook: 'Facebook',
 	twitch: 'Twitch',
@@ -36,10 +39,10 @@ export function ZkLoginAccountWarningModal() {
 	});
 	if (
 		activeAccount &&
-		isZkAccountSerializedUI(activeAccount) &&
+		isZkLoginAccountSerializedUI(activeAccount) &&
 		!activeAccount.warningAcknowledged
 	) {
-		const providerData = zkProviderDataMap[activeAccount.provider];
+		const providerData = zkLoginProviderDataMap[activeAccount.provider];
 		return (
 			<Dialog open>
 				<DialogContent onPointerDownOutside={(e) => e.preventDefault()} background="avocado">

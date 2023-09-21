@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-export type ZkProvider = 'google' | 'twitch' | 'facebook';
+export type ZkLoginProvider = 'google' | 'twitch' | 'facebook';
 
-export interface ZkProviderData {
+export interface ZkLoginProviderData {
 	clientID: string;
 	url: string;
 	extraParams?: Record<string, string>;
@@ -19,7 +19,7 @@ export interface ZkProviderData {
 
 const isDev = process.env.NODE_ENV === 'development';
 
-export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
+export const zkLoginProviderDataMap: Record<ZkLoginProvider, ZkLoginProviderData> = {
 	google: {
 		clientID: '946731352276-pk5glcg8cqo38ndb39h7j093fpsphusu.apps.googleusercontent.com',
 		url: 'https://accounts.google.com/o/oauth2/v2/auth',
