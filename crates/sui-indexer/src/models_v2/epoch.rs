@@ -101,7 +101,7 @@ impl TryInto<EpochInfo> for StoredEpochInfo {
         let validators = self
             .validators
             .into_iter()
-            .filter_map(|opt_v| opt_v)
+            .flatten()
             .map(|v| {
                 bcs::from_bytes(&v).map_err(|_| {
                     IndexerError::PersistentStorageDataCorruptionError(format!(
