@@ -5,11 +5,7 @@
 use std::collections::BTreeSet;
 use tokio::time::{sleep, Duration};
 
-use futures::StreamExt;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_json_rpc_types::TransactionFilter;
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::base_types::ObjectID;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_tx};
 use sui_types::SUI_AUTHENTICATOR_STATE_OBJECT_ID;
@@ -188,8 +184,12 @@ async fn test_create_authenticator_state_object() {
 #[sim_test]
 async fn test_conflicting_jwks() {
     use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+    use futures::StreamExt;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
+    use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+    use sui_json_rpc_types::TransactionFilter;
+    use sui_types::base_types::ObjectID;
     use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
     sui_node::set_jwk_injector(Arc::new(|_authority, provider| {
