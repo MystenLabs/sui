@@ -9,7 +9,7 @@ import { type RuleResolvingParams } from '../../types';
  * A helper to resolve the royalty rule.
  */
 export function resolveRoyaltyRule(params: RuleResolvingParams) {
-	const { txb, itemType, price, packageId, transferRequest, policyId } = params;
+	const { transactionBlock: txb, itemType, price, packageId, transferRequest, policyId } = params;
 
 	const policyObj = objArg(txb, policyId);
 
@@ -32,8 +32,16 @@ export function resolveRoyaltyRule(params: RuleResolvingParams) {
 }
 
 export function resolveKioskLockRule(params: RuleResolvingParams) {
-	const { txb, packageId, itemType, kiosk, kioskCap, policyId, purchasedItem, transferRequest } =
-		params;
+	const {
+		transactionBlock: txb,
+		packageId,
+		itemType,
+		kiosk,
+		kioskCap,
+		policyId,
+		purchasedItem,
+		transferRequest,
+	} = params;
 
 	if (!kiosk || !kioskCap) throw new Error('Missing Owned Kiosk or Owned Kiosk Cap');
 
@@ -52,7 +60,7 @@ export function resolveKioskLockRule(params: RuleResolvingParams) {
  * @param params
  */
 export function resolvePersonalKioskRule(params: RuleResolvingParams) {
-	const { txb, packageId, itemType, kiosk, transferRequest } = params;
+	const { transactionBlock: txb, packageId, itemType, kiosk, transferRequest } = params;
 
 	if (!kiosk) throw new Error('Missing owned Kiosk.');
 
@@ -68,7 +76,7 @@ export function resolvePersonalKioskRule(params: RuleResolvingParams) {
  * Resolves the floor price rule.
  */
 export function resolveFloorPriceRule(params: RuleResolvingParams) {
-	const { txb, packageId, itemType, policyId, transferRequest } = params;
+	const { transactionBlock: txb, packageId, itemType, policyId, transferRequest } = params;
 
 	// proves that the destination kiosk is personal
 	txb.moveCall({

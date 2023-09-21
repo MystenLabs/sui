@@ -346,7 +346,7 @@ export class KioskTransaction {
 
 			ruleDefinition.resolveRuleFunction({
 				packageId: ruleDefinition.packageId,
-				txb: this.transactionBlock,
+				transactionBlock: this.transactionBlock,
 				itemType,
 				itemId,
 				price: price.toString(),
