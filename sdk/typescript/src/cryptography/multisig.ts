@@ -14,9 +14,9 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
-import { builder } from '../builder/bcs.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
+import { bcs } from '../bcs/index.js';
 export { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
 
 export type PubkeyWeightPair = {
@@ -138,7 +138,7 @@ export function combinePartialSigs(
 		multisig_pk,
 	};
 
-	const bytes = builder.ser('MultiSig', multisig).toBytes();
+	const bytes = bcs.MultiSig.serialize(multisig).toBytes();
 	let tmp = new Uint8Array(bytes.length + 1);
 	tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 	tmp.set(bytes, 1);
@@ -151,7 +151,8 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 	if (parsed.length < 1 || parsed[0] !== SIGNATURE_SCHEME_TO_FLAG['MultiSig']) {
 		throw new Error('Invalid MultiSig flag');
 	}
-	const multisig: MultiSig = builder.de('MultiSig', parsed.slice(1));
+
+	const multisig: MultiSig = bcs.MultiSig.parse(parsed.slice(1));
 	let res: SignaturePubkeyPair[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
 		let s: CompressedSignature = multisig.sigs[i];

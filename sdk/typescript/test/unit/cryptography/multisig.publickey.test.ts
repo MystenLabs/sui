@@ -22,7 +22,6 @@ import {
 	parseSerializedSignature,
 	SIGNATURE_SCHEME_TO_FLAG,
 } from '../../../src/cryptography/signature';
-import { builder } from '../../../src/builder/bcs.js';
 import { fromB64 } from '@mysten/bcs';
 
 describe('Publickey', () => {
@@ -249,7 +248,7 @@ describe('Publickey', () => {
 		const maxLength = 1 + (64 + 1) * MAX_SIGNER_IN_MULTISIG + 2;
 		const tmp = new Uint8Array(maxLength);
 		tmp.set([0x03]);
-		tmp.set(builder.ser('u16', 3).toBytes(), 1);
+		tmp.set(bcs.ser('u16', 3).toBytes(), 1);
 		let i = 3;
 		for (const { publicKey, weight } of multiSigPublicKey.getPublicKeys()) {
 			const bytes = publicKey.toSuiBytes();
@@ -423,7 +422,7 @@ describe('Publickey', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const bytes = fromB64(multisig);
-		const multiSigStruct: MultiSigStruct = builder.de('MultiSig', bytes.slice(1));
+		const multiSigStruct: MultiSigStruct = bcs.de('MultiSig', bytes.slice(1));
 
 		const parsedPartialSignatures = parsePartialSignatures(multiSigStruct);
 
