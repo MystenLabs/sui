@@ -9,6 +9,7 @@ import re
 from shutil import which, rmtree
 import subprocess
 from sys import stderr, stdout
+from typing import TextIO, Union
 
 
 def parse_args():
@@ -167,7 +168,6 @@ def do_generate_lib(args):
         lib_path = Path() / "sui-execution" / "src" / "lib.rs"
         with open(lib_path, mode="w") as lib:
             generate_lib(lib)
-
 
 def do_merge(args):
     from_module = impl(args.feature)
@@ -447,7 +447,7 @@ def generate_impls(feature, copy):
             copy.write(line)
 
 
-def generate_lib(output_file):
+def generate_lib(output_file: TextIO):
     """Expose all `Executor` and `Verifier` impls via lib.rs
 
     Generates the contents of sui-execution/src/lib.rs to assign a numeric
@@ -507,15 +507,23 @@ def generate_lib(output_file):
         else:
             raise Exception(f"Don't know how to substitute {var}")
 
-    output_file.write(
-        re.sub(
+
+    rust_code = re.sub(
             r"^(\s*)// \$([A-Z_]+)$",
             substitute,
             template,
             flags=re.MULTILINE,
-        ),
-    )
+        )
 
+    try:
+        result = subprocess.run(['rustfmt'], input=rust_code, text=True, capture_output=True, check=True)
+        formatted_code = result.stdout
+        output_file.write(formatted_code)
+    except subprocess.CalledProcessError as e:
+        print(f"rustfmt failed with error code {e.returncode}")
+        print("stderr:", e.stderr)
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 # Modules in `sui-execution` that don't count as "cuts" (they are
 # other supporting modules)
