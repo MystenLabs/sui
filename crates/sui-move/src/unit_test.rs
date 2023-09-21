@@ -118,10 +118,7 @@ pub fn run_move_unit_tests(
             ignore_compile_warnings: true,
             ..config
         },
-        sui_move_natives::all_natives(
-            /* silent */ false,
-            &ProtocolConfig::get_for_max_version_UNSAFE(),
-        ),
+        sui_move_natives::all_natives(/* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::sink(),

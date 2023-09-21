@@ -45,8 +45,8 @@ pub fn check_zklogin_id_internal(
         context,
         check_zklogin_id_cost_params
             .check_zklogin_id_cost_base
-            .ok_or(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+            .ok_or_else(
+                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Gas cost for check_zklogin_id not available".to_string())
             )?
     );
@@ -139,8 +139,8 @@ pub fn check_zklogin_iss_internal(
         context,
         check_zklogin_id_cost_params
             .check_zklogin_iss_cost_base
-            .ok_or(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+            .ok_or_else(
+                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message("Gas cost for check_zklogin_iss not available".to_string())
             )?
     );
