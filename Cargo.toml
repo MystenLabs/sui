@@ -2,6 +2,9 @@
 resolver = "2"
 
 exclude = [
+    "external-crates/move-execution/super-long-name-as-test/move-bytecode-verifier",
+    "external-crates/move-execution/super-long-name-as-test/move-stdlib",
+    "external-crates/move-execution/super-long-name-as-test/move-vm/runtime",
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
     "external-crates/move-execution/v0/move-vm/runtime",
@@ -159,6 +162,9 @@ members = [
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
+    "sui-execution/super-long-name-as-test/sui-adapter",
+    "sui-execution/super-long-name-as-test/sui-move-natives",
+    "sui-execution/super-long-name-as-test/sui-verifier",
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",

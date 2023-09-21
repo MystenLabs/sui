@@ -15,11 +15,13 @@ pub mod executor;
 pub mod verifier;
 
 mod latest;
+mod super_long_name_as_test;
 mod v0;
 
 #[cfg(test)]
 mod tests;
 
+pub const SUPER_LONG_NAME_AS_TEST: u64 = u64::MAX;
 pub fn executor(
     protocol_config: &ProtocolConfig,
     paranoid_type_checks: bool,
@@ -39,6 +41,12 @@ pub fn executor(
             silent,
         )?),
 
+        SUPER_LONG_NAME_AS_TEST => Arc::new(super_long_name_as_test::Executor::new(
+            protocol_config,
+            paranoid_type_checks,
+            silent,
+        )?),
+
         v => panic!("Unsupported execution version {v}"),
     })
 }
@@ -52,6 +60,11 @@ pub fn verifier<'m>(
     match version {
         0 => Box::new(v0::Verifier::new(protocol_config, is_metered, metrics)),
         1 => Box::new(latest::Verifier::new(protocol_config, is_metered, metrics)),
+        SUPER_LONG_NAME_AS_TEST => Box::new(super_long_name_as_test::Verifier::new(
+            protocol_config,
+            is_metered,
+            metrics,
+        )),
         v => panic!("Unsupported execution version {v}"),
     }
 }
