@@ -32,7 +32,7 @@ async fn test_recovery() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
 
-    // Make certificates for rounds 1 and 2.
+    // Make certificates for rounds 1 up to 4.
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
     let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
@@ -41,17 +41,17 @@ async fn test_recovery() {
     let (mut certificates, next_parents) = test_utils::make_optimal_certificates(
         &committee,
         &latest_protocol_version(),
-        1..=2,
+        1..=4,
         &genesis,
         &ids,
     );
 
-    // Make two certificate (f+1) with round 3 to trigger the commits.
+    // Make two certificate (f+1) with round 5 to trigger the commits.
     let (_, certificate) = test_utils::mock_certificate(
         &committee,
         &latest_protocol_version(),
         ids[0],
-        3,
+        5,
         next_parents.clone(),
     );
     certificates.push_back(certificate);
@@ -59,7 +59,7 @@ async fn test_recovery() {
         &committee,
         &latest_protocol_version(),
         ids[1],
-        3,
+        5,
         next_parents,
     );
     certificates.push_back(certificate);
@@ -109,32 +109,20 @@ async fn test_recovery() {
         tx_waiter.send(certificate).await.unwrap();
     }
 
-    // Ensure the first 4 ordered certificates are from round 1 (they are the parents of the committed
-    // leader); then the leader's certificate should be committed.
-    let consensus_index_counter = 4;
-    let num_of_committed_certificates = 5;
-
-    let committed_sub_dag = rx_output.recv().await.unwrap();
-    let mut sequence = committed_sub_dag.certificates.into_iter();
-    for i in 1..=num_of_committed_certificates {
-        let output = sequence.next().unwrap();
-
-        if i < 5 {
-            assert_eq!(output.round(), 1);
-        } else {
-            assert_eq!(output.round(), 2);
-        }
+    let expected_committed_sub_dags = 2;
+    for i in 1..=expected_committed_sub_dags {
+        let sub_dag = rx_output.recv().await.unwrap();
+        assert_eq!(sub_dag.sub_dag_index, i);
     }
 
     // Now assume that we want to recover from a crash. We are testing all the recovery cases
-    // from having executed no certificates at all (or certificate with index = 0), up to
-    // have executed the last committed certificate
-    for last_executed_certificate_index in 0..consensus_index_counter {
+    // from restoring the executed sub dag index = 0 up to 2.
+    for last_executed_certificate_index in 0..=expected_committed_sub_dags {
         let mut execution_state = MockExecutionState::new();
         execution_state
             .expect_last_executed_sub_dag_index()
             .times(1)
-            .returning(|| 1);
+            .returning(move || last_executed_certificate_index);
 
         let consensus_output = get_restored_consensus_output(
             consensus_store.clone(),
@@ -144,12 +132,9 @@ async fn test_recovery() {
         .await
         .unwrap();
 
-        // we expect to have recovered all the certificates from the last commit. The Sui executor engine
-        // will not execute twice the same certificate.
-        assert_eq!(consensus_output.len(), 1);
-        assert!(
-            consensus_output[0].len()
-                >= (num_of_committed_certificates - last_executed_certificate_index) as usize
+        assert_eq!(
+            consensus_output.len(),
+            (2 - last_executed_certificate_index) as usize
         );
     }
 }

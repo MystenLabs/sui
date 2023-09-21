@@ -92,14 +92,14 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     certificate_store: CertificateStore,
     execution_state: &State,
 ) -> Result<Vec<CommittedSubDag>, SubscriberError> {
-    // We always want to recover at least the last committed sub-dag since we can't know
-    // whether the execution has been interrupted and there are still batches/transactions
-    // that need to be sent for execution.
-
+    // We can safely recover from the `last_executed_sub_dag_index + 1` as we have the guarantee
+    // from the consumer that the `last_executed_sub_dag_index` transactions have been atomically processed
+    // and don't need to re-send the last sub dag.
     let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index().await;
+    let restore_sub_dag_index_from = last_executed_sub_dag_index + 1;
 
     let compressed_sub_dags =
-        consensus_store.read_committed_sub_dags_from(&last_executed_sub_dag_index)?;
+        consensus_store.read_committed_sub_dags_from(&restore_sub_dag_index_from)?;
 
     let mut sub_dags = Vec::new();
     for compressed_sub_dag in compressed_sub_dags {
