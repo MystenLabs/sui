@@ -1,9 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toHEX, fromHEX } from './hex.js';
-import { fromB64, toB64 } from './b64.js';
-import { fromB58, toB58 } from './b58.js';
 import { ulebEncode } from './uleb.js';
 import {
 	BcsTypeOptions,
@@ -129,33 +126,6 @@ export const bcs = {
 		});
 	},
 
-	hex(options?: BcsTypeOptions<string>) {
-		return stringLikeBcsType({
-			name: 'hex',
-			toBytes: (value) => fromHEX(value),
-			fromBytes: (bytes) => toHEX(bytes),
-			...options,
-		});
-	},
-
-	base58(options?: BcsTypeOptions<string>) {
-		return stringLikeBcsType({
-			name: 'base58',
-			toBytes: (value) => fromB58(value),
-			fromBytes: (bytes) => toB58(bytes),
-			...options,
-		});
-	},
-
-	base64(options?: BcsTypeOptions<string>) {
-		return stringLikeBcsType({
-			name: 'base64',
-			toBytes: (value) => fromB64(value),
-			fromBytes: (bytes) => toB64(bytes),
-			...options,
-		});
-	},
-
 	fixedArray<T, Input>(size: number, type: BcsType<T, Input>) {
 		return new BcsType<T[], Iterable<Input> & { length: number }>({
 			name: `${type.name}[${size}]`,
@@ -175,29 +145,27 @@ export const bcs = {
 	},
 
 	option<T, Input>(type: BcsType<T, Input>) {
-		return bcs.optionEnum(type).transform({
-			input: (value: Input | null | undefined) => {
-				if (value == null) {
-					return { None: null };
-				}
+		return bcs
+			.enum(`Option<${type.name}>`, {
+				None: null,
+				Some: type,
+			})
+			.transform({
+				input: (value: Input | null | undefined) => {
+					if (value == null) {
+						return { None: true };
+					}
 
-				return { Some: value };
-			},
-			output: (value) => {
-				if ('Some' in value) {
-					return value.Some;
-				}
+					return { Some: value };
+				},
+				output: (value) => {
+					if ('Some' in value) {
+						return value.Some;
+					}
 
-				return null;
-			},
-		});
-	},
-
-	optionEnum<T, Input>(type: BcsType<T, Input>) {
-		return bcs.enum(`Option<${type.name}>`, {
-			None: null,
-			Some: type,
-		});
+					return null;
+				},
+			});
 	},
 
 	vector<T, Input>(type: BcsType<T, Input>) {
@@ -327,7 +295,7 @@ export const bcs = {
 				{
 					[K in keyof T]: T[K] extends BcsType<any, infer U>
 						? { [K2 in K]: U }
-						: { [K2 in K]: null | boolean };
+						: { [K2 in K]: unknown };
 				}[keyof T]
 			>,
 			'name'
@@ -341,7 +309,7 @@ export const bcs = {
 			{
 				[K in keyof T]: T[K] extends BcsType<any, infer U>
 					? { [K2 in K]: U }
-					: { [K2 in K]: null | boolean };
+					: { [K2 in K]: unknown };
 			}[keyof T]
 		>({
 			name,

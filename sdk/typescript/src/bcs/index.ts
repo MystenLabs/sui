@@ -1,7 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs, toHEX, fromHEX, BCS as BcsRegistry, getSuiMoveConfig } from '@mysten/bcs';
+import {
+	bcs,
+	toHEX,
+	fromHEX,
+	BCS as BcsRegistry,
+	getSuiMoveConfig,
+	toB58,
+	fromB58,
+} from '@mysten/bcs';
 import type { SuiObjectRef as SuiObjectRefType } from '../types/objects.js';
 import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../utils/sui-types.js';
@@ -122,6 +130,13 @@ function unsafe_u64(options?: BcsTypeOptions<number>) {
 		});
 }
 
+function optionEnum<T extends BcsType<any, any>>(type: T) {
+	return bcs.enum('Option', {
+		None: null,
+		Some: type,
+	});
+}
+
 /**
  * Wrapper around Enum, which transforms any `T` into an object with `kind` property:
  * @example
@@ -154,7 +169,13 @@ const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	input: (val: string | Uint8Array) => (typeof val === 'string' ? fromHEX(val) : val),
 	output: (val) => toHEX(val),
 });
-const ObjectDigest = bcs.base58({ name: 'ObjectDigest' });
+
+const ObjectDigest = bcs.vector(bcs.u8()).transform({
+	name: 'ObjectDigest',
+	input: (value: string) => fromB58(value),
+	output: (value) => toB58(new Uint8Array(value)),
+});
+
 const SuiObjectRef = bcs.struct('SuiObjectRef', {
 	objectId: Address,
 	version: bcs.u64(),
@@ -178,49 +199,7 @@ const CallArg = bcs.enum('CallArg', {
 	ObjVec: bcs.vector(ObjectArg),
 });
 
-export type TypeTagEnum =
-	| {
-			bool: true | null;
-	  }
-	| {
-			u8: true | null;
-	  }
-	| {
-			u64: true | null;
-	  }
-	| {
-			u128: true | null;
-	  }
-	| {
-			address: true | null;
-	  }
-	| {
-			signer: true | null;
-	  }
-	| {
-			vector: TypeTag;
-	  }
-	| {
-			struct: StructTagType;
-	  }
-	| {
-			u16: true | null;
-	  }
-	| {
-			u32: true | null;
-	  }
-	| {
-			u256: true | null;
-	  };
-
-export interface StructTagType {
-	address: string;
-	module: string;
-	name: string;
-	typeParams: TypeTagEnum[];
-}
-
-const TypeTag: BcsType<TypeTagEnum> = bcs.enum('TypeTag', {
+const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
 	bool: null,
 	u8: null,
 	u64: null,
@@ -314,7 +293,7 @@ const Transaction = enumKind(
 		 * so this call serves a utility function.
 		 */
 		MakeMoveVec: bcs.struct('MakeMoveVec', {
-			type: bcs.optionEnum(TypeTag),
+			type: optionEnum(TypeTag),
 			objects: bcs.vector(Argument),
 		}),
 		/**  */
@@ -414,9 +393,6 @@ const suiBcs = {
 	ULEB128: bcs.uleb128(),
 	Bool: bcs.bool(),
 	String: bcs.string(),
-	Hex: bcs.hex(),
-	Base64: bcs.base64(),
-	Base58: bcs.base58(),
 	Address,
 	Argument,
 	CallArg,
