@@ -51,9 +51,11 @@ impl RocksDbStore {
     }
 }
 
-impl ReadStore for RocksDbStore {
+impl sui_types::storage::Store for RocksDbStore {
     type Error = typed_store::rocks::TypedStoreError;
+}
 
+impl ReadStore for RocksDbStore {
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,

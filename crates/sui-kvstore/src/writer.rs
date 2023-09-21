@@ -127,7 +127,7 @@ pub async fn uploader<S>(
 ) -> Result<()>
 where
     S: ReadStore + Send,
-    <S as ReadStore>::Error: Send,
+    S::Error: Send,
 {
     let mut client = DynamoDbClient::new(&config).await;
     while receiver.try_recv().is_err() {

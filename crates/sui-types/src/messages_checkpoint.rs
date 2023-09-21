@@ -474,10 +474,11 @@ impl FullCheckpointContents {
             user_signatures: contents.into_v1().user_signatures,
         }
     }
+
     pub fn from_checkpoint_contents<S>(
         store: S,
         contents: CheckpointContents,
-    ) -> Result<Option<Self>, <S as ReadStore>::Error>
+    ) -> Result<Option<Self>, S::Error>
     where
         S: ReadStore,
     {

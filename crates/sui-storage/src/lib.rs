@@ -18,7 +18,7 @@ use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, VerifiedCheckpoint};
-use sui_types::storage::{ReadStore, WriteStore};
+use sui_types::storage::WriteStore;
 use tracing::debug;
 
 pub mod blob;
@@ -160,7 +160,7 @@ pub fn verify_checkpoint<S>(
 ) -> Result<VerifiedCheckpoint, CertifiedCheckpointSummary>
 where
     S: WriteStore,
-    <S as ReadStore>::Error: std::error::Error,
+    S::Error: std::error::Error,
 {
     assert_eq!(
         *checkpoint.sequence_number(),

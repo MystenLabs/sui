@@ -307,9 +307,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
     }
 }
 
-pub trait ReadStore {
-    type Error;
-
+pub trait ReadStore: Store {
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -355,8 +353,6 @@ pub trait ReadStore {
 }
 
 impl<T: ReadStore> ReadStore for &T {
-    type Error = T::Error;
-
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -723,9 +719,11 @@ impl SharedInMemoryStore {
     }
 }
 
-impl ReadStore for SharedInMemoryStore {
+impl Store for SharedInMemoryStore {
     type Error = Infallible;
+}
 
+impl ReadStore for SharedInMemoryStore {
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -1051,9 +1049,11 @@ impl SingleCheckpointSharedInMemoryStore {
     }
 }
 
-impl ReadStore for SingleCheckpointSharedInMemoryStore {
+impl Store for SingleCheckpointSharedInMemoryStore {
     type Error = Infallible;
+}
 
+impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,

@@ -28,7 +28,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary as Checkpoint, CheckpointSequenceNumber,
     FullCheckpointContents as CheckpointContents,
 };
-use sui_types::storage::{ReadStore, WriteStore};
+use sui_types::storage::WriteStore;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::Instant;
@@ -347,7 +347,7 @@ impl ArchiveWriter {
     pub async fn start<S>(&self, store: S) -> Result<tokio::sync::broadcast::Sender<()>>
     where
         S: WriteStore + Send + Sync + 'static,
-        <S as ReadStore>::Error: Send,
+        S::Error: Send,
     {
         let remote_archive_is_empty = self
             .remote_object_store
@@ -404,7 +404,7 @@ impl ArchiveWriter {
     ) -> Result<()>
     where
         S: WriteStore + Send + Sync + 'static,
-        <S as ReadStore>::Error: Send,
+        S::Error: Send,
     {
         let mut checkpoint_sequence_number = start_checkpoint_sequence_number;
         info!("Starting checkpoint tailing from sequence number: {checkpoint_sequence_number}");

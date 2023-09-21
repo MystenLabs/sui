@@ -34,7 +34,7 @@ use sui_storage::object_store::ObjectStoreConfig;
 use sui_storage::{compute_sha3_checksum, SHA3_BYTES};
 use sui_types::base_types::ExecutionData;
 use sui_types::messages_checkpoint::{FullCheckpointContents, VerifiedCheckpointContents};
-use sui_types::storage::{ReadStore, SingleCheckpointSharedInMemoryStore, WriteStore};
+use sui_types::storage::{SingleCheckpointSharedInMemoryStore, WriteStore};
 use tracing::info;
 
 /// Checkpoints and summaries are persisted as blob files. Files are committed to local store
@@ -370,7 +370,7 @@ pub async fn verify_archive_with_local_store<S>(
 ) -> Result<()>
 where
     S: WriteStore + Clone + Send + 'static,
-    <S as ReadStore>::Error: std::error::Error,
+    S::Error: std::error::Error,
 {
     let metrics = ArchiveReaderMetrics::new(&Registry::default());
     let config = ArchiveReaderConfig {
