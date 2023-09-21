@@ -18,7 +18,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 // take item from kiosk.
 const item = kioskTx.take({
@@ -29,8 +29,8 @@ const item = kioskTx.take({
 // do something with `item`, e.g. transfer it to someone else.
 txb.transferObjects([item], txb.pure('address_to_transfer_the_object'));
 
-// wrap the kiosk Tx.
-kioskTx.wrap();
+// finalize the kiosk Tx.
+kioskTx.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -46,7 +46,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 // take item from kiosk.
 kioskTx
@@ -55,7 +55,7 @@ kioskTx
 		itemType,
 		address: 'address_to_transfer_the_object',
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -71,14 +71,14 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.place({
 		item,
 		itemType,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -94,7 +94,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.list({
@@ -102,7 +102,7 @@ kioskTx
 		itemType,
 		price: 100000n,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -119,7 +119,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.placeAndList({
@@ -127,7 +127,7 @@ kioskTx
 		itemType,
 		price: 100000n,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -143,14 +143,14 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.delist({
 		itemId,
 		itemType,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -165,14 +165,14 @@ Withdraw (all or specific amount) from a kiosk.
 ```typescript
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.withdraw({
 		address: 'address_to_transfer_funds',
 		amount: 100000n,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -189,7 +189,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 kioskTx
 	.borrowTx(
@@ -204,7 +204,7 @@ kioskTx
 			});
 		},
 	)
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
@@ -222,7 +222,7 @@ const itemType = '0x..::hero::Hero';
 
 /// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
-const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 const [item, promise] = kioskTx.borrow({
 	itemId,
@@ -240,7 +240,7 @@ kioskClient
 		item,
 		promise,
 	})
-	.wrap();
+	.finalize();
 
 // sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });

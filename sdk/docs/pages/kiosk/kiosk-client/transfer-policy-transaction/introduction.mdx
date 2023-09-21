@@ -26,7 +26,7 @@ const heroPolicyCaps = await kioskClient.getOwnedTransferPoliciesByType({
 
 const txb = new TransactionBlock();
 // We can choose to use any of the caps we have. Let's use the first one for simplicity.
-const tpTx = new TransferPolicyTransaction({ kioskClient, txb, cap: heroPolicyCaps[0] });
+const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb, cap: heroPolicyCaps[0] });
 
 // A demonstration of us using all the available rule add/remove functions.
 // We can chain these commands.
@@ -53,7 +53,7 @@ in the same PTB.
 const publisher = '0xPackagePublisherObject';
 const txb = new TransactionBlock();
 
-const tpTx = new TransferPolicyTransaction({ kioskClient, txb });
+const tpTx = new TransferPolicyTransaction({ kioskClient, transactionBlock: txb });
 
 // We are making an async call here, as the SDK protects from accidently creating
 // a second Transfer Policy.

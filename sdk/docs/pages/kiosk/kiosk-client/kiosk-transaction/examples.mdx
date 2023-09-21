@@ -33,7 +33,7 @@ const getCap = async () => {
 // The mint function could be like.
 const mint = async () => {
     const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ kioskClient, txb, cap: await getCap() }});
+    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap: await getCap() }});
 
     // We'll assume it costs 1 SUI
     let coin = txb.splitCoins(txb.gas, [txb.pure(1_000_000_000)]);
@@ -48,7 +48,7 @@ const mint = async () => {
             ]
     });
 
-    kioskTx.wrap();
+    kioskTx.finalize();
 
     // sign and execute transaction block.
     await signAndExecuteTransactionBlock({ tx: txb });
@@ -64,7 +64,7 @@ const kioskClient = new KioskClient({...});
 // Our mint function.
 const mint = async () => {
     const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ kioskClient, txb }});
+    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb }});
 
     // creates a kiosk.
     kioskTx.create();
@@ -83,8 +83,7 @@ const mint = async () => {
     });
 
     kioskTx.shareAndTransferCap('0xAddressToTransferCapTo');
-    // for new `non-personal` kiosk, we could optionally omit `wrap()`, but it's better to keep it consistent everywhere.
-    kioskTx.wrap();
+    kioskTx.finalize();
 
     // sign and execute transaction block.
     await signAndExecuteTransactionBlock({ tx: txb });
@@ -98,14 +97,14 @@ const mint = async () => {
 const levelUp = async (object) => {
 	const txb = new TransactionBlock();
 
-	new KioskTransaction({ kioskClient, txb, cap })
+	new KioskTransaction({ kioskClient, transactionBlock: txb, cap })
 		.borrowTx(object, (item) => {
 			txb.moveCall({
 				target: '0xMyGame::hero::level_up',
 				arguments: [item],
 			});
 		})
-		.wrap();
+		.finalize();
 
 	// sign and execute transaction block.
 	await signAndExecuteTransactionBlock({ tx: txb });

@@ -29,7 +29,7 @@ async function mintFren(address: string) {
 	const cap = kioskOwnerCaps[0];
 
 	const txb = new TransactionBlock();
-	const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+	const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
 	// We're mixing the logic here. If the cap is undefined, we create a new kiosk.
 	if (!cap) kioskTx.create();
@@ -44,8 +44,7 @@ async function mintFren(address: string) {
 	// If we don't have a cap, that means we create a new kiosk for the user in this flow.
 	if (!cap) kioskTx.shareAndTransferCap(address);
 
-	// We wrap it anyways, to support both existing kiosk & fresh kiosk flows.
-	kioskTx.wrap();
+	kioskTx.finalize();
 
 	// sign and execute transaction block.
 	await signAndExecuteTransactionBlock({ tx: txb });
@@ -60,7 +59,7 @@ Let's see how we could use the Kiosk SDK to mix two `bullsharks`.
 // We're mixing two frens.
 async function mixFrens(firstFrenObjectId: string, secondFrenObjectId: string, cap: KioskOwnerCap) {
     const txb = new TransactionBlock();
-    const kioskTx = new KioskTransaction({ txb, kioskClient, cap });
+    const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
     // borrow both frens.
     const [fren1, promise1] = kioskTx.borrow({
@@ -94,7 +93,7 @@ async function mixFrens(firstFrenObjectId: string, secondFrenObjectId: string, c
         itemType: bullsharkType,
         item: fren2,
         promise: promise2
-    }).wrap();
+    }).finalize();
 
     // sign and execute transaction block.
     await signAndExecuteTransactionBlock({ tx: txb });
