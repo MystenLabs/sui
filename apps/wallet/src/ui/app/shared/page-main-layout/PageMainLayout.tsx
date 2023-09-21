@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
+import cn from 'classnames';
 import { createContext, type ReactNode, useState } from 'react';
 
 import { WalletSettingsButton } from '../../components/menu/button/WalletSettingsButton';
@@ -12,9 +12,7 @@ import { Header } from '../header/Header';
 import { Toaster } from '../toaster';
 import { ErrorBoundary } from '_components/error-boundary';
 import { MenuContent } from '_components/menu';
-import Navigation from '_components/navigation';
-
-import st from './PageMainLayout.module.scss';
+import { Navigation } from '_components/navigation';
 
 export const PageMainLayoutContext = createContext<HTMLDivElement | null>(null);
 
@@ -23,15 +21,13 @@ export type PageMainLayoutProps = {
 	bottomNavEnabled?: boolean;
 	topNavMenuEnabled?: boolean;
 	dappStatusEnabled?: boolean;
-	className?: string;
 };
 
-export default function PageMainLayout({
+export function PageMainLayout({
 	children,
 	bottomNavEnabled = false,
 	topNavMenuEnabled = false,
 	dappStatusEnabled = false,
-	className,
 }: PageMainLayoutProps) {
 	const networkName = useAppSelector(({ app: { apiEnv } }) => apiEnv);
 	const appType = useAppSelector((state) => state.app.appType);
@@ -40,28 +36,27 @@ export default function PageMainLayout({
 
 	return (
 		<div
-			className={cl(st.container, {
-				[st.fullScreenContainer]: isFullScreen,
-			})}
+			className={cn(
+				'flex flex-col flex-nowrap items-stretch justify-center flex-1 w-full max-h-full bg-gradients-graph-cards overflow-hidden',
+				isFullScreen ? 'rounded-xl' : '',
+			)}
 		>
 			<Header
 				networkName={networkName}
 				middleContent={dappStatusEnabled ? <DappStatus /> : <div ref={setTitlePortalContainer} />}
 				rightContent={topNavMenuEnabled ? <WalletSettingsButton /> : undefined}
 			/>
-			<div
-				className={cl(st.content, {
-					[st.fullScreenContent]: isFullScreen,
-				})}
-			>
-				<main className={cl(st.main, { [st.withNav]: bottomNavEnabled }, className)}>
-					<PageMainLayoutContext.Provider value={titlePortalContainer}>
-						<ErrorBoundary>{children}</ErrorBoundary>
-					</PageMainLayoutContext.Provider>
-				</main>
-				{bottomNavEnabled ? <Navigation /> : null}
+			<div className="relative flex flex-col flex-nowrap flex-grow overflow-hidden rounded-t-xl">
+				<div className="flex flex-col flex-nowrap bg-white flex-grow overflow-y-auto overflow-x-hidden rounded-t-xl">
+					<main className={cn('flex-grow w-full', { 'p-5': bottomNavEnabled })}>
+						<PageMainLayoutContext.Provider value={titlePortalContainer}>
+							<ErrorBoundary>{children}</ErrorBoundary>
+						</PageMainLayoutContext.Provider>
+					</main>
+					{bottomNavEnabled ? <Navigation /> : null}
+					<Toaster bottomNavEnabled={bottomNavEnabled} />
+				</div>
 				{topNavMenuEnabled ? <MenuContent /> : null}
-				<Toaster bottomNavEnabled={bottomNavEnabled} />
 			</div>
 		</div>
 	);

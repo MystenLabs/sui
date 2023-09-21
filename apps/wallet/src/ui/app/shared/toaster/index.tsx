@@ -27,7 +27,7 @@ export function Toaster({ bottomNavEnabled = false }: ToasterProps) {
 			<ToasterLib
 				containerClassName={cl(
 					'!absolute !z-[99999] transition-all',
-					includeBottomNavSpace && 'mb-[var(--sizing-navigation-placeholder-height)]',
+					includeBottomNavSpace && 'mb-nav-height',
 					includeExtraBottomNavSpace && '!bottom-10',
 				)}
 				position="bottom-center"

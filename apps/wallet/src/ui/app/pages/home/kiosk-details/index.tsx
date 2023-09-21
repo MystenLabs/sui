@@ -30,7 +30,7 @@ function KioskDetailsPage() {
 	}
 
 	return (
-		<div className="flex flex-1 flex-col flex-nowrap gap-3.75 mb-10">
+		<div className="flex flex-1 flex-col flex-nowrap gap-3.75">
 			<PageTitle title="Kiosk" back />
 			<Loading loading={isLoading}>
 				{!items?.length ? (

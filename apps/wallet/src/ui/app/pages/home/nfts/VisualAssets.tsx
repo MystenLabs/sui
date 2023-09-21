@@ -14,7 +14,7 @@ import { Button } from '_src/ui/app/shared/ButtonUI';
 export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 	const { hideAsset } = useHiddenAssets();
 	return (
-		<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 mb-5">
+		<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
 			{items.map((object) => (
 				<Link
 					to={

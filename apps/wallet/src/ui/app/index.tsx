@@ -54,7 +54,7 @@ import { SelectQredoAccountsPage } from './pages/qredo-connect/SelectQredoAccoun
 import { RestrictedPage } from './pages/restricted';
 import SiteConnectPage from './pages/site-connect';
 import { AppType } from './redux/slices/app/AppType';
-import PageMainLayout from './shared/page-main-layout';
+import { PageMainLayout } from './shared/page-main-layout/PageMainLayout';
 import { Staking } from './staking/home';
 
 import { useAppDispatch, useAppSelector } from '_hooks';

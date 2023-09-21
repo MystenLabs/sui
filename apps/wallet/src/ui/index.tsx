@@ -6,6 +6,7 @@ import '@fontsource-variable/red-hat-mono';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import cn from 'classnames';
 import { Fragment, StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
@@ -13,13 +14,14 @@ import { HashRouter } from 'react-router-dom';
 
 import App from './app';
 import { AccountsFormProvider } from './app/components/accounts/AccountsFormContext';
+import { UnlockAccountProvider } from './app/components/accounts/UnlockAccountContext';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
 import { ErrorBoundary } from '_components/error-boundary';
 import { initAppType } from '_redux/slices/app';
-import { getFromLocationSearch } from '_redux/slices/app/AppType';
+import { AppType, getFromLocationSearch } from '_redux/slices/app/AppType';
 import { initAmplitude } from '_src/shared/analytics/amplitude';
 import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/ui/app/helpers/sentry';
@@ -56,6 +58,7 @@ function renderApp() {
 
 function AppWrapper() {
 	const network = useAppSelector(({ app: { apiEnv, customRPC } }) => `${apiEnv}_${customRPC}`);
+	const isFullscreen = useAppSelector((state) => state.app.appType === AppType.fullscreen);
 	return (
 		<GrowthBookProvider growthbook={growthbook}>
 			<HashRouter>
@@ -77,9 +80,20 @@ function AppWrapper() {
 						>
 							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
 								<AccountsFormProvider>
-									<ErrorBoundary>
-										<App />
-									</ErrorBoundary>
+									<UnlockAccountProvider>
+										<div
+											className={cn(
+												'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
+												isFullscreen && 'shadow-lg rounded-xl',
+											)}
+										>
+											<ErrorBoundary>
+												<App />
+											</ErrorBoundary>
+											<div id="overlay-portal-container"></div>
+											<div id="toaster-portal-container"></div>
+										</div>
+									</UnlockAccountProvider>
 								</AccountsFormProvider>
 							</SuiClientProvider>
 						</PersistQueryClientProvider>

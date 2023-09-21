@@ -109,7 +109,7 @@ export function PasswordModalDialog({
 				<DialogFooter>
 					<div className="flex flex-col gap-3">
 						<div className="flex gap-2.5">
-							<Button variant="outline" size="tall" text={cancelText} onClick={() => onClose()} />
+							<Button variant="outline" size="tall" text={cancelText} onClick={onClose} />
 							<Button
 								type="submit"
 								form={formID}
@@ -127,6 +127,7 @@ export function PasswordModalDialog({
 								size="bodySmall"
 								text="Forgot Password?"
 								to="/accounts/forgot-password"
+								onClick={onClose}
 							/>
 						) : null}
 					</div>
