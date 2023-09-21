@@ -28,7 +28,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use strum::IntoEnumIterator;
 use sui_indexer::framework::interface::Handler;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
@@ -61,6 +61,7 @@ pub struct AnalyticsProcessor {
     remote_object_store: Arc<DynObjectStore>,
     kill_sender: OneshotSender<()>,
     sender: Sender<CheckpointUpdates>,
+    filename_suffix: u128,
 }
 
 // Main callback from the indexer framework.
@@ -171,11 +172,13 @@ impl AnalyticsProcessor {
             kill_receiver,
             metrics.clone(),
         ));
+        let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         let table_writer = match config.file_format {
             FileFormat::CSV => Box::new(CSVWriter::new(
                 &config.checkpoint_dir,
                 epoch,
                 next_checkpoint_seq_num,
+                time_since_epoch,
             )?),
         };
         info!(
@@ -194,6 +197,7 @@ impl AnalyticsProcessor {
             remote_object_store,
             kill_sender,
             sender,
+            filename_suffix: time_since_epoch,
         })
     }
 
@@ -573,6 +577,7 @@ impl AnalyticsProcessor {
                 self.config.file_format,
                 self.current_epoch,
                 self.current_checkpoint_range.clone(),
+                self.filename_suffix,
                 &mut self.manifest,
             );
             self.sender.send(checkpoint_updates).await?;
