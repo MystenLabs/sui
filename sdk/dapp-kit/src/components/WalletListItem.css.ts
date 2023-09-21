@@ -1,0 +1,25 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { style } from '@vanilla-extract/css';
+
+export const container = style({
+	padding: 10,
+});
+
+export const buttonContainer = style({
+	display: 'flex',
+	alignItems: 'center',
+	gap: '8px',
+});
+
+export const walletName = style({});
+
+export const walletIcon = style({
+	width: 28,
+	height: 28,
+	borderRadius: 6,
+	flexShrink: 0,
+	background: 'white',
+	objectFit: 'cover',
+});

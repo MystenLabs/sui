@@ -374,6 +374,12 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.1
         version: 3.1.1
+      '@vanilla-extract/css':
+        specifier: ^1.13.0
+        version: 1.13.0
+      '@vanilla-extract/vite-plugin':
+        specifier: ^3.9.0
+        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       '@vitejs/plugin-react':
         specifier: ^4.0.3
         version: 4.0.3(vite@4.4.4)
@@ -1158,6 +1164,12 @@ importers:
       '@mysten/wallet-standard':
         specifier: workspace:*
         version: link:../wallet-standard
+      '@radix-ui/react-dialog':
+        specifier: ^1.0.4
+        version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
+      '@radix-ui/react-dropdown-menu':
+        specifier: ^2.0.5
+        version: 2.0.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0)(react@18.2.0)
       '@vanilla-extract/css':
         specifier: ^1.13.0
         version: 1.13.0
@@ -1197,7 +1209,7 @@ importers:
         version: 2.3.0(@types/node@20.4.2)
       '@vanilla-extract/vite-plugin':
         specifier: ^3.9.0
-        version: 3.9.0
+        version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
       happy-dom:
         specifier: ^10.5.1
         version: 10.5.1
@@ -6047,7 +6059,7 @@ packages:
       '@types/react-dom':
         optional: true
     dependencies:
-      '@babel/runtime': 7.22.5
+      '@babel/runtime': 7.22.10
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -9788,7 +9800,7 @@ packages:
   /@vanilla-extract/private@1.0.3:
     resolution: {integrity: sha512-17kVyLq3ePTKOkveHxXuIJZtGYs+cSoev7BlP+Lf4916qfDhk/HBjvlYDe8egrea7LNPHKwSZJK/bzZC+Q6AwQ==}
 
-  /@vanilla-extract/vite-plugin@3.9.0:
+  /@vanilla-extract/vite-plugin@3.9.0(@types/node@20.4.2)(vite@4.4.4):
     resolution: {integrity: sha512-Q2HYAyEJ93Uy7GHQPPiP8SXwPMHGpd4d0YnrIQqB0YZccYbGJR/WFIln9Dmbzx2pdngQUoOfhwEg6kJF8sQrog==}
     peerDependencies:
       vite: ^2.2.3 || ^3.0.0 || ^4.0.3
@@ -9797,6 +9809,7 @@ packages:
       outdent: 0.8.0
       postcss: 8.4.26
       postcss-load-config: 3.1.4(postcss@8.4.26)
+      vite: 4.4.4(@types/node@20.4.2)(sass@1.63.6)
     transitivePeerDependencies:
       - '@types/node'
       - less

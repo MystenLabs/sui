@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ConnectButton, WalletProvider } from '@mysten/dapp-kit';
 import clsx from 'clsx';
 import { lazy, Suspense } from 'react';
 
@@ -33,6 +34,9 @@ function Home() {
 						data-testid="home-page"
 						className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
 					>
+						<WalletProvider>
+							<ConnectButton />
+						</WalletProvider>
 						<div style={{ gridArea: 'network' }} className="overflow-hidden">
 							<OnTheNetwork />
 						</div>
