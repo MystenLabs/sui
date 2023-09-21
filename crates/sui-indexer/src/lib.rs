@@ -38,6 +38,7 @@ pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
 pub mod models_v2;
