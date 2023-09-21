@@ -4,8 +4,11 @@
 module sui::prover {
     use sui::object;
 
+    #[allow(unused_const)]
     const OWNED: u64 = 1;
+    #[allow(unused_const)]
     const SHARED: u64 = 2;
+    #[allow(unused_const)]
     const IMMUTABLE: u64 = 3;
 
     // "public" functions to be used in specs as an equivalent of core Prover's builtins

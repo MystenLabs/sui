@@ -24,7 +24,6 @@ module deepbook::clob_v2 {
 
     friend deepbook::order_query;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const ENotImplemented: u64 = 1;
     const EInvalidFeeRateRebateRate: u64 = 2;
     const EInvalidOrderId: u64 = 3;
     const EUnauthorizedCancel: u64 = 4;
@@ -40,9 +39,7 @@ module deepbook::clob_v2 {
     const EInvalidUser: u64 = 12;
     const ENotEqual: u64 = 13;
     const EInvalidRestriction: u64 = 14;
-    const ELevelNotEmpty: u64 = 15;
     const EInvalidPair: u64 = 16;
-    const EInvalidBaseBalance: u64 = 17;
     const EInvalidFee: u64 = 18;
     const EInvalidExpireTimestamp: u64 = 19;
     const EInvalidTickSizeLotSize: u64 = 20;
@@ -56,7 +53,6 @@ module deepbook::clob_v2 {
     // Cancel older (resting) order in full. Continue to execute the newer taking order.
     const CANCEL_OLDEST: u8 = 0;
     // Restrictions on limit orders.
-    const N_RESTRICTIONS: u8 = 4;
     const NO_RESTRICTION: u8 = 0;
     // Mandates that whatever amount of an order that can be executed in the current transaction, be filled and then the rest of the order canceled.
     const IMMEDIATE_OR_CANCEL: u8 = 1;
@@ -68,10 +64,12 @@ module deepbook::clob_v2 {
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = ((1u128 << 64 - 1) as u64);
+    #[test_only]
     const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
     const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
     const REFERENCE_MAKER_REBATE_RATE: u64 = 1_500_000;
     const FEE_AMOUNT_FOR_CREATE_POOL: u64 = 100 * 1_000_000_000; // 100 SUI
+    #[test_only]
     const PREVENT_SELF_MATCHING_DEFAULT: u8 = 0;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Constants <<<<<<<<<<<<<<<<<<<<<<<<
@@ -1297,7 +1295,7 @@ module deepbook::clob_v2 {
             if (is_bid) { &pool.bids } else { &pool.asks },
             tick_price);
         assert!(tick_exists, EInvalidOrderId);
-        let order = remove_order<BaseAsset, QuoteAsset>(
+        let order = remove_order(
             if (is_bid) { &mut pool.bids } else { &mut pool.asks },
             usr_open_orders,
             tick_index,
@@ -1317,7 +1315,7 @@ module deepbook::clob_v2 {
         emit_order_canceled<BaseAsset, QuoteAsset>(*object::uid_as_inner(&pool.id), &order);
     }
 
-    fun remove_order<BaseAsset, QuoteAsset>(
+    fun remove_order(
         open_orders: &mut CritbitTree<TickLevel>,
         usr_open_orders: &mut LinkedTable<u64, u64>,
         tick_index: u64,
@@ -1353,7 +1351,7 @@ module deepbook::clob_v2 {
                 if (is_bid) { &mut pool.bids }
                 else { &mut pool.asks };
             let (_, tick_index) = critbit::find_leaf(open_orders, order_price);
-            let order = remove_order<BaseAsset, QuoteAsset>(
+            let order = remove_order(
                 open_orders,
                 usr_open_order_ids,
                 tick_index,
@@ -1431,7 +1429,7 @@ module deepbook::clob_v2 {
                 assert!(tick_exists, EInvalidTickPrice);
                 tick_index = new_tick_index;
             };
-            let order = remove_order<BaseAsset, QuoteAsset>(
+            let order = remove_order(
                 if (is_bid) { &mut pool.bids } else { &mut pool.asks },
                 usr_open_orders,
                 tick_index,
@@ -1510,7 +1508,7 @@ module deepbook::clob_v2 {
                 assert!(tick_exists, EInvalidTickPrice);
                 tick_index = new_tick_index;
             };
-            let order = remove_order<BaseAsset, QuoteAsset>(open_orders, usr_open_orders, tick_index, order_id, owner);
+            let order = remove_order(open_orders, usr_open_orders, tick_index, order_id, owner);
             assert!(order.expire_timestamp < now, EInvalidExpireTimestamp);
             if (is_bid) {
                 let balance_locked = clob_math::mul(order.quantity, order.price);
@@ -1630,7 +1628,7 @@ module deepbook::clob_v2 {
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
         while (price_low <= price_high) {
-            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
+            let depth = get_level2_book_status(
                 &pool.bids,
                 price_low,
                 clock::timestamp_ms(clock)
@@ -1672,7 +1670,7 @@ module deepbook::clob_v2 {
         price_low = critbit::find_closest_key(&pool.asks, price_low);
         price_high = critbit::find_closest_key(&pool.asks, price_high);
         while (price_low <= price_high) {
-            let depth = get_level2_book_status<BaseAsset, QuoteAsset>(
+            let depth = get_level2_book_status(
                 &pool.asks,
                 price_low,
                 clock::timestamp_ms(clock)
@@ -1689,7 +1687,7 @@ module deepbook::clob_v2 {
     }
 
     /// internal func to retrive single depth of a tick price
-    fun get_level2_book_status<BaseAsset, QuoteAsset>(
+    fun get_level2_book_status(
         open_orders: &CritbitTree<TickLevel>,
         price: u64,
         time_stamp: u64
@@ -2106,7 +2104,7 @@ module deepbook::clob_v2 {
     ): Order {
         let order;
         if (is_bid) {
-            order = remove_order<BaseAsset, QuoteAsset>(
+            order = remove_order(
                 &mut pool.bids,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
@@ -2114,7 +2112,7 @@ module deepbook::clob_v2 {
                 owner
             )
         } else {
-            order = remove_order<BaseAsset, QuoteAsset>(
+            order = remove_order(
                 &mut pool.asks,
                 borrow_mut(&mut pool.usr_open_orders, owner),
                 tick_index,
@@ -2670,7 +2668,7 @@ module deepbook::clob_v2 {
     public fun check_balance_invariants_for_account<BaseAsset, QuoteAsset>(
         account_cap: &AccountCap,
         quote_custodian: &Custodian<QuoteAsset>,
-        base_custodian: &Custodian<BaseAsset>, 
+        base_custodian: &Custodian<BaseAsset>,
         pool: &Pool<BaseAsset, QuoteAsset>
     ) {
         let account_cap_user = custodian::account_owner(account_cap);
