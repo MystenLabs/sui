@@ -10,7 +10,7 @@ interface IconButtonProps extends ButtonOrLinkProps, VariantProps<typeof buttonS
 
 const buttonStyles = cva(
 	[
-		'flex items-center rounded-sm bg-transparent border-0 p-0 text-steel-dark hover:text-hero cursor-pointer',
+		'flex items-center rounded-sm bg-transparent border-0 p-0 text-hero-darkest/40 hover:text-hero-darkest/50 transition cursor-pointer',
 	],
 	{
 		variants: {

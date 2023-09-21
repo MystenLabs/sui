@@ -58,7 +58,7 @@ const FooterLink = forwardRef<HTMLAnchorElement | HTMLButtonElement, ButtonOrLin
 		return (
 			<ButtonOrLink
 				ref={ref}
-				className="text-hero-darkest/40 no-underline uppercase hover:text-hero outline-none border-none bg-transparent hover:cursor-pointer"
+				className="transition text-hero-darkest/40 hover:text-hero-darkest/50 no-underline uppercase outline-none border-none bg-transparent cursor-pointer"
 				to={to}
 				{...props}
 			>
