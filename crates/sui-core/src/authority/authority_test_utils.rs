@@ -338,7 +338,6 @@ pub async fn enqueue_all_and_execute_all(
             &authority.epoch_store_for_testing(),
         )
         .unwrap();
-
     let mut output = Vec::new();
     for cert in certificates {
         let effects = authority.notify_read_effects(&cert).await?;

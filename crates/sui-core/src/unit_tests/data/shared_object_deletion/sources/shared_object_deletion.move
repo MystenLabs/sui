@@ -45,7 +45,24 @@ module shared_object_deletion::o2 {
         o.flipped = true;
     }
 
+    public entry fun consume_with_shared(o: &mut Obj2, o2: Obj2) {
+        if (o.mutation_count < o2.mutation_count) {
+            let Obj2 { id, mutation_count: _mutation_count } = o2;
+            object::delete(id);
+        } else {
+            re_share_o2(o2)
+        };
+        mutate_o2(o);
+    }
+
     public entry fun mutate_o2(o2:  &mut Obj2) {
+        let m = o2.mutation_count + 1;
+        o2.mutation_count = m;
+    }
+
+    public entry fun mutate_o2_with_shared(o: &mut Obj2, o2:  &mut Obj2) {
+        let n = o.mutation_count + 1;
+        o.mutation_count = n;
         let m = o2.mutation_count + 1;
         o2.mutation_count = m;
     }

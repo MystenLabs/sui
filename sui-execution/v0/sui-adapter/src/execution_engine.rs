@@ -23,7 +23,6 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
-    use sui_types::execution::DeletedSharedObjects;
     use sui_types::execution_mode::{self, ExecutionMode};
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
@@ -69,7 +68,6 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
-        _deleted_shared_objects: DeletedSharedObjects,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,

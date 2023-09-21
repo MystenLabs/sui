@@ -839,7 +839,7 @@ fn create_genesis_transaction(
         let certificate_deny_set = HashSet::new();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let input_objects = InputObjects::new(vec![]);
+        let input_objects = InputObjects::new(vec![], vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
@@ -847,7 +847,6 @@ fn create_genesis_transaction(
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
-                BTreeMap::new(),
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
@@ -989,7 +988,7 @@ fn process_package(
         protocol_config,
         metrics,
         ctx,
-        InputObjects::new(loaded_dependencies),
+        InputObjects::new(loaded_dependencies, vec![]),
         pt,
     )?;
 
@@ -1084,7 +1083,7 @@ pub fn generate_genesis_system_object(
         &protocol_config,
         metrics,
         genesis_ctx,
-        InputObjects::new(vec![]),
+        InputObjects::new(vec![], vec![]),
         pt,
     )?;
 

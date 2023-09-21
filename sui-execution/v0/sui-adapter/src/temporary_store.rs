@@ -77,7 +77,8 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
-        let objects = input_objects.into_object_map();
+        let (objects, _) = input_objects.into_object_map();
+
         Self {
             store,
             tx_digest,
@@ -145,6 +146,7 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn into_inner(self) -> InnerTemporaryStore {
         InnerTemporaryStore {
             input_objects: self.input_objects,
+            deleted_shared_object_keys: Vec::new(),
             mutable_inputs: self.mutable_input_refs,
             written: self
                 .written

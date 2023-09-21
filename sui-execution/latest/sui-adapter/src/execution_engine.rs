@@ -34,7 +34,6 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
-    use sui_types::execution::DeletedSharedObjects;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
@@ -75,7 +74,6 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
-        deleted_shared_objects: DeletedSharedObjects,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
@@ -84,13 +82,7 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-
-        let contains_deleted_input = deleted_shared_objects.len() > 0;
-        // insert transaction digests that deleted a shared object that this transaction had
-        // as input but no longer exists due to sequencing order into transaction dependencies
-        for (_, digest) in deleted_shared_objects {
-            transaction_dependencies.insert(digest);
-        }
+        let contains_deleted_input = input_objects.contains_deleted_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,

@@ -376,7 +376,7 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::HashSet;
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -425,7 +425,7 @@ mod test {
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let input_objects = InputObjects::new(vec![]);
+        let input_objects = InputObjects::new(vec![], vec![]);
 
         let (_inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
@@ -434,7 +434,6 @@ mod test {
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
-                BTreeMap::new(),
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,

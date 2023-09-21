@@ -613,7 +613,7 @@ impl AuthorityStore {
         &self,
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
-    ) -> Result<Vec<Object>, SuiError> {
+    ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         sui_transaction_checks::check_input_objects(self, objects, protocol_config)
     }
 
@@ -773,9 +773,9 @@ impl AuthorityStore {
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         epoch_store: &AuthorityPerEpochStore,
-    ) -> Result<(Vec<Object>, DeletedSharedObjects), SuiError> {
+    ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
-        let mut deleted_shared_objects = BTreeMap::new();
+        let mut deleted_shared_objects = Vec::new();
         let mut result = Vec::new();
         for kind in objects.iter() {
             match kind {
@@ -796,11 +796,11 @@ impl AuthorityStore {
                     });
 
                     match self.get_object_by_key(id, *version)? {
-                        Some(obj) => result.push(obj),
+                        Some(obj) => result.push((*kind, obj)),
                         None => {
-                            // If the object was deleted by a concurrently certified tx then return this separately
+                            // If the object was deleted by a concurrently certified tx then return this separately todo: Laura add the digest of the current transaction
                             if let Some(digest) = self.shared_object_deleted(id, epoch_store.committee().epoch)? {
-                                deleted_shared_objects.insert(*id, digest);
+                                deleted_shared_objects.push((*id, *version, digest));
                             } else {
                                 panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
                             }
@@ -808,13 +808,13 @@ impl AuthorityStore {
                     };
 
                 }
-                InputObjectKind::MovePackage(id) => result.push(self.get_object(id)?.unwrap_or_else(|| {
+                InputObjectKind::MovePackage(id) => result.push((*kind, self.get_object(id)?.unwrap_or_else(|| {
                     panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
-                })),
+                }))),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    result.push(self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+                    result.push((*kind, self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
                         panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
-                    }))
+                    })))
                 }
             };
         }
@@ -1125,6 +1125,7 @@ impl AuthorityStore {
     ) -> SuiResult {
         let InnerTemporaryStore {
             input_objects,
+            deleted_shared_object_keys: _,
             mutable_inputs,
             written,
             events,

@@ -27,6 +27,7 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
@@ -37,7 +38,7 @@ use std::{
     fs,
     pin::Pin,
     sync::Arc,
-    thread,
+    thread, vec,
 };
 use sui_config::node::StateDebugDumpConfig;
 use sui_config::NodeConfig;
@@ -1097,6 +1098,29 @@ impl AuthorityState {
         Ok((effects, execution_error_opt))
     }
 
+    /// new function to generate next version of deleted shared object
+    fn get_next_version(
+        &self,
+        mutated: Vec<(ObjectRef, Owner)>,
+        smeared_version: SequenceNumber,
+    ) -> SequenceNumber {
+        let mut sequence_numbers = Vec::new();
+        for (obj_ref, owner) in mutated {
+            match owner {
+                Owner::AddressOwner(_) => {}
+                _ => {
+                    sequence_numbers.push(obj_ref.1);
+                }
+            }
+        }
+
+        if !sequence_numbers.is_empty() {
+            max(sequence_numbers[0], smeared_version.next())
+        } else {
+            smeared_version.next()
+        }
+    }
+
     async fn commit_cert_and_notify(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -1130,32 +1154,36 @@ impl AuthorityState {
             })
             .collect();
 
-        // add here deleted shared object Inputkeys to the outputkeys that then get sent to notify_commit
-        let mut waiting_output_keys = Vec::new();
-        let deleted_output_keys = inner_temporary_store
-            .deleted
+        let deleted: HashMap<_, _> = effects
+            .deleted()
+            .iter()
+            .map(|oref| (oref.0, oref.1))
+            .collect();
+
+        // add deleted shared objects to the outputkeys that then get sent to notify_commit
+        let deleted_output_keys = deleted
             .iter()
             .filter(|(id, _)| {
                 inner_temporary_store
-                    .objects
+                    .input_objects
                     .get(id)
                     .is_some_and(|obj| obj.is_shared())
             })
-            .map(|(id, (seq, _))| {
-                if let Some(v) = epoch_store
-                    .multi_get_next_shared_object_versions(vec![id].into_iter())
-                    .unwrap()[0]
-                {
-                    for i in u64::from(*seq) + 1..=u64::from(v) {
-                        waiting_output_keys.push(InputKey(*id, Some(i.into())));
-                    }
-                };
-
-                InputKey(*id, Some(*seq))
+            .map(|(id, seq)| InputKey::VersionedObject {
+                id: *id,
+                version: *seq,
             });
-
         output_keys.extend(deleted_output_keys);
-        output_keys.extend(waiting_output_keys);
+
+        // add transactions that operate on deleted shared objects to the outputkeys that then get sent to notify_commit
+        for (id, seq) in inner_temporary_store.deleted_shared_object_keys.iter() {
+            let next_version = self.get_next_version(effects.mutated(), *seq);
+            let key = InputKey::VersionedObject {
+                id: *id,
+                version: next_version,
+            };
+            output_keys.push(key);
+        }
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
             .await?;
@@ -1227,13 +1255,11 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
-
-        let (gas_status, input_objects, deleted_shared_objects) =
-            transaction_input_checker::check_certificate_input(
-                &self.database,
-                epoch_store,
-                certificate,
-            )?;
+        let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
+            &self.database,
+            epoch_store,
+            certificate,
+        )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
         self.check_owned_locks(&owned_object_refs).await?;
@@ -1253,7 +1279,6 @@ impl AuthorityState {
                 self.expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
                 self.certificate_deny_config.certificate_deny_set(),
-                deleted_shared_objects,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1354,7 +1379,6 @@ impl AuthorityState {
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 self.certificate_deny_config.certificate_deny_set(),
-                BTreeMap::new(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()

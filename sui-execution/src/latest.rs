@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
@@ -32,7 +31,6 @@ use sui_adapter_latest::execution_engine::{
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
-use sui_types::execution::DeletedSharedObjects;
 use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
@@ -86,7 +84,6 @@ impl executor::Executor for Executor {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
-        deleted_shared_objects: DeletedSharedObjects,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: InputObjects,
@@ -115,7 +112,6 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
-            deleted_shared_objects,
         )
     }
 
@@ -154,7 +150,6 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
-            BTreeMap::new(),
         )
     }
 

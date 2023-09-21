@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::VersionDigest;
+use crate::base_types::{SequenceNumber, VersionDigest};
 use crate::effects::TransactionEvents;
 use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::{
@@ -22,6 +22,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
+    pub deleted_shared_object_keys: Vec<(ObjectID, SequenceNumber)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,

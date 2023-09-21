@@ -11,6 +11,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::execution::DeletedSharedObjects;
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
@@ -2393,19 +2394,24 @@ impl InputObjectKind {
 #[derive(Clone)]
 pub struct InputObjects {
     objects: Vec<(InputObjectKind, Object)>,
+    deleted: DeletedSharedObjects,
 }
 
 impl InputObjects {
-    pub fn new(objects: Vec<(InputObjectKind, Object)>) -> Self {
-        Self { objects }
+    pub fn new(objects: Vec<(InputObjectKind, Object)>, deleted: DeletedSharedObjects) -> Self {
+        Self { objects, deleted }
     }
 
     pub fn len(&self) -> usize {
-        self.objects.len()
+        self.objects.len() + self.deleted.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.objects.is_empty()
+        self.objects.is_empty() && self.deleted.is_empty()
+    }
+
+    pub fn contains_deleted_objects(&self) -> bool {
+        !self.deleted.is_empty()
     }
 
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
@@ -2442,10 +2448,17 @@ impl InputObjects {
     }
 
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
-        self.objects
+        let mut dependencies: BTreeSet<TransactionDigest> = self
+            .objects
             .iter()
             .map(|(_, obj)| obj.previous_transaction)
-            .collect()
+            .collect();
+
+        for (_, _, digest) in &self.deleted {
+            dependencies.insert(*digest);
+        }
+
+        dependencies
     }
 
     pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
@@ -2480,7 +2493,8 @@ impl InputObjects {
             .objects
             .iter()
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
-            .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
+            .chain(receiving_objects.iter().map(|object_ref| object_ref.1))
+            .chain(self.deleted.iter().map(|(_, version, _)| *version));
 
         SequenceNumber::lamport_increment(input_versions)
     }
@@ -2493,11 +2507,17 @@ impl InputObjects {
         self.objects.iter().map(|(kind, _)| kind)
     }
 
-    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
-        self.objects
-            .into_iter()
-            .map(|(_, object)| (object.id(), object))
-            .collect()
+    pub fn into_object_map(self) -> (BTreeMap<ObjectID, Object>, Vec<(ObjectID, SequenceNumber)>) {
+        (
+            self.objects
+                .into_iter()
+                .map(|(_, object)| (object.id(), object))
+                .collect(),
+            self.deleted
+                .into_iter()
+                .map(|(id, version, _)| (id, version))
+                .collect(),
+        )
     }
 }
 

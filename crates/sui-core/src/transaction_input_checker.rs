@@ -7,10 +7,9 @@ pub use checked::*;
 mod checked {
     use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
     use crate::authority::AuthorityStore;
-    use std::collections::BTreeMap;
     pub use sui_transaction_checks::*;
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
-    use sui_types::execution::DeletedSharedObjects;
+    use sui_types::object::Object;
     use sui_types::transaction::{InputObjects, TransactionDataAPI, VersionedProtocolMessage};
     use sui_types::{error::SuiResult, gas::SuiGasStatus};
 
@@ -18,7 +17,7 @@ mod checked {
         store: &AuthorityStore,
         epoch_store: &AuthorityPerEpochStore,
         cert: &VerifiedExecutableTransaction,
-    ) -> SuiResult<(SuiGasStatus, InputObjects, DeletedSharedObjects)> {
+    ) -> SuiResult<(SuiGasStatus, InputObjects)> {
         let protocol_version = epoch_store.protocol_version();
 
         // This should not happen - validators should not have signed the txn in the first place.
@@ -35,25 +34,26 @@ mod checked {
         let tx_data = &cert.data().intent_message().value;
         let input_object_kinds = tx_data.input_objects()?;
 
-        let (input_object_data, deleted_shared_objects) = if tx_data.is_end_of_epoch_tx() {
+        let (inputs, deleted_shared_objects) = if tx_data.is_end_of_epoch_tx() {
             // When changing the epoch, we update a the system object, which is shared, without going
             // through sequencing, so we must bypass the sequence checks here.
             (
                 store.check_input_objects(&input_object_kinds, epoch_store.protocol_config())?,
-                BTreeMap::new(),
+                Vec::new(),
             )
         } else {
             store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
         };
+        let objects: Vec<Object> = inputs.clone().iter().map(|(_, obj)| obj.clone()).collect();
         let gas_status = get_gas_status(
-            &input_object_data,
+            &objects,
             tx_data.gas(),
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             tx_data,
         )?;
-        let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
+        let input_objects = check_objects(tx_data, inputs, deleted_shared_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
-        Ok((gas_status, input_objects, deleted_shared_objects))
+        Ok((gas_status, input_objects))
     }
 }
