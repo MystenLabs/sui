@@ -41,7 +41,6 @@ export class TransferPolicyTransaction {
 		this.kioskClient = kioskClient;
 		this.transactionBlock = transactionBlock;
 		if (cap) this.setCap(cap);
-		return this;
 	}
 
 	/**

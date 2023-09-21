@@ -56,7 +56,6 @@ export class KioskTransaction {
 		this.kioskClient = kioskClient;
 
 		if (cap) this.setCap(cap);
-		return this;
 	}
 
 	/**
