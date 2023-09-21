@@ -1,38 +1,38 @@
 # Managing Owned Kiosk
 
-`KioskClient` helps in making managing a kiosk simple.
+`KioskClient` helps in managing a kiosk.
 
-You need to follow the steps explained in the [Kiosk Transaction section](kiosk-transaction) to
+You need to follow the steps explained in the [Kiosk Transaction section](#kiosk-transaction) to
 create a `KioskTransaction`.
 
 ## Available functions
 
 ### take
 
-Removes an item from the Kiosk and returns a `TransactionArgument` to use it in a different PTB
+Removes an item from the Kiosk and returns a `TransactionArgument` to use it in a different Programmable Transaction Block (PTB)
 call.
 
 ```typescript
 const item = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+/// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
-// take item from kiosk.
+// Take item from kiosk.
 const item = kioskTx.take({
 	itemId: item,
 	itemType,
 });
 
-// do something with `item`, e.g. transfer it to someone else.
+// Do something with `item`, like transfer it to someone else.
 txb.transferObjects([item], txb.pure('address_to_transfer_the_object'));
 
-// finalize the kiosk Tx.
+// Finalize the kiosk Tx.
 kioskTx.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -44,11 +44,11 @@ Similar to `take`, but transfers the item to an address internally.
 const item = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+/// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
-// take item from kiosk.
+// Take item from kiosk.
 kioskTx
 	.transfer({
 		itemId: item,
@@ -57,7 +57,7 @@ kioskTx
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -69,7 +69,7 @@ Places an item in the kiosk.
 const item = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+/// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -80,7 +80,7 @@ kioskTx
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -92,7 +92,7 @@ Lists an item for sale (the item must be in the kiosk).
 const itemId = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -104,20 +104,20 @@ kioskTx
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
 ### placeAndList
 
-List an item for sale by first placing it in the kiosk (places the item & lists it for sale). It's a
-short hand for `place()` and `list()`
+List an item for sale by first placing it in the kiosk (places the item and lists it for sale). It's a
+short hand for `place()` and `list()`.
 
 ```typescript
 const item = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -129,7 +129,7 @@ kioskTx
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -163,7 +163,7 @@ Withdraw (all or specific amount) from a kiosk.
 `amount`: Can be empty, which will withdraw all the funds.
 
 ```typescript
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -174,7 +174,7 @@ kioskTx
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -206,13 +206,13 @@ kioskTx
 	)
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
 ### borrow / return
 
-Similar to `borrowTx`, borrows an item from the kiosk, but returns 2 transaction arguments: `item` &
+Similar to `borrowTx`, borrows an item from the kiosk, but returns two transaction arguments: `item` &
 `promise`. You can use the `item` in your PTBs, but you must always call the `return()` function
 with the `item` and the `Promise`.
 
@@ -220,7 +220,7 @@ with the `item` and the `Promise`.
 const itemId = '0xHeroAddress';
 const itemType = '0x..::hero::Hero';
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -242,6 +242,6 @@ kioskClient
 	})
 	.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
