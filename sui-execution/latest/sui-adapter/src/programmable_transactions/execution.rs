@@ -523,7 +523,7 @@ mod checked {
         );
         context
             .gas_charger
-            .charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+            .charge_upgrade_package(module_bytes.iter().map(|v| v.len()).sum())?;
 
         let upgrade_ticket_type = context
             .load_type_from_struct(&UpgradeTicket::type_())
