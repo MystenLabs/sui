@@ -7,7 +7,7 @@ import { BCS, getSuiMoveConfig } from '../src/index';
 import { serde } from './utils';
 
 describe('BCS: Array type', () => {
-	it.skip('should support destructured type name in ser/de', () => {
+	it('should support destructured type name in ser/de', () => {
 		const bcs = new BCS(getSuiMoveConfig());
 		const values = ['this is a string'];
 

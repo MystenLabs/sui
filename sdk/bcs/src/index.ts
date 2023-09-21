@@ -13,7 +13,7 @@
 
 import { fromB58, toB58 } from './b58.js';
 import { fromB64, toB64 } from './b64.js';
-import { BcsType, BcsTypeOptions } from './bcs-type.js';
+import { BcsType, BcsTypeOptions, SerializedBcs } from './bcs-type.js';
 import { bcs } from './bcs.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
@@ -27,6 +27,7 @@ export {
 	bcs,
 	BcsType,
 	type BcsTypeOptions,
+	SerializedBcs,
 	toB58,
 	fromB58,
 	toB64,

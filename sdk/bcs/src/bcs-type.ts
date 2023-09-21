@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB58 } from './b58';
+import { toB64 } from './b64';
+import { toHEX } from './hex';
 import { BcsReader } from './reader';
 import { ulebEncode } from './uleb';
 import { BcsWriter, BcsWriterOptions } from './writer';
@@ -15,8 +18,8 @@ export class BcsType<T, Input = T> {
 	read: (reader: BcsReader) => T;
 	serializedSize: (value: Input, options?: BcsWriterOptions) => number | null;
 	validate: (value: Input) => void;
-	protected _write: (value: Input, writer: BcsWriter) => void;
-	protected _serialize: (value: Input, options?: BcsWriterOptions) => Uint8Array;
+	#write: (value: Input, writer: BcsWriter) => void;
+	#serialize: (value: Input, options?: BcsWriterOptions) => Uint8Array;
 
 	constructor(
 		options: {
@@ -31,12 +34,12 @@ export class BcsType<T, Input = T> {
 		this.name = options.name;
 		this.read = options.read;
 		this.serializedSize = options.serializedSize ?? (() => null);
-		this._write = options.write;
-		this._serialize =
+		this.#write = options.write;
+		this.#serialize =
 			options.serialize ??
 			((value, options) => {
 				const writer = new BcsWriter({ size: this.serializedSize(value) ?? undefined, ...options });
-				this._write(value, writer);
+				this.#write(value, writer);
 				return writer.toBytes();
 			});
 
@@ -45,12 +48,12 @@ export class BcsType<T, Input = T> {
 
 	write(value: Input, writer: BcsWriter) {
 		this.validate(value);
-		this._write(value, writer);
+		this.#write(value, writer);
 	}
 
 	serialize(value: Input, options?: BcsWriterOptions) {
 		this.validate(value);
-		return this._serialize(value, options);
+		return new SerializedBcs(this, this.#serialize(value, options));
 	}
 
 	parse(bytes: Uint8Array): T {
@@ -69,11 +72,41 @@ export class BcsType<T, Input = T> {
 		return new BcsType<T2, Input2>({
 			name: name ?? this.name,
 			read: (reader) => output(this.read(reader)),
-			write: (value, writer) => this._write(input(value), writer),
+			write: (value, writer) => this.#write(input(value), writer),
 			serializedSize: (value) => this.serializedSize(input(value)),
-			serialize: (value, options) => this._serialize(input(value), options),
+			serialize: (value, options) => this.#serialize(input(value), options),
 			validate: (value) => this.validate(input(value)),
 		});
+	}
+}
+
+export class SerializedBcs<T, Input = T> {
+	#schema: BcsType<T, Input>;
+	#bytes: Uint8Array;
+
+	constructor(type: BcsType<T, Input>, schema: Uint8Array) {
+		this.#schema = type;
+		this.#bytes = schema;
+	}
+
+	toBytes() {
+		return this.#bytes;
+	}
+
+	toHex() {
+		return toHEX(this.#bytes);
+	}
+
+	toBase64() {
+		return toB64(this.#bytes);
+	}
+
+	toBase58() {
+		return toB58(this.#bytes);
+	}
+
+	parse() {
+		return this.#schema.parse(this.#bytes);
 	}
 }
 
@@ -157,7 +190,7 @@ export function dynamicSizeBcsType<T, Input = T>({
 		...options,
 		serialize,
 		write: (value, writer) => {
-			for (const byte of type.serialize(value)) {
+			for (const byte of type.serialize(value).toBytes()) {
 				writer.write8(byte);
 			}
 		},
@@ -223,6 +256,6 @@ export function lazyBcsType<T, Input>(cb: () => BcsType<T, Input>) {
 		read: (data) => getType().read(data),
 		serializedSize: (value) => getType().serializedSize(value),
 		write: (value, writer) => getType().write(value, writer),
-		serialize: (value, options) => getType().serialize(value, options),
+		serialize: (value, options) => getType().serialize(value, options).toBytes(),
 	});
 }
