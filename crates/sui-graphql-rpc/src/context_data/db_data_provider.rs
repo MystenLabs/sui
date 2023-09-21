@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    context_data::db_data_provider::diesel_macro::read_only_blocking, error::Error,
-    types::digest::Digest,
+    context_data::db_data_provider::diesel_macro::read_only_blocking,
+    error::Error,
+    types::{digest::Digest, epoch::Epoch},
 };
 use diesel::{
     r2d2::{self, ConnectionManager},
+    sql_types::BigInt,
     ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
 };
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::{env, str::FromStr, sync::Arc};
-use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_indexer::schema_v2::transactions;
+use sui_indexer::{
+    models_v2::{epoch::StoredEpochInfo, transactions::StoredTransaction},
+    schema_v2::epochs,
+};
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
@@ -59,5 +64,25 @@ pub fn establish_connection_pool() -> PgConnectionPool {
 pub(crate) struct PgManager {
     pub pool: PgConnectionPool,
     pub module_cache: Arc<SyncModuleCache<PgModuleResolver>>,
+    }
+
+    pub(crate) async fn fetch_epoch(
+        &self,
+        epoch_id: Option<u64>,
+    ) -> Result<Option<StoredEpochInfo>> {
+        let mut query = epochs::dsl::epochs.into_boxed();
+
+        if let Some(e) = epoch_id {
+            let bigint_e = i64::try_from(e)
+                .map_err(|_| Error::Internal("Failed to convert epoch to i64".to_string()))?;
+            query = query.filter(epochs::dsl::epoch.eq(bigint_e));
+        } else {
+            query = query.order(epochs::dsl::epoch.desc()).limit(1);
+        }
+
+        Ok(
+            read_only_blocking!(&self.pool, |conn| { query.first::<StoredEpochInfo>(conn) })
+                .map_err(Error::from)?,
+        )
     }
 }
