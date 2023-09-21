@@ -320,3 +320,29 @@ const str4 = bcs.string().parse(fromB58(base58));
 
 console.assert((str1 == str2) == (str3 == str4), 'Result is the same');
 ```
+
+## Inferring types
+
+BCS types have both a `type` and an `inputType`. For some types these are the same, but for others
+(like `u64`) the types diverge slightly to make inputs more flexible. For instance, `u64` will
+always be `string` for it's type, but can be a `number`, `string` or `bigint` for it's input type.
+
+You can infer these types in one of 2 ways, either using the `$inferType` and `$inferInput`
+properties on a `BcsType`, or using the `InferBcsType` and `InferBcsInput` type helpers.
+
+```ts
+import { bcs, type InferBcsType, type InferBcsInput } from '@mysten/bcs';
+
+const MyStruct = bcs.struct('MyStruct', {
+	id: bcs.u64(),
+	name: bcs.string(),
+});
+
+// using the $inferType and $inferInput properties
+type MyStructType = typeof MyStruct.$inferType; // { id: string; name: string; }
+type MyStructInput = typeof MyStruct.$inferInput; // { id: number | string | bigint; name: string; }
+
+// using the InferBcsType and InferBcsInput type helpers
+type MyStructType = InferBcsType<typeof MyStruct>; // { id: string; name: string; }
+type MyStructInput = InferBcsInput<typeof MyStruct>; // { id: number | string | bigint; name: string; }
+```
