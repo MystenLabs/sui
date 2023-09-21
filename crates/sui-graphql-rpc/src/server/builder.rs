@@ -44,13 +44,13 @@ impl ServerBuilder {
         format!("{}:{}", self.host, self.port)
     }
 
-    pub fn max_query_depth(mut self, max_depth: usize) -> Self {
-        self.schema = self.schema.limit_depth(max_depth);
+    pub fn max_query_depth(mut self, max_depth: u32) -> Self {
+        self.schema = self.schema.limit_depth(max_depth as usize);
         self
     }
 
-    pub fn max_query_nodes(mut self, max_nodes: usize) -> Self {
-        self.schema = self.schema.limit_complexity(max_nodes);
+    pub fn max_query_nodes(mut self, max_nodes: u32) -> Self {
+        self.schema = self.schema.limit_complexity(max_nodes as usize);
         self
     }
 
@@ -170,7 +170,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_depth_limit() {
-        async fn exec_query_depth_limit(depth: usize, query: &str) -> Response {
+        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
@@ -203,7 +203,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_node_limit() {
-        async fn exec_query_node_limit(nodes: usize, query: &str) -> Response {
+        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
