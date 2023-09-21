@@ -611,7 +611,7 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  id: ID!
+  id: ID
   digest: String!
 
   senders: [Address]
@@ -1048,9 +1048,9 @@ type AddressMetrics {
 
 # Execution
 
-# Either Transaction Digest on success, or error on failure.
+# Either TransactionBlockEffects on success, or error on failure.
 type ExecutionResult {
-  digest: String
+  effects: TransactionBlockEffects
   errors: String
 }
 
