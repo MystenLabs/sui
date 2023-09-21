@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 25;
+const MAX_PROTOCOL_VERSION: u64 = 26;
 
 // Record history of protocol version allocations here:
 //
@@ -74,6 +74,7 @@ const MAX_PROTOCOL_VERSION: u64 = 25;
 //             Package publish/upgrade number in a single transaction limited.
 //             JWK / authenticator state flags.
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
+// Version 26: New gas model version.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
