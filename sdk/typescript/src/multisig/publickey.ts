@@ -20,6 +20,7 @@ import {
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
+import { bcs } from '../bcs/index.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
@@ -76,13 +77,14 @@ export class MultiSigPublicKey extends PublicKey {
 
 		if (typeof value === 'string') {
 			this.rawBytes = fromB64(value);
-			this.multisigPublicKey = builder.de('MultiSigPublicKey', this.rawBytes);
+
+			this.multisigPublicKey = bcs.MultiSigPublicKey.parse(this.rawBytes);
 		} else if (value instanceof Uint8Array) {
 			this.rawBytes = value;
-			this.multisigPublicKey = builder.de('MultiSigPublicKey', this.rawBytes);
+			this.multisigPublicKey = bcs.MultiSigPublicKey.parse(this.rawBytes);
 		} else {
 			this.multisigPublicKey = value;
-			this.rawBytes = builder.ser('MultiSigPublicKey', value).toBytes();
+			this.rawBytes = bcs.MultiSigPublicKey.serialize(value).toBytes();
 		}
 		if (this.multisigPublicKey.threshold < 1) {
 			throw new Error('Invalid threshold');
@@ -174,7 +176,7 @@ export class MultiSigPublicKey extends PublicKey {
 		const tmp = new Uint8Array(maxLength);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 
-		tmp.set(builder.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
+		tmp.set(bcs.u16().serialize(this.multisigPublicKey.threshold).toBytes(), 1);
 		// The initial value 3 ensures that following data will be after the flag byte and threshold bytes
 		let i = 3;
 		for (const { publicKey, weight } of this.publicKeys) {
@@ -208,8 +210,8 @@ export class MultiSigPublicKey extends PublicKey {
 
 		if (
 			!bytesEqual(
-				builder.ser('MultiSigPublicKey', this.multisigPublicKey).toBytes(),
-				builder.ser('MultiSigPublicKey', multisig.multisig_pk).toBytes(),
+				bcs.MultiSigPublicKey.serialize(this.multisigPublicKey).toBytes(),
+				bcs.MultiSigPublicKey.serialize(multisig.multisig_pk).toBytes(),
 			)
 		) {
 			return false;
@@ -280,7 +282,7 @@ export class MultiSigPublicKey extends PublicKey {
 			multisig_pk: this.multisigPublicKey,
 		};
 
-		const bytes = builder.ser('MultiSig', multisig).toBytes();
+		const bytes = bcs.MultiSig.serialize(multisig).toBytes();
 		let tmp = new Uint8Array(bytes.length + 1);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 		tmp.set(bytes, 1);
