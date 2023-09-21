@@ -47,18 +47,16 @@ export function TransactionData({ transaction }: Props) {
 				)}
 			</section>
 
-			<section className="flex w-96 flex-1 flex-col gap-3 md:min-w-transactionColumn md:gap-6">
-				{isProgrammableTransaction && (
-					<>
-						<div data-testid="transactions-card">
-							<TransactionsCard transactions={programmableTxn.transactions} />
-						</div>
-						<div data-testid="gas-breakdown">
-							<GasBreakdown summary={summary} />
-						</div>
-					</>
-				)}
-			</section>
+			{isProgrammableTransaction && (
+				<section className="flex w-96 flex-1 flex-col gap-3 md:min-w-transactionColumn md:gap-6">
+					<div data-testid="transactions-card">
+						<TransactionsCard transactions={programmableTxn.transactions} />
+					</div>
+					<div data-testid="gas-breakdown">
+						<GasBreakdown summary={summary} />
+					</div>
+				</section>
+			)}
 		</div>
 	);
 }
