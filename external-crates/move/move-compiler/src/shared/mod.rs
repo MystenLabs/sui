@@ -534,6 +534,10 @@ impl CompilationEnv {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 
+    pub fn supports_feature(&self, package: Option<Symbol>, feature: &FeatureGate) -> bool {
+        self.package_config(package).edition.supports(feature)
+    }
+
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
         package
             .and_then(|p| self.package_configs.get(&p))

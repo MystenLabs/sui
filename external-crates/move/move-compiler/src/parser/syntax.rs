@@ -2021,16 +2021,9 @@ fn parse_struct_decl(
         entry,
         native,
     } = modifiers;
-    if let Some(vis) = visibility {
-        let msg = format!(
-            "Invalid struct declaration. Structs cannot have visibility modifiers as they are \
-             always '{}'",
-            Visibility::PUBLIC
-        );
-        context
-            .env
-            .add_diag(diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg)));
-    }
+
+    check_struct_visibility(visibility, context);
+
     if let Some(loc) = entry {
         let msg = format!(
             "Invalid constant declaration. '{}' is used only on functions",
@@ -2181,6 +2174,48 @@ fn parse_postfix_ability_declarations(
         consume_token(context.tokens, Tok::Semicolon)?;
     }
     Ok(())
+}
+
+fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {
+    let current_package = context.package_name;
+    if let Some(Visibility::Public(loc)) = &visibility {
+        context
+            .env
+            .check_feature(&FeatureGate::StructTypeVisibility, current_package, *loc);
+    }
+
+    let supports_public = context
+        .env
+        .supports_feature(current_package, &FeatureGate::StructTypeVisibility);
+
+    if supports_public {
+        if !matches!(visibility, Some(Visibility::Public(_))) {
+            let (loc, vis_str) = match visibility {
+                Some(vis) => (vis.loc().unwrap(), format!("'{vis}'")),
+                None => {
+                    let loc = current_token_loc(context.tokens);
+                    (loc, "Internal".to_owned())
+                }
+            };
+            let msg = format!(
+                "Invalid struct declaration. {vis_str} struct declarations are not yet supported"
+            );
+            let note = "Visibility annotations are required on struct declarations from the Move 2024 edition onwards.";
+            let mut err = diag!(Syntax::InvalidModifier, (loc, msg));
+            err.add_note(note);
+            context.env.add_diag(err);
+        }
+    } else if let Some(vis) = visibility {
+        let msg = format!(
+            "Invalid struct declaration. Structs cannot have visibility modifiers as they are \
+                always '{}'",
+            Visibility::PUBLIC
+        );
+        let note = "Starting in the Move 2024 edition visibility must be annotated on struct declarations.";
+        let mut err = diag!(Syntax::InvalidModifier, (vis.loc().unwrap(), msg));
+        err.add_note(note);
+        context.env.add_diag(err);
+    }
 }
 
 //**************************************************************************************************

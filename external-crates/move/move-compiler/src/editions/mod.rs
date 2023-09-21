@@ -29,6 +29,7 @@ pub struct Edition {
 pub enum FeatureGate {
     PublicPackage,
     PostFixAbilities,
+    StructTypeVisibility,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -48,7 +49,8 @@ pub fn check_feature(
     feature: &FeatureGate,
     loc: Loc,
 ) -> bool {
-    if !edition.supports(feature) {
+    let supports_feature = edition.supports(feature);
+    if !supports_feature {
         let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
             .map(|e| e.to_string())
@@ -69,10 +71,8 @@ pub fn check_feature(
             or via command line flag if invoking the compiler directly.",
         );
         env.add_diag(diag);
-        false
-    } else {
-        true
     }
+    supports_feature
 }
 
 pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
@@ -90,8 +90,11 @@ pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
 
-const E2024_ALPHA_FEATURES: &[FeatureGate] =
-    &[FeatureGate::PublicPackage, FeatureGate::PostFixAbilities];
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
+    FeatureGate::PublicPackage,
+    FeatureGate::PostFixAbilities,
+    FeatureGate::StructTypeVisibility,
+];
 
 impl Edition {
     pub const LEGACY: Self = Self {
