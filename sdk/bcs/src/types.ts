@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BcsType } from './bcs-type';
+import { type BcsType } from './bcs-type';
 
 /**
  * Supported encodings.
@@ -57,4 +57,9 @@ export type ReplaceBcsGenerics<
 				>
 			>
 	  >
+	: never;
+
+export type InferBcsType<T extends BcsType<any>> = T extends BcsType<infer U, any> ? U : never;
+export type InferBcsInput<T extends BcsType<any, any>> = T extends BcsType<any, infer U>
+	? U
 	: never;
