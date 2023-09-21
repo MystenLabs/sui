@@ -13,11 +13,11 @@ use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 pub struct StoredEpochInfo {
     pub epoch: i64,
     pub validators: Vec<Option<Vec<u8>>>,
-    pub epoch_total_transactions: i64,
     pub first_checkpoint_id: i64,
     pub epoch_start_timestamp: i64,
     pub reference_gas_price: i64,
     pub protocol_version: i64,
+    pub epoch_total_transactions: Option<i64>,
     pub last_checkpoint_id: Option<i64>,
     pub epoch_end_timestamp: Option<i64>,
     pub storage_fund_reinvestment: Option<i64>,
@@ -43,7 +43,7 @@ impl From<&IndexedEpochInfo> for StoredEpochInfo {
                 .iter()
                 .map(|v| Some(bcs::to_bytes(v).unwrap()))
                 .collect(),
-            epoch_total_transactions: e.epoch_total_transactions as i64,
+            epoch_total_transactions: e.epoch_total_transactions.map(|v| v as i64),
             first_checkpoint_id: e.first_checkpoint_id as i64,
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
@@ -113,7 +113,7 @@ impl TryInto<EpochInfo> for StoredEpochInfo {
         Ok(EpochInfo {
             epoch: self.epoch as u64,
             validators,
-            epoch_total_transactions: self.epoch_total_transactions as u64,
+            epoch_total_transactions: self.epoch_total_transactions.unwrap_or(0) as u64,
             first_checkpoint_id: self.first_checkpoint_id as u64,
             epoch_start_timestamp: self.epoch_start_timestamp as u64,
             end_of_epoch_info,

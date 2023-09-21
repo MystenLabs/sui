@@ -74,7 +74,7 @@ pub trait IndexerStoreV2 {
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError>;
 
-    async fn get_network_total_transactions_in_epoch(
+    async fn get_network_total_transactions_by_end_of_epoch(
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError>;

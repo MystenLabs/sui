@@ -9,6 +9,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 use mysten_metrics::monitored_scope;
 use mysten_metrics::spawn_monitored_task;
+use sui_rest_api::CheckpointData;
 use tokio::sync::watch;
 
 use std::collections::HashMap;
@@ -273,5 +274,47 @@ impl ObjectProvider for TxChangesProcessor {
         }
 
         panic!("Object {} is not found in TxChangesProcessor as an ObjectProvider (fn find_object_lt_or_eq_version)", id);
+    }
+}
+
+// This is a struct that is used to extract SuiSystemState and its dynamic children
+// for end-of-epoch indexing.
+pub(crate) struct EpochEndIndexingObjectStore<'a> {
+    objects: Vec<&'a Object>,
+}
+
+impl<'a> EpochEndIndexingObjectStore<'a> {
+    pub fn new(data: &'a CheckpointData) -> Self {
+        // We only care about output objects for end-of-epoch indexing
+        Self {
+            objects: data.output_objects(),
+        }
+    }
+}
+
+impl<'a> sui_types::storage::ObjectStore for EpochEndIndexingObjectStore<'a> {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        Ok(self
+            .objects
+            .iter()
+            .find(|o| o.id() == *object_id)
+            .cloned()
+            .cloned())
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<Object>, sui_types::error::SuiError> {
+        Ok(self
+            .objects
+            .iter()
+            .find(|o| o.id() == *object_id && o.version() == version)
+            .cloned()
+            .cloned())
     }
 }
