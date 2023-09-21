@@ -1,16 +1,16 @@
 # Purchasing from a kiosk
 
-One of the base functionalities of the SDK, is a seamless purchasing flow, allowing for ease of
-rules resolving (hiding away the calls). The SDK supports all 4 rules by default, and works for
-`TESTNET` & `MAINNET`. In order to support other networks,
-[follow the instructions by clicking here.](../introduction#using-kioskclient-on-devnet-or-localnet)
+One of the base functionalities of the SDK is a seamless purchasing flow, allowing for ease of
+rules resolving (hiding away the calls). The SDK supports all four rules by default, and works for
+`TESTNET` and `MAINNET`. To support other networks,
+[follow the instructions in the Introduction](../introduction#using-kioskclient-on-devnet-or-localnet).
 
 ## How to purchase
 
-The SDK by default places the item in the caller's kiosk, unless there's a lock rule, in which case
+By default, the SDK places the item in the caller's kiosk, unless there's a lock rule, in which case
 it locks it.
 
-An example of a purchase call is shown below.
+Them following is an example of a purchase call.
 
 ```typescript
 const item = {
@@ -20,7 +20,7 @@ const item = {
 	sellerKiosk: '0xSellerKiosk',
 };
 
-/// asume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
+// Assume `kioskClient` and `cap` are supplied to the function as explained in the previous section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -33,7 +33,7 @@ await kioskTx.purchaseAndResolve({
 
 kioskTx.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 
@@ -44,21 +44,21 @@ await signAndExecuteTransactionBlock({ tx: txb });
 
 ## Supporting a custom rule
 
-You can easily tweak `purchaseAndResolve` function to support a custom rule.
+You can use the `purchaseAndResolve` function to support a custom rule.
 
 ```typescript
 const kioskClient = new KioskClient({...});
 const myCustomRule = {
 		rule: `0xMyRuleAddress::game_rule::Rule`,
 		packageId: `0xMyRuleAddress`,
-        // the resolving function. This is called when calling the `purchaseAndResolve`
+        // The resolving function. This is called when calling the `purchaseAndResolve`.
 		resolveRuleFunction: (params: RuleResolvingParams) => {
-            // by knowing the params we have here, we can extract the variables we need to resolve this rule.
+            // By knowing the params we have here, we can extract the variables we need to resolve this rule.
             const { transactionBlock, itemType, packageId, extraArgs } = params;
             const { gamePass } = extraArgs;
             if(!gamePass) throw new Error("GamePass not supplied");
 
-            // calls the game's rule prove function, which could, for example
+            // Calls the game's rule prove function, which could, for example
             // allow rules to resolve only if the holder has a gamePass object.
             transactionBlock.moveCall({
                 target: `${packageId}::game_rule::prove_pass`,
@@ -67,10 +67,10 @@ const myCustomRule = {
             });
         },
 };
-// this allows rules resolution from the `purchaseAndResolve` function.
+// This allows rules resolution from the `purchaseAndResolve` function.
 kioskClient.addRuleResolver(myCustomRule);
 
-/// asume `cap` is supplied to the function as explained in the introduction section.
+// Assume `cap` is supplied to the function as explained in the introduction section.
 const txb = new TransactionBlock();
 const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap });
 
@@ -86,7 +86,7 @@ await kioskTx.purchaseAndResolve({
 
 kioskTx.finalize();
 
-// sign and execute transaction block.
+// Sign and execute transaction block.
 await signAndExecuteTransactionBlock({ tx: txb });
 ```
 

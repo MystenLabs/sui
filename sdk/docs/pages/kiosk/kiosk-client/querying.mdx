@@ -3,22 +3,22 @@
 You can use the `kioskClient` to query kiosk data. It helps you get owned kiosks for an address, as
 well as fetching all the contents of a specified kiosk.
 
-## Querying owned Kiosks
+## Querying owned kiosks
 
-Querying owned kiosks returns a list of `kioskOwnerCaps` as well as a list of the `kioskIds`.
+Querying owned kiosks returns a list of `kioskOwnerCaps`, as well as a list of the `kioskIds`.
 
-`KioskOwnerCap` is important in this case, as it is used for managing an owned kiosk as well as
+`KioskOwnerCap` is important in this case, as it is used for managing an owned kiosk, as well as
 purchasing.
 
 ```typescript
 const kioskClient = new KioskClient({...});
 const address = '0xAddress'
-// We can go ahead and do actions, like querying the owned kiosks for an address.
+// You can perform actions, like querying the owned kiosks for an address.
 const { kioskOwnerCaps, kioskIds } = await kioskClient.getOwnedKiosks({ address });
 console.log(kioskOwnerCaps);
 
 /**
- * An example response for an address that owns 2 kiosks (one of which is personal)
+ * An example response for an address that owns two kiosks (one of which is personal)
 [
   {
     isPersonal: true,
@@ -38,9 +38,9 @@ console.log(kioskOwnerCaps);
  */
 ```
 
-## Querying Kiosk content
+## Querying kiosk content
 
-You can follow the sample to query a kiosk's contents. It's recommended to save the `items`
+You can follow the sample to query a kiosk's contents. We recommend saving the `items`
 structure (`KioskItem`), as it's useful when you're trying to purchase from one.
 
 `listing` field only applies on items that are listed for sale.
@@ -50,7 +50,7 @@ const kioskClient = new KioskClient({...});
 
 const id = `0xKioskId`;
 
-// We can go ahead and do actions, like querying the owned kiosks for an address.
+// You can perform actions, like querying the owned kiosks for an address.
 const res = await kioskClient.getKiosk({
     id,
     options: {
@@ -136,7 +136,7 @@ console.log(res);
 const kioskClient = new KioskClient({...});
 
 const itemType = '0xAddress::hero::Hero';
-// We can go ahead and do actions, like querying the owned kiosks for an address.
+// You can perform actions, like querying the owned kiosks for an address.
 const policies = await kioskClient.getTransferPolicies(itemType)
 console.log(policies);
 
@@ -158,18 +158,18 @@ console.log(policies);
 */
 ```
 
-## Get Owned Transfer Policies
+## Get owned transfer policies
 
-Queries to find all the owned transfer policies. Useful to manage transfer policies easily, and can
-be combined with `TransferPolicyTransaction` to easily add or remove rules & withdraw profits.
+Queries to find all the owned transfer policies. Useful to manage transfer policies, and can
+be combined with `TransferPolicyTransaction` to easily add or remove rules and withdraw profits.
 
 ```typescript
-// assuming we have a kioskClient instance.
+// Assuming we have a kioskClient instance.
 const kioskClient = new KioskClient({...});
 
-// the address that owns the transfer policies.
+// The address that owns the transfer policies.
 const address = '0xAddress';
-// We can go ahead and do actions, like querying the owned kiosks for an address.
+// You can perform actions, like querying the owned kiosks for an address.
 const policies = await kioskClient.getOwnedTransferPolicies({ address });
 console.log(policies);
 
@@ -190,21 +190,21 @@ console.log(policies);
 */
 ```
 
-## Get Owned Transfer Policies by Type
+## Get owned transfer policies by type
 
 Queries to find all the owned transfer policies for a specific type. Useful to manage transfer
-policies easily, and can be combined with
+policies, and can be combined with
 
 ```typescript
-// assuming we have a kioskClient instance.
+// Assuming you have a kioskClient instance.
 const kioskClient = new KioskClient({...});
 
-// the address that owns the transfer policies.
+// The address that owns the transfer policies.
 const address = '0xAddress';
-// the type of the transfer policy.
+// The type of the transfer policy.
 const type = '0xbe01d0594bedbce45c0e08c7374b03bf822e9b73cd7d555bf39c39bbf09d23a9::hero::Hero';
 
-// we can query by type.
+// We can query by type.
 const policies = await kioskClient.getOwnedTransferPoliciesByType({ address, type });
 
 // An example output of the response
