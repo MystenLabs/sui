@@ -20,12 +20,15 @@ schema {
 
 type Query {
   # First four bytes of the network's genesis checkpoint digest
-  # (uniquely defines the network)
+  # (uniquely identifies the network)
   chainIdentifier: String!
 
   # Range of checkpoints that the RPC has data available for (for data
   # that can be tied to a particular checkpoint).
   availableRange: AvailableRange!
+
+  # Configuration for this RPC service
+  serviceConfig: ServiceConfig!
 
   # Simulate running a transaction to inspect its effects without
   # committing to them on-chain.
@@ -285,6 +288,23 @@ input DynamicFieldFilter {
 type AvailableRange {
   first: Checkpoint
   last: Checkpoint
+}
+
+type ServiceConfig {
+  enabledFeatures: [Feature!]
+  isEnabled(feature: Feature!): Boolean!
+
+  maxQueryDepth: Int
+  maxQueryNodes: Int
+}
+
+enum Feature {
+  ANALYTICS
+  COINS
+  DYNAMIC_FIELDS
+  NAME_SERVICE
+  SUBSCRIPTIONS
+  SYSTEM_STATE
 }
 
 interface ObjectOwner {
