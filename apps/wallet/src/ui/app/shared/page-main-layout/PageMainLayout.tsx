@@ -46,7 +46,7 @@ export function PageMainLayout({
 				middleContent={dappStatusEnabled ? <DappStatus /> : <div ref={setTitlePortalContainer} />}
 				rightContent={topNavMenuEnabled ? <WalletSettingsButton /> : undefined}
 			/>
-			<div className="flex flex-col flex-nowrap flex-grow overflow-hidden rounded-t-xl">
+			<div className="relative flex flex-col flex-nowrap flex-grow overflow-hidden rounded-t-xl">
 				<div className="flex flex-col flex-nowrap bg-white flex-grow overflow-y-auto overflow-x-hidden rounded-t-xl">
 					<main className={cn('flex-grow w-full', { 'p-5': bottomNavEnabled })}>
 						<PageMainLayoutContext.Provider value={titlePortalContainer}>
@@ -54,9 +54,9 @@ export function PageMainLayout({
 						</PageMainLayoutContext.Provider>
 					</main>
 					{bottomNavEnabled ? <Navigation /> : null}
-					{topNavMenuEnabled ? <MenuContent /> : null}
 					<Toaster bottomNavEnabled={bottomNavEnabled} />
 				</div>
+				{topNavMenuEnabled ? <MenuContent /> : null}
 			</div>
 		</div>
 	);
