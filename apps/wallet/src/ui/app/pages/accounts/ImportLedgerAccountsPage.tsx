@@ -114,8 +114,8 @@ export function ImportLedgerAccountsPage() {
 				navigate(-1);
 			}}
 		>
-			<div className="w-full flex flex-col gap-5">
-				<div className="h-full bg-white flex flex-col border border-solid border-gray-45 rounded-2xl">
+			<div className="w-full h-full flex flex-col gap-5">
+				<div className="h-full max-h-[368px] bg-white flex flex-col border border-solid border-gray-45 rounded-2xl">
 					<div className="text-center bg-gray-40 py-2.5 rounded-t-2xl">
 						<Text variant="captionSmall" weight="bold" color="steel-darker" truncate>
 							{areAllAccountsImported ? 'Ledger Accounts ' : 'Connect Ledger Accounts'}
@@ -138,7 +138,7 @@ export function ImportLedgerAccountsPage() {
 						</div>
 					</div>
 				</div>
-				<div>
+				<div className="flex items-end flex-1">
 					<Button
 						variant="primary"
 						size="tall"
