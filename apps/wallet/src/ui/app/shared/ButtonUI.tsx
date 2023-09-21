@@ -73,7 +73,7 @@ const styles = cva(
 			size: {
 				tall: ['h-10 px-5 rounded-xl'],
 				narrow: ['h-9 py-2.5 px-5 rounded-lg'],
-				xs: ['h-6 rounded-lg px-2 py-3 !uppercase'],
+				xs: ['h-6 rounded-lg px-2 py-3 !uppercase text-captionSmall'],
 				icon: ['h-full w-full rounded-lg p-1'],
 			},
 		},

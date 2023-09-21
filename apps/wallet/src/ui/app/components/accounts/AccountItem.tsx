@@ -67,7 +67,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 				ref={ref}
 				className={cn(
 					'flex flex-col px-4 py-3 rounded-xl gap-3 border border-solid border-hero/10 cursor-pointer bg-white/40 group',
-					'hover:bg-white/80',
+					'hover:bg-white/80 hover:border-hero/20',
 					{ 'bg-white/80 shadow-card-soft cursor-auto': selected },
 					{ 'bg-white/80': isActiveAccount },
 					{ '!bg-hero/10 border-none hover:bg-white/40 shadow-none': disabled },
@@ -78,7 +78,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 				{...props}
 			>
 				<div className="flex items-center justify-start gap-3">
-					{icon}
+					<div className="self-start mt-0.5">{icon}</div>
 					<div className="flex flex-col gap-1 overflow-hidden items-start">
 						{!isActiveAccount && !editable ? (
 							<Text variant="pBody" weight="semibold" color="steel-darker" truncate>
@@ -92,12 +92,19 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 								{formatAddress(account.address)}
 							</Text>
 							<div className="opacity-0 group-hover:opacity-100 flex gap-1 duration-100">
-								{hideCopy ? null : <IconButton icon={<Copy12 />} onClick={copyAddress} />}
+								{hideCopy ? null : (
+									<IconButton
+										variant="transparent"
+										icon={<Copy12 className="w-2.5 h-2.5" />}
+										onClick={copyAddress}
+									/>
+								)}
 								{hideExplorerLink || !explorerHref ? null : (
 									<IconButton
+										variant="transparent"
 										title="View on Explorer"
 										href={explorerHref}
-										icon={<ArrowUpRight12 />}
+										icon={<ArrowUpRight12 className="w-2.5 h-2.5" />}
 										onClick={(e) => e.stopPropagation()}
 									/>
 								)}

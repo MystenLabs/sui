@@ -13,7 +13,7 @@ export function ManageAccountsPage() {
 	useInitializedGuard(true);
 	return (
 		<Overlay showModal title="Manage Accounts" closeOverlay={() => navigate('/home')}>
-			<div className="flex flex-col gap-4 flex-1">
+			<div className="flex flex-col gap-10 flex-1">
 				{Object.entries(groupedAccounts).map(([type, accountGroups]) =>
 					Object.entries(accountGroups).map(([key, accounts]) => {
 						return (
