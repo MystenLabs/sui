@@ -507,29 +507,23 @@ def generate_lib(output_file: TextIO):
         else:
             raise Exception(f"Don't know how to substitute {var}")
 
-    output_file.write(
-        re.sub(
+
+    rust_code = re.sub(
             r"^(\s*)// \$([A-Z_]+)$",
             substitute,
             template,
             flags=re.MULTILINE,
-        ),
-    )
-
-    if output_file is not stdout:
-        format_file(output_file.name)
-
-
-def format_file(file: Union[str, Path]):
-    """Format a file with rustfmt."""
-    try:
-        subprocess.run(["rustfmt", file], check=True)
-    except subprocess.CalledProcessError:
-        print(
-            f"Failed to format {file}, you may need to run `rustfmt` manually.",
-            file=stderr,
         )
 
+    try:
+        result = subprocess.run(['rustfmt'], input=rust_code, text=True, capture_output=True, check=True)
+        formatted_code = result.stdout
+        output_file.write(formatted_code)
+    except subprocess.CalledProcessError as e:
+        print(f"rustfmt failed with error code {e.returncode}")
+        print("stderr:", e.stderr)
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 # Modules in `sui-execution` that don't count as "cuts" (they are
 # other supporting modules)
