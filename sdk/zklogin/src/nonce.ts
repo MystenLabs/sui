@@ -4,10 +4,10 @@
 import { PublicKey } from '@mysten/sui.js/cryptography';
 import { toBigEndianBytes } from '@mysten/sui.js/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
-import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 
 import { poseidonHash } from './poseidon.js';
+import { toBigIntBE } from './utils.js';
 
 const NONCE_LENGTH = 27;
 

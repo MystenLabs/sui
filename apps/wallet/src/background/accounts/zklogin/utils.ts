@@ -4,9 +4,13 @@
 import { fetchWithSentry } from '_src/shared/utils';
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce, generateRandomness, type getZkLoginSignature } from '@mysten/zklogin';
+import {
+	generateNonce,
+	generateRandomness,
+	toBigIntBE,
+	type getZkLoginSignature,
+} from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
-import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
