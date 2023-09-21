@@ -14,6 +14,8 @@ export interface BcsTypeOptions<T, Input = T> {
 }
 
 export class BcsType<T, Input = T> {
+	$inferType!: T;
+	$inferInput!: Input;
 	name: string;
 	read: (reader: BcsReader) => T;
 	serializedSize: (value: Input, options?: BcsWriterOptions) => number | null;

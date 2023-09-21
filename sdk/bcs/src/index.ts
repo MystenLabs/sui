@@ -17,6 +17,7 @@ import { BcsType, BcsTypeOptions, SerializedBcs } from './bcs-type.js';
 import { bcs } from './bcs.js';
 import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
+import { type InferBcsInput, type InferBcsType } from './types.js';
 import { decodeStr, encodeStr, splitGenericParameters } from './utils.js';
 import { BcsWriter, BcsWriterOptions } from './writer.js';
 
@@ -40,4 +41,6 @@ export {
 	BcsReader,
 	BcsWriter,
 	type BcsWriterOptions,
+	type InferBcsInput,
+	type InferBcsType,
 };
