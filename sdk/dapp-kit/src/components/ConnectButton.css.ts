@@ -22,9 +22,12 @@ export const modalContent = style({
 	transform: 'translate(-50%, -50%)',
 	zIndex: 999999999,
 	display: 'flex',
+	overflow: 'hidden',
+	borderRadius: 16,
 });
 
 export const walletListContainer = style({
 	backgroundColor: '#F7F8F8',
 	padding: 20,
+	minWidth: 240,
 });

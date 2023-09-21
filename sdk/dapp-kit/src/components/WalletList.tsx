@@ -7,11 +7,12 @@ import { WalletListItem } from './WalletListItem.js';
 import * as styles from './WalletList.css.js';
 
 type WalletListProps = {
+	selectedWalletName?: string;
 	onPlaceholderClick: () => void;
-	onSelect: (selectedWallet: WalletWithRequiredFeatures) => void;
+	onSelect: (wallet: WalletWithRequiredFeatures) => void;
 };
 
-export function WalletList({ onPlaceholderClick, onSelect }: WalletListProps) {
+export function WalletList({ selectedWalletName, onPlaceholderClick, onSelect }: WalletListProps) {
 	const wallets = useWallets();
 	return (
 		<ul className={styles.container}>
@@ -21,6 +22,7 @@ export function WalletList({ onPlaceholderClick, onSelect }: WalletListProps) {
 						key={wallet.name}
 						name={wallet.name}
 						iconSrc={wallet.icon}
+						isSelected={wallet.name === selectedWalletName}
 						onClick={() => onSelect(wallet)}
 					/>
 				))

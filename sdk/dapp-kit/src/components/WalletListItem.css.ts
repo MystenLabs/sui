@@ -4,7 +4,13 @@
 import { style } from '@vanilla-extract/css';
 
 export const container = style({
-	padding: 10,
+	padding: 8,
+	borderRadius: 8,
+});
+
+export const selectedContainer = style({
+	background: '#FFFFFF',
+	boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.05)',
 });
 
 export const buttonContainer = style({

@@ -1173,6 +1173,9 @@ importers:
       '@vanilla-extract/css':
         specifier: ^1.13.0
         version: 1.13.0
+      clsx:
+        specifier: ^2.0.0
+        version: 2.0.0
       zustand:
         specifier: ^4.4.1
         version: 4.4.1(@types/react@18.2.15)(react@18.2.0)

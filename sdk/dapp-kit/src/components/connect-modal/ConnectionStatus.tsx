@@ -7,7 +7,7 @@ import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 type ConnectionStatusProps = {
 	selectedWallet: WalletWithRequiredFeatures;
 	hadConnectionError: boolean;
-	onRetryConnection: () => void;
+	onRetryConnection: (selectedWallet: WalletWithRequiredFeatures) => void;
 };
 
 export function ConnectionStatus({
@@ -21,7 +21,7 @@ export function ConnectionStatus({
 			<div>Opening {selectedWallet.name}</div>
 			<div>{hadConnectionError ? 'Connection failed' : 'Confirm connection in the wallet...'}</div>
 			{hadConnectionError ? (
-				<button type="button" onClick={() => onRetryConnection()}>
+				<button type="button" onClick={() => onRetryConnection(selectedWallet)}>
 					Retry Connection
 				</button>
 			) : null}
