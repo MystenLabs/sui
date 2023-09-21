@@ -460,7 +460,7 @@ impl Package {
                 .edition
                 .or(config.default_edition)
                 .unwrap_or_default(),
-            warning_filter: WarningFilters::new(),
+            warning_filter: WarningFilters::new_for_source(),
         }
     }
 }

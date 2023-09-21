@@ -51,7 +51,7 @@ impl<'env, 'map> Context<'env, 'map> {
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     ) -> Self {
-        let mut all_filter_alls = WarningFilters::new();
+        let mut all_filter_alls = WarningFilters::new_for_dependency();
         for allow in compilation_env.filter_attributes() {
             for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
                 all_filter_alls.add(f);
@@ -839,7 +839,7 @@ fn warning_filter(
 ) -> WarningFilters {
     use crate::diagnostics::codes::Category;
     use known_attributes::DiagnosticAttribute;
-    let mut warning_filters = WarningFilters::new();
+    let mut warning_filters = WarningFilters::new_for_source();
     let filter_attribute_names = context.env.filter_attributes().clone();
     for allow in filter_attribute_names {
         let Some(attr) = attributes.get_(&allow) else {
