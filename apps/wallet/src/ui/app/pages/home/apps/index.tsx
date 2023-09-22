@@ -11,6 +11,7 @@ import AppsPlayGround, { ConnectedAppsCard } from '_components/sui-apps';
 import { getFromSessionStorage, setToSessionStorage } from '_src/background/storage-utils';
 import { FEATURES } from '_src/shared/experimentation/features';
 
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import type { DAppEntry } from '_src/ui/app/components/sui-apps/SuiApp';
 
 import st from './AppsPage.module.scss';
@@ -65,6 +66,10 @@ function AppsPage() {
 	const handleFiltersPortalClick = async (tag: FilterTag) => {
 		await setToSessionStorage<string>(APPS_PAGE_NAVIGATION, tag.link);
 	};
+
+	if (useUnlockedGuard()) {
+		return null;
+	}
 
 	return (
 		<div className={st.container} data-testid="apps-page">

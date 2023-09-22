@@ -468,6 +468,11 @@ impl SuiAddress {
         AccountAddress::random().into()
     }
 
+    pub fn generate<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
+        let buf: [u8; SUI_ADDRESS_LENGTH] = rng.gen();
+        Self(buf)
+    }
+
     /// Serialize an `Option<SuiAddress>` in Hex.
     pub fn optional_address_as_hex<S>(
         key: &Option<SuiAddress>,

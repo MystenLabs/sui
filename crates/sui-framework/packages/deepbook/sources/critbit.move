@@ -11,15 +11,12 @@ module deepbook::critbit {
     friend deepbook::order_query;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    const ENotImplemented: u64 = 1;
     const EExceedCapacity: u64 = 2;
     const ETreeNotEmpty: u64 = 3;
     const EKeyAlreadyExist: u64 = 4;
     const ELeafNotExist: u64 = 5;
-    const EAssertFalse: u64 = 6;
     const EIndexOutOfRange: u64 = 7;
     const ENullParent: u64 = 8;
-    const ENullChild: u64 = 9;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
 

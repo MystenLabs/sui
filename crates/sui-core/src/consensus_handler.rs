@@ -155,11 +155,24 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .index
             .last_committed_round;
 
+        let round = consensus_output.sub_dag.leader_round();
+
+        assert!(round >= last_committed_round);
+        if last_committed_round == round {
+            // we can receive the same commit twice after restart
+            // It is critical that the writes done by this function are atomic - otherwise we can
+            // lose the later parts of a commit if we restart midway through processing it.
+            info!(
+                "Ignoring consensus output for round {} as it is already committed",
+                round
+            );
+            return;
+        }
+
         let mut sequenced_transactions = Vec::new();
         let mut end_of_publish_transactions = Vec::new();
 
         let mut bytes = 0usize;
-        let round = consensus_output.sub_dag.leader_round();
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
@@ -180,11 +193,12 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
         };
 
         info!(
-            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} ",
+            "Received consensus output {:?} at leader round {}, subdag index {}, timestamp {} epoch {}",
             consensus_output.digest(),
             round,
             consensus_output.sub_dag.sub_dag_index,
             timestamp,
+            self.epoch_store.epoch(),
         );
 
         let prologue_transaction = self.consensus_commit_prologue_transaction(round, timestamp);
@@ -369,52 +383,56 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .consensus_handler_processed_bytes
             .inc_by(bytes as u64);
 
-        let transactions_to_schedule = self
-            .epoch_store
-            .process_consensus_transactions_and_commit_boundary(
-                &sequenced_transactions,
-                &end_of_publish_transactions,
-                &self.checkpoint_service,
-                &self.object_store,
-            )
-            .await
-            .expect("Unrecoverable error in consensus handler");
+        let transactions_to_schedule = {
+            let (transactions_to_schedule, consensus_commit_batch) = self
+                .epoch_store
+                .process_consensus_transactions_and_commit_boundary(
+                    &sequenced_transactions,
+                    end_of_publish_transactions,
+                    &self.checkpoint_service,
+                    &self.object_store,
+                )
+                .await
+                .expect("Unrecoverable error in consensus handler");
+
+            // The last block in this function notifies about new checkpoint if needed
+            let final_checkpoint_round = consensus_commit_batch.final_checkpoint_round();
+            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
+                Some(Ordering::Less) => {
+                    debug!(
+                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
+                        round, final_checkpoint_round
+                    );
+                    return;
+                }
+                Some(Ordering::Equal) => true,
+                Some(Ordering::Greater) => false,
+                None => false,
+            };
+            let checkpoint = PendingCheckpoint {
+                roots: roots.into_iter().collect(),
+                details: PendingCheckpointInfo {
+                    timestamp_ms: timestamp,
+                    last_of_epoch: final_checkpoint,
+                    commit_height: round,
+                },
+            };
+
+            consensus_commit_batch
+                .commit(checkpoint)
+                .expect("Failed to commit consensus commit batch");
+
+            if final_checkpoint {
+                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
+                self.epoch_store.record_end_of_message_quorum_time_metric();
+            }
+
+            transactions_to_schedule
+        };
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
-        // The last block in this function notifies about new checkpoint if needed
-        let final_checkpoint_round = self
-            .epoch_store
-            .final_epoch_checkpoint()
-            .expect("final_epoch_checkpoint failed");
-        let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
-            Some(Ordering::Less) => {
-                debug!(
-                    "Not forming checkpoint for round {} above final checkpoint round {:?}",
-                    round, final_checkpoint_round
-                );
-                return;
-            }
-            Some(Ordering::Equal) => true,
-            Some(Ordering::Greater) => false,
-            None => false,
-        };
-        let checkpoint = PendingCheckpoint {
-            roots: roots.into_iter().collect(),
-            details: PendingCheckpointInfo {
-                timestamp_ms: timestamp,
-                last_of_epoch: final_checkpoint,
-                commit_height: round,
-            },
-        };
-        self.checkpoint_service
-            .notify_checkpoint(&self.epoch_store, checkpoint)
-            .expect("notify_checkpoint has failed");
-        if final_checkpoint {
-            info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-            self.epoch_store.record_end_of_message_quorum_time_metric();
-        }
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {

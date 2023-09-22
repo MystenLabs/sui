@@ -85,7 +85,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
 	return (
 		<>
-			<div tabIndex={0} className="w-full" {...getReferenceProps({ ref: refs.setReference })}>
+			<div tabIndex={0} className="w-full flex" {...getReferenceProps({ ref: refs.setReference })}>
 				{children}
 			</div>
 			<FloatingPortal>

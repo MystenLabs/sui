@@ -9,7 +9,7 @@ use crate::{
         ast::{self as E, AbilitySet, ModuleIdent},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
-    naming::ast as N,
+    naming::ast::{self as N, Neighbor_},
     parser::ast::{self as P, Ability_, ConstantName, Field, FunctionName, StructName},
     shared::{unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -18,7 +18,10 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::{ast::TParamID, fake_natives};
+use super::{
+    ast::{Neighbor, TParamID},
+    fake_natives,
+};
 
 //**************************************************************************************************
 // Context
@@ -414,21 +417,20 @@ fn module(
 ) -> N::ModuleDefinition {
     context.current_module = Some(ident);
     let E::ModuleDefinition {
+        loc,
         warning_filter,
         package_name,
         attributes,
-        loc: _loc,
         is_source_module,
-        dependency_order,
-        immediate_neighbors: _,
-        used_addresses: _,
         friends: efriends,
         structs: estructs,
         functions: efunctions,
         constants: econstants,
-        specs: _specs,
+        specs,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    let mut spec_dependencies = BTreeSet::new();
+    spec_blocks(&mut spec_dependencies, &specs);
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
     let unscoped = context.save_unscoped();
     let structs = estructs.map(|name, s| {
@@ -437,7 +439,7 @@ fn module(
     });
     let functions = efunctions.map(|name, f| {
         context.restore_unscoped(unscoped.clone());
-        function(context, Some(ident), name, f)
+        function(context, &mut spec_dependencies, Some(ident), name, f)
     });
     let constants = econstants.map(|name, c| {
         context.restore_unscoped(unscoped.clone());
@@ -446,15 +448,16 @@ fn module(
     context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     N::ModuleDefinition {
+        loc,
         warning_filter,
         package_name,
         attributes,
         is_source_module,
-        dependency_order,
         friends,
         structs,
         constants,
         functions,
+        spec_dependencies,
     }
 }
 
@@ -474,14 +477,14 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         package_name,
         attributes,
         loc,
-        immediate_neighbors: _,
-        used_addresses: _,
         constants: econstants,
         function_name,
         function: efunction,
-        specs: _specs,
+        specs,
     } = escript;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    let mut spec_dependencies = BTreeSet::new();
+    spec_blocks(&mut spec_dependencies, &specs);
     let outer_unscoped = context.save_unscoped();
     for (loc, s, _) in &econstants {
         context.bind_constant(*s, loc)
@@ -492,7 +495,13 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         constant(context, name, c)
     });
     context.restore_unscoped(inner_unscoped);
-    let function = function(context, None, function_name, efunction);
+    let function = function(
+        context,
+        &mut spec_dependencies,
+        None,
+        function_name,
+        efunction,
+    );
     context.restore_unscoped(outer_unscoped);
     context.env.pop_warning_filter_scope();
     N::Script {
@@ -503,6 +512,7 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         constants,
         function_name,
         function,
+        spec_dependencies,
     }
 }
 
@@ -544,6 +554,7 @@ fn friend(context: &mut Context, mident: ModuleIdent, friend: E::Friend) -> Opti
 
 fn function(
     context: &mut Context,
+    spec_dependencies: &mut BTreeSet<(ModuleIdent, Neighbor)>,
     module_opt: Option<ModuleIdent>,
     name: FunctionName,
     ef: E::Function,
@@ -558,7 +569,7 @@ fn function(
         signature,
         acquires,
         body,
-        specs: _,
+        specs,
     } = ef;
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
@@ -566,6 +577,7 @@ fn function(
     assert!(context.used_fun_tparams.is_empty());
     assert!(!context.translating_fun);
     context.env.add_warning_filter_scope(warning_filter.clone());
+    spec_blocks(spec_dependencies, specs.values());
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
@@ -1662,4 +1674,276 @@ fn report_unused_local(context: &mut Context, sp!(loc, unused_): &N::Var) {
     context
         .env
         .add_diag(diag!(UnusedItem::Variable, (*loc, msg)));
+}
+
+//**************************************************************************************************
+// Specs
+//**************************************************************************************************
+
+fn spec_blocks<'a>(
+    used: &mut BTreeSet<(ModuleIdent, Neighbor)>,
+    specs: impl IntoIterator<Item = &'a E::SpecBlock>,
+) {
+    for spec in specs {
+        spec_block(used, spec)
+    }
+}
+
+fn spec_block(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, sb_): &E::SpecBlock) {
+    sb_.members
+        .iter()
+        .for_each(|sbm| spec_block_member(used, sbm))
+}
+
+fn spec_block_member(
+    used: &mut BTreeSet<(ModuleIdent, Neighbor)>,
+    sp!(_, sbm_): &E::SpecBlockMember,
+) {
+    use E::SpecBlockMember_ as M;
+    match sbm_ {
+        M::Condition {
+            exp: e,
+            additional_exps: es,
+            ..
+        } => {
+            spec_exp(used, e);
+            es.iter().for_each(|e| spec_exp(used, e))
+        }
+        M::Function { body, .. } => {
+            if let E::FunctionBody_::Defined(seq) = &body.value {
+                spec_sequence(used, seq)
+            }
+        }
+        M::Let { def: e, .. } | M::Include { exp: e, .. } | M::Apply { exp: e, .. } => {
+            spec_exp(used, e)
+        }
+        M::Update { lhs, rhs } => {
+            spec_exp(used, lhs);
+            spec_exp(used, rhs);
+        }
+        // A special treatment to the `pragma friend` declarations.
+        //
+        // The `pragma friend = <address::module_name::function_name>` notion exists before the
+        // `friend` feature is implemented as a language feature. And it may still have a use case,
+        // that is, to friend a module that is compiled with other modules but not published.
+        //
+        // To illustrate, suppose we have module `A` and `B` compiled and proved together locally,
+        // but for some reason, module `A` is not published on-chain. In this case, we cannot
+        // declare `friend A;` in module `B` because that will lead to a linking error (the loader
+        // is unable to find module `A`). But the prover side still needs to know that `A` is a
+        // friend of `B` (e.g., to verify global invariants). So, the `pragma friend = ...` syntax
+        // might need to stay for this purpose. And for that, we need to add the module that is
+        // declared as a friend in the `immediate_neighbors`.
+        M::Pragma { properties } => {
+            for prop in properties {
+                let pragma = &prop.value;
+                if pragma.name.value.as_str() == "friend" {
+                    match &pragma.value {
+                        None => (),
+                        Some(E::PragmaValue::Literal(_)) => (),
+                        Some(E::PragmaValue::Ident(maccess)) => match &maccess.value {
+                            E::ModuleAccess_::Name(_) => (),
+                            E::ModuleAccess_::ModuleAccess(mident, _) => {
+                                used.insert((*mident, sp(maccess.loc, Neighbor_::Friend)));
+                            }
+                        },
+                    }
+                }
+            }
+        }
+        M::Variable { .. } => (),
+    }
+}
+
+fn spec_sequence(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, seq: &E::Sequence) {
+    for item in seq {
+        spec_sequence_item(used, item)
+    }
+}
+
+fn spec_sequence_item(
+    used: &mut BTreeSet<(ModuleIdent, Neighbor)>,
+    sp!(_, item_): &E::SequenceItem,
+) {
+    match item_ {
+        E::SequenceItem_::Declare(lvs, _) => spec_lvalues(used, lvs),
+        E::SequenceItem_::Bind(lvs, e) => {
+            spec_lvalues(used, lvs);
+            spec_exp(used, e);
+        }
+        E::SequenceItem_::Seq(e) => spec_exp(used, e),
+    }
+}
+
+fn spec_lvalues(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, lvs_): &E::LValueList) {
+    for lv in lvs_ {
+        spec_lvalue(used, lv)
+    }
+}
+
+fn spec_lvalue(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, lv_): &E::LValue) {
+    match lv_ {
+        E::LValue_::Var(m, tys_opt) => {
+            spec_module_access(used, m);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+        }
+        E::LValue_::Unpack(m, tys_opt, fields) => {
+            spec_module_access(used, m);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for (_, _, (_, field_lv)) in fields {
+                spec_lvalue(used, field_lv)
+            }
+        }
+    }
+}
+
+fn spec_types(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, tys: &[E::Type]) {
+    for ty in tys {
+        spec_type(used, ty)
+    }
+}
+
+fn spec_type(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, ty_): &E::Type) {
+    match ty_ {
+        E::Type_::Unit | E::Type_::UnresolvedError => (),
+        E::Type_::Multiple(tys) => spec_types(used, tys),
+        E::Type_::Apply(ma, tys) => {
+            spec_module_access(used, ma);
+            spec_types(used, tys)
+        }
+        E::Type_::Ref(_, inner) => spec_type(used, inner),
+        E::Type_::Fun(ty_params, ty_ret) => {
+            spec_types(used, ty_params);
+            spec_type(used, ty_ret);
+        }
+    }
+}
+
+fn spec_module_access(
+    used: &mut BTreeSet<(ModuleIdent, Neighbor)>,
+    sp!(loc, ma_): &E::ModuleAccess,
+) {
+    match ma_ {
+        E::ModuleAccess_::Name(_) => (),
+        E::ModuleAccess_::ModuleAccess(m, _) => {
+            used.insert((*m, sp(*loc, Neighbor_::Dependency)));
+        }
+    }
+}
+
+fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
+    match e_ {
+        E::Exp_::Value(_)
+        | E::Exp_::Move(_)
+        | E::Exp_::Copy(_)
+        | E::Exp_::Break
+        | E::Exp_::Continue
+        | E::Exp_::Unit { .. }
+        | E::Exp_::Spec(_, _)
+        | E::Exp_::UnresolvedError => (),
+
+        E::Exp_::Loop(einner)
+        | E::Exp_::Return(einner)
+        | E::Exp_::Abort(einner)
+        | E::Exp_::Dereference(einner)
+        | E::Exp_::UnaryExp(_, einner)
+        | E::Exp_::Borrow(_, einner) => spec_exp(used, einner),
+
+        E::Exp_::Mutate(el, er) | E::Exp_::BinopExp(el, _, er) | E::Exp_::Index(el, er) => {
+            spec_exp(used, el);
+            spec_exp(used, er)
+        }
+
+        E::Exp_::Name(ma, tys_opt) => {
+            spec_module_access(used, ma);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+        }
+        E::Exp_::Call(ma, _, tys_opt, sp!(_, args_)) => {
+            spec_module_access(used, ma);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for arg in args_ {
+                spec_exp(used, arg)
+            }
+        }
+        E::Exp_::Pack(ma, tys_opt, fields) => {
+            spec_module_access(used, ma);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for (_, _, (_, arg)) in fields {
+                spec_exp(used, arg)
+            }
+        }
+        E::Exp_::Vector(_, tys_opt, sp!(_, args_)) => {
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for arg in args_ {
+                spec_exp(used, arg)
+            }
+        }
+        E::Exp_::IfElse(econd, etrue, efalse) => {
+            spec_exp(used, econd);
+            spec_exp(used, etrue);
+            spec_exp(used, efalse);
+        }
+        E::Exp_::While(econd, ebody) => {
+            spec_exp(used, econd);
+            spec_exp(used, ebody)
+        }
+        E::Exp_::Block(seq) => spec_sequence(used, seq),
+        E::Exp_::Lambda(lvs, ebody) => {
+            spec_lvalues(used, lvs);
+            spec_exp(used, ebody)
+        }
+        E::Exp_::Quant(_, sp!(_, lvs_es_), ess, e_opt, inner) => {
+            for sp!(_, (lv, e)) in lvs_es_ {
+                spec_lvalue(used, lv);
+                spec_exp(used, e);
+            }
+            for es in ess {
+                for e in es {
+                    spec_exp(used, e)
+                }
+            }
+            if let Some(e) = e_opt {
+                spec_exp(used, e)
+            }
+            spec_exp(used, inner)
+        }
+        E::Exp_::Assign(lvs, er) => {
+            spec_lvalues(used, lvs);
+            spec_exp(used, er)
+        }
+        E::Exp_::FieldMutate(edotted, er) => {
+            spec_exp_dotted(used, edotted);
+            spec_exp(used, er)
+        }
+
+        E::Exp_::ExpList(es) => {
+            for e in es {
+                spec_exp(used, e)
+            }
+        }
+        E::Exp_::ExpDotted(edotted) => spec_exp_dotted(used, edotted),
+        E::Exp_::Cast(e, ty) | E::Exp_::Annotate(e, ty) => {
+            spec_exp(used, e);
+            spec_type(used, ty)
+        }
+    }
+}
+
+fn spec_exp_dotted(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, edotted_): &E::ExpDotted) {
+    match edotted_ {
+        E::ExpDotted_::Exp(e) => spec_exp(used, e),
+        E::ExpDotted_::Dot(edotted, _) => spec_exp_dotted(used, edotted),
+    }
 }

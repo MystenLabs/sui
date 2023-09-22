@@ -191,28 +191,14 @@ impl<'state> LinkageView<'state> {
 
         Ok(())
     }
-}
 
-impl From<&MovePackage> for LinkageInfo {
-    fn from(package: &MovePackage) -> Self {
-        Self {
-            storage_id: package.id().into(),
-            runtime_id: package.original_package_id().into(),
-            link_table: package.linkage_table().clone(),
-        }
-    }
-}
-
-impl<'state> LinkageResolver for LinkageView<'state> {
-    type Error = SuiError;
-
-    fn link_context(&self) -> AccountAddress {
+    pub(crate) fn link_context(&self) -> AccountAddress {
         self.linkage_info
             .as_ref()
             .map_or(AccountAddress::ZERO, |l| l.storage_id)
     }
 
-    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
+    pub(crate) fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, SuiError> {
         let Some(linkage) = &self.linkage_info else {
             invariant_violation!("No linkage context set while relocating {module_id}.")
         };
@@ -240,11 +226,11 @@ impl<'state> LinkageResolver for LinkageView<'state> {
         ))
     }
 
-    fn defining_module(
+    pub(crate) fn defining_module(
         &self,
         runtime_id: &ModuleId,
         struct_: &IdentStr,
-    ) -> Result<ModuleId, Self::Error> {
+    ) -> Result<ModuleId, SuiError> {
         if self.linkage_info.is_none() {
             invariant_violation!(
                 "No linkage context set for defining module query on {runtime_id}::{struct_}."
@@ -278,6 +264,36 @@ impl<'state> LinkageResolver for LinkageView<'state> {
             "{runtime_id}::{struct_} not found in type origin table in {storage_id} (v{})",
             package.version(),
         )
+    }
+}
+
+impl From<&MovePackage> for LinkageInfo {
+    fn from(package: &MovePackage) -> Self {
+        Self {
+            storage_id: package.id().into(),
+            runtime_id: package.original_package_id().into(),
+            link_table: package.linkage_table().clone(),
+        }
+    }
+}
+
+impl<'state> LinkageResolver for LinkageView<'state> {
+    type Error = SuiError;
+
+    fn link_context(&self) -> AccountAddress {
+        LinkageView::link_context(self)
+    }
+
+    fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {
+        LinkageView::relocate(self, module_id)
+    }
+
+    fn defining_module(
+        &self,
+        runtime_id: &ModuleId,
+        struct_: &IdentStr,
+    ) -> Result<ModuleId, Self::Error> {
+        LinkageView::defining_module(self, runtime_id, struct_)
     }
 }
 

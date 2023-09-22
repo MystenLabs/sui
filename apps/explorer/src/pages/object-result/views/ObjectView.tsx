@@ -228,6 +228,8 @@ export function ObjectView({ data }: ObjectViewProps) {
 	const objectType = parseObjectType(data);
 	const objOwner = data.data?.owner;
 	const storageRebate = data.data?.storageRebate;
+	const objectId = data.data?.objectId;
+	const lastTransactionBlockDigest = data.data?.previousTransaction;
 
 	const heroImageTitle = name || display?.description || trimStdLibPrefix(objectType);
 	const heroImageSubtitle = video ? 'Video' : fileType ?? '';
@@ -257,18 +259,22 @@ export function ObjectView({ data }: ObjectViewProps) {
 				</div>
 			)}
 
-			<div style={{ gridArea: 'description' }}>
-				<DescriptionCard
-					name={name}
-					objectType={objectType}
-					objectId={data.data?.objectId!}
-					display={display}
-				/>
-			</div>
+			{objectId && (
+				<div style={{ gridArea: 'description' }}>
+					<DescriptionCard
+						name={name}
+						objectType={objectType}
+						objectId={objectId}
+						display={display}
+					/>
+				</div>
+			)}
 
-			<div style={{ gridArea: 'version' }}>
-				<VersionCard version={data.data?.version} digest={data.data?.previousTransaction!} />
-			</div>
+			{lastTransactionBlockDigest && (
+				<div style={{ gridArea: 'version' }}>
+					<VersionCard version={data.data?.version} digest={lastTransactionBlockDigest} />
+				</div>
+			)}
 
 			<div style={{ gridArea: 'owner' }}>
 				<OwnerCard objOwner={objOwner} display={display} storageRebate={storageRebate} />

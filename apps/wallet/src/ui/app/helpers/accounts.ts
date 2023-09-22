@@ -24,7 +24,7 @@ export function getAccountBackgroundByType(account: SerializedUIAccount) {
 		case 'google':
 			return 'bg-google bg-no-repeat bg-cover';
 		case 'twitch':
-			return 'bg-twitch bg-no-repeat bg-cover';
+			return 'bg-twitch-image bg-no-repeat bg-cover';
 		default:
 			return `bg-gradients-graph-cards`;
 	}

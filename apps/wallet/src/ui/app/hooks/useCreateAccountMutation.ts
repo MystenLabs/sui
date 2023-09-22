@@ -22,7 +22,7 @@ function validateAccountFormValues<T extends CreateType>(
 	if (values.type !== createType) {
 		throw new Error('Account data values type mismatch');
 	}
-	if (values.type !== 'zk' && !password) {
+	if (values.type !== 'zk' && values.type !== 'mnemonic-derived' && !password) {
 		throw new Error('Missing password');
 	}
 	return true;
@@ -69,10 +69,12 @@ export function useCreateAccountsMutation() {
 				type === 'mnemonic-derived' &&
 				validateAccountFormValues(type, accountsFormValues, password)
 			) {
-				await backgroundClient.unlockAccountSourceOrAccount({
-					password,
-					id: accountsFormValues.sourceID,
-				});
+				if (password) {
+					await backgroundClient.unlockAccountSourceOrAccount({
+						password,
+						id: accountsFormValues.sourceID,
+					});
+				}
 				createdAccounts = await backgroundClient.createAccounts({
 					type: 'mnemonic-derived',
 					sourceID: accountsFormValues.sourceID,

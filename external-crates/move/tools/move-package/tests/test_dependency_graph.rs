@@ -234,7 +234,12 @@ fn merge_simple() {
         }),
     )]);
     assert!(outer
-        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
+        .merge(
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
+        )
         .is_ok(),);
     assert_eq!(
         outer.topological_order(),
@@ -280,7 +285,12 @@ fn merge_into_root() {
         }),
     )]);
     assert!(outer
-        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
+        .merge(
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
+        )
         .is_ok());
 
     assert_eq!(
@@ -320,6 +330,7 @@ fn merge_detached() {
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
+        &BTreeMap::new()
     ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
@@ -354,6 +365,7 @@ fn merge_after_calculating_always_deps() {
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
+        &BTreeMap::new()
     ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
@@ -426,7 +438,12 @@ fn merge_overlapping() {
         ),
     ]);
     assert!(outer
-        .merge(dep_graphs, &DependencyKind::default(), dependencies,)
+        .merge(
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
+        )
         .is_ok());
 }
 
@@ -498,6 +515,7 @@ fn merge_overlapping_different_deps() {
         dep_graphs,
         &DependencyKind::default(),
         dependencies,
+        &BTreeMap::new()
     ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };

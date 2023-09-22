@@ -3,7 +3,6 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import PageLayout from './layout';
 import { PasswordInputDialog } from '../components/PasswordInputDialog';
 import LoadingIndicator from '../components/loading/LoadingIndicator';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
@@ -26,7 +25,7 @@ export function StorageMigrationPage() {
 		return null;
 	}
 	return (
-		<PageLayout>
+		<>
 			<CardLayout
 				title={data === 'inProgress' ? 'Storage migration in progress, please wait' : ''}
 				subtitle={data === 'required' ? 'Storage migration is required' : ''}
@@ -47,6 +46,6 @@ export function StorageMigrationPage() {
 				)}
 			</CardLayout>
 			<Toaster />
-		</PageLayout>
+		</>
 	);
 }

@@ -212,15 +212,19 @@ fn module(
     mdef: T::ModuleDefinition,
 ) -> (ModuleIdent, H::ModuleDefinition) {
     let T::ModuleDefinition {
+        loc: _,
         warning_filter,
         package_name,
         attributes,
         is_source_module,
         dependency_order,
+        immediate_neighbors: _,
+        used_addresses: _,
         friends,
         structs: tstructs,
         functions: tfunctions,
         constants: tconstants,
+        spec_dependencies: _,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
@@ -263,9 +267,12 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
         package_name,
         attributes,
         loc,
+        immediate_neighbors: _,
+        used_addresses: _,
         constants: tconstants,
         function_name,
         function: tfunction,
+        spec_dependencies: _,
     } = tscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = tconstants.map(|name, c| constant(context, name, c));
