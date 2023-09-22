@@ -9,7 +9,7 @@ use std::num::NonZeroU64;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 const DEFAULT_OBSERVATIONS_WINDOW: u64 = 120; // number of observations to use to calculate the past traffic
 const DEFAULT_TRAFFIC_PROFILE_UPDATE_WINDOW_SECS: u64 = 60; // seconds that need to pass between two consecutive traffic profile updates
@@ -58,6 +58,15 @@ impl TrafficProfileRanges {
             );
         }
 
+        // By default the Low profile should exist with throughput 0
+        assert_eq!(
+            *p.get(&0).unwrap(),
+            TrafficProfile {
+                level: Level::Low,
+                throughput: 0
+            }
+        );
+
         Self { profiles: p }
     }
 
@@ -76,7 +85,11 @@ impl TrafficProfileRanges {
                 return *profile;
             }
         }
-        panic!("{}", format!("Method should always be able to detect a traffic profile to cover the provided throughput {}, {:?}", current_throughput, self.profiles));
+
+        warn!("Could not resolve traffic profile for throughput {} - we shouldn't end up here. Fallback to lowest profile as default.", current_throughput);
+
+        // If not found, then we should return the lowest possible profile as default.
+        self.lowest_profile()
     }
 }
 
@@ -270,10 +283,6 @@ impl ConsensusThroughputCalculator {
                     .throughput
                     .saturating_mul(100 - self.traffic_profile_cool_down_throughput_threshold)
                     / 100;
-                println!(
-                    "Comp profiles: {:?} {:?}, {} {}",
-                    profile, last_profile.profile, throughput, min_throughput
-                );
                 throughput <= min_throughput
             } else {
                 true
@@ -288,7 +297,7 @@ impl ConsensusThroughputCalculator {
                 timestamp,
                 throughput,
             };
-            info!("Updating traffic profile to {:?}", p);
+            debug!("Updating traffic profile to {:?}", p);
             self.last_traffic_profile.store(Arc::new(p));
         }
 
