@@ -30,6 +30,7 @@ pub struct StoredCheckpoint {
     pub checkpoint_commitments: Vec<u8>,
     pub validator_signature: Vec<u8>,
     pub end_of_epoch_data: Option<Vec<u8>>,
+    pub end_of_epoch: bool,
 }
 
 impl From<&IndexedCheckpoint> for StoredCheckpoint {
@@ -60,6 +61,7 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
                 .end_of_epoch_data
                 .as_ref()
                 .map(|d| bcs::to_bytes(d).unwrap()),
+            end_of_epoch: c.end_of_epoch_data.is_some(),
         }
     }
 }
