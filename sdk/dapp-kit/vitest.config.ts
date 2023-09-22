@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import tsconfigPaths from 'vite-tsconfig-paths';
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { defineConfig, configDefaults } from 'vitest/config';
 
 export default defineConfig({
-	plugins: [tsconfigPaths()],
+	plugins: [tsconfigPaths(), vanillaExtractPlugin()],
 	test: {
 		exclude: [...configDefaults.exclude, 'tests/**'],
 		environment: 'happy-dom',
