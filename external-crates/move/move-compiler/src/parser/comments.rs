@@ -2,12 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{diag, diagnostics::Diagnostics};
+use crate::{diag, diagnostics::Diagnostics, shared::Name};
 use move_command_line_common::{character_sets::is_permitted_chars, files::FileHash};
 use move_ir_types::location::*;
 use std::collections::BTreeMap;
 
 /// Types to represent comments.
+pub type Comment = Name;
 pub type CommentMap = BTreeMap<FileHash, MatchedFileCommentMap>;
 pub type MatchedFileCommentMap = BTreeMap<u32, String>;
 pub type FileCommentMap = BTreeMap<(u32, u32), String>;

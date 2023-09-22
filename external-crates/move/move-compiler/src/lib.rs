@@ -20,6 +20,7 @@ pub mod hlir;
 pub mod interface_generator;
 pub mod ir_translation;
 pub mod naming;
+pub mod parse_tree;
 pub mod parser;
 pub mod shared;
 pub mod sui_mode;
