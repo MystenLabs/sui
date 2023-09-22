@@ -37,13 +37,13 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
-    package: Option<SuiAddress>,
-    module: Option<String>,
-    ty: Option<String>,
+    pub package: Option<SuiAddress>,
+    pub module: Option<String>,
+    pub ty: Option<String>,
 
-    owner: Option<SuiAddress>,
-    object_ids: Option<Vec<SuiAddress>>,
-    object_keys: Option<Vec<ObjectKey>>,
+    pub owner: Option<SuiAddress>,
+    pub object_ids: Option<Vec<SuiAddress>>,
+    pub object_keys: Option<Vec<ObjectKey>>,
 }
 
 #[derive(InputObject)]

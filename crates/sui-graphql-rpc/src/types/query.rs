@@ -1,16 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
-
 use async_graphql::{connection::Connection, *};
 
 use super::{
     address::Address,
-    base64::Base64,
     checkpoint::{Checkpoint, CheckpointId},
     epoch::Epoch,
-    event::EventFilter,
     object::{Object, ObjectFilter},
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
@@ -54,25 +50,28 @@ impl Query {
         Some(Address { address })
     }
 
-    async fn epoch(&self, ctx: &Context<'_>, epoch_id: Option<u64>) -> Option<Epoch> {
+    async fn epoch(&self, ctx: &Context<'_>, epoch_id: Option<u64>) -> Result<Option<Epoch>> {
         // Defaults to latest epoch
+        // TODO: map results from StoredEpoch to graphql::Epoch
         let result = ctx
             .data_unchecked::<PgManager>()
             .fetch_epoch(epoch_id)
             .await?;
+        Ok(None)
     }
 
-    async fn checkpoint(&self, id: CheckpointId) -> Option<Checkpoint> {
-        match (id.digest, id.sequence_number) {
+    async fn checkpoint(&self, ctx: &Context<'_>, id: CheckpointId) -> Result<Option<Checkpoint>> {
+        // TODO: map results
+        let result = match (&id.digest, &id.sequence_number) {
+            // digest or sequence number
             (Some(_), Some(_)) => None,
             _ => {
-                let result = ctx
-                    .data_unchecked::<PgManager>()
+                ctx.data_unchecked::<PgManager>()
                     .fetch_checkpoint(id)
-                    .await?;
-                Ok(result.map(|cp| cp.into()))
+                    .await?
             }
-        }
+        };
+        Ok(None)
     }
 
     async fn transaction_block(
@@ -124,19 +123,7 @@ impl Query {
         Ok(None)
     }
 
-    async fn event_connection(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<EventFilter>,
-    ) -> Result<Option<Connection<String, Event>>> {
-        ctx.data_provider()
-            .fetch_event_connection(first, after, last, before)
-            .await
-    }
+    // event_connection -> TODO: need to define typings
 
     async fn object_connection(
         &self,
@@ -145,11 +132,20 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: ObjectFilter,
-    ) -> Result<Connection<String, Object>> {
-        ctx.data_provider()
-            .fetch_object_connection(first, after, last, before)
-            .await
+        filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, Object>>> {
+        if let Some(filter) = &filter {
+            validate_package_dependencies(
+                filter.package.as_ref(),
+                filter.module.as_ref(),
+                filter.ty.as_ref(),
+            )?;
+        }
+        let result = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_objs(first, after, last, before, filter)
+            .await;
+        Ok(None)
     }
 
     // resolveNameServiceAddress

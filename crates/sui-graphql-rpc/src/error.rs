@@ -80,7 +80,9 @@ impl ErrorExtensions for Error {
             | Error::CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. } => {
+            | Error::InvalidDigestLength { .. }
+            | Error::RequiresModuleAndPackage
+            | Error::RequiresPackage => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

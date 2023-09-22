@@ -147,8 +147,8 @@ impl TransactionBlockEffects {
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 pub(crate) enum TransactionBlockKindInput {
-    ProgrammableTx,
-    SystemTx,
+    SystemTx = 0,
+    ProgrammableTx = 1,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]

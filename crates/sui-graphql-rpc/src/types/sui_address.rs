@@ -54,8 +54,18 @@ impl SuiAddress {
         SuiAddress(arr)
     }
 
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
     pub fn as_slice(&self) -> &[u8] {
         &self.0
+    }
+}
+
+impl std::fmt::Display for SuiAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&format!("0x{}", hex::encode(self.0)))
     }
 }
 
