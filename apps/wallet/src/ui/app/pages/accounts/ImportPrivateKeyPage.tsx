@@ -28,7 +28,7 @@ export function ImportPrivateKeyPage() {
 					onSubmit={({ privateKey }) => {
 						setAccountsFormValues({
 							type: 'imported',
-							keyPair: Ed25519Keypair.fromSecretKey(hexToBytes(privateKey)).export(),
+							keyPair: Ed25519Keypair.fromSecretKey(hexToBytes(privateKey).slice(0, 32)).export(),
 						});
 						navigate('/accounts/protect-account?accountType=imported');
 					}}

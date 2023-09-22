@@ -4,15 +4,15 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
-    naming::ast::{FunctionSignature, StructDefinition, Type, TypeName_, Type_, Var},
+    expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
+    naming::ast::{FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var},
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
 };
 
@@ -37,9 +37,13 @@ pub struct Script {
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
+    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
+    pub used_addresses: BTreeSet<Address>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -48,17 +52,23 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub is_source_module: bool,
     /// `dependency_order` is the topological order/rank in the dependency graph.
+    /// `dependency_order` is initialized at `0` and set in the uses pass
     pub dependency_order: usize,
+    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
+    pub used_addresses: BTreeSet<Address>,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -288,15 +298,32 @@ impl AstDebug for Script {
             package_name,
             attributes,
             loc: _loc,
+            immediate_neighbors,
+            used_addresses,
             constants,
             function_name,
             function,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
+        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
+            w.write(&format!("{mident} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
+        for addr in used_addresses {
+            w.write(&format!("uses address {};", addr));
+            w.new_line()
+        }
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -308,15 +335,19 @@ impl AstDebug for Script {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            loc: _,
             warning_filter,
             package_name,
             attributes,
             is_source_module,
             dependency_order,
+            immediate_neighbors,
+            used_addresses,
             friends,
             structs,
             constants,
             functions,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -329,6 +360,20 @@ impl AstDebug for ModuleDefinition {
             w.writeln("source module")
         }
         w.writeln(&format!("dependency order #{}", dependency_order));
+        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
+            w.write(&format!("{mident} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
+        for addr in used_addresses {
+            w.write(&format!("uses address {};", addr));
+            w.new_line()
+        }
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();

@@ -48,15 +48,17 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 	const headerRef = useRef<HTMLElement | null>(null);
 	const [headerHeight] = useElementDimensions(headerRef, DEFAULT_HEADER_HEIGHT);
 
+	const networkDegradeBannerCopy =
+		network === Network.TESTNET
+			? 'Sui Testnet is currently under-going maintenance. Some data may be incorrect or missing.'
+			: "The explorer is running slower than usual. We're working to fix the issue and appreciate your patience.";
+
 	return (
 		<div className="relative min-h-screen w-full">
 			<section ref={headerRef} className="fixed top-0 z-20 flex w-full flex-col">
 				{renderNetworkDegradeBanner && (
 					<Banner rounded="none" align="center" variant="warning" fullWidth>
-						<div className="break-normal">
-							The explorer is running slower than usual. We&rsquo;re working to fix the issue and
-							appreciate your patience.
-						</div>
+						<div className="break-normal">{networkDegradeBannerCopy}</div>
 					</Banner>
 				)}
 				<Header />

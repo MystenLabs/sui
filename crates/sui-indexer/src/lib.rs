@@ -38,6 +38,7 @@ pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
 pub mod models_v2;
@@ -111,6 +112,9 @@ pub struct IndexerConfig {
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
+
+    #[clap(long)]
+    pub use_v2: bool,
 }
 
 impl IndexerConfig {
@@ -165,6 +169,7 @@ impl Default for IndexerConfig {
             fullnode_sync_worker: true,
             rpc_server_worker: true,
             skip_db_commit: false,
+            use_v2: false,
         }
     }
 }

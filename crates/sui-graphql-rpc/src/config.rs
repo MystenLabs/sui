@@ -3,9 +3,12 @@
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::functional_group::FunctionalGroup;
+
+const MAX_QUERY_DEPTH: usize = 10;
+const MAX_QUERY_NODES: usize = 100;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 pub struct ConnectionConfig {
@@ -15,7 +18,7 @@ pub struct ConnectionConfig {
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
-#[derive(Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
@@ -28,14 +31,16 @@ pub struct ServiceConfig {
     pub(crate) experiments: Experiments,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
     pub(crate) max_query_depth: usize,
+    #[serde(default)]
+    pub(crate) max_query_nodes: usize,
 }
 
-#[derive(Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
@@ -74,7 +79,8 @@ impl Default for ConnectionConfig {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_query_depth: 10,
+            max_query_depth: MAX_QUERY_DEPTH,
+            max_query_nodes: MAX_QUERY_NODES,
         }
     }
 }
@@ -95,6 +101,7 @@ mod tests {
         let actual = ServiceConfig::read(
             r#" [limits]
                 max-query-depth = 100
+                max-query-nodes = 300
             "#,
         )
         .unwrap();
@@ -102,6 +109,7 @@ mod tests {
         let expect = ServiceConfig {
             limits: Limits {
                 max_query_depth: 100,
+                max_query_nodes: 300,
             },
             ..Default::default()
         };
@@ -114,7 +122,7 @@ mod tests {
         let actual = ServiceConfig::read(
             r#" disabled-features = [
                   "coins",
-                  "name-server",
+                  "name-service",
                 ]
             "#,
         )
@@ -123,7 +131,7 @@ mod tests {
         use FunctionalGroup as G;
         let expect = ServiceConfig {
             limits: Limits::default(),
-            disabled_features: BTreeSet::from([G::Coins, G::NameServer]),
+            disabled_features: BTreeSet::from([G::Coins, G::NameService]),
             experiments: Experiments::default(),
         };
 
@@ -154,6 +162,7 @@ mod tests {
 
                 [limits]
                 max-query-depth = 42
+                max-query-nodes = 320
 
                 [experiments]
                 test-flag = true
@@ -164,6 +173,7 @@ mod tests {
         let expect = ServiceConfig {
             limits: Limits {
                 max_query_depth: 42,
+                max_query_nodes: 320,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

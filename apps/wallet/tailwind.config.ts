@@ -21,6 +21,8 @@ export default {
 			colors: {
 				'gradient-blue-start': '#589AEA',
 				'gradient-blue-end': '#4C75A6',
+				facebook: '#1877F2',
+				twitch: '#6441A5',
 			},
 			minHeight: {
 				8: '2rem',
@@ -33,6 +35,7 @@ export default {
 				15: '3.75rem',
 				'popup-height': '680px',
 				'popup-width': '360px',
+				'nav-height': '80px',
 			},
 			boxShadow: {
 				'wallet-content': '0px -5px 20px 5px rgba(160, 182, 195, 0.15)',
@@ -53,7 +56,6 @@ export default {
 			},
 			height: {
 				header: '4.25rem',
-				'nav-height': '76px',
 			},
 			maxWidth: {
 				'popup-width': '360px',
@@ -66,7 +68,7 @@ export default {
 			},
 			backgroundImage: {
 				google: 'url(_assets/images/google-background.png)',
-				twitch: 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
+				'twitch-image': 'linear-gradient(165deg, #ECE5FA 5.6%, #C8BAE2 89.58%);',
 			},
 		},
 	},

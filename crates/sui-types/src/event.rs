@@ -6,6 +6,7 @@ use std::str::FromStr;
 use anyhow::ensure;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
@@ -21,6 +22,7 @@ use crate::error::{SuiError, SuiResult};
 use crate::object::{MoveObject, ObjectFormatOptions};
 use crate::sui_serde::BigInt;
 use crate::sui_serde::Readable;
+use crate::SUI_SYSTEM_ADDRESS;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +141,12 @@ impl Event {
             }
         })
     }
+
+    pub fn is_system_epoch_info_event(&self) -> bool {
+        self.type_.address == SUI_SYSTEM_ADDRESS
+            && self.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
+            && self.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
+    }
 }
 
 impl Event {
@@ -156,4 +164,21 @@ impl Event {
             contents: vec![],
         }
     }
+}
+
+// Event emitted in move code `fun advance_epoch`
+#[derive(Deserialize)]
+pub struct SystemEpochInfoEvent {
+    pub epoch: u64,
+    pub protocol_version: u64,
+    pub reference_gas_price: u64,
+    pub total_stake: u64,
+    pub storage_fund_reinvestment: u64,
+    pub storage_charge: u64,
+    pub storage_rebate: u64,
+    pub storage_fund_balance: u64,
+    pub stake_subsidy_amount: u64,
+    pub total_gas_fees: u64,
+    pub total_stake_rewards_distributed: u64,
+    pub leftover_storage_fund_inflow: u64,
 }

@@ -156,6 +156,13 @@ jobs:
       - name: rustdoc
         run: |
           cargo doc --workspace --no-deps
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@30f432979e99f3ea66a8fa2eede53c07063995d8
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: Install rustfmt
+        run: rustup component add rustfmt
       - name: sui-execution
         run: |
           ./scripts/execution_layer.py generate-lib

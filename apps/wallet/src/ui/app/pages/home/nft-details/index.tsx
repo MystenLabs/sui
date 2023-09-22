@@ -18,6 +18,7 @@ import Loading from '_components/loading';
 import { NFTDisplayCard } from '_components/nft-display';
 import { useGetNFTMeta, useNFTBasicData, useOwnedNFT } from '_hooks';
 import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 
 type NftFields = {
@@ -28,7 +29,7 @@ function NFTDetailsPage() {
 	const [searchParams] = useSearchParams();
 	const nftId = searchParams.get('objectId');
 	const accountAddress = useActiveAddress();
-	const { data: objectData, isLoading } = useOwnedNFT(nftId || '', accountAddress);
+	const { data: objectData, isLoading: isNftLoading } = useOwnedNFT(nftId || '', accountAddress);
 	const isTransferable =
 		!!objectData &&
 		objectData.content?.dataType === 'moveObject' &&
@@ -70,14 +71,16 @@ function NFTDetailsPage() {
 		type: ExplorerLinkType.address,
 		address: ownerAddress,
 	});
+	const isGuardLoading = useUnlockedGuard();
+	const isLoading = isNftLoading || isLoadingDisplay || isGuardLoading;
 
 	return (
 		<div
 			className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
-				'items-center': isLoading || isLoadingDisplay,
+				'items-center': isLoading,
 			})}
 		>
-			<Loading loading={isLoading || isLoadingDisplay}>
+			<Loading loading={isLoading}>
 				{objectData ? (
 					<>
 						<PageTitle back />

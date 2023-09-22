@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useZodForm } from '@mysten/core';
-import { type ComponentProps, forwardRef } from 'react';
+import { type ComponentProps, forwardRef, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { z } from 'zod';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
@@ -32,7 +32,6 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 		},
 	});
 	const { register } = form;
-
 	const onSubmit = async ({ nickname }: { nickname: string }) => {
 		if (accountID) {
 			try {
@@ -47,11 +46,20 @@ export function EditableAccountName({ accountID, name }: { accountID: string; na
 			}
 		}
 	};
-
+	const { ref, ...inputFormData } = register('nickname');
+	const inputRef = useRef<HTMLInputElement | null>();
 	return (
 		<div>
 			<Form className="flex flex-col" form={form} onSubmit={onSubmit}>
-				<Input {...register('nickname')} onBlur={() => form.handleSubmit(onSubmit)()} />
+				<Input
+					{...inputFormData}
+					ref={(instance) => {
+						ref(instance);
+						inputRef.current = instance;
+					}}
+					onBlur={form.handleSubmit(onSubmit)}
+					onFocus={() => inputRef.current?.select()}
+				/>
 				<button className="hidden" type="submit" />
 			</Form>
 		</div>

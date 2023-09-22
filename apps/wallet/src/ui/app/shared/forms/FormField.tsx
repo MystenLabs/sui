@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { type ReactNode } from 'react';
 import { useFormContext } from 'react-hook-form';
 import { FormLabel } from './FormLabel';
@@ -17,7 +18,7 @@ export function FormField({ children, name, label }: FormFieldProps) {
 
 	return (
 		<div className="flex flex-col gap-2.5 w-full">
-			<FormLabel label={label}>{children}</FormLabel>
+			{label ? <FormLabel label={label}>{children}</FormLabel> : children}
 			{state.error && <Alert>{state.error.message}</Alert>}
 		</div>
 	);

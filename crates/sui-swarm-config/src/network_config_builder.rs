@@ -114,6 +114,13 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_chain_start_timestamp_ms(mut self, chain_start_timestamp_ms: u64) -> Self {
+        self.get_or_init_genesis_config()
+            .parameters
+            .chain_start_timestamp_ms = chain_start_timestamp_ms;
+        self
+    }
+
     pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
         self.additional_objects.extend(objects);
         self

@@ -93,6 +93,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 				}}
 				address={addressForTransaction}
 				approveLoading={isLoading || isConfirmationVisible}
+				checkAccountLock
 			>
 				<PageMainLayoutTitle title="Approve Transaction" />
 				<div className="flex flex-col">
