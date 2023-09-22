@@ -824,15 +824,22 @@ impl AstDebug for UseFun {
     }
 }
 
+impl AstDebug for (&TypeName, &UniqueMap<Name, UseFun>) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (tn, methods) = *self;
+        for (_, method_f, use_fun) in methods {
+            use_fun.ast_debug(w);
+            w.write(" as ");
+            tn.ast_debug(w);
+            w.writeln(&format!(".{method_f};"));
+        }
+    }
+}
+
 impl AstDebug for ResolvedUseFuns {
     fn ast_debug(&self, w: &mut AstWriter) {
         for (tn, methods) in self {
-            for (_, method_f, use_fun) in methods {
-                use_fun.ast_debug(w);
-                w.write(" as ");
-                tn.ast_debug(w);
-                w.writeln(&format!(".{method_f};"));
-            }
+            (tn, methods).ast_debug(w);
         }
     }
 }

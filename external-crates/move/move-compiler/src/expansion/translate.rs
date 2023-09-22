@@ -89,17 +89,20 @@ impl<'env, 'map> Context<'env, 'map> {
             unused_alias(self, alias)
         }
         for alias in members {
-            let used_opt = use_funs
+            let use_fun_used_opt = use_funs
                 .as_mut()
                 .and_then(|use_funs| use_funs.implicit.get_mut(&alias))
                 .and_then(|use_fun| match &mut use_fun.kind {
                     E::ImplicitUseFunKind::FunctionDeclaration => None,
                     E::ImplicitUseFunKind::UseAlias { used } => Some(used),
                 });
-            if let Some(used) = used_opt {
+            if let Some(used) = use_fun_used_opt {
                 *used = false;
+            } else {
+                // do not report the use error if it is a function alias, since
+                // these will be reported after method calls are fully resolved
+                unused_alias(self, alias)
             }
-            unused_alias(self, alias)
         }
     }
 

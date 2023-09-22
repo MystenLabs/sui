@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
@@ -92,11 +92,20 @@ impl UseFunsScope {
                         None
                     }
                 });
-                let prev = use_funs.insert(tn.clone(), public_methods);
+                if public_methods.is_empty() {
+                    continue;
+                }
+
                 assert!(
-                    prev.is_none(),
-                    "ICE public methods should have been filtered to the defining module"
-                )
+                    !use_funs.contains_key(tn),
+                    "ICE public methods should have been filtered to the defining module.
+                    tn: {tn}.
+                    prev: {}
+                    new: {}",
+                    debug_display!((tn, (use_funs.get(tn).unwrap()))),
+                    debug_display!((tn, &public_methods))
+                );
+                use_funs.insert(tn.clone(), public_methods);
             }
         }
         UseFunsScope {
@@ -791,8 +800,11 @@ pub fn make_method_call_type(
     BTreeMap<StructName, Loc>,
     Type,
 )> {
-    let use_funs = &context.use_funs.last().unwrap().use_funs;
-    let target_function_opt = use_funs
+    let target_function_opt = context
+        .use_funs
+        .last()
+        .unwrap()
+        .use_funs
         .get(tn)
         .and_then(|methods| Some(methods.get(&method)?.target_function));
     // try to find a function in the defining module for errors
@@ -856,6 +868,13 @@ pub fn make_method_call_type(
         }
         return None;
     };
+    // mark the method as used
+    context
+        .use_funs
+        .last_mut()
+        .unwrap()
+        .unused
+        .remove(&(tn.clone(), method));
 
     let (defined_loc, ty_args, params, acquires, return_ty) =
         make_function_type(context, loc, &target_m, &target_f, ty_args_opt);

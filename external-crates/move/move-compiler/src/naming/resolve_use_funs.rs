@@ -159,6 +159,9 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
         });
     }
+    // remove any empty use funs
+    resolved.retain(|_, methods| !methods.is_empty());
+
     // resolve implicit candidates, removing if
     // - It is not a valid method (i.e. if it would be valid to declare as a 'use fun')
     // - The name is already bound
