@@ -1667,13 +1667,13 @@ impl SuiCallArg {
                 initial_shared_version,
                 mutable,
             }),
-            // TODO(tzakian)[tto]
-            CallArg::Object(ObjectArg::Receiving(_obj_ref)) => std::todo!(
-                "Implement SuiCallArg::try_from for CallArg::Object(ObjectArg::Receiving(obj_ref))"
-            ),
-            // {
-            //     SuiCallArg::Object(SuiObjectArg::Receiving(SuiObjectRef::from(obj_ref)))
-            // }
+            CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::Receiving {
+                    object_id,
+                    version,
+                    digest,
+                })
+            }
         })
     }
 
@@ -1687,9 +1687,8 @@ impl SuiCallArg {
     pub fn object(&self) -> Option<&ObjectID> {
         match self {
             SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
-            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
-                Some(object_id)
-            }
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => Some(object_id),
             _ => None,
         }
     }
@@ -1738,10 +1737,15 @@ pub enum SuiObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
-    // TODO(tzakian)[tto]: uncomment this when we are ready to expose this to the RPC interface.
     // A reference to a Move object that's going to be received in the transaction.
-    // #[serde(rename_all = "camelCase")]
-    // Receiving(SuiObjectRef),
+    #[serde(rename_all = "camelCase")]
+    Receiving {
+        object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
+    },
 }
 
 #[serde_as]

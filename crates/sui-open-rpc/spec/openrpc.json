@@ -8149,6 +8149,32 @@
                     ]
                   }
                 }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "digest",
+                  "objectId",
+                  "objectType",
+                  "version"
+                ],
+                "properties": {
+                  "digest": {
+                    "$ref": "#/components/schemas/ObjectDigest"
+                  },
+                  "objectId": {
+                    "$ref": "#/components/schemas/ObjectID"
+                  },
+                  "objectType": {
+                    "type": "string",
+                    "enum": [
+                      "receiving"
+                    ]
+                  },
+                  "version": {
+                    "$ref": "#/components/schemas/SequenceNumber"
+                  }
+                }
               }
             ],
             "required": [
