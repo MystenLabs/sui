@@ -6,7 +6,7 @@ use crate::{
     cfgir::cfg::MutForwardCFG,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value, Value_, Var,
+        TypeName_, UnannotatedExp_, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
@@ -165,13 +165,18 @@ fn optimize_exp(e: &mut Exp) -> bool {
             if !is_valid_const_type(ty) {
                 return changed;
             }
-            if let Some(vs) = foldable_exps(eargs) {
-                debug_assert!(n == vs.len());
-                *e_ = evalue_(e.exp.loc, Value_::Vector(ty.clone(), vs));
-                true
-            } else {
-                changed
+            let mut vs = vec![];
+            for earg in eargs {
+                let eloc = earg.exp.loc;
+                if let Some(v) = foldable_exp(earg) {
+                    vs.push(sp(eloc, v));
+                } else {
+                    return changed;
+                }
             }
+            debug_assert!(n == vs.len());
+            *e_ = evalue_(e.exp.loc, Value_::Vector(ty.clone(), vs));
+            true
         }
     }
 }
@@ -416,14 +421,6 @@ fn foldable_exp(e: &Exp) -> Option<Value_> {
         E::Value(sp!(_, v_)) => Some(v_.clone()),
         _ => None,
     }
-}
-
-fn foldable_exps(es: &Vec<Exp>) -> Option<Vec<Value>> {
-    let mut result = vec![];
-    for e in es {
-        result.push(sp(e.exp.loc, foldable_exp(e)?));
-    }
-    Some(result)
 }
 
 fn ignorable_exp(e: &Exp) -> bool {

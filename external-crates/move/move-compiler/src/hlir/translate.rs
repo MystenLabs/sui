@@ -1118,6 +1118,8 @@ fn exp_list(
     use T::UnannotatedExp_ as TE;
     if let TE::ExpList(items) = e.exp.value {
         exp_list_items_to_vec(context, result, ty, items)
+    } else if let TE::Unit { .. } = e.exp.value {
+        vec![]
     } else {
         vec![*exp(context, result, ty, e)]
     }
