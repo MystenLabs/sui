@@ -8,7 +8,7 @@ use crate::{
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     naming::ast as N,
     parser::ast::{BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, *},
+    shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -520,7 +520,7 @@ fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
             loc.end()
         ),
         NT::Apply(None, n, tys) => {
-            crate::shared::ast_debug::print_verbose(&NT::Apply(None, n, tys));
+            NT::Apply(None, n, tys).print_verbose();
             panic!("ICE kind not expanded: {:#?}", loc)
         }
         NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(context, n), base_types(context, nbs)),
@@ -573,7 +573,7 @@ fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
         NT::Apply(None, n, tys) => {
-            crate::shared::ast_debug::print_verbose(&NT::Apply(None, n, tys));
+            NT::Apply(None, n, tys).print_verbose();
             panic!("ICE kind not expanded: {:#?}", loc)
         }
         NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(context, ss)),
