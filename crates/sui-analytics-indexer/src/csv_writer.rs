@@ -108,6 +108,7 @@ impl CSVWriter {
         }
         let writer = WriterBuilder::new()
             .has_headers(false)
+            .delimiter(b'|')
             .from_path(file_path)?;
         Ok(writer)
     }
