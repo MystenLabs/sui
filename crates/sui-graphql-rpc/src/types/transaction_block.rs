@@ -159,18 +159,18 @@ pub enum ExecutionStatus {
 
 #[derive(InputObject)]
 pub(crate) struct TransactionBlockFilter {
-    package: Option<SuiAddress>,
-    module: Option<String>,
-    function: Option<String>,
+    pub package: Option<SuiAddress>,
+    pub module: Option<String>,
+    pub function: Option<String>,
 
-    kind: Option<TransactionBlockKindInput>,
-    checkpoint: Option<u64>,
+    pub kind: Option<TransactionBlockKindInput>,
+    pub checkpoint: Option<u64>,
 
-    sign_address: Option<SuiAddress>,
-    sent_address: Option<SuiAddress>,
-    recv_address: Option<SuiAddress>,
-    paid_address: Option<SuiAddress>,
+    pub sign_address: Option<SuiAddress>,
+    pub sent_address: Option<SuiAddress>,
+    pub recv_address: Option<SuiAddress>,
+    pub paid_address: Option<SuiAddress>,
 
-    input_object: Option<SuiAddress>,
-    changed_object: Option<SuiAddress>,
+    pub input_object: Option<SuiAddress>,
+    pub changed_object: Option<SuiAddress>,
 }

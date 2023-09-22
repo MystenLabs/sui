@@ -10,6 +10,7 @@ use super::{
     base64::Base64,
     checkpoint::{Checkpoint, CheckpointId},
     epoch::Epoch,
+    event::EventFilter,
     object::{Object, ObjectFilter},
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
@@ -106,11 +107,21 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: TransactionBlockFilter,
-    ) -> Result<Connection<String, TransactionBlock>> {
-        ctx.data_provider()
-            .fetch_transaction_block_connection(first, after, last, before)
-            .await
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Option<Connection<String, TransactionBlock>>> {
+        if let Some(filter) = &filter {
+            validate_package_dependencies(
+                filter.package.as_ref(),
+                filter.module.as_ref(),
+                filter.function.as_ref(),
+            )?;
+        }
+
+        let result = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_txs(first, after, last, before, filter)
+            .await?;
+        Ok(None)
     }
 
     async fn event_connection(
@@ -120,8 +131,8 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: EventFilter,
-    ) -> Result<Connection<String, Event>> {
+        filter: Option<EventFilter>,
+    ) -> Result<Option<Connection<String, Event>>> {
         ctx.data_provider()
             .fetch_event_connection(first, after, last, before)
             .await
@@ -154,4 +165,21 @@ impl Query {
             .fetch_protocol_config(protocol_version)
             .await
     }
+}
+
+// validations
+use crate::error::Error;
+pub(crate) fn validate_package_dependencies(
+    p: Option<&SuiAddress>,
+    m: Option<&String>,
+    ft: Option<&String>,
+) -> Result<()> {
+    if ft.is_some() && (p.is_none() || m.is_none()) {
+        return Err(Error::RequiresModuleAndPackage.extend());
+    }
+
+    if m.is_some() && p.is_none() {
+        return Err(Error::RequiresPackage.extend());
+    }
+    Ok(())
 }

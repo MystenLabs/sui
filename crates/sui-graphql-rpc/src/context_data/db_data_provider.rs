@@ -4,12 +4,15 @@
 use crate::{
     context_data::db_data_provider::diesel_macro::read_only_blocking,
     error::Error,
-    types::{checkpoint::CheckpointId, digest::Digest, epoch::Epoch},
+    types::{
+        checkpoint::CheckpointId, digest::Digest, epoch::Epoch,
+        transaction_block::TransactionBlockFilter,
+    },
 };
 use diesel::{
     r2d2::{self, ConnectionManager},
     sql_types::BigInt,
-    ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
+    ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, RunQueryDsl,
 };
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use std::{env, str::FromStr, sync::Arc};
@@ -17,7 +20,7 @@ use sui_indexer::{
     models_v2::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, transactions},
+    schema_v2::{checkpoints, epochs, transactions, tx_indices},
 };
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -100,17 +103,25 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_txs(
+        &self,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: TransactionBlockFilter,
-    ) -> Result<Vec<Option<StoredTransaction>>> {
-        // query for transactions based on TransactionBlockFilter
-        // can filter by kind, checkpoint
-        // not sure about package, module function
-        // we'd need to read the serialized bytea for sign/sent/recv/paid_address ...
-        let mut query = transactions::dsl::transactions.into_boxed();
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Option<Vec<StoredTransaction>>> {
+        // what do we want before and after to be
+        // apply all filters?
+        let result: Option<Vec<StoredTransaction>> = read_only_blocking!(&self.pool, |conn| {
+            transactions::dsl::transactions
+                .inner_join(tx_indices::dsl::tx_indices.on(
+                    transactions::dsl::transaction_digest.eq(tx_indices::dsl::transaction_digest),
+                ))
+                .select(transactions::all_columns)
+                .load(conn)
+        })?;
+
+        Ok(result)
     }
 
     pub(crate) async fn fetch_epoch(
@@ -157,6 +168,39 @@ impl PgManager {
 
         Ok(
             read_only_blocking!(&self.pool, |conn| { query.first::<StoredCheckpoint>(conn) })
+                .map_err(Error::from)?,
+        )
+    }
+
+    pub(crate) async fn fetch_events(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Vec<StoredTransaction>>> {
+        let mut query = transactions::dsl::transactions.into_boxed();
+
+        if let Some(after) = after {
+            let digest = Digest::from_str(&after)?;
+            query = query.filter(transactions::dsl::transaction_digest.gt(digest.into_vec()));
+        }
+
+        if let Some(before) = before {
+            let digest = Digest::from_str(&before)?;
+            query = query.filter(transactions::dsl::transaction_digest.lt(digest.into_vec()));
+        }
+
+        if let Some(first) = first {
+            query = query.limit(first as i64);
+        }
+
+        if let Some(last) = last {
+            query = query.limit(last as i64);
+        }
+
+        Ok(
+            read_only_blocking!(&self.pool, |conn| { query.load::<StoredTransaction>(conn) })
                 .map_err(Error::from)?,
         )
     }

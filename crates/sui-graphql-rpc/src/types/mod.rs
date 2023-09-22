@@ -13,6 +13,7 @@ pub(crate) mod digest;
 pub(crate) mod display;
 pub(crate) mod end_of_epoch_data;
 pub(crate) mod epoch;
+pub(crate) mod event;
 pub(crate) mod gas;
 pub(crate) mod name_service;
 pub(crate) mod object;

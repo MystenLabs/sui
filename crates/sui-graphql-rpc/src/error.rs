@@ -62,6 +62,10 @@ pub enum Error {
     CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
+    #[error("If 'type' or 'function' is provided, then 'package' and 'module' are required.")]
+    RequiresModuleAndPackage,
+    #[error("if 'module' is provided, then 'package' is required.")]
+    RequiresPackage,
     #[error("Internal error occurred while processing request")]
     Internal(String),
 }
