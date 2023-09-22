@@ -7,4 +7,6 @@ publish = false
 edition = "2021"
 
 [dependencies]
+tap.workspace = true
 simulacrum.workspace = true
+sui-types.workspace = true

@@ -9292,6 +9292,8 @@ name = "simulacrum-node"
 version = "0.1.0"
 dependencies = [
  "simulacrum",
+ "sui-types",
+ "tap",
 ]
 
 [[package]]
