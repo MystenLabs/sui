@@ -10233,6 +10233,7 @@ dependencies = [
  "hex",
  "hyper",
  "insta",
+ "once_cell",
  "serde",
  "serde_json",
  "serde_with",
