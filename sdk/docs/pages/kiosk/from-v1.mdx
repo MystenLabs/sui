@@ -1,25 +1,23 @@
 # Migrating from Kiosk SDK V1
 
-## Introduction
+The original version of Kiosk SDK V1 provided basic experimentation with the Kiosk API. The new
+version of the SDK provides a more robust experience for building kiosk/transfer policy transactions.
 
-While The original version of Kiosk SDK V1 was a quick way to experiment with the Kiosk API, the new
-version of the SDK offers a more robust way to build kiosk/transfer policy transactions.
+The new SDK offers a builder-pattern API, which provides better autocomplete capabilities, 
+and also makes code more readable.
 
-One extra benefit of the new SDK is it offers a builder-pattern API, which makes it easier to
-autocomplete what you're trying to do, and also makes it easier to read the code.
-
-While it's hard to provide a one-to-one mapping between the old and new SDK, the following examples
+While a one-to-one mapping between the old and new SDK is not possible, the following examples
 should help you get started.
 
-> An important benefit of the new SDK is that it works seamlessly with Personal Kiosk, which would
-> be hard to do with the V1 SDK (you would always have to wrap the transaction with
-> `borrow_cap / return_cap` calls depending on whether the kiosk is personal or not).
+> An important benefit of the new SDK is that it works seamlessly with Personal Kiosk, which was
+> not the case with the V1 SDK (you would always have to wrap the transaction with
+> `borrow_cap` / `return_cap` calls depending on whether the kiosk is personal or not).
 
-## Placing an item to kiosk and listing for sale
+## Placing an item to kiosk and listing it for sale
 
-### V1 Implementation
+The following example is from the original Kiosk SDK V1 documentation.
 
-The following example was taken from the original Kiosk SDK V1 documentation:
+### V1 implementation
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
@@ -41,9 +39,9 @@ const placeAndListToKiosk = async () => {
 };
 ```
 
-### V2 Implementation
+### V2 implementation
 
-On the new SDK, the same transaction can be built as follows:
+Using the new SDK, you can build the same transaction as follows:
 
 ```typescript
 /// You need to do this only once and re-use it in the application.
@@ -55,12 +53,12 @@ const kioskClient = new KioskClient({
 });
 
 const placeAndListToKiosk = async () => {
-	// We probably have saved the user's preferred kiosk Cap somewhere in our app's state.
+	// Assume you have saved the user's preferred kiosk Cap somewhere in your app's state.
 	const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xSomeAddress' });
 
 	const txb = new TransactionBlock();
 
-	// assume we use the first owned kiosk.
+	// Assume you use the first owned kiosk.
 	new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kioskOwnerCaps[0] })
 		.placeAndList({
 			itemType: '0xItemAddr::some:ItemType',
@@ -75,9 +73,9 @@ const placeAndListToKiosk = async () => {
 
 ## Create a new kiosk
 
-### V1 Implementation
+The following example is from the original Kiosk SDK V1 documentation.
 
-The following example was taken from the original Kiosk SDK V1 documentation:
+### V1 implementation
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
@@ -96,9 +94,9 @@ const createKiosk = async () => {
 };
 ```
 
-### V2 Implementation
+### V2 implementation
 
-On the new SDK, the same transaction can be built as follows:
+Using the new SDK, you can build the same transaction as follows:
 
 ```typescript
 /// You need to do this only once and re-use it in the application.
@@ -122,9 +120,9 @@ const placeAndListToKiosk = async () => {
 
 ## Purchasing an item and resolving rules
 
-### V1 Implementation
+The following example is from the original Kiosk SDK V1 documentation.
 
-The following example was taken from the original Kiosk SDK V1 documentation:
+### V1 implementation
 
 ```typescript
 import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
@@ -134,9 +132,9 @@ const client = new SuiClient(
   url: 'https://fullnode.testnet.sui.io:443',
 );
 
- // the kiosk we're purchasing from
+// The kiosk we're purchasing from.
 const kioskId = `0xSomeKioskAddress`;
-// a sample item retrieved from `fetchKiosk` function (or hard-coded)
+// A sample item retrieved from `fetchKiosk` function (or hard-coded).
 const item = {
   isLocked: false,
   objectId: "0xb892d61a9992a10c9453efcdbd14ca9720d7dc1000a2048224209c9e544ed223"
@@ -152,15 +150,15 @@ const ownedKioskCap = `0xMyKioskOwnerCap`;
 
 const purchaseItem = async (item, kioskId) => {
 
-  // fetch the policy of the item (could be an array, if there's more than one transfer policy)
+  // Fetch the policy of the item (could be an array, if there's more than one transfer policy)
   const policies = await queryTransferPolicy(client, item.type);
-  // selecting the first one for simplicity.
+  // Selecting the first one for simplicity.
   const policyId = policy[0]?.id;
-  // initialize tx block.
+  // Initialize tx block.
   const tx = new TransactionBlock();
 
   // Both are required if you there is a `kiosk_lock_rule`.
-  // Optional otherwise. Function will throw an error if there's a kiosk_lock_rule and these are missing.
+  // Optional otherwise. Function throws an error if there's a kiosk_lock_rule and these are missing.
   const extraParams = {
     ownedKiosk,
     ownedKioskCap
@@ -175,8 +173,8 @@ const purchaseItem = async (item, kioskId) => {
   const result = purchaseAndResolvePolicies(tx, item.type, item.listing.price, kioskId, item.objectId, policy[0], environment, extraParams);
 
   // result = {item: <the_purchased_item>, canTransfer: true/false // depending on whether there was a kiosk lock rule }
-  // if the item didn't have a kiosk_lock_rule, we need to do something with it.
-  // for e..g place it in our own kiosk. (demonstrated below)
+  // If the item didn't have a kiosk_lock_rule, you need to do something with it.
+  // For example, place it in your own kiosk. (demonstrated below)
   if(result.canTransfer) place(tx, item.type, ownedKiosk, ownedKioskCap , result.item);
 
   // ...finally, sign PTB & execute it.
@@ -184,11 +182,11 @@ const purchaseItem = async (item, kioskId) => {
 };
 ```
 
-### V2 Implementation
+### V2 implementation
 
-On the new SDK, the same transaction can be built as follows:
+Using the new SDK, you can build the same transaction as follows:
 
-> This would work both with personal and non personal kiosks.
+> This works with both personal and non-personal kiosks.
 
 ```typescript
 /// You need to do this only once and re-use it in the application.
@@ -213,15 +211,15 @@ const item = {
 }
 
 const purchase = async () => {
-	// We probably have saved the user's preferred kiosk Cap somewhere in our app's state.
-    // We wouldn't need to query this every time we purchase.
+    // Assume you have saved the user's preferred kiosk Cap somewhere in your app's state.
+    // You wouldn't need to query this for every purchase.
     const { kioskOwnerCaps } = await kioskClient.getOwnedKiosks({ address: '0xSomeAddress' });
 
     const txb = new TransactionBlock();
 
     const kioskTx = new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kioskOwnerCaps[0] });
 
-    // purchase the item and resolve the rules
+    // Purchase the item and resolve the rules.
     await kioskTx.purchaseAndResolve({
         itemType: item.type,
         itemId: item.objectId,
@@ -233,11 +231,11 @@ const purchase = async () => {
 };
 ```
 
-## Attach Rules to Transfer Policy
+## Attach rules to transfer policy
 
-### V1 Implementation
+The following example was taken from the original Kiosk SDK V1 documentation.
 
-The following example was taken from the original Kiosk SDK V1 documentation:
+### V1 implementation
 
 ```typescript
 import {
@@ -256,12 +254,12 @@ const attachStrongRoyalties = async () => {
 	const policyId = 'policyObjectId'; // the transfer Policy ID that was created for that Type.
 	const transferPolicyCap = 'transferPolicyCapId'; // the transferPolicyCap for that policy.
 
-	// royalties configuration.
+	// Royalties configuration.
 	const percentage = 2.55; // 2.55%
 	const minAmount = 100_000_000; // 0.1 SUI.
 
-	// the environment on which we're referecing the rules package.
-	// use `mainnetEnvironment` for mainnet.
+	// The environment on which we're referecing the rules package.
+	// Use `mainnetEnvironment` for mainnet.
 	const enviroment = testnetEnvironment;
 
 	const tx = new TransactionBlock();
@@ -282,7 +280,7 @@ const attachStrongRoyalties = async () => {
 };
 ```
 
-### V2 Implementation
+### V2 implementation
 
 On the new SDK, the same transaction can be built as follows:
 
