@@ -1465,8 +1465,14 @@ fn deps_equal<'a>(
         Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
     ),
 > {
-    let graph1_edges =
-        BTreeSet::from_iter(graph1.package_graph.edges(pkg_name).map(|(_, pkg, dep)| {
+    // Unwraps in the code below are safe as these edges (and target nodes) must exist either in the
+    // sub-graph or in the pre-populated combined graph (see pkg_table_for_deps_compare's doc
+    // comment for a more detailed explanation). If these were to fail, it would indicate a bug in
+    // the algorithm so it's OK to panic here.
+    let graph1_edges: BTreeSet<_> = graph1
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
             (
                 dep,
                 pkg,
@@ -1475,9 +1481,12 @@ fn deps_equal<'a>(
                     .or_else(|| overrides.get(&pkg))
                     .unwrap(),
             )
-        }));
-    let graph2_edges =
-        BTreeSet::from_iter(graph2.package_graph.edges(pkg_name).map(|(_, pkg, dep)| {
+        })
+        .collect();
+    let graph2_edges: BTreeSet<_> = graph2
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
             (
                 dep,
                 pkg,
@@ -1486,7 +1495,8 @@ fn deps_equal<'a>(
                     .or_else(|| overrides.get(&pkg))
                     .unwrap(),
             )
-        }));
+        })
+        .collect();
 
     let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
         .symmetric_difference(&graph2_edges)
