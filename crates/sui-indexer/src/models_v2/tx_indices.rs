@@ -10,13 +10,13 @@ pub struct StoredTxIndex {
     pub tx_sequence_number: i64,
     pub checkpoint_sequence_number: i64,
     pub transaction_digest: Vec<u8>,
-    pub input_objects: Vec<Vec<u8>>,
-    pub changed_objects: Vec<Vec<u8>>,
-    pub senders: Vec<Vec<u8>>,
-    pub recipients: Vec<Vec<u8>>,
-    pub packages: Vec<Vec<u8>>,
-    pub package_modules: Vec<String>,
-    pub package_module_functions: Vec<String>,
+    pub input_objects: Vec<Option<Vec<u8>>>,
+    pub changed_objects: Vec<Option<Vec<u8>>>,
+    pub senders: Vec<Option<Vec<u8>>>,
+    pub recipients: Vec<Option<Vec<u8>>>,
+    pub packages: Vec<Option<Vec<u8>>>,
+    pub package_modules: Vec<Option<String>>,
+    pub package_module_functions: Vec<Option<String>>,
 }
 
 impl From<TxIndex> for StoredTxIndex {
@@ -28,25 +28,29 @@ impl From<TxIndex> for StoredTxIndex {
             input_objects: tx
                 .input_objects
                 .iter()
-                .map(|o| bcs::to_bytes(&o).unwrap())
+                .map(|o| Some(bcs::to_bytes(&o).unwrap()))
                 .collect(),
             changed_objects: tx
                 .changed_objects
                 .iter()
-                .map(|o| bcs::to_bytes(&o).unwrap())
+                .map(|o| Some(bcs::to_bytes(&o).unwrap()))
                 .collect(),
-            senders: tx.senders.iter().map(|s| s.to_vec()).collect(),
-            recipients: tx.recipients.iter().map(|r| r.to_vec()).collect(),
-            packages: tx.move_calls.iter().map(|(p, _m, _f)| p.to_vec()).collect(),
+            senders: tx.senders.iter().map(|s| Some(s.to_vec())).collect(),
+            recipients: tx.recipients.iter().map(|r| Some(r.to_vec())).collect(),
+            packages: tx
+                .move_calls
+                .iter()
+                .map(|(p, _m, _f)| Some(p.to_vec()))
+                .collect(),
             package_modules: tx
                 .move_calls
                 .iter()
-                .map(|(p, m, _f)| format!("{}::{}", p, m))
+                .map(|(p, m, _f)| Some(format!("{}::{}", p, m)))
                 .collect(),
             package_module_functions: tx
                 .move_calls
                 .iter()
-                .map(|(p, m, f)| format!("{}::{}::{}", p, m, f))
+                .map(|(p, m, f)| Some(format!("{}::{}::{}", p, m, f)))
                 .collect(),
         }
     }
