@@ -669,17 +669,16 @@ impl AuthorityStore {
                 )?
                 .into_iter(),
         ) {
+            // If the key exists at the specified version, then the object is available.
             if has_key {
                 versioned_results.push((*idx, true))
             } else if receiving_objects.contains(input_key) {
-                // If there's a more recent version of this object, then it was mutated by someone
-                // else and we can let it through to let the transaction fail at execution.
-                //
-                // For any objects that are unable to be fetched that are receiving objects, lookup
-                // and determine if the object exists in the object marker table as well. If so we
-                // will then mark it as "available" to let it progress through. If a version of the
-                // object greater than this one exists, then it was mutated by someone else and
-                // then deleted, and we can let it through to let the transaction fail at execution.
+                // There could be a more recent version of this object, and the object at the
+                // specified version could have already been pruned. In such a case `has_key` will
+                // be false, but since this is a receiving object we should mark it as available if
+                // we can determine that an object with a version greater than or equal to the
+                // specified version exists or was deleted. We will then let mark it as available
+                // to let the the transaction through so it can fail at execution.
                 let is_available = self
                     .get_object(&input_key.id())?
                     .map(|obj| obj.version() >= input_key.version().unwrap())

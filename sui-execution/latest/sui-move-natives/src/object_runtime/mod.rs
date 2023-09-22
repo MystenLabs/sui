@@ -587,10 +587,19 @@ impl ObjectRuntimeState {
             }
         }
 
-        // Any received objects are viewed as modified.
+        // Any received objects are viewed as modified. They had to be loaded in order to be
+        // received so they must be in the loaded_child_objects map otherwise it's an invariant
+        // violation.
         for (received_object, _) in received.into_iter() {
-            if let Some(loaded_child) = loaded_child_objects.get_mut(&received_object) {
-                loaded_child.is_modified = true;
+            match loaded_child_objects.get_mut(&received_object) {
+                Some(loaded_child) => {
+                    loaded_child.is_modified = true;
+                }
+                None => {
+                    return Err(ExecutionError::invariant_violation(format!(
+                        "Failed to find received UID {received_object} in loaded child objects."
+                    )))
+                }
             }
         }
 
