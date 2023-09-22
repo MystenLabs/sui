@@ -486,7 +486,8 @@ impl SuiNode {
 
         // Start archiving local state to remote store
         let state_archive_handle =
-            Self::start_state_archival(&config, &prometheus_registry, state_sync_store).await?;
+            Self::start_state_archival(&config, &prometheus_registry, state_sync_store.clone())
+                .await?;
 
         // Start uploading state snapshot to remote store
         let state_snapshot_handle = Self::start_state_snapshot(&config, &prometheus_registry)?;
@@ -565,6 +566,7 @@ impl SuiNode {
 
         let http_server = build_http_server(
             state.clone(),
+            state_sync_store,
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
@@ -1560,6 +1562,7 @@ fn build_kv_store(
 
 pub fn build_http_server(
     state: Arc<AuthorityState>,
+    store: RocksDbStore,
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
@@ -1617,7 +1620,7 @@ pub fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router = sui_rest_api::rest_router(state);
+        let rest_router = sui_rest_api::rest_router(store);
         router = router.nest("/rest", rest_router);
     }
 

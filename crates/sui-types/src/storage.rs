@@ -3,13 +3,10 @@
 
 use crate::base_types::{TransactionDigest, VersionNumber};
 use crate::committee::{Committee, EpochId};
-use crate::digests::{
-    CheckpointContentsDigest, CheckpointDigest, TransactionEffectsDigest, TransactionEventsDigest,
-};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEventsDigest};
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
 use crate::execution::{ExecutionResults, LoadedChildObjectMetadata};
-use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
@@ -307,7 +304,7 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
     }
 }
 
-pub trait ReadStore: Store {
+pub trait ReadStore: Store + CommitteeStore + TransactionStore + EventStore {
     fn get_checkpoint_by_digest(
         &self,
         digest: &CheckpointDigest,
@@ -333,23 +330,6 @@ pub trait ReadStore: Store {
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error>;
-
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error>;
-
-    fn get_transaction_block(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, Self::Error>;
-
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error>;
-
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, Self::Error>;
 }
 
 impl<T: ReadStore> ReadStore for &T {
@@ -391,31 +371,6 @@ impl<T: ReadStore> ReadStore for &T {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
         ReadStore::get_full_checkpoint_contents(*self, digest)
-    }
-
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
-        ReadStore::get_committee(*self, epoch)
-    }
-
-    fn get_transaction_block(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        ReadStore::get_transaction_block(*self, digest)
-    }
-
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
-        ReadStore::get_transaction_effects(*self, digest)
-    }
-
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, Self::Error> {
-        ReadStore::get_transaction_events(*self, digest)
     }
 }
 
@@ -480,7 +435,7 @@ pub struct InMemoryStore {
     sequence_number_to_digest: HashMap<CheckpointSequenceNumber, CheckpointDigest>,
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
-    effects: HashMap<TransactionEffectsDigest, TransactionEffects>,
+    effects: HashMap<TransactionDigest, TransactionEffects>,
     events: HashMap<TransactionEventsDigest, TransactionEvents>,
 
     epoch_to_committee: Vec<Committee>,
@@ -563,7 +518,7 @@ impl InMemoryStore {
             self.transactions
                 .insert(*tx.transaction.digest(), tx.transaction.to_owned());
             self.effects
-                .insert(tx.effects.digest(), tx.effects.to_owned());
+                .insert(*tx.transaction.digest(), tx.effects.to_owned());
         }
         self.contents_digest_to_sequence_number
             .insert(checkpoint.content_digest, *checkpoint.sequence_number());
@@ -617,9 +572,8 @@ impl InMemoryStore {
             .clone();
         let contents_digest = *contents.checkpoint_contents().digest();
         for content in contents.iter() {
-            let effects_digest = content.effects.digest();
             let tx_digest = content.transaction.digest();
-            self.effects.remove(&effects_digest);
+            self.effects.remove(tx_digest);
             self.transactions.remove(tx_digest);
         }
         self.checkpoint_contents.remove(&contents_digest);
@@ -693,7 +647,7 @@ impl InMemoryStore {
 
     pub fn get_transaction_effects(
         &self,
-        digest: &TransactionEffectsDigest,
+        digest: &TransactionDigest,
     ) -> Option<&TransactionEffects> {
         self.effects.get(digest)
     }
@@ -721,6 +675,47 @@ impl SharedInMemoryStore {
 
 impl Store for SharedInMemoryStore {
     type Error = Infallible;
+}
+
+impl CommitteeStore for SharedInMemoryStore {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
+        self.inner()
+            .get_committee_by_epoch(epoch)
+            .cloned()
+            .map(Arc::new)
+            .pipe(Ok)
+    }
+}
+
+impl TransactionStore for SharedInMemoryStore {
+    fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.inner().get_transaction_block(digest).cloned().pipe(Ok)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffects>, Self::Error> {
+        self.inner()
+            .get_transaction_effects(digest)
+            .cloned()
+            .pipe(Ok)
+    }
+}
+
+impl EventStore for SharedInMemoryStore {
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.inner()
+            .get_transaction_events(event_digest)
+            .cloned()
+            .pipe(Ok)
+    }
 }
 
 impl ReadStore for SharedInMemoryStore {
@@ -796,41 +791,6 @@ impl ReadStore for SharedInMemoryStore {
             })
             .transpose()
             .map(|contents| contents.flatten())
-    }
-
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
-        self.inner()
-            .get_committee_by_epoch(epoch)
-            .cloned()
-            .map(Arc::new)
-            .pipe(Ok)
-    }
-
-    fn get_transaction_block(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.inner().get_transaction_block(digest).cloned().pipe(Ok)
-    }
-
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.inner()
-            .get_transaction_effects(digest)
-            .cloned()
-            .pipe(Ok)
-    }
-
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.inner()
-            .get_transaction_events(digest)
-            .cloned()
-            .pipe(Ok)
     }
 }
 
@@ -1053,6 +1013,37 @@ impl Store for SingleCheckpointSharedInMemoryStore {
     type Error = Infallible;
 }
 
+impl CommitteeStore for SingleCheckpointSharedInMemoryStore {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
+        self.0.get_committee(epoch)
+    }
+}
+
+impl TransactionStore for SingleCheckpointSharedInMemoryStore {
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.0.get_transaction(tx_digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffects>, Self::Error> {
+        self.0.get_transaction_effects(tx_digest)
+    }
+}
+
+impl EventStore for SingleCheckpointSharedInMemoryStore {
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.0.get_events(event_digest)
+    }
+}
+
 impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_checkpoint_by_digest(
         &self,
@@ -1093,31 +1084,6 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         digest: &CheckpointContentsDigest,
     ) -> Result<Option<FullCheckpointContents>, Self::Error> {
         self.0.get_full_checkpoint_contents(digest)
-    }
-
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
-        self.0.get_committee(epoch)
-    }
-
-    fn get_transaction_block(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.0.get_transaction_block(digest)
-    }
-
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.0.get_transaction_effects(digest)
-    }
-
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.0.get_transaction_events(digest)
     }
 }
 

@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use axum::{
     extract::{Path, State},
     routing::get,
     Router,
 };
-use sui_core::authority::AuthorityState;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     object::Object,
-    storage::ObjectStore,
+    storage::ObjectStore2,
 };
 
 use crate::{AppError, Bcs};
@@ -24,7 +21,8 @@ pub async fn get_object<S>(
     State(store): State<S>,
 ) -> Result<Bcs<Object>, AppError>
 where
-    S: ObjectStore,
+    S: ObjectStore2,
+    S::Error: std::error::Error + Send + Sync + 'static,
 {
     let object = store
         .get_object(&object_id)?
@@ -40,7 +38,8 @@ pub async fn get_object_with_version<S>(
     State(store): State<S>,
 ) -> Result<Bcs<Object>, AppError>
 where
-    S: ObjectStore,
+    S: ObjectStore2,
+    S::Error: std::error::Error + Send + Sync + 'static,
 {
     let object = store
         .get_object_by_key(&object_id, version)?
@@ -51,7 +50,8 @@ where
 
 pub(super) fn router<S>(store: S) -> Router
 where
-    S: ObjectStore + Clone + Send + Sync + 'static,
+    S: ObjectStore2 + Clone + Send + Sync + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
 {
     Router::new()
         .route(GET_OBJECT_PATH, get(get_object::<S>))

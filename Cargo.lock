@@ -10914,7 +10914,6 @@ dependencies = [
  "bcs",
  "reqwest",
  "serde",
- "sui-core",
  "sui-types",
  "tokio",
  "workspace-hack",

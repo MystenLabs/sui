@@ -155,7 +155,7 @@ where
 
                     if let Some(event_digest) = content.effects.events_digest() {
                         if let Some(tx_events) = store
-                            .get_transaction_events(event_digest)
+                            .get_events(event_digest)
                             .map_err(|_| anyhow!("Failed to fetch events from the store"))?
                         {
                             events.push((event_digest.into_inner().to_vec(), tx_events));

@@ -10,13 +10,14 @@ use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
-use sui_types::storage::MarkerValue;
+use sui_types::storage::{MarkerValue, ObjectStore2, Store};
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::util::{empty_compaction_filter, reference_count_merge_operator};
 use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf, ReadWriteOptions,
 };
 use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
+use typed_store::TypedStoreError;
 
 use crate::authority::authority_store_types::{
     get_store_object_pair, try_construct_object, ObjectContentDigest, StoreData,
@@ -508,6 +509,44 @@ impl ObjectStore for AuthorityPerpetualTables {
             .objects
             .get(&ObjectKey(*object_id, version))?
             .map(|object| self.object(&ObjectKey(*object_id, version), object))
+            .transpose()?
+            .flatten())
+    }
+}
+
+impl Store for AuthorityPerpetualTables {
+    type Error = typed_store::rocks::TypedStoreError;
+}
+
+impl ObjectStore2 for AuthorityPerpetualTables {
+    /// Read an object and return it, or Ok(None) if the object was not found.
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, Self::Error> {
+        let obj_entry = self
+            .objects
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey::max_for_id(object_id))?
+            .next();
+
+        match obj_entry {
+            Some((ObjectKey(obj_id, version), obj)) if obj_id == *object_id => Ok(self
+                .object(&ObjectKey(obj_id, version), obj)
+                .map_err(|e| TypedStoreError::SerializationError(e.to_string()))?),
+            _ => Ok(None),
+        }
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, Self::Error> {
+        Ok(self
+            .objects
+            .get(&ObjectKey(*object_id, version))?
+            .map(|object| {
+                self.object(&ObjectKey(*object_id, version), object)
+                    .map_err(|e| TypedStoreError::SerializationError(e.to_string()))
+            })
             .transpose()?
             .flatten())
     }

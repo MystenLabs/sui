@@ -12,7 +12,6 @@ bcs.workspace = true
 reqwest.workspace = true
 axum.workspace = true
 sui-types.workspace = true
-sui-core.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

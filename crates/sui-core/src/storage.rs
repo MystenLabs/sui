@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use std::sync::Arc;
+use sui_types::effects::TransactionEffectsAPI;
 
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -53,6 +55,149 @@ impl RocksDbStore {
 
 impl sui_types::storage::Store for RocksDbStore {
     type Error = typed_store::rocks::TypedStoreError;
+}
+
+impl sui_types::storage::CommitteeStore for RocksDbStore {
+    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
+        Ok(self.committee_store.get_committee(&epoch).unwrap())
+    }
+}
+
+impl sui_types::storage::TransactionStore for RocksDbStore {
+    fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
+        self.authority_store.get_transaction_block(digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffects>, Self::Error> {
+        let digest = match self
+            .authority_store
+            .perpetual_tables
+            .executed_effects
+            .get(digest)
+        {
+            Ok(Some(digest)) => digest,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        self.authority_store.perpetual_tables.effects.get(&digest)
+    }
+
+    fn multi_get_transactions(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<VerifiedTransaction>>, Self::Error> {
+        self.authority_store
+            .perpetual_tables
+            .transactions
+            .multi_get(tx_digests)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())
+    }
+
+    fn multi_get_transaction_effects(
+        &self,
+        tx_digests: &[TransactionDigest],
+    ) -> Result<Vec<Option<TransactionEffects>>, Self::Error> {
+        let executed_effects_digests = self
+            .authority_store
+            .perpetual_tables
+            .executed_effects
+            .multi_get(tx_digests)?;
+        let effects = self
+            .authority_store
+            .perpetual_tables
+            .effects
+            .multi_get(executed_effects_digests.iter().flatten())?;
+        let mut tx_to_effects_map = effects
+            .into_iter()
+            .flatten()
+            .map(|effects| (*effects.transaction_digest(), effects))
+            .collect::<HashMap<_, _>>();
+        Ok(tx_digests
+            .iter()
+            .map(|digest| tx_to_effects_map.remove(digest))
+            .collect())
+    }
+}
+
+impl sui_types::storage::EventStore for RocksDbStore {
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> Result<Option<TransactionEvents>, Self::Error> {
+        self.authority_store.get_events(event_digest)
+    }
+}
+
+impl sui_types::storage::CheckpointStore for RocksDbStore {
+    fn get_latest_checkpoint(&self) -> Result<VerifiedCheckpoint, Self::Error> {
+        Ok(self
+            .checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .expect("should always have at least 1 executed checkpoint"))
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.checkpoint_store.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<VerifiedCheckpoint>, Self::Error> {
+        self.checkpoint_store
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> Result<Option<sui_types::messages_checkpoint::CheckpointContents>, Self::Error> {
+        self.checkpoint_store.get_checkpoint_contents(digest)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> Result<Option<sui_types::messages_checkpoint::CheckpointContents>, Self::Error> {
+        let checkpoint = match self
+            .checkpoint_store
+            .get_checkpoint_by_sequence_number(sequence_number)
+        {
+            Ok(Some(checkpoint)) => checkpoint,
+            Ok(None) => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        self.checkpoint_store
+            .get_checkpoint_contents(&checkpoint.content_digest)
+    }
+}
+
+impl sui_types::storage::ObjectStore2 for RocksDbStore {
+    fn get_object(
+        &self,
+        object_id: &sui_types::base_types::ObjectID,
+    ) -> Result<Option<sui_types::object::Object>, Self::Error> {
+        self.authority_store.perpetual_tables.get_object(object_id)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &sui_types::base_types::ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<sui_types::object::Object>, Self::Error> {
+        self.authority_store
+            .perpetual_tables
+            .get_object_by_key(object_id, version)
+    }
 }
 
 impl ReadStore for RocksDbStore {
@@ -130,31 +275,6 @@ impl ReadStore for RocksDbStore {
             .map(|contents| FullCheckpointContents::from_checkpoint_contents(&self, contents))
             .transpose()
             .map(|contents| contents.flatten())
-    }
-
-    fn get_committee(&self, epoch: EpochId) -> Result<Option<Arc<Committee>>, Self::Error> {
-        Ok(self.committee_store.get_committee(&epoch).unwrap())
-    }
-
-    fn get_transaction_block(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Result<Option<VerifiedTransaction>, Self::Error> {
-        self.authority_store.get_transaction_block(digest)
-    }
-
-    fn get_transaction_effects(
-        &self,
-        digest: &TransactionEffectsDigest,
-    ) -> Result<Option<TransactionEffects>, Self::Error> {
-        self.authority_store.perpetual_tables.effects.get(digest)
-    }
-
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Result<Option<TransactionEvents>, Self::Error> {
-        self.authority_store.get_events(digest)
     }
 }
 

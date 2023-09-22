@@ -1,25 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use axum::{
     extract::{Path, State},
-    Json, TypedHeader,
+    routing::get,
+    Json, Router, TypedHeader,
 };
 use serde::{Deserialize, Serialize};
-use sui_core::authority::AuthorityState;
 use sui_types::{
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
     },
     object::Object,
-    storage::ObjectKey,
+    storage::{CheckpointStore, EventStore, ObjectKey, ObjectStore2, TransactionStore},
     transaction::Transaction,
 };
 
@@ -29,18 +26,26 @@ pub const GET_LATEST_CHECKPOINT_PATH: &str = "/checkpoints";
 pub const GET_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint";
 pub const GET_FULL_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint/full";
 
-pub async fn get_full_checkpoint(
+pub async fn get_full_checkpoint<S>(
     //TODO support digest as well as sequence number
     Path(checkpoint_id): Path<CheckpointSequenceNumber>,
     TypedHeader(accept): TypedHeader<Accept>,
-    State(state): State<Arc<AuthorityState>>,
-) -> Result<Bcs<CheckpointData>, AppError> {
+    State(state): State<S>,
+) -> Result<Bcs<CheckpointData>, AppError>
+where
+    S: CheckpointStore + TransactionStore + ObjectStore2 + EventStore,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
     if accept.as_str() != crate::APPLICATION_BCS {
         return Err(AppError(anyhow::anyhow!("invalid accept type")));
     }
 
-    let verified_summary = state.get_verified_checkpoint_by_sequence_number(checkpoint_id)?;
-    let checkpoint_contents = state.get_checkpoint_contents(verified_summary.content_digest)?;
+    let verified_summary = state
+        .get_checkpoint_by_sequence_number(checkpoint_id)?
+        .ok_or_else(|| anyhow!("missing checkpoint {checkpoint_id}"))?;
+    let checkpoint_contents = state
+        .get_checkpoint_contents_by_digest(&verified_summary.content_digest)?
+        .ok_or_else(|| anyhow!("missing checkpoint {checkpoint_id}"))?;
 
     let transaction_digests = checkpoint_contents
         .iter()
@@ -48,8 +53,7 @@ pub async fn get_full_checkpoint(
         .collect::<Vec<_>>();
 
     let transactions = state
-        .database
-        .multi_get_transaction_blocks(&transaction_digests)?
+        .multi_get_transactions(&transaction_digests)?
         .into_iter()
         .map(|maybe_transaction| {
             maybe_transaction.ok_or_else(|| anyhow::anyhow!("missing transaction"))
@@ -57,8 +61,7 @@ pub async fn get_full_checkpoint(
         .collect::<Result<Vec<_>>>()?;
 
     let effects = state
-        .database
-        .multi_get_executed_effects(&transaction_digests)?
+        .multi_get_transaction_effects(&transaction_digests)?
         .into_iter()
         .map(|maybe_effects| maybe_effects.ok_or_else(|| anyhow::anyhow!("missing effects")))
         .collect::<Result<Vec<_>>>()?;
@@ -69,7 +72,6 @@ pub async fn get_full_checkpoint(
         .collect::<Vec<_>>();
 
     let events = state
-        .database
         .multi_get_events(&event_digests)?
         .into_iter()
         .map(|maybe_event| maybe_event.ok_or_else(|| anyhow::anyhow!("missing event")))
@@ -111,8 +113,7 @@ pub async fn get_full_checkpoint(
             .collect::<Vec<_>>();
 
         let input_objects = state
-            .database
-            .multi_get_object_by_key(&input_object_keys)?
+            .multi_get_objects_by_key(&input_object_keys)?
             .into_iter()
             .enumerate()
             .map(|(idx, maybe_object)| {
@@ -133,8 +134,7 @@ pub async fn get_full_checkpoint(
             .collect::<Vec<_>>();
 
         let output_objects = state
-            .database
-            .multi_get_object_by_key(&output_object_keys)?
+            .multi_get_objects_by_key(&output_object_keys)?
             .into_iter()
             .enumerate()
             .map(|(idx, maybe_object)| {
@@ -187,20 +187,47 @@ pub struct CheckpointTransaction {
     pub output_objects: Vec<Object>,
 }
 
-pub async fn get_latest_checkpoint(
-    State(state): State<Arc<AuthorityState>>,
-) -> Result<Json<CertifiedCheckpointSummary>, AppError> {
-    let latest_checkpoint_sequence_number = state.get_latest_checkpoint_sequence_number()?;
-    let verified_summary =
-        state.get_verified_checkpoint_by_sequence_number(latest_checkpoint_sequence_number)?;
+pub async fn get_latest_checkpoint<S>(
+    State(state): State<S>,
+) -> Result<Json<CertifiedCheckpointSummary>, AppError>
+where
+    S: CheckpointStore,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
+    let latest_checkpoint = state.get_latest_checkpoint()?;
+    Ok(Json(latest_checkpoint.into()))
+}
+
+pub async fn get_checkpoint<S>(
+    //TODO support digest as well as sequence number
+    Path(checkpoint_id): Path<CheckpointSequenceNumber>,
+    State(state): State<S>,
+) -> Result<Json<CertifiedCheckpointSummary>, AppError>
+where
+    S: CheckpointStore,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
+    let verified_summary = state
+        .get_checkpoint_by_sequence_number(checkpoint_id)?
+        .ok_or_else(|| anyhow!("missing checkpoint {checkpoint_id}"))?;
     Ok(Json(verified_summary.into()))
 }
 
-pub async fn get_checkpoint(
-    //TODO support digest as well as sequence number
-    Path(checkpoint_id): Path<CheckpointSequenceNumber>,
-    State(state): State<Arc<AuthorityState>>,
-) -> Result<Json<CertifiedCheckpointSummary>, AppError> {
-    let verified_summary = state.get_verified_checkpoint_by_sequence_number(checkpoint_id)?;
-    Ok(Json(verified_summary.into()))
+pub(super) fn router<S>(store: S) -> Router
+where
+    S: CheckpointStore
+        + TransactionStore
+        + ObjectStore2
+        + EventStore
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
+    Router::new()
+        .route(GET_FULL_CHECKPOINT_PATH, get(get_full_checkpoint::<S>))
+        .route(GET_CHECKPOINT_PATH, get(get_checkpoint::<S>))
+        .route(GET_LATEST_CHECKPOINT_PATH, get(get_latest_checkpoint::<S>))
+        .with_state(store)
 }

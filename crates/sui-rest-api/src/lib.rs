@@ -48,35 +48,36 @@ where
     }
 }
 
-pub fn rest_router(state: std::sync::Arc<sui_core::authority::AuthorityState>) -> Router {
-    let object_router = objects::router(state.database.clone());
+pub fn rest_router<S>(state: S) -> Router
+where
+    S: sui_types::storage::CheckpointStore
+        + sui_types::storage::TransactionStore
+        + sui_types::storage::ObjectStore2
+        + sui_types::storage::EventStore
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
     Router::new()
         .route("/", get(health_check))
-        .route(
-            checkpoints::GET_FULL_CHECKPOINT_PATH,
-            get(checkpoints::get_full_checkpoint),
-        )
-        .route(
-            checkpoints::GET_CHECKPOINT_PATH,
-            get(checkpoints::get_checkpoint),
-        )
-        .route(
-            checkpoints::GET_LATEST_CHECKPOINT_PATH,
-            get(checkpoints::get_latest_checkpoint),
-        )
-        .with_state(state)
-        .merge(object_router)
-    // .route(objects::GET_OBJECT_PATH, get(objects::get_object))
-    // .route(
-    //     objects::GET_OBJECT_WITH_VERSION_PATH,
-    //     get(objects::get_object_with_version),
-    // )
+        .merge(checkpoints::router(state.clone()))
+        .merge(objects::router(state))
 }
 
-pub async fn start_service(
-    socket_address: std::net::SocketAddr,
-    state: std::sync::Arc<sui_core::authority::AuthorityState>,
-) {
+pub async fn start_service<S>(socket_address: std::net::SocketAddr, state: S)
+where
+    S: sui_types::storage::CheckpointStore
+        + sui_types::storage::TransactionStore
+        + sui_types::storage::ObjectStore2
+        + sui_types::storage::EventStore
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S::Error: std::error::Error + Send + Sync + 'static,
+{
     let app = rest_router(state);
 
     axum::Server::bind(&socket_address)
