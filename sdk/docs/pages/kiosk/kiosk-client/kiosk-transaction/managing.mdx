@@ -9,8 +9,8 @@ create a `KioskTransaction`.
 
 ### take
 
-Removes an item from the Kiosk and returns a `TransactionArgument` to use it in a different Programmable Transaction Block (PTB)
-call.
+Removes an item from the Kiosk and returns a `TransactionArgument` to use it in a different
+Programmable Transaction Block (PTB) call.
 
 ```typescript
 const item = '0xHeroAddress';
@@ -110,8 +110,8 @@ await signAndExecuteTransactionBlock({ tx: txb });
 
 ### placeAndList
 
-List an item for sale by first placing it in the kiosk (places the item and lists it for sale). It's a
-short hand for `place()` and `list()`.
+List an item for sale by first placing it in the kiosk (places the item and lists it for sale). It's
+a short hand for `place()` and `list()`.
 
 ```typescript
 const item = '0xHeroAddress';
@@ -212,8 +212,8 @@ await signAndExecuteTransactionBlock({ tx: txb });
 
 ### borrow / return
 
-Similar to `borrowTx`, borrows an item from the kiosk, but returns two transaction arguments: `item` &
-`promise`. You can use the `item` in your PTBs, but you must always call the `return()` function
+Similar to `borrowTx`, borrows an item from the kiosk, but returns two transaction arguments: `item`
+& `promise`. You can use the `item` in your PTBs, but you must always call the `return()` function
 with the `item` and the `Promise`.
 
 ```typescript
