@@ -290,3 +290,380 @@ async fn transaction_manager_read_lock() {
     transaction_manager.notify_commit(tx_2.digest(), vec![], &state.epoch_store_for_testing());
     transaction_manager.check_empty_for_testing();
 }
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn transaction_manager_receiving_notify_commit() {
+    telemetry_subscribers::init_for_testing();
+    // Initialize an authority state.
+    let (owner, _keypair) = deterministic_random_account_key();
+    let gas_objects: Vec<Object> = (0..10)
+        .map(|_| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect();
+    let state = init_state_with_objects(gas_objects.clone()).await;
+
+    // Create a new transaction manager instead of reusing the authority's, to examine
+    // transaction_manager output from rx_ready_certificates.
+    let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
+    // TM should output no transaction.
+    assert!(rx_ready_certificates.try_recv().is_err());
+    // TM should be empty at the beginning.
+    transaction_manager.check_empty_for_testing();
+
+    let obj_id = ObjectID::random();
+    let object_arguments: Vec<_> = (0..10)
+        .map(|i| {
+            let object = Object::with_id_owner_version_for_testing(obj_id, i.into(), owner);
+            // Every other transaction receives the object, and we create a run of multiple receives in
+            // a row at the beginning to test that the TM doesn't get stuck in either configuration of:
+            // ImmOrOwnedObject => Receiving,
+            // Receiving => Receiving
+            // Receiving => ImmOrOwnedObject
+            // ImmOrOwnedObject => ImmOrOwnedObject is already tested as the default case on mainnet.
+            let object_arg = if i % 2 == 0 || i == 3 {
+                ObjectArg::Receiving(object.compute_object_reference())
+            } else {
+                ObjectArg::ImmOrOwnedObject(object.compute_object_reference())
+            };
+            let txn = make_transaction(gas_objects[0].clone(), vec![CallArg::Object(object_arg)]);
+            (object, txn)
+        })
+        .collect();
+
+    for (i, (_, txn)) in object_arguments.iter().enumerate() {
+        // TM should output no transaction yet since waiting on receiving object or
+        // ImmOrOwnedObject input.
+        transaction_manager
+            .enqueue(vec![txn.clone()], &state.epoch_store_for_testing())
+            .unwrap();
+        sleep(Duration::from_secs(1)).await;
+        assert!(rx_ready_certificates.try_recv().is_err());
+        assert_eq!(transaction_manager.inflight_queue_len(), i + 1);
+    }
+
+    // Start things off by notifying TM that the receiving object 0 is available.
+    transaction_manager.objects_available(
+        get_input_keys(&vec![object_arguments[0].0.clone()]),
+        &state.epoch_store_for_testing(),
+    );
+
+    // Now start to unravel the rest of the transactions by notifying that each subsequent
+    // transaction has been processed.
+    for (i, (object, txn)) in object_arguments.iter().enumerate() {
+        // TM should output the transaction eventually now that the receiving object has become
+        // available.
+        rx_ready_certificates.recv().await.unwrap();
+
+        // Only one transaction at a time should become available though. So if we try to get
+        // another one it should fail.
+        sleep(Duration::from_secs(1)).await;
+        assert!(rx_ready_certificates.try_recv().is_err());
+
+        // Notify the TM that the transaction has been processed, and that it has written the
+        // object at the next version.
+        transaction_manager.notify_commit(
+            txn.digest(),
+            vec![InputKey::VersionedObject {
+                id: object.id(),
+                version: object.version().next(),
+            }],
+            &state.epoch_store_for_testing(),
+        );
+
+        // TM should now output another transaction to run since it the next version of that object
+        // has become available.
+        assert_eq!(
+            transaction_manager.inflight_queue_len(),
+            object_arguments.len() - i - 1
+        );
+    }
+
+    // After everything TM should be empty.
+    transaction_manager.check_empty_for_testing();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn transaction_manager_receiving_object_ready_notifications() {
+    telemetry_subscribers::init_for_testing();
+    // Initialize an authority state.
+    let (owner, _keypair) = deterministic_random_account_key();
+    let gas_objects: Vec<Object> = (0..10)
+        .map(|_| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect();
+    let state = init_state_with_objects(gas_objects.clone()).await;
+
+    // Create a new transaction manager instead of reusing the authority's, to examine
+    // transaction_manager output from rx_ready_certificates.
+    let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
+    // TM should output no transaction.
+    assert!(rx_ready_certificates.try_recv().is_err());
+    // TM should be empty at the beginning.
+    transaction_manager.check_empty_for_testing();
+
+    let obj_id = ObjectID::random();
+    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
+    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_arg0 =
+        ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
+    let receive_object_transaction0 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg0)],
+    );
+
+    let receiving_object_arg1 =
+        ObjectArg::Receiving(receiving_object_new1.compute_object_reference());
+    let receive_object_transaction1 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg1)],
+    );
+
+    // TM should output no transaction yet since waiting on receiving object.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction0.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
+    // TM should output no transaction yet since waiting on receiving object.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction1.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 2);
+
+    // Duplicate enqueue of receiving object is allowed.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction0.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 2);
+
+    // Notify TM that the receiving object 0 is available.
+    transaction_manager.objects_available(
+        get_input_keys(&vec![receiving_object_new0.clone()]),
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should output the transaction eventually now that the receiving object has become
+    // available.
+    rx_ready_certificates.recv().await.unwrap();
+
+    // Notify TM that the receiving object 0 is available.
+    transaction_manager.objects_available(
+        get_input_keys(&vec![receiving_object_new1.clone()]),
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should output the transaction eventually now that the receiving object has become
+    // available.
+    rx_ready_certificates.recv().await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn transaction_manager_receiving_object_ready_notifications_multiple_of_same_receiving() {
+    telemetry_subscribers::init_for_testing();
+    // Initialize an authority state.
+    let (owner, _keypair) = deterministic_random_account_key();
+    let gas_objects: Vec<Object> = (0..10)
+        .map(|_| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect();
+    let state = init_state_with_objects(gas_objects.clone()).await;
+
+    // Create a new transaction manager instead of reusing the authority's, to examine
+    // transaction_manager output from rx_ready_certificates.
+    let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
+    // TM should output no transaction.
+    assert!(rx_ready_certificates.try_recv().is_err());
+    // TM should be empty at the beginning.
+    transaction_manager.check_empty_for_testing();
+
+    let obj_id = ObjectID::random();
+    let receiving_object_new0 = Object::with_id_owner_version_for_testing(obj_id, 0.into(), owner);
+    let receiving_object_new1 = Object::with_id_owner_version_for_testing(obj_id, 1.into(), owner);
+    let receiving_object_arg0 =
+        ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
+    let receive_object_transaction0 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg0)],
+    );
+
+    let receive_object_transaction01 = make_transaction(
+        gas_objects[1].clone(),
+        vec![CallArg::Object(receiving_object_arg0)],
+    );
+
+    let receiving_object_arg1 =
+        ObjectArg::Receiving(receiving_object_new1.compute_object_reference());
+    let receive_object_transaction1 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg1)],
+    );
+
+    // Enqueuing a transaction with a receiving object that is available at the time it is enqueued
+    // should become immediately available.
+    let gas_receiving_arg = ObjectArg::Receiving(gas_objects[3].compute_object_reference());
+    let tx1 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(gas_receiving_arg)],
+    );
+
+    // TM should output no transaction yet since waiting on receiving object.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction0.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 1);
+
+    // TM should output no transaction yet since waiting on receiving object.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction1.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 2);
+
+    // Different transaciton with a duplicate receiving object reference is allowed.
+    // Both transaction's will be outputted once the receiving object is available.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction01.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    assert!(rx_ready_certificates.try_recv().is_err());
+    assert_eq!(transaction_manager.inflight_queue_len(), 3);
+
+    // Notify TM that the receiving object 0 is available.
+    transaction_manager.objects_available(
+        get_input_keys(&vec![receiving_object_new0.clone()]),
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should output both transactions dependening on the receiving object now that the
+    // transaction's receiving object has become available.
+    rx_ready_certificates.recv().await.unwrap();
+
+    rx_ready_certificates.recv().await.unwrap();
+
+    // Only two transactions that were dependent on the receiving object should be output.
+    assert!(rx_ready_certificates.try_recv().is_err());
+
+    // Enqueue a transaction with a receiving object that is available at the time it is enqueued.
+    // This should be immediately available.
+    transaction_manager
+        .enqueue(vec![tx1.clone()], &state.epoch_store_for_testing())
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    rx_ready_certificates.recv().await.unwrap();
+
+    // Notify TM that the receiving object 0 is available.
+    transaction_manager.objects_available(
+        get_input_keys(&vec![receiving_object_new1.clone()]),
+        &state.epoch_store_for_testing(),
+    );
+
+    // TM should output the transaction eventually now that the receiving object has become
+    // available.
+    rx_ready_certificates.recv().await.unwrap();
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn transaction_manager_receiving_object_ready_if_current_version_greater() {
+    telemetry_subscribers::init_for_testing();
+    // Initialize an authority state.
+    let (owner, _keypair) = deterministic_random_account_key();
+    let mut gas_objects: Vec<Object> = (0..10)
+        .map(|_| {
+            let gas_object_id = ObjectID::random();
+            Object::with_id_owner_for_testing(gas_object_id, owner)
+        })
+        .collect();
+    let receiving_object =
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 10.into(), owner);
+    gas_objects.push(receiving_object.clone());
+    let state = init_state_with_objects(gas_objects.clone()).await;
+
+    // Create a new transaction manager instead of reusing the authority's, to examine
+    // transaction_manager output from rx_ready_certificates.
+    let (transaction_manager, mut rx_ready_certificates) = make_transaction_manager(&state);
+    // TM should output no transaction.
+    assert!(rx_ready_certificates.try_recv().is_err());
+    // TM should be empty at the beginning.
+    transaction_manager.check_empty_for_testing();
+
+    let receiving_object_new0 =
+        Object::with_id_owner_version_for_testing(receiving_object.id(), 0.into(), owner);
+    let receiving_object_new1 =
+        Object::with_id_owner_version_for_testing(receiving_object.id(), 1.into(), owner);
+    let receiving_object_arg0 =
+        ObjectArg::Receiving(receiving_object_new0.compute_object_reference());
+    let receive_object_transaction0 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg0)],
+    );
+
+    let receive_object_transaction01 = make_transaction(
+        gas_objects[1].clone(),
+        vec![CallArg::Object(receiving_object_arg0)],
+    );
+
+    let receiving_object_arg1 =
+        ObjectArg::Receiving(receiving_object_new1.compute_object_reference());
+    let receive_object_transaction1 = make_transaction(
+        gas_objects[0].clone(),
+        vec![CallArg::Object(receiving_object_arg1)],
+    );
+
+    // TM should output no transaction yet since waiting on receiving object.
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction0.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction01.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    transaction_manager
+        .enqueue(
+            vec![receive_object_transaction1.clone()],
+            &state.epoch_store_for_testing(),
+        )
+        .unwrap();
+    sleep(Duration::from_secs(1)).await;
+    rx_ready_certificates.recv().await.unwrap();
+    rx_ready_certificates.recv().await.unwrap();
+    rx_ready_certificates.recv().await.unwrap();
+    assert!(rx_ready_certificates.try_recv().is_err());
+}
