@@ -270,7 +270,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .add_node(combined_graph.root_package);
 
         // get overrides
-        let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
+        let mut overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
         for (
@@ -296,7 +296,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let mut all_deps = root_manifest.dependencies.clone();
         all_deps.extend(root_manifest.dev_dependencies.clone());
 
-        combined_graph.merge(dep_graphs, parent, &all_deps)?;
+        // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
+        overrides.extend(dev_overrides);
+
+        combined_graph.merge(dep_graphs, parent, &all_deps, &overrides)?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
@@ -563,6 +566,7 @@ impl DependencyGraph {
         mut dep_graphs: BTreeMap<PM::PackageName, DependencyGraphInfo>,
         parent: &PM::DependencyKind,
         dependencies: &PM::Dependencies,
+        overrides: &BTreeMap<PM::PackageName, Package>,
     ) -> Result<()> {
         if !self.always_deps.is_empty() {
             bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
@@ -664,6 +668,7 @@ impl DependencyGraph {
                         &dep_graphs,
                         graph_info.is_external,
                     ),
+                    overrides,
                 ) {
                     Ok(_) => continue,
                     Err((existing_pkg_deps, pkg_deps)) => {
@@ -715,7 +720,7 @@ impl DependencyGraph {
     /// available in a package tables of a respective (dependent) subgraph. This function return the
     /// right package table, depending on whether conflict was detected between pre-populated
     /// combined graph and another sub-graph or between two separate sub-graphs. If we tried to use
-    /// combined graphs's package table "as is" we would get an error in all cases similar to the on
+    /// combined graphs's package table "as is" we would get an error in all cases similar to the one
     /// in the direct_and_indirect_dep test where A is a direct dependency of Root (as C would be
     /// missing from the combined graph's table):
     ///
@@ -1452,6 +1457,7 @@ fn deps_equal<'a>(
     graph1_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
     graph2: &'a DependencyGraph,
     graph2_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
+    overrides: &'a BTreeMap<PM::PackageName, Package>,
 ) -> std::result::Result<
     (),
     (
@@ -1459,18 +1465,38 @@ fn deps_equal<'a>(
         Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
     ),
 > {
-    let graph1_edges = BTreeSet::from_iter(
-        graph1
-            .package_graph
-            .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, graph1_pkg_table.get(&pkg).unwrap())),
-    );
-    let graph2_edges = BTreeSet::from_iter(
-        graph2
-            .package_graph
-            .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, graph2_pkg_table.get(&pkg).unwrap())),
-    );
+    // Unwraps in the code below are safe as these edges (and target nodes) must exist either in the
+    // sub-graph or in the pre-populated combined graph (see pkg_table_for_deps_compare's doc
+    // comment for a more detailed explanation). If these were to fail, it would indicate a bug in
+    // the algorithm so it's OK to panic here.
+    let graph1_edges: BTreeSet<_> = graph1
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
+            (
+                dep,
+                pkg,
+                graph1_pkg_table
+                    .get(&pkg)
+                    .or_else(|| overrides.get(&pkg))
+                    .unwrap(),
+            )
+        })
+        .collect();
+    let graph2_edges: BTreeSet<_> = graph2
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
+            (
+                dep,
+                pkg,
+                graph2_pkg_table
+                    .get(&pkg)
+                    .or_else(|| overrides.get(&pkg))
+                    .unwrap(),
+            )
+        })
+        .collect();
 
     let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
         .symmetric_difference(&graph2_edges)
