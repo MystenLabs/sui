@@ -1667,6 +1667,13 @@ impl SuiCallArg {
                 initial_shared_version,
                 mutable,
             }),
+            CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::Receiving {
+                    object_id,
+                    version,
+                    digest,
+                })
+            }
         })
     }
 
@@ -1680,9 +1687,8 @@ impl SuiCallArg {
     pub fn object(&self) -> Option<&ObjectID> {
         match self {
             SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
-            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
-                Some(object_id)
-            }
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => Some(object_id),
             _ => None,
         }
     }
@@ -1730,6 +1736,15 @@ pub enum SuiObjectArg {
         #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         mutable: bool,
+    },
+    // A reference to a Move object that's going to be received in the transaction.
+    #[serde(rename_all = "camelCase")]
+    Receiving {
+        object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
     },
 }
 

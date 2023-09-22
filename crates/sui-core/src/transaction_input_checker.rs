@@ -48,6 +48,7 @@ mod checked {
             tx_data,
         )?;
         let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
+        // NB: We do not check receiving objects when executing. Only at signing time do we check.
         Ok((gas_status, input_objects))
     }
 }

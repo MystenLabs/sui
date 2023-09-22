@@ -641,7 +641,9 @@ fn entry_param_ty(
     // which should give a contextual error about `MyObject` having `key`, but the instantiation
     // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
     // `store`
-    let is_valid = is_entry_primitive_ty(param_ty) || is_entry_object_ty(param_ty);
+    let is_valid = is_entry_primitive_ty(param_ty)
+        || is_entry_object_ty(param_ty)
+        || is_entry_receiving_ty(param_ty);
     if is_mut_clock || !is_valid {
         let pmsg = format!(
             "Invalid 'entry' parameter type for parameter '{}'",
@@ -656,7 +658,7 @@ fn entry_param_ty(
             )
         } else {
             "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
-            (by-reference or by-value), or vectors of objects"
+            (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)"
                 .to_owned()
         };
         let emsg = format!("'{name}' was declared 'entry' here");
@@ -679,6 +681,22 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         | Type_::Var(_)
         | Type_::Anything
         | Type_::UnresolvedError => false,
+    }
+}
+
+fn is_entry_receiving_ty(param_ty: &Type) -> bool {
+    match &param_ty.value {
+        Type_::Ref(_, t) => is_entry_receiving_ty(t),
+        Type_::Apply(_, sp!(_, n), targs)
+            if n.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
+        {
+            debug_assert!(targs.len() == 1);
+            // Don't care about the type parameter, just that it's a receiving type -- since it has
+            // a `key` requirement on the type parameter it must be an object or type checking will
+            // fail.
+            true
+        }
+        _ => false,
     }
 }
 

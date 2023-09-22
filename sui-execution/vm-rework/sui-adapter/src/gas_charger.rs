@@ -11,7 +11,9 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
-    use sui_types::gas_model::gas_predicates::dont_charge_budget_on_storage_oog;
+    use sui_types::gas_model::gas_predicates::{
+        charge_upgrades, dont_charge_budget_on_storage_oog,
+    };
     use sui_types::{
         base_types::{ObjectID, ObjectRef},
         digests::TransactionDigest,
@@ -205,6 +207,14 @@ pub mod checked {
 
         pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
             self.gas_status.charge_publish_package(size)
+        }
+
+        pub fn charge_upgrade_package(&mut self, size: usize) -> Result<(), ExecutionError> {
+            if charge_upgrades(self.gas_model_version) {
+                self.gas_status.charge_publish_package(size)
+            } else {
+                Ok(())
+            }
         }
 
         pub fn charge_input_objects(

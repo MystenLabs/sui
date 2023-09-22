@@ -12,10 +12,12 @@ mod checked {
     use sui_config::transaction_deny_config::TransactionDenyConfig;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::ObjectRef;
+    use sui_types::committee::EpochId;
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::storage::BackingPackageStore;
     use sui_types::storage::ObjectStore;
+    use sui_types::storage::ReceivedMarkerQuery;
     use sui_types::transaction::{
         InputObjectKind, InputObjects, TransactionData, TransactionDataAPI, TransactionKind,
         VersionedProtocolMessage,
@@ -23,13 +25,14 @@ mod checked {
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
         error::{SuiError, SuiResult},
-        fp_ensure,
+        fp_bail, fp_ensure,
         gas::SuiGasStatus,
         object::{Object, Owner},
     };
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
     };
+    use tracing::error;
     use tracing::instrument;
 
     // Entry point for all checks related to gas.
@@ -55,20 +58,23 @@ mod checked {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn check_transaction_input<S: BackingPackageStore + ObjectStore>(
-        store: S,
+    pub fn check_transaction_input<S: BackingPackageStore + ObjectStore + ReceivedMarkerQuery>(
+        store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
+        epoch_id: EpochId,
         transaction: &TransactionData,
         transaction_deny_config: &TransactionDenyConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, InputObjects)> {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check(protocol_config)?;
+        let receiving_objects = transaction.receiving_objects();
         let input_objects = transaction.input_objects()?;
         crate::deny::check_transaction_for_signing(
             transaction,
             &input_objects,
+            &receiving_objects,
             transaction_deny_config,
             &store,
         )?;
@@ -85,13 +91,21 @@ mod checked {
             transaction,
         )?;
         let input_objects = check_objects(transaction, input_objects, objects)?;
+        check_receiving_objects(
+            store,
+            &receiving_objects,
+            &input_objects,
+            protocol_config,
+            epoch_id,
+        )?;
         Ok((gas_status, input_objects))
     }
 
-    pub fn check_transaction_input_with_given_gas<S: ObjectStore>(
-        store: S,
+    pub fn check_transaction_input_with_given_gas<S: ObjectStore + ReceivedMarkerQuery>(
+        store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
+        epoch_id: EpochId,
         transaction: &TransactionData,
         gas_object: Object,
         metrics: &Arc<BytecodeVerifierMetrics>,
@@ -99,6 +113,7 @@ mod checked {
         transaction.check_version_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
+        let receiving_objects = transaction.receiving_objects();
         let mut input_objects = transaction.input_objects()?;
         let mut objects = check_input_objects(store, &input_objects, protocol_config)?;
 
@@ -114,13 +129,20 @@ mod checked {
             transaction,
         )?;
         let input_objects = check_objects(transaction, input_objects, objects)?;
+        check_receiving_objects(
+            store,
+            &receiving_objects,
+            &input_objects,
+            protocol_config,
+            epoch_id,
+        )?;
         Ok((gas_status, input_objects))
     }
 
     /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
     /// bypasses many of the normal object checks
     pub fn check_dev_inspect_input<S: ObjectStore>(
-        store: S,
+        store: &S,
         config: &ProtocolConfig,
         kind: &TransactionKind,
         gas_object: Object,
@@ -154,8 +176,138 @@ mod checked {
         Ok((gas_object_ref, input_objects))
     }
 
+    fn check_receiving_objects<S: ObjectStore + ReceivedMarkerQuery>(
+        store: &S,
+        receiving_objects: &[ObjectRef],
+        input_objects: &InputObjects,
+        protocol_config: &ProtocolConfig,
+        epoch_id: EpochId,
+    ) -> Result<(), SuiError> {
+        // Count receiving objects towards the input object limit as they are passed in the PTB
+        // args and they will (most likely) incur an object load at runtime.
+        fp_ensure!(
+            receiving_objects.len() + input_objects.len()
+                <= protocol_config.max_input_objects() as usize,
+            UserInputError::SizeLimitExceeded {
+                limit: "maximum input and receiving objects in a transaction".to_string(),
+                value: protocol_config.max_input_objects().to_string()
+            }
+            .into()
+        );
+
+        let mut objects_in_txn: HashSet<_> = input_objects
+            .object_kinds()
+            .map(|x| x.object_id())
+            .collect();
+
+        // Since we're at signing we check that every object reference that we are receiving is the
+        // most recent version of that object. If it's been received at the version specified we
+        // let it through to allow the transaction to run and fail to unlock any other objects in
+        // the transaction. Otherwise, we return an error.
+        //
+        // If there are any object IDs in common (either between receiving objects and input
+        // objects) we return an error.
+        for (object_id, version, object_digest) in receiving_objects {
+            fp_ensure!(
+                *version < SequenceNumber::MAX,
+                UserInputError::InvalidSequenceNumber.into()
+            );
+
+            let object = store.get_object(object_id)?;
+
+            if !object.as_ref().is_some_and(|x| {
+                x.owner.is_address_owned()
+                    && x.version() == *version
+                    && x.digest() == *object_digest
+            }) && !store.have_received_object_at_version(object_id, *version, epoch_id)?
+            {
+                // Unable to load object
+                fp_ensure!(
+                    object.is_some(),
+                    UserInputError::ObjectNotFound {
+                        object_id: *object_id,
+                        version: Some(*version),
+                    }
+                    .into()
+                );
+
+                let object = object.expect("Safe to unwrap due to check in fp_unwrap");
+
+                // Version mismatch
+                fp_ensure!(
+                    object.version() == *version,
+                    UserInputError::ObjectVersionUnavailableForConsumption {
+                        provided_obj_ref: (*object_id, *version, *object_digest),
+                        current_version: object.version(),
+                    }
+                    .into()
+                );
+
+                // Tried to receive a package
+                fp_ensure!(
+                    !object.is_package(),
+                    UserInputError::MovePackageAsObject {
+                        object_id: *object_id
+                    }
+                    .into()
+                );
+
+                // Digest mismatch
+                let expected_digest = object.digest();
+                fp_ensure!(
+                    expected_digest == *object_digest,
+                    UserInputError::InvalidObjectDigest {
+                        object_id: *object_id,
+                        expected_digest
+                    }
+                    .into()
+                );
+
+                match object.owner {
+                    Owner::AddressOwner(_) => {
+                        debug_assert!(false,
+                            "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
+                            (*object_id, *version, *object_id), object
+                        );
+                        error!(
+                            "Receiving object {:?} is invalid but we expect it should be valid. {:?}",
+                            (*object_id, *version, *object_id), object
+                        );
+                        // We should never get here, but if for some reason we do just default to
+                        // object not found and reject signing the transaction.
+                        fp_bail!(UserInputError::ObjectNotFound {
+                            object_id: *object_id,
+                            version: Some(*version),
+                        }
+                        .into())
+                    }
+                    Owner::ObjectOwner(owner) => {
+                        fp_bail!(UserInputError::InvalidChildObjectArgument {
+                            child_id: object.id(),
+                            parent_id: owner.into(),
+                        }
+                        .into())
+                    }
+                    Owner::Shared { .. } => fp_bail!(UserInputError::NotSharedObjectError.into()),
+                    Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
+                        object_id: *object_id
+                    }
+                    .into()),
+                };
+            }
+
+            fp_ensure!(
+                !objects_in_txn.contains(object_id),
+                UserInputError::DuplicateObjectRefInput.into()
+            );
+
+            objects_in_txn.insert(*object_id);
+        }
+        Ok(())
+    }
+
     pub fn check_input_objects<S: ObjectStore>(
-        object_store: S,
+        object_store: &S,
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
     ) -> Result<Vec<Object>, SuiError> {

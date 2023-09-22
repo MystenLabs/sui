@@ -117,6 +117,7 @@ mod checked {
         is_metered: bool,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        current_epoch_id: EpochId,
     ) -> NativeContextExtensions<'r> {
         let mut extensions = NativeContextExtensions::default();
         extensions.add(ObjectRuntime::new(
@@ -125,6 +126,7 @@ mod checked {
             is_metered,
             protocol_config,
             metrics,
+            current_epoch_id,
         ));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
         extensions

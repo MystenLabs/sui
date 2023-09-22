@@ -1,0 +1,37 @@
+processed 9 tasks
+
+task 1 'publish'. lines 6-46:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8071200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 48-48:
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 50-50:
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'view-object'. lines 52-52:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+
+task 5 'view-object'. lines 54-56:
+Owner: Account Address ( fake(2,1) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+
+task 6 'programmable'. lines 57-60:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 7 'programmable'. lines 61-65:
+Error: Error checking transaction input objects: DuplicateObjectRefInput
+
+task 8 'programmable'. lines 66-69:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 4589640, non_refundable_storage_fee: 46360

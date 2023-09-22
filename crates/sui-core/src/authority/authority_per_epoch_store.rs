@@ -73,7 +73,9 @@ use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
-use sui_types::storage::{transaction_input_object_keys, ObjectKey, ObjectStore};
+use sui_types::storage::{
+    transaction_input_object_keys, transaction_receiving_object_keys, ObjectKey, ObjectStore,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
@@ -1382,6 +1384,10 @@ impl AuthorityPerEpochStore {
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
         let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        // Record receiving object versions towards the shared version computation.
+        let receiving_object_keys = transaction_receiving_object_keys(certificate);
+        input_object_keys.extend(receiving_object_keys);
+
         for (SharedInputObject { id, mutable, .. }, version) in shared_input_objects
             .iter()
             .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))

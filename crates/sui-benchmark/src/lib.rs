@@ -857,6 +857,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     initial_shared_version,
                     mutable,
                 } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                ObjectArg::Receiving(_) => {
+                    unimplemented!("Receiving is not supported for benchmarks")
+                }
             },
         }
     }

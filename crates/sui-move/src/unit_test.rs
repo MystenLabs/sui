@@ -80,6 +80,15 @@ impl ChildObjectResolver for DummyChildObjectStore {
     ) -> SuiResult<Option<Object>> {
         Ok(None)
     }
+    fn get_object_received_at_version(
+        &self,
+        _owner: &ObjectID,
+        _receiving_object_id: &ObjectID,
+        _receive_object_at_version: SequenceNumber,
+        _epoch_id: sui_types::committee::EpochId,
+    ) -> SuiResult<Option<Object>> {
+        Ok(None)
+    }
 }
 
 static TEST_STORE: Lazy<DummyChildObjectStore> = Lazy::new(|| DummyChildObjectStore {});
@@ -129,6 +138,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         false,
         &ProtocolConfig::get_for_min_version(),
         metrics,
+        0, // epoch id
     ));
     ext.add(NativesCostTable::from_protocol_config(
         &ProtocolConfig::get_for_min_version(),
