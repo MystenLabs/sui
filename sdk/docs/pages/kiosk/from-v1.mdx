@@ -1,17 +1,18 @@
 # Migrating from Kiosk SDK V1
 
 The original version of Kiosk SDK V1 provided basic experimentation with the Kiosk API. The new
-version of the SDK provides a more robust experience for building kiosk/transfer policy transactions.
+version of the SDK provides a more robust experience for building kiosk/transfer policy
+transactions.
 
-The new SDK offers a builder-pattern API, which provides better autocomplete capabilities, 
-and also makes code more readable.
+The new SDK offers a builder-pattern API, which provides better autocomplete capabilities, and also
+makes code more readable.
 
 While a one-to-one mapping between the old and new SDK is not possible, the following examples
 should help you get started.
 
-> An important benefit of the new SDK is that it works seamlessly with Personal Kiosk, which was
-> not the case with the V1 SDK (you would always have to wrap the transaction with
-> `borrow_cap` / `return_cap` calls depending on whether the kiosk is personal or not).
+> An important benefit of the new SDK is that it works seamlessly with Personal Kiosk, which was not
+> the case with the V1 SDK (you would always have to wrap the transaction with `borrow_cap` /
+> `return_cap` calls depending on whether the kiosk is personal or not).
 
 ## Placing an item to kiosk and listing it for sale
 
