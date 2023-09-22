@@ -2089,3 +2089,18 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
+    let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
+    let args = vec!["move", "test", "--lint", "--path", "tests/data/linter"];
+    let output = cmd
+        .args(&args)
+        .output()
+        .expect("failed to run 'sui move test'");
+    let out_str = str::from_utf8(&output.stderr).unwrap();
+    assert!(
+        out_str.contains("Total number of linter warnings suppressed: 5 (filtered categories: 3)")
+    );
+    Ok(())
+}

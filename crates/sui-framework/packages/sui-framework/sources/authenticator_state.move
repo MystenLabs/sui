@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(unused_use)]
 // Module for storing authenticator state, which is currently just the set of valid JWKs used by
 // zklogin.
 //

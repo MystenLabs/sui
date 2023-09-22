@@ -94,7 +94,10 @@ export class ImportedAccount
 		};
 	}
 
-	async passwordUnlock(password: string): Promise<void> {
+	async passwordUnlock(password?: string): Promise<void> {
+		if (!password) {
+			throw new Error('Missing password to unlock the account');
+		}
 		const { encrypted } = await this.getStoredData();
 		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
 		await this.setEphemeralValue({ keyPair });

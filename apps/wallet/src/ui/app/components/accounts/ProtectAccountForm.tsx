@@ -63,7 +63,7 @@ export function ProtectAccountForm({
 	submitButtonText,
 	cancelButtonText,
 	onSubmit,
-	displayToS = true,
+	displayToS,
 }: ProtectAccountFormProps) {
 	const autoLock = useAutoLockMinutes();
 	const form = useZodForm({
@@ -71,7 +71,7 @@ export function ProtectAccountForm({
 		schema: formSchema,
 		values: {
 			password: { input: '', confirmation: '' },
-			acceptedTos: !displayToS,
+			acceptedTos: !!displayToS,
 			autoLock: parseAutoLock(autoLock.data || null),
 		},
 	});
@@ -107,7 +107,7 @@ export function ProtectAccountForm({
 			<AutoLockSelector />
 			<div className="flex-1" />
 			<div className="flex flex-col gap-5">
-				{displayToS ? (
+				{displayToS ? null : (
 					<CheckboxField
 						name="acceptedTos"
 						label={
@@ -120,7 +120,7 @@ export function ProtectAccountForm({
 							/>
 						}
 					/>
-				) : null}
+				)}
 				<div className="flex gap-2.5">
 					{cancelButtonText ? (
 						<Button

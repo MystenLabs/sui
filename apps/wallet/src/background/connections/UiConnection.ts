@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import Dexie from 'dexie';
 import { BehaviorSubject, filter, switchMap, takeUntil } from 'rxjs';
 
 import Browser from 'webextension-polyfill';
@@ -9,10 +10,15 @@ import NetworkEnv from '../NetworkEnv';
 import {
 	getAllSerializedUIAccountSources,
 	accountSourcesHandleUIMessage,
+	getAccountSourceByID,
 } from '../account-sources';
+import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
+import { accountSourcesEvents } from '../account-sources/events';
 import { accountsHandleUIMessage, getAllSerializedUIAccounts } from '../accounts';
+import { type AccountType } from '../accounts/Account';
+import { accountsEvents } from '../accounts/events';
 import { getAutoLockMinutes, notifyUserActive, setAutoLockMinutes } from '../auto-lock-accounts';
-import { getDB, settingsKeys } from '../db';
+import { backupDB, getDB, settingsKeys } from '../db';
 import {
 	acceptQredoConnection,
 	getUIQredoInfo,
@@ -42,6 +48,7 @@ import {
 	isQredoConnectPayload,
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 
+import { toEntropy } from '_src/shared/utils/bip39';
 import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { LoadedFeaturesPayload } from '_payloads/feature-gating';
@@ -243,6 +250,48 @@ export class UiConnection extends Connection {
 				await notifyUserActive();
 				await this.send(createMessage({ type: 'done' }, msg.id));
 				return true;
+			} else if (isMethodPayload(payload, 'resetPassword')) {
+				const { password, recoveryData } = payload.args;
+				if (!recoveryData.length) {
+					throw new Error('Missing recovery data');
+				}
+				for (const { accountSourceID, entropy } of recoveryData) {
+					const accountSource = await getAccountSourceByID(accountSourceID);
+					if (!accountSource) {
+						throw new Error('Account source not found');
+					}
+					if (!(accountSource instanceof MnemonicAccountSource)) {
+						throw new Error('Invalid account source type');
+					}
+					await accountSource.verifyRecoveryData(entropy);
+				}
+				const db = await getDB();
+				const zkLoginType: AccountType = 'zk';
+				const accountSourceIDs = recoveryData.map(({ accountSourceID }) => accountSourceID);
+				await db.transaction('rw', db.accountSources, db.accounts, async () => {
+					await db.accountSources.where('id').noneOf(accountSourceIDs).delete();
+					await db.accounts
+						.where('type')
+						.notEqual(zkLoginType)
+						.filter(
+							(anAccount) =>
+								!('sourceID' in anAccount) ||
+								typeof anAccount.sourceID !== 'string' ||
+								!accountSourceIDs.includes(anAccount.sourceID),
+						)
+						.delete();
+					for (const { accountSourceID, entropy } of recoveryData) {
+						await db.accountSources.update(accountSourceID, {
+							encryptedData: await Dexie.waitFor(
+								MnemonicAccountSource.createEncryptedData(toEntropy(entropy), password),
+							),
+						});
+					}
+				});
+				await backupDB();
+				accountSourcesEvents.emit('accountSourcesChanged');
+				accountsEvents.emit('accountsChanged');
+				await this.send(createMessage({ type: 'done' }, msg.id));
 			} else {
 				throw new Error(
 					`Unhandled message ${msg.id}. (${JSON.stringify(

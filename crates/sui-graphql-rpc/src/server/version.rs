@@ -9,7 +9,7 @@ use axum::{
     TypedHeader,
 };
 
-use crate::error::{code, graphql_error};
+use crate::error::{code, graphql_error_response};
 
 const RPC_VERSION_FULL: &str = env!("CARGO_PKG_VERSION");
 const RPC_VERSION_YEAR: &str = env!("CARGO_PKG_VERSION_MAJOR");
@@ -58,7 +58,7 @@ pub(crate) async fn check_version_middleware<B>(
         if !rest.is_empty() {
             return (
                 StatusCode::BAD_REQUEST,
-                graphql_error(
+                graphql_error_response(
                     code::BAD_REQUEST,
                     format!("Failed to parse {VERSION_HEADER}: Multiple possible versions found."),
                 ),
@@ -69,7 +69,7 @@ pub(crate) async fn check_version_middleware<B>(
         let Ok(req_version) = std::str::from_utf8(&req_version) else {
             return (
                 StatusCode::BAD_REQUEST,
-                graphql_error(
+                graphql_error_response(
                     code::BAD_REQUEST,
                     format!("Failed to parse {VERSION_HEADER}: Not a UTF8 string."),
                 ),
@@ -79,7 +79,7 @@ pub(crate) async fn check_version_middleware<B>(
         let Some((year, month)) = parse_version(req_version) else {
             return (
                 StatusCode::BAD_REQUEST,
-                graphql_error(
+                graphql_error_response(
                     code::BAD_REQUEST,
                     format!(
                         "Failed to parse {VERSION_HEADER}: '{req_version}' not a valid \
@@ -92,7 +92,7 @@ pub(crate) async fn check_version_middleware<B>(
         if year != RPC_VERSION_YEAR || month != RPC_VERSION_MONTH {
             return (
                 StatusCode::MISDIRECTED_REQUEST,
-                graphql_error(
+                graphql_error_response(
                     code::INTERNAL_SERVER_ERROR,
                     format!("Version '{req_version}' not supported."),
                 ),

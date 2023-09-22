@@ -114,7 +114,7 @@ export function AddAccountPage() {
 						variant="outline"
 						size="tall"
 						text="Set up Ledger"
-						before={<LedgerLogo className="text-gray-90" width={16} height={16} />}
+						before={<LedgerLogo className="text-gray-90 w-4 h-4" />}
 						onClick={async () => {
 							ampli.openedConnectLedgerFlow({ sourceFlow });
 							if (isPopup) {

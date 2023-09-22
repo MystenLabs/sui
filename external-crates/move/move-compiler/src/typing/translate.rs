@@ -22,7 +22,7 @@ use crate::{
         *,
     },
     sui_mode,
-    typing::ast as T,
+    typing::{ast as T, dependency_ordering},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -43,10 +43,11 @@ pub fn program(
         modules: nmodules,
         scripts: nscripts,
     } = prog;
-    let modules = modules(&mut context, nmodules);
-    let scripts = scripts(&mut context, nscripts);
+    let mut modules = modules(&mut context, nmodules);
+    let mut scripts = scripts(&mut context, nscripts);
 
     assert!(context.constraints.is_empty());
+    dependency_ordering::program(context.env, &mut modules, &mut scripts);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
     let mut prog = T::Program { modules, scripts };
@@ -105,15 +106,16 @@ fn module(
 
     context.current_module = Some(ident);
     let N::ModuleDefinition {
+        loc,
         warning_filter,
         package_name,
         attributes,
         is_source_module,
-        dependency_order,
         friends,
         mut structs,
         functions: nfunctions,
         constants: nconstants,
+        spec_dependencies,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
     structs
@@ -125,15 +127,19 @@ fn module(
     assert!(context.constraints.is_empty());
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
+        loc,
         warning_filter,
         package_name,
         attributes,
         is_source_module,
-        dependency_order,
+        dependency_order: 0,
+        immediate_neighbors: UniqueMap::new(),
+        used_addresses: BTreeSet::new(),
         friends,
         structs,
         constants,
         functions,
+        spec_dependencies,
     };
     // get the list of new friends and reset the list.
     let new_friends = std::mem::take(&mut context.new_friends);
@@ -161,6 +167,7 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         constants: nconstants,
         function_name,
         function: nfunction,
+        spec_dependencies,
     } = nscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.bind_script_constants(&nconstants);
@@ -173,9 +180,12 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         package_name,
         attributes,
         loc,
+        immediate_neighbors: UniqueMap::new(),
+        used_addresses: BTreeSet::new(),
         constants,
         function_name,
         function,
+        spec_dependencies,
     }
 }
 

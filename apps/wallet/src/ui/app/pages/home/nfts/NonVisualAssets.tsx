@@ -11,7 +11,7 @@ export default function NonVisualAssets({ items }: { items: SuiObjectData[] }) {
 	return (
 		<div className="flex flex-col items-center gap-4 w-full flex-1">
 			{items?.length ? (
-				<div className="flex flex-col flex-wrap w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-3 mb-5">
+				<div className="flex flex-col flex-wrap w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-3">
 					{items.map((item) => {
 						const { address, module, name } = parseStructTag(item.type!);
 						return (

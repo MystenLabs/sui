@@ -82,10 +82,15 @@ export class MnemonicAccount
 		await this.onLocked(allowRead);
 	}
 
-	async passwordUnlock(password: string): Promise<void> {
-		const { derivationPath } = await this.getStoredData();
+	async passwordUnlock(password?: string): Promise<void> {
 		const mnemonicSource = await this.#getMnemonicSource();
-		await mnemonicSource.unlock(password);
+		if ((await mnemonicSource.isLocked()) && !password) {
+			throw new Error('Missing password to unlock the account');
+		}
+		const { derivationPath } = await this.getStoredData();
+		if (password) {
+			await mnemonicSource.unlock(password);
+		}
 		await this.setEphemeralValue({
 			keyPair: (await mnemonicSource.deriveKeyPair(derivationPath)).export(),
 		});

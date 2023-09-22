@@ -13,12 +13,9 @@ import { accountSourcesEvents } from './account-sources/events';
 import { getAccountsStatusData, getAllAccounts, lockAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
 import { Connections } from './connections';
-import Keyring from './keyring';
 import * as Qredo from './qredo';
 import { initSentry } from './sentry';
-import { isSessionStorageSupported } from './storage-utils';
 import { openInNewTab } from '_shared/utils';
-import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
 import { growthbook, setAttributes } from '_src/shared/experimentation/features';
 
 growthbook.loadFeatures().catch(() => {
@@ -113,22 +110,6 @@ Browser.alarms.onAlarm.addListener((alarm) => {
 	}
 });
 
-if (!isSessionStorageSupported()) {
-	Keyring.on('lockedStatusUpdate', async (isLocked) => {
-		if (!isLocked) {
-			const allTabs = await Browser.tabs.query({});
-			for (const aTab of allTabs) {
-				if (aTab.id) {
-					try {
-						await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
-					} catch (e) {
-						// not all tabs have the cs installed
-					}
-				}
-			}
-		}
-	});
-}
 NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
 	setAttributes({
 		apiEnv: env,

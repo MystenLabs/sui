@@ -13,6 +13,7 @@ import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { ReceiptCard } from '_src/ui/app/components/receipt-card';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 
 function ReceiptPage() {
 	const location = useLocation();
@@ -63,12 +64,14 @@ function ReceiptPage() {
 		return 'Transaction Failed';
 	}, [/*activeAddress,*/ data]);
 
+	const isGuardLoading = useUnlockedGuard();
+
 	if (!transactionId || !activeAddress) {
 		return <Navigate to="/transactions" replace={true} />;
 	}
 
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isLoading || isGuardLoading}>
 			<Overlay
 				showModal={showModal}
 				setShowModal={setShowModal}

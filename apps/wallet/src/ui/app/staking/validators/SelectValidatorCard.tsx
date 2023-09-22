@@ -111,7 +111,7 @@ export function SelectValidatorCard() {
 	}
 
 	return (
-		<div className="flex flex-col w-full -my-5">
+		<div className="flex flex-col w-full h-full -my-5">
 			<Content className="flex flex-col w-full items-center">
 				<div className="flex flex-col w-full items-center -top-5 bg-white sticky pt-5 pb-2.5 z-50 mt-0">
 					<div className="flex items-start w-full mb-2">

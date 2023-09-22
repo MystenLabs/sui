@@ -16,12 +16,19 @@ import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseSignPersonalMessageArgs = PartialBy<SuiSignPersonalMessageInput, 'account'>;
+
 type UseSignPersonalMessageResult = SuiSignPersonalMessageOutput;
+
+type UseSignPersonalMessageError =
+	| WalletFeatureNotSupportedError
+	| WalletNoAccountSelectedError
+	| WalletNotConnectedError
+	| Error;
 
 type UseSignPersonalMessageMutationOptions = Omit<
 	UseMutationOptions<
 		UseSignPersonalMessageResult,
-		WalletFeatureNotSupportedError | WalletNoAccountSelectedError | WalletNotConnectedError | Error,
+		UseSignPersonalMessageError,
 		UseSignPersonalMessageArgs,
 		unknown
 	>,

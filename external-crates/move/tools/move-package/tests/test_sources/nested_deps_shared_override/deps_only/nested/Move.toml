@@ -1,0 +1,7 @@
+[package]
+name = "Nested"
+version = "0.0.0"
+
+[dependencies]
+Shared = { local = "../shared", override = true }
+More = { local = "../more" }

@@ -2,13 +2,13 @@ CREATE TABLE epochs
 (
     epoch                           BIGINT      PRIMARY KEY,
     validators                      bytea[]     NOT NULL,
-    epoch_total_transactions        BIGINT      NOT NULL,
     first_checkpoint_id             BIGINT      NOT NULL,
     epoch_start_timestamp           BIGINT      NOT NULL,
     reference_gas_price             BIGINT      NOT NULL,
     protocol_version                BIGINT      NOT NULL,
     -- The following fields are nullable because they are filled in
     -- only at the end of an epoch.
+    epoch_total_transactions        BIGINT,
     last_checkpoint_id              BIGINT,
     epoch_end_timestamp             BIGINT,
     -- The following fields are from SystemEpochInfoEvent emitted

@@ -14,7 +14,6 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
@@ -148,12 +147,12 @@ impl GetModule for InMemoryStorage {
 }
 
 impl InMemoryStorage {
-    pub fn new(objects: Vec<Object>) -> Arc<Self> {
+    pub fn new(objects: Vec<Object>) -> Self {
         let mut persistent = BTreeMap::new();
         for o in objects {
             persistent.insert(o.id(), o);
         }
-        Arc::new(Self { persistent })
+        Self { persistent }
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {

@@ -24,6 +24,7 @@ import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useQredoTransaction } from '_src/ui/app/hooks/useQredoTransaction';
 import { useSigner } from '_src/ui/app/hooks/useSigner';
 
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import type { SubmitProps } from './SendTokenForm';
 
 function TransferCoinPage() {
@@ -107,6 +108,10 @@ function TransferCoinPage() {
 		},
 	});
 
+	if (useUnlockedGuard()) {
+		return null;
+	}
+
 	if (!coinType) {
 		return <Navigate to="/" replace={true} />;
 	}
@@ -117,7 +122,7 @@ function TransferCoinPage() {
 			title={showTransactionPreview ? 'Review & Send' : 'Send Coins'}
 			closeOverlay={() => navigate('/')}
 		>
-			<div className="flex flex-col w-full mt-2.5">
+			<div className="flex flex-col w-full h-full">
 				{showTransactionPreview && formData ? (
 					<BottomMenuLayout>
 						<Content>

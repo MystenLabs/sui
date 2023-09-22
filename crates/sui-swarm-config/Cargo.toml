@@ -18,6 +18,7 @@ tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 
+move-bytecode-utils.workspace = true
 narwhal-config.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true

@@ -20,6 +20,7 @@ type OverlayProps = {
 	closeOverlay?: () => void;
 	closeIcon?: ReactNode | null;
 	setShowModal?: (showModal: boolean) => void;
+	background?: 'bg-sui-lightest';
 };
 
 function Overlay({
@@ -29,6 +30,7 @@ function Overlay({
 	closeOverlay,
 	setShowModal,
 	closeIcon = <X32 fill="currentColor" className="text-sui-light w-8 h-8" />,
+	background,
 }: OverlayProps) {
 	const closeModal = useCallback(
 		(e: React.MouseEvent<HTMLElement>) => {
@@ -58,7 +60,7 @@ function Overlay({
 					</div>
 				)}
 				<div
-					className={st.content}
+					className={cl(st.content, background)}
 					style={{
 						height: title ? 'calc(100% - 128px)' : 'calc(100% - 80px)',
 					}}
