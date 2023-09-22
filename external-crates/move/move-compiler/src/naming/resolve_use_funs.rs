@@ -179,7 +179,12 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
 }
 
 fn is_valid_public_method(context: &mut Context, m: ModuleIdent, f: Name) -> Option<N::TypeName> {
-    let (_, first_ty) = first_arg_type(context, m, FunctionName(f));
+    let f = FunctionName(f);
+    // possible the function was removed, e.g. a spec function
+    if !context.info.module(&m).functions.contains_key(&f) {
+        return None;
+    }
+    let (_, first_ty) = first_arg_type(context, m, f);
     let first_ty = first_ty?;
     let tn = first_ty.value.type_name()?;
     let defining_module = match &tn.value {

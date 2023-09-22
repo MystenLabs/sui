@@ -1214,7 +1214,11 @@ fn use_(
                 };
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member) {
                     duplicate_module_member(context, old_loc, alias)
-                } else if matches!(member_kind, ModuleMemberKind::Function) {
+                }
+                if matches!(member_kind, ModuleMemberKind::Function) {
+                    // remove any previously declared alias to keep in sync with the member alias
+                    // map
+                    use_funs.implicit.remove(&alias);
                     // not a function declaration
                     let is_public = None;
                     // assume used. We will set it to false if needed when exiting this alias scope
@@ -1226,7 +1230,7 @@ fn use_(
                         function: (mident, member),
                         kind,
                     };
-                    use_funs.implicit.add(member, implicit).unwrap();
+                    use_funs.implicit.add(alias, implicit).unwrap();
                 }
             }
         }
