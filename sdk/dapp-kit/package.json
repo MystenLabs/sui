@@ -22,11 +22,15 @@
 			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
+		},
+		"./dist/index.css": {
+			"import": "./dist/esm/index.css",
+			"require": "./dist/cjs/index.css"
 		}
 	},
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
-		"build": "build-package",
+		"build": "build-dapp-kit",
 		"test": "pnpm test:typecheck && pnpm vitest",
 		"test:typecheck": "tsc -p ./test",
 		"prepublishOnly": "pnpm build",
@@ -65,6 +69,8 @@
 		"@testing-library/user-event": "^14.4.3",
 		"@types/react": "^18.2.15",
 		"@types/testing-library__jest-dom": "^5.14.9",
+		"@vanilla-extract/esbuild-plugin": "^2.3.0",
+		"@vanilla-extract/vite-plugin": "^3.9.0",
 		"happy-dom": "^10.5.1",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
@@ -77,6 +83,7 @@
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
+		"@vanilla-extract/css": "^1.13.0",
 		"zustand": "^4.4.1"
 	},
 	"peerDependencies": {

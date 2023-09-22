@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export * from './hooks/useSuiClient.js';
+export * from './components/ConnectButton.js';
 export * from './components/SuiClientProvider.js';
 export * from './components/WalletProvider.js';
 export * from './hooks/useRpcApiVersion.js';
