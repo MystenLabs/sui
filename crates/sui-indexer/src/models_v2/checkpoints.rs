@@ -18,7 +18,6 @@ pub struct StoredCheckpoint {
     pub sequence_number: i64,
     pub checkpoint_digest: Vec<u8>,
     pub epoch: i64,
-    pub tx_digests: Vec<Option<Vec<u8>>>,
     pub network_total_transactions: i64,
     pub previous_checkpoint_digest: Option<Vec<u8>>,
     pub tx_digests: Vec<Option<Vec<u8>>>,

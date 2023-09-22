@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::{
-    context_ext::DataProviderContextExt, db_data_provider::PgTransaction,
-    sui_sdk_data_provider::convert_to_epoch,
+    context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch,
 };
 
 use super::{
@@ -36,21 +35,6 @@ pub(crate) struct TransactionBlockV2 {
     pub digest: String,
     pub tx_sequence_number: i64,
     pub checkpoint_sequence_number: i64,
-}
-
-impl From<PgTransaction> for TransactionBlockV2 {
-    fn from(tx: PgTransaction) -> Self {
-        let arr: [u8; 32] = tx
-            .transaction_digest
-            .try_into()
-            .expect("Transaction digest size must be exactly 32");
-
-        Self {
-            digest: Digest::from_array(arr).to_string(),
-            tx_sequence_number: tx.tx_sequence_number,
-            checkpoint_sequence_number: tx.checkpoint_sequence_number,
-        }
-    }
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {

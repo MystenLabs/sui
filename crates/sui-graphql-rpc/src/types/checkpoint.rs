@@ -20,3 +20,11 @@ pub(crate) struct Checkpoint {
     // transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
     // address_metrics: AddressMetrics,
 }
+
+// Filter either by digest or sequence number
+// Or provide neither to get the latest checkpoint
+#[derive(InputObject)]
+pub(crate) struct CheckpointId {
+    pub digest: Option<String>,
+    pub sequence_number: Option<u64>,
+}
