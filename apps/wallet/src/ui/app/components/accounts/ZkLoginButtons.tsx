@@ -8,11 +8,13 @@ import { SocialButton } from '../../shared/SocialButton';
 import { zkProviderDataMap, type ZkProvider } from '_src/background/accounts/zk/providers';
 import { ampli, type ClickedSocialSignInButtonProperties } from '_src/shared/analytics/ampli';
 
-const zkLoginProviders = Object.entries(zkProviderDataMap).map(([provider, { enabled }]) => ({
-	provider: provider as ZkProvider,
-	enabled,
-	tooltip: !enabled ? 'Coming soon!' : undefined,
-}));
+const zkLoginProviders = Object.entries(zkProviderDataMap)
+	.filter(([_, { hidden }]) => !hidden)
+	.map(([provider, { enabled }]) => ({
+		provider: provider as ZkProvider,
+		enabled,
+		tooltip: !enabled ? 'Coming soon!' : undefined,
+	}));
 
 const providerToAmpli: Record<ZkProvider, ClickedSocialSignInButtonProperties['signInProvider']> = {
 	google: 'Google',
