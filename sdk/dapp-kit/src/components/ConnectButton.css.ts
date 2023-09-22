@@ -8,7 +8,7 @@ export const testStyle = style({
 });
 
 export const modalOverlay = style({
-	backgroundColor: 'black',
+	backgroundColor: 'rgba(24 36 53 / 20%)',
 	position: 'fixed',
 	inset: 0,
 	zIndex: 999999999,
