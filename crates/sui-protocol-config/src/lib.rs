@@ -1558,6 +1558,9 @@ impl ProtocolConfig {
     pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
         self.feature_flags.zklogin_supported_providers = list
     }
+    pub fn set_receive_object_for_testing(&mut self, val: bool) {
+        self.feature_flags.receive_objects = val
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
