@@ -143,12 +143,8 @@ impl ConsensusStore {
 mod test {
     use crate::ConsensusStore;
     use std::collections::HashMap;
-    use store::Map;
     use test_utils::CommitteeFixture;
-    use types::{
-        Certificate, CommittedSubDag, CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2,
-        ReputationScores, TimestampMs,
-    };
+    use types::{Certificate, CommittedSubDag, ReputationScores};
 
     #[tokio::test]
     async fn test_read_latest_final_reputation_scores() {
