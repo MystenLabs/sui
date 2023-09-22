@@ -11,10 +11,16 @@ pub(crate) use transaction_builder_api::TransactionBuilderApi;
 pub(crate) use write_api::WriteApi;
 
 mod coin_api;
+mod coin_api_v2;
 mod extended_api;
 mod governance_api;
+mod governance_api_v2;
 mod indexer_api;
+mod indexer_api_v2;
 mod move_utils;
 mod read_api;
+mod read_api_v2;
 mod transaction_builder_api;
+mod transaction_builder_api_v2;
 mod write_api;
+mod write_api_v2;
