@@ -23,9 +23,10 @@ pub(crate) struct CheckpointEntry {
     pub(crate) end_of_epoch: bool,
     // gas stats
     pub(crate) total_gas_cost: i64,
-    pub(crate) total_computation_cost: u64,
-    pub(crate) total_storage_cost: u64,
-    pub(crate) total_storage_rebate: u64,
+    pub(crate) computation_cost: u64,
+    pub(crate) storage_cost: u64,
+    pub(crate) storage_rebate: u64,
+    pub(crate) non_refundable_storage_fee: u64,
     // transaction stats
     pub(crate) total_transaction_blocks: u64,
     pub(crate) total_transactions: u64,
@@ -178,7 +179,7 @@ pub(crate) struct TransactionObjectEntry {
     pub(crate) object_status: Option<ObjectStatus>,
 }
 
-// A move call expressed as a package, module and function.
+// A Move call expressed as a package, module and function.
 #[derive(Serialize)]
 pub(crate) struct MoveCallEntry {
     // indexes
@@ -190,4 +191,18 @@ pub(crate) struct MoveCallEntry {
     pub(crate) package: String,
     pub(crate) module: String,
     pub(crate) function: String,
+}
+
+// A Move package. Pacakge id and MovePackage object bytes
+#[derive(Serialize)]
+pub(crate) struct MovePackageEntry {
+    pub(crate) object_id: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // raw package bytes
+    // pub(crate) bcs: Vec<u8>,
+    // We represent them in base64 encoding so they work with the csv.
+    // TODO: review and possibly move back to Vec<u8>
+    pub(crate) bcs: String,
 }
