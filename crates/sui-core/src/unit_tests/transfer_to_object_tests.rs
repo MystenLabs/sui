@@ -333,6 +333,64 @@ async fn test_tto_transfer() {
     }
 }
 
+#[tokio::test]
+async fn test_tto_intersection_input_and_receiving_objects() {
+    transfer_test_runner! { |mut runner: TestRunner| async move {
+        let TransactionEffects::V1(effects) = runner
+            .run({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                move_call! {
+                    builder,
+                    (runner.package.0)::M1::start()
+                };
+                builder.finish()
+            })
+            .await;
+
+        let (parent, child) = get_parent_and_child(effects.created());
+        let parent_receiving_arg = CallArg::Object(ObjectArg::Receiving(parent.0));
+        let child_receiving_arg = CallArg::Object(ObjectArg::Receiving(child.0));
+
+        // Duplicate object reference between receiving and input object arguments.
+        let SuiError::UserInputError { error } = runner
+            .signing_error({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                move_call! {
+                    builder,
+                    (runner.package.0)::M1::receiver(parent, child)
+                };
+                let mut built = builder.finish();
+                built.inputs.push(parent_receiving_arg);
+                built
+            })
+            .await else {
+                panic!("expected signing error");
+            };
+        assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
+
+        // Duplicate object reference in receiving object arguments.
+        let SuiError::UserInputError { error } = runner
+            .signing_error({
+                let mut builder = ProgrammableTransactionBuilder::new();
+                let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
+                let child = builder.obj(ObjectArg::Receiving(child.0)).unwrap();
+                move_call! {
+                    builder,
+                    (runner.package.0)::M1::receiver(parent, child)
+                };
+                let mut built = builder.finish();
+                built.inputs.push(child_receiving_arg);
+                built
+            })
+            .await else {
+                panic!("expected signing error");
+            };
+        assert!(matches!(error, UserInputError::DuplicateObjectRefInput));
+    }
+    }
+}
 
 #[tokio::test]
 async fn test_tto_invalid_receiving_arguments() {
