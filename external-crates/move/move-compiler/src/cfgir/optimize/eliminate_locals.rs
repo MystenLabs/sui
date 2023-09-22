@@ -157,7 +157,7 @@ mod count {
 
             E::ModuleCall(mcall) => {
                 for arg in &mcall.arguments {
-                    exp(context, &arg);
+                    exp(context, arg);
                 }
             }
             E::Builtin(_, args) | E::Vector(_, _, _, args) => {
@@ -218,7 +218,7 @@ mod count {
             }
             E::Multiple(es) => es.iter().all(can_subst_exp_single),
             E::Pack(_, _, fields) => fields.iter().all(|(_, _, e)| can_subst_exp_single(e)),
-            E::Vector(_, _, _, eargs) => eargs.iter().all(|e| can_subst_exp_single(e)),
+            E::Vector(_, _, _, eargs) => eargs.iter().all(can_subst_exp_single),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
         }

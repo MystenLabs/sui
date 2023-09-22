@@ -1588,7 +1588,7 @@ fn bind_exp_impl_(
         .into_iter()
         .map(|(var, st)| {
             let evar_ = sp(var.loc(), use_tmp(var));
-            let ty = sp(st.loc, H::Type_::Single(st.clone()));
+            let ty = sp(st.loc, H::Type_::Single(st));
             H::exp(ty, evar_)
         })
         .collect::<Vec<_>>();
