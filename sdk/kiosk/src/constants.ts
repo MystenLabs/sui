@@ -43,13 +43,13 @@ export const KIOSK_LOCK_RULE_ADDRESS: Record<Network, string> = {
 
 export const FLOOR_PRICE_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
-	[Network.MAINNET]: '',
+	[Network.MAINNET]: '0x34cc6762780f4f6f153c924c0680cfe2a1fb4601e7d33cc28a92297b62de1e0e',
 	[Network.CUSTOM]: '',
 };
 
 export const PERSONAL_KIOSK_RULE_ADDRESS: Record<Network, string> = {
 	[Network.TESTNET]: '0x06f6bdd3f2e2e759d8a4b9c252f379f7a05e72dfe4c0b9311cdac27b8eb791b1',
-	[Network.MAINNET]: '',
+	[Network.MAINNET]: '0x0cb4bcc0560340eb1a1b929cabe56b33fc6449820ec8c1980d69bb98b649b802',
 	[Network.CUSTOM]: '',
 };
 

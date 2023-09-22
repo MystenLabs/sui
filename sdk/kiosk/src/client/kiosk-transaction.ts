@@ -265,7 +265,6 @@ export class KioskTransaction {
 	/**
 	 * Transfer a non-locked/non-listed item to an address.
 	 *
-
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 * @param address The destination address
@@ -288,6 +287,28 @@ export class KioskTransaction {
 		this.#validateKioskIsSet();
 		kioskTx.lock(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, policy, itemId);
 		return this;
+	}
+
+	/**
+	 * Purchase an item from a seller's kiosk.
+	 * Returns [item, transferRequest]
+	 * Can be called like: `const [item, transferRequest] = kioskTx.purchase({...})`
+	 * @param itemType The type `T` of the item
+	 * @param itemId The ID of the item
+	 * @param price The price in MIST
+	 * @param sellerKiosk The kiosk which is selling the item. Can be an id or an object argument.
+	 */
+	purchase({
+		itemType,
+		itemId,
+		price,
+		sellerKiosk,
+	}: ItemId & Price & { sellerKiosk: ObjectArgument }): [TransactionArgument, TransactionArgument] {
+		// Split the coin for the amount of the listing.
+		const coin = this.transactionBlock.splitCoins(this.transactionBlock.gas, [
+			this.transactionBlock.pure(price, 'u64'),
+		]);
+		return kioskTx.purchase(this.transactionBlock, itemType, sellerKiosk, itemId, coin);
 	}
 
 	/**
@@ -319,19 +340,13 @@ export class KioskTransaction {
 
 		const policy = policies[0]; // we now pick the first one. We need to add an option to define which one.
 
-		// Split the coin for the amount of the listing.
-		const coin = this.transactionBlock.splitCoins(this.transactionBlock.gas, [
-			this.transactionBlock.pure(price, 'u64'),
-		]);
-
 		// initialize the purchase `kiosk::purchase`
-		const [purchasedItem, transferRequest] = kioskTx.purchase(
-			this.transactionBlock,
+		const [purchasedItem, transferRequest] = this.purchase({
 			itemType,
-			sellerKiosk,
 			itemId,
-			coin,
-		);
+			price,
+			sellerKiosk,
+		});
 
 		let canTransferOutsideKiosk = true;
 
