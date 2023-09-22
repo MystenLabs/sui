@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { requestSuiFromFaucetV1 } from '@mysten/sui.js/faucet';
 import { useIsMutating, useMutation, type UseMutationOptions } from '@tanstack/react-query';
 
 import { useActiveAccount } from '../../hooks/useActiveAccount';
@@ -26,7 +26,8 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				throw new Error('Failed, faucet host not found.');
 			}
 
-			const { error, transferredGasObjects } = await requestSuiFromFaucetV0({
+			// based on requestSuiFromFaucetV1 response type, we no longer get the amount transferred
+			const { error } = await requestSuiFromFaucetV1({
 				recipient: addressToTopUp,
 				host: options.host,
 			});
@@ -34,7 +35,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			if (error) {
 				throw new Error(error);
 			}
-			return transferredGasObjects.reduce((total, { amount }) => total + amount, 0);
+			return null;
 		},
 		...options,
 	});
