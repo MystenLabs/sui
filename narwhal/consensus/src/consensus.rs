@@ -220,24 +220,16 @@ impl LeaderSchedule {
         store: Arc<ConsensusStore>,
         protocol_config: ProtocolConfig,
     ) -> Self {
-        // Only try to restore when the new leader election schedule is enabled, otherwise fallback to
-        // default swap table, which basically means there will be no swaps.
-        let table = if protocol_config.narwhal_new_leader_election_schedule() {
-            store
-                .read_latest_commit_with_final_reputation_scores()
-                .map_or(LeaderSwapTable::default(), |commit| {
-                    LeaderSwapTable::new(
-                        &committee,
-                        commit.leader_round(),
-                        &commit.reputation_score(),
-                        protocol_config.consensus_bad_nodes_stake_threshold(),
-                    )
-                })
-        } else {
-            LeaderSwapTable::default()
-        };
-
-        // create the schedule
+        let table = store
+            .read_latest_commit_with_final_reputation_scores()
+            .map_or(LeaderSwapTable::default(), |commit| {
+                LeaderSwapTable::new(
+                    &committee,
+                    commit.leader_round(),
+                    &commit.reputation_score(),
+                    protocol_config.consensus_bad_nodes_stake_threshold(),
+                )
+            });
         Self::new(committee, table)
     }
 

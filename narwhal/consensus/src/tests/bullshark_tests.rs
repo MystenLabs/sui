@@ -89,22 +89,9 @@ async fn commit_one_with_leader_schedule_change() {
 
     let test_cases: Vec<TestCase> = vec![
         TestCase {
-            description: "When no schedule change is enabled, then all leaders commit in round robin fashion".to_string(),
-            protocol_config: latest_protocol_version(),
-            rounds: 11,
-            expected_leaders: VecDeque::from(vec![
-                AuthorityIdentifier(0),
-                AuthorityIdentifier(1),
-                AuthorityIdentifier(2),
-                AuthorityIdentifier(3),
-                AuthorityIdentifier(0),
-            ]),
-        },
-        TestCase {
             description: "When schedule change is enabled, then authority 0 is bad node and swapped with authority 3".to_string(),
             protocol_config: {
                 let mut config: ProtocolConfig = latest_protocol_version();
-                config.set_narwhal_new_leader_election_schedule(true);
                 config.set_consensus_bad_nodes_stake_threshold(33);
                 config
             },
@@ -250,7 +237,6 @@ async fn not_enough_support_with_leader_schedule_change() {
     certificates.extend(out);
 
     let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_narwhal_new_leader_election_schedule(true);
     config.set_consensus_bad_nodes_stake_threshold(33);
 
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
