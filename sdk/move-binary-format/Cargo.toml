@@ -1,5 +1,5 @@
 [package]
-name = "move-binary-format"
+name = "move-binary-format-wasm"
 description = "WASM versions of the move-binary-format"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
