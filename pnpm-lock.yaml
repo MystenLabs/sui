@@ -1304,7 +1304,7 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format:
+  sdk/move-binary-format-wasm:
     devDependencies:
       tsup:
         specifier: ^7.1.0
@@ -1315,6 +1315,8 @@ importers:
       vitest:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
+
+  sdk/move-binary-format-wasm/pkg: {}
 
   sdk/suins-toolkit:
     dependencies:
