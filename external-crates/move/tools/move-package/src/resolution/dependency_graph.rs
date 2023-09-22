@@ -270,7 +270,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .add_node(combined_graph.root_package);
 
         // get overrides
-        let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
+        let mut overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
         for (
@@ -297,10 +297,9 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         all_deps.extend(root_manifest.dev_dependencies.clone());
 
         // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
-        let mut all_overrides = overrides.clone();
-        all_overrides.extend(dev_overrides.clone());
+        overrides.extend(dev_overrides);
 
-        combined_graph.merge(dep_graphs, parent, &all_deps, &all_overrides)?;
+        combined_graph.merge(dep_graphs, parent, &all_deps, &overrides)?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
