@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { useWallets } from '../hooks/wallet/useWallets.js';
+import { useWallets } from '../../../hooks/wallet/useWallets.js';
 import { WalletListItem } from './WalletListItem.js';
 import * as styles from './WalletList.css.js';
+import SuiIcon from '../../../assets/icons/SuiIcon.svg';
 
 type WalletListProps = {
 	selectedWalletName?: string;
@@ -27,7 +28,7 @@ export function WalletList({ selectedWalletName, onPlaceholderClick, onSelect }:
 					/>
 				))
 			) : (
-				<WalletListItem name="Sui Wallet" iconSrc="" onClick={onPlaceholderClick} />
+				<WalletListItem name="Sui Wallet" iconSrc={SuiIcon} onClick={onPlaceholderClick} />
 			)}
 		</ul>
 	);

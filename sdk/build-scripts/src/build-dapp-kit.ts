@@ -19,6 +19,9 @@ buildPackage({
 			},
 		}),
 	],
+	loader: {
+		'.svg': 'dataurl',
+	},
 	packages: 'external',
 	bundle: true,
 }).catch((error) => {

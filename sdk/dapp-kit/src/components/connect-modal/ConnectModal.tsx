@@ -4,15 +4,15 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { WalletList } from './WalletList.js';
-import { useConnectWallet } from '../hooks/wallet/useConnectWallet.js';
-import * as styles from './ConnectButton.css.js';
-import { WhatIsAWallet } from './connect-modal/WhatIsAWallet.js';
-import { GettingStarted } from './connect-modal/GettingStarted.js';
-import { assertUnreachable } from '../utils/assertUnreachable.js';
-import { ConnectionStatus } from './connect-modal/ConnectionStatus.js';
+import { WalletList } from './wallet-list/WalletList.js';
+import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
+import * as styles from './ConnectModal.css.js';
+import { WhatIsAWallet } from './views/WhatIsAWallet.js';
+import { GettingStarted } from './views/GettingStarted.js';
+import { assertUnreachable } from '../../utils/assertUnreachable.js';
+import { ConnectionStatus } from './views/ConnectionStatus.js';
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { CloseIcon } from './icons/CloseIcon.js';
+import CloseIcon from '../../assets/icons/CloseIcon.svg';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
@@ -28,12 +28,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 
 	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
 		setSelectedView('connection-status');
-		mutate(
-			{ wallet },
-			{
-				onSuccess: () => setConnectModalOpen(false),
-			},
-		);
+		mutate({ wallet }, { onSuccess: () => setConnectModalOpen(false) });
 	};
 
 	const onOpenChange = (open: boolean) => {
@@ -67,15 +62,15 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 
 	return (
 		<Dialog.Root open={isConnectModalOpen} onOpenChange={onOpenChange}>
-			<Dialog.Trigger>{triggerButton}</Dialog.Trigger>
+			<Dialog.Trigger className={styles.triggerButton}>{triggerButton}</Dialog.Trigger>
 			<Dialog.Portal>
-				<Dialog.Overlay className={styles.modalOverlay} />
-				<Dialog.Content className={styles.modalContent} aria-describedby={undefined}>
+				<Dialog.Overlay className={styles.overlay} />
+				<Dialog.Content className={styles.content} aria-describedby={undefined}>
 					<div className={styles.walletListContainer}>
 						<Dialog.Title>Connect a Wallet</Dialog.Title>
 						<WalletList
-							onPlaceholderClick={() => setSelectedView('getting-started')}
 							selectedWalletName={selectedWallet?.name}
+							onPlaceholderClick={() => setSelectedView('getting-started')}
 							onSelect={(wallet) => {
 								setSelectedWallet(wallet);
 								connectWallet(wallet);
@@ -83,8 +78,8 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 						/>
 					</div>
 					{modalContent}
-					<Dialog.Close aria-label="Close">
-						<CloseIcon />
+					<Dialog.Close className={styles.closeButton} aria-label="Close">
+						<img src={CloseIcon} alt="" />
 					</Dialog.Close>
 				</Dialog.Content>
 			</Dialog.Portal>

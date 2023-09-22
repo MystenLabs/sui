@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react';
 import { useCurrentWallet } from '../hooks/wallet/useCurrentWallet.js';
 import { AccountDropdownMenu } from './AccountDropdownMenu.js';
-import { ConnectModal } from './ConnectModal.js';
+import { ConnectModal } from './connect-modal/ConnectModal.js';
 
 type ConnectButtonProps = {
 	connectText?: ReactNode;
