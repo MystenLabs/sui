@@ -2139,52 +2139,58 @@ fn method_call(
     loc: Loc,
     mut edotted: ExpDotted,
     edotted_ty: Type,
-    f: Name,
+    method: Name,
     ty_args_opt: Option<Vec<Type>>,
     argloc: Loc,
     mut args: Vec<T::Exp>,
 ) -> Option<(Type, T::UnannotatedExp_)> {
     use TypeName_ as TN;
-    use Type_::*;
+    use Type_ as Ty;
     use T::UnannotatedExp_ as TE;
-    let m = match core::unfold_type(&context.subst, edotted_ty.clone()) {
-        sp!(_, Apply(_, sp!(_, TN::ModuleType(m, _)), _)) => m,
-        sp!(_, Apply(_, sp!(_, TN::Builtin(sp!(_, b_))), _))
-            if context.env.primitive_definer(b_).is_some() =>
-        {
-            context.env.primitive_definer(b_).unwrap().clone()
-        }
-        sp!(tloc, t) => {
+    let edotted_ty_unfolded = core::unfold_type(&context.subst, edotted_ty.clone());
+    let edotted_bty = edotted_ty_base(&edotted_ty_unfolded);
+    let tn = match &edotted_bty.value {
+        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => tn,
+        t => {
             let msg = match t {
-                Var(_) | Anything => {
+                Ty::Anything => {
                     "Unable to infer type for method style call. Try annotating this type"
                         .to_owned()
                 }
-                UnresolvedError => {
-                    assert!(context.env.has_errors());
-                    return None;
-                }
-                _ => {
+                Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) => {
                     let tsubst = core::error_format_(&t, &context.subst);
                     format!(
-                        "Method style syntax is only supported on structs. \
+                        "Method style syntax is only supported on single types. \
                           Got an expression of type: {tsubst}",
                     )
                 }
+                Ty::Param(_) => {
+                    let tsubst = core::error_format_(&t, &context.subst);
+                    format!(
+                        "Method style syntax is not supported on type parameters. \
+                      Got an expression of type: {tsubst}",
+                    )
+                }
+                Ty::UnresolvedError => {
+                    assert!(context.env.has_errors());
+                    return None;
+                }
+                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                Ty::Apply(_, _, _) => unreachable!(),
             };
             context.env.add_diag(diag!(
                 TypeSafety::InvalidMethodCall,
                 (loc, "Invalid method style syntax usage"),
-                (tloc, msg),
+                (edotted_ty.loc, msg),
             ));
             return None;
         }
     };
-    let (_defined_loc, targs, parameters, acquires, ret_ty) =
-        core::make_method_call_type(context, loc, &edotted_ty, &m, f, ty_args_opt)?;
+    let (_defined_loc, m, f, targs, parameters, acquires, ret_ty) =
+        core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
 
     let first_arg = match &parameters[0].1.value {
-        Ref(mut_, _) => {
+        Ty::Ref(mut_, _) => {
             // add a borrow if needed
             let mut cur = &mut edotted;
             loop {
@@ -2192,7 +2198,7 @@ fn method_call(
                     sp!(loc, ExpDotted_::Exp(e)) => {
                         let e_ty = e.ty.clone();
                         match core::unfold_type(&context.subst, e_ty.clone()).value {
-                            Ref(_, _) => (),
+                            Ty::Ref(_, _) => (),
                             _ => *cur = sp(*loc, ExpDotted_::TmpBorrow(e.clone(), Box::new(e_ty))),
                         };
                         break;
@@ -2207,17 +2213,21 @@ fn method_call(
     };
     args.insert(0, first_arg);
     let call = module_call_impl(
-        context,
-        loc,
-        m,
-        FunctionName(f),
-        targs,
-        parameters,
-        acquires,
-        argloc,
-        args,
+        context, loc, m, f, targs, parameters, acquires, argloc, args,
     );
     Some((ret_ty, TE::ModuleCall(Box::new(call))))
+}
+
+fn edotted_ty_base(ty: &Type) -> &Type {
+    match &ty.value {
+        Type_::Unit
+        | Type_::Param(_)
+        | Type_::Anything
+        | Type_::UnresolvedError
+        | Type_::Apply(_, _, _) => ty,
+        Type_::Ref(_, inner) => inner,
+        Type_::Var(_) => panic!("ICE unfolding failed"),
+    }
 }
 
 fn module_call(

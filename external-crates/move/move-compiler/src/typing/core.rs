@@ -23,7 +23,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 //**************************************************************************************************
 
 struct UseFunsScope {
-    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind)>,
+    count: usize,
+    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind, /* depth */ usize)>,
     use_funs: ResolvedUseFuns,
 }
 
@@ -77,14 +78,44 @@ pub struct Context<'env> {
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
+impl UseFunsScope {
+    pub fn global(info: &NamingProgramInfo) -> Self {
+        let count = 1;
+        let unused = BTreeMap::new();
+        let mut use_funs = BTreeMap::new();
+        for (_, _, minfo) in &info.modules {
+            for (tn, methods) in &minfo.use_funs {
+                let public_methods = methods.ref_filter_map(|_, uf| {
+                    if uf.is_public.is_some() {
+                        Some(uf.clone())
+                    } else {
+                        None
+                    }
+                });
+                let prev = use_funs.insert(tn.clone(), public_methods);
+                assert!(
+                    prev.is_none(),
+                    "ICE public methods should have been filtered to the defining module"
+                )
+            }
+        }
+        UseFunsScope {
+            count,
+            unused,
+            use_funs,
+        }
+    }
+}
+
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
         _pre_compiled_lib: Option<&FullyCompiledProgram>,
         info: NamingProgramInfo,
     ) -> Self {
+        let global_use_funs = UseFunsScope::global(&info);
         Context {
-            use_funs: vec![],
+            use_funs: vec![global_use_funs],
             subst: Subst::empty(),
             current_module: None,
             current_function: None,
@@ -109,31 +140,50 @@ impl<'env> Context<'env> {
             implicit_candidates.is_empty(),
             "ICE use fun candidates should have been resolved"
         );
-        let mut unused = BTreeMap::new();
-        let mut use_funs = self
-            .use_funs
-            .last()
-            .map(|cur| cur.use_funs.clone())
-            .unwrap_or_default();
+        let depth = self.use_funs.len();
+        let cur = self.use_funs.last_mut().unwrap();
+        if new_scope.is_empty() {
+            cur.count += 1;
+            return;
+        }
+        let mut unused = cur.unused.clone();
+        let mut use_funs = cur.use_funs.clone();
         for (tn, additional_methods) in new_scope {
             for (method, nuf) in additional_methods {
                 if matches!(
                     nuf.kind,
                     UseFunKind::Explicit | UseFunKind::UseAlias { used: false }
                 ) {
-                    unused.insert((tn.clone(), method), (nuf.loc, nuf.kind));
+                    unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
                 }
                 let cur_methods = use_funs.entry(tn.clone()).or_default();
                 cur_methods.remove(&method);
                 cur_methods.add(method, nuf).unwrap();
             }
         }
-        self.use_funs.push(UseFunsScope { unused, use_funs })
+        self.use_funs.push(UseFunsScope {
+            count: 1,
+            unused,
+            use_funs,
+        })
     }
 
     pub fn pop_use_funs_scope(&mut self) {
+        let cur = self.use_funs.last_mut().unwrap();
+        if cur.count > 1 {
+            cur.count -= 1;
+            return;
+        }
         let UseFunsScope { unused, .. } = self.use_funs.pop().unwrap();
-        for ((tn, method), (loc, kind)) in unused {
+        let cur_depth = self.use_funs.len();
+        let mut new_unused = BTreeMap::new();
+        for ((tn, method), (loc, kind, depth)) in unused {
+            if depth != cur_depth {
+                // the unused was added in a scope above
+                assert!(depth < cur_depth);
+                new_unused.insert((tn, method), (loc, kind, depth));
+                continue;
+            }
             let msg = match kind {
                 UseFunKind::Explicit => {
                     format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
@@ -146,6 +196,7 @@ impl<'env> Context<'env> {
             };
             self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
         }
+        self.use_funs.last_mut().unwrap().unused = new_unused;
     }
 
     pub fn reset_for_module_item(&mut self) {
@@ -728,47 +779,96 @@ pub fn make_method_call_type(
     context: &mut Context,
     loc: Loc,
     lhs_ty: &Type,
-    m: &ModuleIdent,
-    f: Name,
+    tn: &TypeName,
+    method: Name,
     ty_args_opt: Option<Vec<Type>>,
 ) -> Option<(
     Loc,
+    ModuleIdent,
+    FunctionName,
     Vec<Type>,
     Vec<(Var, Type)>,
     BTreeMap<StructName, Loc>,
     Type,
 )> {
-    let function_name = FunctionName(f);
-    if !context
-        .module_info(m)
-        .functions
-        .contains_key(&function_name)
-    {
-        let tstr = error_format(lhs_ty, &context.subst);
-        let msg = format!(
-            "Unable to resolve method call syntax for type {tstr}. \
-            Unbound function '{f}' in module '{m}'"
-        );
-        context
-            .env
-            .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
+    let use_funs = &context.use_funs.last().unwrap().use_funs;
+    let target_function_opt = use_funs
+        .get(tn)
+        .and_then(|methods| Some(methods.get(&method)?.target_function));
+    // try to find a function in the defining module for errors
+    let Some((target_m, target_f)) = target_function_opt else {
+        let lhs_ty_str = error_format_nested(&lhs_ty, &Subst::empty());
+        let defining_module = match &tn.value {
+            TypeName_::Multiple(_) => panic!("ICE method on tuple"),
+            TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
+            TypeName_::ModuleType(m, _) => Some(m),
+        };
+        let finfo_opt = defining_module.and_then(|m| {
+            let finfo = context
+                .modules
+                .module(m)
+                .functions
+                .get(&FunctionName(method))?;
+            Some((m, finfo))
+        });
+        // if we found a function with the method name, it must have the wrong type
+        if let Some((m, finfo)) = finfo_opt {
+            let (first_ty_loc, first_ty) =
+                match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+                    None => (finfo.defined_loc, None),
+                    Some(t) => (t.loc, Some(t)),
+                };
+            let arg_msg = match first_ty {
+                Some(ty) => {
+                    let tys_str = error_format(&ty, &Subst::empty());
+                    format!("but it has a different type for its first argument, {tys_str}")
+                }
+                None => format!("but it takes no arguments"),
+            };
+            let msg = format!(
+                "Invalid method style syntax usage. \
+                Unbound alias for method style call of '{method}' on type '{lhs_ty_str}'"
+            );
+            let fmsg = format!("The function '{m}::{method}' exists, {arg_msg}");
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidMethodCall,
+                (loc, msg),
+                (first_ty_loc, fmsg)
+            ));
+        } else {
+            let msg = format!(
+                "Invalid method style syntax usage. \
+                Unbound alias for method style call of '{method}' on type '{lhs_ty_str}'"
+            );
+            let decl_msg = match defining_module {
+                Some(m) => {
+                    format!(", and no function '{method}' was found in defining module '{m}'")
+                }
+                None => "".to_owned(),
+            };
+            let fmsg =
+                format!("No local 'use fun' alias was found for '{lhs_ty_str}.{method}'{decl_msg}");
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidMethodCall,
+                (loc, msg),
+                (method.loc, fmsg)
+            ));
+        }
         return None;
-    }
+    };
 
     let (defined_loc, ty_args, params, acquires, return_ty) =
-        make_function_type(context, loc, m, &function_name, ty_args_opt);
+        make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
 
-    if params.is_empty() {
-        let msg = format!("Expected function '{}' to have at least one parameter", &f);
-        context.env.add_diag(diag!(
-            TypeSafety::InvalidMethodCall,
-            (loc, "Invalid method style syntax usage"),
-            (defined_loc, msg),
-        ));
-        return None;
-    }
-
-    Some((defined_loc, ty_args, params, acquires, return_ty))
+    Some((
+        defined_loc,
+        target_m,
+        target_f,
+        ty_args,
+        params,
+        acquires,
+        return_ty,
+    ))
 }
 
 pub fn make_function_type(

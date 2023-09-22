@@ -142,6 +142,24 @@ impl<K: TName, V> UniqueMap<K, V> {
         )
     }
 
+    pub fn ref_filter_map<V2, F>(&self, mut f: F) -> UniqueMap<K, V2>
+    where
+        F: FnMut(K, &V) -> Option<V2>,
+    {
+        UniqueMap(
+            self.0
+                .iter()
+                .filter_map(|(k_, loc_v)| {
+                    let loc = loc_v.0;
+                    let v = &loc_v.1;
+                    let k = K::add_loc(loc, k_.clone());
+                    let v2_opt = f(k, v);
+                    v2_opt.map(|v2| (k_.clone(), (loc, v2)))
+                })
+                .collect(),
+        )
+    }
+
     pub fn union_with<F>(&self, other: &Self, mut f: F) -> Self
     where
         V: Clone,

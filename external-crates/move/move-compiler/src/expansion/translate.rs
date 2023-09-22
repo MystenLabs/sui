@@ -1241,20 +1241,22 @@ fn use_(
             method,
         } => {
             let is_public = match visibility {
-                P::Visibility::Public(loc) => Some(loc),
+                P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
-                P::Visibility::Script(loc)
-                | P::Visibility::Friend(loc)
-                | P::Visibility::Package(loc) => {
-                    let msg = format!(
-                        "Invalid visibility for 'use fun' declaration. \
-                        Module level 'use fun' declarations can be '{}' for the module's types, \
+                P::Visibility::Script(vis_loc)
+                | P::Visibility::Friend(vis_loc)
+                | P::Visibility::Package(vis_loc) => {
+                    let msg = "Invalid visibility for 'use fun' declaration";
+                    let vis_msg = format!(
+                        "Module level 'use fun' declarations can be '{}' for the module's types, \
                         otherwise they must internal to declared scope.",
                         P::Visibility::PUBLIC
                     );
-                    context
-                        .env
-                        .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidUseFun,
+                        (loc, msg),
+                        (vis_loc, vis_msg)
+                    ));
                     None
                 }
             };
@@ -1561,7 +1563,7 @@ fn function_(
         let implicit = E::ImplicitUseFunCandidate {
             loc,
             attributes: attributes.clone(),
-            is_public: visibility.loc(),
+            is_public: Some(visibility.loc().unwrap_or_else(|| name.loc())),
             function: (m, name.0),
             // disregard used/unused information tracking
             kind: E::ImplicitUseFunKind::FunctionDeclaration,

@@ -4,7 +4,7 @@
 use crate::diag;
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
-use crate::parser::ast::FunctionName;
+use crate::parser::ast::{FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
 use move_ir_types::location::*;
@@ -16,11 +16,16 @@ use move_ir_types::location::*;
 struct Context<'env, 'info> {
     env: &'env mut CompilationEnv,
     info: &'info NamingProgramInfo,
+    current_module: Option<ModuleIdent>,
 }
 
 impl<'env, 'info> Context<'env, 'info> {
     fn new(env: &'env mut CompilationEnv, info: &'info NamingProgramInfo) -> Self {
-        Self { env, info }
+        Self {
+            env,
+            info,
+            current_module: None,
+        }
     }
 }
 
@@ -51,7 +56,8 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
     info.set_use_funs(module_use_funs);
 }
 
-fn module(context: &mut Context, _mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
+fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
+    context.current_module = Some(mident);
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -62,6 +68,7 @@ fn module(context: &mut Context, _mident: ModuleIdent, mdef: &mut N::ModuleDefin
 }
 
 fn script(context: &mut Context, s: &mut N::Script) {
+    context.current_module = None;
     use_funs(context, &mut s.use_funs);
     for (_, _, c) in &mut s.constants {
         constant(context, c);
@@ -90,20 +97,45 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
-        *methods = std::mem::take(methods).filter_map(|method, nuf| {
-            let N::UseFun {
-                loc,
-                target_function: (m, f),
-                kind,
-                ..
-            } = nuf;
+        *methods = std::mem::take(methods).filter_map(|method, mut nuf| {
+            let loc = nuf.loc;
+            let (m, f) = nuf.target_function;
+            let kind = nuf.kind;
             assert!(kind == N::UseFunKind::Explicit);
-            let (first_ty_loc, first_ty) = first_arg_type(context, m, f);
-            let is_valid = match first_ty.as_ref().and_then(|ty| ty.value.type_name()) {
+            let (first_ty_loc, first_ty) = first_arg_type(context, &m, &f);
+            let is_valid = match first_ty
+                .as_ref()
+                .and_then(|ty| ty.value.unfold_to_type_name())
+            {
                 Some(first_tn) => first_tn == tn,
                 None => false,
             };
             if is_valid {
+                if let Some(public_loc) = nuf.is_public {
+                    let defining_module = match &tn.value {
+                        N::TypeName_::Multiple(_) => panic!("ICE unexpected tuple type"),
+                        N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
+                        N::TypeName_::ModuleType(m, _) => Some(m),
+                    };
+                    if context.current_module.as_ref() != defining_module {
+                        let msg = format!("Invalid visibility for 'use fun' declaration");
+                        let vis_msg = format!(
+                            "Module level 'use fun' declarations can be '{}' for the \
+                            module's types, otherwise they must internal to declared scope.",
+                            Visibility::PUBLIC
+                        );
+                        let mut diag = diag!(
+                            Declarations::InvalidUseFun,
+                            (loc, msg),
+                            (public_loc, vis_msg)
+                        );
+                        if let Some(m) = defining_module {
+                            diag.add_secondary_label((m.loc, "The type '{tn}' is defined here"))
+                        }
+                        context.env.add_diag(diag);
+                        nuf.is_public = None;
+                    }
+                }
                 Some(nuf)
             } else {
                 let msg = format!(
@@ -135,10 +167,10 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             loc,
             attributes,
             is_public,
-            function: (m, f),
+            function: (target_m, target_f),
             kind,
         } = implicit;
-        let Some(tn) = is_valid_public_method(context, m, f) else {
+        let Some((target_f,tn)) = is_valid_method(context, &target_m, target_f) else {
             if matches!(kind, E::ImplicitUseFunKind::UseAlias { used: false }) {
                 let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
                 context.env.add_diag(diag!(
@@ -159,7 +191,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             loc,
             attributes,
             is_public,
-            target_function: (m, FunctionName(f)),
+            target_function: (target_m, target_f),
             kind,
         };
         let nuf_loc = nuf.loc;
@@ -178,22 +210,31 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     }
 }
 
-fn is_valid_public_method(context: &mut Context, m: ModuleIdent, f: Name) -> Option<N::TypeName> {
-    let f = FunctionName(f);
+fn is_valid_method(
+    context: &mut Context,
+    target_m: &ModuleIdent,
+    target_f: Name,
+) -> Option<(FunctionName, N::TypeName)> {
+    let target_f = FunctionName(target_f);
     // possible the function was removed, e.g. a spec function
-    if !context.info.module(&m).functions.contains_key(&f) {
+    if !context
+        .info
+        .module(&target_m)
+        .functions
+        .contains_key(&target_f)
+    {
         return None;
     }
-    let (_, first_ty) = first_arg_type(context, m, f);
+    let (_, first_ty) = first_arg_type(context, target_m, &target_f);
     let first_ty = first_ty?;
-    let tn = first_ty.value.type_name()?;
+    let tn = first_ty.value.unfold_to_type_name()?;
     let defining_module = match &tn.value {
         N::TypeName_::Multiple(_) => return None,
         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_)?,
         N::TypeName_::ModuleType(m, _) => m,
     };
-    if defining_module == &m {
-        Some(tn.clone())
+    if defining_module == target_m {
+        Some((target_f, tn.clone()))
     } else {
         None
     }
@@ -201,8 +242,8 @@ fn is_valid_public_method(context: &mut Context, m: ModuleIdent, f: Name) -> Opt
 
 fn first_arg_type(
     context: &mut Context,
-    m: ModuleIdent,
-    f: FunctionName,
+    m: &ModuleIdent,
+    f: &FunctionName,
 ) -> (Loc, Option<N::Type>) {
     let finfo = context.info.function_info(&m, &f);
     match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {

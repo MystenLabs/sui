@@ -668,6 +668,14 @@ impl Type_ {
         }
     }
 
+    pub fn unfold_to_type_name(&self) -> Option<&TypeName> {
+        match self {
+            Type_::Apply(_, tn, _) => Some(tn),
+            Type_::Ref(_, inner) => return inner.value.unfold_to_type_name(),
+            _ => None,
+        }
+    }
+
     pub fn is(
         &self,
         address: impl AsRef<str>,

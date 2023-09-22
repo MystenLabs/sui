@@ -24,9 +24,9 @@ error[E04023]: invalid method style call
    │
 10 │     0u64.f();
    │     ^^^^^^^^
-   │     │
-   │     Invalid method style syntax usage
-   │     Method style syntax is only supported on structs. Got an expression of type: 'u64'
+   │     │    │
+   │     │    No local 'use fun' alias was found for 'u64.f'
+   │     Invalid method style syntax usage. Unbound alias for method style call of 'f' on type 'u64'
 
 error[E04023]: invalid method style call
    ┌─ tests/move_2024/typing/dot_call_non_struct.move:11:5
@@ -35,7 +35,7 @@ error[E04023]: invalid method style call
    │     ^^^^^^
    │     │
    │     Invalid method style syntax usage
-   │     Method style syntax is only supported on structs. Got an expression of type: '()'
+   │     Method style syntax is only supported on single types. Got an expression of type: '()'
 
 error[E04023]: invalid method style call
    ┌─ tests/move_2024/typing/dot_call_non_struct.move:12:5
@@ -44,7 +44,7 @@ error[E04023]: invalid method style call
    │     ^^^^^^^^^^
    │     │
    │     Invalid method style syntax usage
-   │     Method style syntax is only supported on structs. Got an expression of type: '({integer}, {integer})'
+   │     Method style syntax is only supported on single types. Got an expression of type: '({integer}, {integer})'
 
 error[E04005]: expected a single type
    ┌─ tests/move_2024/typing/dot_call_non_struct.move:13:5
@@ -113,7 +113,7 @@ error[E04023]: invalid method style call
    ┌─ tests/move_2024/typing/dot_call_non_struct.move:18:5
    │
  5 │ fun call<T: drop>(t: T) {
-   │                      - Method style syntax is only supported on structs. Got an expression of type: 'T'
+   │                      - Method style syntax is not supported on type parameters. Got an expression of type: 'T'
    ·
 18 │     t.f();
    │     ^^^^^ Invalid method style syntax usage

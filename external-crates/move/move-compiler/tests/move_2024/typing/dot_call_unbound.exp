@@ -1,18 +1,27 @@
-error[E03003]: unbound module member
+error[E04023]: invalid method style call
   ┌─ tests/move_2024/typing/dot_call_unbound.move:8:5
   │
 8 │     x.f();
-  │     ^^^^^ Unable to resolve method call syntax for type '0x42::t::X'. Unbound function 'f' in module '0x42::t'
+  │     ^^^^^
+  │     │ │
+  │     │ No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in defining module '0x42::t'
+  │     Invalid method style syntax usage. Unbound alias for method style call of 'f' on type '0x42::t::X'
 
-error[E03003]: unbound module member
+error[E04023]: invalid method style call
    ┌─ tests/move_2024/typing/dot_call_unbound.move:20:5
    │
 20 │     x.f();
-   │     ^^^^^ Unable to resolve method call syntax for type '0x42::t::X'. Unbound function 'f' in module '0x42::t'
+   │     ^^^^^
+   │     │ │
+   │     │ No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in defining module '0x42::t'
+   │     Invalid method style syntax usage. Unbound alias for method style call of 'f' on type '0x42::t::X'
 
-error[E03003]: unbound module member
+error[E04023]: invalid method style call
    ┌─ tests/move_2024/typing/dot_call_unbound.move:21:5
    │
 21 │     y.x.f();
-   │     ^^^^^^^ Unable to resolve method call syntax for type '0x42::t::X'. Unbound function 'f' in module '0x42::t'
+   │     ^^^^^^^
+   │     │   │
+   │     │   No local 'use fun' alias was found for '0x42::t::X.f', and no function 'f' was found in defining module '0x42::t'
+   │     Invalid method style syntax usage. Unbound alias for method style call of 'f' on type '0x42::t::X'
 
