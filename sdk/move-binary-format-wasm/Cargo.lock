@@ -237,18 +237,17 @@ dependencies = [
  "getrandom",
  "move-core-types",
  "move-proc-macros",
- "once_cell",
  "ref-cast",
  "serde",
  "variant_count",
 ]
 
 [[package]]
-name = "move-binary-format"
+name = "move-binary-format-wasm"
 version = "0.1.0"
 dependencies = [
  "hex",
- "move-binary-format 0.0.3",
+ "move-binary-format",
  "move-core-types",
  "serde",
  "serde-wasm-bindgen",
@@ -281,7 +280,6 @@ name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
  "enum-compat-util",
- "proc-macro2",
  "quote",
  "syn 2.0.29",
 ]
