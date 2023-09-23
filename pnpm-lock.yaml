@@ -229,6 +229,9 @@ importers:
       '@types/throttle-debounce':
         specifier: ^5.0.0
         version: 5.0.0
+      '@vanilla-extract/css':
+        specifier: ^1.13.0
+        version: 1.13.0
       '@visx/axis':
         specifier: ^3.3.0
         version: 3.3.0(react@18.2.0)
