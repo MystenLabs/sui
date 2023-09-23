@@ -27,6 +27,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			}
 
 			// based on requestSuiFromFaucetV1 response type, we no longer get the amount transferred
+			// Todo - update the include getFaucetRequestStatus to get the request status
 			const { error } = await requestSuiFromFaucetV1({
 				recipient: addressToTopUp,
 				host: options.host,

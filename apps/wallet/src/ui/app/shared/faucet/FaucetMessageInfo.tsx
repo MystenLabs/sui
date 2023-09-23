@@ -8,12 +8,14 @@ export type FaucetMessageInfoProps = {
 	error?: string | null;
 	loading?: boolean;
 	totalReceived?: number | null;
+	message?: string | null;
 };
 
 function FaucetMessageInfo({
 	error = null,
 	loading = false,
 	totalReceived = null,
+	message = null,
 }: FaucetMessageInfoProps) {
 	const [coinsReceivedFormatted, coinsReceivedSymbol] = useFormatCoin(totalReceived, GAS_TYPE_ARG);
 	if (loading) {
@@ -21,6 +23,9 @@ function FaucetMessageInfo({
 	}
 	if (error) {
 		return <>{error}</>;
+	}
+	if (message) {
+		return <>{message}</>;
 	}
 	return (
 		<>{`${totalReceived ? `${coinsReceivedFormatted} ` : ''}${coinsReceivedSymbol} received`}</>
