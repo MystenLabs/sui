@@ -104,6 +104,7 @@ pub mod error;
 pub mod json_rpc_error;
 pub mod sui_client_config;
 pub mod wallet_context;
+
 pub const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
 pub const SUI_LOCAL_NETWORK_URL: &str = "http://127.0.0.1:9000";
 pub const SUI_LOCAL_NETWORK_GAS_URL: &str = "http://127.0.0.1:5003/gas";
@@ -134,6 +135,7 @@ pub struct SuiClientBuilder {
     request_timeout: Duration,
     max_concurrent_requests: usize,
     ws_url: Option<String>,
+    ws_ping_interval: Option<Duration>,
 }
 
 impl Default for SuiClientBuilder {
@@ -142,6 +144,7 @@ impl Default for SuiClientBuilder {
             request_timeout: Duration::from_secs(60),
             max_concurrent_requests: 256,
             ws_url: None,
+            ws_ping_interval: None,
         }
     }
 }
@@ -162,6 +165,12 @@ impl SuiClientBuilder {
     /// Set the WebSocket URL for the Sui network
     pub fn ws_url(mut self, url: impl AsRef<str>) -> Self {
         self.ws_url = Some(url.as_ref().to_string());
+        self
+    }
+
+    /// Set the WebSocket ping interval
+    pub fn ws_ping_interval(mut self, duration: Duration) -> Self {
+        self.ws_ping_interval = Some(duration);
         self
     }
 
@@ -197,15 +206,17 @@ impl SuiClientBuilder {
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
 
         let ws = if let Some(url) = self.ws_url {
-            Some(
-                WsClientBuilder::default()
-                    .max_request_body_size(2 << 30)
-                    .max_concurrent_requests(self.max_concurrent_requests)
-                    .set_headers(headers.clone())
-                    .request_timeout(self.request_timeout)
-                    .build(url)
-                    .await?,
-            )
+            let mut builder = WsClientBuilder::default()
+                .max_request_body_size(2 << 30)
+                .max_concurrent_requests(self.max_concurrent_requests)
+                .set_headers(headers.clone())
+                .request_timeout(self.request_timeout);
+
+            if let Some(duration) = self.ws_ping_interval {
+                builder = builder.ping_interval(duration)
+            }
+
+            Some(builder.build(url).await?)
         } else {
             None
         };
@@ -391,7 +402,6 @@ impl SuiClientBuilder {
 ///     Ok(())
 /// }
 /// ```
-
 #[derive(Clone)]
 pub struct SuiClient {
     api: Arc<RpcClient>,
