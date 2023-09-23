@@ -1320,7 +1320,7 @@ mod tests {
             .build();
 
         let committee: Committee = fixture.committee();
-        let genesis = Certificate::genesis(&committee)
+        let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
