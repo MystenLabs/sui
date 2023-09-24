@@ -535,6 +535,10 @@ async fn process_certificates_v2_helper(
     synchronizer: &Synchronizer,
     metrics: Arc<PrimaryMetrics>,
 ) -> DagResult<()> {
+    warn!(
+        "[arun] In processing certificates v2 helper. We fetched {} certificates and in this order : {:?}",
+        response.certificates.len(), response.certificates
+    );
     let mut all_certificates = response.certificates;
     let mut all_parents = HashSet::new();
     for cert in all_certificates.iter_mut() {
@@ -550,6 +554,11 @@ async fn process_certificates_v2_helper(
             all_parents.insert(parent_digest.clone());
         }
     }
+    warn!(
+        "[arun] We identified {} parent certificates and these are the certs: {:?}",
+        all_parents.len(),
+        all_parents
+    );
 
     let all_certificates_count = all_certificates.len() as u64;
     let mut non_parents_count: u64 = 0;
@@ -557,14 +566,22 @@ async fn process_certificates_v2_helper(
     // Classify certs as parent or non-parent but maintain the order that the
     // certificates were received so that they can be validated in the same
     // response order to avoid certificate suspensions
+    let mut non_parent_certs = Vec::new();
     let mut classified_certs: Vec<(Certificate, bool)> = vec![];
     for c in all_certificates {
         let is_parent = all_parents.contains(&c.digest());
         if !is_parent {
             non_parents_count += 1;
+            non_parent_certs.push(c.clone());
         }
         classified_certs.push((c, is_parent));
     }
+
+    warn!(
+        "[arun] We identified {} non parent certificates and these are the certs: {:?}",
+        non_parent_certs.len(),
+        non_parent_certs
+    );
 
     let verify_tasks = classified_certs
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
@@ -572,11 +589,17 @@ async fn process_certificates_v2_helper(
             let mut certs_and_classification = chunk.to_vec();
             let sync = synchronizer.clone();
             let metrics = metrics.clone();
+            warn!("[arun] Processing chunk of size {}", chunk.len());
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 let now = Instant::now();
                 for (c, is_parent) in &mut certs_and_classification {
+                    warn!("[arun] Cert {:?} being sent for sanitization", c.digest());
                     sync.sanitize_certificate(c, *is_parent)?;
+                    warn!(
+                        "[arun] Cert {:?} passed sanitizion, and is_parent = {is_parent}",
+                        c.digest()
+                    );
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
@@ -607,6 +630,12 @@ async fn process_certificates_v2_helper(
         })??;
         sanitized_certificates.append(&mut certificates);
     }
+
+    warn!(
+        "[arun] Sanitization is complete for {} certificates and in this order : {:?}",
+        sanitized_certificates.len(),
+        sanitized_certificates
+    );
 
     metrics
         .fetched_certificates_verified_directly

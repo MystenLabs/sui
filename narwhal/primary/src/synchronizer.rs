@@ -570,6 +570,10 @@ impl Synchronizer {
     /// because fetched certificates usually are not suspended.
     pub async fn try_accept_fetched_certificate(&self, certificate: Certificate) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificate");
+        warn!(
+            "[arun] Attempting to accept fetched certificate: {:?}",
+            certificate.digest()
+        );
         self.process_certificate_internal(certificate, false, false)
             .await
     }
@@ -689,9 +693,17 @@ impl Synchronizer {
     ) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::process_certificate_internal");
 
+        if !sanitize && !early_suspend {
+            warn!(
+                "[arun] This certificate {:?} was sent for processing either from this primary or from a fetch request.",
+                certificate.digest()
+            );
+        }
+
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
+            warn!("[arun] Certificate {digest:?} has already been processed. Skip processing.");
             self.inner.metrics.duplicate_certificates_processed.inc();
             return Ok(());
         }
@@ -712,8 +724,8 @@ impl Synchronizer {
             self.sanitize_certificate(&mut certificate, false)?;
         }
 
-        debug!(
-            "Processing certificate {:?} round:{:?}",
+        warn!(
+            "[arun] Processing certificate {:?} round:{:?}",
             certificate,
             certificate.round()
         );
@@ -742,6 +754,11 @@ impl Synchronizer {
         //
         // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
         let minimal_round_for_parents = certificate.round().saturating_sub(1);
+
+        warn!(
+            "[arun] Sending min rounds of parents {minimal_round_for_parents} for certificate {:?} we witnessed.",
+            certificate.digest(),
+        );
         self.inner
             .tx_parents
             .send((vec![], minimal_round_for_parents, certificate.epoch()))
@@ -753,6 +770,10 @@ impl Synchronizer {
         // We can thus continue the processing of the certificate without blocking on batch synchronization.
         let header = certificate.header().clone();
         let max_age = self.inner.gc_depth.saturating_sub(1);
+        warn!(
+            "[arun] Sending non blocking batch fetch request certificate {:?} we witnessed.",
+            certificate.digest(),
+        );
         self.inner
             .tx_batch_tasks
             .send((header.clone(), max_age))
@@ -760,7 +781,15 @@ impl Synchronizer {
             .map_err(|_| DagError::ShuttingDown)?;
 
         let highest_processed_round = self.inner.highest_processed_round.load(Ordering::Acquire);
+        warn!(
+            "[arun] The cert {:?} we got was at round {}. The higest processed round is {highest_processed_round}. The round limit we can accept for newer certs is highest round + {NEW_CERTIFICATE_ROUND_LIMIT}",
+            certificate.digest(), certificate.round(),
+        );
         if highest_processed_round + NEW_CERTIFICATE_ROUND_LIMIT < certificate.round() {
+            warn!(
+                "[arun] The cert {:?} is suspended cause its too new",
+                certificate.digest()
+            );
             self.inner
                 .tx_certificate_fetcher
                 .send(CertificateFetcherCommand::Ancestors(certificate.clone()))
@@ -772,6 +801,11 @@ impl Synchronizer {
                 highest_processed_round,
             ));
         }
+
+        warn!(
+            "[arun] The cert {:?} is being accepted!",
+            certificate.digest()
+        );
 
         let (sender, receiver) = oneshot::channel();
         self.inner
