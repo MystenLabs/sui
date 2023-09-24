@@ -59,7 +59,7 @@ async fn main() -> Result<(), anyhow::Error> {
         max_request_per_second,
         wallet_client_timeout_secs,
         ref write_ahead_log,
-        wal_retry_interval,
+        // _wal_retry_interval,
         ..
     } = config;
 
