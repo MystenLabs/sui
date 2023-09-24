@@ -108,14 +108,14 @@ async fn main() -> Result<(), anyhow::Error> {
                 .into_inner(),
         );
 
-    spawn_monitored_task!(async move {
-        info!("Starting task to clear WAL.");
-        loop {
-            // Every config.wal_retry_interval (Default: 300 seconds) we try to clear the wal coins
-            tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
-            app_state.faucet.retry_wal_coins().await.unwrap();
-        }
-    });
+    // spawn_monitored_task!(async move {
+    //     info!("Starting task to clear WAL.");
+    //     loop {
+    //         // Every config.wal_retry_interval (Default: 300 seconds) we try to clear the wal coins
+    //         tokio::time::sleep(Duration::from_secs(wal_retry_interval)).await;
+    //         app_state.faucet.retry_wal_coins().await.unwrap();
+    //     }
+    // });
 
     let addr = SocketAddr::new(IpAddr::V4(host_ip), port);
     info!("listening on {}", addr);
