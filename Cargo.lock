@@ -5289,7 +5289,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-bytecode-verifier-suivm"
+name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
  "move-abstract-stack",
@@ -5301,7 +5301,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-bytecode-verifier-v0"
+name = "move-bytecode-verifier-vm-rework"
 version = "0.1.0"
 dependencies = [
  "move-abstract-stack",
@@ -5743,27 +5743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-suivm"
-version = "0.1.1"
-dependencies = [
- "anyhow",
- "hex",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-prover",
- "move-vm-runtime-suivm",
- "move-vm-types",
- "sha2 0.9.9",
- "sha3 0.9.1",
- "smallvec",
- "walkdir",
-]
-
-[[package]]
 name = "move-stdlib-v0"
 version = "0.1.1"
 dependencies = [
@@ -5777,6 +5756,27 @@ dependencies = [
  "move-errmapgen",
  "move-prover",
  "move-vm-runtime-v0",
+ "move-vm-types",
+ "sha2 0.9.9",
+ "sha3 0.9.1",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-vm-rework"
+version = "0.1.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-core-types",
+ "move-docgen",
+ "move-errmapgen",
+ "move-prover",
+ "move-vm-runtime-vm-rework",
  "move-vm-types",
  "sha2 0.9.9",
  "sha3 0.9.1",
@@ -5890,13 +5890,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-runtime-suivm"
+name = "move-vm-runtime-v0"
 version = "0.1.0"
 dependencies = [
  "better_any",
  "fail",
  "move-binary-format",
- "move-bytecode-verifier-suivm",
+ "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -5909,13 +5909,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-vm-runtime-v0"
+name = "move-vm-runtime-vm-rework"
 version = "0.1.0"
 dependencies = [
  "better_any",
  "fail",
  "move-binary-format",
- "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-vm-rework",
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
@@ -7843,9 +7843,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.10.1"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85af4ed6ee5a89f26a26086e9089a6643650544c025158449a3626ebf72884b3"
+checksum = "2c78e758510582acc40acb90458401172d41f1016f8c9dde89e49677afb7eec1"
 dependencies = [
  "bytes",
  "rand 0.8.5",
@@ -9180,7 +9180,7 @@ version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da03fa3b94cc19e3ebfc88c4229c49d8f08cdbd1228870a45f0ffdf84988e14b"
 dependencies = [
- "dirs 4.0.0",
+ "dirs 5.0.1",
 ]
 
 [[package]]
@@ -9255,6 +9255,36 @@ dependencies = [
  "chrono",
  "log",
  "termcolor",
+]
+
+[[package]]
+name = "simulacrum"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "fastcrypto",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "narwhal-config",
+ "once_cell",
+ "prometheus",
+ "rand 0.8.5",
+ "serde",
+ "shared-crypto",
+ "sui-config",
+ "sui-execution",
+ "sui-framework",
+ "sui-genesis-builder",
+ "sui-keys",
+ "sui-protocol-config",
+ "sui-storage",
+ "sui-swarm-config",
+ "sui-transaction-checks",
+ "sui-types",
+ "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -9502,7 +9532,6 @@ dependencies = [
  "inquire",
  "jemalloc-ctl",
  "json_to_table",
- "move-bytecode-verifier",
  "move-core-types",
  "move-package",
  "num-bigint",
@@ -9520,8 +9549,8 @@ dependencies = [
  "shared-crypto",
  "shell-words",
  "signature 1.6.4",
- "sui-adapter-latest",
  "sui-config",
+ "sui-execution",
  "sui-genesis-builder",
  "sui-json",
  "sui-json-rpc-types",
@@ -9537,7 +9566,6 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
- "sui-verifier-latest",
  "tabled",
  "tap",
  "telemetry-subscribers",
@@ -9565,7 +9593,6 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
- "once_cell",
  "parking_lot 0.12.1",
  "serde",
  "sui-macros",
@@ -9573,34 +9600,6 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
-name = "sui-adapter-suivm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "leb128",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier-suivm",
- "move-core-types",
- "move-package",
- "move-vm-config",
- "move-vm-profiler",
- "move-vm-runtime-suivm",
- "move-vm-types",
- "once_cell",
- "parking_lot 0.12.1",
- "serde",
- "sui-macros",
- "sui-move-natives-suivm",
- "sui-protocol-config",
- "sui-types",
- "sui-verifier-suivm",
  "tracing",
  "workspace-hack",
 ]
@@ -9638,6 +9637,33 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-v0",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-adapter-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "leb128",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-vm-rework",
+ "move-core-types",
+ "move-package",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-runtime-vm-rework",
+ "move-vm-types",
+ "parking_lot 0.12.1",
+ "serde",
+ "sui-macros",
+ "sui-move-natives-vm-rework",
+ "sui-protocol-config",
+ "sui-types",
+ "sui-verifier-vm-rework",
  "tracing",
  "workspace-hack",
 ]
@@ -9992,7 +10018,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sui",
- "sui-adapter-latest",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -10033,22 +10058,25 @@ version = "0.1.0"
 dependencies = [
  "cargo_metadata",
  "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-vm-rework",
  "move-vm-config",
  "move-vm-runtime",
- "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
+ "move-vm-runtime-vm-rework",
  "petgraph 0.5.1",
  "sui-adapter-latest",
- "sui-adapter-suivm",
  "sui-adapter-v0",
+ "sui-adapter-vm-rework",
  "sui-move-natives-latest",
- "sui-move-natives-suivm",
  "sui-move-natives-v0",
+ "sui-move-natives-vm-rework",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
- "sui-verifier-suivm",
  "sui-verifier-v0",
+ "sui-verifier-vm-rework",
  "workspace-hack",
 ]
 
@@ -10180,6 +10208,7 @@ dependencies = [
  "sui-config",
  "sui-execution",
  "sui-framework",
+ "sui-framework-snapshot",
  "sui-protocol-config",
  "sui-simulator",
  "sui-types",
@@ -10204,6 +10233,7 @@ dependencies = [
  "hex",
  "hyper",
  "insta",
+ "once_cell",
  "serde",
  "serde_json",
  "serde_with",
@@ -10239,6 +10269,7 @@ dependencies = [
  "futures",
  "itertools",
  "jsonrpsee",
+ "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
  "mysten-metrics",
@@ -10562,26 +10593,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-move-natives-suivm"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "better_any",
- "fastcrypto",
- "fastcrypto-zkp",
- "linked-hash-map",
- "move-binary-format",
- "move-core-types",
- "move-stdlib-suivm",
- "move-vm-runtime-suivm",
- "move-vm-types",
- "smallvec",
- "sui-protocol-config",
- "sui-types",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-move-natives-v0"
 version = "0.1.0"
 dependencies = [
@@ -10594,6 +10605,26 @@ dependencies = [
  "move-core-types",
  "move-stdlib-v0",
  "move-vm-runtime-v0",
+ "move-vm-types",
+ "smallvec",
+ "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-move-natives-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "better_any",
+ "fastcrypto",
+ "fastcrypto-zkp",
+ "linked-hash-map",
+ "move-binary-format",
+ "move-core-types",
+ "move-stdlib-vm-rework",
+ "move-vm-runtime-vm-rework",
  "move-vm-types",
  "smallvec",
  "sui-protocol-config",
@@ -11003,7 +11034,6 @@ dependencies = [
  "msim",
  "narwhal-network",
  "rand 0.8.5",
- "sui-adapter-latest",
  "sui-framework",
  "sui-move-build",
  "sui-types",
@@ -11215,6 +11245,7 @@ dependencies = [
  "anyhow",
  "fastcrypto",
  "insta",
+ "move-bytecode-utils",
  "narwhal-config",
  "prometheus",
  "rand 0.8.5",
@@ -11495,20 +11526,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-verifier-suivm"
-version = "0.1.0"
-dependencies = [
- "move-abstract-stack",
- "move-binary-format",
- "move-bytecode-utils",
- "move-bytecode-verifier-suivm",
- "move-core-types",
- "move-vm-config",
- "sui-types",
- "workspace-hack",
-]
-
-[[package]]
 name = "sui-verifier-transactional-tests"
 version = "0.1.0"
 dependencies = [
@@ -11528,6 +11545,20 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "sui-protocol-config",
+ "sui-types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "sui-verifier-vm-rework"
+version = "0.1.0"
+dependencies = [
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier-vm-rework",
+ "move-core-types",
+ "move-vm-config",
  "sui-types",
  "workspace-hack",
 ]
@@ -13722,8 +13753,8 @@ dependencies = [
  "move-bytecode-source-map",
  "move-bytecode-utils",
  "move-bytecode-verifier",
- "move-bytecode-verifier-suivm",
  "move-bytecode-verifier-v0",
+ "move-bytecode-verifier-vm-rework",
  "move-bytecode-viewer",
  "move-cli",
  "move-command-line-common",
@@ -13747,16 +13778,16 @@ dependencies = [
  "move-stackless-bytecode",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
- "move-stdlib-suivm",
  "move-stdlib-v0",
+ "move-stdlib-vm-rework",
  "move-symbol-pool",
  "move-transactional-test-runner",
  "move-unit-test",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
- "move-vm-runtime-suivm",
  "move-vm-runtime-v0",
+ "move-vm-runtime-vm-rework",
  "move-vm-test-utils",
  "move-vm-types",
  "multer",

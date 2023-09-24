@@ -49,7 +49,9 @@ function HeroVideoImage({ title, subtitle, src, video }: HeroVideoImageProps) {
 				setOpen={setOpen}
 				rounded="xl"
 			/>
-			<ArrowUpRight16 className="right-5 top-5 hidden group-hover:absolute group-hover:block" />
+			<div className="absolute right-3 top-3 hidden h-8 w-8 items-center justify-center rounded-md bg-white/40 backdrop-blur group-hover:flex">
+				<ArrowUpRight16 />
+			</div>
 		</div>
 	);
 }
@@ -101,15 +103,17 @@ function DescriptionCard({
 	};
 
 	const normalizedStructTag = normalizeStructTag(structTag);
+	const objectNameDisplay = name || display?.description;
+	const renderDescription = name && display?.description;
 
 	return (
 		<ObjectViewCard>
-			{name && (
+			{objectNameDisplay && (
 				<Heading variant="heading4/semibold" color="steel-darker">
-					{name}
+					{objectNameDisplay}
 				</Heading>
 			)}
-			{display?.description && (
+			{renderDescription && (
 				<Text variant="pBody/normal" color="steel-darker">
 					{display.description}
 				</Text>
@@ -224,6 +228,8 @@ export function ObjectView({ data }: ObjectViewProps) {
 	const objectType = parseObjectType(data);
 	const objOwner = data.data?.owner;
 	const storageRebate = data.data?.storageRebate;
+	const objectId = data.data?.objectId;
+	const lastTransactionBlockDigest = data.data?.previousTransaction;
 
 	const heroImageTitle = name || display?.description || trimStdLibPrefix(objectType);
 	const heroImageSubtitle = video ? 'Video' : fileType ?? '';
@@ -253,18 +259,22 @@ export function ObjectView({ data }: ObjectViewProps) {
 				</div>
 			)}
 
-			<div style={{ gridArea: 'description' }}>
-				<DescriptionCard
-					name={name}
-					objectType={objectType}
-					objectId={data.data?.objectId!}
-					display={display}
-				/>
-			</div>
+			{objectId && (
+				<div style={{ gridArea: 'description' }}>
+					<DescriptionCard
+						name={name}
+						objectType={objectType}
+						objectId={objectId}
+						display={display}
+					/>
+				</div>
+			)}
 
-			<div style={{ gridArea: 'version' }}>
-				<VersionCard version={data.data?.version} digest={data.data?.previousTransaction!} />
-			</div>
+			{lastTransactionBlockDigest && (
+				<div style={{ gridArea: 'version' }}>
+					<VersionCard version={data.data?.version} digest={lastTransactionBlockDigest} />
+				</div>
+			)}
 
 			<div style={{ gridArea: 'owner' }}>
 				<OwnerCard objOwner={objOwner} display={display} storageRebate={storageRebate} />

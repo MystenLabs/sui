@@ -1,13 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	ArrowUpRight12,
-	LockLocked16 as LockedLockIcon,
-	Domain24,
-	More24 as MoreIcon,
-	Clipboard16 as ClipboardIcon,
-} from '@mysten/icons';
+import { ArrowUpRight12, LockLocked24, Domain24, More24, Clipboard24 } from '@mysten/icons';
 import Browser from 'webextension-polyfill';
 
 import { MenuLayout } from './MenuLayout';
@@ -37,7 +31,7 @@ function MenuList() {
 				<MenuListItem to={networkUrl} icon={<Domain24 />} title="Network" subtitle={networkName} />
 				<MenuListItem
 					to={autoLockUrl}
-					icon={<LockedLockIcon />}
+					icon={<LockLocked24 />}
 					title="Auto-lock Accounts"
 					subtitle={
 						<Loading loading={autoLockInterval?.isLoading}>
@@ -48,9 +42,9 @@ function MenuList() {
 						</Loading>
 					}
 				/>
-				<MenuListItem icon={<ClipboardIcon />} title="FAQ" href={FAQ_LINK} />
+				<MenuListItem icon={<Clipboard24 />} title="FAQ" href={FAQ_LINK} />
 				<MenuListItem
-					icon={<MoreIcon className="text-steel-darker" />}
+					icon={<More24 className="text-steel-darker" />}
 					title="More options"
 					to={moreOptionsUrl}
 				/>

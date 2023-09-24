@@ -31,6 +31,13 @@ pub struct Program {
     pub scripts: BTreeMap<Symbol, Script>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Neighbor_ {
+    Dependency,
+    Friend,
+}
+pub type Neighbor = Spanned<Neighbor_>;
+
 //**************************************************************************************************
 // Scripts
 //**************************************************************************************************
@@ -45,6 +52,8 @@ pub struct Script {
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -53,18 +62,18 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub is_source_module: bool,
-    /// `dependency_order` is the topological order/rank in the dependency graph.
-    /// `dependency_order` is initialized at `0` and set in the uses pass
-    pub dependency_order: usize,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -730,6 +739,15 @@ impl AstDebug for Program {
     }
 }
 
+impl AstDebug for Neighbor_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Neighbor_::Dependency => w.write("neighbor#dependency"),
+            Neighbor_::Friend => w.write("neighbor#friend"),
+        }
+    }
+}
+
 impl AstDebug for Script {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Script {
@@ -740,12 +758,18 @@ impl AstDebug for Script {
             constants,
             function_name,
             function,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -757,15 +781,16 @@ impl AstDebug for Script {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            loc: _,
             warning_filter,
             package_name,
             attributes,
             is_source_module,
-            dependency_order,
             friends,
             structs,
             constants,
             functions,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -777,7 +802,11 @@ impl AstDebug for ModuleDefinition {
         } else {
             w.writeln("source module")
         }
-        w.writeln(&format!("dependency order #{}", dependency_order));
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();

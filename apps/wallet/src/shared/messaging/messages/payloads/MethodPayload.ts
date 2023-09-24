@@ -15,6 +15,7 @@ export type LedgerAccountsPublicKeys = {
 	accountID: string;
 	publicKey: string;
 }[];
+export type PasswordRecoveryData = { type: 'mnemonic'; accountSourceID: string; entropy: string };
 
 type MethodPayloads = {
 	getStoredEntities: { type: UIAccessibleEntityType };
@@ -61,6 +62,14 @@ type MethodPayloads = {
 	notifyUserActive: {};
 	getAccountKeyPair: { accountID: string; password: string };
 	getAccountKeyPairResponse: { accountID: string; keyPair: ExportedKeypair };
+	resetPassword: {
+		password: string;
+		recoveryData: PasswordRecoveryData[];
+	};
+	verifyPasswordRecoveryData: {
+		data: PasswordRecoveryData;
+	};
+	removeAccount: { accountID: string };
 };
 
 type Methods = keyof MethodPayloads;

@@ -59,33 +59,36 @@ export function QredoConnectInfoPage() {
 				}}
 				addressHidden
 			>
-				<SummaryCard
-					header={showUntrustedWarning ? '' : 'More information'}
-					body={
-						showUntrustedWarning ? (
-							<div className="flex flex-col gap-2.5">
-								<Heading variant="heading6" weight="semibold" color="gray-90">
-									Your Connection Is Not Secure
-								</Heading>
-								<Text variant="pBodySmall" weight="medium" color="steel-darker">
-									If you connect your wallet with this site your data could be exposed to attackers.
-								</Text>
-								<div className="mt-2.5">
+				<div className="pt-4">
+					<SummaryCard
+						header={showUntrustedWarning ? '' : 'More information'}
+						body={
+							showUntrustedWarning ? (
+								<div className="flex flex-col gap-2.5">
+									<Heading variant="heading6" weight="semibold" color="gray-90">
+										Your Connection Is Not Secure
+									</Heading>
 									<Text variant="pBodySmall" weight="medium" color="steel-darker">
-										Click **Reject** if you don't trust this site. Continue at your own risk.
+										If you connect your wallet with this site your data could be exposed to
+										attackers.
 									</Text>
+									<div className="mt-2.5">
+										<Text variant="pBodySmall" weight="medium" color="steel-darker">
+											Click **Reject** if you don't trust this site. Continue at your own risk.
+										</Text>
+									</div>
 								</div>
-							</div>
-						) : (
-							<LabelValuesContainer>
-								<LabelValueItem label="Service" value={data.service} />
-								<LabelValueItem label="Organization" value={data.organization || '-'} />
-								<LabelValueItem label="Token" value={data.partialToken} />
-								<LabelValueItem label="API URL" value={data.apiUrl} />
-							</LabelValuesContainer>
-						)
-					}
-				/>
+							) : (
+								<LabelValuesContainer>
+									<LabelValueItem label="Service" value={data.service} />
+									<LabelValueItem label="Organization" value={data.organization || '-'} />
+									<LabelValueItem label="Token" value={data.partialToken} />
+									<LabelValueItem label="API URL" value={data.apiUrl} />
+								</LabelValuesContainer>
+							)
+						}
+					/>
+				</div>
 			</UserApproveContainer>
 		</>
 	);

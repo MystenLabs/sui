@@ -27,7 +27,7 @@ export type FormValues = z.infer<typeof formSchema>;
 
 type ImportRecoveryPhraseFormProps = {
 	submitButtonText: string;
-	cancelButtonText: string;
+	cancelButtonText?: string;
 	onSubmit: SubmitHandler<FormValues>;
 };
 
@@ -59,7 +59,7 @@ export function ImportRecoveryPhraseForm({
 			className="flex flex-col justify-between relative h-full"
 			onSubmit={handleSubmit(onSubmit)}
 		>
-			<div className="grid grid-cols-2 gap-x-2 gap-y-2.5 overflow-auto">
+			<div className="grid grid-cols-2 gap-x-2 gap-y-2.5">
 				{recoveryPhrase.map((_, index) => {
 					const recoveryPhraseId = `recoveryPhrase.${index}` as const;
 					return (
@@ -110,12 +110,14 @@ export function ImportRecoveryPhraseForm({
 					<Alert>{errors.recoveryPhrase.message}</Alert>
 				)}
 				<div className="flex gap-2.5">
-					<Button
-						variant="outline"
-						size="tall"
-						text={cancelButtonText}
-						onClick={() => navigate(-1)}
-					/>
+					{cancelButtonText ? (
+						<Button
+							variant="outline"
+							size="tall"
+							text={cancelButtonText}
+							onClick={() => navigate(-1)}
+						/>
+					) : null}
 					<Button
 						type="submit"
 						disabled={isSubmitting || !isValid}

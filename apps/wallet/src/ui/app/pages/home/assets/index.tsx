@@ -4,8 +4,12 @@
 import { Routes, Route } from 'react-router-dom';
 import { HiddenAssetsPage, NftsPage } from '..';
 import { HiddenAssetsProvider } from '../hidden-assets/HiddenAssetsProvider';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 
 function AssetsPage() {
+	if (useUnlockedGuard()) {
+		return null;
+	}
 	return (
 		<HiddenAssetsProvider>
 			<Routes>

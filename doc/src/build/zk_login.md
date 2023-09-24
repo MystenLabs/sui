@@ -2,25 +2,27 @@
 title: About zkLogin
 ---
 
-zkLogin is a Sui primitive that lets wallets and apps link Sui objects with an OAuth credential—enabling users to perform transactions using both the credential and attached objects.
+zkLogin is a Sui primitive that lets users send transactions from a Sui address using an OAuth credential, without publicly linking the two.
 
-zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, an zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
+zkLogin is designed with the following goals in mind:
 
-zkLogin is designed with the following principles in mind:
+1. **Simple Onboarding**: zkLogin allows users to transact on Sui using the familiar OAuth login flow, eliminating the friction of handling cryptographic keys or remembering mnemonics.
 
-1. **Simple Onboarding**: With the familiar OAuth login flow, zkLogin enables users to easily create a Sui wallet and engage with Sui—eliminating the need for cryptographic key management.
+1. **Self-Custody**: A zkLogin transaction requires user approval via the standard OAuth login process--the OAuth provider cannot transact on the user's behalf.
 
-1. **Fully Self-Custodial**: A zkLogin transaction requires user approval within the OAuth login process, preventing unilateral fund movement from a zkLogin wallet—even by the OAuth provider.
+1. **Secure**: zkLogin is a two-factor authentication scheme: sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from the user's corresponding Sui address unless they separately compromise the salt.
 
-1. **Privacy-Focused**: Zero knowledge proofs prevent third parties from linking Sui addresses and OAuth identifiers.
+1. **Private**: Zero knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.
 
-1. **Natively Supported**: zkLogin is a protocol-level signature scheme, benefiting from [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). Unlike smart contract-based alternatives, it will smoothly integrate with sponsored transactions and MultiSig.
+1. **Optional Verified Identity**: However, a user can *opt in* to verify the OAuth identifier that was used to derive a particular Sui address. This serves as the foundation for a verifiable on-chain identity layer.
 
-1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain.
+1. **Accessible**: zkLogin is one of several native Sui signature schemes thanks to Sui's [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). It smoothly integrates with other powerful Sui primitives like sponsored transactions and multisig.
 
-Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
+1. **Built with Rigor**. The [code](https://github.com/sui-foundation/zklogin-circuit) for zkLogin is open source and has been independently [audited](https://github.com/sui-foundation/zk-ceremony-client) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string attracted contributions from more than 100 participants.
 
-If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
+Are you a builder who wants to integrate zkLogin into your application or wallet? Dive into our [Integration guide](#integration-guide).
+
+If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies a zkLogin transaction, see [this section](#how-zklogin-works).
 
 If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
 
@@ -28,7 +30,7 @@ More questions? See [this page](#faq).
 
 ## OpenID providers
 
-The following tables lists the OpenID providers and that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
+The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
 | Provider     | Can support? | Comments |
 | ------------ | ----------   | -------- |
@@ -95,7 +97,7 @@ const params = new URLSearchParams({
    // Test Client ID for devnet / testnet:
    client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
    redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
-   respond_type: 'id_token',
+   response_type: 'id_token',
    scope: 'openid',
    // See below for details about generation of the nonce
    nonce: nonce,
@@ -217,7 +219,7 @@ Here's an example request and response for the Mysten Labs-maintained proving se
 Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
 
 ```bash
-curl -X POST http://prover-devnet.mystenlabs.com:8080/zkp -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
 
 Response:
 

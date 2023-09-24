@@ -229,6 +229,9 @@ importers:
       '@types/throttle-debounce':
         specifier: ^5.0.0
         version: 5.0.0
+      '@vanilla-extract/css':
+        specifier: ^1.13.0
+        version: 1.13.0
       '@visx/axis':
         specifier: ^3.3.0
         version: 3.3.0(react@18.2.0)
@@ -374,9 +377,6 @@ importers:
       '@types/topojson-client':
         specifier: ^3.1.1
         version: 3.1.1
-      '@vanilla-extract/css':
-        specifier: ^1.13.0
-        version: 1.13.0
       '@vanilla-extract/vite-plugin':
         specifier: ^3.9.0
         version: 3.9.0(@types/node@20.4.2)(vite@4.4.4)
@@ -1337,7 +1337,7 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
-  sdk/move-binary-format:
+  sdk/move-binary-format-wasm:
     devDependencies:
       tsup:
         specifier: ^7.1.0

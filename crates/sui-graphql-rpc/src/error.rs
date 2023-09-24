@@ -19,19 +19,25 @@ pub(crate) mod code {
 /// because they will originate from within the GraphQL implementation.  This function is intended
 /// for errors that originated from outside of GraphQL (such as in middleware), but that need to be
 /// ingested by GraphQL clients.
-pub(crate) fn graphql_error(code: &str, message: String) -> GraphQLResponse {
+pub(crate) fn graphql_error_response(code: &str, message: impl Into<String>) -> GraphQLResponse {
+    let error = graphql_error(code, message);
+    Response::from_errors(error.into()).into()
+}
+
+/// Create a generic GraphQL Server Error.
+///
+/// This error has no path, source, or locations, just a message and an error code.
+pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerError {
     let mut ext = ErrorExtensionValues::default();
     ext.set("code", code);
 
-    let error = ServerError {
-        message,
+    ServerError {
+        message: message.into(),
         source: None,
         locations: vec![],
         path: vec![],
         extensions: Some(ext),
-    };
-
-    Response::from_errors(error.into()).into()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

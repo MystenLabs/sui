@@ -51,7 +51,7 @@ impl<'env, 'map> Context<'env, 'map> {
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     ) -> Self {
-        let mut all_filter_alls = WarningFilters::new();
+        let mut all_filter_alls = WarningFilters::new_for_dependency();
         for allow in compilation_env.filter_attributes() {
             for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
                 all_filter_alls.add(f);
@@ -195,9 +195,9 @@ pub fn program(
             }
         }
     }
-    let mut module_map = source_module_map;
+    let module_map = source_module_map;
 
-    let mut scripts = {
+    let scripts = {
         let mut collected: BTreeMap<Symbol, Vec<E::Script>> = BTreeMap::new();
         for s in scripts {
             collected
@@ -227,7 +227,6 @@ pub fn program(
         keyed
     };
 
-    super::dependency_ordering::verify(context.env, &mut module_map, &mut scripts);
     E::Program {
         modules: module_map,
         scripts,
@@ -481,9 +480,6 @@ fn module_(
         attributes,
         loc,
         is_source_module: context.is_source_definition,
-        dependency_order: 0,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
         friends,
         structs,
         constants,
@@ -650,8 +646,6 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
         package_name,
         attributes,
         loc,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
         constants,
         function_name,
         function,
@@ -845,7 +839,7 @@ fn warning_filter(
 ) -> WarningFilters {
     use crate::diagnostics::codes::Category;
     use known_attributes::DiagnosticAttribute;
-    let mut warning_filters = WarningFilters::new();
+    let mut warning_filters = WarningFilters::new_for_source();
     let filter_attribute_names = context.env.filter_attributes().clone();
     for allow in filter_attribute_names {
         let Some(attr) = attributes.get_(&allow) else {

@@ -13,7 +13,10 @@ export interface ZkProviderData {
 		params: URLSearchParams;
 	}) => void;
 	enabled: boolean;
+	hidden?: boolean;
 }
+
+const isDev = process.env.NODE_ENV === 'development';
 
 export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 	google: {
@@ -56,12 +59,13 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 		enabled: true,
 	},
 	facebook: {
-		clientID: '1544965116313994',
+		clientID: '829226485248571',
 		url: 'https://facebook.com/dialog/oauth/',
 		extraParams: {
 			response_type: 'id_token',
 			scope: 'openid email',
 		},
-		enabled: true,
+		enabled: isDev,
+		hidden: !isDev,
 	},
 };

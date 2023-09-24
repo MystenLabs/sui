@@ -70,9 +70,8 @@ type Query {
   # If no `id` is provided, fetch the latest available checkpoint.
   checkpoint(id: CheckpointID): Checkpoint
 
-  # Find a transaction block either by its transaction digest or its
-  # effects digest.
-  transactionBlock(filter: TransactionBlockID!): TransactionBlock
+  # Find a transaction block by its transaction digest
+  transactionBlock(digest: String!): TransactionBlock
 
   coinMetadata(coinType: String!): CoinMetadata
 
@@ -154,10 +153,9 @@ type Mutation {
   # `signatures` are a list of `flag || signature || pubkey` bytes,
   #     Base64-encoded.
   #
-  # Waits until the transaction has been finalised on chain and an
-  # effects digest is available, and returns that.  If the
-  # transaction could not be finalised, returns the errors that
-  # prevented it, instead.
+  # Waits until the transaction has been finalised on chain to return
+  # its transaction digest.  If the transaction could not be
+  # finalised, returns the errors that prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
     signatures: [Base64!]!,
@@ -189,14 +187,6 @@ input TransactionMetadata {
 input CheckpointID {
   digest: String
   sequenceNumber: Int
-}
-
-# TODO: Do we want to support querying by effects digest at all?
-# Find a transaction block either by its transaction digest, or its
-# effects digest (can't be both, can't be neither).
-input TransactionBlockID {
-  transactionDigest: String
-  effectsDigest: String
 }
 
 input ObjectFilter {
@@ -597,7 +587,14 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  transactionBlockConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
+  ): TransactionBlockConnection
 
   # NB. Will be moved into a private, explorer-specific extension.
   addressMetrics: AddressMetrics
@@ -614,10 +611,10 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  id: ID!
+  id: ID
   digest: String!
 
-  sender: Address
+  senders: [Address]
   gasInput: GasInput
   kind: TransactionBlockKind
   signatures: [TransactionSignature]
@@ -730,7 +727,6 @@ type MakeMoveVecTransaction {
 type TransactionSignature
 
 type TransactionBlockEffects {
-  digest: String!
   status: ExecutionStatus!
 
   errors: String
@@ -806,7 +802,7 @@ type Event {
   # Type of the event being sent
   eventType: MoveType
 
-  sender: Address
+  senders: [Address]
   timestamp: DateTime
 
   json: String
@@ -1052,8 +1048,9 @@ type AddressMetrics {
 
 # Execution
 
+# Either TransactionBlockEffects on success, or error on failure.
 type ExecutionResult {
-  effectsDigest: String
+  effects: TransactionBlockEffects
   errors: String
 }
 

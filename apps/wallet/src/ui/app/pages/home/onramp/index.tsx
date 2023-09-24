@@ -10,6 +10,7 @@ import { ampli } from '_src/shared/analytics/ampli';
 import Alert from '_src/ui/app/components/alert';
 import Overlay from '_src/ui/app/components/overlay';
 import { useActiveAddress } from '_src/ui/app/hooks';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import { Heading } from '_src/ui/app/shared/heading';
 
 export function Onramp() {
@@ -37,7 +38,9 @@ export function Onramp() {
 		}
 	}, [providers, navigate]);
 
-	if (!providers || !providers.length) return null;
+	const isGuardLoading = useUnlockedGuard();
+
+	if (!providers || !providers.length || isGuardLoading) return null;
 
 	return (
 		<Overlay

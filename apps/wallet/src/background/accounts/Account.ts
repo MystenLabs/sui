@@ -160,7 +160,7 @@ export interface SerializedUIAccount {
 
 export interface PasswordUnlockableAccount {
 	readonly unlockType: 'password';
-	passwordUnlock(password: string): Promise<void>;
+	passwordUnlock(password?: string): Promise<void>;
 	verifyPassword(password: string): Promise<void>;
 }
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// <reference types="vitest" />
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import pluginRewriteAll from 'vite-plugin-rewrite-all';

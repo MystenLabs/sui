@@ -18,9 +18,9 @@ pub struct StoredCheckpoint {
     pub sequence_number: i64,
     pub checkpoint_digest: Vec<u8>,
     pub epoch: i64,
-    pub tx_digests: Vec<Vec<u8>>,
     pub network_total_transactions: i64,
     pub previous_checkpoint_digest: Option<Vec<u8>>,
+    pub tx_digests: Vec<Option<Vec<u8>>>,
     pub timestamp_ms: i64,
     pub total_gas_cost: i64,
     pub computation_cost: i64,
@@ -41,7 +41,7 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
             tx_digests: c
                 .tx_digests
                 .iter()
-                .map(|tx| tx.into_inner().to_vec())
+                .map(|tx| Some(tx.into_inner().to_vec()))
                 .collect(),
             network_total_transactions: c.network_total_transactions as i64,
             previous_checkpoint_digest: c
@@ -90,13 +90,16 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
         let transactions: Vec<TransactionDigest> = checkpoint
             .tx_digests
             .into_iter()
-            .map(|tx_digest| {
-                TransactionDigest::try_from(tx_digest.as_slice()).map_err(|e| {
+            .map(|tx_digest| match tx_digest {
+                None => Err(IndexerError::PersistentStorageDataCorruptionError(
+                    "tx_digests should not contain null elements".to_string(),
+                )),
+                Some(tx_digest) => TransactionDigest::try_from(tx_digest.as_slice()).map_err(|e| {
                     IndexerError::PersistentStorageDataCorruptionError(format!(
                         "Failed to decode transaction digest: {:?} with err: {:?}",
                         tx_digest, e
                     ))
-                })
+                }),
             })
             .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
 

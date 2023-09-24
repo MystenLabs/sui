@@ -276,4 +276,10 @@ pub enum ExecutionStoreEvent {
         id: ModuleId,
         result: SuiResult<Option<CompiledModule>>,
     },
+    ReceiveObject {
+        owner: ObjectID,
+        receive: ObjectID,
+        receive_at_version: SequenceNumber,
+        result: SuiResult<Option<Object>>,
+    },
 }

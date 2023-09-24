@@ -6,11 +6,16 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 
 import { ActiveCoinsCard } from '_components/active-coins-card';
 import Overlay from '_components/overlay';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 
 function CoinsSelectorPage() {
 	const [searchParams] = useSearchParams();
 	const coinType = searchParams.get('type') || SUI_TYPE_ARG;
 	const navigate = useNavigate();
+
+	if (useUnlockedGuard()) {
+		return null;
+	}
 
 	return (
 		<Overlay
