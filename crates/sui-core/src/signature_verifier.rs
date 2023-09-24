@@ -172,34 +172,19 @@ impl SignatureVerifier {
         certs: Vec<CertifiedTransaction>,
         checkpoints: Vec<SignedCheckpointSummary>,
     ) -> SuiResult {
-        let _scope = monitored_scope("VerifyCertsAndCheckpoints");
-
-        let check_cache_scope = monitored_scope("VerifyCertsAndCheckpoints_CheckCache");
         let certs: Vec<_> = certs
             .into_iter()
             .filter(|cert| !self.certificate_cache.is_cached(&cert.certificate_digest()))
             .collect();
-        drop(check_cache_scope);
 
         // Verify only the user sigs of certificates that were not cached already, since whenever we
         // insert a certificate into the cache, it is already verified.
-        let verify_tx_total_scope = monitored_scope("VerifyCertsAndCheckpoints_VerifyTxTotal");
         for cert in &certs {
-            let verify_tx_scope = monitored_scope("VerifyCertsAndCheckpoints_VerifyTx");
             self.verify_tx(cert.data())?;
-            drop(verify_tx_scope);
         }
-        drop(verify_tx_total_scope);
-
-        let batch_verify_all_certificates_and_checkpoints_scope =
-            monitored_scope("VerifyCertsAndCheckpoints_BatchVerifyAllCertificatsAndCheckpoints");
         batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints)?;
-        drop(batch_verify_all_certificates_and_checkpoints_scope);
-
-        let cache_digests_scope = monitored_scope("VerifyCertsAndCheckpoints_CacheDigests");
         self.certificate_cache
             .cache_digests(certs.into_iter().map(|c| c.certificate_digest()).collect());
-        drop(cache_digests_scope);
         Ok(())
     }
 
@@ -478,15 +463,11 @@ pub fn batch_verify_all_certificates_and_checkpoints(
     checkpoints: &[SignedCheckpointSummary],
 ) -> SuiResult {
     // certs.data() is assumed to be verified already by the caller.
-    let verify_epoch_total_scope = monitored_scope("VerifyCertsAndCheckpoints_VerifyEpochTotal");
-    for ckpt in checkpoints {
-        let verify_epoch_scope = monitored_scope("VerifyCertsAndCheckpoints_VerifyEpoch");
-        ckpt.data().verify_epoch(committee.epoch())?;
-        drop(verify_epoch_scope);
-    }
-    drop(verify_epoch_total_scope);
 
-    let _batch_verify_scope = monitored_scope("VerifyCertsAndCheckpoints_BatchVerify");
+    for ckpt in checkpoints {
+        ckpt.data().verify_epoch(committee.epoch())?;
+    }
+
     batch_verify(committee, certs, checkpoints)
 }
 
@@ -519,25 +500,18 @@ fn batch_verify(
 ) -> SuiResult {
     let mut obligation = VerificationObligation::default();
 
-    let add_certs_to_verification_obligation_scope =
-        monitored_scope("VerifyCertsAndCheckpoints_AddCertsToVerificationObligation");
     for cert in certs {
         let idx = obligation.add_message(cert.data(), cert.epoch(), Intent::sui_app(cert.scope()));
         cert.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
     }
-    drop(add_certs_to_verification_obligation_scope);
 
-    let add_ckpts_to_verification_obligation_scope =
-        monitored_scope("VerifyCertsAndCheckpoints_AddCkptsToVerificationObligation");
     for ckpt in checkpoints {
         let idx = obligation.add_message(ckpt.data(), ckpt.epoch(), Intent::sui_app(ckpt.scope()));
         ckpt.auth_sig()
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
     }
-    drop(add_ckpts_to_verification_obligation_scope);
 
-    let _verify_all_scope = monitored_scope("VerifyCertsAndCheckpoints_ObligationVerifyAll");
     obligation.verify_all()
 }
 
