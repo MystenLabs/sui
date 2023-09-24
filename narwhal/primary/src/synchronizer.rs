@@ -151,7 +151,7 @@ impl Inner {
     ) -> DagResult<()> {
         let _scope = monitored_scope("Synchronizer::accept_certificate_internal");
 
-        debug!("Accepting certificate {:?}", certificate);
+        warn!("[arun] Accepting certificate {:?}", certificate);
 
         let digest = certificate.digest();
 
@@ -172,6 +172,10 @@ impl Inner {
         self.certificate_store
             .write(certificate.clone())
             .expect("Writing certificate to storage cannot fail!");
+        warn!(
+            "[arun] certificate {:?} written to store ",
+            certificate.digest()
+        );
 
         // From this point, the certificate must be sent to consensus or Narwhal needs to shutdown,
         // to avoid inconsistencies in certificate store and consensus dag.
@@ -181,6 +185,9 @@ impl Inner {
             .highest_processed_round
             .fetch_max(certificate.round(), Ordering::AcqRel)
             .max(certificate.round());
+
+        warn!("[arun] highest_processed_round {highest_processed_round} recorded ",);
+
         let certificate_source = if self.authority_id.eq(&certificate.origin()) {
             "own"
         } else {
@@ -202,7 +209,7 @@ impl Inner {
             .await
         {
             warn!(
-                "Failed to aggregate certificate {} for header: {}",
+                "[arun] Failed to aggregate certificate {} for header: {}",
                 digest, e
             );
             return Err(DagError::ShuttingDown);
@@ -211,7 +218,7 @@ impl Inner {
         // Send the accepted certificate to the consensus layer.
         if let Err(e) = self.tx_new_certificates.send(certificate).await {
             warn!(
-                "Failed to deliver certificate {} to the consensus: {}",
+                "[arun] Failed to deliver certificate {} to the consensus: {}",
                 digest, e
             );
             return Err(DagError::ShuttingDown);
@@ -259,6 +266,11 @@ impl Inner {
     ) -> DagResult<Vec<CertificateDigest>> {
         let _scope = monitored_scope("Synchronizer::get_missing_parents");
 
+        warn!(
+            "[arun] get_missing_parents for cert {:?}",
+            certificate.digest(),
+        );
+
         let mut result = Vec::new();
         if certificate.round() == 1 {
             for digest in certificate.header().parents() {
@@ -272,12 +284,27 @@ impl Inner {
         let existence = self
             .certificate_store
             .multi_contains(certificate.header().parents().iter())?;
+        warn!(
+            "[arun] for cert {:?} got existence {:?} when checking for parents in certificate store",
+            certificate.digest(), existence
+        );
         for (digest, exists) in certificate.header().parents().iter().zip(existence.iter()) {
             if !*exists {
+                warn!(
+                    "[arun] for cert {:?} adding missing parent {:?} to be fetched",
+                    certificate.digest(),
+                    digest
+                );
                 result.push(*digest);
             }
         }
         if !result.is_empty() {
+            warn!(
+                "[arun] for cert {:?} we found {} missing parent(s) {:?} to be fetched",
+                certificate.digest(),
+                result.len(),
+                result
+            );
             self.tx_certificate_fetcher
                 .send(CertificateFetcherCommand::Ancestors(certificate.clone()))
                 .await
@@ -838,11 +865,11 @@ impl Synchronizer {
         // We re-check here in case we already have in pipeline the same certificate for processing
         // more that once.
         if inner.certificate_store.contains(&digest)? {
-            debug!("Skip processing certificate {:?}", certificate);
+            warn!("[arun] Skip processing certificate {:?}", certificate);
             return Ok(());
         }
 
-        debug!("Processing certificate {:?} with lock", certificate);
+        warn!("[arun] Processing certificate {:?} with lock", certificate);
 
         // The state lock must be held for the rest of the function, to ensure updating state,
         // writing certificates into storage and sending certificates to consensus are atomic.
@@ -869,12 +896,22 @@ impl Synchronizer {
 
         // Ensure either we have all the ancestors of this certificate, or the parents have been garbage collected.
         // If we don't, the synchronizer will start fetching missing certificates.
+        warn!(
+            "[arun] Checking if certificate round {:?} > gc_round {}",
+            certificate.round(),
+            inner.gc_round.load(Ordering::Acquire) + 1
+        );
         if certificate.round() > inner.gc_round.load(Ordering::Acquire) + 1 {
+            warn!(
+                "[arun] certificate round {:?} > gc_round {}",
+                certificate.round(),
+                inner.gc_round.load(Ordering::Acquire) + 1
+            );
             let missing_parents = inner.get_missing_parents(&certificate).await?;
             if !missing_parents.is_empty() {
-                debug!(
-                    "Processing certificate {:?} suspended: missing ancestors",
-                    certificate
+                warn!(
+                    "[arun] Processing certificate {:?} suspended: missing ancestors",
+                    certificate.digest()
                 );
                 inner
                     .metrics
@@ -893,14 +930,24 @@ impl Synchronizer {
         }
 
         let suspended_certs = state.accept_children(certificate.round(), certificate.digest());
+
+        warn!(
+            "[arun] Found {} suspended certs that can also be accepted {:?}.",
+            suspended_certs.len(),
+            suspended_certs
+        );
         // Accept in causal order.
+        let cert_digest = certificate.digest();
         inner
             .accept_certificate_internal(&state, certificate)
             .await?;
+        warn!("[arun] OFFICIALLY ACCEPTED CERT {cert_digest:?}.");
         for suspended in suspended_certs {
+            let suspended_digest = suspended.certificate.digest();
             inner
                 .accept_suspended_certificate(&state, suspended)
                 .await?;
+            warn!("[arun] OFFICIALLY ACCEPTED SUSPENDED CERT {suspended_digest:?}.");
         }
 
         inner
@@ -1184,6 +1231,7 @@ impl Synchronizer {
 
 /// Holds information for a suspended certificate. The certificate can be accepted into the DAG
 /// once `missing_parents` become empty.
+#[derive(Debug)]
 struct SuspendedCertificate {
     certificate: Certificate,
     missing_parents: HashSet<CertificateDigest>,
@@ -1281,6 +1329,10 @@ impl State {
         digest: CertificateDigest,
     ) -> Vec<SuspendedCertificate> {
         // Validate that the parent certificate is no longer suspended.
+        warn!(
+            "[arun] Validate that the parent certificate is no longer suspended for round {} & digest {:?}.",
+            round, digest
+        );
         if let Some(suspended_cert) = self.suspended.remove(&digest) {
             panic!(
                 "Certificate {:?} should have no missing parent, but is still suspended (missing parents {:?})",

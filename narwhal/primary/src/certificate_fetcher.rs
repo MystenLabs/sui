@@ -646,10 +646,14 @@ async fn process_certificates_v2_helper(
 
     let now = Instant::now();
     for cert in sanitized_certificates {
+        let cert_digest = cert.digest();
         if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
             // It is possible that subsequent certificates are useful,
             // so not stopping early.
-            warn!("Failed to accept fetched certificate: {e}");
+            warn!(
+                "[arun] Failed to accept fetched certificate {:?}: {e}",
+                cert_digest
+            );
         }
     }
     metrics
