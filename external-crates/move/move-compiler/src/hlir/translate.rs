@@ -293,7 +293,7 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
 // Functions
 //**************************************************************************************************
 
-fn function(context: &mut Context, name: FunctionName, f: T::Function) -> H::Function {
+fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Function {
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
@@ -1184,6 +1184,7 @@ fn exp_list_items_to_vec(
                         _ => unreachable!(),
                     }
                 }
+                    
             }
         } else {
             es
@@ -1330,7 +1331,18 @@ fn exp_impl(
                 parameter_types,
                 acquires,
             } = *call;
+
+            println!("Found call");
+            println!("parameter types: ");
+            for ty in &parameter_types {
+                crate::shared::ast_debug::print_verbose(ty);
+            }
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
+            print!("expected type: ");
+            crate::shared::ast_debug::print_verbose(&expected_type);
+            print!("arguments: ");
+            crate::shared::ast_debug::print_verbose(&arguments);
+            println!();
             let htys = base_types(context, type_arguments);
             let hargs = exp_list(context, result, Some(&expected_type), *arguments);
             let call = H::ModuleCall {
