@@ -335,7 +335,7 @@ impl LocalExec {
 
         if let Some(url) = rpc_url.clone() {
             info!("Using RPC URL: {}", url);
-            if let Ok(x) = inner_exec(
+            match inner_exec(
                 url,
                 tx_digest,
                 expensive_safety_check_config.clone(),
@@ -345,9 +345,14 @@ impl LocalExec {
             )
             .await
             {
-                return Ok(x);
+                Ok(exec_state) => return Ok(exec_state),
+                Err(e) => {
+                    warn!(
+                        "Failed to execute transaction with provided RPC URL: Error {}",
+                        e
+                    );
+                }
             }
-            warn!("Failed to execute transaction with provided RPC URL. Attempting to load configs from file");
         }
 
         let cfg = ReplayableNetworkConfigSet::load_config(path)?;
