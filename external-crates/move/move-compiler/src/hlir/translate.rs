@@ -293,7 +293,7 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
 // Functions
 //**************************************************************************************************
 
-fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Function {
+fn function(context: &mut Context, name: FunctionName, f: T::Function) -> H::Function {
     assert!(context.has_empty_locals());
     assert!(context.tmp_counter == 0);
     let T::Function {
