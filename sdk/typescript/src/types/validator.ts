@@ -6,13 +6,13 @@ import {
 	array,
 	boolean,
 	literal,
+	nullable,
 	number,
 	object,
-	string,
-	union,
-	nullable,
-	tuple,
 	optional,
+	string,
+	tuple,
+	union,
 } from 'superstruct';
 
 /* -------------- Types for the SuiSystemState Rust definition -------------- */

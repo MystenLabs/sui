@@ -3,7 +3,7 @@
 
 import { type Keypair } from '@mysten/sui.js/cryptography';
 
-import { type Account, AccountType } from './Account';
+import { AccountType, type Account } from './Account';
 import { AccountKeypair } from './AccountKeypair';
 
 /**

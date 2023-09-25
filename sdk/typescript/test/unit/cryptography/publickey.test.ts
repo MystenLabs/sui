@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { PublicKey, bytesEqual } from '../../../src/cryptography/publickey';
+import { toB64 } from '@mysten/bcs';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex } from '@noble/hashes/utils';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { bcs } from '../../../src/bcs/index.js';
+import { IntentScope } from '../../../src/cryptography/intent';
+import { bytesEqual, PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
-import { toB64 } from '@mysten/bcs';
-import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
-import { bytesToHex } from '@noble/hashes/utils';
-import { blake2b } from '@noble/hashes/blake2b';
-import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '../../../src/utils/sui-types.js';
+import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../../../src/utils/sui-types.js';
 
 describe('Publickey', () => {
 	let k1: Ed25519Keypair,

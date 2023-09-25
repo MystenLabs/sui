@@ -13,7 +13,7 @@ You need to create a class that represents your wallet. You can use the `Wallet`
 `@mysten/wallet-standard` to help ensure your class adheres to the standard.
 
 ```tsx
-import { Wallet, SUI_DEVNET_CHAIN } from '@mysten/wallet-standard';
+import { SUI_DEVNET_CHAIN, Wallet } from '@mysten/wallet-standard';
 
 class YourWallet implements Wallet {
 	get version() {

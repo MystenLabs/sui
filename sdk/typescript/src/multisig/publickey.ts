@@ -4,19 +4,20 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
-import { PublicKey, bytesEqual } from '../cryptography/publickey.js';
+
+import { builder } from '../builder/bcs.js';
+import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import type {
 	SerializedSignature,
 	SignatureFlag,
 	SignatureScheme,
 } from '../cryptography/signature.js';
 import {
+	parseSerializedSignature,
 	SIGNATURE_FLAG_TO_SCHEME,
 	SIGNATURE_SCHEME_TO_FLAG,
-	parseSerializedSignature,
 } from '../cryptography/signature.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { builder } from '../builder/bcs.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
 

@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bytesToHex } from '@noble/hashes/utils';
-import { blake2b } from '@noble/hashes/blake2b';
 import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
-import { SUI_ADDRESS_LENGTH, normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '@mysten/sui.js/utils';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex } from '@noble/hashes/utils';
 import { decodeJwt } from 'jose';
+
 import { genAddressSeed, toBufferBE } from './utils.js';
 
 export function jwtToAddress(jwt: string, userSalt: bigint) {

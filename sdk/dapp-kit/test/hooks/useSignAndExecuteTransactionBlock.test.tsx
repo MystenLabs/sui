@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { useConnectWallet, useSignAndExecuteTransactionBlock } from 'dapp-kit/src';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { useConnectWallet, useSignAndExecuteTransactionBlock } from 'dapp-kit/src';
 import {
 	WalletFeatureNotSupportedError,
 	WalletNotConnectedError,
 } from 'dapp-kit/src/errors/walletErrors.js';
 import type { Mock } from 'vitest';
+
 import { suiFeatures } from '../mocks/mockFeatures.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('useSignAndExecuteTransactionBlock', () => {
 	test('throws an error when trying to sign and execute a transaction block without a wallet connection', async () => {

@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useMemo, useRef } from 'react';
-import { QredoAccountsSelector } from './QredoAccountsSelector';
-import { useFetchQredoAccounts } from '../hooks';
-import { SummaryCard } from '_components/SummaryCard';
 import Alert from '_components/alert';
 import Loading from '_components/loading';
+import { SummaryCard } from '_components/SummaryCard';
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { type Wallet } from '_src/shared/qredo-api';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Link } from '_src/ui/app/shared/Link';
+import { useEffect, useMemo, useRef } from 'react';
+
+import { useFetchQredoAccounts } from '../hooks';
+import { QredoAccountsSelector } from './QredoAccountsSelector';
 
 export type SelectQredoAccountsSummaryCardProps = {
 	qredoID: string;

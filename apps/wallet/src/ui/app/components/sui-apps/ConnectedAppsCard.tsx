@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import { useEffect, useMemo } from 'react';
-
-import { type DAppEntry, SuiApp } from './SuiApp';
-import { SuiAppEmpty } from './SuiAppEmpty';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { permissionsSelectors } from '../../redux/slices/permissions';
-import Loading from '../loading';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
 import { useAppSelector } from '_hooks';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { prepareLinkToCompare } from '_src/shared/utils';
+import { useFeature } from '@growthbook/growthbook-react';
+import { useEffect, useMemo } from 'react';
+
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { permissionsSelectors } from '../../redux/slices/permissions';
+import Loading from '../loading';
+import { SuiApp, type DAppEntry } from './SuiApp';
+import { SuiAppEmpty } from './SuiAppEmpty';
 
 const emptyArray: DAppEntry[] = [];
 

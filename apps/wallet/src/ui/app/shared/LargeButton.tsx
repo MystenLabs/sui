@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import LoadingIndicator from '_components/loading/LoadingIndicator';
 import clsx from 'classnames';
 import { forwardRef, type ReactNode, type Ref } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 function Decorator({ disabled, children }: { disabled?: boolean; children: ReactNode }) {
 	return (

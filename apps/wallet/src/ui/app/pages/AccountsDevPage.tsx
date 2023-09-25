@@ -1,6 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
+import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
+import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
+import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
+import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 import { Popover } from '@headlessui/react';
 import { useFormatCoin } from '@mysten/core';
 import { useBalance } from '@mysten/dapp-kit';
@@ -12,16 +19,17 @@ import { toB64 } from '@mysten/sui.js/utils';
 import { hexToBytes } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Toaster, toast } from 'react-hot-toast';
+import { toast, Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+
 import { type BackgroundClient } from '../background-client';
 import { ConnectLedgerModal } from '../components/ledger/ConnectLedgerModal';
 import LoadingIndicator from '../components/loading/LoadingIndicator';
 import Logo from '../components/logo';
 import NetworkSelector from '../components/network-selector';
 import { useAppSelector } from '../hooks';
-import { useAccountSources } from '../hooks/useAccountSources';
 import { useAccounts } from '../hooks/useAccounts';
+import { useAccountSources } from '../hooks/useAccountSources';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useQredoTransaction } from '../hooks/useQredoTransaction';
 import { useSigner } from '../hooks/useSigner';
@@ -31,13 +39,6 @@ import { FAUCET_HOSTS } from '../shared/faucet/FaucetRequestButton';
 import { useFaucetMutation } from '../shared/faucet/useFaucetMutation';
 import { Heading } from '../shared/heading';
 import { Text } from '../shared/text';
-import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
-import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
-import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
-import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
-import { type ZkProvider } from '_src/background/accounts/zk/providers';
-import { entropyToSerialized, mnemonicToEntropy } from '_src/shared/utils/bip39';
 
 export const testPassNewAccounts = '61916a448d7885641';
 const testMnemonic =

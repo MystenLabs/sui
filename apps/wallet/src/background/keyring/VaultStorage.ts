@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type DerivedAccount } from './DerivedAccount';
-import { type ImportedAccount } from './ImportedAccount';
-import { Vault } from './Vault';
+import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
+import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
+import { getRandomPassword, makeEphemeraPassword } from '_src/shared/cryptography/keystore';
+import type { ExportedKeypair } from '@mysten/sui.js/cryptography';
+
 import {
 	getFromLocalStorage,
 	getFromSessionStorage,
@@ -11,12 +13,10 @@ import {
 	setToLocalStorage,
 	setToSessionStorage,
 } from '../storage-utils';
-import { getRandomEntropy, toEntropy } from '_shared/utils/bip39';
-import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
-
-import { getRandomPassword, makeEphemeraPassword } from '_src/shared/cryptography/keystore';
+import { type DerivedAccount } from './DerivedAccount';
+import { type ImportedAccount } from './ImportedAccount';
+import { Vault } from './Vault';
 import type { StoredData } from './Vault';
-import type { ExportedKeypair } from '@mysten/sui.js/cryptography';
 
 const VAULT_KEY = 'vault';
 export const EPHEMERAL_PASSWORD_KEY = '244e4b24e667ebf';

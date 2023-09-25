@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-
 import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
 import cn from 'classnames';
 import { useState, type ReactNode } from 'react';

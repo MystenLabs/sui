@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
-import { EyeClose16 } from '@mysten/icons';
-
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-
-import { useHiddenAssets } from './HiddenAssetsProvider';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
@@ -16,6 +9,12 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
+import { EyeClose16 } from '@mysten/icons';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+
+import { useHiddenAssets } from './HiddenAssetsProvider';
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();

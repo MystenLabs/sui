@@ -65,7 +65,7 @@ The ability to request SUI from a faucet is not part of `SuiClient` as it was wi
 to retrieve the faucet URL for `localnet`, `testnet`, or `devnet` networks.
 
 ```ts
-import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 
 await requestSuiFromFaucetV0({
 	host: getFaucetHost('devnet'),

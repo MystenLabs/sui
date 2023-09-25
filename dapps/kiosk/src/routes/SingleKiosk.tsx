@@ -3,10 +3,10 @@
 
 import { useParams } from 'react-router-dom';
 
-import { KioskItems } from '../components/Kiosk/KioskItems';
 import { Loading } from '../components/Base/Loading';
-import { useOwnedKiosk } from '../hooks/kiosk';
+import { KioskItems } from '../components/Kiosk/KioskItems';
 import { KioskSelector } from '../components/Kiosk/KioskSelector';
+import { useOwnedKiosk } from '../hooks/kiosk';
 import { useKioskSelector } from '../hooks/useKioskSelector';
 
 export default function SingleKiosk() {

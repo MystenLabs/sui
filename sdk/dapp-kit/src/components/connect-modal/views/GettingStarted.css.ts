@@ -19,3 +19,5 @@ export const content = style({
 	gap: 20,
 	padding: 40,
 });
+
+export const installLink = style({});

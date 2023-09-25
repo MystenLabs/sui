@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
+import { Client, HTTPTransport, RequestManager } from '@open-rpc/client-js';
 import type { Struct } from 'superstruct';
 import { validate } from 'superstruct';
+
 import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
 import { RPCValidationError } from './errors.js';
 

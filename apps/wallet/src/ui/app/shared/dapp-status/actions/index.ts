@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createAsyncThunk } from '@reduxjs/toolkit';
-
 import type { AppThunkConfig } from '_redux/store/thunk-extras';
+import { createAsyncThunk } from '@reduxjs/toolkit';
 
 export const appDisconnect = createAsyncThunk<
 	void,

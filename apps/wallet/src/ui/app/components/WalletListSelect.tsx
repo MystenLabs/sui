@@ -4,10 +4,10 @@
 import { cx } from 'class-variance-authority';
 import { useMemo } from 'react';
 
-import { SummaryCard } from './SummaryCard';
-import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
 import { useAccounts } from '../hooks/useAccounts';
 import { Link } from '../shared/Link';
+import { SummaryCard } from './SummaryCard';
+import { WalletListSelectItem, type WalletListSelectItemProps } from './WalletListSelectItem';
 
 export type WalletListSelectProps = {
 	title: string;

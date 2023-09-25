@@ -3,7 +3,7 @@
 
 import { QueryClient } from '@tanstack/react-query';
 import { type PersistedClient, type Persister } from '@tanstack/react-query-persist-client';
-import { get, set, del } from 'idb-keyval';
+import { del, get, set } from 'idb-keyval';
 
 export const queryClient = new QueryClient({
 	defaultOptions: {

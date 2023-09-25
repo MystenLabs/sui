@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
+
 import { useSuiClientContext } from './useSuiClient.js';
-import type { SuiClient } from '@mysten/sui.js/client';
 
 export type SuiRpcMethodName = {
 	[K in keyof SuiClient]: SuiClient[K] extends ((input: any) => Promise<any>) | (() => Promise<any>)

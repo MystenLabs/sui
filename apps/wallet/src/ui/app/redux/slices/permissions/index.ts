@@ -1,17 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Permission } from '_messages/payloads/permissions';
+import type { RootState } from '_redux/RootReducer';
+import type { AppThunkConfig } from '_store/thunk-extras';
 import {
 	createAsyncThunk,
 	createEntityAdapter,
 	createSelector,
 	createSlice,
 } from '@reduxjs/toolkit';
-
 import type { PayloadAction } from '@reduxjs/toolkit';
-import type { Permission } from '_messages/payloads/permissions';
-import type { RootState } from '_redux/RootReducer';
-import type { AppThunkConfig } from '_store/thunk-extras';
 
 const permissionsAdapter = createEntityAdapter<Permission>({
 	sortComparer: (a, b) => {

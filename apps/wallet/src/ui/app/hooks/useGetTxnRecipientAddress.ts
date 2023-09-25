@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getAmount } from '_helpers';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
-
-import { getAmount } from '_helpers';
 
 type Props = {
 	txn: SuiTransactionBlockResponse;

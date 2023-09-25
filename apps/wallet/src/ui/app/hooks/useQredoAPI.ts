@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { QredoAPI } from '_src/shared/qredo-api';
 import { useEffect, useState } from 'react';
 
 import { useBackgroundClient } from './useBackgroundClient';
 import { useQredoInfo } from './useQredoInfo';
-import { QredoAPI } from '_src/shared/qredo-api';
 
 const API_INSTANCES: Record<string, QredoAPI> = {};
 

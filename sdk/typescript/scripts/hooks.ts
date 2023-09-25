@@ -4,10 +4,11 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { format } from 'prettier';
-import { normalizeMethodName } from './generate';
-import { OpenRpcMethod, OpenRpcSpec } from './open-rpc';
+
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
+import { normalizeMethodName } from './generate';
+import { OpenRpcMethod, OpenRpcSpec } from './open-rpc';
 
 const header = `
 // Copyright (c) Mysten Labs, Inc.

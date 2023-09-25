@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
-
-import { Link } from '../../shared/Link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
 import { Text } from '_src/ui/app/shared/text';
+import { useState } from 'react';
+
+import { Link } from '../../shared/Link';
 
 type ConnectLedgerModalProps = {
 	onClose: () => void;

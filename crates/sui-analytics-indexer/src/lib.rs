@@ -149,12 +149,14 @@ impl FileType {
         file_format: FileFormat,
         epoch_num: EpochId,
         checkpoint_sequence_num: u64,
+        filename_suffix: u128,
     ) -> Path {
         self.dir_prefix()
             .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
             .child(format!(
-                "{}.{}",
+                "{}_{}.{}",
                 checkpoint_sequence_num,
+                filename_suffix,
                 file_format.file_suffix()
             ))
     }
@@ -166,6 +168,7 @@ pub struct FileMetadata {
     pub file_format: FileFormat,
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
+    pub filename_suffix: u128,
 }
 
 impl FileMetadata {
@@ -174,12 +177,14 @@ impl FileMetadata {
         file_format: FileFormat,
         epoch_num: u64,
         checkpoint_seq_range: Range<u64>,
+        filename_suffix: u128,
     ) -> FileMetadata {
         FileMetadata {
             file_type,
             file_format,
             epoch_num,
             checkpoint_seq_range,
+            filename_suffix,
         }
     }
 
@@ -188,6 +193,7 @@ impl FileMetadata {
             self.file_format,
             self.epoch_num,
             self.checkpoint_seq_range.start,
+            self.filename_suffix,
         )
     }
 }
@@ -216,10 +222,19 @@ impl CheckpointUpdates {
         file_format: FileFormat,
         epoch_num: u64,
         checkpoint_range: Range<u64>,
+        filename_suffix: u128,
         manifest: &mut Manifest,
     ) -> Self {
         let files: Vec<_> = FileType::iter()
-            .map(|f| FileMetadata::new(f, file_format, epoch_num, checkpoint_range.clone()))
+            .map(|f| {
+                FileMetadata::new(
+                    f,
+                    file_format,
+                    epoch_num,
+                    checkpoint_range.clone(),
+                    filename_suffix,
+                )
+            })
             .collect();
         CheckpointUpdates::new(epoch_num, checkpoint_range.end, files, manifest)
     }

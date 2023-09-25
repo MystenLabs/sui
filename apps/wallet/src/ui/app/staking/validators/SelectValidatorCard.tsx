@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useGetValidatorsApy, formatPercentageDisplay, calculateStakeShare } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
-import { ArrowRight16 } from '@mysten/icons';
-import cl from 'classnames';
-import { useState, useMemo } from 'react';
-
-import { ValidatorListItem } from './ValidatorListItem';
-import { Button } from '_app/shared/ButtonUI';
 import { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { ampli } from '_src/shared/analytics/ampli';
+import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { ArrowRight16 } from '@mysten/icons';
+import cl from 'classnames';
+import { useMemo, useState } from 'react';
+
+import { ValidatorListItem } from './ValidatorListItem';
 
 type SortKeys = 'name' | 'stakeShare' | 'apy';
 const sortKeys: Record<SortKeys, string> = {

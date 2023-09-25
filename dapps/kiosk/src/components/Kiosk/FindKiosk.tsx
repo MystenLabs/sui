@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import classnames from 'classnames';
 import { FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import classnames from 'classnames';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 export default function FindKiosk() {
 	const { id } = useParams();

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type Config } from 'tailwindcss';
-import { fontFamily } from 'tailwindcss/defaultTheme';
 import colors from 'tailwindcss/colors';
+import { fontFamily } from 'tailwindcss/defaultTheme';
 
 /** The minimum line height that text should use to avoid clipping and overflow scrolling */
 const MIN_LINE_HEIGHT = '1.13';

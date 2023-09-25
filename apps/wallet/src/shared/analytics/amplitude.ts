@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import * as amplitude from '@amplitude/analytics-browser';
-import { TransportType, type UserSession, LogLevel } from '@amplitude/analytics-types';
+import { LogLevel, TransportType, type UserSession } from '@amplitude/analytics-types';
 import { PersistableStorage } from '@mysten/core';
 
 import { ampli } from './ampli';

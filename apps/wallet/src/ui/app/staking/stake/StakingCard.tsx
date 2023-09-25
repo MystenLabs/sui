@@ -1,34 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeatureIsOn } from '@growthbook/growthbook-react';
-import { useCoinMetadata } from '@mysten/core';
-import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
-import { ArrowLeft16 } from '@mysten/icons';
-import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import * as Sentry from '@sentry/react';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
-import { Formik } from 'formik';
-import { useCallback, useMemo } from 'react';
-import { toast } from 'react-hot-toast';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
-
-import StakeForm from './StakeForm';
-import { UnStakeForm } from './UnstakeForm';
-import { ValidatorFormDetail } from './ValidatorFormDetail';
-import { createStakeTransaction, createUnstakeTransaction } from './utils/transaction';
-import { createValidationSchema } from './utils/validation';
-import { QredoActionIgnoredByUser } from '../../QredoSigner';
-import Alert from '../../components/alert';
-import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
-import { useActiveAccount } from '../../hooks/useActiveAccount';
-import { useQredoTransaction } from '../../hooks/useQredoTransaction';
-import { useSigner } from '../../hooks/useSigner';
-import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
-import { Button } from '_app/shared/ButtonUI';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
 import { Collapsible } from '_app/shared/collapse';
 import { Text } from '_app/shared/text';
 import Loading from '_components/loading';
@@ -38,9 +12,34 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import { ampli } from '_src/shared/analytics/ampli';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { useFeatureIsOn } from '@growthbook/growthbook-react';
+import { useCoinMetadata } from '@mysten/core';
+import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { ArrowLeft16 } from '@mysten/icons';
 import type { StakeObject } from '@mysten/sui.js/client';
-
+import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import * as Sentry from '@sentry/react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Formik } from 'formik';
 import type { FormikHelpers } from 'formik';
+import { useCallback, useMemo } from 'react';
+import { toast } from 'react-hot-toast';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+
+import Alert from '../../components/alert';
+import { getSignerOperationErrorMessage } from '../../helpers/errorMessages';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
+import { useQredoTransaction } from '../../hooks/useQredoTransaction';
+import { useSigner } from '../../hooks/useSigner';
+import { QredoActionIgnoredByUser } from '../../QredoSigner';
+import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
+import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
+import { useGetDelegatedStake } from '../useGetDelegatedStake';
+import StakeForm from './StakeForm';
+import { UnStakeForm } from './UnstakeForm';
+import { createStakeTransaction, createUnstakeTransaction } from './utils/transaction';
+import { createValidationSchema } from './utils/validation';
+import { ValidatorFormDetail } from './ValidatorFormDetail';
 
 const initialValues = {
 	amount: '',

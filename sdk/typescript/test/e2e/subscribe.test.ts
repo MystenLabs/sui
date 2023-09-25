@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { test, expect } from 'vitest';
-import { setup } from './utils/setup';
+import { expect, test } from 'vitest';
+
 import { TransactionBlock } from '../../src/builder';
+import { setup } from './utils/setup';
 
 test('subscribeTransaction', async () => {
 	const toolbox = await setup();

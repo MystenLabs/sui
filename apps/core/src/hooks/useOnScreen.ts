@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect, MutableRefObject } from 'react';
+import { MutableRefObject, useEffect, useState } from 'react';
 
 export const useOnScreen = (elementRef: MutableRefObject<Element | null>) => {
 	const [isIntersecting, setIsIntersecting] = useState(false);

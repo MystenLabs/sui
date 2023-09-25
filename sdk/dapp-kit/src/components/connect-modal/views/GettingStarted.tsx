@@ -20,6 +20,7 @@ export function GettingStarted() {
 					Once you set up your wallet, refresh this window browser to load up the extension.
 				</InfoSection>
 				<a
+					className={styles.installLink}
 					href="https://chrome.google.com/webstore/detail/sui-wallet/opcgpfmipidbgpenhmajoajpbobppdil"
 					target="_blank"
 					rel="noreferrer"

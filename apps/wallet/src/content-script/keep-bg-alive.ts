@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Browser from 'webextension-polyfill';
-
 import type { Runtime } from 'webextension-polyfill';
 
 export const KEEP_ALIVE_BG_PORT_NAME = 'content-script<->background-script';

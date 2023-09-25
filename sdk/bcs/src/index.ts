@@ -11,9 +11,10 @@
  * @property {BcsReader}
  */
 
-import { toB64, fromB64 } from './b64';
-import { toHEX, fromHEX } from './hex';
 import bs58 from 'bs58';
+
+import { fromB64, toB64 } from './b64';
+import { fromHEX, toHEX } from './hex';
 
 const SUI_ADDRESS_LENGTH = 32;
 

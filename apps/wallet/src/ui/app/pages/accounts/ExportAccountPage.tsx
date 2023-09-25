@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { fromB64 } from '@mysten/sui.js/utils';
 import { bytesToHex } from '@noble/hashes/utils';
 import { useMutation } from '@tanstack/react-query';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 
-import { HideShowDisplayBox } from '../../components/HideShowDisplayBox';
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import Alert from '../../components/alert';
+import { HideShowDisplayBox } from '../../components/HideShowDisplayBox';
 import Loading from '../../components/loading';
 import Overlay from '../../components/overlay';
 import { useAccounts } from '../../hooks/useAccounts';
-import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 
 export function ExportAccountPage() {
 	const { accountID } = useParams();
