@@ -433,4 +433,4 @@ state-archive-read-config:
 
 ## Set up your own node on Spheron
 
-You can easily establish your SUI nodes in just a few simple steps using the (Spheron Network)[https://spheron.network/] on our marketplace. Please refer to our documentation for guidance on running (SUI nodes) [https://docs.spheron.network/marketplace-guide/sui/].
+You can easily establish your SUI nodes in just a few simple steps using the [Spheron Network](https://spheron.network/) on our marketplace. Please refer to our documentation for guidance on running [SUI nodes](https://docs.spheron.network/marketplace-guide/sui/).
