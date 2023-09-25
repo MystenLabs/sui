@@ -56,11 +56,11 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use tabled::builder::Builder as TableBuilder;
 use tabled::settings::{
     object::Cell as TableCell, Border as TableBorder, Modify as TableModify, Panel as TablePanel,
     Style as TableStyle,
 };
+use tabled::{builder::Builder as TableBuilder, settings::style::HorizontalLine};
 use tracing::info;
 
 macro_rules! serialize_or_execute {
@@ -1401,6 +1401,47 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::Gas(gas_coins) => {
+                let gas_coins = gas_coins
+                    .iter()
+                    .map(GasCoinOutput::from)
+                    .collect::<Vec<_>>();
+                if gas_coins.is_empty() {
+                    write!(f, "No gas coins are owned by this address")?;
+                    return Ok(());
+                }
+
+                let mut builder = TableBuilder::default();
+                builder.set_header(vec!["gasCoinId", "gasBalance"]);
+                for coin in &gas_coins {
+                    builder.push_record(vec![
+                        coin.gas_coin_id.to_string(),
+                        coin.gas_balance.to_string(),
+                    ]);
+                }
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
+                if gas_coins.len() > 10 {
+                    table.with(TablePanel::header(format!(
+                        "Showing {} gas coins and their balances.",
+                        gas_coins.len()
+                    )));
+                    table.with(TablePanel::footer(format!(
+                        "Showing {} gas coins and their balances.",
+                        gas_coins.len()
+                    )));
+                    table.with(TableStyle::rounded().horizontals([
+                        HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
+                        HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+                        HorizontalLine::new(
+                            gas_coins.len() + 2,
+                            TableStyle::modern().get_horizontal(),
+                        ),
+                    ]));
+                    table.with(tabled::settings::style::BorderSpanCorrection);
+                }
+                write!(f, "{}", table)?;
+            }
             SuiClientCommandResult::NewAddress(new_address) => {
                 let mut builder = TableBuilder::default();
 
@@ -1531,17 +1572,6 @@ impl Display for SuiClientCommandResult {
             }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
-            }
-            SuiClientCommandResult::Gas(gases) => {
-                // TODO: generalize formatting of CLI
-                writeln!(writer, " {0: ^66} | {1: ^11}", "Object ID", "Gas Value")?;
-                writeln!(
-                    writer,
-                    "----------------------------------------------------------------------------------"
-                )?;
-                for gas in gases {
-                    writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
-                }
             }
             SuiClientCommandResult::ChainIdentifier(ci) => {
                 writeln!(writer, "{}", ci)?;
@@ -1706,6 +1736,13 @@ pub fn write_transaction_response(
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
+            SuiClientCommandResult::Gas(gas_coins) => {
+                let gas_coins = gas_coins
+                    .iter()
+                    .map(GasCoinOutput::from)
+                    .collect::<Vec<_>>();
+                Ok(serde_json::to_string_pretty(&gas_coins)?)
+            }
             SuiClientCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 Ok(serde_json::to_string_pretty(&object)?)
@@ -1783,6 +1820,22 @@ pub struct NewAddressOutput {
     pub address: SuiAddress,
     pub key_scheme: SignatureScheme,
     pub recovery_phrase: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GasCoinOutput {
+    pub gas_coin_id: ObjectID,
+    pub gas_balance: u64,
+}
+
+impl From<&GasCoin> for GasCoinOutput {
+    fn from(gas_coin: &GasCoin) -> Self {
+        Self {
+            gas_coin_id: *gas_coin.id(),
+            gas_balance: gas_coin.value(),
+        }
+    }
 }
 
 #[derive(Serialize)]
