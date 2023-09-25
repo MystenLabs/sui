@@ -26,16 +26,21 @@ type BatchStatusFaucetResponse = {
 	error?: string | null;
 };
 
-async function faucetRequest(
-	host: string,
-	path: string,
-	body: Record<string, any>,
-	headers?: HeadersInit,
-) {
+type FaucetRequest = {
+	host: string;
+	path: string;
+	body?: Record<string, any>;
+	headers?: HeadersInit;
+	method?: 'GET' | 'POST';
+};
+
+async function faucetRequest({ host, path, body, headers, method }: FaucetRequest) {
 	const endpoint = new URL(path, host).toString();
+	// default to POST
 	const res = await fetch(endpoint, {
-		method: 'POST',
-		body: JSON.stringify(body),
+		...(method && method === 'GET'
+			? { method: 'GET' }
+			: { method: 'POST', body: JSON.stringify(body) }),
 		headers: {
 			'Content-Type': 'application/json',
 			...(headers || {}),
@@ -66,16 +71,16 @@ export async function requestSuiFromFaucetV0(input: {
 	recipient: string;
 	headers?: HeadersInit;
 }): Promise<FaucetResponse> {
-	return faucetRequest(
-		input.host,
-		'/gas',
-		{
+	return faucetRequest({
+		host: input.host,
+		path: '/gas',
+		body: {
 			FixedAmountRequest: {
 				recipient: input.recipient,
 			},
 		},
-		input.headers,
-	);
+		headers: input.headers,
+	});
 }
 
 export async function requestSuiFromFaucetV1(input: {
@@ -83,16 +88,16 @@ export async function requestSuiFromFaucetV1(input: {
 	recipient: string;
 	headers?: HeadersInit;
 }): Promise<BatchFaucetResponse> {
-	return faucetRequest(
-		input.host,
-		'/v1/gas',
-		{
+	return faucetRequest({
+		host: input.host,
+		path: '/v1/gas',
+		body: {
 			FixedAmountRequest: {
 				recipient: input.recipient,
 			},
 		},
-		input.headers,
-	);
+		headers: input.headers,
+	});
 }
 
 export async function getFaucetRequestStatus(input: {
@@ -100,16 +105,12 @@ export async function getFaucetRequestStatus(input: {
 	taskId: string;
 	headers?: HeadersInit;
 }): Promise<BatchStatusFaucetResponse> {
-	return faucetRequest(
-		input.host,
-		'/v1/status',
-		{
-			task_id: {
-				task_id: input.taskId,
-			},
-		},
-		input.headers,
-	);
+	return faucetRequest({
+		host: input.host,
+		path: `/v1/status/${input.taskId}`,
+		headers: input.headers,
+		method: 'GET',
+	});
 }
 
 export function getFaucetHost(network: 'testnet' | 'devnet' | 'localnet') {
