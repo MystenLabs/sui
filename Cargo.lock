@@ -11803,6 +11803,7 @@ name = "test-cluster"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fastcrypto-zkp",
  "futures",
  "jsonrpsee",
  "move-binary-format",
