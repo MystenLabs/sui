@@ -27,7 +27,7 @@ import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
-import { ZkAccount } from './zk/ZkAccount';
+import { ZkAccount, type ZkAccountSerialized } from './zk/ZkAccount';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -359,6 +359,21 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		await backupDB();
 		accountsEvents.emit('accountsChanged');
 		accountSourcesEvents.emit('accountSourcesChanged');
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+		return true;
+	}
+	if (isMethodPayload(payload, 'acknowledgeZkLoginWarning')) {
+		const { accountID } = payload.args;
+		const account = await getAccountByID(accountID);
+		if (!account) {
+			throw new Error(`Account with id ${accountID} not found.`);
+		}
+		if (!(account instanceof ZkAccount)) {
+			throw new Error(`Account with id ${accountID} is not a zkLogin account.`);
+		}
+		const updates: Partial<ZkAccountSerialized> = { warningAcknowledged: true };
+		await (await getDB()).accounts.update(accountID, updates);
+		accountsEvents.emit('accountStatusChanged', { accountID });
 		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}
