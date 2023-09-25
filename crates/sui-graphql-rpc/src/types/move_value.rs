@@ -56,7 +56,8 @@ type MoveData =
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum MoveData {
     Address(SuiAddress),
-    UID(SuiAddress),
+    #[serde(rename = "UID")]
+    Uid(SuiAddress),
     Bool(bool),
     Number(BigInt),
     String(String),
@@ -127,15 +128,14 @@ impl TryFrom<value::MoveValue> for MoveData {
                 if is_type(&type_, &STD, MOD_OPTION, TYP_OPTION) {
                     // 0x1::option::Option
                     Self::Option(extract_option(&type_, fields)?)
-                } else if is_type(&type_, &STD, MOD_ASCII, TYP_STRING) {
-                    // 0x1::ascii::String
-                    Self::String(extract_string(&type_, fields)?)
-                } else if is_type(&type_, &STD, MOD_STRING, TYP_STRING) {
-                    // 0x1::string::String
+                } else if is_type(&type_, &STD, MOD_ASCII, TYP_STRING)
+                    || is_type(&type_, &STD, MOD_STRING, TYP_STRING)
+                {
+                    // 0x1::ascii::String, 0x1::string::String
                     Self::String(extract_string(&type_, fields)?)
                 } else if is_type(&type_, &SUI, MOD_OBJECT, TYP_UID) {
                     // 0x2::object::UID
-                    Self::UID(extract_uid(&type_, fields)?)
+                    Self::Uid(extract_uid(&type_, fields)?)
                 } else {
                     // Arbitrary structs
                     let fields: Result<Vec<_>> =
@@ -242,7 +242,7 @@ fn extract_string(
 
         // Provide a sample of the string in question.
         let sample = if bytes.len() < PREFIX {
-            String::from_utf8_lossy(&bytes)
+            String::from_utf8_lossy(bytes)
         } else {
             String::from_utf8_lossy(&bytes[..PREFIX - 3]) + "..."
         };
@@ -472,7 +472,7 @@ mod tests {
         });
 
         let v = data(l, address("0x42"));
-        let expect = expect!["Ok(UID(SuiAddress([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 66])))"];
+        let expect = expect!["Ok(Uid(SuiAddress([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 66])))"];
         expect.assert_eq(&format!("{v:?}"));
     }
 
