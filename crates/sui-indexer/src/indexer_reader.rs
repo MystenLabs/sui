@@ -7,7 +7,10 @@ use std::{
 };
 
 use crate::{
-    errors::IndexerError, models_v2::packages::StoredPackage, schema_v2::packages,
+    errors::IndexerError,
+    models_v2::objects::StoredObject,
+    models_v2::{epoch::StoredEpochInfo, packages::StoredPackage},
+    schema_v2::{epochs, objects, packages},
     PgConectionPoolConfig, PgConnectionConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
@@ -15,7 +18,14 @@ use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
-use sui_types::{base_types::ObjectID, move_package::MovePackage};
+use sui_json_rpc_types::EpochInfo;
+use sui_types::{
+    base_types::{ObjectID, VersionNumber},
+    committee::EpochId,
+    move_package::MovePackage,
+    object::Object,
+    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
+};
 
 #[derive(Clone)]
 pub struct IndexerReader {
@@ -95,6 +105,44 @@ impl IndexerReader {
 
 // Impl for reading data from the DB
 impl IndexerReader {
+    fn get_object_from_db(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<StoredObject>, IndexerError> {
+        let object_id = object_id.to_vec();
+
+        let stored_object = self.run_query(|conn| {
+            if let Some(version) = version {
+                objects::dsl::objects
+                    .filter(objects::dsl::object_id.eq(object_id))
+                    .filter(objects::dsl::object_version.eq(version.value() as i64))
+                    .first::<StoredObject>(conn)
+                    .optional()
+            } else {
+                objects::dsl::objects
+                    .filter(objects::dsl::object_id.eq(object_id))
+                    .first::<StoredObject>(conn)
+                    .optional()
+            }
+        })?;
+
+        Ok(stored_object)
+    }
+
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+        version: Option<VersionNumber>,
+    ) -> Result<Option<Object>, IndexerError> {
+        let Some(stored_package) = self.get_object_from_db(object_id, version)? else {
+            return Ok(None);
+        };
+
+        let object = stored_package.try_into()?;
+        Ok(Some(object))
+    }
+
     fn get_package_from_db(
         &self,
         package_id: &ObjectID,
@@ -145,6 +193,51 @@ impl IndexerReader {
         self.spawn_blocking(move |this| this.get_package(&package_id))
             .await
     }
+
+    pub fn get_epoch_info_from_db(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> Result<Option<StoredEpochInfo>, IndexerError> {
+        let stored_epoch = self.run_query(|conn| {
+            if let Some(epoch) = epoch {
+                epochs::dsl::epochs
+                    .filter(epochs::epoch.eq(epoch as i64))
+                    .limit(1)
+                    .first::<StoredEpochInfo>(conn)
+                    .optional()
+            } else {
+                epochs::dsl::epochs
+                    .order_by(epochs::epoch.desc())
+                    .limit(1)
+                    .first::<StoredEpochInfo>(conn)
+                    .optional()
+            }
+        })?;
+
+        Ok(stored_epoch)
+    }
+
+    pub fn get_epoch_info(
+        &self,
+        epoch: Option<EpochId>,
+    ) -> Result<Option<EpochInfo>, IndexerError> {
+        let stored_epoch = self.get_epoch_info_from_db(epoch)?;
+
+        let stored_epoch = match stored_epoch {
+            Some(stored_epoch) => stored_epoch,
+            None => return Ok(None),
+        };
+
+        let epoch_info = EpochInfo::try_from(stored_epoch)?;
+        Ok(Some(epoch_info))
+    }
+
+    pub fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
+        let system_state: SuiSystemStateSummary =
+            sui_types::sui_system_state::get_sui_system_state(self)?
+                .into_sui_system_state_summary();
+        Ok(system_state)
+    }
 }
 
 #[derive(Clone, Default)]
@@ -174,5 +267,24 @@ impl move_core_types::resolver::ModuleResolver for IndexerReader {
         Ok(self
             .get_package(&package_id)?
             .and_then(|package| package.serialized_module_map().get(&module_name).cloned()))
+    }
+}
+
+impl sui_types::storage::ObjectStore for IndexerReader {
+    fn get_object(
+        &self,
+        object_id: &ObjectID,
+    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+        self.get_object(object_id, None)
+            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: sui_types::base_types::VersionNumber,
+    ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
+        self.get_object(object_id, Some(version))
+            .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
     }
 }
