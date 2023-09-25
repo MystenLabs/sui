@@ -27,6 +27,7 @@ pub(crate) struct CSVWriter {
     object_csv: Writer<File>,
     event_csv: Writer<File>,
     move_call_csv: Writer<File>,
+    filename_suffix: u128,
 }
 
 impl CSVWriter {
@@ -34,8 +35,9 @@ impl CSVWriter {
         root_dir: &Path,
         epoch_num: EpochId,
         starting_checkpoint: u64,
+        filename_suffix: u128,
     ) -> Result<Self, AnalyticsIndexerError> {
-        Self::init(root_dir, epoch_num, starting_checkpoint)
+        Self::init(root_dir, epoch_num, starting_checkpoint, filename_suffix)
             .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))
     }
 
@@ -43,42 +45,49 @@ impl CSVWriter {
         root_dir_path: &Path,
         epoch_num: EpochId,
         checkpoint_seq_num: u64,
+        filename_suffix: u128,
     ) -> Result<CSVWriter> {
         let transaction_object_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::TransactionObjects,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
         let checkpoint_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::Checkpoint,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
         let object_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::Object,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
         let event_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::Event,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
         let transaction_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::Transaction,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
         let move_call_csv = Self::make_writer(
             root_dir_path.to_path_buf(),
             FileType::MoveCall,
             epoch_num,
             checkpoint_seq_num,
+            filename_suffix,
         )?;
 
         Ok(CSVWriter {
@@ -89,6 +98,7 @@ impl CSVWriter {
             object_csv,
             event_csv,
             move_call_csv,
+            filename_suffix,
         })
     }
 
@@ -97,10 +107,16 @@ impl CSVWriter {
         file_type: FileType,
         epoch_num: EpochId,
         checkpoint_seq_num: u64,
+        filename_suffix: u128,
     ) -> Result<Writer<File>> {
         let file_path = path_to_filesystem(
             root_dir_path,
-            &file_type.file_path(FileFormat::CSV, epoch_num, checkpoint_seq_num),
+            &file_type.file_path(
+                FileFormat::CSV,
+                epoch_num,
+                checkpoint_seq_num,
+                filename_suffix,
+            ),
         )?;
         create_dir_all(file_path.parent().ok_or(anyhow!("Bad directory path"))?)?;
         if file_path.exists() {
@@ -171,7 +187,12 @@ impl TableWriter for CSVWriter {
     }
 
     fn reset(&mut self, epoch_num: EpochId, checkpoint_seq_num: u64) -> Result<()> {
-        let new_csv_writer = CSVWriter::init(&self.root_dir_path, epoch_num, checkpoint_seq_num)?;
+        let new_csv_writer = CSVWriter::init(
+            &self.root_dir_path,
+            epoch_num,
+            checkpoint_seq_num,
+            self.filename_suffix,
+        )?;
         self.checkpoint_csv = new_csv_writer.checkpoint_csv;
         self.object_csv = new_csv_writer.object_csv;
         self.transaction_csv = new_csv_writer.transaction_csv;
