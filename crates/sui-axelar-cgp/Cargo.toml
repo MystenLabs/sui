@@ -1,0 +1,31 @@
+[package]
+name = "sui-axelar-cgp"
+version = "0.0.1"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+serde.workspace = true
+
+rxrust = "1.0.0-beta.4"
+ethcontract = "0.25.1"
+
+web3 = "0.19.0"
+futures = "0.3.28"
+bcs = "0.1.5"
+
+sui-sdk = { path = "../sui-sdk" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+log = { version = "0.4.17", features = [] }
+
+[dev-dependencies]
+
+[[bin]]
+name = "sui-axelar-relayer"
+path = "src/relayer.rs"

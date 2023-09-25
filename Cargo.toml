@@ -84,6 +84,7 @@ members = [
     "crates/sui-analytics-indexer",
     "crates/sui-archival",
     "crates/sui-aws-orchestrator",
+    "crates/sui-axelar-cgp",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
