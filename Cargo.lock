@@ -9778,6 +9778,7 @@ dependencies = [
  "clap",
  "comfy-table",
  "duration-str",
+ "fastcrypto-zkp",
  "futures",
  "hdrhistogram",
  "indicatif",
@@ -10005,6 +10006,7 @@ dependencies = [
  "clap",
  "expect-test",
  "fastcrypto",
+ "fastcrypto-zkp",
  "fs_extra",
  "futures",
  "indexmap",
@@ -11802,6 +11804,7 @@ name = "test-cluster"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "fastcrypto-zkp",
  "futures",
  "jsonrpsee",
  "move-binary-format",

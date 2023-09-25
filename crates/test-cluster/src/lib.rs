@@ -50,6 +50,7 @@ use sui_types::transaction::{Transaction, TransactionData};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
+
 const NUM_VALIDATOR: usize = 4;
 
 pub struct FullNodeHandle {
@@ -604,7 +605,9 @@ pub struct TestClusterBuilder {
     db_checkpoint_config_validators: DBCheckpointConfig,
     db_checkpoint_config_fullnodes: DBCheckpointConfig,
     num_unpruned_validators: Option<usize>,
+    jwk_fetch_interval: Option<Duration>,
     config_dir: Option<PathBuf>,
+    default_jwks: bool,
 }
 
 impl TestClusterBuilder {
@@ -621,7 +624,9 @@ impl TestClusterBuilder {
             db_checkpoint_config_validators: DBCheckpointConfig::default(),
             db_checkpoint_config_fullnodes: DBCheckpointConfig::default(),
             num_unpruned_validators: None,
+            jwk_fetch_interval: None,
             config_dir: None,
+            default_jwks: false,
         }
     }
 
@@ -698,6 +703,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
+        self
+    }
+
     pub fn with_fullnode_supported_protocol_versions_config(
         mut self,
         c: SupportedProtocolVersions,
@@ -750,7 +760,41 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_default_jwks(mut self) -> Self {
+        self.default_jwks = true;
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
+        // All test clusters receive a continuous stream of random JWKs.
+        // If we later use zklogin authenticated transactions in tests we will need to supply
+        // valid JWKs as well.
+        #[cfg(msim)]
+        if !self.default_jwks {
+            sui_node::set_jwk_injector(Arc::new(|_authority, provider| {
+                use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+                use rand::Rng;
+
+                // generate random (and possibly conflicting) id/key pairings.
+                let id_num = rand::thread_rng().gen_range(1..=4);
+                let key_num = rand::thread_rng().gen_range(1..=4);
+
+                let id = JwkId {
+                    iss: provider.get_config().iss,
+                    kid: format!("kid{}", id_num),
+                };
+
+                let jwk = JWK {
+                    kty: "kty".to_string(),
+                    e: "e".to_string(),
+                    n: format!("n{}", key_num),
+                    alg: "alg".to_string(),
+                };
+
+                Ok(vec![(id, jwk)])
+            }));
+        }
+
         let swarm = self.start_swarm().await.unwrap();
         let working_dir = swarm.dir();
 
@@ -816,6 +860,10 @@ impl TestClusterBuilder {
         }
         if let Some(num_unpruned_validators) = self.num_unpruned_validators {
             builder = builder.with_num_unpruned_validators(num_unpruned_validators);
+        }
+
+        if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
+            builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
         }
 
         if let Some(config_dir) = self.config_dir.take() {
