@@ -406,26 +406,6 @@ mod test {
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
     ) -> TestCluster {
-        sui_node::set_jwk_injector(Arc::new(|_authority, provider| {
-            // generate random (and possibly conflicting) id/key pairings.
-            let id_num = rand::thread_rng().gen_range(1..=4);
-            let key_num = rand::thread_rng().gen_range(1..=4);
-
-            let id = JwkId {
-                iss: provider.get_config().iss,
-                kid: format!("kid{}", id_num),
-            };
-
-            let jwk = JWK {
-                kty: "kty".to_string(),
-                e: format!("e{}", key_num),
-                n: "n".to_string(),
-                alg: "alg".to_string(),
-            };
-
-            Ok(vec![(id, jwk)])
-        }));
-
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .build()
             .await

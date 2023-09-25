@@ -66,7 +66,7 @@ async fn test_zklogin_provider_not_supported() {
 
 #[sim_test]
 async fn zklogin_end_to_end_test() {
-    run_zklogin_end_to_end_test(TestClusterBuilder::new().build().await).await;
+    run_zklogin_end_to_end_test(TestClusterBuilder::new().with_default_jwks().build().await).await;
 }
 
 #[sim_test]
@@ -75,6 +75,7 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
     let test_cluster = TestClusterBuilder::new()
         .with_protocol_version(23.into())
         .with_epoch_duration_ms(10000)
+        .with_default_jwks()
         .build()
         .await;
 
@@ -183,7 +184,6 @@ async fn test_create_authenticator_state_object() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_conflicting_jwks() {
-    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
     use futures::StreamExt;
     use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
@@ -191,27 +191,6 @@ async fn test_conflicting_jwks() {
     use sui_json_rpc_types::TransactionFilter;
     use sui_types::base_types::ObjectID;
     use sui_types::transaction::{TransactionDataAPI, TransactionKind};
-
-    sui_node::set_jwk_injector(Arc::new(|_authority, provider| {
-        use rand::Rng;
-        // generate random (and possibly conflicting) id/key pairings.
-        let id_num = rand::thread_rng().gen_range(1..=4);
-        let key_num = rand::thread_rng().gen_range(1..=4);
-
-        let id = JwkId {
-            iss: provider.get_config().iss,
-            kid: format!("kid{}", id_num),
-        };
-
-        let jwk = JWK {
-            kty: "kty".to_string(),
-            e: format!("e{}", key_num),
-            n: "n".to_string(),
-            alg: "alg".to_string(),
-        };
-
-        Ok(vec![(id, jwk)])
-    }));
 
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(45000)
