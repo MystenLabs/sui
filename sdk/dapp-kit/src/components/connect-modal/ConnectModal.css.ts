@@ -10,6 +10,10 @@ export const overlay = style({
 	zIndex: 999999999,
 });
 
+export const title = style({
+	paddingLeft: 8,
+});
+
 export const content = style({
 	backgroundColor: 'white',
 	position: 'fixed',

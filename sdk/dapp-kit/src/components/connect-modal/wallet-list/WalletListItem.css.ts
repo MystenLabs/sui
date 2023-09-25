@@ -14,6 +14,7 @@ export const selectedContainer = style({
 });
 
 export const buttonContainer = style({
+	width: '100%',
 	display: 'flex',
 	alignItems: 'center',
 	gap: '8px',

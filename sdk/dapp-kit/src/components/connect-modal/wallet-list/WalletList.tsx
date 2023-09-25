@@ -28,7 +28,12 @@ export function WalletList({ selectedWalletName, onPlaceholderClick, onSelect }:
 					/>
 				))
 			) : (
-				<WalletListItem name="Sui Wallet" iconSrc={SuiIcon} onClick={onPlaceholderClick} />
+				<WalletListItem
+					name="Sui Wallet"
+					iconSrc={SuiIcon}
+					onClick={onPlaceholderClick}
+					isSelected
+				/>
 			)}
 		</ul>
 	);
