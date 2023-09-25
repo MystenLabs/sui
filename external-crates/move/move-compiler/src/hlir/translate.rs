@@ -1156,13 +1156,14 @@ fn exp_list_items_to_vec(
 
     // Because we previously froze subpoints of ExpLists as its own binding expression for that
     // ExpList, we need to process this possible vector the same way.
-    let final_es = if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
+    
+    if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
         // We have to check that the arity of the expected type matches because some ill-typed
         // programs flow through this code. In those cases, the error has already been reported and
         // we bail.
         if etys.len() == tys.len() {
             let current_ty = sp(*tloc, HT::Multiple(tys));
-            match needs_freeze(context, &current_ty, &expected_ty) {
+            match needs_freeze(context, &current_ty, expected_ty) {
                 Freeze::NotNeeded => es,
                 Freeze::Point => unreachable!(),
                 Freeze::Sub(_) => {
@@ -1182,8 +1183,7 @@ fn exp_list_items_to_vec(
         }
     } else {
         es
-    };
-    final_es
+    }
 }
 
 fn exp_impl(
