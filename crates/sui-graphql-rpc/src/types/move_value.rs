@@ -228,7 +228,9 @@ fn extract_bytes(value: value::MoveValue) -> Result<Vec<u8>> {
 /// Extracts a Rust String from the contents of a Move Struct assuming that struct matches the
 /// contents of Move String:
 ///
+/// ```notrust
 ///     { bytes: vector<u8> }
+/// ```
 ///
 /// Which is conformed to by both `std::ascii::String` and `std::string::String`.
 fn extract_string(
@@ -254,7 +256,9 @@ fn extract_string(
 /// Extracts an address from the contents of a Move Struct, assuming the struct matches the
 /// following shape:
 ///
-///     { id: 0x1::object::ID { bytes: address } }
+/// ```notrust
+///     { id: 0x2::object::ID { bytes: address } }
+/// ```
 ///
 /// Which matches `0x2::object::UID`.
 fn extract_uid(
@@ -293,7 +297,9 @@ fn extract_uid(
 /// Extracts a value from the contents of a Move Struct, assuming the struct matches the following
 /// shape:
 ///
+/// ```notrust
 ///     { vec: vector<T> }
+/// ```
 ///
 /// Where `vec` contains at most one element.  This matches the shape of `0x1::option::Option<T>`.
 fn extract_option(
