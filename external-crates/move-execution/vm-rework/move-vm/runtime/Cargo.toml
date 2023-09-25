@@ -32,7 +32,7 @@ anyhow = "1.0.52"
 hex = "0.4.3"
 proptest = "1.0.0"
 move-ir-compiler = { path = "../../../../move/move-ir-compiler" }
-move-compiler = { path = "../../../../move/move-compiler" }
+move-compiler = { path = "../../../../move/move-compiler-stable" }
 
 [features]
 default = []

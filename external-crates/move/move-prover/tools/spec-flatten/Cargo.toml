@@ -11,7 +11,7 @@ license = "Apache-2.0"
 
 # move dependencies
 move-stackless-bytecode = { path = "../../bytecode" }
-move-compiler = { path = "../../../move-compiler" }
+move-compiler = { path = "../../../move-compiler-stable" }
 move-model = { path = "../../../move-model" }
 move-prover = { path = "../.." }
 

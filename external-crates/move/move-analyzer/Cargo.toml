@@ -22,7 +22,7 @@ url = "2.2.2"
 clap.workspace = true
 crossbeam = "0.8"
 move-command-line-common = { path = "../move-command-line-common" }
-move-compiler = { path = "../move-compiler" }
+move-compiler = { path = "../move-compiler-stable" }
 move-ir-types = { path = "../move-ir/types" }
 move-package = { path = "../tools/move-package" }
 move-symbol-pool = { path = "../move-symbol-pool" }

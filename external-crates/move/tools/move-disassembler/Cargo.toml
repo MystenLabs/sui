@@ -17,7 +17,7 @@ move-core-types = { path = "../../move-core/types" }
 move-ir-types = { path = "../../move-ir/types" }
 move-binary-format = { path = "../../move-binary-format" }
 move-coverage = { path = "../move-coverage" }
-move-compiler = { path = "../../move-compiler" }
+move-compiler = { path = "../../move-compiler-stable" }
 
 bcs.workspace = true
 clap.workspace = true

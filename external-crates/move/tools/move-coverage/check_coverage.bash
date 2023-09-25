@@ -27,14 +27,14 @@ popd || exit 1
 echo "---------------------------------------------------------------------------"
 echo "Running Move testsuite..."
 echo "---------------------------------------------------------------------------"
-pushd ../../move-compiler/functional-tests/tests || exit 1
+pushd ../../move-compiler-stable/functional-tests/tests || exit 1
 cargo test
 popd || exit 1
 
 echo "---------------------------------------------------------------------------"
 echo "Building Move modules and source maps.."
 echo "---------------------------------------------------------------------------"
-pushd ../../move-compiler || exit 1
+pushd ../../move-compiler-stable || exit 1
 rm -rf build
 cargo run --bin move-build -- ../../diem-move/diem-framework/core/sources -m
 popd || exit 1
@@ -51,7 +51,7 @@ cargo run --bin coverage-summaries -- -t trace.mvcov -s ../../../diem-move/diem-
 
 echo "==========================================================================="
 echo "You can check source coverage for a module by running:"
-echo "> cargo run --bin source-coverage -- -t trace.mvcov -b ../../move-compiler/build/modules/<LOOK_FOR_MODULE_HERE>.mv -s ../../../diem-move/diem-framework/core/modules/<SOURCE_MODULE>.move"
+echo "> cargo run --bin source-coverage -- -t trace.mvcov -b ../../move-compiler-stable/build/modules/<LOOK_FOR_MODULE_HERE>.mv -s ../../../diem-move/diem-framework/core/modules/<SOURCE_MODULE>.move"
 echo "---------------------------------------------------------------------------"
 echo "You can can also get a finer-grained coverage summary for each function by running:"
 echo "> cargo run --bin coverage-summaries -- -t trace.mvcov -s ../../../diem-move/diem-framework/DPN/releases/artifacts/current/stdlib.mv"

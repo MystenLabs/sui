@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 [dependencies]
 # diem dependencies
-move-compiler = { path = "../../move-compiler" }
+move-compiler = { path = "../../move-compiler-stable" }
 move-model = { path = "../../move-model" }
 move-prover = { path = ".." }
 move-stackless-bytecode = { path = "../bytecode"}

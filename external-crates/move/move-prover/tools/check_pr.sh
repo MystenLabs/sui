@@ -110,8 +110,8 @@ MOVE_TEST_CRATES="\
 "
 
 MOVE_E2E_TEST_CRATES="\
-  $BASE/language/move-compiler\
-  $BASE/language/move-compiler/transactional-tests\
+  $BASE/language/move-compiler-stable\
+  $BASE/language/move-compiler-stable/transactional-tests\
   $BASE/language/move-stdlib\
 "
 # test failure?  $BASE/language/tools/move-cli\

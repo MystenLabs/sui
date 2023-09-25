@@ -15,7 +15,7 @@ move-binary-format = { path = "../../move-binary-format" }
 move-core-types = { path = "../../move-core/types" }
 move-command-line-common = { path = "../../move-command-line-common" }
 move-read-write-set-types = { path = "../../tools/read-write-set/types" }
-move-compiler = { path = "../../move-compiler" }
+move-compiler = { path = "../../move-compiler-stable" }
 
 codespan = "0.11.1"
 codespan-reporting = { version = "0.11.1", features = ["serde", "serialization"] }

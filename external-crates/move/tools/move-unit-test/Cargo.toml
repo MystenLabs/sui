@@ -23,7 +23,7 @@ itertools = "0.10.1"
 move-command-line-common = { path = "../../move-command-line-common" }
 move-stdlib = { path = "../../move-stdlib", features = ["testing"] }
 move-core-types = { path = "../../move-core/types" }
-move-compiler = { path = "../../move-compiler" }
+move-compiler = { path = "../../move-compiler-stable" }
 move-ir-types = { path = "../../move-ir/types" }
 move-symbol-pool = { path = "../../move-symbol-pool" }
 move-vm-types = { path = "../../move-vm/types" }

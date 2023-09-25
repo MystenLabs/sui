@@ -396,7 +396,7 @@ move-bytecode-verifier-vm-rework = { path = "../../external-crates/move-executio
 move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
-move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
+move-compiler = { path = "../../external-crates/move/move-compiler-stable", default-features = false }
 move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
@@ -1180,7 +1180,7 @@ move-bytecode-verifier-vm-rework = { path = "../../external-crates/move-executio
 move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-viewer" }
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
-move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
+move-compiler = { path = "../../external-crates/move/move-compiler-stable", default-features = false }
 move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }

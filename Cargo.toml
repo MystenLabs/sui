@@ -18,8 +18,8 @@ exclude = [
     "external-crates/move/move-bytecode-verifier/invalid-mutations",
     "external-crates/move/move-bytecode-verifier/transactional-tests",
     "external-crates/move/move-command-line-common",
-    "external-crates/move/move-compiler",
-    "external-crates/move/move-compiler/transactional-tests",
+    "external-crates/move/move-compiler-stable",
+    "external-crates/move/move-compiler-stable/transactional-tests",
     "external-crates/move/move-core/types",
     "external-crates/move/move-ir-compiler",
     "external-crates/move/move-ir-compiler/move-bytecode-source-map",
@@ -492,7 +492,7 @@ versions = "4.1.0"
 move-binary-format = { path = "external-crates/move/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
-move-compiler = { path = "external-crates/move/move-compiler" }
+move-compiler = { path = "external-crates/move/move-compiler-stable" }
 move-core-types = { path = "external-crates/move/move-core/types", features = [
   "address32",
 ] }

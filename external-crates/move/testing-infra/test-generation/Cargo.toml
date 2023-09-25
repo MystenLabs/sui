@@ -29,4 +29,4 @@ move-vm-types = { path = "../../move-vm/types" }
 module-generation = { path = "../module-generation" }
 move-binary-format = { path = "../../move-binary-format" }
 move-stdlib = { path = "../../move-stdlib" }
-move-compiler = { path = "../../move-compiler" }
+move-compiler = { path = "../../move-compiler-stable" }

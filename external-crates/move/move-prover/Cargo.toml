@@ -10,7 +10,7 @@ license = "Apache-2.0"
 # move dependencies
 move-prover-boogie-backend = { path = "boogie-backend" }
 move-command-line-common = { path = "../move-command-line-common" }
-move-compiler = { path = "../move-compiler" }
+move-compiler = { path = "../move-compiler-stable" }
 move-model = { path = "../move-model" }
 move-docgen = { path = "move-docgen" }
 move-abigen = { path = "move-abigen" }

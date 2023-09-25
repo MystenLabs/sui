@@ -15,7 +15,7 @@ once_cell = "1.7.2"
 criterion-cpu-time = "0.1.0"
 
 move-core-types = { path = "../move-core/types" }
-move-compiler = { path = "../move-compiler" }
+move-compiler = { path = "../move-compiler-stable" }
 move-vm-runtime = { path = "../move-vm/runtime" }
 move-vm-test-utils = { path = "../move-vm/test-utils" }
 move-vm-types = { path = "../move-vm/types" }
