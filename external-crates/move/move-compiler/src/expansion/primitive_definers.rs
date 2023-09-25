@@ -84,7 +84,7 @@ fn check_prim_definer(
         env.add_diag(diag!(Attributes::InvalidUsage, (*param_loc, msg)));
         return
     };
-    let Some(prim) = BuiltinTypeName_::resolve(&name.value.as_str()) else {
+    let Some(prim) = BuiltinTypeName_::resolve(name.value.as_str()) else {
         let msg = format!(
             "Invalid parameterization of '{}'. Unknown primitive type '{}'",
             DefinesPrimitive::DEFINES_PRIM,

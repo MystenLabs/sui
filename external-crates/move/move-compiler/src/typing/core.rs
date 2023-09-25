@@ -809,7 +809,7 @@ pub fn make_method_call_type(
         .and_then(|methods| Some(methods.get(&method)?.target_function));
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
-        let lhs_ty_str = error_format_nested(&lhs_ty, &Subst::empty());
+        let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
         let defining_module = match &tn.value {
             TypeName_::Multiple(_) => panic!("ICE method on tuple"),
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
@@ -835,7 +835,7 @@ pub fn make_method_call_type(
                     let tys_str = error_format(&ty, &Subst::empty());
                     format!("but it has a different type for its first argument, {tys_str}")
                 }
-                None => format!("but it takes no arguments"),
+                None => "but it takes no arguments".to_owned(),
             };
             let msg = format!(
                 "Invalid method style syntax usage. \

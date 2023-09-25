@@ -2158,14 +2158,14 @@ fn method_call(
                         .to_owned()
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) => {
-                    let tsubst = core::error_format_(&t, &context.subst);
+                    let tsubst = core::error_format_(t, &context.subst);
                     format!(
                         "Method style syntax is only supported on single types. \
                           Got an expression of type: {tsubst}",
                     )
                 }
                 Ty::Param(_) => {
-                    let tsubst = core::error_format_(&t, &context.subst);
+                    let tsubst = core::error_format_(t, &context.subst);
                     format!(
                         "Method style syntax is not supported on type parameters. \
                       Got an expression of type: {tsubst}",

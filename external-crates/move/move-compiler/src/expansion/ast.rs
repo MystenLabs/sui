@@ -958,7 +958,7 @@ impl AstDebug for ExplicitUseFun {
         if is_public.is_some() {
             w.write("public ");
         }
-        w.write(&format!("use fun "));
+        w.write("use fun ");
         function.ast_debug(w);
         w.write(" as ");
         ty.ast_debug(w);

@@ -1433,7 +1433,7 @@ fn exp_impl(
                 | Some(bt @ sp!(_, BT::U32))
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => bt.clone(),
+                | Some(bt @ sp!(_, BT::U256)) => *bt,
                 _ => panic!("ICE typing failed for cast"),
             };
             HE::Cast(e, bt)

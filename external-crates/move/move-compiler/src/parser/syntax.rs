@@ -2323,8 +2323,8 @@ fn parse_use_decl(
             let method = parse_identifier(context)?;
             Use::Fun {
                 visibility: visibility.unwrap_or(Visibility::Internal),
-                function,
-                ty,
+                function: Box::new(function),
+                ty: Box::new(ty),
                 method,
             }
         }

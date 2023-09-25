@@ -118,7 +118,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                         N::TypeName_::ModuleType(m, _) => Some(m),
                     };
                     if context.current_module.as_ref() != defining_module {
-                        let msg = format!("Invalid visibility for 'use fun' declaration");
+                        let msg = "Invalid visibility for 'use fun' declaration";
                         let vis_msg = format!(
                             "Module level 'use fun' declarations can be '{}' for the \
                             module's types, otherwise they must internal to declared scope.",
@@ -130,7 +130,10 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                             (public_loc, vis_msg)
                         );
                         if let Some(m) = defining_module {
-                            diag.add_secondary_label((m.loc, "The type '{tn}' is defined here"))
+                            diag.add_secondary_label((
+                                m.loc,
+                                format!("The type '{tn}' is defined here"),
+                            ))
                         }
                         context.env.add_diag(diag);
                         nuf.is_public = None;
@@ -222,7 +225,7 @@ fn is_valid_method(
     // possible the function was removed, e.g. a spec function
     if !context
         .info
-        .module(&target_m)
+        .module(target_m)
         .functions
         .contains_key(&target_f)
     {
@@ -248,7 +251,7 @@ fn first_arg_type(
     m: &ModuleIdent,
     f: &FunctionName,
 ) -> (Loc, Option<N::Type>) {
-    let finfo = context.info.function_info(&m, &f);
+    let finfo = context.info.function_info(m, f);
     match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
         None => (finfo.defined_loc, None),
         Some(t) => (t.loc, Some(t)),

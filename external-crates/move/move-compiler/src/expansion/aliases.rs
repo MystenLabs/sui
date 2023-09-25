@@ -37,8 +37,8 @@ pub struct ParserExplicitUseFun {
     pub loc: Loc,
     pub attributes: E::Attributes,
     pub is_public: Option<Loc>,
-    pub function: P::NameAccessChain,
-    pub ty: P::NameAccessChain,
+    pub function: Box<P::NameAccessChain>,
+    pub ty: Box<P::NameAccessChain>,
     pub method: Name,
 }
 

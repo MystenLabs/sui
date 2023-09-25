@@ -1301,8 +1301,8 @@ fn explicit_use_fun(
         ty,
         method,
     } = pexplicit;
-    let function = name_access_chain(context, Access::ApplyPositional, function)?;
-    let ty = name_access_chain(context, Access::Type, ty)?;
+    let function = name_access_chain(context, Access::ApplyPositional, *function)?;
+    let ty = name_access_chain(context, Access::Type, *ty)?;
     Some(E::ExplicitUseFun {
         loc,
         attributes,

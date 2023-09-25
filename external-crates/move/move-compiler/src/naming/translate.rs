@@ -29,10 +29,34 @@ use super::{
 
 #[derive(Debug, Clone)]
 enum ResolvedType {
-    Module((Loc, ModuleIdent, Name), Loc, AbilitySet, usize),
+    Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
     Unbound,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedModuleType {
+    // original names/locs are provided to preserve loc information if needed
+    original_loc: Loc,
+    original_mident: ModuleIdent,
+    original_type_name: Name,
+    decl_loc: Loc,
+    declared_abilities: AbilitySet,
+    arity: usize,
+}
+
+enum ResolvedFunction {
+    Builtin(N::BuiltinFunction),
+    Module(Box<ResolvedModuleFunction>),
+    Unbound,
+}
+
+struct ResolvedModuleFunction {
+    // original names/locs are provided to preserve loc information if needed
+    module: ModuleIdent,
+    function: FunctionName,
+    ty_args: Option<Vec<N::Type>>,
 }
 
 struct Context<'env> {
@@ -243,7 +267,15 @@ impl<'env> Context<'env> {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
                 };
-                ResolvedType::Module((nloc, m, n), decl_loc, abilities, arity)
+                let mt = ResolvedModuleType {
+                    original_loc: nloc,
+                    original_mident: m,
+                    original_type_name: n,
+                    decl_loc,
+                    declared_abilities: abilities,
+                    arity,
+                };
+                ResolvedType::Module(Box::new(mt))
             }
         }
     }
@@ -293,7 +325,13 @@ impl<'env> Context<'env> {
                 ));
                 None
             }
-            ResolvedType::Module((_, m, n), _, _, arity) => {
+            ResolvedType::Module(mt) => {
+                let ResolvedModuleType {
+                    original_mident: m,
+                    original_type_name: n,
+                    arity,
+                    ..
+                } = *mt;
                 let tys_opt = etys_opt.map(|etys| {
                     let tys = types(self, etys);
                     let name_f = || format!("{}::{}", &m, &n);
@@ -579,12 +617,17 @@ fn explicit_use_fun(
         method,
     } = e;
     let m_f_opt = match resolve_function(context, loc, function, None) {
-        ResolvedFunction::Module(m, f, ty_args_opt) => {
-            assert!(ty_args_opt.is_none());
-            Some((m, f))
+        ResolvedFunction::Module(mf) => {
+            let ResolvedModuleFunction {
+                module,
+                function,
+                ty_args,
+            } = *mf;
+            assert!(ty_args.is_none());
+            Some((module, function))
         }
         ResolvedFunction::Builtin(_) => {
-            let msg = format!("Invalid 'use fun'. Cannot associate a builtin function with a type");
+            let msg = "Invalid 'use fun'. Cannot associate a builtin function with a type";
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
@@ -616,8 +659,12 @@ fn explicit_use_fun(
             None
         }
         ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
-        ResolvedType::Module((_, m, n), _, _, _) => {
-            Some(N::TypeName_::ModuleType(m, StructName(n)))
+        ResolvedType::Module(mt) => {
+            let mt = *mt;
+            Some(N::TypeName_::ModuleType(
+                mt.original_mident,
+                StructName(mt.original_type_name),
+            ))
         }
     };
     let tn_ = tn_opt?;
@@ -625,10 +672,8 @@ fn explicit_use_fun(
     if let Some(pub_loc) = is_public {
         let current_module = context.current_module;
         if let Err(def_loc_opt) = use_fun_module_defines(context, current_module, &tn) {
-            let msg = format!(
-                "Invalid 'use fun'. Cannot publicly associate a function with a \
-                type defined in another module",
-            );
+            let msg = "Invalid 'use fun'. Cannot publicly associate a function with a \
+                type defined in another module";
             let pub_msg = format!(
                 "Declared '{}' here. Consider removing to make a local 'use fun' instead",
                 Visibility::PUBLIC
@@ -875,7 +920,15 @@ fn acquires_type(context: &mut Context, ma: E::ModuleAccess) -> Option<StructNam
                 .add_diag(diag!(NameResolution::NamePositionMismatch, (ma.loc, msg)));
             None
         }
-        RT::Module((loc, m, n), decl_loc, abilities, _) => {
+        RT::Module(mt) => {
+            let ResolvedModuleType {
+                original_loc: loc,
+                original_mident: m,
+                original_type_name: n,
+                decl_loc,
+                declared_abilities: abilities,
+                arity: _,
+            } = *mt;
             acquires_type_struct(context, loc, decl_loc, m, StructName(n), &abilities)
         }
     }
@@ -1106,7 +1159,14 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                     NT::Param(tp)
                 }
             }
-            RT::Module((nloc, m, n), _, _, arity) => {
+            RT::Module(mt) => {
+                let ResolvedModuleType {
+                    original_loc: nloc,
+                    original_mident: m,
+                    original_type_name: n,
+                    arity,
+                    ..
+                } = *mt;
                 let tn = sp(nloc, NN::ModuleType(m, StructName(n)));
                 let tys = types(context, tys);
                 let name_f = || format!("{}", tn);
@@ -1356,7 +1416,14 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
             let nes = call_args(context, rhs);
             match resolve_function(context, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(f) => NE::Builtin(f, nes),
-                ResolvedFunction::Module(m, f, ty_args) => NE::ModuleCall(m, f, ty_args, nes),
+                ResolvedFunction::Module(mf) => {
+                    let ResolvedModuleFunction {
+                        module,
+                        function,
+                        ty_args,
+                    } = *mf;
+                    NE::ModuleCall(module, function, ty_args, nes)
+                }
                 ResolvedFunction::Unbound => {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
@@ -1546,12 +1613,6 @@ fn lvalue_list(
     ))
 }
 
-enum ResolvedFunction {
-    Builtin(N::BuiltinFunction),
-    Module(ModuleIdent, FunctionName, Option<Vec<N::Type>>),
-    Unbound,
-}
-
 fn resolve_function(
     context: &mut Context,
     loc: Loc,
@@ -1581,7 +1642,11 @@ fn resolve_function(
                 assert!(context.env.has_errors());
                 ResolvedFunction::Unbound
             }
-            Some(_) => ResolvedFunction::Module(m, FunctionName(n), ty_args),
+            Some(_) => ResolvedFunction::Module(Box::new(ResolvedModuleFunction {
+                module: m,
+                function: FunctionName(n),
+                ty_args,
+            })),
         },
     }
 }

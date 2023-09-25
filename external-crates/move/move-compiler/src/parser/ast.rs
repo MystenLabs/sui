@@ -106,8 +106,8 @@ pub enum Use {
     Members(ModuleIdent, Vec<(Name, Option<Name>)>),
     Fun {
         visibility: Visibility,
-        function: NameAccessChain,
-        ty: NameAccessChain,
+        function: Box<NameAccessChain>,
+        ty: Box<NameAccessChain>,
         method: Name,
     },
 }
