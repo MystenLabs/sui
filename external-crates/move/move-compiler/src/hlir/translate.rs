@@ -1147,7 +1147,7 @@ fn exp_list_items_to_vec(
             T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
         }
     }
-    
+
     let es = exp_evaluation_order(context, result, tes);
     assert!(
         es.len() == tys.len(),
@@ -1155,7 +1155,7 @@ fn exp_list_items_to_vec(
     );
 
     // Because we previously froze subpoints of ExpLists as its own binding expression for that
-    // ExpList, we need to process this possible vector the same way. 
+    // ExpList, we need to process this possible vector the same way.
     let final_es = if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
         // We have to check that the arity of the expected type matches because some ill-typed
         // programs flow through this code. In those cases, the error has already been reported and
@@ -1166,14 +1166,16 @@ fn exp_list_items_to_vec(
                 Freeze::NotNeeded => es,
                 Freeze::Point => unreachable!(),
                 Freeze::Sub(_) => {
-                    let current_exp = H::Exp { ty: current_ty, exp: sp(loc, HE::Multiple(es)) };
+                    let current_exp = H::Exp {
+                        ty: current_ty,
+                        exp: sp(loc, HE::Multiple(es)),
+                    };
                     let frozen = freeze(context, result, expected_ty, current_exp);
                     match frozen.exp.value {
                         HE::Multiple(final_es) => final_es,
                         _ => unreachable!(),
                     }
                 }
-                    
             }
         } else {
             es
@@ -1321,18 +1323,7 @@ fn exp_impl(
                 parameter_types,
                 acquires,
             } = *call;
-
-            println!("Found call");
-            println!("parameter types: ");
-            for ty in &parameter_types {
-                crate::shared::ast_debug::print_verbose(ty);
-            }
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
-            print!("expected type: ");
-            crate::shared::ast_debug::print_verbose(&expected_type);
-            print!("arguments: ");
-            crate::shared::ast_debug::print_verbose(&arguments);
-            println!();
             let htys = base_types(context, type_arguments);
             let hargs = exp_list(context, result, Some(&expected_type), *arguments);
             let call = H::ModuleCall {
@@ -1440,7 +1431,9 @@ fn exp_impl(
             };
             HE::Pack(s, bs, fields)
         }
-        TE::ExpList(items) => HE::Multiple(exp_list_items_to_vec(context, result, None, eloc, items)),
+        TE::ExpList(items) => {
+            HE::Multiple(exp_list_items_to_vec(context, result, None, eloc, items))
+        }
         TE::Borrow(mut_, te, f) => {
             let e = exp(context, result, None, *te);
             if let Some(struct_name) = struct_name(&e.ty) {
