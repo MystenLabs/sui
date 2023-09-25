@@ -543,7 +543,7 @@ fn check_visibility_modifiers(
             E::Visibility::Package(loc) => {
                 context
                     .env
-                    .check_feature(&FeatureGate::PublicPackage, package_name, loc);
+                    .check_feature(FeatureGate::PublicPackage, package_name, loc);
                 public_package_usage = Some(loc);
             }
             _ => (),
@@ -1227,7 +1227,7 @@ fn use_(
                     // assume used. We will set it to false if needed when exiting this alias scope
                     let kind = E::ImplicitUseFunKind::UseAlias { used: true };
                     let implicit = E::ImplicitUseFunCandidate {
-                        loc,
+                        loc: alias.loc,
                         attributes: attributes.clone(),
                         is_public,
                         function: (mident, member),
@@ -1243,6 +1243,9 @@ fn use_(
             ty,
             method,
         } => {
+            context
+                .env
+                .check_feature(FeatureGate::DotCall, context.current_package, loc);
             let is_public = match visibility {
                 P::Visibility::Public(vis_loc) => Some(vis_loc),
                 P::Visibility::Internal => None,
@@ -1564,7 +1567,7 @@ fn function_(
     let specs = context.extract_exp_specs();
     if let Some((m, use_funs_builder)) = module_and_use_funs {
         let implicit = E::ImplicitUseFunCandidate {
-            loc,
+            loc: name.loc(),
             attributes: attributes.clone(),
             is_public: Some(visibility.loc().unwrap_or_else(|| name.loc())),
             function: (m, name.0),
@@ -2351,7 +2354,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
             Some(edotted) => {
                 context
                     .env
-                    .check_feature(&FeatureGate::DotCall, context.current_package, loc);
+                    .check_feature(FeatureGate::DotCall, context.current_package, loc);
                 if context.in_spec_context {
                     let msg = "method-style syntax is not supported in specifications";
                     context

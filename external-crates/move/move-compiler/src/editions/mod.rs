@@ -42,7 +42,7 @@ pub enum Flavor {
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
+pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: FeatureGate, loc: Loc) {
     if !edition.supports(feature) {
         let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
@@ -67,7 +67,7 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &Featu
     }
 }
 
-pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
+pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
     Edition::ALL
         .iter()
         .filter(|e| e.supports(feature))
@@ -96,8 +96,8 @@ impl Edition {
 
     pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
-    pub fn supports(&self, feature: &FeatureGate) -> bool {
-        SUPPORTED_FEATURES.get(self).unwrap().contains(feature)
+    pub fn supports(&self, feature: FeatureGate) -> bool {
+        SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
     }
 
     // Intended only for implementing the lazy static (supported feature map) above

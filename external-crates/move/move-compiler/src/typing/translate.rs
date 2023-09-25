@@ -140,8 +140,8 @@ fn module(
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
-    context.env.pop_warning_filter_scope();
     context.pop_use_funs_scope();
+    context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
         loc,
         warning_filter,
@@ -192,8 +192,8 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
-    context.env.pop_warning_filter_scope();
     context.pop_use_funs_scope();
+    context.env.pop_warning_filter_scope();
     T::Script {
         warning_filter,
         package_name,

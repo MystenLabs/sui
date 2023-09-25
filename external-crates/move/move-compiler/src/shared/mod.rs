@@ -529,7 +529,7 @@ impl CompilationEnv {
     }
 
     // Logs an error if the feature isn't supported.
-    pub fn check_feature(&mut self, feature: &FeatureGate, package: Option<Symbol>, loc: Loc) {
+    pub fn check_feature(&mut self, feature: FeatureGate, package: Option<Symbol>, loc: Loc) {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 

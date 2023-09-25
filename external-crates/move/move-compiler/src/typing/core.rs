@@ -159,12 +159,19 @@ impl<'env> Context<'env> {
         let mut use_funs = cur.use_funs.clone();
         for (tn, additional_methods) in new_scope {
             for (method, nuf) in additional_methods {
+                match nuf.kind {
+                    UseFunKind::Explicit if nuf.is_public.is_none() => {
+                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
+                    }
+                    UseFunKind::UseAlias { used: false } => {
+                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
+                    }
+                    _ => (),
+                }
                 if matches!(
                     nuf.kind,
                     UseFunKind::Explicit | UseFunKind::UseAlias { used: false }
-                ) {
-                    unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
-                }
+                ) {}
                 let cur_methods = use_funs.entry(tn.clone()).or_default();
                 cur_methods.remove(&method);
                 cur_methods.add(method, nuf).unwrap();
@@ -201,7 +208,9 @@ impl<'env> Context<'env> {
                     assert!(!used);
                     format!("Unused 'use' of alias '{method}'. Consider removing it")
                 }
-                UseFunKind::FunctionDeclaration => unreachable!(),
+                UseFunKind::FunctionDeclaration => {
+                    panic!("ICE function declaration use funs should never be added to use fun")
+                }
             };
             self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
         }
@@ -854,7 +863,7 @@ pub fn make_method_call_type(
             );
             let decl_msg = match defining_module {
                 Some(m) => {
-                    format!(", and no function '{method}' was found in defining module '{m}'")
+                    format!(", and no function '{method}' was found in the defining module '{m}'")
                 }
                 None => "".to_owned(),
             };

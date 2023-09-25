@@ -58,6 +58,9 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
 
 fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
     context.current_module = Some(mident);
+    context
+        .env
+        .add_warning_filter_scope(mdef.warning_filter.clone());
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -65,25 +68,38 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefini
     for (_, _, f) in &mut mdef.functions {
         function(context, f);
     }
+    context.env.pop_warning_filter_scope();
 }
 
 fn script(context: &mut Context, s: &mut N::Script) {
     context.current_module = None;
+    context
+        .env
+        .add_warning_filter_scope(s.warning_filter.clone());
     use_funs(context, &mut s.use_funs);
     for (_, _, c) in &mut s.constants {
         constant(context, c);
     }
     function(context, &mut s.function);
+    context.env.pop_warning_filter_scope();
 }
 
 fn constant(context: &mut Context, c: &mut N::Constant) {
-    exp(context, &mut c.value)
+    context
+        .env
+        .add_warning_filter_scope(c.warning_filter.clone());
+    exp(context, &mut c.value);
+    context.env.pop_warning_filter_scope();
 }
 
 fn function(context: &mut Context, function: &mut N::Function) {
+    context
+        .env
+        .add_warning_filter_scope(function.warning_filter.clone());
     if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
         sequence(context, seq)
     }
+    context.env.pop_warning_filter_scope();
 }
 
 //**************************************************************************************************
@@ -174,10 +190,10 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             attributes,
             is_public,
             function: (target_m, target_f),
-            kind,
+            kind: ekind,
         } = implicit;
         let Some((target_f,tn)) = is_valid_method(context, &target_m, target_f) else {
-            if matches!(kind, E::ImplicitUseFunKind::UseAlias { used: false }) {
+            if matches!(ekind, E::ImplicitUseFunKind::UseAlias { used: false }) {
                 let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
                 context.env.add_diag(diag!(
                     UnusedItem::Alias,
@@ -186,7 +202,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
             continue;
         };
-        let kind = match kind {
+        let kind = match ekind {
             E::ImplicitUseFunKind::FunctionDeclaration => N::UseFunKind::FunctionDeclaration,
             E::ImplicitUseFunKind::UseAlias { used } => {
                 assert!(is_public.is_none());
@@ -204,8 +220,16 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
         let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
-            let tn_msg = "'use' function aliases create an implicit 'use fun' when their first \
-                        argument is a type defined in that module";
+            let tn_msg = match ekind {
+                E::ImplicitUseFunKind::UseAlias { .. } => {
+                    "'use' function aliases create an implicit 'use fun' when their first \
+                    argument is a type defined in that module"
+                }
+                E::ImplicitUseFunKind::FunctionDeclaration => {
+                    "Function declarations create an implicit 'use fun' when their first \
+                    argument is a type defined in the same module"
+                }
+            };
             context.env.add_diag(diag!(
                 Declarations::DuplicateItem,
                 (nuf_loc, msg),
