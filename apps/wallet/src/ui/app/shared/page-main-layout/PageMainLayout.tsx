@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ErrorBoundary } from '_components/error-boundary';
+import { MenuContent } from '_components/menu';
+import { Navigation } from '_components/navigation';
 import cn from 'classnames';
-import { createContext, type ReactNode, useState } from 'react';
+import { createContext, useState, type ReactNode } from 'react';
 
 import { WalletSettingsButton } from '../../components/menu/button/WalletSettingsButton';
 import { useAppSelector } from '../../hooks';
@@ -10,9 +13,6 @@ import { AppType } from '../../redux/slices/app/AppType';
 import DappStatus from '../dapp-status';
 import { Header } from '../header/Header';
 import { Toaster } from '../toaster';
-import { ErrorBoundary } from '_components/error-boundary';
-import { MenuContent } from '_components/menu';
-import { Navigation } from '_components/navigation';
 
 export const PageMainLayoutContext = createContext<HTMLDivElement | null>(null);
 

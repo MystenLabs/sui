@@ -1,29 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { PublicKey } from '../../../src/cryptography/publickey';
-import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
-import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
-import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
+import { fromB64 } from '@mysten/bcs';
+import { blake2b } from '@noble/hashes/blake2b';
+import { bytesToHex } from '@noble/hashes/utils';
+import { beforeAll, describe, expect, it } from 'vitest';
+
 import { bcs } from '../../../src/bcs/index.js';
+import { builder } from '../../../src/builder/bcs.js';
 import { IntentScope, messageWithIntent } from '../../../src/cryptography/intent';
 import { decodeMultiSig } from '../../../src/cryptography/multisig';
-import { bytesToHex } from '@noble/hashes/utils';
-import { blake2b } from '@noble/hashes/blake2b';
-import { normalizeSuiAddress } from '../../../src/utils/sui-types.js';
-import {
-	MultiSigPublicKey,
-	MAX_SIGNER_IN_MULTISIG,
-	parsePartialSignatures,
-	MultiSigStruct,
-} from '../../../src/multisig/publickey';
+import { PublicKey } from '../../../src/cryptography/publickey';
 import {
 	parseSerializedSignature,
 	SIGNATURE_SCHEME_TO_FLAG,
 } from '../../../src/cryptography/signature';
-import { builder } from '../../../src/builder/bcs.js';
-import { fromB64 } from '@mysten/bcs';
+import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
+import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
+import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
+import {
+	MAX_SIGNER_IN_MULTISIG,
+	MultiSigPublicKey,
+	MultiSigStruct,
+	parsePartialSignatures,
+} from '../../../src/multisig/publickey';
+import { normalizeSuiAddress } from '../../../src/utils/sui-types.js';
 
 describe('Publickey', () => {
 	let k1: Ed25519Keypair,

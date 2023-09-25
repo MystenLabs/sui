@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Fragment } from 'react';
 import { Listbox, Transition } from '@headlessui/react';
 import { KioskOwnerCap } from '@mysten/kiosk';
 import { formatAddress } from '@mysten/sui.js/utils';
 import classNames from 'classnames';
+import { Fragment } from 'react';
 
 export function KioskSelector({
 	caps,

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
-import { it, expect } from 'vitest';
+import { expect, it } from 'vitest';
+
+import { normalizeSuiAddress } from '../../utils/sui-types.js';
 import type { MoveCallTransaction, TransferObjectsTransaction } from '../index.js';
 import { builder, PROGRAMMABLE_CALL, TRANSACTION } from '../index.js';
-import { normalizeSuiAddress } from '../../utils/sui-types.js';
 
 // Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {

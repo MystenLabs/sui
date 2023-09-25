@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type Wallet } from '_src/shared/qredo-api';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
-import { type Account, AccountType } from './Account';
-import { type Wallet } from '_src/shared/qredo-api';
+import { AccountType, type Account } from './Account';
 
 /**
  * @deprecated

@@ -1,11 +1,11 @@
 #! /usr/bin/env tsx
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-import { buildPackage } from './utils/buildPackage';
 import { vanillaExtractPlugin } from '@vanilla-extract/esbuild-plugin';
 import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
+
+import { buildPackage } from './utils/buildPackage';
 
 buildPackage({
 	plugins: [

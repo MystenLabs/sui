@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ReactNode, forwardRef } from 'react';
+import { forwardRef, type ReactNode } from 'react';
 import { Controller, useFormContext } from 'react-hook-form';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './controls/Select';
 
 type SelectFieldProps = {

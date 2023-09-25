@@ -2,29 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiClient } from '@mysten/sui.js/client';
-import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
+
 import {
-	type FetchKioskOptions,
-	type KioskData,
-	type OwnedKiosks,
-	Network,
-	type KioskClientOptions,
-} from '../types';
-import {
-	type TransferPolicyRule,
-	type BaseRulePackageIds,
-	PERSONAL_KIOSK_RULE_ADDRESS,
-	rules,
-	getBaseRules,
-	ROYALTY_RULE_ADDRESS,
-	KIOSK_LOCK_RULE_ADDRESS,
 	FLOOR_PRICE_RULE_ADDRESS,
+	getBaseRules,
+	KIOSK_LOCK_RULE_ADDRESS,
+	PERSONAL_KIOSK_RULE_ADDRESS,
+	ROYALTY_RULE_ADDRESS,
+	rules,
+	type BaseRulePackageIds,
+	type TransferPolicyRule,
 } from '../constants';
+import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
 import {
 	queryOwnedTransferPolicies,
 	queryTransferPolicy,
 	queryTransferPolicyCapsByType,
 } from '../query/transfer-policy';
+import {
+	Network,
+	type FetchKioskOptions,
+	type KioskClientOptions,
+	type KioskData,
+	type OwnedKiosks,
+} from '../types';
 
 /**
  * A Client that allows you to interact with kiosk.

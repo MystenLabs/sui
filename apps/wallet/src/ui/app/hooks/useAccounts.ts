@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useQuery } from '@tanstack/react-query';
-import { useBackgroundClient } from './useBackgroundClient';
-import { accountsQueryKey } from '../helpers/query-client-keys';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { useQuery } from '@tanstack/react-query';
+
+import { accountsQueryKey } from '../helpers/query-client-keys';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export function useAccounts() {
 	const backgroundClient = useBackgroundClient();

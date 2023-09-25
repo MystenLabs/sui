@@ -3,14 +3,15 @@
 
 import { Dialog } from '@headlessui/react';
 import { useEffect, useState } from 'react';
-import { styled } from './stitches';
-import { Button, Panel } from './utils/ui';
-import { BackIcon } from './utils/icons';
-import { WhatIsAWallet } from './WhatIsAWallet';
-import { Body, CloseButton, Content, Overlay, Title } from './utils/Dialog';
-import { SELECTED_GETTING_STARTED, WalletList } from './WalletList';
+
 import { GettingStarted } from './GettingStarted';
+import { styled } from './stitches';
+import { Body, CloseButton, Content, Overlay, Title } from './utils/Dialog';
+import { BackIcon } from './utils/icons';
+import { Button, Panel } from './utils/ui';
 import { useWalletKit } from './WalletKitContext';
+import { SELECTED_GETTING_STARTED, WalletList } from './WalletList';
+import { WhatIsAWallet } from './WhatIsAWallet';
 
 export interface ConnectModalProps {
 	open: boolean;

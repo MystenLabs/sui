@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ComponentProps, forwardRef, type Ref, type ReactNode } from 'react';
+import { forwardRef, type ComponentProps, type ReactNode, type Ref } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 
 import LoadingIndicator from '../../components/loading/LoadingIndicator';

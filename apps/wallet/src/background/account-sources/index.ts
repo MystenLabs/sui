@@ -1,6 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage, type Message } from '_src/shared/messaging/messages';
+import {
+	isMethodPayload,
+	type MethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { toEntropy } from '_src/shared/utils/bip39';
+
+import { type UiConnection } from '../connections/UiConnection';
+import { getDB } from '../db';
+import { type QredoConnectIdentity } from '../qredo/types';
+import { isSameQredoConnection } from '../qredo/utils';
 import {
 	type AccountSource,
 	type AccountSourceSerialized,
@@ -8,16 +19,6 @@ import {
 } from './AccountSource';
 import { MnemonicAccountSource } from './MnemonicAccountSource';
 import { QredoAccountSource } from './QredoAccountSource';
-import { type UiConnection } from '../connections/UiConnection';
-import { getDB } from '../db';
-import { type QredoConnectIdentity } from '../qredo/types';
-import { isSameQredoConnection } from '../qredo/utils';
-import { type Message, createMessage } from '_src/shared/messaging/messages';
-import {
-	type MethodPayload,
-	isMethodPayload,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { toEntropy } from '_src/shared/utils/bip39';
 
 function toAccountSource(accountSource: AccountSourceSerialized) {
 	if (MnemonicAccountSource.isOfType(accountSource)) {

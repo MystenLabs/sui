@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
+	MinimallyRequiredFeatures,
 	Wallet,
 	WalletWithFeatures,
-	MinimallyRequiredFeatures,
 } from '@mysten/wallet-standard';
 import { getWallets, isWalletWithRequiredFeatureSet } from '@mysten/wallet-standard';
 

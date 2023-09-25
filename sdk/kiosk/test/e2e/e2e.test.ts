@@ -1,25 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, beforeAll, expect } from 'vitest';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import {
-	TestToolbox,
-	setupSuiClient,
-	publishExtensionsPackage,
-	publishHeroPackage,
-	mintHero,
-	createKiosk,
-	createPersonalKiosk,
-	executeTransactionBlock,
-	mintVillain,
-} from './setup';
 import {
 	KioskClient,
 	KioskTransaction,
 	Network,
-	TransferPolicyTransaction,
 	percentageToBasisPoints,
+	TransferPolicyTransaction,
 } from '../../src';
 import {
 	existingKioskManagementFlow,
@@ -29,8 +20,17 @@ import {
 	purchaseOnNewKiosk,
 	testLockItemFlow,
 } from './helper';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import {
+	createKiosk,
+	createPersonalKiosk,
+	executeTransactionBlock,
+	mintHero,
+	mintVillain,
+	publishExtensionsPackage,
+	publishHeroPackage,
+	setupSuiClient,
+	TestToolbox,
+} from './setup';
 
 /**
  * Important: We have 2 types so we can easily test transfer policy management without interference.

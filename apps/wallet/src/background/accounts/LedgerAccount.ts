@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
+
 import {
+	Account,
 	type PasswordUnlockableAccount,
 	type SerializedAccount,
 	type SerializedUIAccount,
-	Account,
 } from './Account';
-import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 
 export interface LedgerAccountSerialized extends SerializedAccount {
 	type: 'ledger';

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { promises as fs, existsSync } from 'fs';
-import * as path from 'path';
-import { BuildOptions, build } from 'esbuild';
 import { execSync } from 'child_process';
+import { existsSync, promises as fs } from 'fs';
+import * as path from 'path';
+import { build, BuildOptions } from 'esbuild';
 
 interface PackageJSON {
 	name?: string;

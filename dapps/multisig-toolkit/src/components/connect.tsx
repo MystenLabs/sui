@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Button } from './ui/button';
-import { useState } from 'react';
-import { useWalletKit, ConnectModal } from '@mysten/wallet-kit';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
 import { formatAddress } from '@mysten/sui.js/utils';
+import { ConnectModal, useWalletKit } from '@mysten/wallet-kit';
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { useState } from 'react';
+
 import { cn } from '@/lib/utils';
+
+import { Button } from './ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 function ConnectedButton() {
 	const { accounts, currentAccount, selectAccount, disconnect } = useWalletKit();

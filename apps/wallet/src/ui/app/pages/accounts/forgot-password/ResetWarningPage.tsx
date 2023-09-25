@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_app/shared/ButtonUI';
+import { type AccountType } from '_src/background/accounts/Account';
+import { useAccounts } from '_src/ui/app/hooks/useAccounts';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { useForgotPasswordContext } from './ForgotPasswordPage';
 import { RecoverAccountsGroup } from '../../../components/accounts/RecoverAccountsGroup';
 import { useAccountGroups } from '../../../hooks/useAccountGroups';
 import { Heading } from '../../../shared/heading';
 import { Text } from '../../../shared/text';
 import { getGroupTitle } from '../manage/AccountGroup';
-import { Button } from '_app/shared/ButtonUI';
-import { type AccountType } from '_src/background/accounts/Account';
-import { useAccounts } from '_src/ui/app/hooks/useAccounts';
+import { useForgotPasswordContext } from './ForgotPasswordPage';
 
 const zkLoginType: AccountType = 'zk';
 

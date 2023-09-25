@@ -1,11 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_app/shared/ButtonUI';
+import { Text } from '_app/shared/text';
+import Overlay from '_components/overlay';
+import { zkProviderDataMap, type ZkProvider } from '_src/background/accounts/zk/providers';
+import { ampli } from '_src/shared/analytics/ampli';
 import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
-import { useState, type ReactNode, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Browser from 'webextension-polyfill';
+
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
 import { ConnectLedgerModal } from '../../components/ledger/ConnectLedgerModal';
@@ -14,11 +20,6 @@ import { useAppSelector } from '../../hooks';
 import { useCountAccountsByType } from '../../hooks/useCountAccountByType';
 import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { AppType } from '../../redux/slices/app/AppType';
-import { Button } from '_app/shared/ButtonUI';
-import { Text } from '_app/shared/text';
-import Overlay from '_components/overlay';
-import { type ZkProvider, zkProviderDataMap } from '_src/background/accounts/zk/providers';
-import { ampli } from '_src/shared/analytics/ampli';
 
 async function openTabWithSearchParam(searchParam: string, searchParamValue: string) {
 	const currentURL = new URL(window.location.href);

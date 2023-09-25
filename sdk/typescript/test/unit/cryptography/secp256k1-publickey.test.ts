@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64, toHEX } from '@mysten/bcs';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { Secp256k1PublicKey } from '../../../src/keypairs/secp256k1/publickey';
 import { INVALID_SECP256K1_PUBLIC_KEY, VALID_SECP256K1_PUBLIC_KEY } from './secp256k1-keypair.test';
 

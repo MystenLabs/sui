@@ -4,12 +4,12 @@
 import { useEffect, useState } from 'react';
 import { v4 as uuidV4 } from 'uuid';
 
-import { QredoEvents, type QredoEventsType } from '../QredoSigner';
 import Alert from '../components/alert';
 import LoadingIndicator from '../components/loading/LoadingIndicator';
+import { QredoEvents, type QredoEventsType } from '../QredoSigner';
 import { Button } from '../shared/ButtonUI';
-import { ModalDialog } from '../shared/ModalDialog';
 import { Heading } from '../shared/heading';
+import { ModalDialog } from '../shared/ModalDialog';
 import { Text } from '../shared/text';
 
 export function useQredoTransaction(preventModalDismiss?: boolean) {

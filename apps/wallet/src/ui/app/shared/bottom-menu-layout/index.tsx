@@ -3,7 +3,6 @@
 
 import cl from 'classnames';
 import { Children, memo, useEffect, useRef, useState } from 'react';
-
 import type { ReactNode } from 'react';
 
 import st from './BottomMenuLayout.module.scss';

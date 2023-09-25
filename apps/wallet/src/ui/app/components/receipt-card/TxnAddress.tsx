@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_src/ui/app/shared/text';
 import { useResolveSuiNSName } from '@mysten/core';
 
 import { TxnAddressLink } from './TxnAddressLink';
-import { Text } from '_src/ui/app/shared/text';
 
 type TxnAddressProps = {
 	address: string;

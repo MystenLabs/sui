@@ -1,8 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectDataFilter, SuiObjectResponse } from '@mysten/sui.js/client';
+import {
+	PaginationArguments,
+	SuiClient,
+	SuiObjectData,
+	SuiObjectDataFilter,
+	SuiObjectResponse,
+} from '@mysten/sui.js/client';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
+
+import {
+	FetchKioskOptions,
+	KIOSK_OWNER_CAP,
+	KioskListing,
+	OwnedKiosks,
+	PagedKioskData,
+} from '../types';
 import {
 	attachListingsAndPrices,
 	attachLockedItems,
@@ -12,14 +26,6 @@ import {
 	getAllObjects,
 	getKioskObject,
 } from '../utils';
-import {
-	FetchKioskOptions,
-	KIOSK_OWNER_CAP,
-	KioskListing,
-	OwnedKiosks,
-	PagedKioskData,
-} from '../types';
-import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
 
 export async function fetchKiosk(
 	client: SuiClient,

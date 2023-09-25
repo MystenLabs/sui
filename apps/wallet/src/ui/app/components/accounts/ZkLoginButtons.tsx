@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cx } from 'class-variance-authority';
-import { useState } from 'react';
-import { useCountAccountsByType } from '../../hooks/useCountAccountByType';
-import { SocialButton } from '../../shared/SocialButton';
 import { zkProviderDataMap, type ZkProvider } from '_src/background/accounts/zk/providers';
 import { ampli, type ClickedSocialSignInButtonProperties } from '_src/shared/analytics/ampli';
+import { cx } from 'class-variance-authority';
+import { useState } from 'react';
+
+import { useCountAccountsByType } from '../../hooks/useCountAccountByType';
+import { SocialButton } from '../../shared/SocialButton';
 
 const zkLoginProviders = Object.entries(zkProviderDataMap)
 	.filter(([_, { hidden }]) => !hidden)

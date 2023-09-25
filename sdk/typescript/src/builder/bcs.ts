@@ -3,11 +3,11 @@
 
 import type { TypeName } from '@mysten/bcs';
 import { BCS } from '@mysten/bcs';
-import { bcs } from '../bcs/index.js';
-import { TypeTagSerializer } from '../bcs/index.js';
+
+import { bcs, TypeTagSerializer } from '../bcs/index.js';
 import type { TypeTag } from '../bcs/index.js';
-import type { TransactionArgument, MoveCallTransaction } from './Transactions.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import type { MoveCallTransaction, TransactionArgument } from './Transactions.js';
 
 export const ARGUMENT_INNER = 'Argument';
 export const VECTOR = 'vector';

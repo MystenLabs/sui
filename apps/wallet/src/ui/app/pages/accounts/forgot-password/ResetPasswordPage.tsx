@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAutoLockMinutesMutation } from '_src/ui/app/hooks/useAutoLockMinutesMutation';
+import { useResetPasswordMutation } from '_src/ui/app/hooks/useResetPasswordMutation';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate } from 'react-router-dom';
 
-import { useForgotPasswordContext } from './ForgotPasswordPage';
 import { ProtectAccountForm } from '../../../components/accounts/ProtectAccountForm';
 import { autoLockDataToMinutes } from '../../../hooks/useAutoLockMinutes';
 import { Heading } from '../../../shared/heading';
-import { useAutoLockMinutesMutation } from '_src/ui/app/hooks/useAutoLockMinutesMutation';
-import { useResetPasswordMutation } from '_src/ui/app/hooks/useResetPasswordMutation';
+import { useForgotPasswordContext } from './ForgotPasswordPage';
 
 export function ResetPasswordPage() {
 	const { value, clear } = useForgotPasswordContext();

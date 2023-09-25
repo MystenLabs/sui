@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { expect } from 'vitest';
+
 import {
 	KioskClient,
 	KioskOwnerCap,
 	KioskTransaction,
-	TransferPolicyTransaction,
 	percentageToBasisPoints,
+	TransferPolicyTransaction,
 } from '../../src';
-import { TestToolbox, executeTransactionBlock, getPublisherObject } from './setup';
-import { expect } from 'vitest';
+import { executeTransactionBlock, getPublisherObject, TestToolbox } from './setup';
 
 // Creates a fresh transfer policy for Heroes and attaches all the rules.
 export async function prepareHeroRuleset({

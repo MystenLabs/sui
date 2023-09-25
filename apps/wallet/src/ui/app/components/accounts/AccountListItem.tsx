@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
+
+import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { AccountIcon } from './AccountIcon';
 import { AccountItem } from './AccountItem';
 import { LockUnlockButton } from './LockUnlockButton';
 import { useUnlockAccount } from './UnlockAccountContext';
-import { useActiveAccount } from '../../hooks/useActiveAccount';
-import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
 type AccountListItemProps = {
 	account: SerializedUIAccount;

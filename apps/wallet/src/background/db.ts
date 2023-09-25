@@ -3,6 +3,7 @@
 
 import Dexie, { type Table } from 'dexie';
 import { exportDB, importDB } from 'dexie-export-import';
+
 import { type AccountSourceSerialized } from './account-sources/AccountSource';
 import { type SerializedAccount } from './accounts/Account';
 import { captureException } from './sentry';

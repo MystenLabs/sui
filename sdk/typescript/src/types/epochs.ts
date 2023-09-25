@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Infer } from 'superstruct';
 import { array, boolean, nullable, number, object, string } from 'superstruct';
+
 import { SuiValidatorSummary } from './validator.js';
 
 export const EndOfEpochInfo = object({

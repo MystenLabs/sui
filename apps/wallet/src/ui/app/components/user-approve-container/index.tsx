@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
 import cn from 'classnames';
 import { useCallback, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { useAccountByAddress } from '../../hooks/useAccountByAddress';
 import { Button } from '../../shared/ButtonUI';
-import { DAppInfoCard } from '../DAppInfoCard';
-
 import { UnlockAccountButton } from '../accounts/UnlockAccountButton';
-import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
-import type { ReactNode } from 'react';
+import { DAppInfoCard } from '../DAppInfoCard';
 
 type UserApproveContainerProps = {
 	children: ReactNode | ReactNode[];

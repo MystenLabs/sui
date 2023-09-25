@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SuiClient } from '@mysten/sui.js/client';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
+
 import { bcs } from '../bcs';
 import {
 	TRANSFER_POLICY_CAP_TYPE,
@@ -10,7 +12,6 @@ import {
 	TransferPolicy,
 	TransferPolicyCap,
 } from '../types';
-import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import { getAllOwnedObjects, parseTransferPolicyCapObject } from '../utils';
 
 /**

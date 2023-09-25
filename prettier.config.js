@@ -8,6 +8,16 @@ module.exports = {
 	tabWidth: 2,
 	trailingComma: 'all',
 	useTabs: true,
+	plugins: ['@ianvs/prettier-plugin-sort-imports'],
+	importOrder: [
+		'<BUILT_IN_MODULES>',
+		'<THIRD_PARTY_MODULES>',
+		'',
+		'^@/(.*)$',
+		'^~/(.*)$',
+		'',
+		'^[.]',
+	],
 	overrides: [
 		{
 			files: 'apps/explorer/**/*',

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
+
 import { type ObjectArgument } from '../../types';
 import { objArg } from '../../utils';
 

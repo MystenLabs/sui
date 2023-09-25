@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB58 } from '@mysten/bcs';
-import { describe, it, expect } from 'vitest';
-import { TransactionBlock, Transactions, builder } from '../index.js';
+import { describe, expect, it } from 'vitest';
+
+import { builder, TransactionBlock, Transactions } from '../index.js';
 import { Inputs } from '../Inputs.js';
 
 it('can construct and serialize an empty tranaction', () => {

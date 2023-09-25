@@ -8,10 +8,11 @@ import type {
 	StandardEventsFeature,
 	WalletWithFeatures,
 } from '@wallet-standard/core';
-import type { SuiSignTransactionBlockFeature } from './suiSignTransactionBlock';
+
 import type { SuiSignAndExecuteTransactionBlockFeature } from './suiSignAndExecuteTransactionBlock';
 import { SuiSignMessageFeature } from './suiSignMessage';
 import { SuiSignPersonalMessageFeature } from './suiSignPersonalMessage';
+import type { SuiSignTransactionBlockFeature } from './suiSignTransactionBlock';
 
 /**
  * Wallet Standard features that are unique to Sui, and that all Sui wallets are expected to implement.

@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatPercentageDisplay, useGetValidatorsApy, calculateStakeShare } from '@mysten/core';
+import { Card } from '_app/shared/card';
+import Alert from '_components/alert';
+import LoadingIndicator from '_components/loading/LoadingIndicator';
+import { Text } from '_src/ui/app/shared/text';
+import { IconTooltip } from '_src/ui/app/shared/tooltip';
+import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
 import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -12,11 +17,6 @@ import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
 import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
-import { Card } from '_app/shared/card';
-import Alert from '_components/alert';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
-import { Text } from '_src/ui/app/shared/text';
-import { IconTooltip } from '_src/ui/app/shared/tooltip';
 
 type ValidatorFormDetailProps = {
 	validatorAddress: string;

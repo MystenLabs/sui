@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+
 import {
 	attachFloorPriceRuleTx,
 	attachKioskLockRuleTx,
@@ -15,7 +16,7 @@ import {
 	shareTransferPolicy,
 	withdrawFromPolicy,
 } from '../tx/transfer-policy';
-import { type ObjectArgument, TransferPolicyCap } from '../types';
+import { TransferPolicyCap, type ObjectArgument } from '../types';
 import { KioskClient } from './kiosk-client';
 
 export type TransferPolicyBaseParams = {
