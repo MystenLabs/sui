@@ -70,6 +70,7 @@ type MethodPayloads = {
 		data: PasswordRecoveryData;
 	};
 	removeAccount: { accountID: string };
+	acknowledgeZkLoginWarning: { accountID: string };
 };
 
 type Methods = keyof MethodPayloads;

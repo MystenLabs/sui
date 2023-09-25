@@ -77,6 +77,9 @@ export default {
 			offwhite: '#fefefe',
 			offblack: '#111111',
 			ebony: '#101828',
+			avocado: {
+				200: '#CBE5BE',
+			},
 		},
 
 		extend: {

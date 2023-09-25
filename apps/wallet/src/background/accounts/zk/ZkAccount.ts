@@ -79,6 +79,7 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	 * the name/key of the claim in claims used for the address sub or email
 	 */
 	claimName: 'sub' | 'email';
+	warningAcknowledged?: boolean;
 }
 
 export interface ZkAccountSerializedUI extends SerializedUIAccount {
@@ -86,6 +87,7 @@ export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	email: string | null;
 	picture: string | null;
 	provider: ZkProvider;
+	warningAcknowledged: boolean;
 }
 
 export function isZkAccountSerializedUI(
@@ -174,7 +176,7 @@ export class ZkAccount
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type, claims, selected, provider, nickname } =
+		const { address, publicKey, type, claims, selected, provider, nickname, warningAcknowledged } =
 			await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
@@ -191,6 +193,7 @@ export class ZkAccount
 			isPasswordUnlockable: false,
 			provider,
 			isKeyPairExportable: false,
+			warningAcknowledged: !!warningAcknowledged,
 		};
 	}
 
