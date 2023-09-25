@@ -3,7 +3,7 @@
 
 import { isSuiNSName, useResolveSuiNSAddress, useResolveSuiNSName } from '@mysten/core';
 import { Domain32 } from '@mysten/icons';
-import { LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator, Divider } from '@mysten/ui';
 import { useParams } from 'react-router-dom';
 
 import { PageLayout } from '~/components/Layout/PageLayout';
@@ -12,7 +12,6 @@ import { OwnedObjects } from '~/components/OwnedObjects';
 import { ErrorBoundary } from '~/components/error-boundary/ErrorBoundary';
 import { TransactionsForAddress } from '~/components/transactions/TransactionsForAddress';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
-import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';

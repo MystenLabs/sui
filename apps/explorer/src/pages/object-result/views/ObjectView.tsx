@@ -10,7 +10,7 @@ import {
 	parseStructTag,
 	SUI_TYPE_ARG,
 } from '@mysten/sui.js/utils';
-import { Heading, Text } from '@mysten/ui';
+import { Heading, Text, Divider } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -18,7 +18,6 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useResolveVideo } from '~/hooks/useResolveVideo';
 import { Card } from '~/ui/Card';
 import { Description } from '~/ui/Description';
-import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink, TransactionLink } from '~/ui/InternalLink';
 import { Link } from '~/ui/Link';
 import { ObjectVideoImage } from '~/ui/ObjectVideoImage';

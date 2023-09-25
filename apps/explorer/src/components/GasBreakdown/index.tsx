@@ -8,11 +8,10 @@ import {
 	useResolveSuiNSName,
 } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import { Heading, Text } from '@mysten/ui';
+import { Heading, Text, Divider } from '@mysten/ui';
 
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
-import { Divider } from '~/ui/Divider';
 import { AddressLink, ObjectLink } from '~/ui/InternalLink';
 import { CollapsibleCard } from '~/ui/collapsible/CollapsibleCard';
 import { CollapsibleSection } from '~/ui/collapsible/CollapsibleSection';

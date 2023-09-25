@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { ChevronRight12 } from '@mysten/icons';
-import { Text } from '@mysten/ui';
+import { Text, Divider } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { type ReactNode, useState } from 'react';
-
-import { Divider } from '~/ui/Divider';
 
 export interface CollapsibleSectionProps {
 	children: ReactNode;

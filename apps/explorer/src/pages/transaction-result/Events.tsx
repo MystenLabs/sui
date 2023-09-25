@@ -4,7 +4,7 @@
 import { ChevronRight12 } from '@mysten/icons';
 import { type SuiEvent } from '@mysten/sui.js/client';
 import { parseStructTag, formatAddress } from '@mysten/sui.js/utils';
-import { Text } from '@mysten/ui';
+import { Text, Divider } from '@mysten/ui';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import clsx from 'clsx';
 import { useState } from 'react';
@@ -12,7 +12,6 @@ import { useState } from 'react';
 import { SyntaxHighlighter } from '~/components/SyntaxHighlighter';
 import { CopyToClipboard } from '~/ui/CopyToClipboard';
 import { DescriptionItem } from '~/ui/DescriptionList';
-import { Divider } from '~/ui/Divider';
 import { ObjectLink } from '~/ui/InternalLink';
 
 function Event({ event, divider }: { event: SuiEvent; divider: boolean }) {

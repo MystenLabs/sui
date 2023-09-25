@@ -3,12 +3,11 @@
 
 import { CoinFormat, formatBalance } from '@mysten/core';
 import { useReferenceGasPrice } from '@mysten/dapp-kit';
-import { Heading } from '@mysten/ui';
+import { Heading, Divider } from '@mysten/ui';
 
 import { FormattedStatsAmount, StatsWrapper } from './FormattedStatsAmount';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 import { Card } from '~/ui/Card';
-import { Divider } from '~/ui/Divider';
 
 export function OnTheNetwork() {
 	const { data: networkMetrics } = useGetNetworkMetrics();
