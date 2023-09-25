@@ -81,14 +81,14 @@ impl FromStr for SuiAddress {
             // Left pad with `0`-s up to SUI_ADDRESS_LENGTH * 2 characters long.
             format!("{:0>width$}", s, width = SUI_ADDRESS_LENGTH * 2),
             &mut arr[..],
-        ).map_err(|e| {
-            match e {
-                hex::FromHexError::InvalidHexCharacter { c, index } =>
-                    FromStrError::BadHex(c, index + 2),
-                hex::FromHexError::OddLength =>
-                    unreachable!("SAFETY: Prevented by padding"),
-                hex::FromHexError::InvalidStringLength =>
-                    unreachable!("SAFETY: Prevented by bounds check"),
+        )
+        .map_err(|e| match e {
+            hex::FromHexError::InvalidHexCharacter { c, index } => {
+                FromStrError::BadHex(c, index + 2)
+            }
+            hex::FromHexError::OddLength => unreachable!("SAFETY: Prevented by padding"),
+            hex::FromHexError::InvalidStringLength => {
+                unreachable!("SAFETY: Prevented by bounds check")
             }
         })?;
 
@@ -103,8 +103,8 @@ mod tests {
 
     const STR_ADDRESS: &str = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     const ARR_ADDRESS: [u8; SUI_ADDRESS_LENGTH] = [
-        1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69,
-        103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239
+        1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239, 1, 35, 69, 103,
+        137, 171, 205, 239, 1, 35, 69, 103, 137, 171, 205, 239,
     ];
     const SUI_ADDRESS: SuiAddress = SuiAddress(ARR_ADDRESS);
 
