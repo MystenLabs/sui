@@ -191,6 +191,58 @@ scalar DateTime
 #   | { Struct:  [{ name: string, value: MoveData }] }
 scalar MoveData
 
+# The signature of a concrete Move Type (a type with all its type
+# parameters instantiated with concrete types, that contains no
+# references), corresponding to the following recursive type:
+#
+# type MoveTypeSignature =
+#     "address"
+#   | "bool"
+#   | "u8" | "u16" | ... | "u256"
+#   | { vector: MoveTypeSignature }
+#   | {
+#       package: string,
+#       module: string,
+#       type: string,
+#       typeParameters: [MoveTypeSignature]?,
+#     }
+scalar MoveTypeSignature
+
+# The shape of a concrete Move Type (a type with all its type
+# parameters instantiated with concrete types), corresponding to the
+# following recursive type:
+#
+# type MoveTypeLayout =
+#     "address"
+#   | "bool"
+#   | "u8" | "u16" | ... | "u256"
+#   | { vector: MoveTypeLayout }
+#   | { struct: [{ name: string, layout: MoveTypeLayout }] }
+scalar MoveTypeLayout
+
+# The shape of an abstract Move Type (a type that can contain free
+# type parameters, and can optionally be taken by reference),
+# corresponding to the following recursive type:
+#
+# type OpenMoveTypeSignature = {
+#   ref: ("&" | "&mut")?,
+#   body: OpenMoveTypeSignatureBody,
+# }
+#
+# type OpenMoveTypeSignatureBody =
+#     "address"
+#   | "bool"
+#   | "u8" | "u16" | ... | "u256"
+#   | { vector: OpenMoveTypeSignatureBody }
+#   | {
+#       package: string,
+#       module: string,
+#       type: string,
+#       typeParameters: [OpenMoveTypeSignatureBody]?
+#     }
+#   | { TypeParameter: number }
+scalar OpenMoveTypeSignature
+
 # The extra data required to turn a `TransactionKind` into a
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
@@ -944,17 +996,12 @@ enum MoveVisibility {
   FRIEND
 }
 
-enum MoveReference {
-  IMMUT
-  MUT
-}
-
-type MoveStructTypeParameterDecl {
+type MoveStructTypeParameter {
   constraints: [MoveAbility]
   isPhantom: Boolean
 }
 
-type MoveFunctionTypeParameterDecl {
+type MoveFunctionTypeParameter {
   constraints: [MoveAbility]
 }
 
@@ -965,7 +1012,7 @@ type MoveModule {
   moduleId: MoveModuleId!
   friends: [MoveModule!]
 
-  struct(name: String!): MoveStructDecl
+  struct(name: String!): MoveStruct
   structConnection(
     first: Int,
     after: String,
@@ -985,16 +1032,16 @@ type MoveModule {
   disassembly: String
 }
 
-type MoveStructDecl {
+type MoveStruct {
   id : ID!
   module: MoveModule!
   name: String!
   abilities: [MoveAbility]
-  typeParameters: [MoveStructTypeParameterDecl]
-  fields: [MoveFieldDecl]
+  typeParameters: [MoveStructTypeParameter]
+  fields: [MoveField]
 }
 
-type MoveFieldDecl {
+type MoveField {
   name: String
   type: OpenMoveType
 }
@@ -1007,7 +1054,7 @@ type MoveFunction {
   visibility: MoveVisibility
   isEntry: Boolean
 
-  typeParameters: [MoveFunctionTypeParameterDecl]
+  typeParameters: [MoveFunctionTypeParameter]
   parameters: [OpenMoveType]
   return: [OpenMoveType]
 }
@@ -1019,41 +1066,24 @@ type MoveValue {
   bcs: Base64
 }
 
-type MoveTypeName {
-  # Fully qualified type name.  Primitive types have no `moduleId`, or
-  # `struct`.
-  moduleId: MoveModuleId
-  name: String!
-  struct: MoveStructDecl!
-}
-
 # Represents concrete types (no type parameters, no references)
 type MoveType {
-  # Scalar representation of the type instantiation (type and type
-  # parameters)
-  repr: String!
-  typeName: MoveTypeName!
-  typeParameters: [MoveType]
+  # Flat representation of the type signature, as a displayable string.
+  repr: String
+  # Structured representation of the type signature.
+  signature: MoveTypeSignature
+  # Structured representation of the "shape" of values that match this type.
+  layout: MoveTypeLayout
 }
 
-# Represents types that could contain unbound type parameters, or
-# references. Such types can appear as function parameters, or fields
+# Represents types that could contain references or free type
+# parameters.  Such types can appear as function parameters, or fields
 # in structs.
 type OpenMoveType {
-  repr: String!
-  ref: MoveReference
-  type: OpenMoveTypeBody
-}
-
-union OpenMoveTypeBody = MoveTypeApplication | MoveTypeParameter
-
-type MoveTypeApplication {
-  name: MoveTypeName!
-  typeParameters: [OpenMoveType]
-}
-
-type MoveTypeParameter {
-  index: Int!
+  # Flat representation of the type signature, as a displayable string.
+  repr: String
+  # Structured representation of the type signature.
+  signature: OpenMoveTypeSignature
 }
 
 # Metrics (omitted for brevity)
@@ -1186,7 +1216,7 @@ type MoveFunctionEdge {
   node: MoveFunction!
 }
 
-# MoveStructDeclConnection
+# MoveStructConnection
 type MoveStructConnection {
   edges: [MoveStructEdge!]!
   pageInfo: PageInfo!
@@ -1194,7 +1224,7 @@ type MoveStructConnection {
 
 type MoveStructEdge {
   cursor: String
-  node: MoveStructDecl!
+  node: MoveStruct!
 }
 
 # TransactionBlockConnection
