@@ -112,13 +112,17 @@ export function ProtectAccountForm({
 					<CheckboxField
 						name="acceptedTos"
 						label={
-							<Link
-								href={ToS_LINK}
-								beforeColor="steelDarker"
-								color="suiDark"
-								text="Terms of Services"
-								before="I read and agreed to the"
-							/>
+							<div className="text-bodySmall whitespace-nowrap">
+								I read and agreed to the{' '}
+								<span className="inline-block">
+									<Link
+										href={ToS_LINK}
+										beforeColor="steelDarker"
+										color="suiDark"
+										text="Terms of Services"
+									/>
+								</span>
+							</div>
 						}
 					/>
 				)}
