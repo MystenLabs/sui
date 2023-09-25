@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	SocialFacebook24,
-	LogoGoogle,
-	LogoTwitch,
-	Sui,
-	LogoQredo,
-	LedgerLogo17,
-} from '@mysten/icons';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import {
+	LedgerLogo17,
+	LogoGoogle,
+	LogoQredo,
+	LogoTwitch,
+	SocialFacebook24,
+	Sui,
+} from '@mysten/icons';
 
 function SuiIcon() {
 	return (

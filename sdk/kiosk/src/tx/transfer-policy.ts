@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
-import { objArg } from '../utils';
+import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
+
 import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
+import { objArg } from '../utils';
 
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.

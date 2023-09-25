@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowUpRight12, LockLocked24, Domain24, More24, Clipboard24 } from '@mysten/icons';
-import Browser from 'webextension-polyfill';
-
-import { MenuLayout } from './MenuLayout';
-import MenuListItem from './MenuListItem';
-import Loading from '../../loading';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
 import { useNextMenuUrl } from '_components/menu/hooks';
 import { useAppSelector } from '_hooks';
-import { ToS_LINK, FAQ_LINK } from '_src/shared/constants';
+import { FAQ_LINK, ToS_LINK } from '_src/shared/constants';
 import { formatAutoLock, useAutoLockMinutes } from '_src/ui/app/hooks/useAutoLockMinutes';
-import { Link } from '_src/ui/app/shared/Link';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
+import { ArrowUpRight12, Clipboard24, Domain24, LockLocked24, More24 } from '@mysten/icons';
+import Browser from 'webextension-polyfill';
+
+import Loading from '../../loading';
+import { MenuLayout } from './MenuLayout';
+import MenuListItem from './MenuListItem';
 
 function MenuList() {
 	const networkUrl = useNextMenuUrl(true, '/network');

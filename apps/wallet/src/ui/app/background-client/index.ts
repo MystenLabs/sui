@@ -1,8 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage } from '_messages';
+import type { Message } from '_messages';
+import { PortStream } from '_messaging/PortStream';
+import { type BasePayload } from '_payloads';
+import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
+import type { KeyringPayload } from '_payloads/keyring';
+import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
+import { isPermissionRequests } from '_payloads/permissions';
+import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';
+import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
+import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
+import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
+import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
+import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
+import { changeActiveNetwork, setActiveOrigin } from '_redux/slices/app';
+import { setPermissions } from '_redux/slices/permissions';
+import { setTransactionRequests } from '_redux/slices/transaction-requests';
+import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
+import type { NetworkEnvType } from '_src/shared/api-env';
+import {
+	isMethodPayload,
+	type MethodPayload,
+	type UIAccessibleEntityType,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import {
+	isQredoConnectPayload,
+	type QredoConnectPayload,
+} from '_src/shared/messaging/messages/payloads/QredoConnect';
+import { type SignedMessage, type SignedTransaction } from '_src/ui/app/WalletSigner';
+import type { AppDispatch } from '_store';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-
 import { type SerializedSignature } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
 import { type QueryKey } from '@tanstack/react-query';
@@ -12,37 +41,6 @@ import { growthbook } from '../experimentation/feature-gating';
 import { accountsQueryKey } from '../helpers/query-client-keys';
 import { queryClient } from '../helpers/queryClient';
 import { accountSourcesQueryKey } from '../hooks/useAccountSources';
-import { createMessage } from '_messages';
-import { PortStream } from '_messaging/PortStream';
-import { type BasePayload } from '_payloads';
-import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
-import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
-import { isPermissionRequests } from '_payloads/permissions';
-import { isUpdateActiveOrigin } from '_payloads/tabs/updateActiveOrigin';
-import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
-import { setActiveOrigin, changeActiveNetwork } from '_redux/slices/app';
-import { setPermissions } from '_redux/slices/permissions';
-import { setTransactionRequests } from '_redux/slices/transaction-requests';
-import { type MnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
-import {
-	type MethodPayload,
-	isMethodPayload,
-	type UIAccessibleEntityType,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import {
-	isQredoConnectPayload,
-	type QredoConnectPayload,
-} from '_src/shared/messaging/messages/payloads/QredoConnect';
-import { type SignedTransaction, type SignedMessage } from '_src/ui/app/WalletSigner';
-
-import type { Message } from '_messages';
-import type { KeyringPayload } from '_payloads/keyring';
-import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';
-import type { DisconnectApp } from '_payloads/permissions/DisconnectApp';
-import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
-import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import type { NetworkEnvType } from '_src/shared/api-env';
-import type { AppDispatch } from '_store';
 
 const entitiesToClientQueryKeys: Record<UIAccessibleEntityType, QueryKey> = {
 	accounts: accountsQueryKey,

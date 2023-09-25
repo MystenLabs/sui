@@ -4,7 +4,6 @@
 import ApiProvider from '_app/ApiProvider';
 import { BackgroundClient } from '_app/background-client';
 import { growthbook } from '_app/experimentation/feature-gating';
-
 import type { RootState } from '_redux/RootReducer';
 import type { AppDispatch } from '_store';
 

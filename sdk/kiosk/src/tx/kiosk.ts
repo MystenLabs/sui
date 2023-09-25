@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
+import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 
-import { objArg } from '../utils';
 import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
+import { objArg } from '../utils';
 
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.

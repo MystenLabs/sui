@@ -3,6 +3,15 @@
 
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';
+
+import { ErrorBoundary } from '_components/error-boundary';
+import { initAppType } from '_redux/slices/app';
+import { AppType, getFromLocationSearch } from '_redux/slices/app/AppType';
+import { initAmplitude } from '_src/shared/analytics/amplitude';
+import { setAttributes } from '_src/shared/experimentation/features';
+import initSentry from '_src/ui/app/helpers/sentry';
+import store from '_store';
+import { api, thunkExtras } from '_store/thunk-extras';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -19,14 +28,6 @@ import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClient
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
-import { ErrorBoundary } from '_components/error-boundary';
-import { initAppType } from '_redux/slices/app';
-import { AppType, getFromLocationSearch } from '_redux/slices/app/AppType';
-import { initAmplitude } from '_src/shared/analytics/amplitude';
-import { setAttributes } from '_src/shared/experimentation/features';
-import initSentry from '_src/ui/app/helpers/sentry';
-import store from '_store';
-import { api, thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';

@@ -7,6 +7,7 @@ import {
 	SuiObjectDataOptions,
 } from '@mysten/sui.js/client';
 import { TransactionArgument } from '@mysten/sui.js/transactions';
+
 import { ObjectArgument } from '.';
 
 /** The Kiosk module. */

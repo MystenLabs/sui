@@ -3,7 +3,7 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import { PaginatedCoins } from '@mysten/sui.js/client';
-import { UseInfiniteQueryResult, useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, UseInfiniteQueryResult } from '@tanstack/react-query';
 
 const MAX_COINS_PER_REQUEST = 10;
 

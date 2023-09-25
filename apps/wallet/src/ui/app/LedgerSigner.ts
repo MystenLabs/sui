@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 import { type SuiClient } from '@mysten/sui.js/client';
 import {
-	type SerializedSignature,
 	toSerializedSignature,
+	type SerializedSignature,
 	type SignatureScheme,
 } from '@mysten/sui.js/cryptography';
 import { Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
-import { WalletSigner } from './WalletSigner';
 
-import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
+import { WalletSigner } from './WalletSigner';
 
 export class LedgerSigner extends WalletSigner {
 	#suiLedgerClient: SuiLedgerClient | null;

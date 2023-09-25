@@ -3,7 +3,7 @@
 
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
-import { type Account, AccountType } from './Account';
+import { AccountType, type Account } from './Account';
 
 /**
  * @deprecated

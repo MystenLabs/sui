@@ -1,19 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
+import { getValidDAppUrl } from '_src/shared/utils';
 import { CheckFill16 } from '@mysten/icons';
 import cn from 'classnames';
-import { DAppPermissionsList } from './DAppPermissionsList';
-import { SummaryCard } from './SummaryCard';
+
+import { useAccountByAddress } from '../hooks/useAccountByAddress';
+import { Heading } from '../shared/heading';
+import { Link } from '../shared/Link';
 import { AccountIcon } from './accounts/AccountIcon';
 import { AccountItem } from './accounts/AccountItem';
 import { LockUnlockButton } from './accounts/LockUnlockButton';
 import { useUnlockAccount } from './accounts/UnlockAccountContext';
-import { useAccountByAddress } from '../hooks/useAccountByAddress';
-import { Link } from '../shared/Link';
-import { Heading } from '../shared/heading';
-import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
-import { getValidDAppUrl } from '_src/shared/utils';
+import { DAppPermissionsList } from './DAppPermissionsList';
+import { SummaryCard } from './SummaryCard';
 
 export type DAppInfoCardProps = {
 	name: string;

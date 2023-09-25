@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
-import { formatAddress } from '@mysten/sui.js/utils';
-import cl from 'classnames';
-import { useMemo } from 'react';
-
 import { Heading } from '_app/shared/heading';
 import { ImageIcon } from '_app/shared/image-icon';
 import { Text } from '_app/shared/text';
 import { Badge } from '_src/ui/app/shared/Badge';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { formatAddress } from '@mysten/sui.js/utils';
+import cl from 'classnames';
+import { useMemo } from 'react';
 
 interface ValidatorLogoProps {
 	validatorAddress: string;

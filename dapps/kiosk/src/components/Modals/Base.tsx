@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Fragment, ReactNode } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
+import { Fragment, ReactNode } from 'react';
 
 export function ModalBase({
 	isOpen,

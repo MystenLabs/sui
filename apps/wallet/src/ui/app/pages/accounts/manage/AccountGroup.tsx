@@ -1,20 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { ArrowBgFill16, Plus12 } from '@mysten/icons';
-import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
-import { useMutation } from '@tanstack/react-query';
-import { forwardRef, useState } from 'react';
-import toast from 'react-hot-toast';
 import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { AccountIcon } from '_src/ui/app/components/accounts/AccountIcon';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
 import { useAccountsFormContext } from '_src/ui/app/components/accounts/AccountsFormContext';
 import { NicknameDialog } from '_src/ui/app/components/accounts/NicknameDialog';
 import { VerifyPasswordModal } from '_src/ui/app/components/accounts/VerifyPasswordModal';
-import { useAccountSources } from '_src/ui/app/hooks/useAccountSources';
 import { useAccounts } from '_src/ui/app/hooks/useAccounts';
+import { useAccountSources } from '_src/ui/app/hooks/useAccountSources';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { useCreateAccountsMutation } from '_src/ui/app/hooks/useCreateAccountMutation';
 import { Button } from '_src/ui/app/shared/ButtonUI';
@@ -29,6 +24,11 @@ import {
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { ButtonOrLink, type ButtonOrLinkProps } from '_src/ui/app/shared/utils/ButtonOrLink';
+import { ArrowBgFill16, Plus12 } from '@mysten/icons';
+import * as CollapsiblePrimitive from '@radix-ui/react-collapsible';
+import { useMutation } from '@tanstack/react-query';
+import { forwardRef, useState } from 'react';
+import toast from 'react-hot-toast';
 
 const accountTypeToLabel: Record<AccountType, string> = {
 	'mnemonic-derived': 'Passphrase Derived',

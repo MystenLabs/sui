@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
+import nacl from 'tweetnacl';
+
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
-import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
+import { bytesEqual, PublicKey } from '../../cryptography/publickey.js';
 import type { SerializedSignature } from '../../cryptography/signature.js';
 import {
-	SIGNATURE_SCHEME_TO_FLAG,
 	parseSerializedSignature,
+	SIGNATURE_SCHEME_TO_FLAG,
 } from '../../cryptography/signature.js';
-import nacl from 'tweetnacl';
 
 const PUBLIC_KEY_SIZE = 32;
 

@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import type { RootState } from '_redux/RootReducer';
+import type { API_ENV, NetworkEnvType } from '_src/shared/api-env';
+import type { AppThunkConfig } from '_store/thunk-extras';
+import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
 
 import { AppType } from './AppType';
-import { DEFAULT_API_ENV } from '_app/ApiProvider';
-
-import type { PayloadAction } from '@reduxjs/toolkit';
-import type { RootState } from '_redux/RootReducer';
-import type { NetworkEnvType, API_ENV } from '_src/shared/api-env';
-import type { AppThunkConfig } from '_store/thunk-extras';
 
 type AppState = {
 	appType: AppType;

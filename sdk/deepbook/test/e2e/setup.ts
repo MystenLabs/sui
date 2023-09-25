@@ -1,23 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { expect } from 'vitest';
 import { execSync } from 'child_process';
-import tmp from 'tmp';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import {
 	DevInspectResults,
+	getFullnodeUrl,
 	SuiClient,
 	SuiObjectChangeCreated,
 	SuiObjectChangePublished,
 	SuiTransactionBlockResponse,
-	getFullnodeUrl,
 } from '@mysten/sui.js/client';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { PoolSummary } from '../../src/types';
+import tmp from 'tmp';
+import { retry } from 'ts-retry-promise';
+import { expect } from 'vitest';
+
 import { DeepBookClient } from '../../src';
+import { PoolSummary } from '../../src/types';
 import { FLOAT_SCALING_FACTOR, NORMALIZED_SUI_COIN_TYPE } from '../../src/utils';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');

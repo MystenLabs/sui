@@ -14,8 +14,8 @@ _Mysten Kiosk rules and extensions are not supported in Devnet due to network wi
 require constantly changing the package IDs)._
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import { KioskClient, Network } from '@mysten/kiosk';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // We need a Sui Client. You can re-use the SuiClient of your project
 // (it's not recommended to create a new one).

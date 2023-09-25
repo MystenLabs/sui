@@ -4,13 +4,15 @@
 import './index.css';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';
+
+import { WalletKitProvider } from '@mysten/wallet-kit';
+import { QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { WalletKitProvider } from '@mysten/wallet-kit';
-import { router } from './routes';
 import { RouterProvider } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
+
 import { queryClient } from './lib/queryClient';
+import { router } from './routes';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 	<React.StrictMode>

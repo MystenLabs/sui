@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseInfiniteQueryOptions } from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
+
 import { useSuiClientContext } from './useSuiClient.js';
-import type { SuiClient } from '@mysten/sui.js/client';
 
 interface PaginatedResult {
 	data?: unknown;

@@ -3,20 +3,20 @@
 
 import { Command } from 'cmdk';
 import {
-	type ComponentProps,
-	type ReactNode,
-	type RefObject,
 	createContext,
 	useCallback,
 	useContext,
 	useEffect,
 	useRef,
 	useState,
+	type ComponentProps,
+	type ReactNode,
+	type RefObject,
 } from 'react';
 
-import { Text } from './Text';
-import { LoadingIndicator } from './LoadingIndicator';
 import { useOnClickOutside } from './hooks/useOnClickOutside';
+import { LoadingIndicator } from './LoadingIndicator';
+import { Text } from './Text';
 
 export type ComboboxItem = {
 	value: string;

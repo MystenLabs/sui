@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { Configuration } from 'webpack';
+
 import configDev from './configs/webpack/webpack.config.dev';
 import configProd from './configs/webpack/webpack.config.prod';
-
-import type { Configuration } from 'webpack';
 
 const configMap: Record<string, () => Promise<Configuration>> = {
 	development: configDev,

@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64 } from '@mysten/bcs';
-import { PublicKey, bytesEqual } from '../../cryptography/publickey.js';
+import { secp256r1 } from '@noble/curves/p256';
+import { sha256 } from '@noble/hashes/sha256';
+
+import { bytesEqual, PublicKey } from '../../cryptography/publickey.js';
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import type { SerializedSignature } from '../../cryptography/signature.js';
 import {
-	SIGNATURE_SCHEME_TO_FLAG,
 	parseSerializedSignature,
+	SIGNATURE_SCHEME_TO_FLAG,
 } from '../../cryptography/signature.js';
-import { sha256 } from '@noble/hashes/sha256';
-import { secp256r1 } from '@noble/curves/p256';
 
 const SECP256R1_PUBLIC_KEY_SIZE = 33;
 

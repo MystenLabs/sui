@@ -4,7 +4,6 @@
 import { Check12 } from '@mysten/icons';
 import * as RadixCheckbox from '@radix-ui/react-checkbox';
 import { forwardRef } from 'react';
-
 import type { ComponentProps, ReactNode } from 'react';
 
 type CheckboxProps = {

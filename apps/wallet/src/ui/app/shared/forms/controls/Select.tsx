@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
 import { ChevronDown12 } from '@mysten/icons';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { forwardRef } from 'react';
-import { Text } from '_app/shared/text';
 
 const Select = SelectPrimitive.Root;
 const SelectValue = SelectPrimitive.Value;

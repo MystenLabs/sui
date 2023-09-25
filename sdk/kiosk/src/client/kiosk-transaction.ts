@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
-import { type KioskClient } from './kiosk-client';
+
+import * as kioskTx from '../tx/kiosk';
+import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
+import { confirmRequest } from '../tx/transfer-policy';
 import {
 	ItemId,
 	ItemReference,
@@ -13,9 +16,7 @@ import {
 	PurchaseOptions,
 } from '../types';
 import { getNormalizedRuleType, objArg } from '../utils';
-import * as kioskTx from '../tx/kiosk';
-import { confirmRequest } from '../tx/transfer-policy';
-import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
+import { type KioskClient } from './kiosk-client';
 
 export type KioskTransactionParams = {
 	/** The TransactionBlock for this run */

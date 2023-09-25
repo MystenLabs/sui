@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-
-import { AutoLockAccounts } from './AutoLockAccounts';
-import { MoreOptions } from './MoreOptions';
-import { NetworkSettings } from './NetworkSettings';
-import WalletSettingsMenuList from './WalletSettingsMenuList';
 import { ErrorBoundary } from '_components/error-boundary';
 import {
 	MainLocationContext,
@@ -16,8 +9,14 @@ import {
 	useNextMenuUrl,
 } from '_components/menu/hooks';
 import { useOnKeyboardEvent } from '_hooks';
-
+import { useCallback } from 'react';
 import type { MouseEvent } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+
+import { AutoLockAccounts } from './AutoLockAccounts';
+import { MoreOptions } from './MoreOptions';
+import { NetworkSettings } from './NetworkSettings';
+import WalletSettingsMenuList from './WalletSettingsMenuList';
 
 const CLOSE_KEY_CODES: string[] = ['Escape'];
 
