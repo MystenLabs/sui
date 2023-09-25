@@ -13,16 +13,70 @@ export const overlay = style({
 export const content = style({
 	backgroundColor: 'white',
 	position: 'fixed',
-	top: '50%',
-	left: '50%',
-	transform: 'translate(-50%, -50%)',
+	bottom: 16,
+	left: 16,
+	right: 16,
 	zIndex: 999999999,
 	display: 'flex',
+	flexDirection: 'column',
+	justifyContent: 'space-between',
 	overflow: 'hidden',
 	borderRadius: 16,
+	minHeight: '50vh',
+	maxHeight: '85vh',
+	maxWidth: 700,
+
+	'@media': {
+		'screen and (min-width: 768px)': {
+			flexDirection: 'row',
+			top: '50%',
+			left: '50%',
+			transform: 'translate(-50%, -50%)',
+		},
+	},
+});
+
+export const whatIsAWalletButton = style({
+	backgroundColor: '#F7F8F8',
+	padding: 16,
+	'@media': {
+		'screen and (min-width: 768px)': {
+			display: 'none',
+		},
+	},
+});
+
+export const viewContainer = style({
+	display: 'none',
+	'@media': {
+		'screen and (min-width: 768px)': {
+			display: 'flex',
+		},
+	},
+});
+
+export const selectedWalletListContainer = style({
+	display: 'none',
+	'@media': {
+		'screen and (min-width: 768px)': {
+			display: 'flex',
+		},
+	},
+});
+
+export const selectedViewContainer = style({
+	display: 'flex',
 });
 
 export const triggerButton = style({});
+
+export const backButton = style({
+	'@media': {
+		'screen and (min-width: 768px)': {
+			display: 'none',
+		},
+	},
+});
 
 export const closeButton = style({
 	position: 'absolute',
@@ -34,7 +88,11 @@ export const closeButton = style({
 });
 
 export const walletListContainer = style({
-	backgroundColor: '#F7F8F8',
 	padding: 20,
 	minWidth: 240,
+	'@media': {
+		'screen and (min-width: 768px)': {
+			backgroundColor: '#F7F8F8',
+		},
+	},
 });

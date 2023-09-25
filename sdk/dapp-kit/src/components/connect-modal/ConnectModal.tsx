@@ -9,10 +9,10 @@ import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
 import * as styles from './ConnectModal.css.js';
 import { WhatIsAWallet } from './views/WhatIsAWallet.js';
 import { GettingStarted } from './views/GettingStarted.js';
-import { assertUnreachable } from '../../utils/assertUnreachable.js';
 import { ConnectionStatus } from './views/ConnectionStatus.js';
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import CloseIcon from '../../assets/icons/CloseIcon.svg';
+import clsx from 'clsx';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
@@ -22,7 +22,7 @@ type ConnectModalProps = {
 
 export function ConnectModal({ triggerButton }: ConnectModalProps) {
 	const [isConnectModalOpen, setConnectModalOpen] = useState(false);
-	const [selectedView, setSelectedView] = useState<ConnectModalView>('what-is-a-wallet');
+	const [selectedView, setSelectedView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
 	const { mutate, isError } = useConnectWallet();
 
@@ -34,7 +34,6 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 	const onOpenChange = (open: boolean) => {
 		if (!open) {
 			setSelectedWallet(undefined);
-			setSelectedView('what-is-a-wallet');
 		}
 		setConnectModalOpen(open);
 	};
@@ -57,7 +56,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 			) : null;
 			break;
 		default:
-			assertUnreachable(selectedView);
+			modalContent = <WhatIsAWallet />;
 	}
 
 	return (
@@ -66,7 +65,11 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 			<Dialog.Portal>
 				<Dialog.Overlay className={styles.overlay} />
 				<Dialog.Content className={styles.content} aria-describedby={undefined}>
-					<div className={styles.walletListContainer}>
+					<div
+						className={clsx(styles.walletListContainer, {
+							[styles.selectedWalletListContainer]: !!selectedView,
+						})}
+					>
 						<Dialog.Title>Connect a Wallet</Dialog.Title>
 						<WalletList
 							selectedWalletName={selectedWallet?.name}
@@ -77,7 +80,28 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 							}}
 						/>
 					</div>
-					{modalContent}
+					<div
+						className={clsx(styles.viewContainer, {
+							[styles.selectedViewContainer]: !!selectedView,
+						})}
+					>
+						<button
+							className={styles.backButton}
+							type="button"
+							aria-label="Back"
+							onClick={() => setSelectedView(undefined)}
+						>
+							back
+						</button>
+						{modalContent}
+					</div>
+					<button
+						className={styles.whatIsAWalletButton}
+						type="button"
+						onClick={() => setSelectedView('what-is-a-wallet')}
+					>
+						What is a Wallet?
+					</button>
 					<Dialog.Close className={styles.closeButton} aria-label="Close">
 						<img src={CloseIcon} alt="" />
 					</Dialog.Close>
