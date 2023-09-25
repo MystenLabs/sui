@@ -1156,7 +1156,7 @@ fn exp_list_items_to_vec(
 
     // Because we previously froze subpoints of ExpLists as its own binding expression for that
     // ExpList, we need to process this possible vector the same way.
-    
+
     if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
         // We have to check that the arity of the expected type matches because some ill-typed
         // programs flow through this code. In those cases, the error has already been reported and
