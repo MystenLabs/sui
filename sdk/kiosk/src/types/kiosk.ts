@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PaginatedObjectsResponse } from '@mysten/sui.js/client';
+import {
+	PaginatedObjectsResponse,
+	SuiObjectData,
+	SuiObjectDataOptions,
+} from '@mysten/sui.js/client';
 import { TransactionArgument } from '@mysten/sui.js/transactions';
 import { ObjectArgument } from '.';
 
@@ -98,6 +102,10 @@ export type KioskItem = {
 	isLocked: boolean;
 	/** Optional listing */
 	listing?: KioskListing;
+	/** The ID of the kiosk the item is placed in */
+	kioskId: string;
+	/** Optional Kiosk Data */
+	data?: SuiObjectData;
 };
 /**
  * Aggregated data from the Kiosk.
@@ -117,8 +125,14 @@ export type PagedKioskData = {
 };
 
 export type FetchKioskOptions = {
+	/** Include the base kiosk object, which includes the profits, the owner and the base fields. */
 	withKioskFields?: boolean;
+	/** Include the listing prices. */
 	withListingPrices?: boolean;
+	/** Include the objects for the Items in the kiosk. Defaults to `display` only. */
+	withObjects?: boolean;
+	/** Pass the data options for the objects, when fetching, in case you want to query other details. */
+	objectOptions?: SuiObjectDataOptions;
 };
 
 export type OwnedKiosks = {
@@ -127,8 +141,18 @@ export type OwnedKiosks = {
 } & Omit<PaginatedObjectsResponse, 'data'>;
 
 export type KioskOwnerCap = {
+	isPersonal?: boolean;
 	objectId: string;
 	kioskId: string;
 	digest: string;
 	version: string;
 };
+
+export type PurchaseOptions = {
+	extraArgs?: Record<string, any>;
+};
+
+export type ItemId = { itemType: string; itemId: string };
+export type ItemReference = { itemType: string; item: ObjectArgument };
+export type ItemValue = { itemType: string; item: TransactionArgument };
+export type Price = { price: string | bigint };

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { KIOSK_ITEM, KioskItem, fetchKiosk, getOwnedKiosks } from '@mysten/kiosk';
+import { KIOSK_ITEM, KioskClient, KioskItem, KioskOwnerCap, Network } from '@mysten/kiosk';
 import { useQuery } from '@tanstack/react-query';
 import { ORIGINBYTE_KIOSK_OWNER_TOKEN, getKioskIdFromOwnerCap } from '../utils/kiosk';
-import { SuiClient, SuiObjectResponse } from '@mysten/sui.js/src/client';
+import { SuiClient } from '@mysten/sui.js/src/client';
 import { useSuiClient } from '@mysten/dapp-kit';
 
 export enum KioskTypes {
@@ -13,11 +13,11 @@ export enum KioskTypes {
 }
 
 export type Kiosk = {
-	items: Partial<SuiObjectResponse & KioskItem>[];
+	items: KioskItem[];
 	itemIds: string[];
 	kioskId: string;
 	type: KioskTypes;
-	ownerCap?: string;
+	ownerCap?: KioskOwnerCap;
 };
 
 async function getOriginByteKioskContents(address: string, client: SuiClient) {
@@ -73,39 +73,48 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 	return contents;
 }
 
-async function getSuiKioskContents(address: string, client: SuiClient) {
-	const ownedKiosks = await getOwnedKiosks(client, address!);
+// TODO: Replace `getSuiKioskContent` references to also pass in the network.
+async function getSuiKioskContents(
+	address: string,
+	client: SuiClient,
+	network: Network = Network.MAINNET,
+) {
+	const kioskClient = new KioskClient({ client, network });
+
+	const ownedKiosks = await kioskClient.getOwnedKiosks({ address });
 
 	const contents = await Promise.all(
-		ownedKiosks.kioskIds.map(async (id) => {
-			const kiosk = await fetchKiosk(client, id, { limit: 1000 }, {});
-			const contents = await client.multiGetObjects({
-				ids: kiosk.data.itemIds,
-				options: { showDisplay: true, showContent: true },
-			});
-			const items = contents.map((object) => {
-				const kioskData = kiosk.data.items.find((item) => item.objectId === object.data?.objectId);
-				return { ...object, ...kioskData, kioskId: id };
+		ownedKiosks.kioskIds.map(async (id: string) => {
+			const kiosk = await kioskClient.getKiosk({
+				id,
+				options: {
+					withObjects: true,
+					objectOptions: { showDisplay: true, showContent: true },
+				},
 			});
 			return {
-				itemIds: kiosk.data.itemIds,
-				items,
+				itemIds: kiosk.itemIds,
+				items: kiosk.items,
 				kioskId: id,
 				type: KioskTypes.SUI,
-				ownerCap: ownedKiosks.kioskOwnerCaps.find((k) => k.kioskId === id)?.objectId,
+				ownerCap: ownedKiosks.kioskOwnerCaps.find((k) => k.kioskId === id),
 			};
 		}),
 	);
 	return contents;
 }
 
-export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
+export function useGetKioskContents(
+	address?: string | null,
+	network?: Network,
+	disableOriginByteKiosk?: boolean,
+) {
 	const client = useSuiClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: ['get-kiosk-contents', address, disableOriginByteKiosk],
+		queryKey: ['get-kiosk-contents', address, network, disableOriginByteKiosk],
 		queryFn: async () => {
-			const suiKiosks = await getSuiKioskContents(address!, client);
+			const suiKiosks = await getSuiKioskContents(address!, client, network);
 			const obKiosks = await getOriginByteKioskContents(address!, client);
 			return [...suiKiosks, ...obKiosks];
 		},

@@ -1,13 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
+import { SuiObjectData, SuiObjectDataFilter, SuiObjectResponse } from '@mysten/sui.js/client';
 import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	attachListingsAndPrices,
 	attachLockedItems,
+	attachObjects,
 	extractKioskData,
 	getAllDynamicFields,
+	getAllObjects,
 	getKioskObject,
 } from '../utils';
 import {
@@ -35,20 +37,20 @@ export async function fetchKiosk(
 	const lockedItemIds: string[] = [];
 
 	// extracted kiosk data.
-	const kioskData = extractKioskData(data, listings, lockedItemIds);
+	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId);
 
 	// split the fetching in two queries as we are most likely passing different options for each kind.
 	// For items, we usually seek the Display.
 	// For listings we usually seek the DF value (price) / exclusivity.
-	const [kiosk, listingObjects] = await Promise.all([
+	const [kiosk, listingObjects, items] = await Promise.all([
 		options.withKioskFields ? getKioskObject(client, kioskId) : Promise.resolve(undefined),
 		options.withListingPrices
-			? client.multiGetObjects({
-					ids: kioskData.listingIds,
-					options: {
-						showContent: true,
-					},
+			? getAllObjects(client, kioskData.listingIds, {
+					showContent: true,
 			  })
+			: Promise.resolve([]),
+		options.withObjects
+			? getAllObjects(client, kioskData.itemIds, options.objectOptions || { showDisplay: true })
 			: Promise.resolve([]),
 	]);
 
@@ -57,6 +59,12 @@ export async function fetchKiosk(
 	attachListingsAndPrices(kioskData, listings, listingObjects);
 	// add `locked` status to items that are locked.
 	attachLockedItems(kioskData, lockedItemIds);
+
+	// Attach the objects for the queried items.
+	attachObjects(
+		kioskData,
+		items.filter((x) => !!x.data).map((x) => x.data!),
+	);
 
 	return {
 		data: kioskData,
@@ -76,6 +84,7 @@ export async function getOwnedKiosks(
 	address: string,
 	options?: {
 		pagination?: PaginationArguments<string>;
+		personalKioskType: string;
 	},
 ): Promise<OwnedKiosks> {
 	if (!isValidSuiAddress(address))
@@ -86,12 +95,27 @@ export async function getOwnedKiosks(
 			kioskIds: [],
 		};
 
+	const filter: SuiObjectDataFilter = {
+		MatchAny: [
+			{
+				StructType: KIOSK_OWNER_CAP,
+			},
+		],
+	};
+
+	if (options?.personalKioskType) {
+		filter.MatchAny.push({
+			StructType: options.personalKioskType,
+		});
+	}
+
 	// fetch owned kiosk caps, paginated.
 	const { data, hasNextPage, nextCursor } = await client.getOwnedObjects({
 		owner: address,
-		filter: { StructType: KIOSK_OWNER_CAP },
+		filter,
 		options: {
 			showContent: true,
+			showType: true,
 		},
 		...(options?.pagination || {}),
 	});
@@ -99,7 +123,9 @@ export async function getOwnedKiosks(
 	// get kioskIds from the OwnerCaps.
 	const kioskIdList = data?.map((x: SuiObjectResponse) => {
 		const fields = x.data?.content?.dataType === 'moveObject' ? x.data.content.fields : null;
-		return (fields as { for: string })?.for;
+		// @ts-ignore-next-line TODO: should i remove ts ignore here?
+		return (fields?.cap ? fields?.cap?.fields?.for : fields?.for) as string;
+		// return (fields as { for: string })?.for;
 	});
 
 	// clean up data that might have an error in them.
@@ -110,6 +136,7 @@ export async function getOwnedKiosks(
 		nextCursor,
 		hasNextPage,
 		kioskOwnerCaps: filteredData.map((x, idx) => ({
+			isPersonal: x.type !== KIOSK_OWNER_CAP,
 			digest: x.digest,
 			version: x.version,
 			objectId: x.objectId,
