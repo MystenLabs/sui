@@ -11,6 +11,7 @@ import { WhatIsAWallet } from './views/WhatIsAWallet.js';
 import { GettingStarted } from './views/GettingStarted.js';
 import { ConnectionStatus } from './views/ConnectionStatus.js';
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+import BackIcon from '../../assets/icons/BackIcon.svg';
 import CloseIcon from '../../assets/icons/CloseIcon.svg';
 import clsx from 'clsx';
 
@@ -27,13 +28,16 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 	const { mutate, isError } = useConnectWallet();
 
 	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
-		setSelectedView('connection-status');
+		// Set a quick timeout here so we don't flash the connection status UI
+		// when the user has previously authorized a set of wallet accounts.
+		setTimeout(() => setSelectedView('connection-status'), 100);
 		mutate({ wallet }, { onSuccess: () => setConnectModalOpen(false) });
 	};
 
 	const onOpenChange = (open: boolean) => {
 		if (!open) {
 			setSelectedWallet(undefined);
+			setSelectedView(undefined);
 		}
 		setConnectModalOpen(open);
 	};
@@ -91,7 +95,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 							aria-label="Back"
 							onClick={() => setSelectedView(undefined)}
 						>
-							back
+							<img src={BackIcon} alt="" />
 						</button>
 						{modalContent}
 					</div>

@@ -16,7 +16,7 @@ export function AccountDropdownMenu() {
 
 	return currentAccount ? (
 		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>{formatAddress(currentAccount?.address!)}</DropdownMenu.Trigger>
+			<DropdownMenu.Trigger>{formatAddress(currentAccount.address)}</DropdownMenu.Trigger>
 			<DropdownMenu.Portal>
 				<DropdownMenu.Content>
 					{accounts.map((account) => (

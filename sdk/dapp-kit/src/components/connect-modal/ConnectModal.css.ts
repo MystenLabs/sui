@@ -25,10 +25,10 @@ export const content = style({
 	minHeight: '50vh',
 	maxHeight: '85vh',
 	maxWidth: 700,
-
 	'@media': {
 		'screen and (min-width: 768px)': {
 			flexDirection: 'row',
+			width: '100%',
 			top: '50%',
 			left: '50%',
 			transform: 'translate(-50%, -50%)',
@@ -48,15 +48,8 @@ export const whatIsAWalletButton = style({
 
 export const viewContainer = style({
 	display: 'none',
-	'@media': {
-		'screen and (min-width: 768px)': {
-			display: 'flex',
-		},
-	},
-});
-
-export const selectedWalletListContainer = style({
-	display: 'none',
+	padding: 20,
+	flexGrow: 1,
 	'@media': {
 		'screen and (min-width: 768px)': {
 			display: 'flex',
@@ -71,6 +64,9 @@ export const selectedViewContainer = style({
 export const triggerButton = style({});
 
 export const backButton = style({
+	position: 'absolute',
+	top: 20,
+	left: 20,
 	'@media': {
 		'screen and (min-width: 768px)': {
 			display: 'none',
@@ -90,9 +86,21 @@ export const closeButton = style({
 export const walletListContainer = style({
 	padding: 20,
 	minWidth: 240,
+	display: 'flex',
+	flexDirection: 'column',
+	gap: 24,
 	'@media': {
 		'screen and (min-width: 768px)': {
 			backgroundColor: '#F7F8F8',
+		},
+	},
+});
+
+export const selectedWalletListContainer = style({
+	display: 'none',
+	'@media': {
+		'screen and (min-width: 768px)': {
+			display: 'flex',
 		},
 	},
 });
