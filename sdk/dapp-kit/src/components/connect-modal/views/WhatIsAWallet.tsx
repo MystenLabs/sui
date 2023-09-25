@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as styles from './WhatIsAWallet.css.js';
 import { InfoSection } from '../InfoSection.js';
+import * as styles from './WhatIsAWallet.css.js';
 
 export function WhatIsAWallet() {
 	return (

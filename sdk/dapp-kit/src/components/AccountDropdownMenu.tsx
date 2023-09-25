@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
-import { useAccounts } from '../hooks/wallet/useAccounts.js';
 import { formatAddress } from '@mysten/sui.js/utils';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+
+import { useAccounts } from '../hooks/wallet/useAccounts.js';
+import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
 import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 

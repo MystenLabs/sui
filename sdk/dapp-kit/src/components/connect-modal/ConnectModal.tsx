@@ -1,19 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+import * as Dialog from '@radix-ui/react-dialog';
+import clsx from 'clsx';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { WalletList } from './wallet-list/WalletList.js';
-import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
-import * as styles from './ConnectModal.css.js';
-import { WhatIsAWallet } from './views/WhatIsAWallet.js';
-import { GettingStarted } from './views/GettingStarted.js';
-import { ConnectionStatus } from './views/ConnectionStatus.js';
-import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
+
 import BackIcon from '../../assets/icons/BackIcon.svg';
 import CloseIcon from '../../assets/icons/CloseIcon.svg';
-import clsx from 'clsx';
+import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
+import * as styles from './ConnectModal.css.js';
+import { ConnectionStatus } from './views/ConnectionStatus.js';
+import { GettingStarted } from './views/GettingStarted.js';
+import { WhatIsAWallet } from './views/WhatIsAWallet.js';
+import { WalletList } from './wallet-list/WalletList.js';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 

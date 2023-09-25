@@ -8,7 +8,6 @@ import { defineConfig } from 'vite';
 import pluginRewriteAll from 'vite-plugin-rewrite-all';
 import svgr from 'vite-plugin-svgr';
 import { configDefaults } from 'vitest/config';
-import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 
 process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 

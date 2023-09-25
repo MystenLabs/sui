@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { ReactNode } from 'react';
+
 import { useCurrentWallet } from '../hooks/wallet/useCurrentWallet.js';
 import { AccountDropdownMenu } from './AccountDropdownMenu.js';
 import { ConnectModal } from './connect-modal/ConnectModal.js';

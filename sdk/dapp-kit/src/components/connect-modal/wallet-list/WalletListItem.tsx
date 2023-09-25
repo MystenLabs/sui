@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as styles from './WalletListItem.css.js';
 import { clsx } from 'clsx';
+
+import * as styles from './WalletListItem.css.js';
 
 type WalletListItemProps = {
 	name: string;

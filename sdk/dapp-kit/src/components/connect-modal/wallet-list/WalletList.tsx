@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { useWallets } from '../../../hooks/wallet/useWallets.js';
-import { WalletListItem } from './WalletListItem.js';
-import * as styles from './WalletList.css.js';
+
 import SuiIcon from '../../../assets/icons/SuiIcon.svg';
+import { useWallets } from '../../../hooks/wallet/useWallets.js';
+import * as styles from './WalletList.css.js';
+import { WalletListItem } from './WalletListItem.js';
 
 type WalletListProps = {
 	selectedWalletName?: string;
