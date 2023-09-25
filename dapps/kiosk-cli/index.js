@@ -173,7 +173,11 @@ async function newKiosk() {
   }
 
   const txb = new TransactionBlock();
-  kioskClient.createAndShare(txb, txb.pure(sender, 'address'));
+
+  new KioskTransaction({ transactionBlock: txb, kioskClient })
+    .create()
+    .shareAndTransferCap(sender)
+    .finalize();
 
   return sendTx(txb);
 }
@@ -329,7 +333,7 @@ async function placeItem(itemId) {
       type: item.data.type,
       item: itemArg,
     })
-    .wrap();
+    .finalize();
 
   return sendTx(txb);
 }
@@ -378,7 +382,7 @@ async function lockItem(itemId) {
       itemId: itemArg,
       policy: policy.id,
     })
-    .wrap();
+    .finalize();
 
   return sendTx(txb);
 }
@@ -418,7 +422,7 @@ async function takeItem(itemId, { address }) {
       itemId,
       address: receiver,
     })
-    .wrap();
+    .finalize();
 
   return sendTx(txb);
 }
@@ -452,7 +456,7 @@ async function listItem(itemId, price) {
       itemId,
       price,
     })
-    .wrap();
+    .finalize();
 
   return sendTx(txb);
 }
@@ -485,7 +489,7 @@ async function delistItem(itemId) {
       itemType: item.data.type,
       itemId,
     })
-    .wrap();
+    .finalize();
 
   return sendTx(txb);
 }
@@ -577,7 +581,7 @@ async function purchaseItem(itemId, opts) {
       price,
       sellerKiosk: fromKioskArg,
     })
-  ).wrap();
+  ).finalize();
 
   return sendTx(txb);
 }
@@ -664,7 +668,7 @@ async function withdrawAll() {
 
   const txb = new TransactionBlock();
 
-  new KioskTransaction({ txb, kioskClient, cap }).withdraw(sender).wrap();
+  new KioskTransaction({ txb, kioskClient, cap }).withdraw(sender).finalize();
 
   return sendTx(txb);
 }
