@@ -20,7 +20,7 @@ import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Button } from '../../shared/ButtonUI';
 import { Link } from '../../shared/Link';
 
-const nameToProvider: Record<ZkProvider, string> = {
+const providerToName: Record<ZkProvider, string> = {
 	google: 'Google',
 	facebook: 'Facebook',
 	twitch: 'Twitch',
@@ -30,7 +30,7 @@ export function ZkLoginAccountWarningModal() {
 	const activeAccount = useActiveAccount();
 	const backgroundClient = useBackgroundClient();
 	const warningMutation = useMutation({
-		mutationKey: ['acknowledgeZkLoginWarning mutation'],
+		mutationKey: ['acknowledge-zk-login-warning'],
 		mutationFn: (args: MethodPayload<'acknowledgeZkLoginWarning'>['args']) =>
 			backgroundClient.acknowledgeZkLoginWarning(args),
 	});
@@ -50,7 +50,7 @@ export function ZkLoginAccountWarningModal() {
 						</DialogTitle>
 					</DialogHeader>
 					<DialogDescription className="text-center text-steel-darker">
-						Your {nameToProvider[activeAccount.provider]} Account now gives access to your Sui
+						Your {providerToName[activeAccount.provider]} Account now gives access to your Sui
 						Wallet. To help safeguard your assets, we strongly recommend you enable 2FA.
 						{providerData.mfaLink ? (
 							<>
