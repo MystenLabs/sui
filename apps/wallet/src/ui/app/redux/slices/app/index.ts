@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DEFAULT_API_ENV } from '_app/ApiProvider';
+import { DEFAULT_API_ENV, walletApiProvider } from '_app/ApiProvider';
 import type { RootState } from '_redux/RootReducer';
 import type { API_ENV, NetworkEnvType } from '_src/shared/api-env';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -32,16 +32,13 @@ export const changeActiveNetwork = createAsyncThunk<
 	void,
 	{ network: NetworkEnvType; store?: boolean },
 	AppThunkConfig
->(
-	'changeRPCNetwork',
-	async ({ network, store = false }, { extra: { background, api }, dispatch }) => {
-		if (store) {
-			await background.setActiveNetworkEnv(network);
-		}
-		api.setNewJsonRpcProvider(network.env, network.customRpcUrl);
-		await dispatch(slice.actions.setActiveNetwork(network));
-	},
-);
+>('changeRPCNetwork', async ({ network, store = false }, { extra: { background }, dispatch }) => {
+	if (store) {
+		await background.setActiveNetworkEnv(network);
+	}
+	walletApiProvider.setNewJsonRpcProvider(network.env, network.customRpcUrl);
+	await dispatch(slice.actions.setActiveNetwork(network));
+});
 
 const slice = createSlice({
 	name: 'app',

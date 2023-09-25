@@ -6,10 +6,10 @@ import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAcco
 import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
 import { useSuiClient } from '@mysten/dapp-kit';
 
+import { walletApiProvider } from '../ApiProvider';
 import { useSuiLedgerClient } from '../components/ledger/SuiLedgerClientProvider';
 import { LedgerSigner } from '../LedgerSigner';
 import { QredoSigner } from '../QredoSigner';
-import { thunkExtras } from '../redux/store/thunk-extras';
 import { type WalletSigner } from '../WalletSigner';
 import useAppSelector from './useAppSelector';
 import { useBackgroundClient } from './useBackgroundClient';
@@ -34,5 +34,5 @@ export function useSigner(account: SerializedUIAccount | null): WalletSigner | n
 	if (isQredoAccountSerializedUI(account)) {
 		return qredoAPI ? new QredoSigner(api, account, qredoAPI, networkName) : null;
 	}
-	return thunkExtras.api.getSignerInstance(account, background);
+	return walletApiProvider.getSignerInstance(account, background);
 }

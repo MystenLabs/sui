@@ -11,7 +11,7 @@ import { initAmplitude } from '_src/shared/analytics/amplitude';
 import { setAttributes } from '_src/shared/experimentation/features';
 import initSentry from '_src/ui/app/helpers/sentry';
 import store from '_store';
-import { api, thunkExtras } from '_store/thunk-extras';
+import { thunkExtras } from '_store/thunk-extras';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -22,6 +22,7 @@ import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
 import App from './app';
+import { walletApiProvider } from './app/ApiProvider';
 import { AccountsFormProvider } from './app/components/accounts/AccountsFormContext';
 import { UnlockAccountProvider } from './app/components/accounts/UnlockAccountContext';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
@@ -79,7 +80,9 @@ function AppWrapper() {
 								},
 							}}
 						>
-							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
+							<SuiClientProvider
+								networks={{ [walletApiProvider.apiEnv]: walletApiProvider.instance.fullNode }}
+							>
 								<AccountsFormProvider>
 									<UnlockAccountProvider>
 										<div

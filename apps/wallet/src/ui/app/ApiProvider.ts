@@ -112,3 +112,5 @@ export default class ApiProvider {
 		return this._signerByAddress.get(key)!;
 	}
 }
+
+export const walletApiProvider = new ApiProvider();
