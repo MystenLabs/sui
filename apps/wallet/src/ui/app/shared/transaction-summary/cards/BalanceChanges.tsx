@@ -8,6 +8,7 @@ import {
 	type BalanceChange,
 	getRecognizedUnRecognizedTokenChanges,
 } from '@mysten/core';
+import classNames from 'classnames';
 import { useMemo } from 'react';
 
 import { Card } from '../Card';
@@ -69,7 +70,12 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 					<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
 				))}
 				{unRecognizedTokenChanges.length > 0 && (
-					<div className="flex flex-col gap-2 border-t border-gray-45 pt-2">
+					<div
+						className={classNames(
+							'flex flex-col gap-2 pt-2',
+							recognizedTokenChanges?.length && 'border-t border-gray-45',
+						)}
+					>
 						{unRecognizedTokenChanges.map((change, index) => (
 							<BalanceChangeEntry change={change} key={change.coinType + index} />
 						))}
