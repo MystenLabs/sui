@@ -38,7 +38,6 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				throw new Error(error ?? 'Failed, task id not found.');
 			}
 
-			// Continuously check the status until it's no longer 'INPROGRESS'
 			let currentStatus = 'INPROGRESS';
 			let requestStatusCount = 0;
 			while (currentStatus === 'INPROGRESS') {

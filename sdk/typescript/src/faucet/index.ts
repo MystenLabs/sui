@@ -39,7 +39,6 @@ type FaucetRequest = {
 
 async function faucetRequest({ host, path, body, headers, method }: FaucetRequest) {
 	const endpoint = new URL(path, host).toString();
-	// default to POST
 	const res = await fetch(endpoint, {
 		method,
 		body: body ? JSON.stringify(body) : undefined,
