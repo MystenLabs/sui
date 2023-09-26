@@ -1,7 +1,0 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
-declare module '*.svg' {
-	const dataUrl: string;
-	export default dataUrl;
-}
