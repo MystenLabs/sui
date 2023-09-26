@@ -30,41 +30,36 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				recipient: addressToTopUp,
 				host: options.host,
 			});
-			if (!taskId) {
-				throw new Error('Failed, task id not found.');
+
+			if (error || !taskId) {
+				throw new Error(error ?? 'Failed, task id not found.');
 			}
-			// Initialize a variable to track possible faucet request status errors
-			let totalMistTransferred: number | null = null;
 
 			// Continuously check the status until it's no longer 'INPROGRESS'
 			let currentStatus = 'INPROGRESS';
 			while (currentStatus === 'INPROGRESS') {
-				const { status, error } = await getFaucetRequestStatus({
+				const {
+					status: { status, transferred_gas_objects },
+					error,
+				} = await getFaucetRequestStatus({
 					host: options.host,
 					taskId,
 				});
 
-				if (status?.status === 'SUCCEEDED') {
-					totalMistTransferred = status.transferred_gas_objects?.sent.reduce(
-						(total, { amount }) => total + amount,
-						0,
-					);
-					break;
+				currentStatus = status;
+
+				if (currentStatus === 'DISCARDED' || error) {
+					throw new Error(error ?? status);
 				}
 
-				if (status?.status === 'DISCARDED' || error) {
-					throw new Error(error ?? status.status);
+				if (currentStatus === 'SUCCEEDED') {
+					return transferred_gas_objects?.sent.reduce((total, { amount }) => total + amount, 0);
 				}
-				currentStatus = status.status;
-
 				// Wait for 1 second before checking the status again
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 
-			if (error) {
-				throw new Error(error);
-			}
-			return totalMistTransferred;
+			throw new Error('Something went wrong');
 		},
 		...options,
 	});
