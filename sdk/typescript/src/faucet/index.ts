@@ -21,7 +21,7 @@ type BatchFaucetResponse = {
 
 type BatchSendStatusType = {
 	status: 'INPROGRESS' | 'SUCCEEDED' | 'DISCARDED';
-	transferredGasObjects: { sent: FaucetCoinInfo[] };
+	transferred_gas_objects: { sent: FaucetCoinInfo[] };
 };
 
 type BatchStatusFaucetResponse = {

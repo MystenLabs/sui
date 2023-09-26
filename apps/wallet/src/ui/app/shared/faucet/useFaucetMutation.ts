@@ -36,31 +36,30 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			// Initialize a variable to track possible faucet request status errors
 			let faucetStatusError: string | null = null;
 			let totalMistTransferred: number | null = null;
-			if (taskId) {
-				// Continuously check the status until it's no longer 'INPROGRESS'
-				let currentStatus = 'INPROGRESS';
-				while (currentStatus === 'INPROGRESS') {
-					const { status, error } = await getFaucetRequestStatus({
-						host: options.host,
-						taskId,
-					});
 
-					if (status?.status === 'SUCCEEDED') {
-						totalMistTransferred = status.transferredGasObjects?.sent.reduce(
-							(total, { amount }) => total + amount,
-							0,
-						);
-					}
+			// Continuously check the status until it's no longer 'INPROGRESS'
+			let currentStatus = 'INPROGRESS';
+			while (currentStatus === 'INPROGRESS') {
+				const { status, error } = await getFaucetRequestStatus({
+					host: options.host,
+					taskId,
+				});
 
-					if (status?.status !== 'INPROGRESS' || error) {
-						currentStatus = status.status;
-						faucetStatusError = error || null;
-						break; // Exit the loop if status changed or there's an error
-					}
-
-					// Wait for 1 second before checking the status again
-					await new Promise((resolve) => setTimeout(resolve, 1000));
+				if (status?.status === 'SUCCEEDED') {
+					totalMistTransferred = status.transferred_gas_objects?.sent.reduce(
+						(total, { amount }) => total + amount,
+						0,
+					);
 				}
+
+				if (status?.status !== 'INPROGRESS' || error) {
+					currentStatus = status.status;
+					faucetStatusError = error || null;
+					throw new Error(error ?? status.status);
+				}
+
+				// Wait for 1 second before checking the status again
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 
 			if (error || faucetStatusError) {
