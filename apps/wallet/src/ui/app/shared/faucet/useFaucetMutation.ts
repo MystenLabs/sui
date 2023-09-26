@@ -49,12 +49,13 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 						(total, { amount }) => total + amount,
 						0,
 					);
+					break;
 				}
 
 				if (status?.status === 'DISCARDED' || error) {
-					currentStatus = status.status;
 					throw new Error(error ?? status.status);
 				}
+				currentStatus = status.status;
 
 				// Wait for 1 second before checking the status again
 				await new Promise((resolve) => setTimeout(resolve, 1000));
