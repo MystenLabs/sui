@@ -79,7 +79,7 @@ impl TryFrom<StoredObject> for Object {
             previous_transaction: Some(Digest::from_array(
                 object.previous_transaction.into_inner(),
             )),
-            kind: None,
+            kind,
         })
     }
 }
@@ -135,7 +135,7 @@ impl Object {
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
             let loader = ctx.data_unchecked::<DataLoader<SuiClientLoader, LruCache>>();
-            loader.load_one(*tx).await
+            Ok(loader.load_one(*tx).await.unwrap_or(None))
         } else {
             Ok(None)
         }
