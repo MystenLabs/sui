@@ -44,8 +44,9 @@ pub struct IndexerMetrics {
     pub indexing_get_object_db_hit: IntCounter,
     pub indexing_module_resolver_in_mem_hit: IntCounter,
     pub indexing_module_resolver_in_mem_miss: IntCounter,
+    pub indexing_transactions_latency: Histogram,
     pub indexing_packages_latency: Histogram,
-    pub checkpoint_objects_index_latency: Histogram,
+    pub indexing_epochs_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
     pub checkpoint_db_commit_latency_step_1: Histogram,
     pub checkpoint_db_commit_latency_transactions: Histogram,
@@ -211,18 +212,34 @@ impl IndexerMetrics {
             .unwrap(),
             indexing_objects_latency: register_histogram_with_registry!(
                 "indexing_objects_latency",
-                "Time spent in indexing objects",
+                "Time spent in indexing objects in a checkpoint",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             indexing_packages_latency: register_histogram_with_registry!(
                 "indexing_packages_latency",
-                "Time spent in indexing packages",
+                "Time spent in indexing packages in a checkpoint",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+
+            indexing_transactions_latency: register_histogram_with_registry!(
+                "indexing_transactions_latency",
+                "Time spent in indexing transactions in a checkpoint",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            indexing_epochs_latency: register_histogram_with_registry!(
+                "indexing_epochs_latency",
+                "Time spent in indexing an epoch",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
             indexing_get_object_in_mem_hit: register_int_counter_with_registry!(
                 "indexing_get_object_in_mem_hit",
                 "Total number get object hit in mem",
@@ -244,13 +261,6 @@ impl IndexerMetrics {
             indexing_module_resolver_in_mem_miss: register_int_counter_with_registry!(
                 "indexing_module_resolver_in_mem_miss",
                 "Total number module resolver miss in mem",
-                registry,
-            )
-            .unwrap(),
-            checkpoint_objects_index_latency: register_histogram_with_registry!(
-                "checkpoint_object_index_latency",
-                "Time spent in indexing a checkpoint objects",
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

@@ -170,7 +170,9 @@ where
     async fn index_epoch(
         state: &S,
         data: &CheckpointData,
+        metrics: &IndexerMetrics,
     ) -> Result<Option<EpochToCommit>, IndexerError> {
+        let _timer = metrics.indexing_epochs_latency.start_timer();
         let checkpoint_object_store = EpochEndIndexingObjectStore::new(data);
 
         let CheckpointData {
@@ -239,168 +241,13 @@ where
         package_cache: Arc<Mutex<IndexingPackageCache>>,
         metrics: &IndexerMetrics,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
-        let (checkpoint, db_transactions, db_events, db_indices) = {
-            let CheckpointData {
-                transactions,
-                checkpoint_summary,
-                checkpoint_contents,
-            } = &data;
-            let checkpoint_seq = checkpoint_summary.sequence_number();
-            let mut db_transactions = Vec::new();
-            let mut db_events = Vec::new();
-            let mut db_indices = Vec::new();
+        let (checkpoint, db_transactions, db_events, db_indices) =
+            Self::index_transactions(&data, metrics).await?;
 
-            let mut tx_seq_num_iter = checkpoint_contents
-                .enumerate_transactions(checkpoint_summary)
-                .map(|(seq, execution_digest)| (execution_digest.transaction, seq));
+        let epoch = Self::index_epoch(state, &data, metrics).await?;
 
-            if checkpoint_contents.size() != transactions.len() {
-                return Err(IndexerError::FullNodeReadingError(format!(
-                    "CheckpointContents has different size {} compared to Transactions {} for checkpoint {}",
-                    checkpoint_contents.size(),
-                    transactions.len(),
-                    checkpoint_seq
-                )));
-            }
-
-            for (idx, tx) in transactions.iter().enumerate() {
-                let CheckpointTransaction {
-                    transaction: sender_signed_data,
-                    effects: fx,
-                    events,
-                    input_objects,
-                    output_objects,
-                } = tx;
-                // Unwrap safe - we checked they have equal length above
-                let (tx_digest, tx_sequence_number) = tx_seq_num_iter.next().unwrap();
-                if tx_digest != *sender_signed_data.digest() {
-                    return Err(IndexerError::FullNodeReadingError(format!(
-                        "Transactions has different ordering from CheckpointContents, for checkpoint {}, Mismatch found at {} v.s. {}",
-                        checkpoint_seq, tx_digest, sender_signed_data.digest()
-                    )));
-                }
-                let tx = sender_signed_data.transaction_data();
-                let events = events
-                    .as_ref()
-                    .map(|events| events.data.clone())
-                    .unwrap_or_default();
-
-                let transaction_kind = if tx.is_system_tx() {
-                    TransactionKind::SystemTransaction
-                } else {
-                    TransactionKind::ProgrammableTransaction
-                };
-
-                db_events.extend(events.iter().enumerate().map(|(idx, event)| {
-                    IndexedEvent::from_event(
-                        tx_sequence_number,
-                        idx as u64,
-                        *checkpoint_seq,
-                        tx_digest,
-                        event,
-                        checkpoint_summary.timestamp_ms,
-                    )
-                }));
-
-                let objects = input_objects
-                    .iter()
-                    .chain(output_objects.iter())
-                    .collect::<Vec<_>>();
-
-                let (balance_change, object_changes) =
-                    TxChangesProcessor::new(&objects, metrics.clone())
-                        .get_changes(tx, fx, &tx_digest)
-                        .await?;
-
-                let db_txn = IndexedTransaction {
-                    tx_sequence_number,
-                    tx_digest,
-                    checkpoint_sequence_number: *checkpoint_summary.sequence_number(),
-                    timestamp_ms: checkpoint_summary.timestamp_ms,
-                    sender_signed_data: sender_signed_data.data().clone(),
-                    effects: fx.clone(),
-                    object_changes,
-                    balance_change,
-                    events,
-                    transaction_kind,
-                    successful_tx_num: if fx.status().is_ok() {
-                        tx.kind().num_commands() as u64
-                    } else {
-                        0
-                    },
-                };
-
-                db_transactions.push(db_txn);
-
-                // Input Objects
-                let input_objects = tx
-                    .input_objects()
-                    .expect("committed txns have been validated")
-                    .into_iter()
-                    .map(|obj_kind| obj_kind.object_id())
-                    .collect::<Vec<_>>();
-
-                // Changed Objects
-                let changed_objects = fx
-                    .all_changed_objects()
-                    .into_iter()
-                    .map(|(object_ref, _owner, _write_kind)| object_ref.0)
-                    .collect::<Vec<_>>();
-
-                // Payers
-                let payers = vec![tx.gas_owner()];
-
-                // Senders
-                let senders = vec![tx.sender()];
-
-                // Recipients
-                let recipients = fx
-                    .all_changed_objects()
-                    .into_iter()
-                    .filter_map(|(_object_ref, owner, _write_kind)| match owner {
-                        Owner::AddressOwner(address) => Some(address),
-                        _ => None,
-                    })
-                    .unique()
-                    .collect::<Vec<_>>();
-
-                // Move Calls
-                let move_calls = tx
-                    .move_calls()
-                    .iter()
-                    .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
-                    .collect();
-
-                db_indices.push(TxIndex {
-                    tx_sequence_number,
-                    transaction_digest: tx_digest,
-                    checkpoint_sequence_number: *checkpoint_seq,
-                    input_objects,
-                    changed_objects,
-                    senders,
-                    payers,
-                    recipients,
-                    move_calls,
-                });
-            }
-            let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
-            (
-                IndexedCheckpoint::from_sui_checkpoint(
-                    checkpoint_summary,
-                    checkpoint_contents,
-                    successful_tx_num as usize,
-                ),
-                db_transactions,
-                db_events,
-                db_indices,
-            )
-        };
-
-        let epoch = Self::index_epoch(state, &data).await?;
-
-        // Index Objects
         let (object_changes, packages) =
-            Self::index_checkpoint(state, data, package_cache, metrics);
+            Self::index_packages_and_objects(state, data, package_cache, metrics);
 
         Ok(CheckpointDataToCommit {
             checkpoint,
@@ -413,7 +260,173 @@ where
         })
     }
 
-    fn index_checkpoint(
+    async fn index_transactions(
+        data: &CheckpointData,
+        metrics: &IndexerMetrics,
+    ) -> IndexerResult<(
+        IndexedCheckpoint,
+        Vec<IndexedTransaction>,
+        Vec<IndexedEvent>,
+        Vec<TxIndex>,
+    )> {
+        let _timer = metrics.indexing_transactions_latency.start_timer();
+        let CheckpointData {
+            transactions,
+            checkpoint_summary,
+            checkpoint_contents,
+        } = data;
+        let checkpoint_seq = checkpoint_summary.sequence_number();
+        let mut db_transactions = Vec::new();
+        let mut db_events = Vec::new();
+        let mut db_indices = Vec::new();
+
+        let mut tx_seq_num_iter = checkpoint_contents
+            .enumerate_transactions(checkpoint_summary)
+            .map(|(seq, execution_digest)| (execution_digest.transaction, seq));
+
+        if checkpoint_contents.size() != transactions.len() {
+            return Err(IndexerError::FullNodeReadingError(format!(
+                "CheckpointContents has different size {} compared to Transactions {} for checkpoint {}",
+                checkpoint_contents.size(),
+                transactions.len(),
+                checkpoint_seq
+            )));
+        }
+
+        for (idx, tx) in transactions.iter().enumerate() {
+            let CheckpointTransaction {
+                transaction: sender_signed_data,
+                effects: fx,
+                events,
+                input_objects,
+                output_objects,
+            } = tx;
+            // Unwrap safe - we checked they have equal length above
+            let (tx_digest, tx_sequence_number) = tx_seq_num_iter.next().unwrap();
+            if tx_digest != *sender_signed_data.digest() {
+                return Err(IndexerError::FullNodeReadingError(format!(
+                    "Transactions has different ordering from CheckpointContents, for checkpoint {}, Mismatch found at {} v.s. {}",
+                    checkpoint_seq, tx_digest, sender_signed_data.digest()
+                )));
+            }
+            let tx = sender_signed_data.transaction_data();
+            let events = events
+                .as_ref()
+                .map(|events| events.data.clone())
+                .unwrap_or_default();
+
+            let transaction_kind = if tx.is_system_tx() {
+                TransactionKind::SystemTransaction
+            } else {
+                TransactionKind::ProgrammableTransaction
+            };
+
+            db_events.extend(events.iter().enumerate().map(|(idx, event)| {
+                IndexedEvent::from_event(
+                    tx_sequence_number,
+                    idx as u64,
+                    *checkpoint_seq,
+                    tx_digest,
+                    event,
+                    checkpoint_summary.timestamp_ms,
+                )
+            }));
+
+            let objects = input_objects
+                .iter()
+                .chain(output_objects.iter())
+                .collect::<Vec<_>>();
+
+            let (balance_change, object_changes) =
+                TxChangesProcessor::new(&objects, metrics.clone())
+                    .get_changes(tx, fx, &tx_digest)
+                    .await?;
+
+            let db_txn = IndexedTransaction {
+                tx_sequence_number,
+                tx_digest,
+                checkpoint_sequence_number: *checkpoint_summary.sequence_number(),
+                timestamp_ms: checkpoint_summary.timestamp_ms,
+                sender_signed_data: sender_signed_data.data().clone(),
+                effects: fx.clone(),
+                object_changes,
+                balance_change,
+                events,
+                transaction_kind,
+                successful_tx_num: if fx.status().is_ok() {
+                    tx.kind().num_commands() as u64
+                } else {
+                    0
+                },
+            };
+
+            db_transactions.push(db_txn);
+
+            // Input Objects
+            let input_objects = tx
+                .input_objects()
+                .expect("committed txns have been validated")
+                .into_iter()
+                .map(|obj_kind| obj_kind.object_id())
+                .collect::<Vec<_>>();
+
+            // Changed Objects
+            let changed_objects = fx
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _owner, _write_kind)| object_ref.0)
+                .collect::<Vec<_>>();
+
+            // Payers
+            let payers = vec![tx.gas_owner()];
+
+            // Senders
+            let senders = vec![tx.sender()];
+
+            // Recipients
+            let recipients = fx
+                .all_changed_objects()
+                .into_iter()
+                .filter_map(|(_object_ref, owner, _write_kind)| match owner {
+                    Owner::AddressOwner(address) => Some(address),
+                    _ => None,
+                })
+                .unique()
+                .collect::<Vec<_>>();
+
+            // Move Calls
+            let move_calls = tx
+                .move_calls()
+                .iter()
+                .map(|(p, m, f)| (*<&ObjectID>::clone(p), m.to_string(), f.to_string()))
+                .collect();
+
+            db_indices.push(TxIndex {
+                tx_sequence_number,
+                transaction_digest: tx_digest,
+                checkpoint_sequence_number: *checkpoint_seq,
+                input_objects,
+                changed_objects,
+                payers,
+                senders,
+                recipients,
+                move_calls,
+            });
+        }
+        let successful_tx_num: u64 = db_transactions.iter().map(|t| t.successful_tx_num).sum();
+        Ok((
+            IndexedCheckpoint::from_sui_checkpoint(
+                checkpoint_summary,
+                checkpoint_contents,
+                successful_tx_num as usize,
+            ),
+            db_transactions,
+            db_events,
+            db_indices,
+        ))
+    }
+
+    fn index_packages_and_objects(
         state: &S,
         data: CheckpointData,
         package_cache: Arc<Mutex<IndexingPackageCache>>,
@@ -435,7 +448,6 @@ where
         package_cache: Arc<Mutex<IndexingPackageCache>>,
         metrics: &IndexerMetrics,
     ) -> TransactionObjectChangesToCommit {
-        let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
         let module_resolver = InterimModuleResolver::new(
             state.module_cache(),
