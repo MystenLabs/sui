@@ -29,9 +29,7 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 	const { mutate, isError } = useConnectWallet();
 
 	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
-		// Set a quick timeout here so we don't flash the connection status UI
-		// when the user has previously authorized a set of wallet accounts.
-		setTimeout(() => setCurrentView('connection-status'), 100);
+		setCurrentView('connection-status');
 		mutate({ wallet }, { onSuccess: () => setConnectModalOpen(false) });
 	};
 
