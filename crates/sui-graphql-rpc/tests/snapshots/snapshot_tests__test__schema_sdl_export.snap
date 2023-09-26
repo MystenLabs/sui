@@ -164,6 +164,38 @@ enum ExecutionStatus {
 	FAILURE
 }
 
+"""
+Groups of features served by the RPC service.  The GraphQL Service can be configured to enable
+or disable these features.
+"""
+enum Feature {
+	"""
+	Statistics about how the network was running (TPS, top packages, APY, etc)
+	"""
+	ANALYTICS
+	"""
+	Coin metadata, per-address coin and balance information.
+	"""
+	COINS
+	"""
+	Querying an object's dynamic fields.
+	"""
+	DYNAMIC_FIELDS
+	"""
+	SuiNS name and reverse name look-up.
+	"""
+	NAME_SERVICE
+	"""
+	Transaction and Event subscriptions.
+	"""
+	SUBSCRIPTIONS
+	"""
+	Information about the system that changes from epoch to epoch (protocol config, committee,
+	reference gas price).
+	"""
+	SYSTEM_STATE
+}
+
 
 type GasCostSummary {
 	computationCost: BigInt
@@ -350,7 +382,15 @@ type ProtocolConfigs {
 }
 
 type Query {
+	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the
+	network).
+	"""
 	chainIdentifier: String!
+	"""
+	Configuration for this RPC service
+	"""
+	serviceConfig: ServiceConfig!
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
@@ -361,6 +401,25 @@ type Query {
 type SafeMode {
 	enabled: Boolean
 	gasSummary: GasCostSummary
+}
+
+type ServiceConfig {
+	"""
+	Check whether `feature` is enabled on this GraphQL service.
+	"""
+	isEnabled(feature: Feature!): Boolean!
+	"""
+	List of all features that are enabled on this GraphQL service.
+	"""
+	enabledFeatures: [Feature!]!
+	"""
+	The maximum depth a GraphQL query can be to be accepted by this service.
+	"""
+	maxQueryDepth: Int!
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int!
 }
 
 type Stake {
@@ -536,3 +595,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+
