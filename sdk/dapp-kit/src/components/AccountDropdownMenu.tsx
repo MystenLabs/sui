@@ -12,12 +12,10 @@ import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 import * as styles from './AccountDropdownMenu.css.js';
 import { ChevronIcon } from './icons/ChevronIcon.js';
 import { CheckIcon } from './icons/CheckIcon.js';
-import { useCurrentWallet } from '../hooks/wallet/useCurrentWallet.js';
 
 export function AccountDropdownMenu() {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 	const { mutate: switchAccount } = useSwitchAccount();
-	const currentWallet = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 	const accounts = useAccounts();
 
@@ -50,7 +48,5 @@ export function AccountDropdownMenu() {
 				</DropdownMenu.Content>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
-	) : (
-		<div></div>
-	);
+	) : null;
 }
