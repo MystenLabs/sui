@@ -65,7 +65,19 @@ export const selectedViewContainer = style({
 	display: 'flex',
 });
 
-export const triggerButton = style({});
+export const triggerButton = style({
+	backgroundColor: '#0284AD',
+	boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
+	color: 'white',
+	borderRadius: 12,
+	paddingLeft: 16,
+	paddingRight: 16,
+	paddingTop: 24,
+	paddingBottom: 24,
+	':hover': {
+		backgroundColor: '#007194',
+	},
+});
 
 export const backButton = style({
 	position: 'absolute',
