@@ -34,16 +34,15 @@ type FaucetRequest = {
 	path: string;
 	body?: Record<string, any>;
 	headers?: HeadersInit;
-	method?: 'GET' | 'POST';
+	method: 'GET' | 'POST';
 };
 
 async function faucetRequest({ host, path, body, headers, method }: FaucetRequest) {
 	const endpoint = new URL(path, host).toString();
 	// default to POST
 	const res = await fetch(endpoint, {
-		...(method && method === 'GET'
-			? { method: 'GET' }
-			: { method: 'POST', body: JSON.stringify(body) }),
+		method,
+		body: body ? JSON.stringify(body) : undefined,
 		headers: {
 			'Content-Type': 'application/json',
 			...(headers || {}),
@@ -83,6 +82,7 @@ export async function requestSuiFromFaucetV0(input: {
 			},
 		},
 		headers: input.headers,
+		method: 'POST',
 	});
 }
 
@@ -100,6 +100,7 @@ export async function requestSuiFromFaucetV1(input: {
 			},
 		},
 		headers: input.headers,
+		method: 'POST',
 	});
 }
 

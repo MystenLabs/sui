@@ -11,6 +11,9 @@ type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'> & {
 	address?: string;
 };
 
+const MAX_FAUCET_REQUESTS_STATUS = 10;
+const FAUCET_REQUEST_DELAY = 1500;
+
 export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address || null;
@@ -37,6 +40,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 
 			// Continuously check the status until it's no longer 'INPROGRESS'
 			let currentStatus = 'INPROGRESS';
+			let requestStatusCount = 0;
 			while (currentStatus === 'INPROGRESS') {
 				const {
 					status: { status, transferred_gas_objects },
@@ -48,15 +52,19 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 
 				currentStatus = status;
 
-				if (currentStatus === 'DISCARDED' || error) {
-					throw new Error(error ?? status);
+				if (
+					currentStatus === 'DISCARDED' ||
+					error ||
+					requestStatusCount > MAX_FAUCET_REQUESTS_STATUS
+				) {
+					throw new Error(error ?? status ?? 'Something went wrong');
 				}
 
 				if (currentStatus === 'SUCCEEDED') {
 					return transferred_gas_objects?.sent.reduce((total, { amount }) => total + amount, 0);
 				}
-				// Wait for 1 second before checking the status again
-				await new Promise((resolve) => setTimeout(resolve, 1000));
+				requestStatusCount += 1;
+				await new Promise((resolve) => setTimeout(resolve, FAUCET_REQUEST_DELAY));
 			}
 
 			throw new Error('Something went wrong');
