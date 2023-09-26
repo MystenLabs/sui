@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getDeepbookClient } from '_shared/deepbook-client';
 import { SUI_DECIMALS } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-import { getDeepbookClient } from '_shared/deepbook-client';
 
 const FLOAT_SCALING_FACTOR = 1_000_000_000n;
 export const DEFAULT_TICK_SIZE = 1n * FLOAT_SCALING_FACTOR;

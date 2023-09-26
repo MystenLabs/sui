@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAllBalances } from '@mysten/dapp-kit';
-import { useNavigate } from 'react-router-dom';
 import { getSendOrSwapUrl } from '_app/helpers/getSendOrSwapUrl';
 import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
+import { useAllBalances } from '@mysten/dapp-kit';
+import { useNavigate } from 'react-router-dom';
 
 export function Assets() {
 	const navigate = useNavigate();

@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import clsx from 'classnames';
-
 import { getSendOrSwapUrl } from '_app/helpers/getSendOrSwapUrl';
 import { getUSDCurrency } from '_app/helpers/getUSDCurrency';
 import { useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
@@ -25,13 +23,14 @@ import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
+import { useAppsBackend, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { useAllBalances, useBalance } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, SUI_TYPE_ARG, MIST_PER_SUI } from '@mysten/sui.js/utils';
+import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
+import clsx from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';

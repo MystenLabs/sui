@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ErrorBoundary } from '_components/error-boundary';
 import { Route, Routes } from 'react-router-dom';
 
 import { Assets } from './Assets';
 import { SwapPageForm } from './SwapPageForm';
-import { ErrorBoundary } from '_components/error-boundary';
 
 export function SwapPage() {
 	return (

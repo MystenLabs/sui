@@ -1,6 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getUSDCurrency } from '_app/helpers/getUSDCurrency';
+import { useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
+import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
+import { Button } from '_app/shared/ButtonUI';
+import { Heading } from '_app/shared/heading';
+import { InputWithAction } from '_app/shared/InputWithAction';
+import { Text } from '_app/shared/text';
+import { CoinIcon } from '_components/coin-icon';
+import { IconButton } from '_components/IconButton';
+import Loading from '_components/loading';
+import Overlay from '_components/overlay';
+import { filterAndSortTokenBalances } from '_helpers';
+import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
+import { validate } from '_pages/swap/validation';
 import { useCoinMetadata, useFormatCoin } from '@mysten/core';
 import { useAllBalances } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16, ChevronDown16 } from '@mysten/icons';
@@ -10,20 +24,6 @@ import clsx from 'classnames';
 import { Form, Formik } from 'formik';
 import { useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getUSDCurrency } from '_app/helpers/getUSDCurrency';
-import { useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
-import { Button } from '_app/shared/ButtonUI';
-import { InputWithAction } from '_app/shared/InputWithAction';
-import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
-import { Heading } from '_app/shared/heading';
-import { Text } from '_app/shared/text';
-import { IconButton } from '_components/IconButton';
-import { CoinIcon } from '_components/coin-icon';
-import Loading from '_components/loading';
-import Overlay from '_components/overlay';
-import { filterAndSortTokenBalances } from '_helpers';
-import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
-import { validate } from '_pages/swap/validation';
 
 export const initialValues = {
 	amount: '',

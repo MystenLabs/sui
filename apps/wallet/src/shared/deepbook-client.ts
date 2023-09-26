@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { DeepBookClient } from '@mysten/deepbook';
 import { getActiveNetworkSuiClient } from '_shared/sui-client';
+import { DeepBookClient } from '@mysten/deepbook';
 
 export async function getDeepbookClient() {
 	const suiClient = await getActiveNetworkSuiClient();

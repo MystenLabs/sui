@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { useMemo } from 'react';
 import { usePinnedCoinTypes } from '_app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_app/hooks/useRecognizedPackages';
+import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
+import { useMemo } from 'react';
 
 export function useSortedCoinsByCategories(coinBalances: CoinBalanceType[]) {
 	const recognizedPackages = useRecognizedPackages();
