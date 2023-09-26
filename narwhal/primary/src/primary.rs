@@ -985,10 +985,15 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                             cert.aggregate_signature_state(),
                             AggregateSignatureState::VerifiedDirectly(_)
                         ) {
+                            warn!(
+                                "[arun] Certificate {:?} was requested but we did not serve it because it had {:?} signature state.",
+                                cert.digest(), cert.aggregate_signature_state()
+                            );
                             self.metrics
                                 .indirectly_verified_certificates_not_served
                                 .inc();
-                            continue;
+                            // TODO(arun): Temporarirly disable not serving certs that were verified indirectly
+                            // continue;
                         }
                     }
                     response.certificates.push(cert);
