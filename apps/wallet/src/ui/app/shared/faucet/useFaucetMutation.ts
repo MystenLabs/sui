@@ -30,9 +30,12 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				recipient: addressToTopUp,
 				host: options.host,
 			});
-
+			if (!taskId) {
+				throw new Error('Failed, task id not found.');
+			}
 			// Initialize a variable to track possible faucet request status errors
 			let faucetStatusError: string | null = null;
+			let faucetStatusTransferObject: number | null = null;
 			if (taskId) {
 				// Continuously check the status until it's no longer 'INPROGRESS'
 				let currentStatus = 'INPROGRESS';
@@ -42,8 +45,15 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 						taskId,
 					});
 
-					if (status !== 'INPROGRESS' || error) {
-						currentStatus = status;
+					if (status?.status === 'SUCCEEDED') {
+						faucetStatusTransferObject = status.transferredGasObjects?.reduce(
+							(total, { amount }) => total + amount,
+							0,
+						);
+					}
+
+					if (status?.status !== 'INPROGRESS' || error) {
+						currentStatus = status.status;
 						faucetStatusError = error || null;
 						break; // Exit the loop if status changed or there's an error
 					}
@@ -57,7 +67,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				const errorMessage = error ?? faucetStatusError ?? 'Error occurred';
 				throw new Error(errorMessage);
 			}
-			return null;
+			return faucetStatusTransferObject;
 		},
 		...options,
 	});
