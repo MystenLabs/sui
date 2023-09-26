@@ -14,12 +14,12 @@ You must serialize transaction data following [Binary Canonical Serialization](h
 
 The following example demonstrates how to serialize data for a transfer using the Sui CLI. This returns serialized transaction data in Base64. Submit the raw transaction to execute as `tx_bytes`.
 ```shell
-$SUI_BINARY client transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000 --serialize-output
+$SUI_BINARY client transfer-sui --to $ADDRESS --sui-coin-object-id $OBJECT_ID --gas-budget 1000 --serialize-unsigned-transaction
 
 Raw tx_bytes to execute: $TX_BYTES
 ```
 
-**Note:** All other CLI commands that craft a transaction (e.g., `sui client publish`, `sui client call`) also accept the `--serialize-output` flag and you can use them in the same way.
+**Note:** All other CLI commands that craft a transaction (e.g., `sui client publish`, `sui client call`) also accept the `--serialize-unsigned-transaction` flag and you can use them in the same way.
 
 ## Sign the serialized data
 

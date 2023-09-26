@@ -8,7 +8,9 @@ use crate::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
         Friend, ModuleIdent, SpecId, Value, Value_, Visibility,
     },
-    parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
+    parser::ast::{
+        Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+    },
     shared::{ast_debug::*, unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
@@ -29,6 +31,13 @@ pub struct Program {
     pub scripts: BTreeMap<Symbol, Script>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum Neighbor_ {
+    Dependency,
+    Friend,
+}
+pub type Neighbor = Spanned<Neighbor_>;
+
 //**************************************************************************************************
 // Scripts
 //**************************************************************************************************
@@ -43,6 +52,8 @@ pub struct Script {
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -51,18 +62,18 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub struct ModuleDefinition {
+    pub loc: Loc,
     pub warning_filter: WarningFilters,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub is_source_module: bool,
-    /// `dependency_order` is the topological order/rank in the dependency graph.
-    /// `dependency_order` is initialized at `0` and set in the uses pass
-    pub dependency_order: usize,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
+    // module dependencies referenced in specs
+    pub spec_dependencies: BTreeSet<(ModuleIdent, Neighbor)>,
 }
 
 //**************************************************************************************************
@@ -611,6 +622,45 @@ impl Type_ {
             _ => None,
         }
     }
+
+    pub fn type_name(&self) -> Option<&TypeName> {
+        match self {
+            Type_::Apply(_, tn, _) => Some(tn),
+            _ => None,
+        }
+    }
+
+    pub fn is(
+        &self,
+        address: impl AsRef<str>,
+        module: impl AsRef<str>,
+        name: impl AsRef<str>,
+    ) -> bool {
+        self.type_name()
+            .is_some_and(|tn| tn.value.is(address, module, name))
+    }
+
+    pub fn abilities(&self, loc: Loc) -> Option<AbilitySet> {
+        match self {
+            Type_::Apply(abilities, _, _) => abilities.clone(),
+            Type_::Param(tp) => Some(tp.abilities.clone()),
+            Type_::Unit => Some(AbilitySet::collection(loc)),
+            Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
+            Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
+            Type_::Var(_) => None,
+        }
+    }
+
+    pub fn has_ability_(&self, ability: Ability_) -> Option<bool> {
+        match self {
+            Type_::Apply(abilities, _, _) => abilities.as_ref().map(|s| s.has_ability_(ability)),
+            Type_::Param(tp) => Some(tp.abilities.has_ability_(ability)),
+            Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
+            Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
+            Type_::Anything | Type_::UnresolvedError => Some(true),
+            Type_::Var(_) => None,
+        }
+    }
 }
 
 impl Value_ {
@@ -689,6 +739,15 @@ impl AstDebug for Program {
     }
 }
 
+impl AstDebug for Neighbor_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            Neighbor_::Dependency => w.write("neighbor#dependency"),
+            Neighbor_::Friend => w.write("neighbor#friend"),
+        }
+    }
+}
+
 impl AstDebug for Script {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Script {
@@ -699,12 +758,18 @@ impl AstDebug for Script {
             constants,
             function_name,
             function,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -716,15 +781,16 @@ impl AstDebug for Script {
 impl AstDebug for ModuleDefinition {
     fn ast_debug(&self, w: &mut AstWriter) {
         let ModuleDefinition {
+            loc: _,
             warning_filter,
             package_name,
             attributes,
             is_source_module,
-            dependency_order,
             friends,
             structs,
             constants,
             functions,
+            spec_dependencies,
         } = self;
         warning_filter.ast_debug(w);
         if let Some(n) = package_name {
@@ -736,7 +802,11 @@ impl AstDebug for ModuleDefinition {
         } else {
             w.writeln("source module")
         }
-        w.writeln(&format!("dependency order #{}", dependency_order));
+        for (m, neighbor) in spec_dependencies {
+            w.write(&format!("spec_dep {m} is"));
+            neighbor.ast_debug(w);
+            w.writeln(";");
+        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();

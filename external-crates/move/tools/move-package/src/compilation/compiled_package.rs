@@ -929,7 +929,10 @@ pub(crate) fn make_source_and_deps_for_compiler(
     let source_package_paths = PackagePaths {
         name: Some((
             root.source_package.package.name,
-            root.compiler_config(&resolution_graph.build_options),
+            root.compiler_config(
+                /* is_dependency */ false,
+                &resolution_graph.build_options,
+            ),
         )),
         paths: sources,
         named_address_map: root_named_addrs,

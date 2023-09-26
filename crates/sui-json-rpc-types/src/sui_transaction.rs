@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::{self, Display, Formatter, Write};
 use sui_json::{primitive_type, SuiJsonValue};
+use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{
     EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -38,9 +39,9 @@ use sui_types::sui_serde::{
     BigInt, SequenceNumber as AsSequenceNumber, SuiTypeTag as AsSuiTypeTag,
 };
 use sui_types::transaction::{
-    Argument, CallArg, Command, GenesisObject, InputObjectKind, ObjectArg, ProgrammableMoveCall,
-    ProgrammableTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
-    TransactionKind, VersionedProtocolMessage,
+    Argument, CallArg, ChangeEpoch, Command, EndOfEpochTransactionKind, GenesisObject,
+    InputObjectKind, ObjectArg, ProgrammableMoveCall, ProgrammableTransaction, SenderSignedData,
+    TransactionData, TransactionDataAPI, TransactionKind, VersionedProtocolMessage,
 };
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 
@@ -284,6 +285,10 @@ pub enum SuiTransactionBlockKind {
     /// A series of transactions where the results of one transaction can be used in future
     /// transactions
     ProgrammableTransaction(SuiProgrammableTransactionBlock),
+    /// A transaction which updates global authenticator state
+    AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate),
+    /// The transaction which occurs only at the end of the epoch
+    EndOfEpochTransaction(SuiEndOfEpochTransaction),
     // .. more transaction types go here
 }
 
@@ -314,6 +319,12 @@ impl Display for SuiTransactionBlockKind {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
             }
+            Self::AuthenticatorStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::EndOfEpochTransaction(_) => {
+                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+            }
         }
         write!(f, "{}", writer)
     }
@@ -322,13 +333,7 @@ impl Display for SuiTransactionBlockKind {
 impl SuiTransactionBlockKind {
     fn try_from(tx: TransactionKind, module_cache: &impl GetModule) -> Result<Self, anyhow::Error> {
         Ok(match tx {
-            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(SuiChangeEpoch {
-                epoch: e.epoch,
-                storage_charge: e.storage_charge,
-                computation_charge: e.computation_charge,
-                storage_rebate: e.storage_rebate,
-                epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
-            }),
+            TransactionKind::ChangeEpoch(e) => Self::ChangeEpoch(e.into()),
             TransactionKind::Genesis(g) => Self::Genesis(SuiGenesisTransaction {
                 objects: g.objects.iter().map(GenesisObject::id).collect(),
             }),
@@ -342,6 +347,39 @@ impl SuiTransactionBlockKind {
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from(p, module_cache)?,
             ),
+            TransactionKind::AuthenticatorStateUpdate(update) => {
+                Self::AuthenticatorStateUpdate(SuiAuthenticatorStateUpdate {
+                    epoch: update.epoch,
+                    round: update.round,
+                    new_active_jwks: update
+                        .new_active_jwks
+                        .into_iter()
+                        .map(SuiActiveJwk::from)
+                        .collect(),
+                })
+            }
+            TransactionKind::EndOfEpochTransaction(end_of_epoch_tx) => {
+                Self::EndOfEpochTransaction(SuiEndOfEpochTransaction {
+                    transactions: end_of_epoch_tx
+                        .into_iter()
+                        .map(|tx| match tx {
+                            EndOfEpochTransactionKind::ChangeEpoch(e) => {
+                                SuiEndOfEpochTransactionKind::ChangeEpoch(e.into())
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateCreate
+                            }
+                            EndOfEpochTransactionKind::AuthenticatorStateExpire(expire) => {
+                                SuiEndOfEpochTransactionKind::AuthenticatorStateExpire(
+                                    SuiAuthenticatorStateExpire {
+                                        min_epoch: expire.min_epoch,
+                                    },
+                                )
+                            }
+                        })
+                        .collect(),
+                })
+            }
         })
     }
 
@@ -358,6 +396,8 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
 }
@@ -380,6 +420,18 @@ pub struct SuiChangeEpoch {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub epoch_start_timestamp_ms: u64,
+}
+
+impl From<ChangeEpoch> for SuiChangeEpoch {
+    fn from(e: ChangeEpoch) -> Self {
+        Self {
+            epoch: e.epoch,
+            storage_charge: e.storage_charge,
+            computation_charge: e.computation_charge,
+            storage_rebate: e.storage_rebate,
+            epoch_start_timestamp_ms: e.epoch_start_timestamp_ms,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -1038,6 +1090,86 @@ pub struct SuiConsensusCommitPrologue {
 }
 
 #[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateUpdate {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub round: u64,
+
+    pub new_active_jwks: Vec<SuiActiveJwk>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiEndOfEpochTransaction {
+    pub transactions: Vec<SuiEndOfEpochTransactionKind>,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub enum SuiEndOfEpochTransactionKind {
+    ChangeEpoch(SuiChangeEpoch),
+    AuthenticatorStateCreate,
+    AuthenticatorStateExpire(SuiAuthenticatorStateExpire),
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiAuthenticatorStateExpire {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub min_epoch: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiActiveJwk {
+    pub jwk_id: SuiJwkId,
+    pub jwk: SuiJWK,
+
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+}
+
+impl From<ActiveJwk> for SuiActiveJwk {
+    fn from(active_jwk: ActiveJwk) -> Self {
+        Self {
+            jwk_id: SuiJwkId {
+                iss: active_jwk.jwk_id.iss.clone(),
+                kid: active_jwk.jwk_id.kid.clone(),
+            },
+            jwk: SuiJWK {
+                kty: active_jwk.jwk.kty.clone(),
+                e: active_jwk.jwk.e.clone(),
+                n: active_jwk.jwk.n.clone(),
+                alg: active_jwk.jwk.alg.clone(),
+            },
+            epoch: active_jwk.epoch,
+        }
+    }
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiJwkId {
+    pub iss: String,
+    pub kid: String,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiJWK {
+    pub kty: String,
+    pub e: String,
+    pub n: String,
+    pub alg: String,
+}
+
+#[serde_as]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename = "InputObjectKind")]
 pub enum SuiInputObjectKind {
@@ -1535,6 +1667,13 @@ impl SuiCallArg {
                 initial_shared_version,
                 mutable,
             }),
+            CallArg::Object(ObjectArg::Receiving((object_id, version, digest))) => {
+                SuiCallArg::Object(SuiObjectArg::Receiving {
+                    object_id,
+                    version,
+                    digest,
+                })
+            }
         })
     }
 
@@ -1548,9 +1687,8 @@ impl SuiCallArg {
     pub fn object(&self) -> Option<&ObjectID> {
         match self {
             SuiCallArg::Object(SuiObjectArg::SharedObject { object_id, .. })
-            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. }) => {
-                Some(object_id)
-            }
+            | SuiCallArg::Object(SuiObjectArg::ImmOrOwnedObject { object_id, .. })
+            | SuiCallArg::Object(SuiObjectArg::Receiving { object_id, .. }) => Some(object_id),
             _ => None,
         }
     }
@@ -1598,6 +1736,15 @@ pub enum SuiObjectArg {
         #[serde_as(as = "AsSequenceNumber")]
         initial_shared_version: SequenceNumber,
         mutable: bool,
+    },
+    // A reference to a Move object that's going to be received in the transaction.
+    #[serde(rename_all = "camelCase")]
+    Receiving {
+        object_id: ObjectID,
+        #[schemars(with = "AsSequenceNumber")]
+        #[serde_as(as = "AsSequenceNumber")]
+        version: SequenceNumber,
+        digest: ObjectDigest,
     },
 }
 

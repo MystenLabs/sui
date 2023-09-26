@@ -1,0 +1,46 @@
+[package]
+name = "sui-analytics-indexer"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+bcs.workspace = true
+byteorder.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+clap.workspace = true
+csv.workspace = true
+move-core-types.workspace = true
+object_store.workspace = true
+num_enum.workspace = true
+prometheus.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-stream.workspace = true
+url.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+
+fastcrypto = { workspace = true, features = ["copy_key"] }
+mysten-metrics.workspace = true
+sui-indexer.workspace = true
+sui-types.workspace = true
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+telemetry-subscribers.workspace = true
+sui-rest-api.workspace = true
+sui-storage.workspace = true
+
+[dev-dependencies]
+
+[[bin]]
+name = "sui-analytics-indexer"
+path = "src/main.rs"

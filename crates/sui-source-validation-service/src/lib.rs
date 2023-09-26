@@ -16,6 +16,9 @@ use axum::{Json, Router, Server};
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
+use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
+use jsonrpsee::core::params::ArrayParams;
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
 use tracing::{debug, info};
@@ -27,6 +30,8 @@ use move_package::BuildConfig as MoveBuildConfig;
 use move_symbol_pool::Symbol;
 use sui_move::build::resolve_lock_file_path;
 use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_sdk::rpc_types::{SuiTransactionBlockEffects, TransactionFilter};
+use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
@@ -38,6 +43,11 @@ pub const MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
 pub const TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 pub const DEVNET_URL: &str = "https://fullnode.devnet.sui.io:443";
 pub const LOCALNET_URL: &str = "http://127.0.0.1:9000";
+
+pub const MAINNET_WS_URL: &str = "wss://rpc.mainnet.sui.io:443";
+pub const TESTNET_WS_URL: &str = "wss://rpc.testnet.sui.io:443";
+pub const DEVNET_WS_URL: &str = "wss://rpc.devnet.sui.io:443";
+pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -62,14 +72,22 @@ pub enum PackageSources {
 pub struct RepositorySource {
     pub repository: String,
     pub branch: String,
-    pub paths: Vec<String>,
+    pub packages: Vec<Package>,
     pub network: Option<Network>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct DirectorySource {
-    pub paths: Vec<String>,
+    pub packages: Vec<Package>,
     pub network: Option<Network>,
+}
+
+#[derive(Clone, Deserialize, Debug)]
+pub struct Package {
+    pub path: String,
+    /// Optional object ID to watch for upgrades. For framework packages, this is an address like 0x2.
+    /// For non-framework packages this is an upgrade cap (possibly wrapped).
+    pub watch: Option<ObjectID>,
 }
 
 #[derive(Debug)]
@@ -225,7 +243,11 @@ impl CloneCommand {
             ostr!("set"),
             ostr!("--no-cone"),
         ];
-        let path_args: Vec<OsString> = p.paths.iter().map(OsString::from).collect();
+        let path_args: Vec<OsString> = p
+            .packages
+            .iter()
+            .map(|p| OsString::from(p.path.clone()))
+            .collect();
         cmd_args.extend_from_slice(&path_args);
         args.push(cmd_args);
 
@@ -298,8 +320,8 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 let repo_name = repo_name_from_url(&r.repository)?;
                 let network_name = r.network.clone().unwrap_or_default().to_string();
                 let packages_dir = dir.join(network_name).join(repo_name);
-                for p in &r.paths {
-                    let package_path = packages_dir.join(p).clone();
+                for p in &r.packages {
+                    let package_path = packages_dir.join(p.path.clone()).clone();
                     let network = r.network.clone().unwrap_or_default();
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
@@ -307,8 +329,8 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                 }
             }
             PackageSources::Directory(packages_dir) => {
-                for p in &packages_dir.paths {
-                    let package_path = PathBuf::from(p);
+                for p in &packages_dir.packages {
+                    let package_path = PathBuf::from(p.path.clone());
                     let network = packages_dir.network.clone().unwrap_or_default();
                     let t =
                         tokio::spawn(async move { verify_package(&network, package_path).await });
@@ -337,6 +359,35 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     lookup.insert(Network::Devnet, devnet_lookup);
     lookup.insert(Network::Localnet, localnet_lookup);
     Ok(lookup)
+}
+
+pub async fn watch_for_upgrades(config: &Config) -> anyhow::Result<()> {
+    let mut watch_ids = ArrayParams::new();
+    for s in &config.packages {
+        let packages = match s {
+            PackageSources::Repository(RepositorySource { packages, .. }) => packages,
+            PackageSources::Directory(DirectorySource { packages, .. }) => packages,
+        };
+        for p in packages {
+            if let Some(id) = p.watch {
+                watch_ids.insert(TransactionFilter::ChangedObject(id))?
+            }
+        }
+    }
+
+    let client: WsClient = WsClientBuilder::default().build(LOCALNET_WS_URL).await?;
+    let mut subscription: Subscription<SuiTransactionBlockEffects> = client
+        .subscribe(
+            "suix_subscribeTransaction",
+            watch_ids,
+            "suix_unsubscribeTransaction",
+        )
+        .await?;
+
+    info!("Listening for upgrades...");
+    let result = subscription.next().await;
+    info!("Saw upgrade txn: {:?}", result);
+    Ok(())
 }
 
 pub struct AppState {

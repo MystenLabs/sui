@@ -47,7 +47,7 @@ pub enum ParsedType {
 }
 
 impl Display for TypeToken {
-    fn fmt<'f>(&self, formatter: &mut fmt::Formatter<'f>) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let s = match *self {
             TypeToken::Whitespace => "[whitespace]",
             TypeToken::Ident => "[identifier]",

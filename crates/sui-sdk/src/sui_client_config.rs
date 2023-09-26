@@ -7,10 +7,9 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{SuiClient, SuiClientBuilder};
-use sui_config::{Config, SUI_DEV_NET_URL};
-use sui_keys::keystore::AccountKeystore;
-use sui_keys::keystore::Keystore;
+use crate::{SuiClient, SuiClientBuilder, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL};
+use sui_config::Config;
+use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::*;
 
 #[serde_as]
@@ -90,7 +89,22 @@ impl SuiEnv {
     pub fn devnet() -> Self {
         Self {
             alias: "devnet".to_string(),
-            rpc: SUI_DEV_NET_URL.into(),
+            rpc: SUI_DEVNET_URL.into(),
+            ws: None,
+        }
+    }
+    pub fn testnet() -> Self {
+        Self {
+            alias: "testnet".to_string(),
+            rpc: SUI_TESTNET_URL.into(),
+            ws: None,
+        }
+    }
+
+    pub fn localnet() -> Self {
+        Self {
+            alias: "local".to_string(),
+            rpc: SUI_LOCAL_NETWORK_URL.into(),
             ws: None,
         }
     }

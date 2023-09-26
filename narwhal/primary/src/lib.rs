@@ -25,6 +25,10 @@ mod metrics;
 #[path = "tests/certificate_tests.rs"]
 mod certificate_tests;
 
+#[cfg(test)]
+#[path = "tests/rpc_tests.rs"]
+mod rpc_tests;
+
 pub use crate::{
     metrics::PrimaryChannelMetrics,
     primary::{Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS},

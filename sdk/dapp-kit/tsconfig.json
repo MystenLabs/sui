@@ -7,10 +7,13 @@
 		"isolatedModules": true,
 		"jsx": "react-jsx",
 		"baseUrl": "..",
+		"rootDir": "src",
 		"paths": {
 			"@mysten/sui.js/transactions": ["../typescript/src/builder/export.ts"],
 			"@mysten/sui.js/*": ["../typescript/src/*"],
-			"@mysten/sui.js": ["../typescript/src/"]
+			"@mysten/sui.js": ["../typescript/src/"],
+			"@mysten/wallet-standard": ["../wallet-standard/src"]
 		}
-	}
+	},
+	"references": [{ "path": "../typescript" }, { "path": "../wallet-standard" }]
 }

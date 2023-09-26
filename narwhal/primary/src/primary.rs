@@ -50,7 +50,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use storage::{CertificateStore, HeaderStore, PayloadStore, ProposerStore, VoteDigestStore};
+use storage::{CertificateStore, PayloadStore, ProposerStore, VoteDigestStore};
 use sui_protocol_config::ProtocolConfig;
 use tokio::{sync::oneshot, time::Instant};
 use tokio::{sync::watch, task::JoinHandle};
@@ -93,7 +93,6 @@ impl Primary {
         _protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
-        header_store: HeaderStore,
         certificate_store: CertificateStore,
         proposer_store: ProposerStore,
         payload_store: PayloadStore,
@@ -164,7 +163,6 @@ impl Primary {
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
 
         let (tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(0u64);
-        let (tx_synchronizer_network, rx_synchronizer_network) = oneshot::channel();
 
         let synchronizer = Arc::new(Synchronizer::new(
             authority.id(),
@@ -178,7 +176,6 @@ impl Primary {
             tx_new_certificates,
             tx_parents,
             rx_consensus_round_updates.clone(),
-            rx_synchronizer_network,
             node_metrics.clone(),
             &primary_channel_metrics,
         ));
@@ -196,7 +193,6 @@ impl Primary {
             worker_cache: worker_cache.clone(),
             synchronizer: synchronizer.clone(),
             signature_service: signature_service.clone(),
-            header_store: header_store.clone(),
             certificate_store: certificate_store.clone(),
             vote_digest_store,
             rx_narwhal_round_updates,
@@ -360,9 +356,7 @@ impl Primary {
                 }
             }
         }
-        if tx_synchronizer_network.send(network.clone()).is_err() {
-            panic!("Failed to send Network to Synchronizer!");
-        }
+        client.set_primary_network(network.clone());
 
         info!("Primary {} listening on {}", authority.id(), address);
 
@@ -431,7 +425,6 @@ impl Primary {
         let core_handle = Certifier::spawn(
             authority.id(),
             committee.clone(),
-            header_store,
             certificate_store.clone(),
             synchronizer.clone(),
             signature_service,
@@ -532,7 +525,6 @@ struct PrimaryReceiverHandler {
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
     signature_service: SignatureService<Signature, { crypto::INTENT_MESSAGE_LENGTH }>,
-    header_store: HeaderStore,
     certificate_store: CertificateStore,
     /// The store to persist the last voted round per authority, used to ensure idempotence.
     vote_digest_store: VoteDigestStore,
@@ -704,11 +696,6 @@ impl PrimaryReceiverHandler {
             }
         }
 
-        // Store the header.
-        self.header_store
-            .write(header)
-            .map_err(DagError::StoreError)?;
-
         // Check if we can vote for this header.
         // Send the vote when:
         // 1. when there is no existing vote for this publicKey & epoch/round
@@ -822,7 +809,7 @@ impl PrimaryReceiverHandler {
         // certificates to still have a chance to be included in the DAG while not wasting
         // resources on very old vote requests. This value affects performance but not correctness
         // of the algorithm.
-        const HEADER_AGE_LIMIT: Round = 5;
+        const HEADER_AGE_LIMIT: Round = 3;
 
         // Lock to ensure consistency between limit_round and where parent_digests are gc'ed.
         let mut parent_digests = self.parent_digests.lock();

@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
-import { EyeClose16 } from '@mysten/icons';
-
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-
-import { useHiddenAssets } from './HiddenAssetsProvider';
 import Alert from '_components/alert';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
@@ -16,6 +9,12 @@ import { NFTDisplayCard } from '_components/nft-display';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import PageTitle from '_src/ui/app/shared/PageTitle';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken, useMultiGetObjects } from '@mysten/core';
+import { EyeClose16 } from '@mysten/icons';
+import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+
+import { useHiddenAssets } from './HiddenAssetsProvider';
 
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
@@ -74,7 +73,7 @@ function HiddenNftsPage() {
 					</Alert>
 				) : null}
 				{filteredAndSortedNfts?.length ? (
-					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2 mb-5">
+					<div className="flex flex-col w-full divide-y divide-solid divide-gray-40 divide-x-0 gap-2">
 						{filteredAndSortedNfts.map((nft) => {
 							const { objectId, type } = nft.data!;
 							return (

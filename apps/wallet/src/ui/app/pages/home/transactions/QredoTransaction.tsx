@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { formatDate, useOnScreen } from '@mysten/core';
-import { IntentScope } from '@mysten/sui.js/cryptography';
-import { fromB64 } from '@mysten/sui.js/utils';
-import { useMemo, useRef } from 'react';
-
 import { toUtf8OrB64 } from '_src/shared/utils';
 import LoadingIndicator from '_src/ui/app/components/loading/LoadingIndicator';
 import { TxnIcon } from '_src/ui/app/components/transactions-card/TxnIcon';
 import { useGetQredoTransaction } from '_src/ui/app/hooks/useGetQredoTransaction';
 import { Text } from '_src/ui/app/shared/text';
+import { formatDate, useOnScreen } from '@mysten/core';
+import { IntentScope } from '@mysten/sui.js/cryptography';
+import { fromB64 } from '@mysten/sui.js/utils';
+import { useMemo, useRef } from 'react';
+
 export type QredoTransactionProps = {
 	qredoID?: string;
 	qredoTransactionID?: string;

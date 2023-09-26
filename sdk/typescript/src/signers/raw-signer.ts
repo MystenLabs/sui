@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { blake2b } from '@noble/hashes/blake2b';
+
+import type { SuiClient } from '../client/index.js';
 import type { Keypair } from '../cryptography/keypair.js';
 import { toSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import { SignerWithProvider } from './signer-with-provider.js';
-import type { SuiClient } from '../client/index.js';
 
 export class RawSigner extends SignerWithProvider {
 	private readonly keypair: Keypair;

@@ -7,9 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-arc-swap.workspace = true
 bcs.workspace = true
-match_opt.workspace = true
 rand = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
@@ -38,13 +36,9 @@ indexmap.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 node = { path = "../node", package = "narwhal-node" }
 
-[target.'cfg(unix)'.dev-dependencies]
-pprof.workspace = true
-
 [features]
 default = ["rand"]
 benchmark = []
-pprof = []
 
 [lib]
 bench = false
@@ -52,4 +46,4 @@ bench = false
 [[bench]]
 name = "process_certificates"
 harness = false
-required-features = ["benchmark", "pprof"]
+required-features = ["benchmark"]

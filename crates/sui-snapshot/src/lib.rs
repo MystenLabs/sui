@@ -23,6 +23,7 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_storage::{compute_sha3_checksum, FileCompression, SHA3_BYTES};
 use sui_types::accumulator::Accumulator;
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::get_sui_system_state;
@@ -110,7 +111,7 @@ const ADDRESS_LENGTH_BYTES: usize = 8;
 const PADDING_BYTES: usize = 3;
 const MANIFEST_FILE_HEADER_BYTES: usize =
     MAGIC_BYTES + SNAPSHOT_VERSION_BYTES + ADDRESS_LENGTH_BYTES + PADDING_BYTES;
-const FILE_MAX_BYTES: usize = 128 * 1024 * 1024 * 1024;
+const FILE_MAX_BYTES: usize = 128 * 1024 * 1024;
 const OBJECT_ID_BYTES: usize = ObjectID::LENGTH;
 const SEQUENCE_NUM_BYTES: usize = 8;
 const OBJECT_DIGEST_BYTES: usize = 32;
@@ -146,7 +147,9 @@ impl FileMetadata {
             FileType::Object => {
                 dir_path.child(&*format!("{}_{}.obj", self.bucket_num, self.part_num))
             }
-            FileType::Reference => dir_path.child(&*format!("REFERENCE-{}", self.bucket_num)),
+            FileType::Reference => {
+                dir_path.child(&*format!("{}_{}.ref", self.bucket_num, self.part_num))
+            }
         }
     }
     pub fn local_file_path(&self, root_path: &std::path::Path, dir_path: &Path) -> Result<PathBuf> {
@@ -219,14 +222,19 @@ pub async fn setup_db_state(
     // This function should be called once state accumulator based hash verification
     // is complete and live object set state is downloaded to local store
     let system_state_object = get_sui_system_state(&perpetual_db)?;
+    let authenticator_state_obj_initial_shared_version =
+        get_authenticator_state_obj_initial_shared_version(&perpetual_db)?;
     let new_epoch_start_state = system_state_object.into_epoch_start_state();
     let next_epoch_committee = new_epoch_start_state.get_sui_committee();
     let last_checkpoint = checkpoint_store
         .get_epoch_last_checkpoint(epoch)
         .expect("Error loading last checkpoint for current epoch")
         .expect("Could not load last checkpoint for current epoch");
-    let epoch_start_configuration =
-        EpochStartConfiguration::new(new_epoch_start_state, *last_checkpoint.digest());
+    let epoch_start_configuration = EpochStartConfiguration::new(
+        new_epoch_start_state,
+        *last_checkpoint.digest(),
+        authenticator_state_obj_initial_shared_version,
+    );
     perpetual_db
         .set_epoch_start_configuration(&epoch_start_configuration)
         .await?;

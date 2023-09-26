@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{base_types::*, error::*};
+use crate::authenticator_state::ActiveJwk;
 use crate::committee::{EpochId, ProtocolVersion};
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthoritySignature, AuthorityStrongQuorumSignInfo,
@@ -19,8 +20,8 @@ use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use crate::{
-    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
-    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
@@ -42,15 +43,17 @@ use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
 use tap::Pipe;
 use tracing::trace;
 
-// TODO: The following constants appear to be very large.
-// We should revisit them.
-pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 2_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 10_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 5_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_VALIDATOR: u64 = 25_000_000;
-pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 1_000_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_TRANSFER: u64 = 10_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_PUBLISH: u64 = 70_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_STAKING: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_GENERIC: u64 = 50_000;
+pub const TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN: u64 = 10_000;
+// For some transactions we may either perform heavy operations or touch
+// objects that are storage expensive. That may happen (and often is the case)
+// because the object touched are set up in genesis and carry no storage cost
+// (and thus rebate) on first usage.
+pub const TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE: u64 = 5_000_000;
 
 pub const GAS_PRICE_FOR_SYSTEM_TX: u64 = 1;
 
@@ -96,6 +99,8 @@ pub enum ObjectArg {
         initial_shared_version: SequenceNumber,
         mutable: bool,
     },
+    // A Move object that can be received in this transaction.
+    Receiving(ObjectRef),
 }
 
 fn type_tag_validity_check(
@@ -184,6 +189,40 @@ impl GenesisObject {
     }
 }
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateExpire {
+    /// expire JWKs that have a lower epoch than this
+    pub min_epoch: u64,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+}
+
+impl AuthenticatorStateExpire {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub struct AuthenticatorStateUpdate {
+    /// Epoch of the authenticator state update transaction
+    pub epoch: u64,
+    /// Consensus round of the authenticator state update
+    pub round: u64,
+    /// newly active jwks
+    pub new_active_jwks: Vec<ActiveJwk>,
+    /// The initial version of the authenticator object that it was shared at.
+    pub authenticator_obj_initial_shared_version: SequenceNumber,
+    // to version this struct, do not add new fields. Instead, add a AuthenticatorStateUpdateV2 to
+    // TransactionKind.
+}
+
+impl AuthenticatorStateUpdate {
+    pub fn authenticator_obj_initial_shared_version(&self) -> SequenceNumber {
+        self.authenticator_obj_initial_shared_version
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
@@ -196,24 +235,169 @@ pub enum TransactionKind {
     /// It also doesn't require/use a gas object.
     /// A validator will not sign a transaction of this kind from outside. It only
     /// signs internally during epoch changes.
+    ///
+    /// The ChangeEpoch enumerant is now deprecated (but the ChangeEpoch struct is still used by
+    /// EndOfEpochTransaction below).
     ChangeEpoch(ChangeEpoch),
     Genesis(GenesisTransaction),
     ConsensusCommitPrologue(ConsensusCommitPrologue),
+    AuthenticatorStateUpdate(AuthenticatorStateUpdate),
+
+    /// EndOfEpochTransaction replaces ChangeEpoch with a list of transactions that are allowed to
+    /// run at the end of the epoch.
+    EndOfEpochTransaction(Vec<EndOfEpochTransactionKind>),
     // .. more transaction types go here
 }
 
+/// EndOfEpochTransactionKind
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
+pub enum EndOfEpochTransactionKind {
+    ChangeEpoch(ChangeEpoch),
+    AuthenticatorStateCreate,
+    AuthenticatorStateExpire(AuthenticatorStateExpire),
+}
+
+impl EndOfEpochTransactionKind {
+    pub fn new_change_epoch(
+        next_epoch: EpochId,
+        protocol_version: ProtocolVersion,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        non_refundable_storage_fee: u64,
+        epoch_start_timestamp_ms: u64,
+        system_packages: Vec<(SequenceNumber, Vec<Vec<u8>>, Vec<ObjectID>)>,
+    ) -> Self {
+        Self::ChangeEpoch(ChangeEpoch {
+            epoch: next_epoch,
+            protocol_version,
+            storage_charge,
+            computation_charge,
+            storage_rebate,
+            non_refundable_storage_fee,
+            epoch_start_timestamp_ms,
+            system_packages,
+        })
+    }
+
+    pub fn new_authenticator_state_expire(
+        min_epoch: u64,
+        authenticator_obj_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        Self::AuthenticatorStateExpire(AuthenticatorStateExpire {
+            min_epoch,
+            authenticator_obj_initial_shared_version,
+        })
+    }
+
+    pub fn new_authenticator_state_create() -> Self {
+        Self::AuthenticatorStateCreate
+    }
+
+    fn input_objects(&self) -> Vec<InputObjectKind> {
+        match self {
+            Self::ChangeEpoch(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
+            Self::AuthenticatorStateCreate => vec![],
+            Self::AuthenticatorStateExpire(expire) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+            }
+        }
+    }
+
+    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        match self {
+            Self::ChangeEpoch(_) => Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)),
+            Self::AuthenticatorStateExpire(expire) => Either::Left(iter::once(SharedInputObject {
+                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                mutable: true,
+            })),
+            Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
+        }
+    }
+
+    fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
+        match self {
+            Self::ChangeEpoch(_) => (),
+            Self::AuthenticatorStateCreate | Self::AuthenticatorStateExpire(_) => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.enable_jwk_consensus_updates());
+            }
+        }
+        Ok(())
+    }
+}
+
 impl VersionedProtocolMessage for TransactionKind {
-    fn check_version_supported(&self, _protocol_config: &ProtocolConfig) -> SuiResult {
-        // This code does nothing right now - it exists to cause a compiler error when new
-        // enumerants are added to TransactionKind.
-        //
-        // When we add new cases here, check that current_protocol_version does not pre-date the
-        // addition of that enumerant.
+    fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
+        // When adding new cases, they must be guarded by a feature flag and return
+        // UnsupportedFeatureError if the flag is not set.
         match &self {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ProgrammableTransaction(_) => Ok(()),
+            | TransactionKind::ConsensusCommitPrologue(_) => Ok(()),
+            TransactionKind::ProgrammableTransaction(pt) => {
+                // NB: we don't use the `receiving_objects` method here since we don't want to check
+                // for any validity requirements such as duplicate receiving inputs at this point.
+                if !protocol_config.receiving_objects_supported() {
+                    let has_receiving_objects = pt
+                        .inputs
+                        .iter()
+                        .any(|arg| !arg.receiving_objects().is_empty());
+                    if has_receiving_objects {
+                        return Err(SuiError::UnsupportedFeatureError {
+                            error: format!(
+                                "receiving objects is not supported at {:?}",
+                                protocol_config.version
+                            ),
+                        });
+                    }
+                }
+                Ok(())
+            }
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                if protocol_config.enable_jwk_consensus_updates() {
+                    Ok(())
+                } else {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "authenticator state updates not enabled".to_string(),
+                    })
+                }
+            }
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                if !protocol_config.end_of_epoch_transaction_supported() {
+                    Err(SuiError::UnsupportedFeatureError {
+                        error: "EndOfEpochTransaction is not supported".to_string(),
+                    })
+                } else {
+                    for tx in txns {
+                        match tx {
+                            EndOfEpochTransactionKind::ChangeEpoch(_) => (),
+                            EndOfEpochTransactionKind::AuthenticatorStateCreate
+                            | EndOfEpochTransactionKind::AuthenticatorStateExpire(_) => {
+                                if !protocol_config.enable_jwk_consensus_updates() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "authenticator state updates not enabled"
+                                            .to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -239,6 +423,19 @@ impl CallArg {
                     mutable,
                 }]
             }
+            // Receiving objects are not part of the input objects.
+            CallArg::Object(ObjectArg::Receiving(_)) => vec![],
+        }
+    }
+
+    fn receiving_objects(&self) -> Vec<ObjectRef> {
+        match self {
+            CallArg::Pure(_) => vec![],
+            CallArg::Object(o) => match o {
+                ObjectArg::ImmOrOwnedObject(_) => vec![],
+                ObjectArg::SharedObject { .. } => vec![],
+                ObjectArg::Receiving(obj_ref) => vec![*obj_ref],
+            },
         }
     }
 
@@ -323,7 +520,9 @@ impl ObjectArg {
 
     pub fn id(&self) -> ObjectID {
         match self {
-            ObjectArg::ImmOrOwnedObject((id, _, _)) | ObjectArg::SharedObject { id, .. } => *id,
+            ObjectArg::Receiving((id, _, _))
+            | ObjectArg::ImmOrOwnedObject((id, _, _))
+            | ObjectArg::SharedObject { id, .. } => *id,
         }
     }
 }
@@ -635,6 +834,14 @@ impl ProgrammableTransaction {
             .collect())
     }
 
+    fn receiving_objects(&self) -> Vec<ObjectRef> {
+        let ProgrammableTransaction { inputs, .. } = self;
+        inputs
+            .iter()
+            .flat_map(|arg| arg.receiving_objects())
+            .collect()
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         let ProgrammableTransaction { inputs, commands } = self;
         fp_ensure!(
@@ -647,8 +854,22 @@ impl ProgrammableTransaction {
         for input in inputs {
             input.validity_check(config)?
         }
+        let mut publish_count = 0u64;
         for command in commands {
-            command.validity_check(config)?
+            command.validity_check(config)?;
+            match command {
+                Command::Publish(_, _) | Command::Upgrade(_, _, _, _) => publish_count += 1,
+                _ => (),
+            }
+        }
+        if let Some(max_publish_commands) = config.max_publish_or_upgrade_per_ptb_as_option() {
+            fp_ensure!(
+                publish_count <= max_publish_commands,
+                UserInputError::MaxPublishCountExceeded {
+                    max_publish_commands,
+                    publish_count,
+                }
+            );
         }
         Ok(())
     }
@@ -657,7 +878,9 @@ impl ProgrammableTransaction {
         self.inputs
             .iter()
             .filter_map(|arg| match arg {
-                CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                CallArg::Pure(_)
+                | CallArg::Object(ObjectArg::Receiving(_))
+                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
                 CallArg::Object(ObjectArg::SharedObject {
                     id,
                     initial_shared_version,
@@ -820,6 +1043,15 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
                 | TransactionKind::Genesis(_)
                 | TransactionKind::ConsensusCommitPrologue(_)
+                | TransactionKind::AuthenticatorStateUpdate(_)
+                | TransactionKind::EndOfEpochTransaction(_)
+        )
+    }
+
+    pub fn is_end_of_epoch_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::EndOfEpochTransaction(_) | TransactionKind::ChangeEpoch(_)
         )
     }
 
@@ -827,12 +1059,21 @@ impl TransactionKind {
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.
     pub fn get_advance_epoch_tx_gas_summary(&self) -> Option<(u64, u64)> {
-        match self {
-            Self::ChangeEpoch(e) => {
-                Some((e.computation_charge + e.storage_charge, e.storage_rebate))
+        let e = match self {
+            Self::ChangeEpoch(e) => e,
+            Self::EndOfEpochTransaction(txns) => {
+                if let EndOfEpochTransactionKind::ChangeEpoch(e) =
+                    txns.last().expect("at least one end-of-epoch txn required")
+                {
+                    e
+                } else {
+                    panic!("final end-of-epoch txn must be ChangeEpoch")
+                }
             }
-            _ => None,
-        }
+            _ => return None,
+        };
+
+        Some((e.computation_charge + e.storage_charge, e.storage_rebate))
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -848,12 +1089,22 @@ impl TransactionKind {
             }
 
             Self::ConsensusCommitPrologue(_) => {
-                Either::Left(Either::Right(iter::once(SharedInputObject {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
                     mutable: true,
                 })))
             }
+            Self::AuthenticatorStateUpdate(update) => {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: update.authenticator_obj_initial_shared_version,
+                    mutable: true,
+                })))
+            }
+            Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
+                txns.iter().flat_map(|txn| txn.shared_input_objects()),
+            )),
             Self::ProgrammableTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
             }
@@ -865,6 +1116,17 @@ impl TransactionKind {
         match &self {
             Self::ProgrammableTransaction(pt) => pt.move_calls(),
             _ => vec![],
+        }
+    }
+
+    pub fn receiving_objects(&self) -> Vec<ObjectRef> {
+        match &self {
+            TransactionKind::ChangeEpoch(_)
+            | TransactionKind::Genesis(_)
+            | TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::EndOfEpochTransaction(_) => vec![],
+            TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
         }
     }
 
@@ -891,6 +1153,16 @@ impl TransactionKind {
                     mutable: true,
                 }]
             }
+            Self::AuthenticatorStateUpdate(update) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: update.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+            }
+            Self::EndOfEpochTransaction(txns) => {
+                txns.iter().flat_map(|txn| txn.input_objects()).collect()
+            }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
         // Ensure that there are no duplicate inputs. This cannot be removed because:
@@ -913,6 +1185,19 @@ impl TransactionKind {
             TransactionKind::ChangeEpoch(_)
             | TransactionKind::Genesis(_)
             | TransactionKind::ConsensusCommitPrologue(_) => (),
+            TransactionKind::EndOfEpochTransaction(txns) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.end_of_epoch_transaction_supported());
+
+                for tx in txns {
+                    tx.validity_check(config)?;
+                }
+            }
+
+            TransactionKind::AuthenticatorStateUpdate(_) => {
+                // The transaction should have been rejected earlier if the feature is not enabled.
+                assert!(config.enable_jwk_consensus_updates());
+            }
         };
         Ok(())
     }
@@ -929,6 +1214,17 @@ impl TransactionKind {
         match self {
             TransactionKind::ProgrammableTransaction(pt) => pt.commands.iter(),
             _ => [].iter(),
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::ChangeEpoch(_) => "ChangeEpoch",
+            Self::Genesis(_) => "Genesis",
+            Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
+            Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
+            Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
+            Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
         }
     }
 }
@@ -955,6 +1251,12 @@ impl Display for TransactionKind {
             Self::ProgrammableTransaction(p) => {
                 writeln!(writer, "Transaction Kind : Programmable")?;
                 write!(writer, "{p}")?;
+            }
+            Self::AuthenticatorStateUpdate(_) => {
+                writeln!(writer, "Transaction Kind : Authenticator State Update")?;
+            }
+            Self::EndOfEpochTransaction(_) => {
+                writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
             }
         }
         write!(f, "{}", writer)
@@ -1437,6 +1739,8 @@ pub trait TransactionDataAPI {
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    fn receiving_objects(&self) -> Vec<ObjectRef>;
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
 
     fn validity_check_no_gas_check(&self, config: &ProtocolConfig) -> UserInputResult;
@@ -1447,6 +1751,10 @@ pub trait TransactionDataAPI {
     fn is_system_tx(&self) -> bool;
     fn is_change_epoch_tx(&self) -> bool;
     fn is_genesis_tx(&self) -> bool;
+
+    /// returns true if the transaction is one that is specially sequenced to run at the very end
+    /// of the epoch
+    fn is_end_of_epoch_tx(&self) -> bool;
 
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
@@ -1536,6 +1844,10 @@ impl TransactionDataAPI for TransactionDataV1 {
         Ok(inputs)
     }
 
+    fn receiving_objects(&self) -> Vec<ObjectRef> {
+        self.kind.receiving_objects()
+    }
+
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         fp_ensure!(!self.gas().is_empty(), UserInputError::MissingGasPayment);
         fp_ensure!(
@@ -1566,13 +1878,7 @@ impl TransactionDataAPI for TransactionDataV1 {
         if self.gas_owner() == self.sender() {
             return Ok(());
         }
-        let allow_sponsored_tx = match &self.kind {
-            TransactionKind::ProgrammableTransaction(_) => true,
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::Genesis(_) => false,
-        };
-        if allow_sponsored_tx {
+        if matches!(&self.kind, TransactionKind::ProgrammableTransaction(_)) {
             return Ok(());
         }
         Err(UserInputError::UnsupportedSponsoredTransactionKind)
@@ -1580,6 +1886,10 @@ impl TransactionDataAPI for TransactionDataV1 {
 
     fn is_change_epoch_tx(&self) -> bool {
         matches!(self.kind, TransactionKind::ChangeEpoch(_))
+    }
+
+    fn is_end_of_epoch_tx(&self) -> bool {
+        self.is_change_epoch_tx() || matches!(self.kind, TransactionKind::EndOfEpochTransaction(_))
     }
 
     fn is_system_tx(&self) -> bool {
@@ -1936,6 +2246,26 @@ impl VerifiedTransaction {
         .pipe(Self::new_system_transaction)
     }
 
+    pub fn new_authenticator_state_update(
+        epoch: u64,
+        round: u64,
+        new_active_jwks: Vec<ActiveJwk>,
+        authenticator_obj_initial_shared_version: SequenceNumber,
+    ) -> Self {
+        AuthenticatorStateUpdate {
+            epoch,
+            round,
+            new_active_jwks,
+            authenticator_obj_initial_shared_version,
+        }
+        .pipe(TransactionKind::AuthenticatorStateUpdate)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_end_of_epoch_transaction(txns: Vec<EndOfEpochTransactionKind>) -> Self {
+        TransactionKind::EndOfEpochTransaction(txns).pipe(Self::new_system_transaction)
+    }
+
     fn new_system_transaction(system_transaction: TransactionKind) -> Self {
         system_transaction
             .pipe(TransactionData::new_system_transaction)
@@ -2118,7 +2448,7 @@ impl InputObjects {
             .collect()
     }
 
-    pub fn mutable_inputs(&self) -> Vec<ObjectRef> {
+    pub fn mutable_inputs(&self) -> BTreeMap<ObjectID, (VersionDigest, Owner)> {
         self.objects
             .iter()
             .filter_map(|(kind, object)| match kind {
@@ -2127,12 +2457,13 @@ impl InputObjects {
                     if object.is_immutable() {
                         None
                     } else {
-                        Some(*object_ref)
+                        Some((object_ref.0, ((object_ref.1, object_ref.2), object.owner)))
                     }
                 }
                 InputObjectKind::SharedMoveObject { mutable, .. } => {
                     if *mutable {
-                        Some(object.compute_object_reference())
+                        let oref = object.compute_object_reference();
+                        Some((oref.0, ((oref.1, oref.2), object.owner)))
                     } else {
                         None
                     }
@@ -2142,18 +2473,24 @@ impl InputObjects {
     }
 
     /// The version to set on objects created by the computation that `self` is input to.
-    /// Guaranteed to be strictly greater than the versions of all input objects.
-    pub fn lamport_timestamp(&self) -> SequenceNumber {
+    /// Guaranteed to be strictly greater than the versions of all input objects and objects
+    /// received in the transaction.
+    pub fn lamport_timestamp(&self, receiving_objects: &[ObjectRef]) -> SequenceNumber {
         let input_versions = self
             .objects
             .iter()
-            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version));
+            .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
+            .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 
         SequenceNumber::lamport_increment(input_versions)
     }
 
     pub fn into_objects(self) -> Vec<(InputObjectKind, Object)> {
         self.objects
+    }
+
+    pub fn object_kinds(&self) -> impl Iterator<Item = &InputObjectKind> {
+        self.objects.iter().map(|(kind, _)| kind)
     }
 
     pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {

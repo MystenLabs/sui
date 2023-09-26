@@ -5,13 +5,14 @@
 use crate::{
     diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructDefinition, StructTypeParameter,
         TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, Var,
     },
     parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
     shared::{unique_map::UniqueMap, *},
+    typing::ast as T,
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -51,13 +52,18 @@ pub struct ConstantInfo {
 }
 
 pub struct ModuleInfo {
+    pub package: Option<Symbol>,
     pub friends: UniqueMap<ModuleIdent, Loc>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, FunctionInfo>,
     pub constants: UniqueMap<ConstantName, ConstantInfo>,
 }
 
-pub struct ProgramInfo(UniqueMap<ModuleIdent, ModuleInfo>);
+pub struct ProgramInfo<const AFTER_TYPING: bool> {
+    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
+}
+pub type NamingProgramInfo = ProgramInfo<false>;
+pub type TypingProgramInfo = ProgramInfo<true>;
 
 pub struct LoopInfo(LoopInfo_);
 
@@ -68,7 +74,7 @@ enum LoopInfo_ {
 }
 
 pub struct Context<'env> {
-    pub modules: ProgramInfo,
+    pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
 
     pub current_module: Option<ModuleIdent>,
@@ -82,16 +88,74 @@ pub struct Context<'env> {
 
     loop_info: LoopInfo,
 
-    /// collects all called functions in the current module
-    pub called_fns: BTreeSet<Symbol>,
+    /// collects all friends that should be added over the course of 'public(package)' calls
+    /// structured as (defining module, new friend, location) where `new friend` is usually the
+    /// context's current module. Note there may be more than one location in practice, but
+    /// tracking a single one is sufficient for error reporting.
+    pub new_friends: BTreeSet<(ModuleIdent, Loc)>,
+    /// collects all used module members (functions and constants) but it's a superset of these in
+    /// that it may contain other identifiers that do not in fact represent a function or a constant
+    pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
-impl ProgramInfo {
-    fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.0.get(m).expect("ICE should have failed in naming")
+macro_rules! program_info {
+    ($pre_compiled_lib:ident, $prog:ident, $pass:ident) => {{
+        let all_modules = $prog
+            .modules
+            .key_cloned_iter()
+            .chain($pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                pre_compiled
+                    .$pass
+                    .modules
+                    .key_cloned_iter()
+                    .filter(|(mident, _m)| !$prog.modules.contains_key(mident))
+            }));
+        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
+            let structs = mdef.structs.clone();
+            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
+                defined_loc: fname.loc(),
+                visibility: fdef.visibility.clone(),
+                signature: fdef.signature.clone(),
+                acquires: fdef.acquires.clone(),
+            });
+            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
+                defined_loc: cname.loc(),
+                signature: cdef.signature.clone(),
+            });
+            let minfo = ModuleInfo {
+                package: mdef.package_name,
+                friends: mdef.friends.ref_map(|_, friend| friend.loc),
+                structs,
+                functions,
+                constants,
+            };
+            (mident, minfo)
+        }))
+        .unwrap();
+        ProgramInfo { modules }
+    }};
+}
+
+impl TypingProgramInfo {
+    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &T::Program) -> Self {
+        program_info!(pre_compiled_lib, prog, typing)
+    }
+}
+
+impl NamingProgramInfo {
+    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &N::Program) -> Self {
+        program_info!(pre_compiled_lib, prog, naming)
+    }
+}
+
+impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
+    pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
+        self.modules
+            .get(m)
+            .expect("ICE should have failed in naming")
     }
 
-    fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+    pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
         let minfo = self.module(m);
         minfo
             .structs
@@ -104,10 +168,14 @@ impl ProgramInfo {
     }
 
     pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+        self.struct_declared_loc_(m, &n.0.value)
+    }
+
+    pub fn struct_declared_loc_(&self, m: &ModuleIdent, n: &Symbol) -> Loc {
         let minfo = self.module(m);
         *minfo
             .structs
-            .get_loc(n)
+            .get_loc_(n)
             .expect("ICE should have failed in naming")
     }
 
@@ -138,38 +206,7 @@ impl<'env> Context<'env> {
         pre_compiled_lib: Option<&FullyCompiledProgram>,
         prog: &N::Program,
     ) -> Self {
-        let all_modules = prog
-            .modules
-            .key_cloned_iter()
-            .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .naming
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !prog.modules.contains_key(mident))
-            }));
-        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
-            let structs = mdef.structs.clone();
-            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
-                defined_loc: fname.loc(),
-                visibility: fdef.visibility.clone(),
-                signature: fdef.signature.clone(),
-                acquires: fdef.acquires.clone(),
-            });
-            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
-                defined_loc: cname.loc(),
-                signature: cdef.signature.clone(),
-            });
-            let minfo = ModuleInfo {
-                friends: mdef.friends.ref_map(|_, friend| friend.loc),
-                structs,
-                functions,
-                constants,
-            };
-            (mident, minfo)
-        }))
-        .unwrap();
-
+        let modules = NamingProgramInfo::new(pre_compiled_lib, prog);
         Context {
             subst: Subst::empty(),
             current_module: None,
@@ -179,9 +216,10 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
-            modules: ProgramInfo(modules),
+            modules,
             env,
-            called_fns: BTreeSet::new(),
+            new_friends: BTreeSet::new(),
+            used_module_members: BTreeMap::new(),
         }
     }
 
@@ -282,6 +320,20 @@ impl<'env> Context<'env> {
 
     pub fn is_current_function(&self, m: &ModuleIdent, f: &FunctionName) -> bool {
         self.is_current_module(m) && matches!(&self.current_function, Some(curf) if curf == f)
+    }
+
+    // `loc` indicates the location that caused the add to occur
+    fn record_current_module_as_friend(&mut self, m: &ModuleIdent, loc: Loc) {
+        if matches!(self.current_module, Some(current_mident) if m != &current_mident) {
+            self.new_friends.insert((*m, loc));
+        }
+    }
+
+    fn current_module_shares_package_and_address(&self, m: &ModuleIdent) -> bool {
+        self.current_module.is_some_and(|current_mident| {
+            m.value.address == current_mident.value.address
+                && self.module_info(m).package == self.module_info(&current_mident).package
+        })
     }
 
     fn current_module_is_a_friend_of(&self, m: &ModuleIdent) -> bool {
@@ -501,7 +553,11 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
 // Type utils
 //**************************************************************************************************
 
-pub fn infer_abilities(context: &ProgramInfo, subst: &Subst, ty: Type) -> AbilitySet {
+pub fn infer_abilities<const INFO_PASS: bool>(
+    context: &ProgramInfo<INFO_PASS>,
+    subst: &Subst,
+    ty: Type,
+) -> AbilitySet {
     use Type_ as T;
     let loc = ty.loc;
     match unfold_type(subst, ty).value {
@@ -799,20 +855,54 @@ pub fn make_function_type(
     } else {
         BTreeMap::new()
     };
+
     let defined_loc = finfo.defined_loc;
     match finfo.visibility {
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}' and '{}' functions can \
+                "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
                  be called outside of their module",
                 Visibility::PUBLIC,
-                Visibility::FRIEND
+                Visibility::FRIEND,
+                Visibility::PACKAGE
             );
             context.env.add_diag(diag!(
                 TypeSafety::Visibility,
                 (loc, format!("Invalid call to '{}::{}'", m, f)),
                 (defined_loc, internal_msg),
+            ));
+        }
+        Visibility::Package(loc)
+            if in_current_module || context.current_module_shares_package_and_address(m) =>
+        {
+            context.record_current_module_as_friend(m, loc);
+        }
+        Visibility::Package(vis_loc) => {
+            let internal_msg = format!(
+                "A '{}' function can only be called from the same address and package as \
+                module '{}' in package '{}'. This call is from address '{}' in package '{}'",
+                Visibility::PACKAGE,
+                m,
+                context
+                    .module_info(m)
+                    .package
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<unknown package>".to_string()),
+                &context
+                    .current_module
+                    .map(|cur_module| cur_module.value.address.to_string())
+                    .unwrap_or("<unknown addr>".to_string()),
+                &context
+                    .current_module
+                    .and_then(|cur_module| context.module_info(&cur_module).package)
+                    .map(|pkg_name| format!("{}", pkg_name))
+                    .unwrap_or("<unknown package>".to_string())
+            );
+            context.env.add_diag(diag!(
+                TypeSafety::Visibility,
+                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (vis_loc, internal_msg),
             ));
         }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}

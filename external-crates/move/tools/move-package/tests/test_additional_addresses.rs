@@ -4,10 +4,8 @@
 
 use move_core_types::account_address::AccountAddress;
 use move_package::{
-    resolution::{
-        dependency_cache::DependencyCache, dependency_graph as DG, resolution_graph as RG,
-    },
-    source_package::manifest_parser as MP,
+    resolution::{dependency_graph as DG, resolution_graph as RG},
+    source_package::{layout::SourcePackageLayout, parsed_manifest as PM},
     BuildConfig,
 };
 use std::{collections::BTreeMap, path::PathBuf};
@@ -23,11 +21,28 @@ fn test_additonal_addresses() {
     .into_iter()
     .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut sink = std::io::sink();
-    let dg = DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink).unwrap();
+    let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
+    );
+    let (dg, _) = dep_graph_builder
+        .get_graph(
+            &PM::DependencyKind::default(),
+            path,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
+        .unwrap();
+
+    let DG::DependencyGraphBuilder {
+        mut dependency_cache,
+        mut progress_output,
+        ..
+    } = dep_graph_builder;
 
     assert!(RG::ResolvedGraph::resolve(
         dg.clone(),
@@ -40,7 +55,7 @@ fn test_additonal_addresses() {
             ..Default::default()
         },
         &mut dependency_cache,
-        &mut sink,
+        &mut progress_output,
     )
     .is_ok());
 
@@ -51,7 +66,7 @@ fn test_additonal_addresses() {
             ..Default::default()
         },
         &mut dependency_cache,
-        &mut sink,
+        &mut progress_output,
     )
     .is_err());
 }
@@ -62,11 +77,28 @@ fn test_additonal_addresses_already_assigned_same_value() {
         .into_iter()
         .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut sink = std::io::sink();
-    let dg = DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink).unwrap();
+    let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
+    );
+    let (dg, _) = dep_graph_builder
+        .get_graph(
+            &PM::DependencyKind::default(),
+            path,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
+        .unwrap();
+
+    let DG::DependencyGraphBuilder {
+        mut dependency_cache,
+        mut progress_output,
+        ..
+    } = dep_graph_builder;
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
@@ -79,7 +111,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
             ..Default::default()
         },
         &mut dependency_cache,
-        &mut sink,
+        &mut progress_output,
     )
     .is_ok());
 }
@@ -90,11 +122,28 @@ fn test_additonal_addresses_already_assigned_different_value() {
         .into_iter()
         .collect();
 
-    let pm = MP::parse_move_manifest_from_file(&path).unwrap();
+    let manifest_string =
+        std::fs::read_to_string(&path.join(SourcePackageLayout::Manifest.path())).unwrap();
 
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let mut sink = std::io::sink();
-    let dg = DG::DependencyGraph::new(&pm, path, &mut dependency_cache, &mut sink).unwrap();
+    let mut dep_graph_builder = DG::DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempdir().unwrap().path().to_path_buf(),
+    );
+    let (dg, _) = dep_graph_builder
+        .get_graph(
+            &PM::DependencyKind::default(),
+            path,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
+        .unwrap();
+
+    let DG::DependencyGraphBuilder {
+        mut dependency_cache,
+        mut progress_output,
+        ..
+    } = dep_graph_builder;
 
     assert!(RG::ResolvedGraph::resolve(
         dg,
@@ -107,7 +156,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
             ..Default::default()
         },
         &mut dependency_cache,
-        &mut sink,
+        &mut progress_output,
     )
     .is_err());
 }

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { getRefGasPrice, useGetSystemState } from '@mysten/core';
+import { getRefGasPrice } from '@mysten/core';
+import { useLatestSuiSystemState } from '@mysten/dapp-kit';
 import { Heading, Text } from '@mysten/ui';
 import { useMemo } from 'react';
 
@@ -8,7 +9,7 @@ import { Card } from '~/ui/Card';
 import { RingChart, RingChartLegend } from '~/ui/RingChart';
 
 export function ValidatorStatus() {
-	const { data } = useGetSystemState();
+	const { data } = useLatestSuiSystemState();
 
 	const nextRefGasPrice = useMemo(
 		() => getRefGasPrice(data?.activeValidators),

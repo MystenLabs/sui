@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Flag16, Info12, Nft16 } from '@mysten/icons';
+import { Flag16, Info12 } from '@mysten/icons';
 import { Heading, Placeholder, Text } from '@mysten/ui';
 
 import { ReactComponent as CallIcon } from './icons/transactions/call.svg';
@@ -27,7 +27,7 @@ const TYPE_TO_COPY: Partial<Record<PageHeaderType, string>> = {
 const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon | null> = {
 	Transaction: null,
 	Checkpoint: Flag16,
-	Object: Nft16,
+	Object: null,
 	Package: CallIcon,
 	Address: null,
 };
@@ -52,23 +52,27 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 							{loading ? (
 								<Placeholder rounded="lg" width="140px" />
 							) : (
-								<Heading variant="heading6/semibold" color="steel-darker">
+								<Text variant="captionSmall/semibold" color="hero-dark">
 									{type in TYPE_TO_COPY ? TYPE_TO_COPY[type] : type}
-								</Heading>
+								</Text>
 							)}
 						</div>
 						<div className="min-w-0 break-words break-all">
 							{loading ? (
 								<Placeholder rounded="lg" width="540px" height="20px" />
 							) : (
-								<div className="flex items-center">
-									<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
-										{title}
-									</Heading>
-									<div className="ml-2 h-4 w-4 self-start md:h-6 md:w-6">
-										<CopyToClipboard size="lg" color="steel" copyText={title} />
-									</div>
-								</div>
+								<>
+									{title && (
+										<div className="flex items-center">
+											<Heading as="h3" variant="heading3/semibold" color="gray-90" mono>
+												{title}
+											</Heading>
+											<div className="ml-2 h-4 w-4 self-start md:h-6 md:w-6">
+												<CopyToClipboard size="lg" color="steel" copyText={title} />
+											</div>
+										</div>
+									)}
+								</>
 							)}
 						</div>
 						{subtitle && (

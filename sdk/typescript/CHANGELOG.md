@@ -1,5 +1,44 @@
 # @mysten/sui.js
 
+## 0.42.0
+
+### Minor Changes
+
+- fd8589806: Remove all previously deprecated exports from @mysten/sui.js
+
+## 0.41.2
+
+### Patch Changes
+
+- Updated dependencies [290c8e640]
+  - @mysten/bcs@0.7.4
+
+## 0.41.1
+
+### Patch Changes
+
+- 24c21e1f0: Fix defaults not being applied correctly in websocket client
+
+## 0.41.0
+
+### Minor Changes
+
+- ba8e3b857: Rename TransactionBlock generated type in @mysten/sui.js/client to SuiTransactionBlock to avoid conflicting names in exports
+
+### Patch Changes
+
+- f4b7b3474: Adds zk signature scheme
+
+## 0.40.0
+
+### Minor Changes
+
+- a503cad34: Add exports to `@mysten/sui.js/client` for rpc method params
+
+### Patch Changes
+
+- 8281e3d25: Add new `sign` method to the TransactionBlock class, so that implementing transaction signing is easier.
+
 ## 0.39.0
 
 ### Minor Changes

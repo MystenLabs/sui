@@ -3,7 +3,8 @@
 
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
 import nacl from 'tweetnacl';
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { TransactionBlock } from '../../../src/builder';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';

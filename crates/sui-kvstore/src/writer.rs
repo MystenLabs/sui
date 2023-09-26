@@ -142,10 +142,15 @@ where
                 let mut transactions = vec![];
                 let mut effects = vec![];
                 let mut events = vec![];
+                let mut transactions_to_checkpoint = vec![];
 
                 for content in contents.iter() {
                     let transaction_digest = content.transaction.digest().into_inner().to_vec();
                     effects.push((transaction_digest.clone(), content.effects.clone()));
+                    transactions_to_checkpoint.push((
+                        transaction_digest.clone(),
+                        checkpoint_summary.sequence_number,
+                    ));
                     transactions.push((transaction_digest, content.transaction.clone()));
 
                     if let Some(event_digest) = content.effects.events_digest() {
@@ -162,6 +167,9 @@ where
                     .await?;
                 client.multi_set(KVTable::Effects, effects).await?;
                 client.multi_set(KVTable::Events, events).await?;
+                client
+                    .multi_set(KVTable::TransactionToCheckpoint, transactions_to_checkpoint)
+                    .await?;
 
                 let serialized_checkpoint_number = bcs::to_bytes(
                     &TaggedKey::CheckpointSequenceNumber(checkpoint_summary.sequence_number),

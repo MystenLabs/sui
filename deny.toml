@@ -51,10 +51,18 @@ ignore = [
     # "RUSTSEC-0000-0000",
     # potential segfault in the time crate, brought by chrono et al.
     "RUSTSEC-2020-0071",
-    # potential segfault in localtime_r, brought by chrono et al.
-    "RUSTSEC-2020-0159",
-    # potential DOS
-    "RUSTSEC-2023-0034"
+    # difference 2.0.0 is unmaintained
+    "RUSTSEC-2020-0095",
+    # rusoto is unmaintained, use aws crates
+    "RUSTSEC-2022-0071",
+    # `tui` is unmaintained; use `ratatui` instead
+    "RUSTSEC-2023-0049",
+    # ansi_term is Unmaintained
+    "RUSTSEC-2021-0139",
+    # atty
+    # "RUSTSEC-2021-0145",
+    # webpki
+    "RUSTSEC-2023-0052",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -95,7 +103,7 @@ deny = [
     #"Nokia",
 ]
 # Lint level for licenses considered copyleft
-copyleft = "warn"
+copyleft = "deny"
 # Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
 # * both - The license will be approved if it is both OSI-approved *AND* FSF
 # * either - The license will be approved if it is either OSI-approved *OR* FSF

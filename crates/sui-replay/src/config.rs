@@ -4,7 +4,7 @@
 use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
 
 use crate::types::ReplayEngineError;
-use jsonrpsee::client_transport::ws::Uri;
+use http::Uri;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use tracing::log::warn;

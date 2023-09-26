@@ -1,0 +1,39 @@
+[package]
+name = "bytecode-verifier-libfuzzer"
+version = "0.0.0"
+authors = ["Diem Association <opensource@diem.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = "1.1.7"
+move-bytecode-verifier = { path = "../" }
+move-core-types = { path = "../../move-core/types", features = ["fuzzing"] }
+move-binary-format = { path = "../../move-binary-format", features = ["fuzzing"] }
+
+# Prevent this from interfering with workspaces
+#[workspace]
+#members = ["."]
+
+[[bin]]
+name = "code_unit"
+path = "fuzz_targets/code_unit.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "compiled_module"
+path = "fuzz_targets/compiled_module.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mixed"
+path = "fuzz_targets/mixed.rs"
+test = false
+doc = false

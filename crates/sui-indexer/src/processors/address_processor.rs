@@ -3,18 +3,15 @@
 
 use tracing::{info, warn};
 
-use sui_json_rpc_types::{
-    CheckpointId, SuiTransactionBlockEvents, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::CheckpointId;
 
 use crate::errors::IndexerError;
 use crate::models::addresses::{dedup_from_addresses, dedup_from_and_to_addresses};
 use crate::store::IndexerStore;
-use crate::types::{AddressData, CheckpointTransactionBlockResponse};
+use crate::types::AddressData;
 
 const ADDRESS_STATS_BATCH_SIZE: usize = 100;
 const DB_COMMIT_RETRY_INTERVAL_IN_MILLIS: u64 = 100;
-const PG_TX_READ_CHUNK_SIZE: usize = 1000;
 
 pub struct AddressProcessor<S> {
     pub store: S,
@@ -50,55 +47,41 @@ where
                     .store
                     .get_checkpoints(cursor, ADDRESS_STATS_BATCH_SIZE)
                     .await?;
-                let tx_vec: Vec<sui_types::digests::TransactionDigest> = checkpoints
-                    .into_iter()
-                    .flat_map(|c| c.transactions)
-                    .collect();
 
-                for tx_chunk in tx_vec.chunks(PG_TX_READ_CHUNK_SIZE) {
-                    let tx_digest_strs = tx_chunk
-                        .iter()
-                        .map(|tx| tx.to_string())
-                        .collect::<Vec<String>>();
-                    let txs = self
+                for checkpoint in &checkpoints {
+                    let timestamp = checkpoint.timestamp_ms;
+                    let cp_sender_recipient_data = self
                         .store
-                        .multi_get_transactions_by_digests(&tx_digest_strs)
+                        .get_recipients_data_by_checkpoint(checkpoint.sequence_number)
                         .await?;
-                    let tx_option = SuiTransactionBlockResponseOptions {
-                        show_input: true,
-                        show_raw_input: true,
-                        show_effects: true,
-                        ..Default::default()
-                    };
-                    let sui_tx_resp_handles = txs.into_iter().map(|tx| {
-                        self.store
-                            .compose_sui_transaction_block_response(tx, Some(&tx_option))
-                    });
-                    let sui_tx_resp_vec = futures::future::join_all(sui_tx_resp_handles)
-                        .await
-                        .into_iter()
-                        .collect::<Result<Vec<_>, _>>()?
-                        .into_iter()
-                        // NOTE: need to set events to empty to avoid type hardening error
-                        .map(|mut resp| {
-                            resp.events = Some(SuiTransactionBlockEvents { data: vec![] });
-                            resp
-                        })
-                        .collect::<Vec<_>>();
 
-                    // retrieve address and active address data from txs
-                    let checkpoint_tx_resp_vec = sui_tx_resp_vec
-                        .into_iter()
-                        .map(CheckpointTransactionBlockResponse::try_from)
-                        .collect::<Result<Vec<_>, _>>()?;
-                    let from_and_to_address_data: Vec<AddressData> = checkpoint_tx_resp_vec
+                    let sender_data = cp_sender_recipient_data
                         .iter()
-                        .flat_map(|tx| tx.get_from_and_to_addresses())
-                        .collect();
-                    let from_address_data: Vec<AddressData> = checkpoint_tx_resp_vec
+                        .map(|d| (d.transaction_digest.clone(), d.sender.clone()))
+                        .collect::<Vec<(String, String)>>();
+                    let recipient_data = cp_sender_recipient_data
                         .iter()
-                        .map(|tx| tx.get_from_address())
-                        .collect();
+                        .map(|d| (d.transaction_digest.clone(), d.recipient.clone()))
+                        .collect::<Vec<(String, String)>>();
+
+                    let from_address_data = sender_data
+                        .iter()
+                        .map(|(tx, sender)| AddressData {
+                            account_address: sender.clone(),
+                            transaction_digest: tx.clone(),
+                            timestamp_ms: timestamp as i64,
+                        })
+                        .collect::<Vec<AddressData>>();
+                    let from_and_to_address_data = sender_data
+                        .iter()
+                        .chain(recipient_data.iter())
+                        .map(|(tx, sender)| AddressData {
+                            account_address: sender.clone(),
+                            transaction_digest: tx.clone(),
+                            timestamp_ms: timestamp as i64,
+                        })
+                        .collect::<Vec<AddressData>>();
+
                     let addresses = dedup_from_and_to_addresses(from_and_to_address_data);
                     let active_addresses: Vec<crate::models::addresses::ActiveAddress> =
                         dedup_from_addresses(from_address_data);

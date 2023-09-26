@@ -15,27 +15,27 @@ ResolvedGraph {
             ],
             "A": [
                 (
+                    "Root",
+                    Incoming,
+                ),
+                (
                     "ADep",
                     Outgoing,
                 ),
+            ],
+            "B": [
                 (
                     "Root",
                     Incoming,
+                ),
+                (
+                    "BDep",
+                    Outgoing,
                 ),
             ],
             "ADep": [
                 (
                     "A",
-                    Incoming,
-                ),
-            ],
-            "B": [
-                (
-                    "BDep",
-                    Outgoing,
-                ),
-                (
-                    "Root",
                     Incoming,
                 ),
             ],
@@ -55,7 +55,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "ADep": Package {
                 kind: Local(
@@ -65,7 +64,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "B": Package {
                 kind: Local(
@@ -75,7 +73,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
             "BDep": Package {
                 kind: Local(
@@ -85,7 +82,6 @@ ResolvedGraph {
                 resolver: Some(
                     "../resolvers/successful.sh",
                 ),
-                overridden_path: false,
             },
         },
         always_deps: {
@@ -93,6 +89,8 @@ ResolvedGraph {
             "ADep",
             "Root",
         },
+        manifest_digest: "64CF52DCF661C2F1581935BC7AEA0424EE20B10997D1F183779443C8679727F1",
+        deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
         dev_mode: true,
@@ -111,6 +109,7 @@ ResolvedGraph {
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
         default_edition: None,
+        deps_as_root: false,
     },
     package_table: {
         "A": Package {

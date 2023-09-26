@@ -14,10 +14,17 @@ export function ScrollToViewCard({ children, inView }: ScrollToViewCardProps) {
 	useEffect(() => {
 		if (!scrollViewRef?.current || !inView) return;
 
-		scrollViewRef.current.scrollIntoView({
+		const parentNode = scrollViewRef.current.parentNode as HTMLDivElement;
+		const parentOffset = parentNode.offsetTop;
+		const currentOffset = scrollViewRef.current.offsetTop;
+
+		const elementOffset = currentOffset - parentOffset;
+
+		parentNode.scrollTo({
+			top: elementOffset,
 			behavior: 'smooth',
-			block: 'nearest',
 		});
 	}, [inView, scrollViewRef]);
+
 	return <div ref={scrollViewRef}>{children}</div>;
 }

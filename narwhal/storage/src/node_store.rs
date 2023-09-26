@@ -6,7 +6,7 @@ use crate::proposer_store::ProposerKey;
 use crate::vote_digest_store::VoteDigestStore;
 use crate::{
     CertificateStore, CertificateStoreCache, CertificateStoreCacheMetrics, ConsensusStore,
-    HeaderStore, ProposerStore,
+    ProposerStore,
 };
 use config::{AuthorityIdentifier, WorkerId};
 use std::num::NonZeroUsize;
@@ -17,7 +17,7 @@ use store::reopen;
 use store::rocks::{default_db_options, open_cf_opts, DBMap, MetricConf, ReadWriteOptions};
 use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CommittedSubDagShell, ConsensusCommit,
-    Header, HeaderDigest, Round, SequenceNumber, VoteInfo,
+    Header, Round, SequenceNumber, VoteInfo,
 };
 
 // A type alias marking the "payload" tokens sent by workers to their primary as batch acknowledgements
@@ -28,7 +28,6 @@ pub type PayloadToken = u8;
 pub struct NodeStorage {
     pub proposer_store: ProposerStore,
     pub vote_digest_store: VoteDigestStore,
-    pub header_store: HeaderStore,
     pub certificate_store: CertificateStore<CertificateStoreCache>,
     pub payload_store: PayloadStore,
     pub batch_store: DBMap<BatchDigest, Batch>,
@@ -39,7 +38,6 @@ impl NodeStorage {
     /// The datastore column family names.
     pub(crate) const LAST_PROPOSED_CF: &'static str = "last_proposed";
     pub(crate) const VOTES_CF: &'static str = "votes";
-    pub(crate) const HEADERS_CF: &'static str = "headers";
     pub(crate) const CERTIFICATES_CF: &'static str = "certificates";
     pub(crate) const CERTIFICATE_DIGEST_BY_ROUND_CF: &'static str = "certificate_digest_by_round";
     pub(crate) const CERTIFICATE_DIGEST_BY_ORIGIN_CF: &'static str = "certificate_digest_by_origin";
@@ -66,13 +64,6 @@ impl NodeStorage {
         let column_family_options = vec![
             (Self::LAST_PROPOSED_CF, cf_options.clone()),
             (Self::VOTES_CF, cf_options.clone()),
-            (
-                Self::HEADERS_CF,
-                default_db_options()
-                    .optimize_for_write_throughput()
-                    .optimize_for_large_values_no_scan(1 << 10)
-                    .options,
-            ),
             (
                 Self::CERTIFICATES_CF,
                 default_db_options()
@@ -105,7 +96,6 @@ impl NodeStorage {
         let (
             last_proposed_map,
             votes_map,
-            header_map,
             certificate_map,
             certificate_digest_by_round_map,
             certificate_digest_by_origin_map,
@@ -117,7 +107,6 @@ impl NodeStorage {
         ) = reopen!(&rocksdb,
             Self::LAST_PROPOSED_CF;<ProposerKey, Header>,
             Self::VOTES_CF;<AuthorityIdentifier, VoteInfo>,
-            Self::HEADERS_CF;<HeaderDigest, Header>,
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_DIGEST_BY_ROUND_CF;<(Round, AuthorityIdentifier), CertificateDigest>,
             Self::CERTIFICATE_DIGEST_BY_ORIGIN_CF;<(AuthorityIdentifier, Round), CertificateDigest>,
@@ -130,7 +119,6 @@ impl NodeStorage {
 
         let proposer_store = ProposerStore::new(last_proposed_map);
         let vote_digest_store = VoteDigestStore::new(votes_map);
-        let header_store = HeaderStore::new(header_map);
 
         let certificate_store_cache = CertificateStoreCache::new(
             NonZeroUsize::new(Self::CERTIFICATE_STORE_CACHE_SIZE).unwrap(),
@@ -153,7 +141,6 @@ impl NodeStorage {
         Self {
             proposer_store,
             vote_digest_store,
-            header_store,
             certificate_store,
             payload_store,
             batch_store,

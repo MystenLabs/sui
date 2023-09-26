@@ -20,7 +20,8 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    compiled_unit::AnnotatedCompiledUnit, shared::PackagePaths, FullyCompiledProgram,
+    compiled_unit::AnnotatedCompiledUnit, editions::Edition, shared::PackagePaths,
+    FullyCompiledProgram,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -76,9 +77,15 @@ pub struct AdapterExecuteArgs {
     pub check_runtime_types: bool,
 }
 
+#[derive(Debug, Parser)]
+pub struct AdapterInitArgs {
+    #[clap(long = "edition")]
+    pub edition: Option<Edition>,
+}
+
 #[async_trait]
 impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
-    type ExtraInitArgs = EmptyCommand;
+    type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();
     type ExtraRunArgs = AdapterExecuteArgs;
@@ -95,13 +102,15 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
     async fn init(
         default_syntax: SyntaxChoice,
         pre_compiled_deps: Option<&'a FullyCompiledProgram>,
-        task_opt: Option<TaskInput<(InitCommand, EmptyCommand)>>,
+        task_opt: Option<TaskInput<(InitCommand, Self::ExtraInitArgs)>>,
     ) -> (Self, Option<String>) {
-        let additional_mapping = match task_opt.map(|t| t.command) {
-            Some((InitCommand { named_addresses }, _)) => {
-                verify_and_create_named_address_mapping(named_addresses).unwrap()
+        let (additional_mapping, compiler_edition) = match task_opt.map(|t| t.command) {
+            Some((InitCommand { named_addresses }, AdapterInitArgs { edition })) => {
+                let addresses = verify_and_create_named_address_mapping(named_addresses).unwrap();
+                let compiler_edition = edition.unwrap_or(Edition::LEGACY);
+                (addresses, compiler_edition)
             }
-            None => BTreeMap::new(),
+            None => (BTreeMap::new(), Edition::LEGACY),
         };
 
         let mut named_address_mapping = move_stdlib_named_addresses();
@@ -115,7 +124,12 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
             named_address_mapping.insert(name, addr);
         }
         let mut adapter = Self {
-            compiled_state: CompiledState::new(named_address_mapping, pre_compiled_deps, None),
+            compiled_state: CompiledState::new(
+                named_address_mapping,
+                pre_compiled_deps,
+                None,
+                Some(compiler_edition),
+            ),
             default_syntax,
             storage: InMemoryStorage::new(),
         };

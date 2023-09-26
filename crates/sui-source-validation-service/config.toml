@@ -4,11 +4,11 @@ source = "Repository"
 repository = "https://github.com/mystenlabs/sui"
 branch = "framework/mainnet"
 network = "mainnet"
-paths = [
-    "crates/sui-framework/packages/deepbook",
-    "crates/sui-framework/packages/move-stdlib",
-    "crates/sui-framework/packages/sui-framework",
-    "crates/sui-framework/packages/sui-system",
+packages = [
+    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
 ]
 
 [[packages]]
@@ -17,9 +17,22 @@ source = "Repository"
 repository = "https://github.com/mystenlabs/sui"
 branch = "framework/testnet"
 network = "testnet"
-paths = [
-    "crates/sui-framework/packages/deepbook",
-    "crates/sui-framework/packages/move-stdlib",
-    "crates/sui-framework/packages/sui-framework",
-    "crates/sui-framework/packages/sui-system",
+packages = [
+    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
+]
+
+[[packages]]
+source = "Repository"
+[packages.values]
+repository = "https://github.com/mystenlabs/sui"
+branch = "framework/devnet"
+network = "devnet"
+packages = [
+    { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+    { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+    { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+    { path = "crates/sui-framework/packages/sui-system", watch = "0x3" },
 ]

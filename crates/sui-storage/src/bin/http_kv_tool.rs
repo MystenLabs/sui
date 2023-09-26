@@ -17,21 +17,21 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 // --digest <digest> - the digest of the key being fetched
 // --type <fx|tx|ev> - the type of key being fetched
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case")]
 struct Options {
     // default value of 'https://transactions.sui.io/'
-    #[clap(short, long, default_value = "https://transactions.sui.io/mainnet")]
+    #[arg(short, long, default_value = "https://transactions.sui.io/mainnet")]
     base_url: String,
 
-    #[clap(short, long)]
+    #[arg(short, long)]
     digest: Vec<String>,
 
-    #[clap(short, long)]
+    #[arg(short, long)]
     seq: Vec<String>,
 
     // must be either 'tx', 'fx', 'events', or 'ckpt_contents'
     // default value of 'tx'
-    #[clap(short, long, default_value = "tx")]
+    #[arg(short, long, default_value = "tx")]
     type_: String,
 }
 

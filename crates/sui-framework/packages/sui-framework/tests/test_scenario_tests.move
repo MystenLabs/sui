@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
+#[allow(unused_use)]
 module sui::test_scenarioTests {
     use sui::object;
     use sui::test_scenario::Self as ts;
@@ -10,7 +11,6 @@ module sui::test_scenarioTests {
 
     const EIdBytesMismatch: u64 = 0;
     const EValueMismatch: u64 = 1;
-    const EObjectIdNotFound: u64 = 2;
 
     struct Object has key, store {
         id: object::UID,

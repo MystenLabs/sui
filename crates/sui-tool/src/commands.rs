@@ -3,11 +3,12 @@
 
 use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
-    get_object, get_transaction_block, make_clients, restore_from_db_checkpoint,
-    state_sync_from_archive, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
-    GroupedObjectOutput, VerboseObjectOutput,
+    download_db_snapshot, get_object, get_transaction_block, make_clients,
+    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
+    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use std::env;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
@@ -19,7 +20,7 @@ use clap::*;
 use fastcrypto::encoding::Encoding;
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
-use sui_storage::object_store::ObjectStoreConfig;
+use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -33,7 +34,7 @@ pub enum Verbosity {
 }
 
 #[derive(Parser)]
-#[clap(
+#[command(
     name = "sui-tool",
     about = "Debugging utilities for sui",
     rename_all = "kebab-case",
@@ -42,27 +43,27 @@ pub enum Verbosity {
 )]
 pub enum ToolCommand {
     /// Fetch the same object from all validators
-    #[clap(name = "fetch-object")]
+    #[command(name = "fetch-object")]
     FetchObject {
-        #[clap(long, help = "The object ID to fetch")]
+        #[arg(long, help = "The object ID to fetch")]
         id: ObjectID,
 
-        #[clap(long, help = "Fetch object at a specific sequence")]
+        #[arg(long, help = "Fetch object at a specific sequence")]
         version: Option<u64>,
 
-        #[clap(
+        #[arg(
             long,
             help = "Validator to fetch from - if not specified, all validators are queried"
         )]
         validator: Option<AuthorityName>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
         /// Concise mode groups responses by results.
@@ -73,7 +74,7 @@ pub enum ToolCommand {
         ///      --genesis $HOME/.sui/sui_config/genesis.blob \
         ///      --verbosity concise --concise-no-header
         /// ```
-        #[clap(
+        #[arg(
             value_enum,
             long = "verbosity",
             default_value = "grouped",
@@ -81,7 +82,7 @@ pub enum ToolCommand {
         )]
         verbosity: Verbosity,
 
-        #[clap(
+        #[arg(
             long = "concise-no-header",
             help = "don't show header in concise output"
         )]
@@ -89,138 +90,164 @@ pub enum ToolCommand {
     },
 
     /// Fetch the effects association with transaction `digest`
-    #[clap(name = "fetch-transaction")]
+    #[command(name = "fetch-transaction")]
     FetchTransaction {
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
-        #[clap(long, help = "The transaction ID to fetch")]
+        #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
 
         /// If true, show the input transaction as well as the effects
-        #[clap(long = "show-tx")]
+        #[arg(long = "show-tx")]
         show_input_tx: bool,
     },
 
     /// Tool to read validator & node db.
-    #[clap(name = "db-tool")]
+    #[command(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
-        #[clap(long = "db-path")]
+        #[arg(long = "db-path")]
         db_path: String,
-        #[clap(subcommand)]
+        #[command(subcommand)]
         cmd: Option<DbToolCommand>,
     },
 
     /// Tool to sync the node from archive store
-    #[clap(name = "sync-from-archive")]
+    #[command(name = "sync-from-archive")]
     SyncFromArchive {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
-        #[clap(long = "db-path")]
+        #[arg(long = "db-path")]
         db_path: PathBuf,
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
     /// Tool to verify the archive store
-    #[clap(name = "verify-archive")]
+    #[command(name = "verify-archive")]
     VerifyArchive {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
     /// Tool to verify the archive store by comparing file checksums
-    #[clap(name = "verify-archive-from-checksums")]
+    #[command(name = "verify-archive-from-checksums")]
     VerifyArchiveByChecksum {
-        #[clap(flatten)]
+        #[command(flatten)]
         object_store_config: ObjectStoreConfig,
-        #[clap(default_value_t = 5)]
+        #[arg(default_value_t = 5)]
         download_concurrency: usize,
     },
 
-    #[clap(name = "dump-validators")]
+    #[command(name = "dump-validators")]
     DumpValidators {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
 
-        #[clap(
+        #[arg(
             long = "concise",
             help = "show concise output - name, protocol key and network address"
         )]
         concise: bool,
     },
 
-    #[clap(name = "dump-genesis")]
+    #[command(name = "dump-genesis")]
     DumpGenesis {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
     },
 
     /// Fetch authenticated checkpoint information at a specific sequence number.
     /// If sequence number is not specified, get the latest authenticated checkpoint.
-    #[clap(name = "fetch-checkpoint")]
+    #[command(name = "fetch-checkpoint")]
     FetchCheckpoint {
         // At least one of genesis or fullnode_rpc_url must be provided
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: Option<PathBuf>,
 
         // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
-        #[clap(long = "fullnode-rpc-url")]
+        #[arg(long = "fullnode-rpc-url")]
         fullnode_rpc_url: Option<String>,
 
-        #[clap(long, help = "Fetch checkpoint at a specific sequence number")]
+        #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
     },
 
-    #[clap(name = "anemo")]
+    #[command(name = "anemo")]
     Anemo {
-        #[clap(next_help_heading = "foo", flatten)]
+        #[command(next_help_heading = "foo", flatten)]
         args: anemo_cli::Args,
     },
 
-    #[clap(name = "restore-db")]
+    #[command(name = "restore-db")]
     RestoreFromDBCheckpoint {
-        #[clap(long = "config-path")]
+        #[arg(long = "config-path")]
         config_path: PathBuf,
-        #[clap(long = "db-checkpoint-path")]
+        #[arg(long = "db-checkpoint-path")]
         db_checkpoint_path: PathBuf,
+    },
+
+    #[clap(name = "download-db-snapshot")]
+    DownloadDBSnapshot {
+        #[clap(long = "epoch")]
+        epoch: u32,
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+        #[clap(long = "path", default_value = "/tmp")]
+        path: PathBuf,
+        // skip downloading checkpoints dir
+        #[clap(long = "skip-checkpoints")]
+        skip_checkpoints: bool,
+        // skip downloading indexes dir
+        #[clap(long = "skip-indexes")]
+        skip_indexes: bool,
+        #[clap(long = "num-parallel-downloads", default_value = "2")]
+        num_parallel_downloads: usize,
+        #[clap(long = "snapshot-bucket", default_value = "mysten-mainnet-snapshots")]
+        snapshot_bucket: String,
+        #[clap(long = "snapshot-bucket-type", default_value = "s3")]
+        snapshot_bucket_type: ObjectStoreType,
+        #[clap(long = "archive-bucket", default_value = "mysten-mainnet-archives")]
+        archive_bucket: String,
+        #[clap(long = "archive-bucket-type", default_value = "s3")]
+        archive_bucket_type: ObjectStoreType,
     },
 
     #[clap(name = "replay")]
     Replay {
-        #[clap(long = "rpc")]
+        #[arg(long = "rpc")]
         rpc_url: Option<String>,
-        #[clap(long = "safety-checks")]
+        #[arg(long = "safety-checks")]
         safety_checks: bool,
-        #[clap(long = "authority")]
+        #[arg(long = "authority")]
         use_authority: bool,
-        #[clap(long = "cfg-path", short)]
+        #[arg(long = "cfg-path", short)]
         cfg_path: Option<PathBuf>,
-        #[clap(subcommand)]
+        #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
 
     /// Ask all validators to sign a transaction through AuthorityAggregator.
-    #[clap(name = "sign-transaction")]
+    #[command(name = "sign-transaction")]
     SignTransaction {
-        #[clap(long = "genesis")]
+        #[arg(long = "genesis")]
         genesis: PathBuf,
 
-        #[clap(
+        #[arg(
             long,
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]
@@ -385,6 +412,122 @@ impl ToolCommand {
             } => {
                 let config = sui_config::NodeConfig::load(config_path)?;
                 restore_from_db_checkpoint(&config, &db_checkpoint_path).await?;
+            }
+            ToolCommand::DownloadDBSnapshot {
+                epoch,
+                genesis,
+                path,
+                skip_checkpoints,
+                skip_indexes,
+                num_parallel_downloads,
+                snapshot_bucket,
+                snapshot_bucket_type,
+                archive_bucket,
+                archive_bucket_type,
+            } => {
+                let snapshot_store_config = match snapshot_bucket_type {
+                    ObjectStoreType::S3 => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: Some(snapshot_bucket),
+                            aws_access_key_id: Some(env::var(
+                                "AWS_SNAPSHOT_ACCESS_KEY_ID",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_ACCESS_KEY_ID as env variable"))?),
+                            aws_secret_access_key: Some(env::var(
+                                "AWS_SNAPSHOT_SECRET_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_SECRET_ACCESS_KEY as env variable"))?),
+                            aws_region: Some(env::var(
+                                "AWS_SNAPSHOT_REGION",
+                            ).map_err(|_| anyhow!("Please provide AWS_SNAPSHOT_REGION as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::GCS => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: Some(snapshot_bucket),
+                            google_service_account: Some(env::var(
+                                "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
+                            ).map_err(|_| anyhow!("Please provide GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::Azure => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: Some(snapshot_bucket),
+                            azure_storage_account: Some(env::var(
+                                "AZURE_SNAPSHOT_STORAGE_ACCOUNT",
+                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCOUNT as env variable"))?),
+                            azure_storage_access_key: Some(env::var(
+                                "AZURE_SNAPSHOT_STORAGE_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AZURE_SNAPSHOT_STORAGE_ACCESS_KEY as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                };
+
+                let archive_store_config = match archive_bucket_type {
+                    ObjectStoreType::S3 => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::S3),
+                            bucket: Some(archive_bucket),
+                            aws_access_key_id: Some(env::var(
+                                "AWS_ARCHIVE_ACCESS_KEY_ID",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_ACCESS_KEY_ID as env variable"))?),
+                            aws_secret_access_key: Some(env::var(
+                                "AWS_ARCHIVE_SECRET_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_SECRET_ACCESS_KEY as env variable"))?),
+                            aws_region: Some(env::var(
+                                "AWS_ARCHIVE_REGION",
+                            ).map_err(|_| anyhow!("Please provide AWS_ARCHIVE_REGION as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::GCS => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::GCS),
+                            bucket: Some(archive_bucket),
+                            google_service_account: Some(env::var(
+                                "GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH",
+                            ).map_err(|_| anyhow!("Please provide GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::Azure => {
+                        ObjectStoreConfig {
+                            object_store: Some(ObjectStoreType::Azure),
+                            bucket: Some(archive_bucket),
+                            azure_storage_account: Some(env::var(
+                                "AZURE_ARCHIVE_STORAGE_ACCOUNT",
+                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCOUNT as env variable"))?),
+                            azure_storage_access_key: Some(env::var(
+                                "AZURE_ARCHIVE_STORAGE_ACCESS_KEY",
+                            ).map_err(|_| anyhow!("Please provide AZURE_ARCHIVE_STORAGE_ACCESS_KEY as env variable"))?),
+                            object_store_connection_limit: 200,
+                            ..Default::default()
+                        }
+                    },
+                    ObjectStoreType::File => panic!("Download from local filesystem is not supported")
+                };
+
+                download_db_snapshot(
+                    &path,
+                    epoch,
+                    &genesis,
+                    snapshot_store_config,
+                    archive_store_config,
+                    skip_checkpoints,
+                    skip_indexes,
+                    num_parallel_downloads,
+                )
+                .await?;
             }
             ToolCommand::Replay {
                 rpc_url,

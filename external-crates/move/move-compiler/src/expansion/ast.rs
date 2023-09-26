@@ -88,12 +88,12 @@ pub type Attributes = UniqueMap<AttributeName, Attribute>;
 #[derive(Debug, Clone)]
 pub struct Script {
     pub warning_filter: WarningFilters,
-    // package name metadata from compiler arguments, not used for any language rules
+    // package name metadata from compiler arguments.
+    // It is used primarily for retrieving the associated `PackageConfig`,
+    // but it is also used in determining public(package) visibility.
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
@@ -124,11 +124,6 @@ pub struct ModuleDefinition {
     pub attributes: Attributes,
     pub loc: Loc,
     pub is_source_module: bool,
-    /// `dependency_order` is the topological order/rank in the dependency graph.
-    /// `dependency_order` is initialized at `0` and set in the uses pass
-    pub dependency_order: usize,
-    pub immediate_neighbors: UniqueMap<ModuleIdent, Neighbor>,
-    pub used_addresses: BTreeSet<Address>,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
@@ -144,12 +139,6 @@ pub struct ModuleDefinition {
 pub struct Friend {
     pub attributes: Attributes,
     pub loc: Loc,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Neighbor {
-    Dependency,
-    Friend,
 }
 
 //**************************************************************************************************
@@ -187,10 +176,11 @@ pub enum StructFields {
 // Functions
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum Visibility {
     Public(Loc),
     Friend(Loc),
+    Package(Loc),
     Internal,
 }
 
@@ -666,6 +656,14 @@ impl AbilitySet {
         self.0.contains_(&a)
     }
 
+    pub fn ability_loc(&self, sp!(_, a_): &Ability) -> Option<Loc> {
+        self.0.get_loc_(a_).copied()
+    }
+
+    pub fn ability_loc_(&self, a: Ability_) -> Option<Loc> {
+        self.0.get_loc_(&a).copied()
+    }
+
     // intersection of two sets. Keeps the loc of the first set
     pub fn intersect(&self, other: &Self) -> Self {
         Self(self.0.intersect(&other.0))
@@ -719,13 +717,18 @@ impl AbilitySet {
 }
 
 impl Visibility {
-    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
     pub const FRIEND: &'static str = P::Visibility::FRIEND;
+    pub const FRIEND_IDENT: &'static str = P::Visibility::FRIEND_IDENT;
     pub const INTERNAL: &'static str = P::Visibility::INTERNAL;
+    pub const PACKAGE: &'static str = P::Visibility::PACKAGE;
+    pub const PACKAGE_IDENT: &'static str = P::Visibility::PACKAGE_IDENT;
+    pub const PUBLIC: &'static str = P::Visibility::PUBLIC;
 
     pub fn loc(&self) -> Option<Loc> {
         match self {
-            Visibility::Public(loc) | Visibility::Friend(loc) => Some(*loc),
+            Visibility::Friend(loc) | Visibility::Package(loc) | Visibility::Public(loc) => {
+                Some(*loc)
+            }
             Visibility::Internal => None,
         }
     }
@@ -795,15 +798,6 @@ impl fmt::Display for Address {
     }
 }
 
-impl fmt::Display for Neighbor {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Neighbor::Dependency => write!(f, "neighbor#dependency"),
-            Neighbor::Friend => write!(f, "neighbor#friend"),
-        }
-    }
-}
-
 impl fmt::Display for AttributeName_ {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -837,6 +831,7 @@ impl fmt::Display for Visibility {
             match &self {
                 Visibility::Public(_) => Visibility::PUBLIC,
                 Visibility::Friend(_) => Visibility::FRIEND,
+                Visibility::Package(_) => Visibility::PACKAGE,
                 Visibility::Internal => Visibility::INTERNAL,
             }
         )
@@ -945,8 +940,6 @@ impl AstDebug for Script {
             package_name,
             attributes,
             loc: _loc,
-            immediate_neighbors,
-            used_addresses,
             constants,
             function_name,
             function,
@@ -958,14 +951,6 @@ impl AstDebug for Script {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{} {};", neighbor, mident));
-            w.new_line();
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
         for cdef in constants.key_cloned_iter() {
             cdef.ast_debug(w);
             w.new_line();
@@ -985,9 +970,6 @@ impl AstDebug for ModuleDefinition {
             attributes,
             loc: _loc,
             is_source_module,
-            dependency_order,
-            immediate_neighbors,
-            used_addresses,
             friends,
             structs,
             functions,
@@ -1005,15 +987,6 @@ impl AstDebug for ModuleDefinition {
         } else {
             "library module"
         });
-        w.writeln(&format!("dependency order #{}", dependency_order));
-        for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
-            w.write(&format!("{} {};", neighbor, mident));
-            w.new_line();
-        }
-        for addr in used_addresses {
-            w.write(&format!("uses address {};", addr));
-            w.new_line()
-        }
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();

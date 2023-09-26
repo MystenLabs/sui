@@ -3,6 +3,7 @@
 
 import type { Infer } from 'superstruct';
 import { boolean, define, literal, nullable, object, record, string, union } from 'superstruct';
+
 import type { CallArg } from '../bcs/index.js';
 
 /** @deprecated Use `string` instead. */

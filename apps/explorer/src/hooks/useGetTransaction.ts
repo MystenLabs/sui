@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { useQuery } from '@tanstack/react-query';
 
 export function useGetTransaction(transactionId: string) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useQuery({
 		queryKey: ['transactions-by-id', transactionId],
 		queryFn: async () =>
-			rpc.getTransactionBlock({
+			client.getTransactionBlock({
 				digest: transactionId,
 				options: {
 					showInput: true,

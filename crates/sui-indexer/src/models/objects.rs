@@ -20,10 +20,13 @@ use std::collections::hash_map::Entry;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::{SuiObjectData, SuiObjectRef, SuiRawData};
-use sui_types::base_types::{ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Data, MoveObject, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::{
+    base_types::{ObjectID, ObjectRef, ObjectType, SequenceNumber, SuiAddress},
+    storage::WriteKind,
+};
 
 use crate::errors::IndexerError;
 use crate::models::owners::OwnerType;
@@ -124,7 +127,58 @@ pub enum ObjectStatus {
     UnwrappedThenDeleted,
 }
 
+impl From<WriteKind> for ObjectStatus {
+    fn from(value: WriteKind) -> Self {
+        match value {
+            WriteKind::Mutate => Self::Mutated,
+            WriteKind::Create => Self::Created,
+            WriteKind::Unwrap => Self::Unwrapped,
+        }
+    }
+}
+
 impl Object {
+    pub fn new(
+        epoch: u64,
+        checkpoint: u64,
+        kind: WriteKind,
+        object: &sui_types::object::Object,
+    ) -> Self {
+        let (owner_type, owner_address, initial_shared_version) =
+            owner_to_owner_info(&object.owner);
+
+        let has_public_transfer = object
+            .data
+            .try_as_move()
+            .map(|o| o.has_public_transfer())
+            .unwrap_or(false);
+        let object_type = object
+            .data
+            .try_as_move()
+            .map(|o| o.type_().to_string())
+            .unwrap_or_else(|| "".to_owned());
+
+        Self {
+            epoch: epoch as i64,
+            checkpoint: checkpoint as i64,
+            object_id: object.id().to_string(),
+            version: object.version().value() as i64,
+            object_digest: object.digest().to_string(),
+            owner_type,
+            owner_address,
+            initial_shared_version,
+            previous_transaction: object.previous_transaction.to_string(),
+            object_type,
+            object_status: kind.into(),
+            has_public_transfer,
+            storage_rebate: object.storage_rebate as i64,
+            bcs: vec![NamedBcsBytes(
+                OBJECT.to_string(),
+                bcs::to_bytes(object).unwrap(),
+            )],
+        }
+    }
+
     pub fn from(
         epoch: u64,
         checkpoint: Option<u64>,

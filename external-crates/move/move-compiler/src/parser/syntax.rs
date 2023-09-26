@@ -498,17 +498,17 @@ fn parse_module_member_modifiers(context: &mut Context) -> Result<Modifiers, Box
 }
 
 // Parse a function visibility modifier:
-//      Visibility = "public" ( "(" "script" | "friend" ")" )?
+//      Visibility = "public" ( "(" "script" | "friend" | "package" ")" )?
 fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     consume_token(context.tokens, Tok::Public)?;
     let sub_public_vis = if match_token(context.tokens, Tok::LParen)? {
-        let sub_token = context.tokens.peek();
+        let (sub_token, tok_content) = (context.tokens.peek(), context.tokens.content());
         context.tokens.advance()?;
         if sub_token != Tok::RParen {
             consume_token(context.tokens, Tok::RParen)?;
         }
-        Some(sub_token)
+        Some((sub_token, tok_content))
     } else {
         None
     };
@@ -517,13 +517,15 @@ fn parse_visibility(context: &mut Context) -> Result<Visibility, Box<Diagnostic>
     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
     Ok(match sub_public_vis {
         None => Visibility::Public(loc),
-        Some(Tok::Script) => Visibility::Script(loc),
-        Some(Tok::Friend) => Visibility::Friend(loc),
+        Some((Tok::Script, _)) => Visibility::Script(loc),
+        Some((Tok::Friend, _)) => Visibility::Friend(loc),
+        Some((Tok::Identifier, Visibility::PACKAGE_IDENT)) => Visibility::Package(loc),
         _ => {
             let msg = format!(
-                "Invalid visibility modifier. Consider removing it or using '{}' or '{}'",
+                "Invalid visibility modifier. Consider removing it or using '{}', '{}' or '{}'",
                 Visibility::PUBLIC,
-                Visibility::FRIEND
+                Visibility::FRIEND,
+                Visibility::PACKAGE,
             );
             return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
         }

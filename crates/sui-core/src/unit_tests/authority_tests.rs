@@ -4236,6 +4236,23 @@ pub async fn execute_programmable_transaction_with_shared(
     .await
 }
 
+pub async fn build_programmable_transaction(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+    gas_unit: u64,
+) -> SuiResult<Transaction> {
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let data =
+        TransactionData::new_programmable(*sender, vec![gas_object_ref], pt, rgp * gas_unit, rgp);
+
+    Ok(to_sender_signed_transaction(data, sender_key))
+}
+
 async fn execute_programmable_transaction_(
     authority: &AuthorityState,
     fullnode: Option<&AuthorityState>,
@@ -4439,7 +4456,7 @@ pub async fn call_dev_inspect(
 }
 
 /// This function creates a transaction that calls a 0x02::object_basics::set_value function.
-/// Usually we need to publish this package first, but in this test files we often don't do that.
+/// Usually we need to publish this package first, but in these test files we often don't do that.
 /// Then the tx would fail with `VMVerificationOrDeserializationError` (Linker error, module not found),
 /// but gas is still charged. Depending on what we want to test, this may be fine.
 #[cfg(test)]

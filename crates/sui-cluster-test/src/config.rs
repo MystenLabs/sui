@@ -4,7 +4,7 @@ use std::path::PathBuf;
 // SPDX-License-Identifier: Apache-2.0
 use clap::*;
 
-#[derive(Parser, Clone, ArgEnum)]
+#[derive(Parser, Clone, ValueEnum)]
 pub enum Env {
     Devnet,
     Staging,
@@ -18,7 +18,7 @@ pub enum Env {
 #[derive(Parser)]
 #[clap(name = "", rename_all = "kebab-case")]
 pub struct ClusterTestOpt {
-    #[clap(arg_enum)]
+    #[clap(value_enum)]
     pub env: Env,
     #[clap(long)]
     pub faucet_address: Option<String>,

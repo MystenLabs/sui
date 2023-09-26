@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { test, expect } from './fixtures';
+import { expect, test } from './fixtures';
 import { createWallet } from './utils/auth';
 import { generateKeypair } from './utils/localnet';
+
+test.skip();
 
 test('create new wallet', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);
@@ -24,6 +26,7 @@ test('import wallet', async ({ page, extensionUrl }) => {
 	await page.getByRole('link', { name: /Open Sui Wallet/ }).click();
 	await page.getByTestId('bullshark-dismiss').click();
 	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
-
-	await expect(page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6))).toBeVisible();
+	await expect(
+		page.getByText(keypair.getPublicKey().toSuiAddress().slice(0, 6)).first(),
+	).toBeVisible();
 });

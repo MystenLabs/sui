@@ -4,19 +4,22 @@
 import { requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { useIsMutating, useMutation, type UseMutationOptions } from '@tanstack/react-query';
 
-import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
 
 type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'> & {
 	host: string | null;
+	address?: string;
 };
 
 export function useFaucetMutation(options?: UseFaucetMutationOptions) {
-	const address = useActiveAddress();
-	const mutationKey = ['faucet-request-tokens', address];
+	const activeAccount = useActiveAccount();
+	const activeAddress = activeAccount?.address || null;
+	const addressToTopUp = options?.address || activeAddress;
+	const mutationKey = ['faucet-request-tokens', activeAddress];
 	const mutation = useMutation({
 		mutationKey,
 		mutationFn: async () => {
-			if (!address) {
+			if (!addressToTopUp) {
 				throw new Error('Failed, wallet address not found.');
 			}
 			if (!options?.host) {
@@ -24,7 +27,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			}
 
 			const { error, transferredGasObjects } = await requestSuiFromFaucetV0({
-				recipient: address,
+				recipient: addressToTopUp,
 				host: options.host,
 			});
 
@@ -37,8 +40,8 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 	});
 	return {
 		...mutation,
-		/** If the currently-configured endpoint supports faucet: */
-		enabled: !!options?.host,
+		/** If the currently-configured endpoint supports faucet and the active account is unlocked */
+		enabled: !!options?.host && !!activeAccount && !activeAccount.isLocked,
 		/**
 		 * is any faucet request in progress across different instances of the mutation
 		 */

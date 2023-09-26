@@ -1,29 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli } from '_src/shared/analytics/ampli';
 import { Popover, Transition } from '@headlessui/react';
 import { useResolveSuiNSName } from '@mysten/core';
 import { ChevronDown12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 
-import { AccountList } from './AccountList';
+import { useActiveAddress } from '../hooks';
 import { useAccounts } from '../hooks/useAccounts';
-import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useBackgroundClient } from '../hooks/useBackgroundClient';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { ButtonConnectedTo } from '../shared/ButtonConnectedTo';
 import { Text } from '../shared/text';
-import { ampli } from '_src/shared/analytics/ampli';
+import { AccountList } from './AccountList';
 
 export function AccountSelector() {
-	const allAccounts = useAccounts();
-	const activeAddress = useActiveAddress();
-	const copyToAddress = useCopyToClipboard(activeAddress || '', {
+	const { data: allAccounts } = useAccounts();
+	const activeAddress = useActiveAddress() || '';
+	const copyToAddress = useCopyToClipboard(activeAddress, {
 		copySuccessMessage: 'Address copied',
 	});
 	const backgroundClient = useBackgroundClient();
 	const { data: domainName } = useResolveSuiNSName(activeAddress);
-	if (!allAccounts.length) {
+	if (!allAccounts?.length) {
 		return null;
 	}
 
@@ -65,12 +65,12 @@ export function AccountSelector() {
 							<div className="absolute w-3 h-3 bg-white -top-1 left-1/2 -translate-x-1/2 rotate-45" />
 							<div className="relative px-1.25 max-h-80 overflow-y-auto max-w-full z-10">
 								<AccountList
-									onAccountSelected={async ({ address, type }) => {
-										if (address !== activeAddress) {
+									onAccountSelected={async ({ id, type, selected }) => {
+										if (!selected) {
 											ampli.switchedAccount({
 												toAccountType: type,
 											});
-											await backgroundClient.selectAccount(address);
+											await backgroundClient.selectAccount(id);
 										}
 										close();
 									}}

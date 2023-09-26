@@ -1,0 +1,18 @@
+# Dependency graph to check if dependencies of a package being a direct dependency of root is
+# processed correctly.
+#
+#                 +----+
+#           +---->| B  |----+
+#           |     +----+    |
+#           |               |
+# +----+    |               +-->+----+     +----+
+# |Root|----+------------------>| A  |---->| C  |
+# +----+                        +----+     +----+
+#
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

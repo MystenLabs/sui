@@ -423,17 +423,54 @@ The command parameters include:
   function call
 * `--gas-budget` - a decimal value expressing how much gas you are
   willing to pay for the `transfer` call to be completed to avoid
-  accidental drain of all gas in the gas pay)
+  accidental drainage of all gas in the gas payment
+* `--type-args` - a list of types to let the Sui Move compiler know how to fill
+  in generic type parameters in the called function.
+  It is not needed above, but it would be if the function being called were generic.
+  See more about this flag below.
 
 Note the third argument to the `transfer` function representing
 `TxContext` does not have to be specified explicitly - it
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
-**Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`.
+**Important:**
 
-To include multiple object IDs, enclose the IDs in double quotes. For example,
-`'["0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427","0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"]'`
+1. If you use a shell that interprets square brackets ([ ]) as special
+   characters (such as the `zsh` shell), you must enclose the brackets in single
+   quotes. For example, instead of `[7,42]` you must use `'[7,42]'`.
+
+  To include multiple object IDs, enclose the IDs in double quotes. For example,
+  `'["0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427","0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760"]'`
+
+2. The `--type-args` flag is used if the entry function being called is
+  generic, i.e. its signature is similar to
+  ```
+  public entry fun generic<T_1: ..., T_2: ..., ..., T_N: ...>(...) {...}
+  ```
+  In this case, the flag `--type-args` would need to be used like this:
+  ```bash
+  --type-args <type_for_t_1> <type_for_t_2> ... <type_for_t_n>
+  ```
+  where each of the types above can be among the following non-exhaustive list:
+  - a primitive type, such as `u8`, `bool`, `address`
+  - a composition of primitive types, like `vector<u8>`
+  - a non-generic type or struct defined in a published, public Sui Move package, specified thusly:
+  `[package-id]::[module-identifier]::[Struct]`.
+  An example of such a type would be `0x1234::xy::Zzy`
+  - generic types with arbitrarily nested parameters, in the form
+  `[package-id]::[module]::[Struct]<T_1, ..., T_n>`, where `T_1`, ..., `T_n` are fully
+  qualified, fully instantiated types, and `[package-id]::[module]::[Struct]` is a generic type
+  with `n` parameters.
+  An example of such a type would be `vector<0x123::foo::Bar<u32, bool>>`
+
+  When, upon calling `sui client call`, an error similar to
+  ```
+  Error calling module: Failure {
+    error: "VMVerificationOrDeserializationError in command 0",
+  }
+  ```
+  occurs, it may help to check if `--type-args` has all the types the function needs.
 
 ## Publish packages
 

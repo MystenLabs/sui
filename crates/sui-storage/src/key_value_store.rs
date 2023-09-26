@@ -385,6 +385,15 @@ impl TransactionKeyValueStore {
                 error: UserInputError::VerifiedCheckpointDigestNotFound(format!("{:?}", digest)),
             })
     }
+
+    pub async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        self.inner
+            .deprecated_get_transaction_checkpoint(digest)
+            .await
+    }
 }
 
 /// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
@@ -407,6 +416,11 @@ pub trait TransactionKeyValueStoreTrait {
         checkpoint_summaries_by_digest: &[CheckpointDigest],
         checkpoint_contents_by_digest: &[CheckpointContentsDigest],
     ) -> SuiResult<KVStoreCheckpointData>;
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>>;
 }
 
 /// A TransactionKeyValueStoreTrait that falls back to a secondary store for any key for which the
@@ -523,6 +537,23 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         merge_res(&mut res.3, secondary_res.3, &indices_contents_by_digest);
 
         Ok((res.0, res.1, res.2, res.3))
+    }
+
+    async fn deprecated_get_transaction_checkpoint(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<CheckpointSequenceNumber>> {
+        let mut res = self
+            .primary
+            .deprecated_get_transaction_checkpoint(digest)
+            .await?;
+        if res.is_none() {
+            res = self
+                .fallback
+                .deprecated_get_transaction_checkpoint(digest)
+                .await?;
+        }
+        Ok(res)
     }
 }
 

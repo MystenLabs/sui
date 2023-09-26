@@ -58,6 +58,9 @@ pub struct NodeConfig {
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
+    #[serde(default)]
+    pub enable_experimental_rest_api: bool,
+
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
     #[serde(default = "default_admin_interface_port")]
@@ -149,12 +152,19 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_kv_store_write_config: Option<TransactionKeyValueStoreWriteConfig>,
+
+    #[serde(default = "default_jwk_fetch_interval_seconds")]
+    pub jwk_fetch_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionKeyValueStoreReadConfig {
     pub base_url: String,
+}
+
+fn default_jwk_fetch_interval_seconds() -> u64 {
+    3600
 }
 
 fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {
@@ -198,11 +208,6 @@ pub fn default_admin_interface_port() -> u16 {
 pub fn default_json_rpc_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9000)
-}
-
-pub fn default_websocket_address() -> Option<SocketAddr> {
-    use std::net::{IpAddr, Ipv4Addr};
-    Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
 pub fn default_concurrency_limit() -> Option<usize> {

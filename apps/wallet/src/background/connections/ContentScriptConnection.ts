@@ -1,32 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SignedTransaction } from '@mysten/sui.js';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import Browser from 'webextension-polyfill';
-
-import { Connection } from './Connection';
-import NetworkEnv from '../NetworkEnv';
-import { Window } from '../Window';
-import { getStoredAccountsPublicInfo } from '../keyring/accounts';
-import { requestUserApproval } from '../qredo';
 import { createMessage } from '_messages';
-import { type ErrorPayload, isBasePayload } from '_payloads';
+import type { Message } from '_messages';
+import type { PortChannelName } from '_messaging/PortChannelName';
+import { isBasePayload, type ErrorPayload } from '_payloads';
 import { isGetAccount } from '_payloads/account/GetAccount';
+import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { SetNetworkPayload } from '_payloads/network';
 import {
 	isAcquirePermissionsRequest,
 	isHasPermissionRequest,
-	type PermissionType,
-	type HasPermissionsResponse,
 	type AcquirePermissionsResponse,
+	type HasPermissionsResponse,
 	type Permission,
+	type PermissionType,
 } from '_payloads/permissions';
 import {
 	isExecuteTransactionRequest,
 	isSignTransactionRequest,
 	isStakeRequest,
-	type SignTransactionResponse,
 	type ExecuteTransactionResponse,
+	type SignTransactionResponse,
 } from '_payloads/transactions';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
@@ -36,12 +31,16 @@ import {
 	isSignMessageRequest,
 	type SignMessageRequest,
 } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
-
-import type { Message } from '_messages';
-import type { PortChannelName } from '_messaging/PortChannelName';
-import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
-import type { SetNetworkPayload } from '_payloads/network';
+import { type SignedTransaction } from '_src/ui/app/WalletSigner';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import Browser from 'webextension-polyfill';
 import type { Runtime } from 'webextension-polyfill';
+
+import { getAccountsStatusData } from '../accounts';
+import NetworkEnv from '../NetworkEnv';
+import { requestUserApproval } from '../qredo';
+import { Window } from '../Window';
+import { Connection } from './Connection';
 
 export class ContentScriptConnection extends Connection {
 	public static readonly CHANNEL: PortChannelName = 'sui_content<->background';
@@ -226,15 +225,11 @@ export class ContentScriptConnection extends Connection {
 	}
 
 	private async sendAccounts(accounts: string[], responseForID?: string) {
-		const allAccountsPublicInfo = await getStoredAccountsPublicInfo();
 		this.send(
 			createMessage<GetAccountResponse>(
 				{
 					type: 'get-account-response',
-					accounts: accounts.map((anAddress) => ({
-						address: anAddress,
-						publicKey: allAccountsPublicInfo[anAddress]?.publicKey || null,
-					})),
+					accounts: await getAccountsStatusData(accounts),
 				},
 				responseForID,
 			),

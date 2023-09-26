@@ -20,7 +20,7 @@ use move_compiler::{
         codes::{custom, DiagnosticInfo, Severity},
         Diagnostic, Diagnostics,
     },
-    hlir::ast::{Command, Exp, LValue, Label, ModuleCall, Type, Type_, Var},
+    hlir::ast::{Label, ModuleCall, Type, Type_, Var},
     shared::CompilationEnv,
 };
 use move_symbol_pool::Symbol;
@@ -125,15 +125,6 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
         diags
     }
 
-    fn exp_custom(
-        &self,
-        _context: &mut ExecutionContext,
-        _state: &mut State,
-        _e: &Exp,
-    ) -> Option<Vec<Value>> {
-        None
-    }
-
     fn call_custom(
         &self,
         context: &mut ExecutionContext,
@@ -174,20 +165,6 @@ impl SimpleAbsInt for SelfTransferVerifierAI {
             Type_::Single(_) => vec![Value::Other],
             Type_::Multiple(types) => vec![Value::Other; types.len()],
         })
-    }
-
-    fn command_custom(&self, _: &mut ExecutionContext, _: &mut State, _: &Command) -> bool {
-        false
-    }
-
-    fn lvalue_custom(
-        &self,
-        _context: &mut ExecutionContext,
-        _state: &mut State,
-        _l: &LValue,
-        _value: &Value,
-    ) -> bool {
-        false
     }
 }
 

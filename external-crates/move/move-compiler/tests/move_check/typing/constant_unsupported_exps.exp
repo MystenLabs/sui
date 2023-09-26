@@ -101,7 +101,7 @@ error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:27:9
    │
  5 │     fun f_private() {}
-   │         --------- This function is internal to its module. Only 'public' and 'public(friend)' functions can be called outside of their module
+   │         --------- This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
    ·
 27 │         0x42::X::f_private();
    │         ^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::X::f_private'

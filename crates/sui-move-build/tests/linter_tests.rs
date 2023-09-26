@@ -10,7 +10,7 @@ use move_command_line_common::{
 use move_compiler::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::move_check_for_errors,
-    diagnostics::codes::{self, CategoryID, DiagnosticsID, WarningFilter},
+    diagnostics::codes::{self, WarningFilter},
     editions::Flavor,
     expansion::ast as E,
     shared::{NumericalAddress, PackageConfig},
@@ -19,8 +19,10 @@ use move_compiler::{
 };
 
 use sui_move_build::linters::{
-    coin_field::CoinFieldVisitor, custom_state_change::CustomStateChangeVerifier, known_filters,
-    self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier, LINT_WARNING_PREFIX,
+    coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
+    custom_state_change::CustomStateChangeVerifier, freeze_wrapped::FreezeWrappedVisitor,
+    known_filters, self_transfer::SelfTransferVerifier, share_owned::ShareOwnedVerifier,
+    LINT_WARNING_PREFIX,
 };
 
 const SUI_FRAMEWORK_PATH: &str = "../sui-framework/packages/sui-framework";
@@ -42,16 +44,15 @@ fn linter_tests(path: &Path) -> datatest_stable::Result<()> {
 pub fn known_filters_for_test() -> (E::AttributeName_, Vec<WarningFilter>) {
     let (filter_attr_name, mut filters) = known_filters();
 
-    let unused_function_code_filter = WarningFilter::Code(
-        DiagnosticsID::new(
-            codes::Category::UnusedItem as u8,
-            codes::UnusedItem::Function as u8,
-            Some(LINT_WARNING_PREFIX),
-        ),
+    let unused_function_code_filter = WarningFilter::code(
+        Some(LINT_WARNING_PREFIX),
+        codes::Category::UnusedItem as u8,
+        codes::UnusedItem::Function as u8,
         Some("code_suppression_should_not_work"),
     );
-    let unused_function_category_filter = WarningFilter::Category(
-        CategoryID::new(codes::Category::UnusedItem as u8, Some(LINT_WARNING_PREFIX)),
+    let unused_function_category_filter = WarningFilter::category(
+        Some(LINT_WARNING_PREFIX),
+        codes::Category::UnusedItem as u8,
         Some("category_suppression_should_not_work"),
     );
     filters.push(unused_function_code_filter);
@@ -68,6 +69,8 @@ fn run_tests(path: &Path) -> anyhow::Result<()> {
         SelfTransferVerifier.visitor(),
         CustomStateChangeVerifier.visitor(),
         CoinFieldVisitor.visitor(),
+        FreezeWrappedVisitor.visitor(),
+        CollectionEqualityVisitor.visitor(),
     ];
     let (filter_attr_name, filters) = known_filters_for_test();
     let (files, comments_and_compiler_res) = Compiler::from_files(

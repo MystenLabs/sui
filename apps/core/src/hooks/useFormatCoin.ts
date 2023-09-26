@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Coin } from '@mysten/sui.js';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { CoinMetadata } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-import { useRpcClient } from '../api/RpcClientContext';
+
 import { formatAmount } from '../utils/formatAmount';
 
 type FormattedCoin = [
@@ -45,7 +45,7 @@ const SYMBOL_TRUNCATE_LENGTH = 5;
 const NAME_TRUNCATE_LENGTH = 10;
 
 export function useCoinMetadata(coinType?: string | null) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useQuery({
 		queryKey: ['coin-metadata', coinType],
 		queryFn: async () => {
@@ -67,7 +67,7 @@ export function useCoinMetadata(coinType?: string | null) {
 				return metadata;
 			}
 
-			return rpc.getCoinMetadata({ coinType });
+			return client.getCoinMetadata({ coinType });
 		},
 		select(data) {
 			if (!data) return null;
@@ -98,7 +98,7 @@ export function useFormatCoin(
 	coinType?: string | null,
 	format: CoinFormat = CoinFormat.ROUNDED,
 ): FormattedCoin {
-	const fallbackSymbol = useMemo(() => (coinType ? Coin.getCoinSymbol(coinType) : ''), [coinType]);
+	const fallbackSymbol = useMemo(() => (coinType ? getCoinSymbol(coinType) ?? '' : ''), [coinType]);
 
 	const queryResult = useCoinMetadata(coinType);
 	const { isFetched, data } = queryResult;
@@ -112,4 +112,9 @@ export function useFormatCoin(
 	}, [data?.decimals, isFetched, balance, format]);
 
 	return [formatted, isFetched ? data?.symbol || fallbackSymbol : '', queryResult];
+}
+
+/** @deprecated use coin metadata instead */
+export function getCoinSymbol(coinTypeArg: string) {
+	return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
 }

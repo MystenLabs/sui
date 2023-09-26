@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '../api/RpcClientContext';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { type SuiObjectDataFilter } from '@mysten/sui.js/client';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -12,11 +12,11 @@ export function useGetOwnedObjects(
 	filter?: SuiObjectDataFilter,
 	maxObjectRequests = MAX_OBJECTS_PER_REQ,
 ) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	return useInfiniteQuery(
 		['get-owned-objects', address, filter, maxObjectRequests],
 		({ pageParam }) =>
-			rpc.getOwnedObjects({
+			client.getOwnedObjects({
 				owner: address!,
 				filter,
 				options: {

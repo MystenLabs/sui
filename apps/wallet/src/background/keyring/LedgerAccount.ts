@@ -3,8 +3,11 @@
 
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
-import { type Account, AccountType } from './Account';
+import { AccountType, type Account } from './Account';
 
+/**
+ * @deprecated
+ */
 export type SerializedLedgerAccount = {
 	type: AccountType.LEDGER;
 	address: string;
@@ -12,6 +15,9 @@ export type SerializedLedgerAccount = {
 	publicKey: string | null;
 };
 
+/**
+ * @deprecated
+ */
 export class LedgerAccount implements Account {
 	readonly type: AccountType;
 	readonly address: string;

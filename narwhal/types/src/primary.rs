@@ -309,7 +309,11 @@ pub struct BatchDigest(pub [u8; crypto::DIGEST_LENGTH]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
     }
 }
 
@@ -318,7 +322,9 @@ impl fmt::Display for BatchDigest {
         write!(
             f,
             "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
         )
     }
 }
@@ -594,7 +600,11 @@ impl From<HeaderDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
 
 impl fmt::Debug for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
     }
 }
 
@@ -603,7 +613,9 @@ impl fmt::Display for HeaderDigest {
         write!(
             f,
             "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
         )
     }
 }
@@ -801,7 +813,11 @@ impl From<VoteDigest> for Digest<{ crypto::INTENT_MESSAGE_LENGTH }> {
 
 impl fmt::Debug for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
     }
 }
 
@@ -810,7 +826,9 @@ impl fmt::Display for VoteDigest {
         write!(
             f,
             "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
         )
     }
 }
@@ -1202,7 +1220,11 @@ impl From<CertificateDigest> for Digest<{ crypto::DIGEST_LENGTH }> {
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(self.0))
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
     }
 }
 
@@ -1211,7 +1233,9 @@ impl fmt::Display for CertificateDigest {
         write!(
             f,
             "{}",
-            base64::encode(self.0).get(0..16).ok_or(fmt::Error)?
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..16)
+                .ok_or(fmt::Error)?
         )
     }
 }

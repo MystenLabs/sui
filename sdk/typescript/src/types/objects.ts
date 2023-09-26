@@ -7,18 +7,19 @@ import {
 	array,
 	assign,
 	boolean,
+	is,
 	literal,
+	nullable,
 	number,
 	object,
 	optional,
 	record,
 	string,
-	union,
-	is,
-	nullable,
 	tuple,
+	union,
 	unknown,
 } from 'superstruct';
+
 import { ObjectOwner } from './common.js';
 import type { OwnedObjectRef } from './transactions.js';
 

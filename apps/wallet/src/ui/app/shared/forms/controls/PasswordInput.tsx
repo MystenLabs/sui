@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { EyeOpen16, EyeClose16 } from '@mysten/icons';
+import { EyeClose16, EyeOpen16 } from '@mysten/icons';
 import { forwardRef, useState, type ComponentProps } from 'react';
-import { Input } from './Input';
+
 import { ButtonOrLink } from '../../utils/ButtonOrLink';
+import { Input } from './Input';
 
 type PasswordInputProps = {
 	name: string;
@@ -24,6 +25,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
 					ref={forwardedRef}
 				/>
 				<ButtonOrLink
+					tabIndex={-1}
 					className="flex appearance-none bg-transparent border-none cursor-pointer absolute right-3 text-gray-60 peer-focus:text-steel"
 					onClick={() => setPasswordShown((prevState) => !prevState)}
 				>

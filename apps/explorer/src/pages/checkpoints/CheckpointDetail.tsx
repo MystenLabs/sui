@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { Text, LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
@@ -19,10 +19,10 @@ export default function CheckpointDetail() {
 	const { id } = useParams<{ id: string }>();
 	const digestOrSequenceNumber = /^\d+$/.test(id!) ? parseInt(id!, 10) : id;
 
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const { data, isError, isLoading } = useQuery({
 		queryKey: ['checkpoints', digestOrSequenceNumber],
-		queryFn: () => rpc.getCheckpoint({ id: String(digestOrSequenceNumber!) }),
+		queryFn: () => client.getCheckpoint({ id: String(digestOrSequenceNumber!) }),
 	});
 	return (
 		<PageLayout

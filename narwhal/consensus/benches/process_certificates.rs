@@ -8,7 +8,6 @@ use criterion::{
 use fastcrypto::hash::Hash;
 use narwhal_consensus as consensus;
 use narwhal_consensus::consensus::{LeaderSchedule, LeaderSwapTable};
-use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::NodeStorage;
@@ -81,7 +80,7 @@ pub fn process_certificates(c: &mut Criterion) {
 
 criterion_group! {
     name = consensus_group;
-    config = Criterion::default().with_profiler(PProfProfiler::new(100, Output::Flamegraph(None)));
+    config = Criterion::default();
     targets = process_certificates
 }
 criterion_main!(consensus_group);

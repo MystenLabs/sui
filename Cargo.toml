@@ -5,6 +5,9 @@ exclude = [
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
     "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move-execution/vm-rework/move-bytecode-verifier",
+    "external-crates/move-execution/vm-rework/move-stdlib",
+    "external-crates/move-execution/vm-rework/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -62,6 +65,7 @@ exclude = [
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
     "external-crates/move/tools/read-write-set/types",
+    "sdk/move-binary-format-wasm",
 ]
 
 members = [
@@ -74,9 +78,12 @@ members = [
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
+    "crates/simulacrum",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-analytics-indexer",
     "crates/sui-archival",
+    "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
@@ -89,6 +96,7 @@ members = [
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
     "crates/sui-genesis-builder",
+    "crates/sui-graphql-rpc",
     "crates/sui-indexer",
     "crates/sui-json",
     "crates/sui-json-rpc",
@@ -110,6 +118,7 @@ members = [
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
     "crates/sui-replay",
+    "crates/sui-rest-api",
     "crates/sui-rosetta",
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
@@ -127,6 +136,7 @@ members = [
     "crates/sui-tls",
     "crates/sui-tool",
     "crates/sui-transaction-builder",
+    "crates/sui-transaction-checks",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
@@ -157,11 +167,14 @@ members = [
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/vm-rework/sui-adapter",
+    "sui-execution/vm-rework/sui-move-natives",
+    "sui-execution/vm-rework/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.8.0"
+version = "1.11.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -202,15 +215,38 @@ opt-level = 1
 anyhow = "1.0.71"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
+async-graphql = "5.0.10"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
-aws-config = "0.55.3"
-aws-sdk-dynamodb = "0.28.0"
-aws-sdk-s3 = "0.28.0"
-axum = { version = "0.6.6", default-features = false, features = ["headers", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query"] }
+aws-config = "0.56"
+aws-sdk-ec2 = "0.29.0"
+aws-sdk-dynamodb = "0.29.0"
+aws-sdk-s3 = "0.29.0"
+aws-smithy-http = "0.56"
+aws-smithy-runtime-api = "0.56"
+axum = { version = "0.6.6", default-features = false, features = [
+  "headers",
+  "tokio",
+  "http1",
+  "http2",
+  "json",
+  "matched-path",
+  "original-uri",
+  "form",
+  "query",
+  "ws",
+] }
 axum-extra = "0.4.2"
-axum-server = { version = "0.4.4", default-features = false, features = ["tls-rustls"] }
-backoff = { version = "0.4.0", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
+axum-server = { version = "0.5.1", default-features = false, features = [
+  "tls-rustls",
+] }
+backoff = { version = "0.4.0", features = [
+  "futures",
+  "futures-core",
+  "pin-project-lite",
+  "tokio",
+  "tokio_1",
+] }
 base64 = "0.21.2"
 base64-url = "2"
 bcs = "0.1.4"
@@ -224,23 +260,34 @@ cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "3.2.17", features = ["derive"] }
-# clap = { version = "4.3.2", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "wrap_help"] }
 collectable = "0.0.2"
 colored = "2.0.0"
+color-eyre = "0.6.2"
 comfy-table = "6.1.3"
 console-subscriber = "0.1.6"
 const-str = "0.5.3"
-criterion = { version = "0.4.0", features = ["async", "async_tokio", "html_reports"] }
+criterion = { version = "0.5.0", features = [
+  "async",
+  "async_tokio",
+  "html_reports",
+] }
 crossterm = "0.25.0"
 csv = "1.2.1"
 dashmap = "5.4.0"
-datatest-stable = "0.1.2"
+# datatest-stable = "0.1.2"
+datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derivative = "2.2.0"
 derive-syn-parse = "0.1.5"
 derive_builder = "0.12.0"
 derive_more = "0.99.17"
-diesel = { version = "2.1.0", features = ["chrono", "postgres", "r2d2", "serde_json", "64-column-tables"] }
+diesel = { version = "2.1.0", features = [
+  "chrono",
+  "postgres",
+  "r2d2",
+  "serde_json",
+  "64-column-tables",
+] }
 diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
 diesel_migrations = { version = "2.0.0" }
 dirs = "4.0.0"
@@ -256,7 +303,8 @@ fs_extra = "1.3.0"
 futures = "0.3.25"
 futures-core = "0.3.21"
 git-version = "0.3.5"
-governor = "0.5.1"
+glob = "0.3.1"
+governor = "0.6.0"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 hex = "0.4.3"
@@ -276,9 +324,14 @@ insta = { version = "1.21.1", features = ["redactions", "yaml", "json"] }
 integer-encoding = "3.0.1"
 itertools = "0.10.5"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = ["full", "http-client", "jsonrpsee-core"] }
-jsonrpsee-proc-macros = {git="https://github.com/wlmyng/jsonrpsee.git", rev= "b1b300784795f6a64d0fcdf8f03081a9bc38bde8"}
-json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4"}
+jsonrpsee = { git = "https://github.com/wlmyng/jsonrpsee.git", rev = "b1b300784795f6a64d0fcdf8f03081a9bc38bde8", features = [
+  "server",
+  "macros",
+  "ws-client",
+  "http-client",
+  "jsonrpsee-core",
+] }
+json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 linked-hash-map = "0.5.6"
 lru = "0.10"
@@ -286,8 +339,8 @@ match_opt = "0.1.2"
 mime = "0.3"
 mockall = "0.11.4"
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "bd870b9a11870a2618c55ba703d58fafd41d686c", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "bd870b9a11870a2618c55ba703d58fafd41d686c", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "03b22b1576b5b81fd76fc9aa85009b22ddbfd5b6", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "03b22b1576b5b81fd76fc9aa85009b22ddbfd5b6", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -295,38 +348,61 @@ ntest = "0.9.0"
 num-bigint = "0.4.3"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
-object_store = { version = "=0.5.4", features = ["aws", "aws_profile", "gcp", "azure"] }
+object_store = { version = "0.7", features = [
+  "aws",
+  "gcp",
+  "azure",
+] }
 once_cell = "1.18.0"
-ouroboros = "0.15.5"
+ouroboros = "0.17"
 parking_lot = "0.12.1"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-pprof = { version = "0.11.0", features = ["cpp", "frame-pointer", "criterion", "flamegraph"] }
+pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
 proc-macro2 = "1.0.47"
 prometheus = "0.13.3"
-prometheus-http-query = { version = "0.6.6", default_features = false, features = ["rustls-tls"] }
+prometheus-http-query = { version = "0.6.6", default_features = false, features = [
+  "rustls-tls",
+] }
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
 prost = "0.11.8"
 prost-build = "0.11.8"
-protobuf = {version="2.28", features=["with-bytes"]}
+protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
-quinn-proto = "^0.10.0"
+quinn-proto = "^0.10.5"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.9.2"
 regex = "1.7.1"
-reqwest = { version = "0.11.18", default_features= false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = { version = "0.11.20", default_features = false, features = [
+  "blocking",
+  "json",
+  "rustls-tls",
+] }
 roaring = "0.10.1"
-rocksdb = { version = "0.21.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+rocksdb = { version = "0.21.0", features = [
+  "snappy",
+  "lz4",
+  "zstd",
+  "zlib",
+  "multi-threaded-cf",
+], default-features = false }
 ron = "0.8.0"
 rstest = "0.16.0"
-rusoto_core = { version = "0.48.0", default_features=false, features=["rustls"] }
-rusoto_kms = { version = "0.48.0", default_features=false, features=["rustls"] }
+rusoto_core = { version = "0.48.0", default_features = false, features = [
+  "rustls",
+] }
+rusoto_kms = { version = "0.48.0", default_features = false, features = [
+  "rustls",
+] }
+russh = "0.38.0"
+russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -336,7 +412,10 @@ scopeguard = "1.1"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde-name = "0.2.1"
 serde-reflection = "0.3.6"
-serde_json = { version = "1.0.95", features = ["preserve_order", "arbitrary_precision"] }
+serde_json = { version = "1.0.95", features = [
+  "preserve_order",
+  "arbitrary_precision",
+] }
 serde_repr = "0.1"
 serde_test = "1.0.147"
 serde_with = { version = "2.1.0", features = ["hex"] }
@@ -350,7 +429,6 @@ slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
 static_assertions = "1.1.0"
-structopt = "0.3.26"
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24.3"
 syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
@@ -365,27 +443,48 @@ thiserror = "1.0.40"
 tiny-bip39 = "1.0.0"
 tokio = "1.28.1"
 tokio-retry = "0.3"
-tokio-rustls = "0.23"
+tokio-rustls = "0.24"
 tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.4"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
 tonic = { version = "0.8.2", features = ["transport", "tls"] }
-tonic-build = { version = "0.8.2", features = [ "prost", "transport" ] }
+tonic-build = { version = "0.8.2", features = ["prost", "transport"] }
 tonic-health = "0.8.0"
-tower = { version = "0.4.12", features = ["full", "util", "timeout", "load-shed", "limit"] }
-tower-http = { version = "0.3.4", features = ["cors", "full", "trace", "set-header", "propagate-header"] }
+tower = { version = "0.4.12", features = [
+  "full",
+  "util",
+  "timeout",
+  "load-shed",
+  "limit",
+] }
+tower-http = { version = "0.3.4", features = [
+  "cors",
+  "full",
+  "trace",
+  "set-header",
+  "propagate-header",
+] }
 # tower-http = { version="0.4", features = ["trace"] }
 tower-layer = "0.3.2"
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.15", default-features = false, features = ["std", "smallvec", "fmt", "ansi", "time", "json", "registry", "env-filter"] }
+tracing-subscriber = { version = "0.3.15", default-features = false, features = [
+  "std",
+  "smallvec",
+  "fmt",
+  "ansi",
+  "time",
+  "json",
+  "registry",
+  "env-filter",
+] }
 ttl_cache = "0.5.1"
 uint = "0.9.4"
 unescape = "0.1.0"
 url = "2.3.1"
-uuid = { version = "1.1.2", features = ["v4", "fast-rng"]}
-webpki = { version = "0.22.0", features = ["alloc", "std"] }
+uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
+webpki = { version = "0.101.0", package = "rustls-webpki", features = ["alloc", "std"] }
 x509-parser = "0.14.0"
 zstd = "0.12.3"
 versions = "4.1.0"
@@ -395,12 +494,16 @@ move-binary-format = { path = "external-crates/move/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
 move-compiler = { path = "external-crates/move/move-compiler" }
-move-core-types = { path = "external-crates/move/move-core/types", features = ["address32"] }
+move-core-types = { path = "external-crates/move/move-core/types", features = [
+  "address32",
+] }
 move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
 move-package = { path = "external-crates/move/tools/move-package" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
 move-vm-config = { path = "external-crates/move/move-vm/config" }
-move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils", features = ["tiered-gas"] }
+move-vm-test-utils = { path = "external-crates/move/move-vm/test-utils", features = [
+  "tiered-gas",
+] }
 move-vm-types = { path = "external-crates/move/move-vm/types" }
 move-vm-profiler = { path = "external-crates/move/move-vm/profiler" }
 move-command-line-common = { path = "external-crates/move/move-command-line-common" }
@@ -412,14 +515,14 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c961a01596a87e76f590c7e43aca9d57106dbbb1", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3", package = "fastcrypto-zkp" }
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159"}
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "0f0ae8d8f222820a20b586088ea7a2941478a159"}
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -432,6 +535,7 @@ prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
+sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-archival = { path = "crates/sui-archival" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
@@ -479,8 +583,10 @@ sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
 sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
+sui-rest-api = { path = "crates/sui-rest-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
+sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }

@@ -7,6 +7,7 @@ use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
 use rand::rngs::OsRng;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -50,6 +51,7 @@ pub struct ConfigBuilder<R = OsRng> {
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
+    jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
 }
 
@@ -63,6 +65,7 @@ impl ConfigBuilder {
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
+            jwk_fetch_interval: None,
             num_unpruned_validators: None,
         }
     }
@@ -104,6 +107,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
+        self
+    }
+
     pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
         self.reference_gas_price = Some(reference_gas_price);
         self
@@ -111,6 +119,13 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
+        self
+    }
+
+    pub fn with_chain_start_timestamp_ms(mut self, chain_start_timestamp_ms: u64) -> Self {
+        self.get_or_init_genesis_config()
+            .parameters
+            .chain_start_timestamp_ms = chain_start_timestamp_ms;
         self
     }
 
@@ -161,6 +176,7 @@ impl<R> ConfigBuilder<R> {
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
+            jwk_fetch_interval: self.jwk_fetch_interval,
         }
     }
 
@@ -277,6 +293,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .map(|(idx, validator)| {
                 let mut builder = ValidatorConfigBuilder::new()
                     .with_config_directory(self.config_directory.clone());
+
+                if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
+                    builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
+                }
+
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {
@@ -355,16 +376,15 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::HashSet;
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
     use sui_types::epoch_data::EpochData;
-    use sui_types::gas::GasCharger;
+    use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
     use sui_types::metrics::LimitsMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
-    use sui_types::temporary_store::TemporaryStore;
     use sui_types::transaction::InputObjects;
 
     #[test]
@@ -391,12 +411,6 @@ mod test {
         let genesis_transaction = genesis.transaction().clone();
 
         let genesis_digest = *genesis_transaction.digest();
-        let temporary_store = TemporaryStore::new(
-            InMemoryStorage::new(Vec::new()),
-            InputObjects::new(vec![]),
-            genesis_digest,
-            &protocol_config,
-        );
 
         let silent = true;
         let paranoid_checks = false;
@@ -409,26 +423,25 @@ mod test {
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
         let epoch = EpochData::new_test();
-        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let transaction_dependencies = BTreeSet::new();
+        let input_objects = InputObjects::new(vec![]);
 
         let (_inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
+                &InMemoryStorage::new(Vec::new()),
                 &protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
-                temporary_store,
-                shared_object_refs,
-                &mut GasCharger::new_unmetered(genesis_digest),
+                input_objects,
+                vec![],
+                SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
-                transaction_dependencies,
             );
 
         assert_eq!(&effects, genesis.effects());

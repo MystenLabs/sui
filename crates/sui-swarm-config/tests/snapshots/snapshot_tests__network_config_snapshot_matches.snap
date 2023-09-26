@@ -14,6 +14,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -26,7 +27,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -77,6 +78,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -88,6 +90,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: avYcyVgYMXTyaUYh9IRwLK0gSzl7YF6ZQDAbrS1Bhvo=
     worker-key-pair:
@@ -99,6 +102,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -111,7 +115,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -162,6 +166,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -173,6 +178,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: OXnx3yM1C/ppgnDMx/o1d49fJs7E05kq11mXNae/O+I=
     worker-key-pair:
@@ -184,6 +190,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -196,7 +203,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -247,6 +254,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -258,6 +266,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: CyNkjqNVr3HrHTH7f/NLs7u5lUHJzuPAw0PqMTD2y2s=
     worker-key-pair:
@@ -269,6 +278,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -281,7 +291,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -332,6 +342,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -343,6 +354,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: X/I/kM+KvHcxAKEf2UU6Sr7SpN3bhiE9nP5CuM/iIY0=
     worker-key-pair:
@@ -354,6 +366,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -366,7 +379,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -417,6 +430,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -428,6 +442,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: N272EiFDyKtxRbDKbyN6ujenJ+skPcRoc/XolpOLGnU=
     worker-key-pair:
@@ -439,6 +454,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -451,7 +467,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -502,6 +518,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -513,6 +530,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
   - protocol-key-pair:
       value: a74f03IOjL8ZFSWFChFVEi+wiMwHNwNCPDGIYkGfgjs=
     worker-key-pair:
@@ -524,6 +542,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
+    enable-experimental-rest-api: true
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -536,7 +555,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -587,6 +606,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -598,6 +618,7 @@ validator_configs:
     indexer-max-subscriptions: ~
     transaction-kv-store-read-config:
       base-url: ""
+    jwk-fetch-interval-seconds: 3600
 account_keys:
   - Hloy4pnf8pWEHGP+4OFsXz56bLdIJhkD2O+OdKMqCA4=
   - pvMScjoMR/DaN0M5IOxS2VpGC59N6kv6gDm63ufLQ5w=

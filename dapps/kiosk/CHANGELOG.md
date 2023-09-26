@@ -1,5 +1,55 @@
 # kiosk-demo
 
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [fd8589806]
+- Updated dependencies [fd8589806]
+  - @mysten/kiosk@0.6.0
+  - @mysten/sui.js@0.42.0
+  - @mysten/wallet-kit@0.7.3
+
+## 0.0.9
+
+### Patch Changes
+
+- @mysten/sui.js@0.41.2
+- @mysten/kiosk@0.5.3
+- @mysten/wallet-kit@0.7.2
+
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [24c21e1f0]
+  - @mysten/sui.js@0.41.1
+  - @mysten/kiosk@0.5.2
+  - @mysten/wallet-kit@0.7.1
+
+## 0.0.7
+
+### Patch Changes
+
+- Updated dependencies [ba8e3b857]
+- Updated dependencies [f4b7b3474]
+- Updated dependencies [85f785c97]
+  - @mysten/sui.js@0.41.0
+  - @mysten/wallet-kit@0.7.0
+  - @mysten/kiosk@0.5.1
+
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [8281e3d25]
+- Updated dependencies [a503cad34]
+- Updated dependencies [210bfac58]
+- Updated dependencies [8281e3d25]
+  - @mysten/wallet-kit@0.6.0
+  - @mysten/sui.js@0.40.0
+  - @mysten/kiosk@0.5.0
+
 ## 0.0.5
 
 ### Patch Changes

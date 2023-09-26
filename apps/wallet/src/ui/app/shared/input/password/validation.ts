@@ -4,7 +4,7 @@
 import * as Yup from 'yup';
 import zxcvbn from 'zxcvbn';
 
-function addDot(str: string | undefined) {
+export function addDot(str: string | undefined) {
 	if (str && !str.endsWith('.')) {
 		return `${str}.`;
 	}

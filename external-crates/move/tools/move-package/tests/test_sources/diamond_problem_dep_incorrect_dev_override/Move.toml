@@ -1,0 +1,12 @@
+# A "dev" override should not work for "regular" dependencies
+
+[package]
+name = "Root"
+version = "0.0.0"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }
+
+[dev-dependencies]
+C = { local = "./deps_only/C", version = "1.0.0", override = true }

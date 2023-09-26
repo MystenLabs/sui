@@ -4,6 +4,7 @@
 use anyhow::bail;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_core::authority::AuthorityState;
 
 use async_trait::async_trait;
 use futures::Stream;
@@ -22,7 +23,6 @@ use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::spawn_monitored_task;
-use sui_core::authority::AuthorityState;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
@@ -41,6 +41,7 @@ use crate::api::{
     cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
     QUERY_MAX_RESULT_LIMIT,
 };
+use crate::authority_state::StateRead;
 use crate::error::{Error, SuiRpcInputError};
 use crate::name_service::Domain;
 use crate::with_tracing;
@@ -86,7 +87,7 @@ pub fn spawn_subscription<S, T>(
 const DEFAULT_MAX_SUBSCRIPTIONS: usize = 100;
 
 pub struct IndexerApi<R> {
-    state: Arc<AuthorityState>,
+    state: Arc<dyn StateRead>,
     read_api: R,
     transaction_kv_store: Arc<TransactionKeyValueStore>,
     ns_package_addr: Option<SuiAddress>,
@@ -110,8 +111,8 @@ impl<R: ReadApiServer> IndexerApi<R> {
         let max_subscriptions = max_subscriptions.unwrap_or(DEFAULT_MAX_SUBSCRIPTIONS);
         Self {
             state,
-            read_api,
             transaction_kv_store,
+            read_api,
             ns_registry_id,
             ns_package_addr,
             ns_reverse_registry_id,
@@ -128,7 +129,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
             type_: name_type,
             value,
         } = name;
-        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.database)?;
+        let layout = TypeLayoutBuilder::build_with_types(&name_type, &self.state.get_db())?;
         let sui_json_value = SuiJsonValue::new(value)?;
         let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
         Ok((name_type, name_bcs_value))
@@ -160,7 +161,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let options = options.unwrap_or_default();
             let mut objects = self
                 .state
-                .get_owner_objects(address, cursor, limit + 1, filter)
+                .get_owner_objects_with_limit(address, cursor, limit + 1, filter)
                 .map_err(Error::from)?;
 
             // objects here are of size (limit + 1), where the last one is the cursor for the next page
@@ -302,7 +303,9 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         let permit = self.acquire_subscribe_permit()?;
         spawn_subscription(
             sink,
-            self.state.subscription_handler.subscribe_events(filter),
+            self.state
+                .get_subscription_handler()
+                .subscribe_events(filter),
             Some(permit),
         );
         Ok(())
@@ -317,7 +320,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         spawn_subscription(
             sink,
             self.state
-                .subscription_handler
+                .get_subscription_handler()
                 .subscribe_transactions(filter),
             Some(permit),
         );

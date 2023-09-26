@@ -3,15 +3,21 @@
 
 import { type Keypair } from '@mysten/sui.js/cryptography';
 
-import { type Account, AccountType } from './Account';
+import { AccountType, type Account } from './Account';
 import { AccountKeypair } from './AccountKeypair';
 
+/**
+ * @deprecated
+ */
 export type SerializedDerivedAccount = {
 	type: AccountType.DERIVED;
 	address: string;
 	derivationPath: string;
 };
 
+/**
+ * @deprecated
+ */
 export class DerivedAccount implements Account {
 	readonly accountKeypair: AccountKeypair;
 	readonly type: AccountType;

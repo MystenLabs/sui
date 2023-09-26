@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { TransactionFilter } from '@mysten/sui.js/client';
@@ -14,12 +14,12 @@ export function useGetTransactionBlocks(
 	limit = DEFAULT_TRANSACTIONS_LIMIT,
 	refetchInterval?: number,
 ) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 
 	return useInfiniteQuery(
 		['get-transaction-blocks', filter, limit],
 		async ({ pageParam }) =>
-			await rpc.queryTransactionBlocks({
+			await client.queryTransactionBlocks({
 				filter,
 				cursor: pageParam,
 				order: 'descending',

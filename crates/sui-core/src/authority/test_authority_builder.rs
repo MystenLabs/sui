@@ -29,7 +29,6 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::digests::ChainIdentifier;
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -124,16 +123,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    pub async fn side_load_objects(
-        authority_state: Arc<AuthorityState>,
-        objects: &'a [Object],
-    ) -> SuiResult {
-        authority_state
-            .database
-            .insert_raw_object_unchecked_for_testing(objects)
-            .await
-    }
-
     pub async fn build(self) -> Arc<AuthorityState> {
         let local_network_config =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
@@ -180,6 +169,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
+            genesis.authenticator_state_obj_initial_shared_version(),
         );
         let expensive_safety_checks = match self.expensive_safety_checks {
             None => ExpensiveSafetyCheckConfig::default(),

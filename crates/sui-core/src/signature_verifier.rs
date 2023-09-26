@@ -2,15 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use either::Either;
+use fastcrypto_zkp::bn254::zk_login::JwkId;
+use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
 use lru::LruCache;
+use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
 use std::hash::Hash;
 use std::sync::Arc;
+use sui_types::digests::SenderSignedDataDigest;
+use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
@@ -20,18 +26,14 @@ use sui_types::{
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
-    zk_login_util::OAuthProviderContent,
 };
-
-use mysten_metrics::monitored_scope;
-use sui_types::digests::SenderSignedDataDigest;
-use sui_types::transaction::SenderSignedData;
 use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::{
     sync::oneshot,
     time::{timeout, Duration},
 };
+use tracing::debug;
 
 // Maximum amount of time we wait for a batch to fill up before verifying a partial batch.
 const BATCH_TIMEOUT_MS: Duration = Duration::from_millis(10);
@@ -92,15 +94,27 @@ pub struct SignatureVerifier {
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
 
-    /// Map from kid (key id) to the fetched OAuthProviderContent for that key.
+    /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
     /// don't want to pass a reference to the map to the verify method, since that would lead to a
     /// lengthy critical section. Instead, we use an immutable data structure which can be cloned
     /// very cheaply.
-    oauth_provider_jwk: RwLock<ImHashMap<String, OAuthProviderContent>>,
+    jwks: RwLock<ImHashMap<JwkId, JWK>>,
+
+    /// Params that contains a list of supported providers for ZKLogin and the environment (prod/test) the code runs in.
+    zk_login_params: ZkLoginParams,
 
     queue: Mutex<CertBuffer>,
     pub metrics: Arc<SignatureVerifierMetrics>,
+}
+
+/// Contains two parameters to pass in to verify a ZkLogin signature.
+#[derive(Clone)]
+struct ZkLoginParams {
+    /// A list of supported OAuth providers for ZkLogin.
+    pub supported_providers: Vec<OIDCProvider>,
+    /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
+    pub env: ZkLoginEnv,
 }
 
 impl SignatureVerifier {
@@ -108,6 +122,8 @@ impl SignatureVerifier {
         committee: Arc<Committee>,
         batch_size: usize,
         metrics: Arc<SignatureVerifierMetrics>,
+        supported_providers: Vec<OIDCProvider>,
+        env: ZkLoginEnv,
     ) -> Self {
         Self {
             committee,
@@ -119,14 +135,29 @@ impl SignatureVerifier {
                 metrics.signed_data_cache_hits.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
-            oauth_provider_jwk: Default::default(),
+            jwks: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
+            zk_login_params: ZkLoginParams {
+                supported_providers,
+                env,
+            },
         }
     }
 
-    pub fn new(committee: Arc<Committee>, metrics: Arc<SignatureVerifierMetrics>) -> Self {
-        Self::new_with_batch_size(committee, MAX_BATCH_SIZE, metrics)
+    pub fn new(
+        committee: Arc<Committee>,
+        metrics: Arc<SignatureVerifierMetrics>,
+        supported_providers: Vec<OIDCProvider>,
+        zklogin_env: ZkLoginEnv,
+    ) -> Self {
+        Self::new_with_batch_size(
+            committee,
+            MAX_BATCH_SIZE,
+            metrics,
+            supported_providers,
+            zklogin_env,
+        )
     }
 
     /// Verifies all certs, returns Ok only if all are valid.
@@ -275,26 +306,40 @@ impl SignatureVerifier {
         });
     }
 
-    /// Insert a JWK into the verifier state. Returns true if the kid of the JWK has not already
-    /// been inserted.
-    pub(crate) fn insert_oauth_jwk(&self, content: &OAuthProviderContent) -> bool {
-        let mut oauth_provider_jwk = self.oauth_provider_jwk.write();
-
-        if oauth_provider_jwk.contains_key(content.kid()) {
-            return false;
+    /// Insert a JWK into the verifier state. Pre-existing entries for a given JwkId will not be
+    /// overwritten.
+    pub(crate) fn insert_jwk(&self, jwk_id: &JwkId, jwk: &JWK) {
+        let mut jwks = self.jwks.write();
+        match jwks.entry(jwk_id.clone()) {
+            im::hashmap::Entry::Occupied(_) => {
+                debug!("JWK with kid {:?} already exists", jwk_id);
+            }
+            im::hashmap::Entry::Vacant(entry) => {
+                debug!("inserting JWK with kid: {:?}", jwk_id);
+                entry.insert(jwk.clone());
+            }
         }
+    }
 
-        let kid = content.kid().to_string();
-        oauth_provider_jwk.insert(kid, content.clone());
-        true
+    pub fn has_jwk(&self, jwk_id: &JwkId, jwk: &JWK) -> bool {
+        let jwks = self.jwks.read();
+        jwks.get(jwk_id) == Some(jwk)
+    }
+
+    pub fn get_jwks(&self) -> ImHashMap<JwkId, JWK> {
+        self.jwks.read().clone()
     }
 
     pub fn verify_tx(&self, signed_tx: &SenderSignedData) -> SuiResult {
         self.signed_data_cache
             .is_verified(signed_tx.full_message_digest(), || {
                 signed_tx.verify_epoch(self.committee.epoch())?;
-                let oauth_provider_jwk = self.oauth_provider_jwk.read().clone();
-                let aux_data = VerifyParams::new(oauth_provider_jwk);
+                let jwks = self.jwks.read().clone();
+                let aux_data = VerifyParams::new(
+                    jwks,
+                    self.zk_login_params.supported_providers.clone(),
+                    self.zk_login_params.env.clone(),
+                );
                 signed_tx.verify_message_signature(&aux_data)
             })
     }
@@ -394,8 +439,7 @@ pub fn batch_verify_certificates(
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-
-    let verify_params = VerifyParams::new(Default::default());
+    let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

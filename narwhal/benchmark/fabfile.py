@@ -27,7 +27,7 @@ def local(ctx, debug=True):
     node_params = {
         'header_num_of_batches_threshold': 32,
         'max_header_num_of_batches': 1000,
-        'max_header_delay': '2000ms',  # ms
+        'max_header_delay': '1000ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes
@@ -64,7 +64,7 @@ def smoke(ctx, debug=True, release=False):
     node_params = {
         'header_num_of_batches_threshold': 32,
         'max_header_num_of_batches': 1000,
-        'max_header_delay': '2000ms',  # ms
+        'max_header_delay': '1000ms',  # ms
         'gc_depth': 50,  # rounds
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes
@@ -144,7 +144,7 @@ def demo(ctx, debug=True):
         "max_header_num_of_batches": 1000,
         "max_batch_delay": "200ms",  # ms
         "max_concurrent_requests": 500_000,
-        "max_header_delay": "2000ms",  # ms
+        "max_header_delay": "1000ms",  # ms
         "sync_retry_delay": "10_000ms",  # ms
         "sync_retry_nodes": 3,  # number of nodes
         'prometheus_metrics': {

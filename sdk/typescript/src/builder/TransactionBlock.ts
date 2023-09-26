@@ -3,6 +3,10 @@
 
 import { fromB64 } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
+
+import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
+import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
+import { SUI_TYPE_ARG } from '../framework/framework.js';
 import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
@@ -11,8 +15,7 @@ import {
 	getObjectReference,
 	SuiObjectRef,
 } from '../types/index.js';
-import type { TransactionArgument, TransactionType, MoveCallTransaction } from './Transactions.js';
-import { Transactions, TransactionBlockInput, getTransactionType } from './Transactions.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { ObjectCallArg } from './Inputs.js';
 import {
 	BuilderCallArg,
@@ -24,11 +27,10 @@ import {
 import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
+import type { MoveCallTransaction, TransactionArgument, TransactionType } from './Transactions.js';
+import { getTransactionType, TransactionBlockInput, Transactions } from './Transactions.js';
 import type { WellKnownEncoding } from './utils.js';
-import { TRANSACTION_TYPE, create } from './utils.js';
-import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
-import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import { SUI_TYPE_ARG } from '../framework/framework.js';
+import { create, TRANSACTION_TYPE } from './utils.js';
 
 type TransactionResult = TransactionArgument & TransactionArgument[];
 
@@ -132,6 +134,10 @@ interface BuildOptions {
 	protocolConfig?: ProtocolConfig;
 	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
 	limits?: Limits;
+}
+
+interface SignOptions extends BuildOptions {
+	signer: Keypair;
 }
 
 export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
@@ -397,6 +403,13 @@ export class TransactionBlock {
 
 		// NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
 		return Number(value);
+	}
+
+	/** Build the transaction to BCS bytes, and sign it with the provided keypair. */
+	async sign(options: SignOptions): Promise<SignatureWithBytes> {
+		const { signer, ...buildOptions } = options;
+		const bytes = await this.build(buildOptions);
+		return signer.signTransactionBlock(bytes);
 	}
 
 	/** Build the transaction to BCS bytes. */

@@ -49,6 +49,24 @@ impl From<SuiEvent> for Event {
 }
 
 impl Event {
+    pub fn from_sui_event(
+        event: &sui_types::event::Event,
+        transaction_digest: &TransactionDigest,
+        event_timestamp_ms: u64,
+    ) -> Self {
+        Self {
+            id: None,
+            transaction_digest: transaction_digest.base58_encode(),
+            event_sequence: 0,
+            sender: event.sender.to_string(),
+            package: event.package_id.to_string(),
+            module: event.transaction_module.to_string(),
+            event_type: event.type_.to_string(),
+            event_time_ms: Some(event_timestamp_ms as i64),
+            event_bcs: event.contents.clone(),
+        }
+    }
+
     pub fn try_into(self, module_cache: &impl GetModule) -> Result<SuiEvent, IndexerError> {
         // Event in this table is always MoveEvent
         let package_id = self.package.parse().map_err(|e| {

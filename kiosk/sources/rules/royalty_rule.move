@@ -63,7 +63,7 @@ module kiosk::royalty_rule {
     /// Creator action: Add the Royalty Rule for the `T`.
     /// Pass in the `TransferPolicy`, `TransferPolicyCap` and the configuration
     /// for the policy: `amount_bp` and `min_amount`.
-    public fun add<T: key + store>(
+    public fun add<T>(
         policy: &mut TransferPolicy<T>,
         cap: &TransferPolicyCap<T>,
         amount_bp: u16,
@@ -74,7 +74,7 @@ module kiosk::royalty_rule {
     }
 
     /// Buyer action: Pay the royalty fee for the transfer.
-    public fun pay<T: key + store>(
+    public fun pay<T>(
         policy: &mut TransferPolicy<T>,
         request: &mut TransferRequest<T>,
         payment: Coin<SUI>
@@ -90,7 +90,7 @@ module kiosk::royalty_rule {
 
     /// Helper function to calculate the amount to be paid for the transfer.
     /// Can be used dry-runned to estimate the fee amount based on the Kiosk listing price.
-    public fun fee_amount<T: key + store>(policy: &TransferPolicy<T>, paid: u64): u64 {
+    public fun fee_amount<T>(policy: &TransferPolicy<T>, paid: u64): u64 {
         let config: &Config = policy::get_rule(Rule {}, policy);
         let amount = (((paid as u128) * (config.amount_bp as u128) / 10_000) as u64);
 

@@ -19,6 +19,7 @@ use sui_types::{
     error::ExecutionErrorKind,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     utils::to_sender_signed_transaction,
+    SUI_FRAMEWORK_PACKAGE_ID,
 };
 
 use move_core_types::language_storage::TypeTag;
@@ -32,6 +33,7 @@ use sui_types::{
 use std::{collections::HashSet, path::PathBuf};
 use std::{env, str::FromStr};
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
+use sui_types::move_package::UpgradeCap;
 
 #[tokio::test]
 #[cfg_attr(msim, ignore)]
@@ -770,6 +772,7 @@ async fn test_entry_point_vector_empty() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
 
     let package = build_and_publish_test_package(
         &authority,
@@ -802,7 +805,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -831,7 +834,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -861,7 +864,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();
@@ -891,7 +894,7 @@ async fn test_entry_point_vector_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();
@@ -2281,6 +2284,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
             vec![vec, n],
         );
     }
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
     // empty
     let mut builder = ProgrammableTransactionBuilder::new();
     make_and_drop(&mut builder, package_id, &t, vec![]);
@@ -2291,7 +2295,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2313,7 +2317,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2338,7 +2342,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2368,7 +2372,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2405,7 +2409,7 @@ async fn test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2534,6 +2538,8 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
     t: TypeTag,
     value: T,
 ) {
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+
     // single without a type argument
     let mut builder = ProgrammableTransactionBuilder::new();
     let arg = builder.pure(value.clone()).unwrap();
@@ -2545,7 +2551,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2574,7 +2580,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2605,7 +2611,7 @@ async fn error_test_make_move_vec_for_type<T: Clone + Serialize>(
         sender,
         sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap();
@@ -2718,6 +2724,7 @@ async fn test_make_move_vec_empty() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
     let mut builder = ProgrammableTransactionBuilder::new();
     builder.command(Command::MakeMoveVec(None, vec![]));
     let pt = builder.finish();
@@ -2727,7 +2734,7 @@ async fn test_make_move_vec_empty() {
         &sender,
         &sender_key,
         pt,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC,
+        rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
     )
     .await
     .unwrap_err();
@@ -2779,6 +2786,7 @@ async fn test_object_no_id_error() {
                  err_str.contains("SuiMoveVerificationError")
                  && err_str.contains("First field of struct NotObject must be 'id'"));
 }
+
 pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Vec<u8>> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", test_dir]);
@@ -2786,6 +2794,20 @@ pub fn build_test_package(test_dir: &str, with_unpublished_deps: bool) -> Vec<Ve
         .build(path)
         .unwrap()
         .get_package_bytes(with_unpublished_deps)
+}
+
+pub fn build_package(
+    code_dir: &str,
+    with_unpublished_deps: bool,
+) -> (Vec<u8>, Vec<Vec<u8>>, Vec<ObjectID>) {
+    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.extend(["src", "unit_tests", "data", code_dir]);
+    let compiled_package = BuildConfig::new_for_testing().build(path).unwrap();
+    let digest = compiled_package.get_package_digest(with_unpublished_deps);
+    let modules = compiled_package.get_package_bytes(with_unpublished_deps);
+    let dependencies = compiled_package.get_dependency_original_package_ids();
+    (digest.to_vec(), modules, dependencies)
 }
 
 pub async fn build_and_try_publish_test_package(
@@ -2889,6 +2911,107 @@ pub async fn build_and_publish_test_package_with_upgrade_cap(
         .unwrap();
 
     (package.0, upgrade_cap.0)
+}
+
+pub async fn collect_packages_and_upgrade_caps(
+    authority: &AuthorityState,
+    effects: &TransactionEffects,
+) -> HashMap<ObjectID, ObjectRef> {
+    let packages: HashMap<_, _> = effects
+        .created()
+        .into_iter()
+        .filter(|(_, owner)| matches!(owner, Owner::Immutable))
+        .map(|(package, _)| (package.0, package))
+        .collect();
+    let mut caps = HashMap::new();
+    for (obj_ref, owner) in effects.created() {
+        if !matches!(owner, Owner::AddressOwner(_)) {
+            continue;
+        }
+        let cap = authority.get_object(&obj_ref.0).await.unwrap().unwrap();
+        let bcs = cap.data.try_as_move().unwrap().contents();
+        let obj: UpgradeCap = bcs::from_bytes(bcs).unwrap();
+        let pkg = packages.get(&obj.package.bytes).unwrap();
+        caps.insert(pkg.0, obj_ref);
+    }
+    caps
+}
+
+pub async fn run_multi_txns(
+    authority: &AuthorityState,
+    sender: SuiAddress,
+    sender_key: &AccountKeyPair,
+    gas_object_id: &ObjectID,
+    builder: ProgrammableTransactionBuilder,
+) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
+    // build the transaction data
+    let pt = builder.finish();
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let gas_price = authority.reference_gas_price_for_testing().unwrap();
+    let gas_budget = pt.non_system_packages_to_be_published().count() as u64
+        * TEST_ONLY_GAS_UNIT_FOR_PUBLISH
+        * gas_price;
+    let data =
+        TransactionData::new_programmable(sender, vec![gas_object_ref], pt, gas_budget, gas_price);
+    // run the transaction
+    let transaction = to_sender_signed_transaction(data, sender_key);
+    send_and_confirm_transaction(authority, transaction).await
+}
+
+pub fn build_multi_publish_txns(
+    builder: &mut ProgrammableTransactionBuilder,
+    sender: SuiAddress,
+    packages: Vec<(Vec<Vec<u8>>, Vec<ObjectID>)>,
+) {
+    for (modules, dep_ids) in packages {
+        let upgrade_cap = builder.publish_upgradeable(modules, dep_ids);
+        builder.transfer_arg(sender, upgrade_cap);
+    }
+}
+
+pub struct UpgradeData {
+    pub package_id: ObjectID,
+    pub upgrade_cap: ObjectRef,
+    pub policy: u8,
+    pub digest: Vec<u8>,
+    pub dep_ids: Vec<ObjectID>,
+    pub modules: Vec<Vec<u8>>,
+}
+
+pub fn build_multi_upgrade_txns(
+    builder: &mut ProgrammableTransactionBuilder,
+    package_upgrades: Vec<UpgradeData>,
+) {
+    // build the programmable transaction
+    for package_upgrade in package_upgrades {
+        let package_id = package_upgrade.package_id;
+        let cap = builder
+            .obj(ObjectArg::ImmOrOwnedObject(package_upgrade.upgrade_cap))
+            .unwrap();
+        let policy = builder.pure(package_upgrade.policy).unwrap();
+        let digest = builder.pure(package_upgrade.digest).unwrap();
+        let ticket = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("package").unwrap(),
+            Identifier::new("authorize_upgrade").unwrap(),
+            vec![],
+            vec![cap, policy, digest],
+        );
+        let receipt = builder.upgrade(
+            package_id,
+            ticket,
+            package_upgrade.dep_ids,
+            package_upgrade.modules,
+        );
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("package").unwrap(),
+            Identifier::new("commit_upgrade").unwrap(),
+            vec![],
+            vec![cap, receipt],
+        );
+    }
 }
 
 async fn check_latest_object_ref(

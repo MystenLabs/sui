@@ -23,6 +23,8 @@ use std::sync::RwLock;
 use sui_protocol_config::ProtocolConfig;
 
 pub static GOOGLE_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
+pub static TWITCH_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
+pub static FACEBOOK_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
 
 pub fn get_google_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
     GOOGLE_JWK_BYTES
@@ -48,6 +50,43 @@ pub fn get_google_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
                         }
                       ]
                   }"#.as_bytes().to_vec()
+            ))
+        }).clone()
+}
+
+pub fn get_twitch_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
+    TWITCH_JWK_BYTES
+        .get_or_init(|| {
+            Arc::new(RwLock::new(
+                r#"{"keys":[{"alg":"RS256","e":"AQAB","kid":"1","kty":"RSA","n":"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw","use":"sig"}]}"#.as_bytes().to_vec()
+            ))
+        }).clone()
+}
+
+pub fn get_facebook_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
+    FACEBOOK_JWK_BYTES
+        .get_or_init(|| {
+            Arc::new(RwLock::new(
+                r#"{
+                    "keys": [
+                       {
+                          "kid": "5931701331165f07f550ac5f0194942d54f9c249",
+                          "kty": "RSA",
+                          "alg": "RS256",
+                          "use": "sig",
+                          "n": "-GuAIboTsRYNprJQOkdmuKXRx8ARnKXOC9Pajg4KxHHPt3OY8rXRmVeDxTj1-m9TfW6V-wJa_8ncBbbFE-aV-eBi_XeuIToBBvLZp1-UPIjitS8WCDrUhHiJnbvkIZf1B1YBIq_Ua81fzxhtjQ0jDftV2m5aavmJG4_94VG3Md7noQjjUKzxJyUNl4v_joMA6pIRCeeamvfIZorjcR4wVf-wR8NiZjjRbcjKBpc7ztc7Gm778h34RSe9-DLH6uicTROSYNa99pUwhn3XVfAv4hTFpLIcgHYadLZjsHfUvivr76uiYbxDZx6UTkK5jmi51b87u1b6iYmijDIMztzrIQ",
+                          "e": "AQAB"
+                       },
+                       {
+                          "kid": "a378585d826a933cc207ce31cad63c019a53095c",
+                          "kty": "RSA",
+                          "alg": "RS256",
+                          "use": "sig",
+                          "n": "1aLDAmRq-QeOr1b8WbtpmD5D4CpE5S0YrNklM5BrRjuZ6FTG8AhqvyUUnAb7Dd1gCZgARbuk2yHOOca78JWX2ocAId9R4OV2PUoIYljDZ5gQJBaL6liMpolQjlqovmd7IpF8XZWudWU6Rfhoh-j6dd-8IHeJjBKMYij0CuA6HZ1L98vBW1ehEdnBZPfTe28H57hySzucnC1q1340h2E2cpCfLZ-vNoYQ4Qe-CZKpUAKOoOlC4tWCt2rLcsV_vXvmNlLv_UYGbJEFKS-I1tEwtlD71bvn9WWluE7L4pWlIolgzNyIz4yxe7G7V4jlvSSwsu1ZtIQzt5AtTC--5HEAyQ",
+                          "e": "AQAB"
+                       }
+                    ]
+                 }"#.as_bytes().to_vec()
             ))
         }).clone()
 }

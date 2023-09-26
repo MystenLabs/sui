@@ -228,6 +228,10 @@ pub async fn find_missing_epochs_dirs(
     Ok(missing_epochs)
 }
 
+pub fn get_path(prefix: &str) -> Path {
+    Path::from(prefix)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::object_store::util::{copy_recursively, delete_recursively};

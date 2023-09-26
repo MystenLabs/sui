@@ -9,12 +9,14 @@ use std::{
 };
 
 use move_package::{
-    resolution::{
-        dependency_cache::DependencyCache,
-        dependency_graph::{DependencyGraph, DependencyMode},
-        lock_file::LockFile,
+    lock_file::LockFile,
+    resolution::dependency_graph::{
+        DependencyGraph, DependencyGraphBuilder, DependencyGraphInfo, DependencyMode,
     },
-    source_package::manifest_parser::parse_move_manifest_from_file,
+    source_package::{
+        layout::SourcePackageLayout,
+        parsed_manifest::{Dependency, DependencyKind, InternalDependency},
+    },
 };
 use move_symbol_pool::Symbol;
 
@@ -30,9 +32,20 @@ macro_rules! assert_error_contains {
 fn no_dep_graph() {
     let pkg = no_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
         .expect("Creating DependencyGraph");
 
     assert!(
@@ -52,6 +65,7 @@ fn no_dep_graph_from_lock() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Reading DependencyGraph");
 
@@ -75,6 +89,7 @@ fn lock_file_roundtrip() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Reading DependencyGraph");
 
@@ -99,7 +114,12 @@ fn lock_file_missing_dependency() {
     let pkg = one_dep_test_package();
 
     let commit = tmp.path().join("Move.lock");
-    let lock = LockFile::new(pkg.clone()).expect("Creating new lock file");
+    let lock = LockFile::new(
+        pkg.clone(),
+        /* manifest_digest */ "42".to_string(),
+        /* deps_digest */ "7".to_string(),
+    )
+    .expect("Creating new lock file");
 
     // Write a reference to a dependency that there isn't package information for.
     writeln!(&*lock, r#"dependencies = [{{ name = "OtherDep" }}]"#).unwrap();
@@ -109,6 +129,7 @@ fn lock_file_missing_dependency() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&commit).expect("Opening empty lock file"),
+        None
     ) else {
         panic!("Expected reading dependencies to fail.");
     };
@@ -124,9 +145,20 @@ fn lock_file_missing_dependency() {
 fn always_deps() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
         .expect("Creating DependencyGraph");
 
     assert_eq!(
@@ -149,6 +181,7 @@ fn always_deps_from_lock() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&snapshot).expect("Opening snapshot"),
+        None,
     )
     .expect("Creating DependencyGraph");
 
@@ -170,6 +203,7 @@ fn merge_simple() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -181,25 +215,37 @@ fn merge_simple() {
         tmp.path().to_path_buf(),
         Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+    )]);
+    let dependencies = &BTreeMap::from([(
+        Symbol::from("A"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::default(),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
     assert!(outer
         .merge(
-            Symbol::from("A"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
         )
-        .is_ok());
-
+        .is_ok(),);
     assert_eq!(
         outer.topological_order(),
         vec![Symbol::from("Root"), Symbol::from("A")],
     );
 }
-
 #[test]
 fn merge_into_root() {
     let tmp = tempfile::tempdir().unwrap();
@@ -207,6 +253,7 @@ fn merge_into_root() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -219,16 +266,30 @@ fn merge_into_root() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+    )]);
+    let dependencies = &BTreeMap::from([(
+        Symbol::from("A"),
+        Dependency::Internal(InternalDependency {
+            kind: DependencyKind::Local("A".into()),
+            subst: None,
+            version: None,
+            digest: None,
+            dep_override: false,
+        }),
+    )]);
     assert!(outer
         .merge(
-            Symbol::from("Root"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
         )
         .is_ok());
 
@@ -245,6 +306,7 @@ fn merge_detached() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -256,10 +318,20 @@ fn merge_detached() {
         tmp.path().to_path_buf(),
         Symbol::from("OtherDep"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("OtherDep"), Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("OtherDep"),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+    )]);
+    let Err(err) = outer.merge(
+        dep_graphs,
+        &DependencyKind::default(),
+        &BTreeMap::new(),
+        &BTreeMap::new()
+    ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
 
@@ -273,6 +345,7 @@ fn merge_after_calculating_always_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
         &mut A_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -280,10 +353,20 @@ fn merge_after_calculating_always_deps() {
         tmp.path().to_path_buf(),
         Symbol::from("A"),
         &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading inner");
 
-    let Err(err) = outer.merge(Symbol::from("A"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let dep_graphs = BTreeMap::from([(
+        Symbol::from("A"),
+        DependencyGraphInfo::new(inner, DependencyMode::Always, false, false),
+    )]);
+    let Err(err) = outer.merge(
+        dep_graphs,
+        &DependencyKind::default(),
+        &BTreeMap::new(),
+        &BTreeMap::new()
+    ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
 
@@ -293,10 +376,12 @@ fn merge_after_calculating_always_deps() {
 #[test]
 fn merge_overlapping() {
     let tmp = tempfile::tempdir().unwrap();
+
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
-        &mut AB_LOCK.as_bytes(),
+        &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -304,20 +389,60 @@ fn merge_overlapping() {
     // built, not after it has been entirely read.
     outer.always_deps.clear();
 
-    let inner = DependencyGraph::read_from_lock(
+    let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
-        Symbol::from("B"),
-        &mut A_LOCK.as_bytes(),
+        Symbol::from("C"),
+        &mut AB_LOCK.as_bytes(),
+        None,
     )
-    .expect("Reading inner");
+    .expect("Reading inner1");
 
+    let inner2 = DependencyGraph::read_from_lock(
+        tmp.path().to_path_buf(),
+        Symbol::from("C"),
+        &mut A_LOCK.as_bytes(),
+        None,
+    )
+    .expect("Reading inner2");
+
+    let dep_graphs = BTreeMap::from([
+        (
+            Symbol::from("B"),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
+        ),
+        (
+            Symbol::from("C"),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
+        ),
+    ]);
+    let dependencies = &BTreeMap::from([
+        (
+            Symbol::from("B"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::Local("B".into()),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+        (
+            Symbol::from("C"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+    ]);
     assert!(outer
         .merge(
-            Symbol::from("B"),
-            Symbol::from("A"),
-            inner,
-            Symbol::from(""),
-            &BTreeMap::new(),
+            dep_graphs,
+            &DependencyKind::default(),
+            dependencies,
+            &BTreeMap::new()
         )
         .is_ok());
 }
@@ -325,10 +450,12 @@ fn merge_overlapping() {
 #[test]
 fn merge_overlapping_different_deps() {
     let tmp = tempfile::tempdir().unwrap();
+
     let mut outer = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
         Symbol::from("Root"),
-        &mut A_DEP_B_LOCK.as_bytes(),
+        &mut EMPTY_LOCK.as_bytes(),
+        None,
     )
     .expect("Reading outer");
 
@@ -336,55 +463,84 @@ fn merge_overlapping_different_deps() {
     // built, not after it has been entirely read.
     outer.always_deps.clear();
 
-    let inner = DependencyGraph::read_from_lock(
+    let inner1 = DependencyGraph::read_from_lock(
         tmp.path().to_path_buf(),
-        Symbol::from("B"),
-        &mut A_LOCK.as_bytes(),
+        Symbol::from("C"),
+        &mut A_DEP_B_LOCK.as_bytes(),
+        None,
     )
-    .expect("Reading inner");
+    .expect("Reading inner1");
 
-    let Err(err) = outer.merge(Symbol::from("B"),Symbol::from("A"), inner, Symbol::from(""), &BTreeMap::new()) else {
+    let inner2 = DependencyGraph::read_from_lock(
+        tmp.path().to_path_buf(),
+        Symbol::from("C"),
+        &mut A_LOCK.as_bytes(),
+        None,
+    )
+    .expect("Reading inner2");
+
+    let dep_graphs = BTreeMap::from([
+        (
+            Symbol::from("B"),
+            DependencyGraphInfo::new(inner1, DependencyMode::Always, false, false),
+        ),
+        (
+            Symbol::from("C"),
+            DependencyGraphInfo::new(inner2, DependencyMode::Always, false, false),
+        ),
+    ]);
+    let dependencies = &BTreeMap::from([
+        (
+            Symbol::from("B"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+        (
+            Symbol::from("C"),
+            Dependency::Internal(InternalDependency {
+                kind: DependencyKind::default(),
+                subst: None,
+                version: None,
+                digest: None,
+                dep_override: false,
+            }),
+        ),
+    ]);
+    let Err(err) = outer.merge(
+        dep_graphs,
+        &DependencyKind::default(),
+        dependencies,
+        &BTreeMap::new()
+    ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };
 
-    assert_error_contains!(err, "Conflicting dependencies found");
-}
-
-#[test]
-fn merge_cyclic() {
-    let tmp = tempfile::tempdir().unwrap();
-    let mut outer = DependencyGraph::read_from_lock(
-        tmp.path().to_path_buf(),
-        Symbol::from("Root"),
-        &mut AB_LOCK.as_bytes(),
-    )
-    .expect("Reading outer");
-
-    // Test only -- clear always deps because usually `merge` is used while the graph is being
-    // built, not after it has been entirely read.
-    outer.always_deps.clear();
-
-    let inner = DependencyGraph::read_from_lock(
-        tmp.path().to_path_buf(),
-        Symbol::from("B"),
-        &mut ROOT_LOCK.as_bytes(),
-    )
-    .expect("Reading inner");
-
-    let Err(err) = outer.merge(Symbol::from("B"), Symbol::from("Root"), inner, Symbol::from(""), &BTreeMap::new()) else {
-        panic!("Inner refers back to outer's root");
-    };
-
-    assert_error_contains!(err, "Conflicting dependencies found");
+    assert_error_contains!(err, "conflicting dependencies found");
 }
 
 #[test]
 fn immediate_dependencies() {
     let pkg = dev_dep_test_package();
 
-    let manifest = parse_move_manifest_from_file(&pkg).expect("Loading manifest");
-    let mut dependency_cache = DependencyCache::new(/* skip_fetch_latest_git_deps */ true);
-    let graph = DependencyGraph::new(&manifest, pkg, &mut dependency_cache, &mut std::io::sink())
+    let manifest_string = std::fs::read_to_string(&pkg.join(SourcePackageLayout::Manifest.path()))
+        .expect("Loading manifest");
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        /* skip_fetch_latest_git_deps */ true,
+        std::io::sink(),
+        tempfile::tempdir().unwrap().path().to_path_buf(),
+    );
+    let (graph, _) = dep_graph_builder
+        .get_graph(
+            &DependencyKind::default(),
+            pkg,
+            manifest_string,
+            /* lock_string_opt */ None,
+        )
         .expect("Creating DependencyGraph");
 
     let r = Symbol::from("Root");
@@ -434,23 +590,15 @@ fn dev_dep_test_package() -> PathBuf {
 const EMPTY_LOCK: &str = r#"
 [move]
 version = 0
-"#;
-
-const ROOT_LOCK: &str = r#"
-[move]
-version = 0
-dependencies = [
-    { name = "Root" },
-]
-
-[[move.package]]
-name = "Root"
-source = { local = "." }
+manifest_digest = "42"
+deps_digest = ""
 "#;
 
 const A_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]
@@ -463,6 +611,8 @@ source = { local = "./A" }
 const AB_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
     { name = "B" },
@@ -480,6 +630,8 @@ source = { local = "./B" }
 const A_DEP_B_LOCK: &str = r#"
 [move]
 version = 0
+manifest_digest = "42"
+deps_digest = "7"
 dependencies = [
     { name = "A" },
 ]

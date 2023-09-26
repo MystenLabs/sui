@@ -7,6 +7,7 @@ use crate::messages_checkpoint::{
 };
 use crate::transaction::CertifiedTransaction;
 use byteorder::{BigEndian, ReadBytesExt};
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Debug, Formatter};
@@ -26,6 +27,15 @@ pub struct ConsensusCommitPrologue {
     pub commit_timestamp_ms: CheckpointTimestamp,
 }
 
+// In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
+// 4096 should give us plenty of space for any imaginable JWK while preventing DoSes.
+static MAX_TOTAL_JWK_SIZE: usize = 4096;
+
+pub fn check_total_jwk_size(id: &JwkId, jwk: &JWK) -> bool {
+    id.iss.len() + id.kid.len() + jwk.kty.len() + jwk.alg.len() + jwk.e.len() + jwk.n.len()
+        <= MAX_TOTAL_JWK_SIZE
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusTransaction {
     /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
@@ -34,12 +44,15 @@ pub struct ConsensusTransaction {
     pub kind: ConsensusTransactionKind,
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 pub enum ConsensusTransactionKey {
     Certificate(TransactionDigest),
     CheckpointSignature(AuthorityName, CheckpointSequenceNumber),
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityName, u64 /* generation */),
+    // Key must include both id and jwk, because honest validators could be given multiple jwks for
+    // the same id by malfunctioning providers.
+    NewJWKFetched(Box<(AuthorityName, JwkId, JWK)>),
 }
 
 impl Debug for ConsensusTransactionKey {
@@ -56,6 +69,16 @@ impl Debug for ConsensusTransactionKey {
                 name.concise(),
                 generation
             ),
+            Self::NewJWKFetched(key) => {
+                let (authority, id, jwk) = &**key;
+                write!(
+                    f,
+                    "NewJWKFetched({:?}, {:?}, {:?})",
+                    authority.concise(),
+                    id,
+                    jwk
+                )
+            }
         }
     }
 }
@@ -122,6 +145,7 @@ pub enum ConsensusTransactionKind {
     CheckpointSignature(Box<CheckpointSignatureMessage>),
     EndOfPublish(AuthorityName),
     CapabilityNotification(AuthorityCapabilities),
+    NewJWKFetched(AuthorityName, JwkId, JWK),
 }
 
 impl ConsensusTransaction {
@@ -170,6 +194,16 @@ impl ConsensusTransaction {
         }
     }
 
+    pub fn new_jwk_fetched(authority: AuthorityName, id: JwkId, jwk: JWK) -> Self {
+        let mut hasher = DefaultHasher::new();
+        id.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_le_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::NewJWKFetched(authority, id, jwk),
+        }
+    }
+
     pub fn get_tracking_id(&self) -> u64 {
         (&self.tracking_id[..])
             .read_u64::<BigEndian>()
@@ -193,6 +227,13 @@ impl ConsensusTransaction {
             ConsensusTransactionKind::CapabilityNotification(cap) => {
                 ConsensusTransactionKey::CapabilityNotification(cap.authority, cap.generation)
             }
+            ConsensusTransactionKind::NewJWKFetched(authority, id, key) => {
+                ConsensusTransactionKey::NewJWKFetched(Box::new((
+                    *authority,
+                    id.clone(),
+                    key.clone(),
+                )))
+            }
         }
     }
 
@@ -203,4 +244,31 @@ impl ConsensusTransaction {
     pub fn is_end_of_publish(&self) -> bool {
         matches!(self.kind, ConsensusTransactionKind::EndOfPublish(_))
     }
+}
+
+#[test]
+fn test_jwk_compatibility() {
+    // Ensure that the JWK and JwkId structs in fastcrypto do not change formats.
+    // If this test breaks DO NOT JUST UPDATE THE EXPECTED BYTES. Instead, add a local JWK or
+    // JwkId struct that mirrors the fastcrypto struct, use it in AuthenticatorStateUpdate, and
+    // add Into/From as necessary.
+    let jwk = JWK {
+        kty: "a".to_string(),
+        e: "b".to_string(),
+        n: "c".to_string(),
+        alg: "d".to_string(),
+    };
+
+    let expected_jwk_bytes = vec![1, 97, 1, 98, 1, 99, 1, 100];
+    let jwk_bcs = bcs::to_bytes(&jwk).unwrap();
+    assert_eq!(jwk_bcs, expected_jwk_bytes);
+
+    let id = JwkId {
+        iss: "abc".to_string(),
+        kid: "def".to_string(),
+    };
+
+    let expected_id_bytes = vec![3, 97, 98, 99, 3, 100, 101, 102];
+    let id_bcs = bcs::to_bytes(&id).unwrap();
+    assert_eq!(id_bcs, expected_id_bytes);
 }

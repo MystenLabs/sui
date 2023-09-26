@@ -232,6 +232,22 @@ pub enum UserInputError {
 
     #[error("Transaction {0} not found")]
     TransactionCursorNotFound(u64),
+
+    #[error(
+        "Object {:?} is a system object and cannot be accessed by user transactions.",
+        object_id
+    )]
+    InaccessibleSystemObject { object_id: ObjectID },
+    #[error(
+        "{max_publish_commands} max publish/upgrade commands allowed, {publish_count} provided"
+    )]
+    MaxPublishCountExceeded {
+        max_publish_commands: u64,
+        publish_count: u64,
+    },
+
+    #[error("Immutable parameter provided, mutable parameter expected.")]
+    MutableParameterExpected { object_id: ObjectID },
 }
 
 #[derive(
@@ -349,6 +365,15 @@ pub enum SuiError {
     QuorumFailedToGetEffectsQuorumWhenProcessingTransaction {
         effects_map: BTreeMap<TransactionEffectsDigest, (Vec<AuthorityName>, StakeUnit)>,
     },
+    #[error(
+        "Failed to verify Tx certificate with executed effects, error: {error:?}, validator: {validator_name:?}"
+    )]
+    FailedToVerifyTxCertWithExecutedEffects {
+        validator_name: AuthorityName,
+        error: String,
+    },
+    #[error("Transaction is already finalized but with different user signatures")]
+    TxAlreadyFinalizedWithDifferentUserSigs,
     #[error("System Transaction not accepted")]
     InvalidSystemTransaction,
 
@@ -359,6 +384,9 @@ pub enum SuiError {
     InvalidAddress,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+
+    #[error("Invalid digest length. Expected {expected}, got {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
 
     #[error("Unexpected message.")]
     UnexpectedMessage,
@@ -712,6 +740,8 @@ impl SuiError {
             SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
                 (false, true)
             }
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
             SuiError::ObjectLockConflict { .. } => (false, true),
 
             _ => (false, false),

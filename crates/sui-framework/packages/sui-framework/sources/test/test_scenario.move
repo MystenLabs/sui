@@ -8,6 +8,7 @@ module sui::test_scenario {
     use sui::tx_context::{Self, TxContext};
     use sui::vec_map::VecMap;
 
+    #[allow(unused_const)]
     /// the transaction failed when generating these effects. For example, a circular ownership
     /// of objects was created
     const ECouldNotGenerateEffects: u64 = 0;
@@ -357,7 +358,8 @@ module sui::test_scenario {
 
     // == internal ==
 
-    // internal function that ends the transaction, realizing changes
+    // internal function that ends the transaction, realizing changes (may abort with
+    // `ECouldNotGenerateEffects`)
     native fun end_transaction(): TransactionEffects;
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...

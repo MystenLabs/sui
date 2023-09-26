@@ -8,7 +8,7 @@ use crate::digests::{
 };
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::SuiError;
-use crate::execution::LoadedChildObjectMetadata;
+use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -19,11 +19,11 @@ use crate::transaction::{SenderSignedData, TransactionDataAPI, VerifiedTransacti
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
-    event::Event,
     object::Object,
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -55,13 +55,16 @@ pub enum DeleteKind {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub enum MarkerKind {
+pub enum MarkerValue {
     /// An object was received at the given version in the transaction and is no longer able
     /// to be received at that version in subequent transactions.
     Received,
+    /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
+    /// accessed or used in subsequent transactions.
+    OwnedDeleted,
     /// A shared object was deleted by the transaction and is no longer able to be accessed or
     /// used in subsequent transactions.
-    SharedObjectDeleted,
+    SharedDeleted(TransactionDigest),
 }
 
 /// DeleteKind together with the old sequence number prior to the deletion, if available.
@@ -112,11 +115,25 @@ impl<T: Storage + ParentSync + ChildObjectResolver> StorageView for T {}
 /// An abstraction of the (possibly distributed) store for objects. This
 /// API only allows for the retrieval of objects, not any state changes
 pub trait ChildObjectResolver {
+    /// `child` must have an `ObjectOwner` ownership equal to `owner`.
     fn read_child_object(
         &self,
         parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
+    ) -> SuiResult<Option<Object>>;
+
+    /// `receiving_object_id` must have an `AddressOwner` ownership equal to `owner`.
+    /// `get_object_received_at_version` must be the exact version at which the object will be received,
+    /// and it cannot have been previously received at that version. NB: An object not existing at
+    /// that version, and not having valid access to the object will be treated exactly the same
+    /// and `Ok(None)` must be returned.
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
     ) -> SuiResult<Option<Object>>;
 }
 
@@ -124,16 +141,13 @@ pub trait ChildObjectResolver {
 pub trait Storage {
     fn reset(&mut self);
 
-    /// Record an event that happened during execution
-    fn log_event(&mut self, event: Event);
-
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
 
-    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
+    fn record_execution_results(&mut self, results: ExecutionResults);
 
-    fn save_loaded_child_objects(
+    fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     );
 }
 
@@ -234,24 +248,38 @@ pub fn get_module_by_id<S: BackingPackageStore>(
 }
 
 pub trait ParentSync {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>>;
+    /// This function is only called by older protocol versions.
+    /// It creates an explicit dependency to tombstones, which is not desired.
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>>;
 }
 
 impl<S: ParentSync> ParentSync for std::sync::Arc<S> {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(self.as_ref(), object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(self.as_ref(), object_id)
     }
 }
 
 impl<S: ParentSync> ParentSync for &S {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(*self, object_id)
     }
 }
 
 impl<S: ParentSync> ParentSync for &mut S {
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
-        ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref_deprecated(*self, object_id)
     }
 }
 
@@ -269,6 +297,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
             child_version_upper_bound,
         )
     }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            self.as_ref(),
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &S {
@@ -280,6 +323,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
     }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            *self,
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
@@ -290,6 +348,21 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::read_child_object(*self, parent, child, child_version_upper_bound)
+    }
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        ChildObjectResolver::get_object_received_at_version(
+            *self,
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
     }
 }
 
@@ -913,6 +986,47 @@ pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<Obj
         .collect())
 }
 
+pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> Vec<ObjectKey> {
+    tx.intent_message()
+        .value
+        .receiving_objects()
+        .into_iter()
+        .map(|oref| oref.into())
+        .collect()
+}
+
+pub trait ReceivedMarkerQuery {
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError>;
+}
+
+impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for Arc<T> {
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        self.as_ref()
+            .have_received_object_at_version(object_id, version, epoch_id)
+    }
+}
+
+impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for &T {
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        (*self).have_received_object_at_version(object_id, version, epoch_id)
+    }
+}
+
 pub trait ObjectStore {
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError>;
     fn get_object_by_key(
@@ -993,6 +1107,20 @@ impl<T: ObjectStore> ObjectStore for Arc<T> {
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
         self.as_ref().get_object_by_key(object_id, version)
+    }
+}
+
+impl<T: ObjectStore> ObjectStore for &T {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object(*self, object_id)
+    }
+
+    fn get_object_by_key(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+    ) -> Result<Option<Object>, SuiError> {
+        ObjectStore::get_object_by_key(*self, object_id, version)
     }
 }
 
@@ -1139,5 +1267,28 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
 
     fn insert_committee(&self, new_committee: Committee) -> Result<(), Self::Error> {
         self.0.insert_committee(new_committee)
+    }
+}
+
+pub trait BackingStore:
+    BackingPackageStore
+    + ChildObjectResolver
+    + GetModule<Error = SuiError, Item = CompiledModule>
+    + ObjectStore
+    + ParentSync
+{
+    fn as_object_store(&self) -> &dyn ObjectStore;
+}
+
+impl<T> BackingStore for T
+where
+    T: BackingPackageStore,
+    T: ChildObjectResolver,
+    T: GetModule<Error = SuiError, Item = CompiledModule>,
+    T: ObjectStore,
+    T: ParentSync,
+{
+    fn as_object_store(&self) -> &dyn ObjectStore {
+        self
     }
 }

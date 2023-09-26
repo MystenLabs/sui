@@ -4,12 +4,10 @@
 
 use std::env;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
-use backoff::ExponentialBackoff;
 use clap::Parser;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
@@ -26,26 +24,31 @@ use apis::{
     WriteApi,
 };
 use errors::IndexerError;
-use handlers::checkpoint_handler::CheckpointHandler;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
 use processors::processor_orchestrator::ProcessorOrchestrator;
 use store::IndexerStore;
-use sui_core::subscription_handler::SubscriptionHandler;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use crate::apis::MoveUtilsApi;
+use crate::framework::IndexerBuilder;
+use crate::handlers::checkpoint_handler::new_handlers;
 
 pub mod apis;
 pub mod errors;
+pub mod framework;
 mod handlers;
+pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
+pub mod models_v2;
 pub mod processors;
 pub mod schema;
+pub mod schema_v2;
 pub mod store;
 pub mod test_utils;
 pub mod types;
+pub mod types_v2;
 pub mod utils;
 
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -98,7 +101,7 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
-    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    #[clap(long, num_args(1..))]
     pub migrated_methods: Vec<String>,
     #[clap(long)]
     pub reset_db: bool,
@@ -109,6 +112,9 @@ pub struct IndexerConfig {
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
+
+    #[clap(long)]
+    pub use_v2: bool,
 }
 
 impl IndexerConfig {
@@ -163,6 +169,7 @@ impl Default for IndexerConfig {
             fullnode_sync_worker: true,
             rpc_server_worker: true,
             skip_db_commit: false,
+            use_v2: false,
         }
     }
 }
@@ -182,80 +189,41 @@ impl Indexer {
             env!("CARGO_PKG_VERSION")
         );
         mysten_metrics::init_metrics(registry);
-        let subscription_handler = Arc::new(SubscriptionHandler::new(registry));
-        if config.rpc_server_worker && config.fullnode_sync_worker {
-            info!("Starting indexer with both fullnode sync and RPC server");
-            // let JSON RPC server run forever.
-            let handle = build_json_rpc_server(
-                registry,
-                store.clone(),
-                subscription_handler.clone(),
-                config,
-                custom_runtime,
-            )
-            .await
-            .expect("Json rpc server should not run into errors upon start.");
-            spawn_monitored_task!(handle.stopped());
 
-            // let async processor run forever.
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
-            spawn_monitored_task!(processor_orchestrator.run_forever());
-
-            backoff::future::retry(ExponentialBackoff::default(), || async {
-                let subscription_handler_clone = subscription_handler.clone();
-                let metrics_clone = metrics.clone();
-                let http_client = get_http_client(config.rpc_client_url.as_str())?;
-                let cp = CheckpointHandler::new(
-                    store.clone(),
-                    http_client,
-                    subscription_handler_clone,
-                    metrics_clone,
-                    config,
-                );
-                cp.spawn()
-                    .await
-                    .expect("Indexer main should not run into errors.");
-                Ok(())
-            })
-            .await
-        } else if config.rpc_server_worker {
+        if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
-            let handle = build_json_rpc_server(
-                registry,
-                store.clone(),
-                subscription_handler.clone(),
-                config,
-                custom_runtime,
-            )
-            .await
-            .expect("Json rpc server should not run into errors upon start.");
+            let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
+                .await
+                .expect("Json rpc server should not run into errors upon start.");
             handle.stopped().await;
-            Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
             let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
-            backoff::future::retry(ExponentialBackoff::default(), || async {
-                let subscription_handler_clone = subscription_handler.clone();
-                let metrics_clone = metrics.clone();
-                let http_client = get_http_client(config.rpc_client_url.as_str())?;
-                let cp = CheckpointHandler::new(
-                    store.clone(),
-                    http_client,
-                    subscription_handler_clone,
-                    metrics_clone,
-                    config,
-                );
-                cp.spawn()
-                    .await
-                    .expect("Indexer main should not run into errors.");
-                Ok(())
-            })
-            .await
-        } else {
-            Ok(())
+            // -1 will be returned when checkpoints table is empty.
+            let last_seq_from_db = store
+                .get_latest_tx_checkpoint_sequence_number()
+                .await
+                .expect("Failed to get latest tx checkpoint sequence number from DB");
+            let last_downloaded_checkpoint = if last_seq_from_db < 0 {
+                None
+            } else {
+                Some(last_seq_from_db as u64)
+            };
+
+            let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
+
+            IndexerBuilder::new()
+                .last_downloaded_checkpoint(last_downloaded_checkpoint)
+                .rest_url(&config.rpc_client_url)
+                .handler(checkpoint_handler)
+                .handler(object_handler)
+                .run()
+                .await;
         }
+
+        Ok(())
     }
 }
 
@@ -319,8 +287,8 @@ struct PgConectionPoolConfig {
 
 impl PgConectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
-    const DEFAULT_CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
-    const DEFAULT_STATEMENT_TIMEOUT: Duration = Duration::from_secs(5);
+    const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
+    const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
 
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
@@ -335,10 +303,19 @@ impl Default for PgConectionPoolConfig {
             .ok()
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(Self::DEFAULT_POOL_SIZE);
+        let conn_timeout_secs = std::env::var("DB_CONNECTION_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(Self::DEFAULT_CONNECTION_TIMEOUT);
+        let statement_timeout_secs = std::env::var("DB_STATEMENT_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(Self::DEFAULT_STATEMENT_TIMEOUT);
+
         Self {
             pool_size: db_pool_size,
-            connection_timeout: Self::DEFAULT_CONNECTION_TIMEOUT,
-            statement_timeout: Self::DEFAULT_STATEMENT_TIMEOUT,
+            connection_timeout: Duration::from_secs(conn_timeout_secs),
+            statement_timeout: Duration::from_secs(statement_timeout_secs),
         }
     }
 }
@@ -374,7 +351,6 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
 pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
     prometheus_registry: &Registry,
     state: S,
-    subscription_handler: Arc<SubscriptionHandler>,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
@@ -392,7 +368,6 @@ pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clo
     builder.register_module(IndexerApi::new(
         state.clone(),
         http_client.clone(),
-        subscription_handler,
         config.migrated_methods.clone(),
     ))?;
     builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;

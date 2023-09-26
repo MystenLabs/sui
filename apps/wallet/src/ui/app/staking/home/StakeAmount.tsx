@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
+import { useFormatCoin } from '@mysten/core';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 
 //TODO unify StakeAmount and CoinBalance
 interface StakeAmountProps {

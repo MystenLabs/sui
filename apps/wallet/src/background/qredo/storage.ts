@@ -3,16 +3,15 @@
 
 import { v4 as uuid } from 'uuid';
 
-import { isSameQredoConnection } from './utils';
 import {
-	setToSessionStorage,
+	getFromLocalStorage,
 	getFromSessionStorage,
 	isSessionStorageSupported,
-	getFromLocalStorage,
 	setToLocalStorage,
+	setToSessionStorage,
 } from '../storage-utils';
-
-import type { QredoConnectPendingRequest, QredoConnectIdentity, QredoConnection } from './types';
+import type { QredoConnectIdentity, QredoConnection, QredoConnectPendingRequest } from './types';
+import { isSameQredoConnection } from './utils';
 
 const SESSION_STORAGE_KEY = 'qredo-connect-requests';
 const STORAGE_ACCEPTED_CONNECTIONS_KEY = 'qredo-connections';
@@ -105,14 +104,23 @@ export async function updatePendingRequest(
 	await storePendingRequest(request);
 }
 
+/**
+ * @deprecated
+ */
 export async function getAllQredoConnections() {
 	return (await getFromLocalStorage<QredoConnection[]>(STORAGE_ACCEPTED_CONNECTIONS_KEY, [])) || [];
 }
 
+/**
+ * @deprecated
+ */
 export function storeAllQredoConnections(qredoConnections: QredoConnection[]) {
 	return setToLocalStorage<QredoConnection[]>(STORAGE_ACCEPTED_CONNECTIONS_KEY, qredoConnections);
 }
 
+/**
+ * @deprecated
+ */
 export async function getQredoConnection(identity: QredoConnectIdentity | string) {
 	return (
 		(await getAllQredoConnections()).find((aConnection) =>
@@ -121,6 +129,9 @@ export async function getQredoConnection(identity: QredoConnectIdentity | string
 	);
 }
 
+/**
+ * @deprecated
+ */
 export async function storeQredoConnection(qredoConnection: QredoConnection) {
 	const allConnections = await getAllQredoConnections();
 	const newConnections = allConnections.filter(
@@ -130,6 +141,9 @@ export async function storeQredoConnection(qredoConnection: QredoConnection) {
 	await storeAllQredoConnections(newConnections);
 }
 
+/**
+ * @deprecated
+ */
 export async function storeQredoConnectionAccessToken(qredoID: string, accessToken: string) {
 	const existingConnection = await getQredoConnection(qredoID);
 	if (existingConnection) {

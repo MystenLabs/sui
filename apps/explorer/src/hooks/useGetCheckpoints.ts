@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 export const DEFAULT_CHECKPOINTS_LIMIT = 20;
 
 // Fetch transaction blocks
 export function useGetCheckpoints(cursor?: string, limit = DEFAULT_CHECKPOINTS_LIMIT) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 
 	return useInfiniteQuery(
 		['get-checkpoints', limit, cursor],
 		async ({ pageParam }) =>
-			await rpc.getCheckpoints({
+			await client.getCheckpoints({
 				descendingOrder: true,
 				cursor: pageParam ?? cursor,
 				limit,

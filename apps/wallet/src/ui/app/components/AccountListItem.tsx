@@ -1,24 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { useResolveSuiNSName } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 
-import { AccountBadge } from './AccountBadge';
-import { useActiveAddress } from '../hooks/useActiveAddress';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
-import { type SerializedAccount } from '_src/background/keyring/Account';
+import { AccountBadge } from './AccountBadge';
 
 export type AccountItemProps = {
-	account: SerializedAccount;
-	onAccountSelected: (address: SerializedAccount) => void;
+	account: SerializedUIAccount;
+	onAccountSelected: (account: SerializedUIAccount) => void;
 };
 
+/** @deprecated - use AccountListItem from the `accounts` folder **/
 export function AccountListItem({ account, onAccountSelected }: AccountItemProps) {
-	const { address, type } = account;
-	const activeAddress = useActiveAddress();
+	const { address, type, selected } = account;
 	const copy = useCopyToClipboard(address, {
 		copySuccessMessage: 'Address Copied',
 	});
@@ -40,7 +39,7 @@ export function AccountListItem({ account, onAccountSelected }: AccountItemProps
 					</div>
 					<AccountBadge accountType={type} />
 				</div>
-				{activeAddress === address ? <Check12 className="text-success" /> : null}
+				{selected ? <Check12 className="text-success" /> : null}
 				<Copy12
 					className="text-gray-60 group-hover:text-steel transition-colors hover:!text-hero-dark"
 					onClick={copy}

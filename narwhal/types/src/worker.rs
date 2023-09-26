@@ -17,7 +17,7 @@ pub struct WorkerBatchMessage {
 }
 
 /// Used by primary to bulk request batches from workers local store.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RequestBatchesRequest {
     pub batch_digests: Vec<BatchDigest>,
 }

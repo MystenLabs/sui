@@ -58,10 +58,10 @@ transfers.forEach((transfer, index) => {
 });
 ```
 
-After you have the transaction block defined, you can directly execute it with a signer using `signAndExecuteTransactionBlock`.
+After you have the transaction block defined, you can directly execute it using the `signAndExecuteTransactionBlock` method on a SuiClient.
 
 ```tsx
-signer.signAndExecuteTransactionBlock({ transactionBlock: txb });
+client.signAndExecuteTransactionBlock({ signer: keypair, transactionBlock: txb });
 ```
 
 ## Inputs and transactions
@@ -128,17 +128,17 @@ You can also transfer the gas coin using `transferObjects`, in the event that yo
 
 If you need the transaction block bytes, instead of signing or executing the transaction block, you can use the `build` method on the transaction builder itself.
 
-**Important:** You might need to explicitly call `setSender()` on the transaction block to ensure that the `sender` field is populated. This is normally done by the signer before signing the transaction, but will not be done automatically if you’re building the transaction block bytes yourself.
+**Important:** You might need to explicitly call `setSender()` on the transaction block to ensure that the `sender` field is populated. This is normally done by the client before signing the transaction, but will not be done automatically if you’re building the transaction block bytes yourself.
 
 ```tsx
 const txb = new TransactionBlock();
 
 // ... add some transactions...
 
-await txb.build({ provider });
+await txb.build({ client });
 ```
 
-In most cases, building requires your JSON RPC Provider to fully resolve input values.
+In most cases, building requires your SuiClient to fully resolve input values.
 
 If you have transaction block bytes, you can also convert them back into a `TransactionBlock` class:
 
@@ -149,7 +149,7 @@ const txb = TransactionBlock.from(bytes);
 
 ## Building Offline
 
-In the event that you want to build a transaction block offline (i.e. with no `provider` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
+In the event that you want to build a transaction block offline (i.e. with no `client` required), you need to fully define all of your input values, and gas configuration (see the following example). For pure values, you can provide a `Uint8Array` which will be used directly in the transaction. For objects, you can use the `Inputs` helper to construct an object reference.
 
 ```tsx
 import { Inputs } from "@mysten/sui.js/transactions";
@@ -164,7 +164,7 @@ txb.object(Inputs.ObjectRef({ digest, objectId, version }));
 txb.object(Inputs.SharedObjectRef({ objectId, initialSharedVersion, mutable }));
 ```
 
-You can then omit the `provider` object when calling `build` on the transaction. If there is any required data that is missing, this will throw an error.
+You can then omit the `client` object when calling `build` on the transaction. If there is any required data that is missing, this will throw an error.
 
 ## Gas Configuration
 
@@ -233,7 +233,7 @@ const txb = new TransactionBlock();
 
 // ... add some transactions...
 
-const kindBytes = await txb.build({ provider, onlyTransactionKind: true });
+const kindBytes = await txb.build({ client, onlyTransactionKind: true });
 
 // Construct a sponsored transaction from the kind bytes:
 const sponsoredTxb = TransactionBlock.fromKind(kindBytes);

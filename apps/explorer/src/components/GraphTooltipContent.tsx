@@ -14,7 +14,7 @@ export function GraphTooltipContent({ children }: GraphTooltipContentProps) {
 	return (
 		<div
 			className={clsx(
-				'w-fit -translate-y-[calc(100%-10px)] rounded-md border border-solid border-steel bg-white/90 p-2 shadow-mistyEdge',
+				'w-fit -translate-y-[calc(100%-10px)] rounded-md border border-solid border-steel bg-white/90 p-2 shadow-effect-ui-regular',
 				isFlippedHorizontally
 					? '-translate-x-[1px] rounded-bl-none'
 					: 'translate-x-[1px] rounded-br-none',

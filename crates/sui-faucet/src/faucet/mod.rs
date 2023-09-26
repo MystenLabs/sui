@@ -112,7 +112,7 @@ pub struct FaucetConfig {
     #[clap(long, default_value_t = 300)]
     pub ttl_expiration: u64,
 
-    #[clap(long, default_value_t = false)]
+    #[clap(long, action = clap::ArgAction::Set, default_value_t = false)]
     pub batch_enabled: bool,
 }
 

@@ -39,7 +39,9 @@ use sui_types::{
     object::{Data, Owner},
     signature::GenericSignature,
     storage::DeleteKind,
-    transaction::{Argument, CallArg, Command, ObjectArg, TransactionKind},
+    transaction::{
+        Argument, CallArg, Command, EndOfEpochTransactionKind, ObjectArg, TransactionKind,
+    },
 };
 use typed_store::rocks::TypedStoreError;
 
@@ -155,6 +157,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<TypeArgumentError>(&samples)?;
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
     tracer.trace_type::<TransactionExpiration>(&samples)?;
+    tracer.trace_type::<EndOfEpochTransactionKind>(&samples)?;
 
     // uncomment once GenericSignature is added
     tracer.trace_type::<FullCheckpointContents>(&samples)?;
@@ -164,7 +167,7 @@ fn get_registry() -> Result<Registry> {
     tracer.registry()
 }
 
-#[derive(Debug, Parser, Clone, Copy, ArgEnum)]
+#[derive(Debug, Parser, Clone, Copy, ValueEnum)]
 enum Action {
     Print,
     Test,
@@ -177,7 +180,7 @@ enum Action {
     about = "Trace serde (de)serialization to generate format descriptions for Sui types"
 )]
 struct Options {
-    #[clap(arg_enum, default_value = "Print", ignore_case = true)]
+    #[clap(value_enum, default_value = "Print", ignore_case = true)]
     action: Action,
 }
 

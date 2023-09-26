@@ -73,7 +73,7 @@ where
 
             let tls_connect_info = TlsConnectionInfo {
                 peer_certificates: server_conn.peer_certificates().map(From::from),
-                sni_hostname: server_conn.sni_hostname().map(From::from),
+                sni_hostname: server_conn.server_name().map(From::from),
                 public_key,
             };
             let service = Extension(tls_connect_info).layer(service);

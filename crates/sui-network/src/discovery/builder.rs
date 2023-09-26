@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{server::Server, Discovery, DiscoveryEventLoop, DiscoveryServer, State};
+use super::{
+    metrics::Metrics, server::Server, Discovery, DiscoveryEventLoop, DiscoveryServer, State,
+};
 use crate::discovery::TrustedPeerChangeEvent;
 use anemo::codegen::InboundRequestLayer;
 use anemo_tower::rate_limit;
@@ -19,6 +21,7 @@ use tokio::{
 /// Discovery Service Builder.
 pub struct Builder {
     config: Option<P2pConfig>,
+    metrics: Option<Metrics>,
     trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
 }
 
@@ -27,12 +30,18 @@ impl Builder {
     pub fn new(trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>) -> Self {
         Self {
             config: None,
+            metrics: None,
             trusted_peer_change_rx,
         }
     }
 
     pub fn config(mut self, config: P2pConfig) -> Self {
         self.config = Some(config);
+        self
+    }
+
+    pub fn with_metrics(mut self, registry: &prometheus::Registry) -> Self {
+        self.metrics = Some(Metrics::enabled(registry));
         self
     }
 
@@ -60,9 +69,11 @@ impl Builder {
     pub(super) fn build_internal(self) -> (UnstartedDiscovery, Server) {
         let Builder {
             config,
+            metrics,
             trusted_peer_change_rx,
         } = self;
         let config = config.unwrap();
+        let metrics = metrics.unwrap_or_else(Metrics::disabled);
         let (sender, receiver) = oneshot::channel();
 
         let handle = Handle {
@@ -88,6 +99,7 @@ impl Builder {
                 shutdown_handle: receiver,
                 state,
                 trusted_peer_change_rx,
+                metrics,
             },
             server,
         )
@@ -101,6 +113,7 @@ pub struct UnstartedDiscovery {
     pub(super) shutdown_handle: oneshot::Receiver<()>,
     pub(super) state: Arc<RwLock<State>>,
     pub(super) trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    pub(super) metrics: Metrics,
 }
 
 impl UnstartedDiscovery {
@@ -111,6 +124,7 @@ impl UnstartedDiscovery {
             shutdown_handle,
             state,
             trusted_peer_change_rx,
+            metrics,
         } = self;
 
         let discovery_config = config.discovery.clone().unwrap_or_default();
@@ -138,6 +152,7 @@ impl UnstartedDiscovery {
                 shutdown_handle,
                 state,
                 trusted_peer_change_rx,
+                metrics,
             },
             handle,
         )

@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
-
-import { encrypt, decrypt } from '_shared/cryptography/keystore';
+import { decrypt, encrypt } from '_shared/cryptography/keystore';
 import {
 	entropyToMnemonic,
 	entropyToSerialized,
@@ -12,6 +10,7 @@ import {
 	validateEntropy,
 } from '_shared/utils/bip39';
 import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
+import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
 
 export const LATEST_VAULT_VERSION = 2;
 
@@ -27,6 +26,7 @@ export type V2DecryptedDataType = {
 /**
  * Holds the mnemonic of the wallet and any imported Keypairs.
  * Also provides functionality to create/encrypt/decrypt it.
+ * @deprecated
  */
 export class Vault {
 	public readonly entropy: Uint8Array;

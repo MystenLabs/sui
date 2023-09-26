@@ -14,10 +14,12 @@ module sui::sui {
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 1;
 
+    #[allow(unused_const)]
     /// The amount of Mist per Sui token based on the the fact that mist is
     /// 10^-9 of a Sui token
     const MIST_PER_SUI: u64 = 1_000_000_000;
 
+    #[allow(unused_const)]
     /// The total supply of Sui denominated in whole Sui tokens (10 Billion)
     const TOTAL_SUPPLY_SUI: u64 = 10_000_000_000;
 

@@ -10,32 +10,40 @@ use std::{
 };
 
 use crate::{
-    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo, SourceManifest},
+    source_package::parsed_manifest::{CustomDepInfo, DependencyKind, GitInfo},
     BuildConfig,
 };
 
-use self::{dependency_cache::DependencyCache, dependency_graph::DependencyGraph};
+use self::dependency_graph::DependencyGraphBuilder;
 
 pub mod dependency_cache;
 pub mod dependency_graph;
 mod digest;
-pub mod lock_file;
 pub mod resolution_graph;
 pub mod resolving_table;
 
 pub fn download_dependency_repos<Progress: Write>(
-    manifest: &SourceManifest,
+    manifest_string: String,
+    lock_string: Option<String>,
     build_options: &BuildConfig,
     root_path: &Path,
     progress_output: &mut Progress,
 ) -> Result<()> {
-    let mut dependency_cache = DependencyCache::new(build_options.skip_fetch_latest_git_deps);
-
-    let graph = DependencyGraph::new(
-        manifest,
-        root_path.to_path_buf(),
-        &mut dependency_cache,
+    let install_dir = build_options
+        .install_dir
+        .as_ref()
+        .unwrap_or(&root_path.to_path_buf())
+        .to_owned();
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        build_options.skip_fetch_latest_git_deps,
         progress_output,
+        install_dir,
+    );
+    let (graph, _) = dep_graph_builder.get_graph(
+        &DependencyKind::default(),
+        root_path.to_path_buf(),
+        manifest_string,
+        lock_string,
     )?;
 
     for pkg_name in graph.topological_order() {
@@ -52,6 +60,11 @@ pub fn download_dependency_repos<Progress: Write>(
             .get(&pkg_name)
             .expect("Metadata for package");
 
+        let DependencyGraphBuilder {
+            ref mut dependency_cache,
+            ref mut progress_output,
+            ..
+        } = dep_graph_builder;
         dependency_cache.download_and_update_if_remote(pkg_name, &package.kind, progress_output)?;
     }
 

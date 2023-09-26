@@ -104,6 +104,8 @@ async fn test_node_staggered_starts() {
 #[ignore]
 #[tokio::test]
 async fn test_full_outage_and_recovery() {
+    let _guard = setup_tracing();
+
     let stop_and_start_delay = Duration::from_secs(12);
     let node_advance_delay = Duration::from_secs(60);
 

@@ -16,7 +16,7 @@ pub struct Errmap {
     #[clap(long)]
     pub error_prefix: Option<String>,
     /// The file to serialize the generated error map to.
-    #[clap(long, default_value = "error_map", parse(from_os_str))]
+    #[clap(long, default_value = "error_map")]
     pub output_file: PathBuf,
 }
 

@@ -191,7 +191,7 @@ Public key in hex: $PK
     let pk = x"$PK";
     let sig = x"$SIG";
     let verified = bls12381::bls12381_min_sig_verify(&sig, &msg);
-    assert!(verify == true, 0);
+    assert!(verified == true, 0);
 ```
 
 #### BLS G1 signature (96 bytes, minPk setting)
@@ -218,5 +218,5 @@ Public key in hex: $PK
     let pk = x"$PK";
     let sig = x"$SIG";
     let verified = bls12381::bls12381_min_pk_verify(&sig, &msg);
-    assert!(verify == true, 0);
+    assert!(verified == true, 0);
 ```

@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '@mysten/core';
+import { useLatestCheckpointSequenceNumber } from '@mysten/dapp-kit';
 import { ArrowRight12 } from '@mysten/icons';
 import { Text } from '@mysten/ui';
-import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import { genTableDataFromCheckpointsData } from './utils';
@@ -32,12 +31,8 @@ export function CheckpointsTable({
 	maxCursor,
 }: Props) {
 	const [limit, setLimit] = useState(initialLimit);
-	const rpc = useRpcClient();
 
-	const countQuery = useQuery({
-		queryKey: ['checkpoints', 'count'],
-		queryFn: () => rpc.getLatestCheckpointSequenceNumber(),
-	});
+	const countQuery = useLatestCheckpointSequenceNumber();
 
 	const checkpoints = useGetCheckpoints(initialCursor, limit);
 

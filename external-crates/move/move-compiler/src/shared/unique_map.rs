@@ -69,7 +69,21 @@ impl<K: TName, V> UniqueMap<K, V> {
     }
 
     pub fn get_key(&self, key: &K) -> Option<&K::Key> {
-        self.0.get_key_value(key.borrow().1).map(|(k, _v)| k)
+        self.get_key_(key.borrow().1)
+    }
+
+    pub fn get_key_(&self, key: &K::Key) -> Option<&K::Key> {
+        self.0.get_key_value(key).map(|(k, _v)| k)
+    }
+
+    pub fn get_full_key(&self, key: &K) -> Option<K> {
+        self.get_full_key_(key.borrow().1)
+    }
+
+    pub fn get_full_key_(&self, key: &K::Key) -> Option<K> {
+        self.0
+            .get_key_value(key)
+            .map(|(k, (loc, _))| K::add_loc(*loc, k.clone()))
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
@@ -162,6 +176,11 @@ impl<K: TName, V> UniqueMap<K, V> {
 
     pub fn iter_mut(&mut self) -> IterMut<K, V> {
         self.into_iter()
+    }
+
+    pub fn key_cloned_iter_mut(&mut self) -> impl Iterator<Item = (K, &mut V)> {
+        self.into_iter()
+            .map(|(loc, k_, v)| (K::add_loc(loc, k_.clone()), v))
     }
 
     pub fn maybe_from_opt_iter(

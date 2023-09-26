@@ -175,10 +175,10 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
 
     let leading_name_access = sp(
         mloc,
-        P::LeadingNameAccess_::Name(sp(mloc, STDLIB_ADDRESS_NAME.into())),
+        P::LeadingNameAccess_::Name(sp(mloc, STDLIB_ADDRESS_NAME)),
     );
 
-    let mod_name = sp(mloc, UNIT_TEST_MODULE_NAME.into());
+    let mod_name = sp(mloc, UNIT_TEST_MODULE_NAME);
     let mod_addr_name = sp(mloc, (leading_name_access, mod_name));
     let fn_name = sp(mloc, "create_signers_for_testing".into());
     let args_ = vec![sp(

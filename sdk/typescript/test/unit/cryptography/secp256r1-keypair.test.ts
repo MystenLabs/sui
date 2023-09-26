@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64, toB58, toB64 } from '@mysten/bcs';
+import { secp256r1 } from '@noble/curves/p256';
+import { sha256 } from '@noble/hashes/sha256';
+import { describe, expect, it } from 'vitest';
+
+import { TransactionBlock } from '../../../src/builder';
 import {
 	DEFAULT_SECP256R1_DERIVATION_PATH,
 	Secp256r1Keypair,
 } from '../../../src/keypairs/secp256r1';
-import { describe, it, expect } from 'vitest';
-import { secp256r1 } from '@noble/curves/p256';
-import { fromB64, toB58, toB64 } from '@mysten/bcs';
-import { sha256 } from '@noble/hashes/sha256';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
-import { TransactionBlock } from '../../../src/builder';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,

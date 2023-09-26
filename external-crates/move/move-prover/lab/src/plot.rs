@@ -10,7 +10,7 @@ use crate::{
     benchmark::{Benchmark, BenchmarkData},
 };
 use anyhow::Context;
-use clap::{Arg, Command};
+use clap::Parser;
 use itertools::Itertools;
 use plotters::{
     coord::types::RangedCoordu32,
@@ -24,79 +24,45 @@ use std::collections::BTreeMap;
 // =====================================================================================
 // Command line interface
 
+#[derive(Parser)]
+#[clap(
+    name = "plot",
+    version = "0.1.0",
+    about = "Benchmark plotter for the Move Prover",
+    author
+)]
+struct Plot {
+    /// file where output will be written too
+    #[clap(long, value_name = "FILE", default_value = "plot.svg")]
+    out: String,
+    /// whether to sort the benchmark data based on the first data file
+    #[clap(long)]
+    sort: bool,
+    /// plot on ly the top N entries
+    #[clap(long, value_name = "NUMBER")]
+    top: Option<usize>,
+    /// the benchmark data files to plot
+    #[clap(value_name = "PATH_TO_BENCHMARK_DATA")]
+    data_files: Vec<String>,
+}
+
 pub fn plot_svg(args: &[String]) -> anyhow::Result<()> {
-    let is_number = |s: &str| {
-        s.parse::<usize>()
-            .map(|_| ())
-            .map_err(|_| "expected number".to_string())
-    };
-    let cmd_line_parser = Command::new("plot")
-        .version("0.1.0")
-        .about("Benchmark plotter for the Move Prover")
-        .author("The Diem Core Contributors")
-        .arg(
-            Arg::new("out")
-                .long("out")
-                .takes_value(true)
-                .value_name("FILE")
-                .help("file where output will be written too"),
-        )
-        .arg(
-            Arg::new("sort")
-                .long("sort")
-                .help("whether to sort the benchmark data based on the first data file"),
-        )
-        .arg(
-            Arg::new("top")
-                .long("top")
-                .takes_value(true)
-                .value_name("NUMBER")
-                .validator(is_number)
-                .help("plot only the top N entries"),
-        )
-        .arg(
-            Arg::new("data-files")
-                .multiple_occurrences(true)
-                .value_name("PATH_TO_BENCHMARK_DATA")
-                .min_values(1)
-                .default_value("")
-                .forbid_empty_values(true)
-                .help("the benchmark data files to plot"),
-        );
-    let matches = cmd_line_parser.try_get_matches_from(args)?;
-    let get_vec = |s: &str| -> Vec<String> {
-        match matches.values_of(s) {
-            Some(vs) => vs.map(|v| v.to_string()).collect(),
-            _ => vec![],
-        }
-    };
-    let out_file = if matches.is_present("out") {
-        matches.value_of("out").unwrap().to_string()
-    } else {
-        "plot.svg".to_owned()
-    };
-    let sort = matches.is_present("sort");
-    let top = if matches.is_present("top") {
-        Some(matches.value_of("top").unwrap().parse::<usize>()?)
-    } else {
-        None
-    };
-    let data_files = get_vec("data-files");
+    let plot = Plot::try_parse_from(args)?;
     let mut data = vec![];
-    for file in data_files {
+    for file in plot.data_files {
         data.push(benchmark::read_benchmark(&file).context(format!("cannot open `{}`", file))?);
     }
 
-    if sort {
+    if plot.sort {
         data[0].sort();
     }
 
-    if let Some(n) = top {
+    if let Some(n) = plot.top {
         data[0].take(n)
     }
 
-    println!("plotting to `{}`", out_file);
-    plot_benchmarks_to_file(&out_file, data.as_slice())
+    println!("plotting to `{}`", plot.out);
+    plot_benchmarks_to_file(&plot.out, data.as_slice())
 }
 
 pub const LIGHT_GRAY: RGBColor = RGBColor(0xb4, 0xb4, 0xb4);

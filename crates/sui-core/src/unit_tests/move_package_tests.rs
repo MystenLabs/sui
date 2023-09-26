@@ -330,15 +330,13 @@ fn package_digest_changes_with_dep_upgrades_and_in_sync_with_move_package_digest
         .unwrap();
 
     let b_pkg = MovePackage::new_initial(&build_test_modules("B"), u64::MAX, [&c_v1]).unwrap();
-
     let b_v2 = MovePackage::new_initial(&build_test_modules("Bv2"), u64::MAX, [&c_v2]).unwrap();
 
     let with_unpublished_deps = false;
-    let hash_modules = true;
-    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps, hash_modules);
-    let local_v2 =
-        build_test_package("Bv2").get_package_digest(with_unpublished_deps, hash_modules);
+    let local_v1 = build_test_package("B").get_package_digest(with_unpublished_deps);
+    let local_v2 = build_test_package("Bv2").get_package_digest(with_unpublished_deps);
 
+    let hash_modules = true;
     assert_ne!(b_pkg.digest(hash_modules), b_v2.digest(hash_modules));
     assert_eq!(b_pkg.digest(hash_modules), local_v1);
     assert_eq!(b_v2.digest(hash_modules), local_v2);

@@ -106,13 +106,20 @@ async fn test_batch_verify() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_async_verifier() {
+    use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+
     let (committee, key_pairs) = Committee::new_simple_test_committee();
     let committee = Arc::new(committee);
     let key_pairs = Arc::new(key_pairs);
 
     let registry = Registry::new();
     let metrics = SignatureVerifierMetrics::new(&registry);
-    let verifier = Arc::new(SignatureVerifier::new(committee.clone(), metrics));
+    let verifier = Arc::new(SignatureVerifier::new(
+        committee.clone(),
+        metrics,
+        vec![],
+        ZkLoginEnv::Test,
+    ));
 
     let tasks: Vec<_> = (0..32)
         .map(|_| {

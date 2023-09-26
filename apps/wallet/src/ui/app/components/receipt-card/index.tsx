@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import { useTransactionSummary } from '@mysten/core';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
 
-import { StakeTxnCard } from './StakeTxnCard';
-import { StatusIcon } from './StatusIcon';
-import { UnStakeTxnCard } from './UnstakeTxnCard';
 import { DateCard } from '../../shared/date-card';
 import { TransactionSummary } from '../../shared/transaction-summary';
 import { ExplorerLinkCard } from '../../shared/transaction-summary/cards/ExplorerLink';
 import { GasSummary } from '../../shared/transaction-summary/cards/GasSummary';
-import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
+import { StakeTxnCard } from './StakeTxnCard';
+import { StatusIcon } from './StatusIcon';
+import { UnStakeTxnCard } from './UnstakeTxnCard';
 
 type ReceiptCardProps = {
 	txn: SuiTransactionBlockResponse;

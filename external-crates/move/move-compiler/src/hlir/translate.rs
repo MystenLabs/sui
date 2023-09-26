@@ -212,15 +212,19 @@ fn module(
     mdef: T::ModuleDefinition,
 ) -> (ModuleIdent, H::ModuleDefinition) {
     let T::ModuleDefinition {
+        loc: _,
         warning_filter,
         package_name,
         attributes,
         is_source_module,
         dependency_order,
+        immediate_neighbors: _,
+        used_addresses: _,
         friends,
         structs: tstructs,
         functions: tfunctions,
         constants: tconstants,
+        spec_dependencies: _,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
@@ -263,9 +267,12 @@ fn script(context: &mut Context, tscript: T::Script) -> H::Script {
         package_name,
         attributes,
         loc,
+        immediate_neighbors: _,
+        used_addresses: _,
         constants: tconstants,
         function_name,
         function: tfunction,
+        spec_dependencies: _,
     } = tscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let constants = tconstants.map(|name, c| constant(context, name, c));
@@ -293,7 +300,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility,
+        visibility: evisibility,
         entry,
         signature,
         acquires,
@@ -307,7 +314,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility,
+        visibility: visibility(evisibility),
         entry,
         signature,
         acquires,
@@ -382,6 +389,16 @@ fn function_body_defined(
     check_trailing_unit(context, &mut body);
     context.signature = None;
     (locals, body)
+}
+
+fn visibility(evisibility: E::Visibility) -> H::Visibility {
+    match evisibility {
+        E::Visibility::Internal => H::Visibility::Internal,
+        E::Visibility::Friend(loc) => H::Visibility::Friend(loc),
+        // We added any friends we needed during typing, so we convert this over.
+        E::Visibility::Package(loc) => H::Visibility::Friend(loc),
+        E::Visibility::Public(loc) => H::Visibility::Public(loc),
+    }
 }
 
 //**************************************************************************************************
@@ -850,8 +867,8 @@ fn exp(
     Box::new(exp_(context, result, expected_type_opt, te))
 }
 
-fn exp_<'env>(
-    context: &mut Context<'env>,
+fn exp_(
+    context: &mut Context<'_>,
     result: &mut Block,
     initial_expected_type_opt: Option<&H::Type>,
     initial_e: T::Exp,

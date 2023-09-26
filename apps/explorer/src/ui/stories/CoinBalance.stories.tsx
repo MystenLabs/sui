@@ -1,21 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RpcClientContext } from '@mysten/core';
+import { SuiClientProvider } from '@mysten/dapp-kit';
 import { type Meta, type StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { CoinBalance, type CoinBalanceProps } from '../CoinBalance';
-import { DefaultRpcClient, Network } from '~/utils/api/DefaultRpcClient';
+import { Network, NetworkConfigs, createSuiClient } from '~/utils/api/DefaultRpcClient';
 
 export default {
 	component: CoinBalance,
 	decorators: [
 		(Story) => (
 			<QueryClientProvider client={new QueryClient()}>
-				<RpcClientContext.Provider value={DefaultRpcClient(Network.LOCAL)}>
+				<SuiClientProvider
+					networks={NetworkConfigs}
+					defaultNetwork={Network.LOCAL}
+					createClient={createSuiClient}
+				>
 					<Story />
-				</RpcClientContext.Provider>
+				</SuiClientProvider>
 			</QueryClientProvider>
 		),
 	],

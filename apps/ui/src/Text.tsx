@@ -44,6 +44,7 @@ const textStyles = cva(['break-words'], {
 			'steel-darker': 'text-steel-darker',
 			hero: 'text-hero',
 			'hero-dark': 'text-hero-dark',
+			'hero-darkest': 'text-hero-darkest',
 			'success-dark': 'text-success-dark',
 			issue: 'text-issue',
 			'issue-dark': 'text-issue-dark',

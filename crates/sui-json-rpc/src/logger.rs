@@ -17,7 +17,7 @@ macro_rules! with_tracing {
             let result: RpcResult<_> = interim_result.map_err(|e: Error| {
                 let anyhow_error = anyhow!("{:?}", e);
 
-                let rpc_error = e.to_rpc_error();
+                let rpc_error: RpcError = e.into();
                 if !matches!(rpc_error, RpcError::Call(CallError::InvalidParams(_))) {
                     error!(error=?anyhow_error);
                 }

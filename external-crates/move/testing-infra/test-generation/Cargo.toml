@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 rand = "0.8.3"
 num_cpus = "1.13.0"
-clap = { version = "3.1.8", features = ["derive"] }
+clap.workspace = true
 itertools = "0.10.0"
 hex = "0.4.3"
 getrandom = "0.2.2"

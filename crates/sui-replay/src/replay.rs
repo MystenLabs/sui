@@ -26,7 +26,6 @@ use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority::NodeStateDump;
-use sui_core::authority::TemporaryStore;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
@@ -37,6 +36,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ChainIdentifier;
@@ -45,13 +45,13 @@ use sui_types::digests::TransactionDigest;
 use sui_types::error::ExecutionError;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::{GasCharger, SuiGasStatus};
+use sui_types::gas::SuiGasStatus;
+use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::{Data, Object, Owner};
 use sui_types::storage::get_module_by_id;
 use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::temporary_store::InnerTemporaryStore;
 use sui_types::transaction::{
     CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
     TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
@@ -124,9 +124,9 @@ pub struct ProtocolVersionSummary {
     /// The last epoch that uses this protocol version
     pub epoch_end: u64,
     /// The first checkpoint in this protocol v ersion
-    pub checkpoint_start: u64,
+    pub checkpoint_start: Option<u64>,
     /// The last checkpoint in this protocol version
-    pub checkpoint_end: u64,
+    pub checkpoint_end: Option<u64>,
     /// The transaction which triggered this epoch change
     pub epoch_change_tx: TransactionDigest,
 }
@@ -335,7 +335,7 @@ impl LocalExec {
 
         if let Some(url) = rpc_url.clone() {
             info!("Using RPC URL: {}", url);
-            if let Ok(x) = inner_exec(
+            match inner_exec(
                 url,
                 tx_digest,
                 expensive_safety_check_config.clone(),
@@ -345,9 +345,14 @@ impl LocalExec {
             )
             .await
             {
-                return Ok(x);
+                Ok(exec_state) => return Ok(exec_state),
+                Err(e) => {
+                    warn!(
+                        "Failed to execute transaction with provided RPC URL: Error {}",
+                        e
+                    );
+                }
             }
-            warn!("Failed to execute transaction with provided RPC URL. Attempting to load configs from file");
         }
 
         let cfg = ReplayableNetworkConfigSet::load_config(path)?;
@@ -373,7 +378,7 @@ impl LocalExec {
                 }
             }
         }
-        error!("No more configs to attempt. Try specifing Full Node RPC URL directly or provide a config file with a valid URL");
+        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
         Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
@@ -464,18 +469,6 @@ impl LocalExec {
             executor_version_override: None,
             protocol_version_override: None,
         })
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_temporary_store(
-        &mut self,
-        tx_digest: &TransactionDigest,
-        input_objects: InputObjects,
-        protocol_config: &ProtocolConfig,
-    ) -> TemporaryStore {
-        // Wrap `&mut self` in an `Arc` because of `TemporaryStore`'s interface, not because it will
-        // be shared across multiple threads
-        TemporaryStore::new(Arc::new(self), input_objects, *tx_digest, protocol_config)
     }
 
     pub async fn multi_download_and_store(
@@ -704,6 +697,14 @@ impl LocalExec {
         // Initialize the state necessary for execution
         // Get the input objects
         let input_objects = self.initialize_execution_env_state(tx_info).await?;
+        assert_eq!(
+            &input_objects.filter_shared_objects(),
+            &tx_info.shared_object_refs
+        );
+        assert_eq!(
+            input_objects.transaction_dependencies(),
+            tx_info.dependencies.clone().into_iter().collect(),
+        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
@@ -718,10 +719,6 @@ impl LocalExec {
 
         let ov = self.executor_version_override;
 
-        // Temp store for data
-        let temporary_store =
-            self.to_temporary_store(tx_digest, InputObjects::new(input_objects), protocol_config);
-
         // We could probably cache the executor per protocol config
         let executor = get_executor(ov, protocol_config, expensive_safety_check_config);
 
@@ -732,19 +729,19 @@ impl LocalExec {
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
+                &self,
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                temporary_store,
-                tx_info.shared_object_refs.clone(),
-                &mut GasCharger::new(*tx_digest, tx_info.gas.clone(), gas_status, protocol_config),
+                input_objects,
+                tx_info.gas.clone(),
+                gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,
-                tx_info.dependencies.clone().into_iter().collect(),
             )
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
@@ -1083,7 +1080,8 @@ impl LocalExec {
             .expect("Genesis TX must be in first checkpoint");
         // Somehow the genesis TX did not emit any event, but we know it was the start of version 1
         // So we need to manually add this range
-        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) = (0, 1, 0u64);
+        let (mut start_epoch, mut start_protocol_version, mut start_checkpoint) =
+            (0, 1, Some(0u64));
 
         let (mut curr_epoch, mut curr_protocol_version, mut curr_checkpoint) =
             (start_epoch, start_protocol_version, start_checkpoint);
@@ -1109,8 +1107,7 @@ impl LocalExec {
                 .fetcher
                 .get_transaction(&event.id.tx_digest)
                 .await?
-                .checkpoint
-                .expect("Checkpoint should be present");
+                .checkpoint;
             // Insert the last range
             range_map.insert(
                 start_protocol_version,
@@ -1119,7 +1116,7 @@ impl LocalExec {
                     epoch_start: start_epoch,
                     epoch_end: curr_epoch - 1,
                     checkpoint_start: start_checkpoint,
-                    checkpoint_end: curr_checkpoint - 1,
+                    checkpoint_end: curr_checkpoint.map(|x| x - 1),
                     epoch_change_tx: tx_digest,
                 },
             );
@@ -1142,8 +1139,7 @@ impl LocalExec {
                     .fetcher
                     .get_transaction(&end_epoch_tx_digest)
                     .await?
-                    .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .checkpoint,
                 epoch_change_tx: tx_digest,
             },
         );
@@ -1335,7 +1331,12 @@ impl LocalExec {
                     .get_transaction(&epoch_change_tx)
                     .await?
                     .checkpoint
-                    .expect("Checkpoint should be present"),
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Checkpoint for transaction {} not present. Could be due to pruning",
+                            epoch_change_tx
+                        )
+                    }),
                 idx,
             )
         };
@@ -1350,7 +1351,12 @@ impl LocalExec {
             .get_transaction(&next_epoch_change_tx)
             .await?
             .checkpoint
-            .expect("Checkpoint should be present");
+            .unwrap_or_else(|| {
+                panic!(
+                    "Checkpoint for transaction {} not present. Could be due to pruning",
+                    next_epoch_change_tx
+                )
+            });
 
         Ok((start_checkpoint, next_epoch_checkpoint - 1))
     }
@@ -1600,7 +1606,7 @@ impl LocalExec {
     async fn initialize_execution_env_state(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
+    ) -> Result<InputObjects, ReplayEngineError> {
         // We need this for other activities in this session
         self.current_protocol_version = tx_info.protocol_config.version.as_u64();
 
@@ -1629,7 +1635,7 @@ impl LocalExec {
         self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
 
-        Ok(input_objs)
+        Ok(InputObjects::new(input_objs))
     }
 }
 
@@ -1708,12 +1714,57 @@ impl ChildObjectResolver for LocalExec {
             );
         res
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        fn inner(
+            self_: &LocalExec,
+            owner: &ObjectID,
+            receiving_object_id: &ObjectID,
+            receive_object_at_version: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            let recv_object = match self_.get_object(receiving_object_id)? {
+                None => return Ok(None),
+                Some(o) => o,
+            };
+            if recv_object.version() != receive_object_at_version {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {receiving_object_id} at version \
+                    {receive_object_at_version} but expected the version to be == {receive_object_at_version}"
+                )));
+            }
+            if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+                return Ok(None);
+            }
+            Ok(Some(recv_object))
+        }
+
+        let res = inner(self, owner, receiving_object_id, receive_object_at_version);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ReceiveObject {
+                owner: *owner,
+                receive: *receiving_object_id,
+                receive_at_version: receive_object_at_version,
+                result: res.clone(),
+            });
+        res
+    }
 }
 
 impl ParentSync for LocalExec {
     /// The objects here much already exist in the store because we downloaded them earlier
     /// No download from network
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
         fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
             if let Some(v) = self_.storage.live_objects_store.get(&object_id) {
                 return Ok(Some(v.compute_object_reference()));
@@ -1992,7 +2043,12 @@ async fn create_epoch_store(
         store_base_path
     };
 
-    let epoch_start_config = EpochStartConfiguration::new(sys_state, CheckpointDigest::random());
+    let epoch_start_config = EpochStartConfiguration::new(
+        sys_state,
+        CheckpointDigest::random(),
+        get_authenticator_state_obj_initial_shared_version(&authority_state.database)
+            .expect("read cannot fail"),
+    );
 
     let registry = Registry::new();
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));

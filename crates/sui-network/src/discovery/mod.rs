@@ -28,6 +28,7 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/sui.Discovery.rs"));
 }
 mod builder;
+mod metrics;
 mod server;
 #[cfg(test)]
 mod tests;
@@ -38,6 +39,8 @@ pub use generated::{
     discovery_server::{Discovery, DiscoveryServer},
 };
 pub use server::GetKnownPeersResponse;
+
+use self::metrics::Metrics;
 
 /// The internal discovery state shared between the main event loop and the request handler
 struct State {
@@ -80,6 +83,7 @@ struct DiscoveryEventLoop {
     shutdown_handle: oneshot::Receiver<()>,
     state: Arc<RwLock<State>>,
     trusted_peer_change_rx: watch::Receiver<TrustedPeerChangeEvent>,
+    metrics: Metrics,
 }
 
 impl DiscoveryEventLoop {
@@ -219,6 +223,7 @@ impl DiscoveryEventLoop {
                     self.tasks.spawn(query_peer_for_their_known_peers(
                         peer,
                         self.state.clone(),
+                        self.metrics.clone(),
                         self.allowlisted_peers.clone(),
                     ));
                 }
@@ -245,6 +250,7 @@ impl DiscoveryEventLoop {
                 self.network.clone(),
                 self.discovery_config.clone(),
                 self.state.clone(),
+                self.metrics.clone(),
                 self.allowlisted_peers.clone(),
             ));
 
@@ -370,6 +376,7 @@ async fn try_to_connect_to_seed_peers(
 async fn query_peer_for_their_known_peers(
     peer: Peer,
     state: Arc<RwLock<State>>,
+    metrics: Metrics,
     allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
 ) {
     let mut client = DiscoveryClient::new(peer);
@@ -392,7 +399,7 @@ async fn query_peer_for_their_known_peers(
             },
         )
     {
-        update_known_peers(state, found_peers, allowlisted_peers);
+        update_known_peers(state, metrics, found_peers, allowlisted_peers);
     }
 }
 
@@ -400,6 +407,7 @@ async fn query_connected_peers_for_their_known_peers(
     network: Network,
     config: Arc<DiscoveryConfig>,
     state: Arc<RwLock<State>>,
+    metrics: Metrics,
     allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
 ) {
     use rand::seq::IteratorRandom;
@@ -437,11 +445,12 @@ async fn query_connected_peers_for_their_known_peers(
         .collect::<Vec<_>>()
         .await;
 
-    update_known_peers(state, found_peers, allowlisted_peers);
+    update_known_peers(state, metrics, found_peers, allowlisted_peers);
 }
 
 fn update_known_peers(
     state: Arc<RwLock<State>>,
+    metrics: Metrics,
     found_peers: Vec<NodeInfo>,
     allowlisted_peers: Arc<HashMap<PeerId, Option<Multiaddr>>>,
 ) {
@@ -472,10 +481,19 @@ fn update_known_peers(
         match known_peers.entry(peer.peer_id) {
             Entry::Occupied(mut o) => {
                 if peer.timestamp_ms > o.get().timestamp_ms {
+                    if o.get().addresses.is_empty() && !peer.addresses.is_empty() {
+                        metrics.inc_num_peers_with_external_address();
+                    }
+                    if !o.get().addresses.is_empty() && peer.addresses.is_empty() {
+                        metrics.dec_num_peers_with_external_address();
+                    }
                     o.insert(peer);
                 }
             }
             Entry::Vacant(v) => {
+                if !peer.addresses.is_empty() {
+                    metrics.inc_num_peers_with_external_address();
+                }
                 v.insert(peer);
             }
         }

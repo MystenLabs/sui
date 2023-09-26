@@ -71,6 +71,10 @@
 					{
 						"label": "Consensus Engine",
 						"fileName": "learn/architecture/consensus"
+					},
+					{
+						"label": "Full Node Data Management",
+						"fileName": "learn/architecture/sui-full-node-data"
 					}
 				]
 			},
@@ -308,6 +312,10 @@
 						"fileName": "build/event_api"
 					}
 				]
+			},
+			{
+				"label": "About zkLogin",
+				"fileName": "build/zk_login"
 			},
 			{
 				"label": "RPC Best Practices",

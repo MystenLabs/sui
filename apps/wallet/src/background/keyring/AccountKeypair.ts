@@ -3,11 +3,14 @@
 
 import {
 	toSerializedSignature,
-	type SerializedSignature,
 	type Keypair,
+	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 
+/**
+ * @deprecated
+ */
 export class AccountKeypair {
 	#keypair: Keypair;
 

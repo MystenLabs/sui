@@ -423,6 +423,8 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         let is_entry = def.entry.is_some();
         let visibility = match def.visibility {
             EA::Visibility::Public(_) => FunctionVisibility::Public,
+            // Packages are converted to friend during compilation.
+            EA::Visibility::Package(_) => FunctionVisibility::Friend,
             EA::Visibility::Friend(_) => FunctionVisibility::Friend,
             EA::Visibility::Internal => FunctionVisibility::Private,
         };
@@ -939,7 +941,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         }
         let spec_fun_idx = spec_fun_id.as_usize();
         let body = if self.spec_funs[spec_fun_idx].body.is_some() {
-            std::mem::replace(&mut self.spec_funs[spec_fun_idx].body, None).unwrap()
+            self.spec_funs[spec_fun_idx].body.take().unwrap()
         } else {
             // If the function is native and contains no mutable references
             // as parameters, consider it pure.
@@ -2802,6 +2804,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                     // TODO: model friend visibility properly
                     unimplemented!("Friend visibility not supported yet")
                 }
+                PA::Visibility::Package(..) => {
+                    // TODO: model friend visibility properly
+                    unimplemented!("Package visibility not supported yet")
+                }
             }
         }
         let rex = Regex::new(&format!(
@@ -2877,7 +2883,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         // the full self. Rust requires us to do so (at least the author doesn't know better yet),
         // but moving it should be not too expensive.
         let body = if self.spec_funs[fun_idx].body.is_some() {
-            std::mem::replace(&mut self.spec_funs[fun_idx].body, None).unwrap()
+            self.spec_funs[fun_idx].body.take().unwrap()
         } else {
             // No body: assume it is pure.
             return;
@@ -3204,7 +3210,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                         fun_spec,
                     )))
                 } else {
-                    let funs = self.parent.fun_table.iter().map(|(k, _)| {
+                    let funs = self.parent.fun_table.keys().map(|k| {
                         format!("{}", k.display_full(self.symbol_pool()))
                     }).join(", ");
                     self.parent.error(

@@ -18,4 +18,3 @@ move-bytecode-verifier = { path = "../../../external-crates/move/move-bytecode-v
 
 sui-types.workspace = true
 workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
-sui-protocol-config.workspace = true

@@ -358,6 +358,27 @@ impl CheckpointContents {
         })
     }
 
+    pub fn new_with_causally_ordered_execution_data<'a, T>(contents: T) -> Self
+    where
+        T: IntoIterator<Item = &'a VerifiedExecutionData>,
+    {
+        let (transactions, user_signatures): (Vec<_>, Vec<_>) = contents
+            .into_iter()
+            .map(|data| {
+                (
+                    data.digests(),
+                    data.transaction.inner().data().tx_signatures().to_owned(),
+                )
+            })
+            .unzip();
+        assert_eq!(transactions.len(), user_signatures.len());
+        Self::V1(CheckpointContentsV1 {
+            digest: Default::default(),
+            transactions,
+            user_signatures,
+        })
+    }
+
     fn as_v1(&self) -> &CheckpointContentsV1 {
         match self {
             Self::V1(v) => v,

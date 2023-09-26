@@ -11,7 +11,6 @@ edition = "2021"
 anyhow = "1.0.52"
 colored = "2.0.0"
 
-move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
 move-bytecode-source-map = { path = "../../move-ir-compiler/move-bytecode-source-map" }
 move-command-line-common = { path = "../../move-command-line-common" }
 move-core-types = { path = "../../move-core/types" }
@@ -20,7 +19,8 @@ move-binary-format = { path = "../../move-binary-format" }
 move-coverage = { path = "../move-coverage" }
 move-compiler = { path = "../../move-compiler" }
 
-clap = { version = "3.1.8", features = ["derive"] }
+bcs.workspace = true
+clap.workspace = true
 hex = "0.4.3"
 
 [features]

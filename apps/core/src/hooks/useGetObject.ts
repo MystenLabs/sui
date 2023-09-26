@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useRpcClient } from '../api/RpcClientContext';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 
@@ -15,12 +15,12 @@ const defaultOptions = {
 };
 
 export function useGetObject(objectId?: string | null) {
-	const rpc = useRpcClient();
+	const client = useSuiClient();
 	const normalizedObjId = objectId && normalizeSuiAddress(objectId);
 	return useQuery({
 		queryKey: ['object', normalizedObjId],
 		queryFn: () =>
-			rpc.getObject({
+			client.getObject({
 				id: normalizedObjId!,
 				options: defaultOptions,
 			}),

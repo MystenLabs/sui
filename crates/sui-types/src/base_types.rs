@@ -44,7 +44,7 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
-use fastcrypto_zkp::bn254::zk_login::big_int_str_to_bytes;
+use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
 use move_bytecode_utils::resolve_struct;
@@ -123,6 +123,8 @@ pub struct ObjectID(
     #[serde_as(as = "Readable<HexAccountAddress, _>")]
     AccountAddress,
 );
+
+pub type VersionDigest = (SequenceNumber, ObjectDigest);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
@@ -466,6 +468,11 @@ impl SuiAddress {
         AccountAddress::random().into()
     }
 
+    pub fn generate<R: rand::RngCore + rand::CryptoRng>(mut rng: R) -> Self {
+        let buf: [u8; SUI_ADDRESS_LENGTH] = rng.gen();
+        Self(buf)
+    }
+
     /// Serialize an `Option<SuiAddress>` in Hex.
     pub fn optional_address_as_hex<S>(
         key: &Option<SuiAddress>,
@@ -604,15 +611,16 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 }
 
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
-/// [zklogin_flag || bcs bytes of AddressParams || address seed in bytes] where
-/// AddressParams contains iss and key_claim_name.
+/// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes] where
+/// AddressParams contains iss and aud string.
 impl From<&ZkLoginAuthenticator> for SuiAddress {
     fn from(authenticator: &ZkLoginAuthenticator) -> Self {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
-        // unwrap is safe here
-        hasher.update(bcs::to_bytes(&authenticator.get_address_params()).unwrap());
-        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()));
+        let iss_bytes = authenticator.get_iss().as_bytes();
+        hasher.update([iss_bytes.len() as u8]);
+        hasher.update(iss_bytes);
+        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()).unwrap());
         SuiAddress(hasher.finalize().digest)
     }
 }

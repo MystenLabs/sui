@@ -77,7 +77,6 @@ impl DependencyCache {
                         "FETCHING GIT DEPENDENCY".bold().green(),
                         git_url,
                     )?;
-
                     // If the cached folder does not exist, download and clone accordingly
                     Command::new("git")
                         .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])

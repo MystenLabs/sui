@@ -28,9 +28,10 @@ pub struct MoveCall {
     pub move_function: String,
 }
 
-#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[derive(Queryable, Insertable, Debug, Clone, Default, QueryableByName)]
 #[diesel(table_name = recipients)]
 pub struct Recipient {
+    #[diesel(deserialize_as = i64)]
     pub id: Option<i64>,
     pub transaction_digest: String,
     pub checkpoint_sequence_number: i64,

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
 use move_vm_config::verifier::VerifierConfig;
@@ -15,27 +12,31 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::{ExecutionState, TypeLayoutStore},
+    execution::TypeLayoutStore,
     execution_mode::{self, ExecutionResult},
-    gas::GasCharger,
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
-    temporary_store::{InnerTemporaryStore, TemporaryStore},
-    transaction::{ProgrammableTransaction, TransactionKind},
+    transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
+use move_bytecode_verifier_latest::meter::Scope;
 use move_vm_runtime_latest::move_vm::MoveVM;
 use sui_adapter_latest::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
 };
-use sui_adapter_latest::execution_engine::execute_transaction_to_effects;
-use sui_adapter_latest::programmable_transactions;
+use sui_adapter_latest::execution_engine::{
+    execute_genesis_state_update, execute_transaction_to_effects,
+};
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_latest::all_natives;
+use sui_types::storage::BackingStore;
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
+use crate::verifier::{VerifierMeteredValues, VerifierOverrides};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -78,32 +79,32 @@ impl<'m> Verifier<'m> {
 impl executor::Executor for Executor {
     fn execute_transaction_to_effects(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
-        shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        input_objects: InputObjects,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
         Result<(), ExecutionError>,
     ) {
         execute_transaction_to_effects::<execution_mode::Normal>(
-            shared_object_refs,
-            temporary_store,
+            store,
+            input_objects,
+            gas_coins,
+            gas_status,
             transaction_kind,
             transaction_signer,
-            gas_charger,
             transaction_digest,
-            transaction_dependencies,
             &self.0,
             epoch_id,
             epoch_timestamp_ms,
@@ -116,32 +117,32 @@ impl executor::Executor for Executor {
 
     fn dev_inspect_transaction(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
-        temporary_store: TemporaryStore,
-        shared_object_refs: Vec<ObjectRef>,
-        gas_charger: &mut GasCharger,
+        input_objects: InputObjects,
+        gas_coins: Vec<ObjectRef>,
+        gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     ) {
         execute_transaction_to_effects::<execution_mode::DevInspect>(
-            shared_object_refs,
-            temporary_store,
+            store,
+            input_objects,
+            gas_coins,
+            gas_status,
             transaction_kind,
             transaction_signer,
-            gas_charger,
             transaction_digest,
-            transaction_dependencies,
             &self.0,
             epoch_id,
             epoch_timestamp_ms,
@@ -154,20 +155,20 @@ impl executor::Executor for Executor {
 
     fn update_genesis_state(
         &self,
+        store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        state_view: &mut dyn ExecutionState,
         tx_context: &mut TxContext,
-        gas_charger: &mut GasCharger,
+        input_objects: InputObjects,
         pt: ProgrammableTransaction,
-    ) -> Result<(), ExecutionError> {
-        programmable_transactions::execution::execute::<execution_mode::Genesis>(
+    ) -> Result<InnerTemporaryStore, ExecutionError> {
+        execute_genesis_state_update(
+            store,
             protocol_config,
             metrics,
             &self.0,
-            state_view,
             tx_context,
-            gas_charger,
+            input_objects,
             pt,
         )
     }
@@ -187,5 +188,27 @@ impl<'m> verifier::Verifier for Verifier<'m> {
         modules: &[CompiledModule],
     ) -> SuiResult<()> {
         run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, self.metrics)
+    }
+
+    fn meter_compiled_modules_with_overrides(
+        &mut self,
+        modules: &[CompiledModule],
+        _protocol_config: &ProtocolConfig,
+        config_overrides: &VerifierOverrides,
+    ) -> SuiResult<VerifierMeteredValues> {
+        let mut config = self.config.clone();
+        let max_per_fun_meter_current = config.max_per_fun_meter_units;
+        let max_per_mod_meter_current = config.max_per_mod_meter_units;
+        config.max_per_fun_meter_units = config_overrides.max_per_fun_meter_units;
+        config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
+        run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, self.metrics)?;
+        let fun_meter_units_result = self.meter.get_usage(Scope::Function);
+        let mod_meter_units_result = self.meter.get_usage(Scope::Function);
+        Ok(VerifierMeteredValues::new(
+            max_per_fun_meter_current,
+            max_per_mod_meter_current,
+            fun_meter_units_result,
+            mod_meter_units_result,
+        ))
     }
 }

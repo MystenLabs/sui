@@ -4,10 +4,8 @@
 
 use crate::{
     diag,
-    diagnostics::{
-        codes::{CategoryID, WarningFilter},
-        Diagnostic, WarningFilters,
-    },
+    diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
+    editions::FeatureGate,
     expansion::{
         aliases::{AliasMap, AliasSet},
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, SpecId},
@@ -40,8 +38,12 @@ struct Context<'env, 'map> {
     address: Option<Address>,
     aliases: AliasMap,
     is_source_definition: bool,
+    current_package: Option<Symbol>,
     in_spec_context: bool,
     exp_specs: BTreeMap<SpecId, E::SpecBlock>,
+    // Cached warning filters for all available prefixes. Used by non-source defs
+    // and dependency packages
+    all_filter_alls: WarningFilters,
     env: &'env mut CompilationEnv,
 }
 impl<'env, 'map> Context<'env, 'map> {
@@ -49,6 +51,12 @@ impl<'env, 'map> Context<'env, 'map> {
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     ) -> Self {
+        let mut all_filter_alls = WarningFilters::new_for_dependency();
+        for allow in compilation_env.filter_attributes() {
+            for f in compilation_env.filter_from_str(FILTER_ALL, *allow) {
+                all_filter_alls.add(f);
+            }
+        }
         Self {
             module_members,
             env: compilation_env,
@@ -56,8 +64,10 @@ impl<'env, 'map> Context<'env, 'map> {
             address: None,
             aliases: AliasMap::new(),
             is_source_definition: false,
+            current_package: None,
             in_spec_context: false,
             exp_specs: BTreeMap::new(),
+            all_filter_alls,
         }
     }
 
@@ -148,6 +158,7 @@ pub fn program(
         def,
     } in source_definitions
     {
+        context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
         definition(
             &mut context,
@@ -165,6 +176,7 @@ pub fn program(
         def,
     } in lib_definitions
     {
+        context.current_package = package;
         context.named_address_mapping = Some(named_address_maps.get(named_address_map));
         definition(
             &mut context,
@@ -174,6 +186,7 @@ pub fn program(
             def,
         )
     }
+    context.current_package = None;
 
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
@@ -182,9 +195,9 @@ pub fn program(
             }
         }
     }
-    let mut module_map = source_module_map;
+    let module_map = source_module_map;
 
-    let mut scripts = {
+    let scripts = {
         let mut collected: BTreeMap<Symbol, Vec<E::Script>> = BTreeMap::new();
         for s in scripts {
             collected
@@ -214,7 +227,6 @@ pub fn program(
         keyed
     };
 
-    super::dependency_ordering::verify(context.env, &mut module_map, &mut scripts);
     E::Program {
         modules: module_map,
         scripts,
@@ -403,7 +415,7 @@ fn module_(
         members,
     } = mdef;
     let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
-    let mut warning_filter = warning_filter(context, &attributes);
+    let mut warning_filter = module_warning_filter(context, &attributes);
     let config = context.env.package_config(package_name);
     warning_filter.union(&config.warning_filter);
 
@@ -458,6 +470,9 @@ fn module_(
             P::ModuleMember::Spec(s) => specs.push(spec(context, s)),
         }
     }
+
+    check_visibility_modifiers(context, &functions, &friends, package_name);
+
     context.set_to_outer_scope(old_aliases);
 
     let def = E::ModuleDefinition {
@@ -465,9 +480,6 @@ fn module_(
         attributes,
         loc,
         is_source_module: context.is_source_definition,
-        dependency_order: 0,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
         friends,
         structs,
         constants,
@@ -477,6 +489,84 @@ fn module_(
     };
     context.env.pop_warning_filter_scope();
     (current_module, def)
+}
+
+fn check_visibility_modifiers(
+    context: &mut Context,
+    functions: &UniqueMap<FunctionName, E::Function>,
+    friends: &UniqueMap<ModuleIdent, E::Friend>,
+    package_name: Option<Symbol>,
+) {
+    let mut friend_usage = friends.iter().next().map(|(_, _, friend)| friend.loc);
+    let mut public_package_usage = None;
+    for (_, _, function) in functions {
+        match function.visibility {
+            E::Visibility::Friend(loc) if friend_usage.is_none() => {
+                friend_usage = Some(loc);
+            }
+            E::Visibility::Package(loc) => {
+                context
+                    .env
+                    .check_feature(&FeatureGate::PublicPackage, package_name, loc);
+                public_package_usage = Some(loc);
+            }
+            _ => (),
+        }
+    }
+
+    // Emit any errors.
+    if public_package_usage.is_some() && friend_usage.is_some() {
+        let friend_error_msg = format!(
+            "Cannot define 'friend' modules and use '{}' visibility in the same module",
+            E::Visibility::PACKAGE
+        );
+        let package_definition_msg = format!("'{}' visibility used here", E::Visibility::PACKAGE);
+        for (_, _, friend) in friends {
+            context.env.add_diag(diag!(
+                Declarations::InvalidVisibilityModifier,
+                (friend.loc, friend_error_msg.clone()),
+                (
+                    public_package_usage.unwrap(),
+                    package_definition_msg.clone()
+                )
+            ));
+        }
+        let package_error_msg = format!(
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::PACKAGE_IDENT,
+            E::Visibility::FRIEND_IDENT
+        );
+        let friend_error_msg = format!(
+            "Cannot mix '{}' and '{}' visibilities in the same module",
+            E::Visibility::FRIEND_IDENT,
+            E::Visibility::PACKAGE_IDENT
+        );
+        for (_, _, function) in functions {
+            match function.visibility {
+                E::Visibility::Friend(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, friend_error_msg.clone()),
+                        (
+                            public_package_usage.unwrap(),
+                            package_definition_msg.clone()
+                        )
+                    ));
+                }
+                E::Visibility::Package(loc) => {
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidVisibilityModifier,
+                        (loc, package_error_msg.clone()),
+                        (
+                            friend_usage.unwrap(),
+                            &format!("'{}' visibility used here", E::Visibility::FRIEND_IDENT)
+                        )
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
 }
 
 fn script(
@@ -524,7 +614,7 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     check_valid_module_member_name(context, ModuleMemberKind::Function, pfunction.name.0);
     let (function_name, function) = function_(context, 0, pfunction);
     match &function.visibility {
-        E::Visibility::Public(loc) | E::Visibility::Friend(loc) => {
+        E::Visibility::Friend(loc) | E::Visibility::Package(loc) | E::Visibility::Public(loc) => {
             let msg = format!(
                 "Invalid '{}' visibility modifier. \
                 Script functions are not callable from other Move functions.",
@@ -556,8 +646,6 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
         package_name,
         attributes,
         loc,
-        immediate_neighbors: UniqueMap::new(),
-        used_addresses: BTreeSet::new(),
         constants,
         function_name,
         function,
@@ -724,13 +812,34 @@ fn attribute_value(
     ))
 }
 
+/// Like warning_filter, but it will filter _all_ warnings for non-source definitions (or for any
+/// dependency packages)
+fn module_warning_filter(
+    context: &mut Context,
+    attributes: &UniqueMap<E::AttributeName, E::Attribute>,
+) -> WarningFilters {
+    let filters = warning_filter(context, attributes);
+    let is_dep = !context.is_source_definition
+        || context
+            .env
+            .package_config(context.current_package)
+            .is_dependency;
+    if is_dep {
+        // For dependencies (non source defs or package deps), we check the filters for errors
+        // but then throw them away and actually ignore _all_ warnings
+        context.all_filter_alls.clone()
+    } else {
+        filters
+    }
+}
+
 fn warning_filter(
     context: &mut Context,
     attributes: &UniqueMap<E::AttributeName, E::Attribute>,
 ) -> WarningFilters {
     use crate::diagnostics::codes::Category;
     use known_attributes::DiagnosticAttribute;
-    let mut warning_filters = WarningFilters::new();
+    let mut warning_filters = WarningFilters::new_for_source();
     let filter_attribute_names = context.env.filter_attributes().clone();
     for allow in filter_attribute_names {
         let Some(attr) = attributes.get_(&allow) else {
@@ -742,10 +851,11 @@ fn warning_filter(
                 let msg = format!(
                     "Expected list of warnings, e.g. '{}({})'",
                     DiagnosticAttribute::ALLOW,
-                    WarningFilter::Category(
-                        CategoryID::new(Category::UnusedItem as u8, None),
-                        Some(FILTER_UNUSED)
-                    )
+                    WarningFilter::Category {
+                        prefix: None,
+                        category: Category::UnusedItem as u8,
+                        name: Some(FILTER_UNUSED)
+                    }
                     .to_str()
                     .unwrap(),
                 );
@@ -770,9 +880,7 @@ fn warning_filter(
                     n
                 }
             };
-            let filters = context
-                .env
-                .filter_from_str(name_.to_string(), allow.clone());
+            let filters = context.env.filter_from_str(name_, allow);
             if filters.is_empty() {
                 let msg = format!("Unknown warning filter '{name_}'");
                 context
@@ -1335,13 +1443,14 @@ fn function_(
 
 fn visibility(context: &mut Context, pvisibility: P::Visibility) -> E::Visibility {
     match pvisibility {
+        P::Visibility::Friend(loc) => E::Visibility::Friend(loc),
+        P::Visibility::Internal => E::Visibility::Internal,
+        P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
         P::Visibility::Script(loc) => {
             assert!(!context.env.has_errors());
             E::Visibility::Public(loc)
         }
-        P::Visibility::Friend(loc) => E::Visibility::Friend(loc),
-        P::Visibility::Internal => E::Visibility::Internal,
     }
 }
 
@@ -2630,7 +2739,7 @@ fn check_valid_address_name_(
 
 fn check_valid_local_name(context: &mut Context, v: &Var) {
     fn is_valid(s: Symbol) -> bool {
-        s.starts_with('_') || s.starts_with(|c| matches!(c, 'a'..='z'))
+        s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
     }
     if !is_valid(v.value()) {
         let msg = format!(
@@ -2790,7 +2899,7 @@ fn check_valid_module_member_name_impl(
 }
 
 pub fn is_valid_struct_constant_or_schema_name(s: &str) -> bool {
-    s.starts_with(|c| matches!(c, 'A'..='Z'))
+    s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
 // Checks for a restricted name in any decl case

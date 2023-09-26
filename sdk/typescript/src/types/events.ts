@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Infer } from 'superstruct';
-import { object, string, array, record, any, optional, boolean, nullable } from 'superstruct';
+import { any, array, boolean, nullable, object, optional, record, string } from 'superstruct';
+
 import type { SuiJsonValue } from './common.js';
 
 export const EventId = object({

@@ -7,14 +7,14 @@ import {
 import { useMemo } from 'react';
 
 import { getBalanceChangeSummary } from '../utils/transaction/getBalanceChangeSummary';
-import {
-	SuiObjectChangeWithDisplay,
-	getObjectChangeSummary,
-} from '../utils/transaction/getObjectChangeSummary';
-import { getLabel } from '../utils/transaction/getLabel';
 import { getGasSummary } from '../utils/transaction/getGasSummary';
-import { useMultiGetObjects } from './useMultiGetObjects';
+import { getLabel } from '../utils/transaction/getLabel';
+import {
+	getObjectChangeSummary,
+	SuiObjectChangeWithDisplay,
+} from '../utils/transaction/getObjectChangeSummary';
 import { getObjectDisplayLookup } from '../utils/transaction/getObjectDisplayLookup';
+import { useMultiGetObjects } from './useMultiGetObjects';
 
 export function useTransactionSummary({
 	transaction,
@@ -60,6 +60,9 @@ export function useTransactionSummary({
 				objectSummary,
 				status: transaction.effects?.status.status,
 				timestamp: transaction.timestampMs,
+				upgradedSystemPackages: transaction.effects?.mutated?.filter(
+					({ owner }) => owner === 'Immutable',
+				),
 			};
 		} else {
 			// Dry run transaction:

@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ImageIcon } from '_app/shared/image-icon';
 import { useCoinMetadata } from '@mysten/core';
 import { Sui, Unstaked } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 
-import { ImageIcon } from '_app/shared/image-icon';
-
-const imageStyle = cva(['rounded-full flex rounded-full'], {
+const imageStyle = cva(['rounded-full flex'], {
 	variants: {
 		size: {
 			sm: 'w-6 h-6',
@@ -46,7 +45,7 @@ function NonSuiCoin({ coinType }: NonSuiCoinProps) {
 					src={coinMeta.iconUrl}
 					label={coinMeta.name || coinType}
 					fallback={coinMeta.name || coinType}
-					circle
+					rounded="full"
 				/>
 			) : (
 				<Unstaked />

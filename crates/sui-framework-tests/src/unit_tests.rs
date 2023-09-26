@@ -3,7 +3,7 @@
 
 use move_cli::base::test::UnitTestResult;
 use move_unit_test::UnitTestingConfig;
-use std::path::PathBuf;
+use std::{fs, io, path::PathBuf};
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
 
@@ -56,6 +56,25 @@ fn run_examples_move_unit_tests() {
             buf
         });
     }
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn run_docs_examples_move_unit_tests() -> io::Result<()> {
+    let examples = {
+        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        buf.extend(["..", "..", "examples", "sui-move"]);
+        buf
+    };
+
+    for entry in fs::read_dir(examples)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            check_move_unit_tests(entry.path());
+        }
+    }
+
+    Ok(())
 }
 
 #[test]

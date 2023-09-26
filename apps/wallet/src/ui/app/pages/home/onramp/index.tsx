@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli } from '_src/shared/analytics/ampli';
+import Alert from '_src/ui/app/components/alert';
+import Overlay from '_src/ui/app/components/overlay';
+import { useActiveAddress } from '_src/ui/app/hooks';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
+import { Heading } from '_src/ui/app/shared/heading';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useOnrampProviders } from './useOnrampProviders';
-import { ampli } from '_src/shared/analytics/ampli';
-import Alert from '_src/ui/app/components/alert';
-import Overlay from '_src/ui/app/components/overlay';
-import { useActiveAddress } from '_src/ui/app/hooks';
-import { Heading } from '_src/ui/app/shared/heading';
 
 export function Onramp() {
 	const navigate = useNavigate();
@@ -37,7 +38,9 @@ export function Onramp() {
 		}
 	}, [providers, navigate]);
 
-	if (!providers || !providers.length) return null;
+	const isGuardLoading = useUnlockedGuard();
+
+	if (!providers || !providers.length || isGuardLoading) return null;
 
 	return (
 		<Overlay

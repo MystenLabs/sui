@@ -13,7 +13,7 @@ pub fn compute_digest(paths: &[PathBuf]) -> Result<PackageDigest> {
     let mut hashed_files = Vec::new();
     let mut hash = |path: &Path| {
         let contents = std::fs::read(path)?;
-        hashed_files.push(format!("{:X}", Sha256::digest(&contents)));
+        hashed_files.push(digest_str(&contents));
         Ok(())
     };
     let mut maybe_hash_file = |path: &Path| -> Result<()> {
@@ -40,6 +40,10 @@ pub fn compute_digest(paths: &[PathBuf]) -> Result<PackageDigest> {
         }
     }
 
+    Ok(PackageDigest::from(hashed_files_digest(hashed_files)))
+}
+
+pub fn hashed_files_digest(mut hashed_files: Vec<String>) -> String {
     // Sort the hashed files to ensure that the order of files is always stable
     hashed_files.sort();
 
@@ -48,5 +52,9 @@ pub fn compute_digest(paths: &[PathBuf]) -> Result<PackageDigest> {
         hasher.update(file_hash.as_bytes());
     }
 
-    Ok(PackageDigest::from(format!("{:X}", hasher.finalize())))
+    format!("{:X}", hasher.finalize())
+}
+
+pub fn digest_str(data: &[u8]) -> String {
+    format!("{:X}", Sha256::digest(data))
 }
