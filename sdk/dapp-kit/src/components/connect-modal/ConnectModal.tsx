@@ -7,14 +7,14 @@ import clsx from 'clsx';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import BackIcon from '../../assets/icons/BackIcon.svg';
-import CloseIcon from '../../assets/icons/CloseIcon.svg';
 import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
 import * as styles from './ConnectModal.css.js';
 import { ConnectionStatus } from './views/ConnectionStatus.js';
 import { GettingStarted } from './views/GettingStarted.js';
 import { WhatIsAWallet } from './views/WhatIsAWallet.js';
 import { WalletList } from './wallet-list/WalletList.js';
+import { BackIcon } from '../icons/BackIcon.js';
+import { CloseIcon } from '../icons/CloseIcon.js';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
@@ -101,7 +101,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 							aria-label="Back"
 							onClick={() => resetSelection()}
 						>
-							<img src={BackIcon} alt="" />
+							<BackIcon />
 						</button>
 						{modalContent}
 					</div>
@@ -113,7 +113,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 						What is a Wallet?
 					</button>
 					<Dialog.Close className={styles.closeButton} aria-label="Close">
-						<img src={CloseIcon} alt="" />
+						<CloseIcon />
 					</Dialog.Close>
 				</Dialog.Content>
 			</Dialog.Portal>

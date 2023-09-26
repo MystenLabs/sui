@@ -20,7 +20,11 @@ export const buttonContainer = style({
 	gap: '8px',
 });
 
-export const walletName = style({});
+export const walletName = style({
+	overflow: 'hidden',
+	textOverflow: 'ellipsis',
+	whiteSpace: 'nowrap',
+});
 
 export const walletIcon = style({
 	width: 28,
