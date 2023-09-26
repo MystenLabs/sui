@@ -433,7 +433,7 @@ mod checked {
             return Err(UserInputError::ObjectInputArityViolation);
         }
 
-        Ok(InputObjects::new(all_objects, Vec::new()))
+        Ok(InputObjects::new(all_objects, deleted_shared_objects))
     }
 
     /// Check one object against a reference

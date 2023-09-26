@@ -16,5 +16,5 @@ Version: 3
 Contents: t2::o2::Obj2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
 
 task 4 'run'. lines 34-34:
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::transfer_impl (function index 8) at offset 0, Abort Code: 0
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 8, instruction: 0, function_name: Some("transfer_impl") }, 0) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::transfer_impl (function index 9) at offset 0, Abort Code: 0
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 9, instruction: 0, function_name: Some("transfer_impl") }, 0) at command Some(0)

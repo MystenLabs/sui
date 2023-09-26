@@ -1020,10 +1020,12 @@ async fn test_delete_before_two_mutations() {
         .await
         .unwrap();
 
-    let (_effects, _error) = user_1
+    let (delete_effects, _error) = user_1
         .execute_sequenced_certificate_to_effects(delete_cert)
         .await
         .unwrap();
+
+    let delete_digest = delete_effects.transaction_digest();
 
     let (effects, error) = user_1
         .execute_sequenced_certificate_to_effects(mutate_cert_1)
@@ -1037,6 +1039,9 @@ async fn test_delete_before_two_mutations() {
     assert!(effects.created().is_empty());
     assert!(effects.unwrapped_then_deleted().is_empty());
     assert!(effects.wrapped().is_empty());
+
+    assert!(effects.dependencies().contains(delete_digest));
+    let mutate_digest = effects.transaction_digest();
 
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
@@ -1056,6 +1061,8 @@ async fn test_delete_before_two_mutations() {
 
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
+
+    assert!(effects.dependencies().contains(mutate_digest));
 }
 
 #[tokio::test]

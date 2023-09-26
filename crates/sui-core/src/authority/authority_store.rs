@@ -424,6 +424,25 @@ impl AuthorityStore {
         }
     }
 
+    pub fn update_deleted_shared_object_dependency(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+        digest: TransactionDigest,
+    ) -> Result<(), TypedStoreError> {
+        let object_key = (
+            epoch_id,
+            ObjectKey(*object_id, SHARED_OBJECT_MARKER_VERSION),
+        );
+
+        let mut batch = self.perpetual_tables.object_per_epoch_marker_table.batch();
+        batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table,
+            iter::once((object_key, MarkerValue::SharedDeleted(digest))),
+        )?;
+        batch.write()
+    }
+
     /// Returns future containing the state hash for the given epoch
     /// once available
     pub async fn notify_read_root_state_hash(
@@ -798,9 +817,12 @@ impl AuthorityStore {
                     match self.get_object_by_key(id, *version)? {
                         Some(obj) => result.push((*kind, obj)),
                         None => {
-                            // If the object was deleted by a concurrently certified tx then return this separately todo: Laura add the digest of the current transaction
-                            if let Some(digest) = self.shared_object_deleted(id, epoch_store.committee().epoch)? {
-                                deleted_shared_objects.push((*id, *version, digest));
+                            // If the object was deleted by a concurrently certified tx then return this separately and add the digest of the current transaction 
+                            // to be used as the dependency of the next transaction that has the deleted shared object as input
+                            let epoch = epoch_store.committee().epoch;
+                            if let Some(dependency) = self.shared_object_deleted(id, epoch)? {
+                                deleted_shared_objects.push((*id, *version, dependency));
+                                self.update_deleted_shared_object_dependency(id, epoch, *digest).expect("Could not update dependency for previously deleted shared object");
                             } else {
                                 panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
                             }
