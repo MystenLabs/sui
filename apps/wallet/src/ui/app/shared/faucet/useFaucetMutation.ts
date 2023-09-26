@@ -35,7 +35,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 			}
 			// Initialize a variable to track possible faucet request status errors
 			let faucetStatusError: string | null = null;
-			let faucetStatusTransferObject: number | null = null;
+			let faucetStatusTransferAmount: number | null = null;
 			if (taskId) {
 				// Continuously check the status until it's no longer 'INPROGRESS'
 				let currentStatus = 'INPROGRESS';
@@ -46,7 +46,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 					});
 
 					if (status?.status === 'SUCCEEDED') {
-						faucetStatusTransferObject = status.transferredGasObjects?.reduce(
+						faucetStatusTransferAmount = status.transferredGasObjects?.sent.reduce(
 							(total, { amount }) => total + amount,
 							0,
 						);
@@ -67,7 +67,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				const errorMessage = error ?? faucetStatusError ?? 'Error occurred';
 				throw new Error(errorMessage);
 			}
-			return faucetStatusTransferObject;
+			return faucetStatusTransferAmount;
 		},
 		...options,
 	});
