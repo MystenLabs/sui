@@ -73,7 +73,6 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 			<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
 			<Dialog.Portal>
 				<Dialog.Overlay className={styles.overlay} />
-				{/* TODO: Add a visually hidden description for better accessibility? */}
 				<Dialog.Content className={styles.content} aria-describedby={undefined}>
 					<div
 						className={clsx(styles.walletListContainer, {
