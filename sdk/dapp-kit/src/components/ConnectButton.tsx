@@ -3,9 +3,9 @@
 
 import type { ReactNode } from 'react';
 
+import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { AccountDropdownMenu } from './AccountDropdownMenu.js';
 import { ConnectModal } from './connect-modal/ConnectModal.js';
-import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 
 type ConnectButtonProps = {
 	connectText?: ReactNode;

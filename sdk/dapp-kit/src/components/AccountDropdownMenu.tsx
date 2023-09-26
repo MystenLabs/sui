@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAddress } from '@mysten/sui.js/utils';
+import type { WalletAccount } from '@mysten/wallet-standard';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 import { useAccounts } from '../hooks/wallet/useAccounts.js';
@@ -10,7 +11,6 @@ import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 import * as styles from './AccountDropdownMenu.css.js';
 import { CheckIcon } from './icons/CheckIcon.js';
 import { ChevronIcon } from './icons/ChevronIcon.js';
-import type { WalletAccount } from '@mysten/wallet-standard';
 
 type AccountDropdownMenuProps = {
 	currentAccount: WalletAccount;
