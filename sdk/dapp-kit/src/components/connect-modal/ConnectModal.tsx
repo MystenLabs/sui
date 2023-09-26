@@ -19,10 +19,10 @@ import { CloseIcon } from '../icons/CloseIcon.js';
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
 type ConnectModalProps = {
-	triggerButton: ReactNode;
+	trigger: ReactNode;
 };
 
-export function ConnectModal({ triggerButton }: ConnectModalProps) {
+export function ConnectModal({ trigger }: ConnectModalProps) {
 	const [isConnectModalOpen, setConnectModalOpen] = useState(false);
 	const [currentView, setCurrentView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
@@ -70,7 +70,7 @@ export function ConnectModal({ triggerButton }: ConnectModalProps) {
 
 	return (
 		<Dialog.Root open={isConnectModalOpen} onOpenChange={onOpenChange}>
-			<Dialog.Trigger className={styles.triggerButton}>{triggerButton}</Dialog.Trigger>
+			<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
 			<Dialog.Portal>
 				<Dialog.Overlay className={styles.overlay} />
 				{/* TODO: Add a visually hidden description for better accessibility? */}

@@ -31,7 +31,7 @@ export function AccountDropdownMenu() {
 						<DropdownMenu.Item key={account.address} asChild>
 							<button
 								type="button"
-								className={styles.menuItem}
+								className={styles.switchAccountButton}
 								onClick={() => switchAccount({ account })}
 							>
 								{formatAddress(account.address)}
@@ -40,8 +40,12 @@ export function AccountDropdownMenu() {
 						</DropdownMenu.Item>
 					))}
 					<DropdownMenu.Separator className={styles.separator} />
-					<DropdownMenu.Item>
-						<button type="button" onClick={() => disconnectWallet()}>
+					<DropdownMenu.Item asChild>
+						<button
+							className={styles.disconnectButton}
+							type="button"
+							onClick={() => disconnectWallet()}
+						>
 							Disconnect
 						</button>
 					</DropdownMenu.Item>

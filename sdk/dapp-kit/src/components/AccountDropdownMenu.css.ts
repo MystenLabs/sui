@@ -23,8 +23,6 @@ export const menuContent = style({
 	maxHeight: 200,
 	borderRadius: 12,
 	marginTop: 4,
-	color: 'red',
-	boxShadow: 'k',
 	padding: 8,
 	display: 'flex',
 	flexDirection: 'column',
@@ -32,8 +30,13 @@ export const menuContent = style({
 	backgroundColor: 'white',
 });
 
-export const menuItem = style({
-	color: 'RED',
+export const switchAccountButton = style({
+	display: 'flex',
+	justifyContent: 'space-between',
+	alignItems: 'center',
+});
+
+export const disconnectButton = style({
 	display: 'flex',
 	justifyContent: 'space-between',
 	alignItems: 'center',

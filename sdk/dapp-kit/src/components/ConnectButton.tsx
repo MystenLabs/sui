@@ -13,5 +13,5 @@ type ConnectButtonProps = {
 
 export function ConnectButton({ connectText = 'Connect Wallet' }: ConnectButtonProps) {
 	const currentWallet = useCurrentWallet();
-	return currentWallet ? <AccountDropdownMenu /> : <ConnectModal triggerButton={connectText} />;
+	return currentWallet ? <AccountDropdownMenu /> : <ConnectModal trigger={connectText} />;
 }
