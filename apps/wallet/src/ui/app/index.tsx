@@ -58,6 +58,8 @@ import { AppType } from './redux/slices/app/AppType';
 import { PageMainLayout } from './shared/page-main-layout/PageMainLayout';
 import { Staking } from './staking/home';
 
+import { SwapPage } from '_pages/swap';
+
 const HIDDEN_MENU_PATHS = [
 	'/nft-details',
 	'/nft-transfer',
@@ -170,6 +172,7 @@ const App = () => {
 				<Route path="send" element={<TransferCoinPage />} />
 				<Route path="send/select" element={<CoinsSelectorPage />} />
 				<Route path="stake/*" element={<Staking />} />
+				<Route path="swap/*" element={<SwapPage />} />
 				<Route path="tokens/*" element={<TokenDetailsPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />

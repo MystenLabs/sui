@@ -567,6 +567,9 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../sdk/dapp-kit
+      '@mysten/deepbook':
+        specifier: workspace:*
+        version: link:../../sdk/deepbook
       '@mysten/icons':
         specifier: workspace:*
         version: link:../icons

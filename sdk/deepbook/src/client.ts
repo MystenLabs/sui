@@ -646,7 +646,7 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param isBidSide true: query bid side, false: query ask side
+	 * @param side { 'bid' | 'ask' } bid or ask side
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
@@ -665,6 +665,7 @@ export class DeepBookClient {
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
+
 		const results = (
 			await this.suiClient.devInspectTransactionBlock({
 				transactionBlock: txb,
