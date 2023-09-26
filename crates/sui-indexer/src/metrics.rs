@@ -336,12 +336,14 @@ impl IndexerMetrics {
                 "db_conn_pool_size",
                 "Size of the database connection pool",
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
             idle_db_conn: register_int_gauge_with_registry!(
                 "idle_db_conn",
                 "Number of idle database connections",
                 registry
-            ).unwrap(),
+            )
+            .unwrap(),
         }
     }
 }

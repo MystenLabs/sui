@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unused)]
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use jsonrpsee::core::RpcResult;
@@ -183,22 +185,12 @@ where
         digest: TransactionDigest,
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
-        if !self
-            .migrated_methods
-            .contains(&"get_transaction_block".to_string())
-        {
-            let tx_guard = self
-                .state
-                .indexer_metrics()
-                .get_transaction_block_latency
-                .start_timer();
-            let tx_resp = self.fullnode.get_transaction_block(digest, options).await;
-            tx_guard.stop_and_record();
-            return tx_resp;
-        }
-        Ok(self
-            .get_transaction_block_internal(&digest, options)
-            .await?)
+        let _tx_guard = self
+            .state
+            .indexer_metrics()
+            .get_transaction_block_latency
+            .start_timer();
+        self.fullnode.get_transaction_block(digest, options).await
     }
 
     async fn multi_get_transaction_blocks(
@@ -206,25 +198,14 @@ where
         digests: Vec<TransactionDigest>,
         options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<Vec<SuiTransactionBlockResponse>> {
-        if !self
-            .migrated_methods
-            .contains(&"multi_get_transaction_blocks".to_string())
-        {
-            let multi_tx_guard = self
-                .state
-                .indexer_metrics()
-                .multi_get_transaction_blocks_latency
-                .start_timer();
-            let multi_tx_resp = self
-                .fullnode
-                .multi_get_transaction_blocks(digests, options)
-                .await;
-            multi_tx_guard.stop_and_record();
-            return multi_tx_resp;
-        }
-        Ok(self
-            .multi_get_transaction_blocks_internal(&digests, options)
-            .await?)
+        let _multi_tx_guard = self
+            .state
+            .indexer_metrics()
+            .multi_get_transaction_blocks_latency
+            .start_timer();
+        self.fullnode
+            .multi_get_transaction_blocks(digests, options)
+            .await
     }
 
     async fn try_get_past_object(

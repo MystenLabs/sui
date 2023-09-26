@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unused)]
+
 use std::sync::Arc;
 
 use anyhow::anyhow;
@@ -369,25 +371,14 @@ where
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
-        if !self
-            .migrated_methods
-            .contains(&"query_transaction_blocks".to_string())
-        {
-            let query_tx_guard = self
-                .state
-                .indexer_metrics()
-                .query_transaction_blocks_latency
-                .start_timer();
-            let query_tx_resp = self
-                .fullnode
-                .query_transaction_blocks(query, cursor, limit, descending_order)
-                .await;
-            query_tx_guard.stop_and_record();
-            return query_tx_resp;
-        }
-        Ok(self
-            .query_transaction_blocks_internal(query, cursor, limit, descending_order)
-            .await?)
+        let _query_tx_guard = self
+            .state
+            .indexer_metrics()
+            .query_transaction_blocks_latency
+            .start_timer();
+        self.fullnode
+            .query_transaction_blocks(query, cursor, limit, descending_order)
+            .await
     }
 
     async fn query_events(
