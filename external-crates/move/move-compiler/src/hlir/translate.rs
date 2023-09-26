@@ -1467,6 +1467,8 @@ fn value_list(
             "ICE value_evaluation_order changed arity"
         );
         Some(exprs)
+    } else if let TE::Unit { .. } = e.exp.value {
+        Some(vec![])
     } else {
         let exp = value(context, block, ty, e);
         // FIXME(cgswords): check expr is defined; error otherwise.
