@@ -45,6 +45,20 @@ impl PgManager {
             .map_err(|e| Error::Internal(e.to_string()))
     }
 
+    pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        // TODO (wlmyng): beef up cursor
+        cursor
+            .parse()
+            .map_err(|_| Error::InvalidCursor(format!("Failed to parse tx cursor: {cursor}")))
+    }
+
+    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        // TODO (wlmyng): beef up cursor
+        cursor
+            .parse()
+            .map_err(|_| Error::InvalidCursor(format!("Failed to parse obj cursor: {cursor}")))
+    }
+
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<StoredTransaction>, Error> {
         let digest = Digest::from_str(digest)?.into_vec();
 
@@ -137,12 +151,12 @@ impl PgManager {
                 ))
                 .into_boxed();
         if let Some(after) = after {
-            let after: i64 = after.parse().expect("Failed to parse string to i64");
+            let after = self.parse_tx_cursor(&after)?;
             query = query
                 .filter(transactions::dsl::tx_sequence_number.gt(after))
                 .order(transactions::dsl::tx_sequence_number.asc());
         } else if let Some(before) = before {
-            let before: i64 = before.parse().expect("Failed to parse string to i64");
+            let before = self.parse_tx_cursor(&before)?;
             query = query
                 .filter(transactions::dsl::tx_sequence_number.lt(before))
                 .order(transactions::dsl::tx_sequence_number.desc());
@@ -250,14 +264,13 @@ impl PgManager {
             }
         }
 
-        // TODO: for demonstration purposes only, not finalized and assumes checkpoint sequence number for now.
         if let Some(after) = after {
-            let after: i64 = after.parse().expect("Failed to parse string to i64");
+            let after = self.parse_obj_cursor(&after)?;
             query = query
                 .filter(objects::dsl::checkpoint_sequence_number.gt(after))
                 .order(objects::dsl::checkpoint_sequence_number.asc());
         } else if let Some(before) = before {
-            let before: i64 = before.parse().expect("Failed to parse string to i64");
+            let before = self.parse_obj_cursor(&before)?;
             query = query
                 .filter(objects::dsl::checkpoint_sequence_number.lt(before))
                 .order(objects::dsl::checkpoint_sequence_number.desc());
