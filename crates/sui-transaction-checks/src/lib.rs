@@ -15,6 +15,7 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::error::{UserInputError, UserInputResult};
     use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::signature::GenericSignature;
     use sui_types::storage::BackingPackageStore;
     use sui_types::storage::ObjectStore;
     use sui_types::storage::ReceivedMarkerQuery;
@@ -34,7 +35,6 @@ mod checked {
     };
     use tracing::error;
     use tracing::instrument;
-
     // Entry point for all checks related to gas.
     // Called on both signing and execution.
     // On success the gas part of the transaction (gas data and gas coins)
@@ -64,6 +64,7 @@ mod checked {
         reference_gas_price: u64,
         epoch_id: EpochId,
         transaction: &TransactionData,
+        tx_signatures: &[GenericSignature],
         transaction_deny_config: &TransactionDenyConfig,
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> SuiResult<(SuiGasStatus, InputObjects)> {
@@ -73,6 +74,7 @@ mod checked {
         let input_objects = transaction.input_objects()?;
         crate::deny::check_transaction_for_signing(
             transaction,
+            tx_signatures,
             &input_objects,
             &receiving_objects,
             transaction_deny_config,
