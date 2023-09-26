@@ -5,20 +5,23 @@ import { formatAddress } from '@mysten/sui.js/utils';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 import { useAccounts } from '../hooks/wallet/useAccounts.js';
-import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
 import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 import * as styles from './AccountDropdownMenu.css.js';
 import { CheckIcon } from './icons/CheckIcon.js';
 import { ChevronIcon } from './icons/ChevronIcon.js';
+import type { WalletAccount } from '@mysten/wallet-standard';
 
-export function AccountDropdownMenu() {
+type AccountDropdownMenuProps = {
+	currentAccount: WalletAccount;
+};
+
+export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps) {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 	const { mutate: switchAccount } = useSwitchAccount();
-	const currentAccount = useCurrentAccount();
 	const accounts = useAccounts();
 
-	return currentAccount ? (
+	return (
 		<DropdownMenu.Root modal={false}>
 			<DropdownMenu.Trigger className={styles.triggerButton}>
 				{formatAddress(currentAccount.address)}
@@ -51,5 +54,5 @@ export function AccountDropdownMenu() {
 				</DropdownMenu.Content>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
-	) : null;
+	);
 }
