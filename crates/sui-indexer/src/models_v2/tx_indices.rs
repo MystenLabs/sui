@@ -13,6 +13,7 @@ pub struct StoredTxIndex {
     pub input_objects: Vec<Option<Vec<u8>>>,
     pub changed_objects: Vec<Option<Vec<u8>>>,
     pub senders: Vec<Option<Vec<u8>>>,
+    pub payers: Vec<Option<Vec<u8>>>,
     pub recipients: Vec<Option<Vec<u8>>>,
     pub packages: Vec<Option<Vec<u8>>>,
     pub package_modules: Vec<Option<String>>,
@@ -35,6 +36,7 @@ impl From<TxIndex> for StoredTxIndex {
                 .iter()
                 .map(|o| Some(bcs::to_bytes(&o).unwrap()))
                 .collect(),
+            payers: tx.payers.iter().map(|s| Some(s.to_vec())).collect(),
             senders: tx.senders.iter().map(|s| Some(s.to_vec())).collect(),
             recipients: tx.recipients.iter().map(|r| Some(r.to_vec())).collect(),
             packages: tx

@@ -7,6 +7,7 @@ use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
 use rand::rngs::OsRng;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -50,6 +51,7 @@ pub struct ConfigBuilder<R = OsRng> {
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
+    jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
 }
 
@@ -63,6 +65,7 @@ impl ConfigBuilder {
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
+            jwk_fetch_interval: None,
             num_unpruned_validators: None,
         }
     }
@@ -101,6 +104,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_num_unpruned_validators(mut self, n: usize) -> Self {
         self.num_unpruned_validators = Some(n);
+        self
+    }
+
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
         self
     }
 
@@ -168,6 +176,7 @@ impl<R> ConfigBuilder<R> {
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
+            jwk_fetch_interval: self.jwk_fetch_interval,
         }
     }
 
@@ -284,6 +293,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .map(|(idx, validator)| {
                 let mut builder = ValidatorConfigBuilder::new()
                     .with_config_directory(self.config_directory.clone());
+
+                if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
+                    builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
+                }
+
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {

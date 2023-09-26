@@ -16,6 +16,7 @@ module sui::authenticator_state_tests {
         update_authenticator_state_for_testing,
         get_active_jwks_for_testing,
         expire_jwks_for_testing,
+        ActiveJwk,
     };
     use sui::tx_context;
 
@@ -60,6 +61,45 @@ module sui::authenticator_state_tests {
         let recorded_jwks = get_active_jwks_for_testing(&auth_state, test_scenario::ctx(scenario));
         assert!(vector::length(&recorded_jwks) == 1, 0);
         assert!(vector::borrow(&recorded_jwks, 0) == &jwk1, 0);
+
+        test_scenario::return_shared(auth_state);
+        test_scenario::end(scenario_val);
+    }
+
+    #[test]
+    fun authenticator_state_tests_deduplication() {
+        let scenario_val = test_scenario::begin(@0x0);
+        let scenario = &mut scenario_val;
+
+        authenticator_state::create_for_testing(test_scenario::ctx(scenario));
+        test_scenario::next_tx(scenario, @0x0);
+
+        let auth_state = test_scenario::take_shared<AuthenticatorState>(scenario);
+
+        let jwk1 = create_active_jwk(utf8(b"https://accounts.google.com"), utf8(b"kid2"), utf8(b"k1"), 0);
+        update_authenticator_state_for_testing(&mut auth_state, vector[jwk1], test_scenario::ctx(scenario));
+
+        let recorded_jwks = get_active_jwks_for_testing(&auth_state, test_scenario::ctx(scenario));
+        assert!(vector::length(&recorded_jwks) == 1, 0);
+        assert!(vector::borrow(&recorded_jwks, 0) == &jwk1, 0);
+
+        let jwk2 = create_active_jwk(utf8(b"https://www.facebook.com"), utf8(b"kid1"), utf8(b"k2"), 0);
+        let jwk3 = create_active_jwk(utf8(b"https://accounts.google.com"), utf8(b"kid2"), utf8(b"k3"), 0);
+        update_authenticator_state_for_testing(&mut auth_state, vector[jwk2, jwk3], test_scenario::ctx(scenario));
+
+        let recorded_jwks = get_active_jwks_for_testing(&auth_state, test_scenario::ctx(scenario));
+        assert!(vector::length(&recorded_jwks) == 2, 0);
+        // jwk2 sorts before 1, and 3 is dropped because its a duplicated
+        assert!(vector::borrow(&recorded_jwks, 0) == &jwk2, 0);
+        assert!(vector::borrow(&recorded_jwks, 1) == &jwk1, 0);
+
+        let jwk4 = create_active_jwk(utf8(b"https://accounts.google.com"), utf8(b"kid4"), utf8(b"k4"), 0);
+        update_authenticator_state_for_testing(&mut auth_state, vector[jwk4], test_scenario::ctx(scenario));
+        let recorded_jwks = get_active_jwks_for_testing(&auth_state, test_scenario::ctx(scenario));
+        assert!(vector::length(&recorded_jwks) == 3, 0);
+        assert!(vector::borrow(&recorded_jwks, 0) == &jwk2, 0);
+        assert!(vector::borrow(&recorded_jwks, 1) == &jwk1, 0);
+        assert!(vector::borrow(&recorded_jwks, 2) == &jwk4, 0);
 
         test_scenario::return_shared(auth_state);
         test_scenario::end(scenario_val);

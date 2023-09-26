@@ -1260,8 +1260,19 @@ impl<'a> Disassembler<'a> {
         constant_index: usize,
         Constant { type_, data }: &Constant,
     ) -> Result<String> {
+        let data_str = match type_ {
+            SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8 => {
+                match bcs::from_bytes::<Vec<u8>>(data)
+                    .ok()
+                    .and_then(|data| String::from_utf8(data).ok())
+                {
+                    Some(str) => "\"".to_owned() + &str + "\" // interpreted as UTF8 string",
+                    None => hex::encode(data),
+                }
+            }
+            _ => hex::encode(data),
+        };
         let type_str = self.disassemble_sig_tok(type_.clone(), &[])?;
-        let data_str = hex::encode(data);
         Ok(format!("\t{constant_index} => {}: {}", type_str, data_str))
     }
 

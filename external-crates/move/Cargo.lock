@@ -2709,6 +2709,7 @@ name = "move-disassembler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "clap 4.4.1",
  "colored",
  "hex",
