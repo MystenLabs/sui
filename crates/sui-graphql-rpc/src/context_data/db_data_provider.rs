@@ -3,14 +3,15 @@
 #![allow(dead_code)]
 
 use crate::{error::Error, types::digest::Digest};
-use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
     models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, transactions::StoredTransaction, objects::StoredObject,        
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
+        transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, transactions, objects, tx_indices},
+    schema_v2::{checkpoints, epochs, objects, transactions, tx_indices},
     PgConnectionPoolConfig,
 };
 

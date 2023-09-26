@@ -73,15 +73,6 @@ impl Query {
         Some(Address { address })
     }
 
-    async fn transaction_block(
-        &self,
-        ctx: &Context<'_>,
-        digest: String,
-    ) -> Result<Option<TransactionBlock>> {
-        let result = ctx.data_unchecked::<PgManager>().fetch_tx(&digest).await?;
-        result.map(TransactionBlock::try_from).transpose().extend()
-    }
-
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
         let result = if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
