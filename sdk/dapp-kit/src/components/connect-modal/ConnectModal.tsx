@@ -54,13 +54,13 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 			modalContent = <GettingStarted />;
 			break;
 		case 'connection-status':
-			modalContent = selectedWallet ? (
+			modalContent = (
 				<ConnectionStatus
-					selectedWallet={selectedWallet}
+					selectedWallet={selectedWallet!}
 					hadConnectionError={isError}
 					onRetryConnection={connectWallet}
 				/>
-			) : null;
+			);
 			break;
 		default:
 			modalContent = <WhatIsAWallet />;
