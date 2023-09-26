@@ -74,19 +74,29 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 				<Dialog.Content className={styles.content} aria-describedby={undefined}>
 					<div
 						className={clsx(styles.walletListContainer, {
-							[styles.selectedWalletListContainer]: !!currentView,
+							[styles.walletListContainerWithViewSelected]: !!currentView,
 						})}
 					>
-						<Dialog.Title className={styles.title}>Connect a Wallet</Dialog.Title>
-						<WalletList
-							selectedWalletName={selectedWallet?.name}
-							onPlaceholderClick={() => setCurrentView('getting-started')}
-							onSelect={(wallet) => {
-								setSelectedWallet(wallet);
-								connectWallet(wallet);
-							}}
-						/>
+						<div className={styles.walletListContent}>
+							<Dialog.Title className={styles.title}>Connect a Wallet</Dialog.Title>
+							<WalletList
+								selectedWalletName={selectedWallet?.name}
+								onPlaceholderClick={() => setCurrentView('getting-started')}
+								onSelect={(wallet) => {
+									setSelectedWallet(wallet);
+									connectWallet(wallet);
+								}}
+							/>
+						</div>
+						<button
+							className={styles.whatIsAWalletButton}
+							onClick={() => setCurrentView('what-is-a-wallet')}
+							type="button"
+						>
+							What is a Wallet?
+						</button>
 					</div>
+
 					<div
 						className={clsx(styles.viewContainer, {
 							[styles.selectedViewContainer]: !!currentView,
@@ -94,21 +104,14 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 					>
 						<button
 							className={styles.backButton}
+							onClick={() => resetSelection()}
 							type="button"
 							aria-label="Back"
-							onClick={() => resetSelection()}
 						>
 							<BackIcon />
 						</button>
 						{modalContent}
 					</div>
-					<button
-						className={styles.whatIsAWalletButton}
-						type="button"
-						onClick={() => setCurrentView('what-is-a-wallet')}
-					>
-						What is a Wallet?
-					</button>
 					<Dialog.Close className={styles.closeButton} aria-label="Close">
 						<CloseIcon />
 					</Dialog.Close>

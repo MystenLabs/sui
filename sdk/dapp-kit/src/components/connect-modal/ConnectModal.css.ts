@@ -99,7 +99,7 @@ export const closeButton = style({
 	backgroundColor: '#F0F1F2',
 });
 
-export const walletListContainer = style({
+export const walletListContent = style({
 	padding: 20,
 	minWidth: 240,
 	display: 'flex',
@@ -112,7 +112,20 @@ export const walletListContainer = style({
 	},
 });
 
-export const selectedWalletListContainer = style({
+export const walletListContainer = style({
+	display: 'flex',
+	justifyContent: 'space-between',
+	flexDirection: 'column',
+	flexGrow: 1,
+	'@media': {
+		'screen and (min-width: 768px)': {
+			flexDirection: 'row',
+			flexGrow: 0,
+		},
+	},
+});
+
+export const walletListContainerWithViewSelected = style({
 	display: 'none',
 	'@media': {
 		'screen and (min-width: 768px)': {
