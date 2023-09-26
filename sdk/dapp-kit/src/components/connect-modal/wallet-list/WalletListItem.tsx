@@ -17,7 +17,11 @@ export function WalletListItem({ name, icon, onClick, isSelected = false }: Wall
 	return (
 		<li className={clsx(styles.container, { [styles.selectedContainer]: isSelected })}>
 			<button className={styles.buttonContainer} type="button" onClick={onClick}>
-				{typeof icon === 'string' ? <img className={styles.walletIcon} src={icon} alt="" /> : icon}
+				{typeof icon === 'string' ? (
+					<img className={styles.walletIcon} src={icon} alt={`${name} logo`} />
+				) : (
+					icon
+				)}
 				<div className={styles.walletName}>{name}</div>
 			</button>
 		</li>

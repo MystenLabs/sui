@@ -19,9 +19,12 @@ export function ConnectionStatus({
 }: ConnectionStatusProps) {
 	return (
 		<div className={styles.container}>
-			<img className={styles.walletIcon} src={selectedWallet.icon} alt="" />
+			<img
+				className={styles.walletIcon}
+				src={selectedWallet.icon}
+				alt={`${selectedWallet.name} logo`}
+			/>
 			<div className={styles.walletName}>Opening {selectedWallet.name}</div>
-
 			<div
 				className={clsx(styles.connectionStatus, {
 					[styles.connectionStatusWithError]: hadConnectionError,
