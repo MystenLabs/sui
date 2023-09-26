@@ -11161,6 +11161,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-single-node-benchmark"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "clap",
+ "futures",
+ "move-core-types",
+ "sui-core",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sui-snapshot"
 version = "0.1.0"
 dependencies = [
