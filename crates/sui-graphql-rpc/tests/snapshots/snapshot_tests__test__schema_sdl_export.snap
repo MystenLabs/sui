@@ -399,11 +399,9 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
-	epoch(epochId: Int): Epoch
-	checkpoint(id: CheckpointId!): Checkpoint
-	transactionBlock(digest: String!): TransactionBlock
 	epoch(id: Int): Epoch
 	checkpoint(id: CheckpointId): Checkpoint
+	transactionBlock(digest: String!): TransactionBlock
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
@@ -607,4 +605,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-
