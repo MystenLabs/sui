@@ -12,6 +12,7 @@ type WalletListItemProps = {
 	isSelected?: boolean;
 	onClick: () => void;
 };
+
 export function WalletListItem({ name, icon, onClick, isSelected = false }: WalletListItemProps) {
 	return (
 		<li className={clsx(styles.container, { [styles.selectedContainer]: isSelected })}>

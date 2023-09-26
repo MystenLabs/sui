@@ -9,6 +9,10 @@ import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
 import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 
+import * as styles from './AccountDropdownMenu.css.js';
+import { ChevronIcon } from './icons/ChevronIcon.js';
+import { CheckIcon } from './icons/CheckIcon.js';
+
 export function AccountDropdownMenu() {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 	const { mutate: switchAccount } = useSwitchAccount();
@@ -16,18 +20,26 @@ export function AccountDropdownMenu() {
 	const accounts = useAccounts();
 
 	return currentAccount ? (
-		<DropdownMenu.Root>
-			<DropdownMenu.Trigger>{formatAddress(currentAccount.address)}</DropdownMenu.Trigger>
+		<DropdownMenu.Root modal={false}>
+			<DropdownMenu.Trigger className={styles.triggerButton}>
+				{formatAddress(currentAccount.address)}
+				<ChevronIcon />
+			</DropdownMenu.Trigger>
 			<DropdownMenu.Portal>
-				<DropdownMenu.Content>
+				<DropdownMenu.Content className={styles.menuContent}>
 					{accounts.map((account) => (
 						<DropdownMenu.Item key={account.address} asChild>
-							<button type="button" onClick={() => switchAccount({ account })}>
+							<button
+								type="button"
+								className={styles.menuItem}
+								onClick={() => switchAccount({ account })}
+							>
 								{formatAddress(account.address)}
+								{currentAccount.address === account.address ? <CheckIcon /> : null}
 							</button>
 						</DropdownMenu.Item>
 					))}
-					<DropdownMenu.Separator />
+					<DropdownMenu.Separator className={styles.separator} />
 					<DropdownMenu.Item>
 						<button type="button" onClick={() => disconnectWallet()}>
 							Disconnect
