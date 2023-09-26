@@ -14,3 +14,4 @@ sui-types.workspace = true
 tracing.workspace = true
 sui-execution.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+fastcrypto-zkp.workspace = true
