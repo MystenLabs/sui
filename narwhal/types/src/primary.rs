@@ -1251,6 +1251,9 @@ pub enum AggregateSignatureVerificationState {
     // This state occurs when the certificate has not yet received a quorum of
     // signatures.
     Unsigned(AggregateSignatureBytes),
+    // This state occurs only for genesis certificates which always has valid
+    // signatures bytes but the bytes are garbage so we don't mark them as verified.
+    Genesis(AggregateSignatureBytes),
 }
 
 impl Default for AggregateSignatureVerificationState {
@@ -1279,7 +1282,8 @@ impl CertificateAPI for CertificateV2 {
             AggregateSignatureVerificationState::VerifiedIndirectly(bytes)
             | AggregateSignatureVerificationState::VerifiedDirectly(bytes)
             | AggregateSignatureVerificationState::Unverified(bytes)
-            | AggregateSignatureVerificationState::Unsigned(bytes) => bytes,
+            | AggregateSignatureVerificationState::Unsigned(bytes)
+            | AggregateSignatureVerificationState::Genesis(bytes) => bytes,
         }
     }
 
@@ -1322,6 +1326,9 @@ impl CertificateV2 {
                     epoch: committee.epoch(),
                     ..Default::default()
                 }),
+                aggregate_signature_verification_state: AggregateSignatureVerificationState::Genesis(
+                    AggregateSignatureBytes::default(),
+                ),
                 ..Self::default()
             })
             .collect()
@@ -1488,7 +1495,8 @@ impl CertificateV2 {
     fn verify_signature(&mut self, pks: Vec<PublicKey>) -> DagResult<()> {
         let aggregrate_signature_bytes = match self.aggregate_signature_verification_state {
             AggregateSignatureVerificationState::VerifiedIndirectly(ref bytes) => bytes,
-            AggregateSignatureVerificationState::VerifiedDirectly(_) => return Ok(()),
+            AggregateSignatureVerificationState::VerifiedDirectly(_)
+            | AggregateSignatureVerificationState::Genesis(_) => return Ok(()),
             AggregateSignatureVerificationState::Unverified(ref bytes) => bytes,
             AggregateSignatureVerificationState::Unsigned(_) => {
                 bail!(DagError::CertificateRequiresQuorum);
