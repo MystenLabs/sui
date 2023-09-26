@@ -16,8 +16,9 @@ use sui_types::digests::TransactionDigest;
 /// Very unlikely to take this long, but we want to be sure we find one
 const NUM_CHECKPOINTS_TO_ATTEMPT: usize = 1_000;
 
+/// Checks that replaying the latest tx on each testnet and mainnet does not fail
 #[tokio::test]
-async fn verify_latest_tx_replay() {
+async fn verify_latest_tx_replay_testnet_mainnet() {
     let _ = verify_latest_tx_replay_impl().await;
 }
 async fn verify_latest_tx_replay_impl() {
