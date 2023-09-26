@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { clsx } from 'clsx';
+import type { ReactNode } from 'react';
 
 import * as styles from './WalletListItem.css.js';
-import type { ReactNode } from 'react';
 
 type WalletListItemProps = {
 	name: string;

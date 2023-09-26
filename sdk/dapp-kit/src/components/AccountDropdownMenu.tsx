@@ -8,10 +8,9 @@ import { useAccounts } from '../hooks/wallet/useAccounts.js';
 import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
 import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
-
 import * as styles from './AccountDropdownMenu.css.js';
-import { ChevronIcon } from './icons/ChevronIcon.js';
 import { CheckIcon } from './icons/CheckIcon.js';
+import { ChevronIcon } from './icons/ChevronIcon.js';
 
 export function AccountDropdownMenu() {
 	const { mutate: disconnectWallet } = useDisconnectWallet();

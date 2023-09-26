@@ -4,9 +4,9 @@
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 
 import { useWallets } from '../../../hooks/wallet/useWallets.js';
+import { SuiIcon } from '../../icons/SuiIcon.js';
 import * as styles from './WalletList.css.js';
 import { WalletListItem } from './WalletListItem.js';
-import { SuiIcon } from '../../icons/SuiIcon.js';
 
 type WalletListProps = {
 	selectedWalletName?: string;
