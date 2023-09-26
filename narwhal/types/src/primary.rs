@@ -1236,6 +1236,7 @@ pub enum AggregateSignatureState {
     VerifiedDirectly(AggregateSignatureBytes),
     Unverified(AggregateSignatureBytes),
     Unsigned(AggregateSignatureBytes),
+    Genesis(AggregateSignatureBytes),
 }
 
 impl Default for AggregateSignatureState {
@@ -1264,7 +1265,8 @@ impl CertificateAPI for CertificateV2 {
             AggregateSignatureState::VerifiedIndirectly(bytes)
             | AggregateSignatureState::VerifiedDirectly(bytes)
             | AggregateSignatureState::Unverified(bytes)
-            | AggregateSignatureState::Unsigned(bytes) => bytes,
+            | AggregateSignatureState::Unsigned(bytes)
+            | AggregateSignatureState::Genesis(bytes) => bytes,
         }
     }
 
@@ -1304,6 +1306,9 @@ impl CertificateV2 {
                     epoch: committee.epoch(),
                     ..Default::default()
                 }),
+                aggregate_signature_state: AggregateSignatureState::Genesis(
+                    AggregateSignatureBytes::default(),
+                ),
                 ..Self::default()
             })
             .collect()
@@ -1464,7 +1469,9 @@ impl CertificateV2 {
 
         let aggregrate_signature_bytes = match self.aggregate_signature_state {
             AggregateSignatureState::VerifiedIndirectly(ref bytes) => bytes,
-            AggregateSignatureState::VerifiedDirectly(_) => return Ok(()),
+            AggregateSignatureState::VerifiedDirectly(_) | AggregateSignatureState::Genesis(_) => {
+                return Ok(())
+            }
             AggregateSignatureState::Unverified(ref bytes) => bytes,
             AggregateSignatureState::Unsigned(_) => {
                 bail!(DagError::CertificateRequiresQuorum);

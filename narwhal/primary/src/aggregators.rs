@@ -16,7 +16,7 @@ use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
-    Certificate, CertificateAPI, Header, Vote, VoteAPI,
+    AggregateSignatureState, Certificate, CertificateAPI, Header, Vote, VoteAPI,
 };
 
 /// Aggregates votes for a particular header into a certificate.
@@ -62,7 +62,7 @@ impl VotesAggregator {
             .votes_received_last_round
             .set(self.votes.len() as i64);
         if self.weight >= committee.quorum_threshold() {
-            let cert = Certificate::new_unverified(
+            let mut cert = Certificate::new_unverified(
                 &self.protocol_config,
                 committee,
                 header.clone(),
@@ -94,7 +94,16 @@ impl VotesAggregator {
                     });
                     return Ok(None);
                 }
-                Ok(_) => return Ok(Some(cert)),
+                Ok(_) => {
+                    if self.protocol_config.narwhal_certificate_v2() {
+                        cert.set_aggregate_signature_state(
+                            AggregateSignatureState::VerifiedDirectly(
+                                cert.aggregated_signature().clone(),
+                            ),
+                        );
+                    }
+                    return Ok(Some(cert));
+                }
             }
         }
         Ok(None)

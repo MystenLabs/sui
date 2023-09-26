@@ -168,6 +168,19 @@ impl Inner {
             }
         }
 
+        if !matches!(
+            certificate.aggregate_signature_state(),
+            AggregateSignatureState::VerifiedDirectly(_)
+        ) && !matches!(
+            certificate.aggregate_signature_state(),
+            AggregateSignatureState::VerifiedIndirectly(_)
+        ) {
+            error!(
+                "[arun] Writing cert {:?} with signature state {:?} to store",
+                certificate.digest(),
+                certificate.aggregate_signature_state()
+            );
+        }
         // Store the certificate and make it available as parent to other certificates.
         self.certificate_store
             .write(certificate.clone())

@@ -980,10 +980,17 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 Some(cert) => {
                     if self.protocol_config.narwhal_certificate_v2() {
                         // We only serve certificates that have we have verified
-                        // directly
+                        // directly or genesis certs
+                        if matches!(
+                            cert.aggregate_signature_state(),
+                            AggregateSignatureState::Genesis(_)
+                        ) {
+                            warn!("[arun] Genesis cert {:?} was requested!", cert.digest());
+                        }
                         if !matches!(
                             cert.aggregate_signature_state(),
                             AggregateSignatureState::VerifiedDirectly(_)
+                                | AggregateSignatureState::Genesis(_)
                         ) {
                             warn!(
                                 "[arun] Certificate {:?} was requested but we did not serve it because it had {:?} signature state.",
@@ -992,8 +999,7 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                             self.metrics
                                 .indirectly_verified_certificates_not_served
                                 .inc();
-                            // TODO(arun): Temporarirly disable not serving certs that were verified indirectly
-                            // continue;
+                            continue;
                         }
                     }
                     response.certificates.push(cert);
