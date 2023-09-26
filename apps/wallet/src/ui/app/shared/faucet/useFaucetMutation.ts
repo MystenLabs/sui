@@ -51,7 +51,7 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 					);
 				}
 
-				if (status?.status !== 'DISCARDED' || error) {
+				if (status?.status === 'DISCARDED' || error) {
 					currentStatus = status.status;
 					throw new Error(error ?? status.status);
 				}
