@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSuiClient } from '@mysten/dapp-kit';
-import { Check32 } from '@mysten/icons';
-import { getExecutionStatusType } from '@mysten/sui.js';
-import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { ReceiptCard } from '_src/ui/app/components/receipt-card';
 import { useActiveAddress } from '_src/ui/app/hooks/useActiveAddress';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
+import { useSuiClient } from '@mysten/dapp-kit';
+import { Check32 } from '@mysten/icons';
+import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 function ReceiptPage() {
 	const location = useLocation();
@@ -25,7 +25,7 @@ function ReceiptPage() {
 	const fromParam = searchParams.get('from');
 	const client = useSuiClient();
 
-	const { data, isLoading, isError } = useQuery({
+	const { data, isLoading, isError } = useQuery<SuiTransactionBlockResponse>({
 		queryKey: ['transactions-by-id', transactionId],
 		queryFn: async () => {
 			return client.getTransactionBlock({
@@ -52,7 +52,7 @@ function ReceiptPage() {
 
 	const pageTitle = useMemo(() => {
 		if (data) {
-			const executionStatus = getExecutionStatusType(data);
+			const executionStatus = data.effects?.status.status;
 
 			// TODO: Infer out better name:
 			const transferName = 'Transaction';
@@ -63,12 +63,14 @@ function ReceiptPage() {
 		return 'Transaction Failed';
 	}, [/*activeAddress,*/ data]);
 
+	const isGuardLoading = useUnlockedGuard();
+
 	if (!transactionId || !activeAddress) {
 		return <Navigate to="/transactions" replace={true} />;
 	}
 
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isLoading || isGuardLoading}>
 			<Overlay
 				showModal={showModal}
 				setShowModal={setShowModal}

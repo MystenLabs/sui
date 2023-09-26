@@ -16,7 +16,6 @@ eyre.workspace = true
 fdlimit.workspace = true
 once_cell.workspace = true
 tap.workspace = true
-num_cpus.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
 rocksdb.workspace = true

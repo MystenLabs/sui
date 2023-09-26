@@ -16,15 +16,15 @@ use sui_metric_checker::{
 
 #[derive(Parser)]
 pub struct Opts {
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     api_user: String,
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     api_key: String,
     // Path to the config file
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     config: String,
     // URL of the Prometheus server
-    #[clap(long, required = true)]
+    #[arg(long, required = true)]
     url: String,
 }
 

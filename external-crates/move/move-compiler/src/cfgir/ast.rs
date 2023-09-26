@@ -4,9 +4,10 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Friend, ModuleIdent, Visibility},
+    expansion::ast::{Attributes, Friend, ModuleIdent},
     hlir::ast::{
         BaseType, Command, Command_, FunctionSignature, Label, SingleType, StructDefinition, Var,
+        Visibility,
     },
     parser::ast::{ConstantName, FunctionName, StructName, ENTRY_MODIFIER},
     shared::{ast_debug::*, unique_map::UniqueMap},

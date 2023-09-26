@@ -439,7 +439,7 @@ impl Type {
                 } else {
                     Some(MType::Reference(Box::new(t.into_normalized_type(env).expect("Invariant violation: reference type contains incomplete, tuple, or spec type"))))
                 }
-            TypeParameter(idx) => Some(MType::TypeParameter(idx as u16)),
+            TypeParameter(idx) => Some(MType::TypeParameter(idx)),
             Tuple(..) | Error | Fun(..) | TypeDomain(..) | ResourceDomain(..) | Var(..) =>
                 None
         }

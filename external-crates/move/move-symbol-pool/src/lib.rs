@@ -70,6 +70,15 @@ static_symbols!(
     "TxContext",
     "ID",
     "SUI",
+    "authenticator_state",
+    "AuthenticatorState",
+    "id",
+    "transfer",
+    "freeze_object",
+    "share_object",
+    "event",
+    "emit",
+    "Receiving",
 );
 
 /// The global, unique cache of strings.

@@ -10,7 +10,7 @@ relevant URL to the `url` parameter. The following example establishes a connect
 requests SUI from that network's faucet.
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // use getFullnodeUrl to define Devnet RPC location
 const rpcUrl = getFullnodeUrl('devnet');
@@ -45,7 +45,7 @@ methods are built into `SuiClient`, but you can use `call` to leverage any metho
 RPC.
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({ url: getFullnodeUrl('devnet') });
 
@@ -61,7 +61,7 @@ For a full list of available RPC methods, see the
 In addition to calling RPC methods, you can use `SuiClient` to subscribe to network events:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -86,7 +86,7 @@ await unsubscribe();
 Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -113,7 +113,7 @@ You can construct a custom transport instance if you need to pass any custom opt
 headers or timeout values.
 
 ```typescript
-import { SuiClient, SuiHTTPTransport, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	transport: new SuiHTTPTransport({
@@ -129,4 +129,32 @@ const client = new SuiClient({
 		},
 	}),
 });
+```
+
+## Pagination
+
+`SuiClient` exposes a number of RPC methods that return paginated results. These methods return a
+result object with 3 fields:
+
+- data: The list of results for the current page
+- nextCursor: a cursor pointing to the next page of results
+- hasNextPage: a boolean indicating whether there are more pages of results
+
+Some APIs also accept an `order` option that can be set to either `ascending` or `descending` to
+change the order in which the results are returned.
+
+You can pass the `nextCursor` to the `cursor` option of the RPC method to retrieve the next page,
+along with a `limit` to specify the page size:
+
+```ts
+const page1 = await client.getCheckpoints({
+	limit: 10,
+});
+
+const page2 =
+	page1.hasNextPage &&
+	client.getCheckpoints({
+		cursor: page1.nextCursor,
+		limit: 10,
+	});
 ```

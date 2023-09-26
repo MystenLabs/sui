@@ -11,6 +11,7 @@
  */
 
 import type { GetBalanceParams } from '@mysten/sui.js/client';
+
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
 

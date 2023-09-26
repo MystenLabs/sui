@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::faucet::{FaucetClient, FaucetClientFactory};
 use async_trait::async_trait;
-use clap::*;
 use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use futures::{stream::FuturesUnordered, StreamExt};

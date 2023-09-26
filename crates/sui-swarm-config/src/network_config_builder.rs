@@ -114,6 +114,13 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_chain_start_timestamp_ms(mut self, chain_start_timestamp_ms: u64) -> Self {
+        self.get_or_init_genesis_config()
+            .parameters
+            .chain_start_timestamp_ms = chain_start_timestamp_ms;
+        self
+    }
+
     pub fn with_objects<I: IntoIterator<Item = Object>>(mut self, objects: I) -> Self {
         self.additional_objects.extend(objects);
         self
@@ -355,7 +362,7 @@ mod tests {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::HashSet;
     use std::sync::Arc;
     use sui_config::genesis::Genesis;
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -402,28 +409,25 @@ mod test {
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
         let epoch = EpochData::new_test();
-        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let transaction_dependencies = BTreeSet::new();
+        let input_objects = InputObjects::new(vec![]);
 
         let (_inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                InMemoryStorage::new(Vec::new()),
+                &InMemoryStorage::new(Vec::new()),
                 &protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
-                InputObjects::new(vec![]),
-                shared_object_refs,
+                input_objects,
                 vec![],
                 SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
-                transaction_dependencies,
             );
 
         assert_eq!(&effects, genesis.effects());

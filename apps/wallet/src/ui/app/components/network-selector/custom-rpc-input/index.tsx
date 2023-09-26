@@ -1,17 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Formik, Form } from 'formik';
-import { useCallback } from 'react';
-import { toast } from 'react-hot-toast';
-import * as Yup from 'yup';
-
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { isValidUrl } from '_src/shared/utils';
 import { InputWithAction } from '_src/ui/app/shared/InputWithAction';
+import { Form, Formik } from 'formik';
+import { useCallback } from 'react';
+import { toast } from 'react-hot-toast';
+import * as Yup from 'yup';
 
 const MIN_CHAR = 5;
 

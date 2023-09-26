@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub mod fetcher;
+mod builder;
 pub mod interface;
-pub mod runner;
+
+// TODO remove the pub(crater) once indexer_v2.rs is renamed to lib.rs
+pub(crate) mod fetcher;
+pub(crate) mod runner;
+
+pub use builder::IndexerBuilder;
+pub use interface::Handler;

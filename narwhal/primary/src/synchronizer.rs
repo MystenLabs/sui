@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anemo::{rpc::Status, Network, Request, Response};
-use config::{AuthorityIdentifier, Committee, Epoch, Stake, WorkerCache};
+use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
 use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
@@ -19,7 +19,6 @@ use parking_lot::Mutex;
 use std::{
     cmp::min,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    iter,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -154,7 +153,7 @@ impl Inner {
         let digest = certificate.digest();
 
         // Validate that certificates are accepted in causal order.
-        // Currently it is relatively cheap because of certificate store caching.
+        // This should be relatively cheap because of certificate store caching.
         if certificate.round() > self.gc_round.load(Ordering::Acquire) + 1 {
             let existence = self
                 .certificate_store
@@ -283,6 +282,12 @@ impl Inner {
         }
         Ok(result)
     }
+
+    #[cfg(test)]
+    async fn get_suspended_stats(&self) -> (usize, usize) {
+        let state = self.state.lock().await;
+        (state.num_suspended(), state.num_missing())
+    }
 }
 
 /// `Synchronizer` helps this primary and other peers stay in sync with each other,
@@ -361,37 +366,11 @@ impl Synchronizer {
         let inner_proposer = inner.clone();
         spawn_logged_monitored_task!(
             async move {
-                let highest_round_number = inner_proposer.certificate_store.highest_round_number();
-                let mut certificates = vec![];
-                // The last or last 2 rounds are sufficient for recovery.
-                for i in 0..2 {
-                    let round = highest_round_number - i;
-                    // Do not recover genesis certificates. They are initialized into certificate
-                    // aggregator already.
-                    if round == 0 {
-                        break;
-                    }
-                    let round_certs = inner_proposer
-                        .certificate_store
-                        .at_round(round)
-                        .expect("Failed recovering certificates in primary core");
-                    let stake: Stake = round_certs
-                        .iter()
-                        .map(|c: &Certificate| inner_proposer.committee.stake_by_id(c.origin()))
-                        .sum();
-                    certificates.extend(round_certs.into_iter());
-                    // If a round has a quorum of certificates, enough have recovered because
-                    // a header can be proposed with these parents.
-                    if stake >= inner_proposer.committee.quorum_threshold() {
-                        break;
-                    } else {
-                        // Only the last round can have less than a quorum of stake.
-                        assert_eq!(i, 0);
-                    }
-                }
-                // Unnecessary to append certificates in ascending round order, but it doesn't
-                // hurt either.
-                for certificate in certificates.into_iter().rev() {
+                let last_round_certificates = inner_proposer
+                    .certificate_store
+                    .last_two_rounds_certs()
+                    .expect("Failed recovering certificates in primary core");
+                for certificate in last_round_certificates {
                     if let Err(e) = inner_proposer
                         .append_certificate_in_aggregator(certificate)
                         .await
@@ -447,16 +426,17 @@ impl Synchronizer {
                         .certificates_aggregators
                         .lock()
                         .retain(|k, _| k > &gc_round);
-                    // Accept certificates at gc round + 1, if there is any.
+                    // Accept certificates at and below gc round, if there is any.
                     let mut state = inner.state.lock().await;
-                    for suspended_cert in state.run_gc(gc_round) {
-                        let suspended_certs = state.accept_children(
-                            suspended_cert.certificate.round(),
-                            suspended_cert.certificate.digest(),
-                        );
-                        // Iteration must be in causal order.
-                        for suspended in
-                            iter::once(suspended_cert).chain(suspended_certs.into_iter())
+                    while let Some(((round, digest), suspended_cert)) = state.run_gc_once(gc_round)
+                    {
+                        assert!(round <= gc_round, "Never gc certificates above gc_round as this can lead to missing causal history in DAG");
+
+                        let suspended_children_certs = state.accept_children(round, digest);
+                        // Acceptance must be in causal order.
+                        for suspended in suspended_cert
+                            .into_iter()
+                            .chain(suspended_children_certs.into_iter())
                         {
                             match inner.accept_suspended_certificate(&state, suspended).await {
                                 Ok(()) => {}
@@ -722,6 +702,20 @@ impl Synchronizer {
             .highest_received_round
             .with_label_values(&[certificate_source])
             .set(highest_received_round as i64);
+
+        // Let the proposer draw early conclusions from a certificate at this round and epoch, without its
+        // parents or payload (which we may not have yet).
+        //
+        // Since our certificate is well-signed, it shows a majority of honest signers stand at round r,
+        // so to make a successful proposal, our proposer must use parents at least at round r-1.
+        //
+        // This allows the proposer not to fire proposals at rounds strictly below the certificate we witnessed.
+        let minimal_round_for_parents = certificate.round().saturating_sub(1);
+        self.inner
+            .tx_parents
+            .send((vec![], minimal_round_for_parents, certificate.epoch()))
+            .await
+            .map_err(|_| DagError::ShuttingDown)?;
 
         // Instruct workers to download any missing batches referenced in this certificate.
         // Since this header got certified, we are sure that all the data it refers to (ie. its batches and its parents) are available.
@@ -1109,11 +1103,17 @@ impl Synchronizer {
     /// certificate to `CertificateFetcher` which will trigger range fetching of missing
     /// certificates.
     #[cfg(test)]
-    pub async fn get_missing_parents(
+    pub(crate) async fn get_missing_parents(
         &self,
         certificate: &Certificate,
     ) -> DagResult<Vec<CertificateDigest>> {
         self.inner.get_missing_parents(certificate).await
+    }
+
+    /// Returns the number of suspended certificates and missing certificates.
+    #[cfg(test)]
+    pub(crate) async fn get_suspended_stats(&self) -> (usize, usize) {
+        self.inner.get_suspended_stats().await
     }
 }
 
@@ -1215,12 +1215,11 @@ impl State {
         round: Round,
         digest: CertificateDigest,
     ) -> Vec<SuspendedCertificate> {
-        // This validation is only triggered for fetched and own certificates.
-        // Certificates from other sources will find the suspended certificate and wait on its
-        // accept notification, so no parent check or validation is done.
+        // Validate that the parent certificate is no longer suspended.
         if let Some(suspended_cert) = self.suspended.remove(&digest) {
             panic!(
-                "Suspended certificate {digest:?} has no missing parent ({:?} exist in store)",
+                "Certificate {:?} should have no missing parent, but is still suspended (missing parents {:?})",
+                suspended_cert.certificate,
                 suspended_cert.missing_parents
             )
         }
@@ -1247,49 +1246,141 @@ impl State {
         to_accept
     }
 
-    /// Runs GC on the suspended certificates, returns a list that can be accepted at gc round + 1.
-    /// It is caller's responsibility to check if some children of the returned certificates can
-    /// also be accepted.
-    fn run_gc(&mut self, gc_round: Round) -> Vec<SuspendedCertificate> {
-        // Remove suspended certificates below gc round, and collect digests for certificates just
-        // above the gc round.
-        let mut gc_certificates = Vec::new();
-        let mut certificates_above_gc_round = HashSet::new();
-        while let Some(((round, digest), children)) = self.missing.iter().next() {
-            if *round > gc_round {
-                break;
-            }
-            if *round == gc_round {
-                certificates_above_gc_round.extend(children.iter().cloned());
-            }
-            // It is ok to notify waiters here (via Drop). The certificate will never and does
-            // not need to get into certificate store.
-            if let Some(suspended) = self.suspended.remove(digest) {
-                gc_certificates.push(suspended);
-            }
-            self.missing.remove(&(*round, *digest));
+    /// Runs GC on the suspended certificates.
+    /// Returns one certificate that can be GC'ed and accepted, or None.
+    ///
+    /// If (round, digest) is returned, it is the caller's responsibility to check if any
+    /// of its children can also be accepted. If SuspendedCertificate is returned as well,
+    /// it should be accepted before any of its children.
+    fn run_gc_once(
+        &mut self,
+        gc_round: Round,
+    ) -> Option<((u64, CertificateDigest), Option<SuspendedCertificate>)> {
+        // Accept suspended certificates at and below gc round because their parents will not
+        // be accepted into the DAG store anymore, in sanitize_certificate().
+        let Some(((round, digest), _children)) = self.missing.first_key_value() else {
+            return None;
+        };
+        // Note that gc_round is the highest round where certificates are gc'ed, and which will
+        // never be in a consensus commit. It's safe to gc up to gc_round, so anything suspended on gc_round + 1
+        // can safely be accepted as their parents (of gc_round) have already been removed from the DAG.
+        // It would be dangerous to accept anything above gc_round here as this could create inconsistencies
+        // in the DAG because we have to make sure anything we accept above gc_round is able to get
+        // properly processed , stored and sent to the DAG.
+        if *round > gc_round {
+            return None;
         }
-        // Notify waiters on GC'ed certificates.
-        for suspended in gc_certificates {
-            suspended
-                .notify
-                .notify()
-                .expect("Suspended certificate should be notified once.");
+
+        let mut suspended = self.suspended.remove(digest);
+        if let Some(suspended) = suspended.as_mut() {
+            // Clear the missing_parents field to be consistent with other accepted
+            // certificates.
+            suspended.missing_parents.clear();
         }
-        // All certificates at gc round + 1 can be accepted.
-        let mut to_accept = Vec::new();
-        for digest in certificates_above_gc_round {
-            let mut suspended_cert = self
-                .suspended
-                .remove(&digest)
-                .expect("Inconsistency found!");
-            suspended_cert.missing_parents.clear();
-            to_accept.push(suspended_cert);
-        }
-        to_accept
+
+        // The missing children info is needed for and will be cleared in accept_children() later.
+        Some(((*round, *digest), suspended))
     }
 
     fn num_suspended(&self) -> usize {
         self.suspended.len()
+    }
+
+    #[cfg(test)]
+    fn num_missing(&self) -> usize {
+        self.missing.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::synchronizer::State;
+    use config::Committee;
+    use fastcrypto::{hash::Hash, traits::KeyPair};
+    use itertools::Itertools;
+    use std::collections::BTreeSet;
+    use std::num::NonZeroUsize;
+    use test_utils::{latest_protocol_version, make_optimal_signed_certificates, CommitteeFixture};
+    use types::{Certificate, Round};
+
+    // Tests that gc_once is reporting back missing certificates up to gc_round and no further.
+    #[tokio::test]
+    async fn test_run_gc_once() {
+        // GIVEN
+        const NUM_AUTHORITIES: usize = 4;
+
+        let fixture = CommitteeFixture::builder()
+            .randomize_ports(true)
+            .committee_size(NonZeroUsize::new(NUM_AUTHORITIES).unwrap())
+            .build();
+
+        let committee: Committee = fixture.committee();
+        let genesis = Certificate::genesis(&committee)
+            .iter()
+            .map(|x| x.digest())
+            .collect::<BTreeSet<_>>();
+        let keys: Vec<_> = fixture
+            .authorities()
+            .map(|a| (a.id(), a.keypair().copy()))
+            .collect();
+        let (certificates, _next_parents) = make_optimal_signed_certificates(
+            1..=3,
+            &genesis,
+            &committee,
+            &latest_protocol_version(),
+            keys.as_slice(),
+        );
+        let certificates = certificates.into_iter().collect_vec();
+
+        let mut state = State::default();
+
+        // Insert all certificates of round 2, except the first certificate.
+        // We report as missing the certificate of validator 1 from round 1.
+        let round_1_validator_1 = certificates[0].digest();
+        for cert in &certificates[NUM_AUTHORITIES + 1..NUM_AUTHORITIES * 2] {
+            state.insert(cert.clone(), vec![round_1_validator_1], true);
+        }
+
+        // Insert all certificates of round 3. We report as missing the certificate of validator 1
+        // from round 2.
+        let round_2_validator_1 = certificates[NUM_AUTHORITIES].digest();
+        for cert in &certificates[NUM_AUTHORITIES * 2..] {
+            state.insert(cert.clone(), vec![round_2_validator_1], true);
+        }
+
+        // AND
+        // Round 1 certificate of validator 1
+        // Round 2 certificate of validator 1
+        assert_eq!(state.num_missing(), 2);
+
+        // 3 certificates of round 2,
+        // 4 certificates of round 3
+        assert_eq!(state.num_suspended(), 7);
+
+        // WHEN running the gc for gc_round = 1, we expect to gc up to round = 1.
+        const GC_ROUND: Round = 1;
+
+        let ((round, certificate_digest), suspended_certificate) =
+            state.run_gc_once(GC_ROUND).unwrap();
+
+        assert_eq!(certificate_digest, certificates[0].digest()); // Ensure that only the missing certificate digest of round 1 gets garbage collected.
+        assert_eq!(round, 1);
+        assert!(suspended_certificate.is_none()); // We don't have its certificate
+
+        // Accept its children
+        let suspended_certificates = state.accept_children(round, certificate_digest);
+
+        // 3 certificates of round 2 have been unsuspended
+        assert_eq!(suspended_certificates.len(), 3);
+        assert!(suspended_certificates
+            .iter()
+            .all(|c| c.certificate.round() == 2));
+
+        // WHEN trying to trigger again for gc_round 1, it should return None
+        assert!(state.run_gc_once(GC_ROUND).is_none());
+
+        // THEN
+        assert_eq!(state.num_missing(), 1);
+        assert_eq!(state.num_suspended(), 4);
     }
 }

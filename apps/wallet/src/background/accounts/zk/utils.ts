@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fetchWithSentry } from '_src/shared/utils';
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce } from '@mysten/zklogin';
+import { generateNonce, generateRandomness, type ZkSignatureInputs } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 import Browser from 'webextension-polyfill';
-import { type ZkProvider, zkProviderDataMap } from './providers';
-import { fetchWithSentry } from '_src/shared/utils';
+
+import { zkProviderDataMap, type ZkProvider } from './providers';
 
 export function prepareZKLogin(currentEpoch: number) {
 	const maxEpoch = currentEpoch + 2;
 	const ephemeralKeyPair = new Ed25519Keypair();
-	const randomness = toBigIntBE(Buffer.from(randomBytes(16)));
+	const randomness = generateRandomness();
 	const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
 	return {
 		ephemeralKeyPair,
@@ -22,6 +23,41 @@ export function prepareZKLogin(currentEpoch: number) {
 		nonce,
 		maxEpoch,
 	};
+}
+
+const forceSilentGetProviders: ZkProvider[] = ['twitch'];
+
+/**
+ * This method does a get request to the authorize url and is used as a workarround
+ * for `forceSilentGetProviders` that they do the silent login/token refresh using
+ * html directives or js code to redirect to the redirect_url (instead of response headers) and that forces the launchWebAuthFlow
+ * to open and close quickly a new window. Which closes the popup window when open but also creates a weird flickering effect.
+ *
+ * @param authUrl
+ */
+async function tryGetRedirectURLSilently(provider: ZkProvider, authUrl: string) {
+	if (!forceSilentGetProviders.includes(provider)) {
+		return null;
+	}
+	try {
+		const responseText = await (await fetch(authUrl)).text();
+		const redirectURLMatch =
+			/<meta\s*http-equiv="refresh"\s*(CONTENT|content)=["']0;\s?URL='(.*)'["']\s*\/?>/.exec(
+				responseText,
+			);
+		if (redirectURLMatch) {
+			const redirectURL = redirectURLMatch[2];
+			if (
+				redirectURL.startsWith(`https://${Browser.runtime.id}.chromiumapp.org`) &&
+				redirectURL.includes('id_token=')
+			) {
+				return new URL(redirectURL.replaceAll('&amp;', '&'));
+			}
+		}
+	} catch (e) {
+		//do nothing
+	}
+	return null;
 }
 
 export async function zkLogin({
@@ -32,34 +68,36 @@ export async function zkLogin({
 }: {
 	provider: ZkProvider;
 	nonce?: string;
+	// This can be used for logins after the user has already connected an account
+	// and we need to make sure that the user logged in with the correct account
+	// seems only google supports this
 	loginHint?: string;
-	prompt?: 'select_account' | 'consent';
+	prompt?: boolean;
 }) {
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
 	}
-	const { clientID, url } = zkProviderDataMap[provider];
-	const params = new URLSearchParams();
+	const { clientID, url, extraParams, buildExtraParams } = zkProviderDataMap[provider];
+	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
-	params.append('response_type', 'id_token');
 	params.append('redirect_uri', Browser.identity.getRedirectURL());
-	params.append('scope', 'openid email profile');
 	params.append('nonce', nonce);
-	// This can be used for logins after the user has already connected a google account
-	// and we need to make sure that the user logged in with the correct account
-	if (loginHint) {
-		params.append('login_hint', loginHint);
-	}
-	if (prompt) {
-		params.append('prompt', prompt);
+	if (buildExtraParams) {
+		buildExtraParams({ prompt, loginHint, params });
 	}
 	const authUrl = `${url}?${params.toString()}`;
-	const responseURL = new URL(
-		await Browser.identity.launchWebAuthFlow({
-			url: authUrl,
-			interactive: true,
-		}),
-	);
+	let responseURL;
+	if (!prompt) {
+		responseURL = await tryGetRedirectURLSilently(provider, authUrl);
+	}
+	if (!responseURL) {
+		responseURL = new URL(
+			await Browser.identity.launchWebAuthFlow({
+				url: authUrl,
+				interactive: true,
+			}),
+		);
+	}
 	const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
 	const jwt = responseParams.get('id_token');
 	if (!jwt) {
@@ -68,8 +106,7 @@ export async function zkLogin({
 	return jwt;
 }
 
-// TODO: update when we have the final production url
-const saltRegistryUrl = 'http://salt.api-devnet.mystenlabs.com';
+const saltRegistryUrl = 'https://salt.api.mystenlabs.com/get_salt';
 
 export async function fetchSalt(jwt: string): Promise<string> {
 	const response = await fetchWithSentry('fetchUserSalt', `${saltRegistryUrl}/get_salt`, {
@@ -90,25 +127,10 @@ type WalletInputs = {
 	userSalt: bigint;
 	keyClaimName?: 'sub' | 'email';
 };
-type Claim = {
-	name: string;
-	value_base64: string;
-	index_mod_4: number;
-};
-type ProofPoints = {
-	pi_a: string[];
-	pi_b: string[][];
-	pi_c: string[];
-};
-export type PartialZkSignature = {
-	proof_points: ProofPoints;
-	address_seed: string;
-	claims: Claim[];
-	header_base64: string;
-};
 
-// TODO: update when we have the final production url (and a https one)
-const zkProofsServerUrl = 'http://185.209.177.123:8000';
+export type PartialZkSignature = Omit<ZkSignatureInputs, 'addressSeed'>;
+
+const zkProofsServerUrl = 'https://prover.mystenlabs.com/v1';
 
 export async function createPartialZKSignature({
 	jwt,
@@ -118,18 +140,20 @@ export async function createPartialZKSignature({
 	userSalt,
 	keyClaimName = 'sub',
 }: WalletInputs): Promise<PartialZkSignature> {
-	const response = await fetchWithSentry('createZKProofs', `${zkProofsServerUrl}/test/zkp`, {
+	const response = await fetchWithSentry('createZKProofs', zkProofsServerUrl, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 		},
 		body: JSON.stringify({
 			jwt,
-			eph_public_key: toBigIntBE(Buffer.from(ephemeralPublicKey.toSuiBytes())).toString(),
-			max_epoch: maxEpoch,
-			jwt_randomness: jwtRandomness.toString(),
-			subject_pin: userSalt.toString(),
-			key_claim_name: keyClaimName,
+			extendedEphemeralPublicKey: toBigIntBE(
+				Buffer.from(ephemeralPublicKey.toSuiBytes()),
+			).toString(),
+			maxEpoch,
+			jwtRandomness: jwtRandomness.toString(),
+			salt: userSalt.toString(),
+			keyClaimName,
 		}),
 	});
 	return response.json();

@@ -1,19 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
+import { QredoAPI } from '_src/shared/qredo-api';
 import Dexie from 'dexie';
+
 import { getAccountSources } from '.';
+import { setupAutoLockAlarm } from '../auto-lock-accounts';
+import { backupDB, getDB } from '../db';
+import { type QredoConnectIdentity } from '../qredo/types';
+import { isSameQredoConnection } from '../qredo/utils';
+import { makeUniqueKey } from '../storage-utils';
 import {
 	AccountSource,
 	type AccountSourceSerialized,
 	type AccountSourceSerializedUI,
 } from './AccountSource';
 import { accountSourcesEvents } from './events';
-import { backupDB, getDB } from '../db';
-import { type QredoConnectIdentity } from '../qredo/types';
-import { isSameQredoConnection } from '../qredo/utils';
-import { makeUniqueKey } from '../storage-utils';
-import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
-import { QredoAPI } from '_src/shared/qredo-api';
 
 type DataDecrypted = {
 	refreshToken: string;
@@ -68,6 +70,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 			service,
 			encrypted: await encrypt(password, decryptedData),
 			originFavIcon,
+			createdAt: Date.now(),
 		};
 		const allAccountSources = await getAccountSources();
 		for (const anAccountSource of allAccountSources) {
@@ -140,6 +143,7 @@ export class QredoAccountSource extends AccountSource<QredoAccountSourceSerializ
 			refreshToken,
 			accessToken: await this.#createAccessToken(refreshToken),
 		});
+		await setupAutoLockAlarm();
 		accountSourcesEvents.emit('accountSourceStatusUpdated', { accountSourceID: this.id });
 	}
 

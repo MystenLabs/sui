@@ -31,20 +31,24 @@ use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TY
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
 use crate::apis::MoveUtilsApi;
-use crate::framework::fetcher::CheckpointFetcher;
+use crate::framework::IndexerBuilder;
 use crate::handlers::checkpoint_handler::new_handlers;
 
 pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
+pub mod models_v2;
 pub mod processors;
 pub mod schema;
+pub mod schema_v2;
 pub mod store;
 pub mod test_utils;
 pub mod types;
+pub mod types_v2;
 pub mod utils;
 
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
@@ -97,7 +101,7 @@ pub struct IndexerConfig {
     pub rpc_server_url: String,
     #[clap(long, default_value = "9000", global = true)]
     pub rpc_server_port: u16,
-    #[clap(long, multiple_occurrences = false, multiple_values = true)]
+    #[clap(long, num_args(1..))]
     pub migrated_methods: Vec<String>,
     #[clap(long)]
     pub reset_db: bool,
@@ -108,6 +112,9 @@ pub struct IndexerConfig {
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
+
+    #[clap(long)]
+    pub use_v2: bool,
 }
 
 impl IndexerConfig {
@@ -162,13 +169,12 @@ impl Default for IndexerConfig {
             fullnode_sync_worker: true,
             rpc_server_worker: true,
             skip_db_commit: false,
+            use_v2: false,
         }
     }
 }
 
 pub struct Indexer;
-
-const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 
 impl Indexer {
     pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
@@ -190,7 +196,6 @@ impl Indexer {
                 .await
                 .expect("Json rpc server should not run into errors upon start.");
             handle.stopped().await;
-            Ok(())
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
             let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
@@ -201,43 +206,24 @@ impl Indexer {
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
                 .expect("Failed to get latest tx checkpoint sequence number from DB");
-            let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
-                mysten_metrics::metered_channel::channel(
-                    DOWNLOAD_QUEUE_SIZE,
-                    &mysten_metrics::get_metrics()
-                        .unwrap()
-                        .channels
-                        .with_label_values(&["checkpoint_tx_downloading"]),
-                );
-
-            // experimental rest api route is found at `/rest` on the same interface as the jsonrpc
-            // service
-            let rest_api_url = format!("{}/rest", config.rpc_client_url);
-            let fetcher = CheckpointFetcher::new(
-                sui_rest_api::Client::new(&rest_api_url),
-                if last_seq_from_db < 0 {
-                    None
-                } else {
-                    Some(last_seq_from_db as u64)
-                },
-                downloaded_checkpoint_data_sender,
-            );
-            spawn_monitored_task!(fetcher.run());
+            let last_downloaded_checkpoint = if last_seq_from_db < 0 {
+                None
+            } else {
+                Some(last_seq_from_db as u64)
+            };
 
             let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
 
-            crate::framework::runner::run(
-                mysten_metrics::metered_channel::ReceiverStream::new(
-                    downloaded_checkpoint_data_receiver,
-                ),
-                vec![Box::new(checkpoint_handler), Box::new(object_handler)],
-            )
-            .await;
-
-            Ok(())
-        } else {
-            Ok(())
+            IndexerBuilder::new()
+                .last_downloaded_checkpoint(last_downloaded_checkpoint)
+                .rest_url(&config.rpc_client_url)
+                .handler(checkpoint_handler)
+                .handler(object_handler)
+                .run()
+                .await;
         }
+
+        Ok(())
     }
 }
 

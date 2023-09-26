@@ -260,7 +260,6 @@ impl Cluster {
     fn parameters() -> Parameters {
         Parameters {
             batch_size: 200,
-            max_header_delay: Duration::from_secs(2),
             ..Parameters::default()
         }
     }
@@ -356,7 +355,7 @@ impl PrimaryNodeDetails {
                 self.worker_cache.clone(),
                 client,
                 &primary_store,
-                Arc::new(SimpleExecutionState::new(tx_transaction_confirmation)),
+                SimpleExecutionState::new(tx_transaction_confirmation),
             )
             .await
             .unwrap();

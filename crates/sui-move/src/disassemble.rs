@@ -13,6 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 #[derive(Parser)]
+#[group(id = "sui-move-disassemmble")]
 pub struct Disassemble {
     /// Path to a .mv file to disassemble
     #[clap(name = "module_path")]

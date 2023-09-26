@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type LedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
+import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 import { Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { useSuiLedgerClient } from './SuiLedgerClientProvider';
-import { type LedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
-
-import type SuiLedgerClient from '@mysten/ledgerjs-hw-app-sui';
 
 export type DerivedLedgerAccount = Pick<
 	LedgerAccountSerializedUI,

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Text } from '_app/shared/text';
-
 import type { ReactNode } from 'react';
 
 export type CardItemProps = {

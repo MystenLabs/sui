@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiClient } from '@mysten/sui.js/client';
-import { type WalletSigner } from './WalletSigner';
-import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
-import { queryClient } from './helpers/queryClient';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { API_ENV } from '_src/shared/api-env';
-
 import { getSuiClient } from '_src/shared/sui-client';
+import { type SuiClient } from '@mysten/sui.js/client';
+
 import type { BackgroundClient } from './background-client';
-import type { SignerWithProvider } from '@mysten/sui.js';
+import { BackgroundServiceSigner } from './background-client/BackgroundServiceSigner';
+import { queryClient } from './helpers/queryClient';
+import { type WalletSigner } from './WalletSigner';
 
 type EnvInfo = {
 	name: string;
@@ -45,7 +44,7 @@ const accountTypesWithBackgroundSigner = ['mnemonic-derived', 'imported', 'zk'];
 
 export default class ApiProvider {
 	private _apiFullNodeProvider?: SuiClient;
-	private _signerByAddress: Map<string, SignerWithProvider> = new Map();
+	private _signerByAddress: Map<string, WalletSigner> = new Map();
 	apiEnv: API_ENV = DEFAULT_API_ENV;
 
 	public setNewJsonRpcProvider(apiEnv: API_ENV = DEFAULT_API_ENV, customRPC?: string | null) {
@@ -76,7 +75,7 @@ export default class ApiProvider {
 	public getSignerInstance(
 		account: SerializedUIAccount,
 		backgroundClient: BackgroundClient,
-	): SignerWithProvider {
+	): WalletSigner {
 		if (!this._apiFullNodeProvider) {
 			this.setNewJsonRpcProvider();
 		}
@@ -113,3 +112,5 @@ export default class ApiProvider {
 		return this._signerByAddress.get(key)!;
 	}
 }
+
+export const walletApiProvider = new ApiProvider();

@@ -156,6 +156,7 @@ All of the type usage examples below can be used for `bcs.de(<type>, ...)` as we
 ```ts
 // Example: Primitive types
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // Integers
@@ -189,7 +190,8 @@ To serialize and deserialize data to and from BCS there are two methods: `bcs.se
 
 ```ts
 // Example: Ser/de and Encoding
-import { BCS, getSuiMoveConfig, BcsWriter } from '@mysten/bcs';
+import { BCS, BcsWriter, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // bcs.ser() returns an instance of BcsWriter which can be converted to bytes or a string
@@ -227,6 +229,7 @@ predefined schema without making changes deep in the tree.
 ```ts
 // Example: Alias
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 bcs.registerAlias('ObjectDigest', BCS.BASE58);
@@ -248,6 +251,7 @@ types.
 ```ts
 // Example: Struct
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // register a custom type (it becomes available for using)
@@ -281,6 +285,7 @@ a string or as an Array. See below:
 ```ts
 // Example: Generics
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // Container -> the name of the type
@@ -328,6 +333,7 @@ mark it (see `Option<T>` below).
 ```ts
 // Example: Enum
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 bcs.registerEnumType('Option<T>', {
@@ -374,6 +380,7 @@ definition can be used.
 ```ts
 // Example: Inline Struct
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // Some value we want to serialize
@@ -424,6 +431,7 @@ Definition for the above should be the following:
 ```ts
 // Example: Simplifying UID
 import { BCS, getSuiMoveConfig } from '@mysten/bcs';
+
 const bcs = new BCS(getSuiMoveConfig());
 
 // If there's a deep nested struct we can ignore Move type

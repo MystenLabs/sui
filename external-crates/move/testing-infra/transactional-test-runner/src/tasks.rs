@@ -201,7 +201,7 @@ pub enum SyntaxChoice {
 }
 
 /// When printing bytecode, the input program must either be a script or a module.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PrintBytecodeInputChoice {
     Script,
     Module,
@@ -220,10 +220,8 @@ pub struct PrintBytecodeCommand {
 pub struct InitCommand {
     #[clap(
         long = "addresses",
-        parse(try_from_str = move_compiler::shared::parse_named_address),
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        value_parser = move_compiler::shared::parse_named_address,
+        num_args(1..),
     )]
     pub named_addresses: Vec<(String, NumericalAddress)>,
 }
@@ -240,41 +238,35 @@ pub struct PublishCommand {
 pub struct RunCommand<ExtraValueArgs: ParsableValue> {
     #[clap(
         long = "signers",
-        parse(try_from_str = ParsedAddress::parse),
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        value_parser = ParsedAddress::parse,
+        num_args(1..),
     )]
     pub signers: Vec<ParsedAddress>,
     #[clap(
         long = "args",
-        parse(try_from_str = ParsedValue::parse),
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        value_parser = ParsedValue::<ExtraValueArgs>::parse,
+        num_args(1..),
     )]
     pub args: Vec<ParsedValue<ExtraValueArgs>>,
     #[clap(
         long = "type-args",
-        parse(try_from_str = ParsedType::parse),
-        takes_value(true),
-        multiple_values(true),
-        multiple_occurrences(true)
+        value_parser = ParsedType::parse,
+        num_args(1..),
     )]
     pub type_args: Vec<ParsedType>,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
-    #[clap(name = "NAME", parse(try_from_str = parse_qualified_module_access))]
+    #[clap(name = "NAME", value_parser = parse_qualified_module_access)]
     pub name: Option<(ParsedAddress, Identifier, Identifier)>,
 }
 
 #[derive(Debug, Parser)]
 pub struct ViewCommand {
-    #[clap(long = "address", parse(try_from_str = ParsedAddress::parse))]
+    #[clap(long = "address", value_parser = ParsedAddress::parse)]
     pub address: ParsedAddress,
-    #[clap(long = "resource", parse(try_from_str = ParsedStructType::parse))]
+    #[clap(long = "resource", value_parser = ParsedStructType::parse)]
     pub resource: ParsedStructType,
 }
 
@@ -342,7 +334,7 @@ impl<
     > CommandFactory
     for TaskCommand<ExtraInitArgs, ExtraPublishArgs, ExtraValueArgs, ExtraRunArgs, SubCommands>
 {
-    fn into_app<'help>() -> Command<'help> {
+    fn command() -> Command {
         SubCommands::command()
             .name("Task Command")
             .subcommand(InitCommand::augment_args(ExtraInitArgs::command()).name("init"))
@@ -354,7 +346,7 @@ impl<
             .subcommand(ViewCommand::command().name("view"))
     }
 
-    fn into_app_for_update<'help>() -> Command<'help> {
+    fn command_for_update() -> Command {
         todo!()
     }
 }

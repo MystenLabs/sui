@@ -25,9 +25,9 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    CLOCK_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, SUI_ADDR_NAME,
-    SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME,
-    UID_TYPE_NAME,
+    AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, CLOCK_MODULE_NAME, ID_LEAK_DIAG,
+    OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, SUI_ADDR_NAME, SUI_CLOCK_CREATE,
+    SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME, UID_TYPE_NAME,
 };
 
 pub const FRESH_ID_FUNCTIONS: &[(Symbol, Symbol, Symbol)] = &[
@@ -42,6 +42,11 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
         SUI_SYSTEM_CREATE,
     ),
     (SUI_ADDR_NAME, CLOCK_MODULE_NAME, SUI_CLOCK_CREATE),
+    (
+        SUI_ADDR_NAME,
+        AUTHENTICATOR_STATE_MODULE_NAME,
+        AUTHENTICATOR_STATE_CREATE,
+    ),
 ];
 
 //**************************************************************************************************
@@ -53,10 +58,11 @@ pub struct IDLeakVerifierAI<'a> {
     declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Value {
     FreshID(Loc),
     NotFresh(Loc),
+    #[default]
     Other,
 }
 
@@ -144,7 +150,7 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         let (f, _, first_e) = fields_iter.next().unwrap();
         let first_value = self.exp(context, state, first_e).pop().unwrap_or_default();
         if !matches!(first_value, Value::FreshID(_)) {
-            let msg = format!("Invalid object creation without a newly created UID.");
+            let msg = "Invalid object creation without a newly created UID.".to_string();
             let uid_msg = format!(
                 "The UID must come directly from {sui}::{object}::{new}. \
                 Or for tests, it can come from {sui}::{ts}::{ts_new}",
@@ -234,11 +240,5 @@ impl SimpleDomain for State {
 impl SimpleExecutionContext for ExecutionContext {
     fn add_diag(&mut self, diag: Diagnostic) {
         self.diags.add(diag)
-    }
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value::Other
     }
 }

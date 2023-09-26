@@ -11,6 +11,9 @@
  */
 
 import type { ResolveNameServiceNamesParams } from '@mysten/sui.js/client';
+
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
 
@@ -19,6 +22,19 @@ export function useResolveNameServiceNames(
 	options?: UseSuiClientQueryOptions<'resolveNameServiceNames'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'resolveNameServiceNames',
+			params,
+		},
+		options,
+	);
+}
+
+export function useResolveNameServiceNamesInfinite(
+	params: ResolveNameServiceNamesParams,
+	options?: UseSuiClientInfiniteQueryOptions<'resolveNameServiceNames'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'resolveNameServiceNames',
 			params,

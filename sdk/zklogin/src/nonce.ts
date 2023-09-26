@@ -1,13 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { base64url } from 'jose';
-import { toBigIntBE } from 'bigint-buffer';
 import { PublicKey } from '@mysten/sui.js/cryptography';
+import { randomBytes } from '@noble/hashes/utils';
+import { toBigIntBE } from 'bigint-buffer';
+import { base64url } from 'jose';
+
 import { poseidonHash } from './poseidon.js';
 import { toBufferBE } from './utils.js';
 
 const NONCE_LENGTH = 27;
+
+export function generateRandomness() {
+	// Once Node 20 enters LTS, we can just use crypto.getRandomValues(new Uint8Array(16)), but until then this improves compatibility:
+	return toBigIntBE(Buffer.from(randomBytes(16)));
+}
 
 export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness: bigint) {
 	const publicKeyBytes = toBigIntBE(Buffer.from(publicKey.toSuiBytes()));

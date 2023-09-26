@@ -9,7 +9,7 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::get_oidc_url;
-use fastcrypto_zkp::bn254::zk_login::{AddressParams, OIDCProvider};
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use json_to_table::{json_to_table, Orientation};
 use num_bigint::BigUint;
 use rand::rngs::StdRng;
@@ -106,9 +106,9 @@ pub enum KeyToolCommand {
     MultiSigAddress {
         #[clap(long)]
         threshold: ThresholdUnit,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
     },
     /// Provides a list of participating signatures (`flag || sig || pk` encoded in Base64),
@@ -121,21 +121,21 @@ pub enum KeyToolCommand {
     /// e.g. for [pk1, pk2, pk3, pk4, pk5], [sig1, sig2, sig5] is valid, but
     /// [sig2, sig1, sig5] is invalid.
     MultiSigCombinePartialSig {
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
     },
     MultiSigCombinePartialSigLegacy {
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         sigs: Vec<Signature>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         pks: Vec<PublicKey>,
-        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        #[clap(long, num_args(1..))]
         weights: Vec<WeightUnit>,
         #[clap(long)]
         threshold: ThresholdUnit,
@@ -150,7 +150,7 @@ pub enum KeyToolCommand {
     /// of the BCS serialized transaction bytes itself and its intent. If intent is absent,
     /// default will be used.
     Sign {
-        #[clap(long, parse(try_from_str = decode_bytes_hex))]
+        #[clap(long, value_parser = decode_bytes_hex::<SuiAddress>)]
         address: SuiAddress,
         #[clap(long)]
         data: String,
@@ -176,14 +176,16 @@ pub enum KeyToolCommand {
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory where the address is the filename,
     /// and prints out its Sui address, Base64 encoded public key, the key scheme, and the key scheme flag.
-    Unpack { keypair: SuiKeyPair },
+    Unpack { keypair: String },
 
     /// Given the max_epoch, generate an OAuth url, ask user to paste the redirect with id_token, call salt server, then call the prover server,
     /// create a test transaction, use the ephemeral key to sign and execute it by assembling to a serialized zkLogin signature.
     ZkLoginSignAndExecuteTx {
         #[clap(long)]
         max_epoch: EpochId,
-        #[clap(long, parse(try_from_str), default_value = "false")]
+        #[clap(long, default_value = "devnet")]
+        network: String,
+        #[clap(long, default_value = "true")]
         fixed: bool,
     },
 
@@ -199,6 +201,8 @@ pub enum KeyToolCommand {
         kp_bigint: String,
         #[clap(long)]
         ephemeral_key_identifier: SuiAddress,
+        #[clap(long, default_value = "devnet")]
+        network: String,
     },
 }
 
@@ -274,6 +278,13 @@ pub struct MultiSigOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub enum ConvertOutput {
+    Base64(String),
+    Hex(String),
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PrivateKeyBase64 {
     base64: String,
 }
@@ -311,11 +322,11 @@ pub struct ZkLoginSignAndExecuteTx {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum CommandOutput {
+    Convert(ConvertOutput),
     DecodeMultiSig(DecodedMultiSigOutput),
     DecodeTxBytes(TransactionData),
     Error(String),
     Generate(Key),
-    GenerateZkLoginAddress(SuiAddress, AddressParams),
     Import(Key),
     List(Vec<Key>),
     LoadKeypair(KeypairData),
@@ -334,7 +345,7 @@ impl KeyToolCommand {
         let cmd_result = Ok(match self {
             KeyToolCommand::Convert { value } => {
                 let result = convert_private_key_to_base64(value)?;
-                CommandOutput::PrivateKeyBase64(PrivateKeyBase64 { base64: result })
+                CommandOutput::Convert(result)
             }
 
             KeyToolCommand::DecodeMultiSig { multisig, tx_bytes } => {
@@ -686,6 +697,9 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
+                let keypair: SuiKeyPair = keypair.parse()
+                    .expect("Expected a Base64 private key, but could not decode the input string to a SuiKeyPair");
+
                 let key = Key::from(&keypair);
                 let path_str = format!("{}.key", key.sui_address).to_lowercase();
                 let path = Path::new(&path_str);
@@ -699,7 +713,11 @@ impl KeyToolCommand {
                 CommandOutput::Show(key)
             }
 
-            KeyToolCommand::ZkLoginSignAndExecuteTx { fixed, max_epoch } => {
+            KeyToolCommand::ZkLoginSignAndExecuteTx {
+                max_epoch,
+                network,
+                fixed,
+            } => {
                 let skp = if fixed {
                     SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])))
                 } else {
@@ -727,7 +745,7 @@ impl KeyToolCommand {
                     OIDCProvider::Google,
                     &eph_pk_bytes,
                     max_epoch,
-                    "575519204237-msop9ep45u2uo98hapqmngv8d84qdc8k.apps.googleusercontent.com",
+                    "25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com",
                     "https://sui.io/",
                     &jwt_randomness,
                 )?;
@@ -761,6 +779,7 @@ impl KeyToolCommand {
                     &kp_bigint.to_string(),
                     ephemeral_key_identifier,
                     keystore,
+                    &network,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
@@ -771,6 +790,7 @@ impl KeyToolCommand {
                 jwt_randomness,
                 kp_bigint,
                 ephemeral_key_identifier,
+                network,
             } => {
                 let tx_digest = perform_zk_login_test_tx(
                     &parsed_token,
@@ -779,6 +799,7 @@ impl KeyToolCommand {
                     &kp_bigint,
                     ephemeral_key_identifier,
                     keystore,
+                    &network,
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
@@ -881,13 +902,14 @@ impl Debug for CommandOutput {
     }
 }
 
-fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error> {
+fn convert_private_key_to_base64(value: String) -> Result<ConvertOutput, anyhow::Error> {
     match Base64::decode(&value) {
         Ok(decoded) => {
             if decoded.len() != 33 {
                 return Err(anyhow!(format!("Private key is malformed and cannot base64 decode it. Fed 33 length but got {}", decoded.len())));
             }
-            Ok(Hex::encode(&decoded[1..]))
+            info!("Hex encode");
+            Ok(ConvertOutput::Hex(Hex::encode(&decoded[1..])))
         }
         Err(_) => match Hex::decode(&value) {
             Ok(decoded) => {
@@ -897,7 +919,8 @@ fn convert_private_key_to_base64(value: String) -> Result<String, anyhow::Error>
                 let mut res = Vec::new();
                 res.extend_from_slice(&[SignatureScheme::ED25519.flag()]);
                 res.extend_from_slice(&decoded);
-                Ok(Base64::encode(&res))
+                info!("Base64 encode");
+                Ok(ConvertOutput::Base64(Base64::encode(&res)))
             }
             Err(_) => Err(anyhow!("Invalid private key format".to_string())),
         },

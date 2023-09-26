@@ -70,9 +70,8 @@ type Query {
   # If no `id` is provided, fetch the latest available checkpoint.
   checkpoint(id: CheckpointID): Checkpoint
 
-  # Find a transaction block either by its transaction digest or its
-  # effects digest.
-  transactionBlock(filter: TransactionBlockID!): TransactionBlock
+  # Find a transaction block by its transaction digest
+  transactionBlock(digest: String!): TransactionBlock
 
   coinMetadata(coinType: String!): CoinMetadata
 
@@ -154,10 +153,9 @@ type Mutation {
   # `signatures` are a list of `flag || signature || pubkey` bytes,
   #     Base64-encoded.
   #
-  # Waits until the transaction has been finalised on chain and an
-  # effects digest is available, and returns that.  If the
-  # transactioon could not be finalised, returns the errors that
-  # prevented it, instead.
+  # Waits until the transaction has been finalised on chain to return
+  # its transaction digest.  If the transaction could not be
+  # finalised, returns the errors that prevented it, instead.
   executeTransactionBlock(
     txBytes: Base64!,
     signatures: [Base64!]!,
@@ -191,14 +189,6 @@ input CheckpointID {
   sequenceNumber: Int
 }
 
-# TODO: Do we want to support querying by effects digest at all?
-# Find a transaction block either by its transaction digest, or its
-# effects digest (can't be both, can't be neither).
-input TransactionBlockID {
-  transactionDigest: String
-  effectsDigest: String
-}
-
 input ObjectFilter {
   # Cascading (type requires module requires package)
   package: SuiAddress
@@ -208,6 +198,12 @@ input ObjectFilter {
   owner: SuiAddress
   objectIds: [SuiAddress!]
   objectKeys: [ObjectKey!]
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [ObjectFilter]
+  all: [ObjectFilter]
+  not: ObjectFilter
 }
 
 input ObjectKey {
@@ -218,6 +214,9 @@ input ObjectKey {
 input EventFilter {
   sender: SuiAddress
   transactionDigest: String
+  # Enhancement (post-MVP), requires compound filters to be useful.
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   # Cascading (module requires package)
   emittingPackage: SuiAddress
@@ -228,15 +227,15 @@ input EventFilter {
   eventModule: String
   eventType: String
 
-  eventField: EventField
-
+  # Enhancement (post-MVP), requires compound filters to be useful.
   startTime: DateTime
   endTime: DateTime
-}
 
-input EventField {
-  path: String!
-  json: String!
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [EventFilter]
+  all: [EventFilter]
+  not: EventFilter
 }
 
 input TransactionBlockFilter {
@@ -246,7 +245,8 @@ input TransactionBlockFilter {
   function: String
 
   kind: TransactionBlockKindInput
-  checkpoint: Int
+  afterCheckpoint: Int
+  beforeCheckpoint: Int
 
   signAddress: SuiAddress
   sentAddress: SuiAddress
@@ -255,6 +255,19 @@ input TransactionBlockFilter {
 
   inputObject: SuiAddress
   changedObject: SuiAddress
+
+  transactionIDs: [TransactionBlockID!]
+
+  # Enhancement (post-MVP), consistency with EventFilter -- timestamp
+  # comes from checkpoint timestamp.
+  startTime: DateTime
+  endTime: DateTime
+
+  # Enhancement (post-MVP), compound filters.  Compound filters are
+  # exclusive (must be the only filter set if they are used).
+  any: [TransactionBlockFilter]
+  all: [TransactionBlockFilter]
+  not: TransactionBlockFilter
 }
 
 input DynamicFieldFilter {
@@ -282,6 +295,7 @@ interface ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: ObjectFilter,
   ): ObjectConnection
 
@@ -332,6 +346,7 @@ type Address implements ObjectOwner {
     last: Int,
     before: String,
     relation: AddressTransactionBlockRelationship,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
@@ -371,6 +386,7 @@ type Object implements ObjectOwner {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 
@@ -421,6 +437,8 @@ type Epoch {
     after: String,
     last: Int,
     before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
   ): TransactionBlockConnection
 }
 
@@ -524,7 +542,7 @@ type Validator {
   # The other validators this validator has reported
   reportRecords: [SuiAddress]
 
-  apy: Float
+  apy: Int
 }
 
 type ValidatorCredentials {
@@ -569,7 +587,14 @@ type Checkpoint {
   # Only available on the final checkpoint in an epoch
   endOfEpoch: EndOfEpochData
 
-  transactionConnection(first: Int, after: String, last: Int, before: String): TransactionBlockConnection
+  transactionBlockConnection(
+    first: Int,
+    after: String,
+    last: Int,
+    before: String,
+    # Enhancement (post-MVP) relies on compound filters.
+    filter: TransactionBlockFilter,
+  ): TransactionBlockConnection
 
   # NB. Will be moved into a private, explorer-specific extension.
   addressMetrics: AddressMetrics
@@ -586,10 +611,10 @@ type CommitteeMember {
 }
 
 type TransactionBlock {
-  id: ID!
+  id: ID
   digest: String!
 
-  sender: Address
+  senders: [Address]
   gasInput: GasInput
   kind: TransactionBlockKind
   signatures: [TransactionSignature]
@@ -702,7 +727,6 @@ type MakeMoveVecTransaction {
 type TransactionSignature
 
 type TransactionBlockEffects {
-  digest: String!
   status: ExecutionStatus!
 
   errors: String
@@ -723,6 +747,7 @@ type TransactionBlockEffects {
     after: String,
     last: Int,
     before: String,
+    # Extension (post-MVP) relies on compound filters
     filter: EventFilter,
   ): EventConnection
 
@@ -777,7 +802,7 @@ type Event {
   # Type of the event being sent
   eventType: MoveType
 
-  sender: Address
+  senders: [Address]
   timestamp: DateTime
 
   json: String
@@ -1023,8 +1048,9 @@ type AddressMetrics {
 
 # Execution
 
+# Either TransactionBlockEffects on success, or error on failure.
 type ExecutionResult {
-  effectsDigest: String
+  effects: TransactionBlockEffects
   errors: String
 }
 

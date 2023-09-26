@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import {
 	BCS,
-	getSuiMoveConfig,
 	fromB58,
-	toB58,
 	fromB64,
-	toB64,
 	fromHEX,
+	getSuiMoveConfig,
+	toB58,
+	toB64,
 	toHEX,
 } from './../src/index';
 
@@ -53,5 +54,24 @@ describe('BCS: Encodings', () => {
 		expect(deserialized.hex).toEqual(hex_str);
 		expect(deserialized.base58).toEqual(b58_str);
 		expect(deserialized.base64).toEqual(b64_str);
+	});
+
+	it('should deserialize hex with leading 0s', () => {
+		const addressLeading0 = 'a7429d7a356dd98f688f11a330a32e0a3cc1908734a8c5a5af98f34ec93df0c';
+		expect(toHEX(Uint8Array.from([0, 1]))).toEqual('0001');
+		expect(fromHEX('0x1')).toEqual(Uint8Array.from([1]));
+		expect(fromHEX('1')).toEqual(Uint8Array.from([1]));
+		expect(fromHEX('111')).toEqual(Uint8Array.from([1, 17]));
+		expect(fromHEX('001')).toEqual(Uint8Array.from([0, 1]));
+		expect(fromHEX('011')).toEqual(Uint8Array.from([0, 17]));
+		expect(fromHEX('0011')).toEqual(Uint8Array.from([0, 17]));
+		expect(fromHEX('0x0011')).toEqual(Uint8Array.from([0, 17]));
+		expect(fromHEX(addressLeading0)).toEqual(
+			Uint8Array.from([
+				10, 116, 41, 215, 163, 86, 221, 152, 246, 136, 241, 26, 51, 10, 50, 224, 163, 204, 25, 8,
+				115, 74, 140, 90, 90, 249, 143, 52, 236, 147, 223, 12,
+			]),
+		);
+		expect(toHEX(fromHEX(addressLeading0))).toEqual(`0${addressLeading0}`);
 	});
 });

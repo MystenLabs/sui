@@ -79,10 +79,10 @@ pub struct DependencyGraph {
     /// `DependencyMode::Always` edges in `package_graph`).
     pub always_deps: BTreeSet<PM::PackageName>,
 
-    /// A hash of the manifest file content this lock file was generated from, if any.
-    pub manifest_digest: Option<String>,
-    /// A hash of all the dependencies (their lock file content) this lock file depends on, if any.
-    pub deps_digest: Option<String>,
+    /// A hash of the manifest file content this lock file was generated from.
+    pub manifest_digest: String,
+    /// A hash of all the dependencies (their lock file content) this lock file depends on.
+    pub deps_digest: String,
 }
 
 /// A helper to store additional information about a dependency graph
@@ -163,88 +163,52 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     pub progress_output: Progress,
     /// A chain of visited dependencies used for cycle detection
     visited_dependencies: VecDeque<(PM::PackageName, PM::InternalDependency)>,
+    /// Installation directory for compiled artifacts (from BuildConfig).
+    install_dir: PathBuf,
 }
 
 impl<Progress: Write> DependencyGraphBuilder<Progress> {
-    pub fn new(skip_fetch_latest_git_deps: bool, progress_output: Progress) -> Self {
+    pub fn new(
+        skip_fetch_latest_git_deps: bool,
+        progress_output: Progress,
+        install_dir: PathBuf,
+    ) -> Self {
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
             visited_dependencies: VecDeque::new(),
+            install_dir,
         }
     }
 
-    /// Get a graph from the Move.lock file, if Move.lock file is present and up-to-date
-    /// (additionally returning false), otherwise compute a new graph based on the content of the
-    /// Move.toml (manifest) file (additionally returning true).
+    /// Get a new graph by either reading it from Move.lock file (if this file is up-to-date, in
+    /// which case also return false) or by computing a new graph based on the content of the
+    /// Move.toml (manifest) file (in which case also return true).
     pub fn get_graph(
         &mut self,
         parent: &PM::DependencyKind,
         root_path: PathBuf,
         manifest_string: String,
-        lock_string: Option<String>,
+        lock_string_opt: Option<String>,
     ) -> Result<(DependencyGraph, bool)> {
         let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
-        let manifest = parse_source_manifest(toml_manifest)?;
+        let root_manifest = parse_source_manifest(toml_manifest)?;
 
         // compute digests eagerly as even if we can't reuse existing lock file, they need to become
         // part of the newly computed dependency graph
-        let new_manifest_digest_opt = Some(digest_str(manifest_string.into_bytes().as_slice()));
+        let new_manifest_digest = digest_str(manifest_string.into_bytes().as_slice());
+        let (old_manifest_digest_opt, old_deps_digest_opt, lock_string) = match lock_string_opt {
+            Some(lock_string) => match schema::read_header(&lock_string) {
+                Ok(header) => (
+                    Some(header.manifest_digest),
+                    Some(header.deps_digest),
+                    Some(lock_string),
+                ),
+                Err(_) => (None, None, None), // malformed header - regenerate lock file
+            },
+            None => (None, None, None),
+        };
 
-        let new_deps_digest_opt = self.dependency_digest(root_path.clone(), &manifest)?;
-        if let Some(lock_contents) = lock_string {
-            let schema::Header {
-                version: _,
-                manifest_digest: manifest_digest_opt,
-                deps_digest: deps_digest_opt,
-            } = schema::read_header(&lock_contents)?;
-
-            // check if manifest file and dependencies haven't changed and we can use existing lock
-            // file to create the dependency graph
-            if new_manifest_digest_opt.clone() == manifest_digest_opt {
-                // manifest file hasn't changed
-                if let Some(deps_digest) = deps_digest_opt {
-                    // dependencies digest exists in the lock file
-                    if Some(deps_digest) == new_deps_digest_opt {
-                        // dependencies have not changed
-                        return Ok((
-                            DependencyGraph::read_from_lock(
-                                root_path,
-                                manifest.package.name,
-                                &mut lock_contents.as_bytes(),
-                                None,
-                            )?,
-                            false,
-                        ));
-                    }
-                }
-            }
-        }
-
-        Ok((
-            self.new_graph(
-                parent,
-                &manifest,
-                root_path.to_path_buf(),
-                new_manifest_digest_opt,
-                new_deps_digest_opt,
-            )?,
-            true,
-        ))
-    }
-
-    /// Build a graph from the transitive dependencies and dev-dependencies of `root_package`.
-    ///
-    /// `progress_output` is an output stream that is written to while generating the graph, to
-    /// provide human-readable progress updates.
-    pub fn new_graph(
-        &mut self,
-        parent: &PM::DependencyKind,
-        root_manifest: &PM::SourceManifest,
-        root_path: PathBuf,
-        manifest_digest: Option<String>,
-        deps_digest: Option<String>,
-    ) -> Result<DependencyGraph> {
         // collect sub-graphs for "regular" and "dev" dependencies
         let mut dep_graphs = self.collect_graphs(
             parent,
@@ -253,6 +217,10 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             DependencyMode::Always,
             &root_manifest.dependencies,
         )?;
+        let dep_lock_files = dep_graphs
+            .values()
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            .collect::<Result<Vec<LockFile>>>()?;
         let dev_dep_graphs = self.collect_graphs(
             parent,
             root_manifest.package.name,
@@ -261,10 +229,34 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             &root_manifest.dev_dependencies,
         )?;
 
+        let dev_dep_lock_files = dev_dep_graphs
+            .values()
+            .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
+            .collect::<Result<Vec<LockFile>>>()?;
+        let new_deps_digest = self.dependency_digest(dep_lock_files, dev_dep_lock_files)?;
+        let (manifest_digest, deps_digest) =
+            match (old_manifest_digest_opt, old_deps_digest_opt, lock_string) {
+                (Some(old_manifest_digest), Some(old_deps_digest), Some(lock_string))
+                    if old_manifest_digest == new_manifest_digest
+                        && old_deps_digest == new_deps_digest =>
+                {
+                    return Ok((
+                        DependencyGraph::read_from_lock(
+                            root_path,
+                            root_manifest.package.name,
+                            &mut lock_string.as_bytes(), // safe since old_deps_digest exists
+                            None,
+                        )?,
+                        false,
+                    ));
+                }
+                _ => (new_manifest_digest, new_deps_digest),
+            };
+
         dep_graphs.extend(dev_dep_graphs);
 
         let mut combined_graph = DependencyGraph {
-            root_path: root_path.clone(),
+            root_path,
             root_package: root_manifest.package.name,
             package_graph: DiGraphMap::new(),
             package_table: BTreeMap::new(),
@@ -278,7 +270,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             .add_node(combined_graph.root_package);
 
         // get overrides
-        let overrides = collect_overrides(parent, &root_manifest.dependencies)?;
+        let mut overrides = collect_overrides(parent, &root_manifest.dependencies)?;
         let dev_overrides = collect_overrides(parent, &root_manifest.dev_dependencies)?;
 
         for (
@@ -304,12 +296,15 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let mut all_deps = root_manifest.dependencies.clone();
         all_deps.extend(root_manifest.dev_dependencies.clone());
 
-        combined_graph.merge(dep_graphs, parent, &all_deps)?;
+        // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
+        overrides.extend(dev_overrides);
+
+        combined_graph.merge(dep_graphs, parent, &all_deps, &overrides)?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
 
-        Ok(combined_graph)
+        Ok((combined_graph, true))
     }
 
     /// Given all dependencies from the parent manifest file, collects all the sub-graphs
@@ -373,7 +368,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 self.visited_dependencies
                     .push_front((dep_pkg_name, d.clone()));
                 let (mut pkg_graph, modified) =
-                    self.get_graph(&d.kind, pkg_path.clone(), manifest_string, lock_string)?;
+                    self.get_graph(&d.kind, pkg_path, manifest_string, lock_string)?;
                 self.visited_dependencies.pop_front();
                 // reroot all packages to normalize local paths across all graphs
                 for (_, p) in pkg_graph.package_table.iter_mut() {
@@ -405,66 +400,33 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         Ok((pkg_graph, is_override, is_external))
     }
 
-    /// Computes dependency hashes but may return None if information about some dependencies is not
-    /// available or if there are no dependencies.
-    fn dependency_hashes(
-        &mut self,
-        root_path: PathBuf,
-        dependencies: &PM::Dependencies,
-    ) -> Result<Option<Vec<String>>> {
+    /// Computes dependency hashes.
+    fn dependency_hashes(&mut self, lock_files: Vec<LockFile>) -> Result<Vec<String>> {
         let mut hashed_lock_files = Vec::new();
-
-        for (pkg_name, dep) in dependencies {
-            let internal_dep = match dep {
-                // bail if encountering external dependency that would require running the external
-                // resolver
-                // TODO: should we consider handling this here?
-                PM::Dependency::External(_) => return Ok(None),
-                PM::Dependency::Internal(d) => d,
-            };
-
-            self.dependency_cache
-                .download_and_update_if_remote(
-                    *pkg_name,
-                    &internal_dep.kind,
-                    &mut self.progress_output,
-                )
-                .with_context(|| format!("Fetching '{}'", *pkg_name))?;
-            let pkg_path = root_path.join(local_path(&internal_dep.kind));
-
-            let Ok(lock_contents) = std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())) else {
-                return Ok(None);
-            };
-            hashed_lock_files.push(digest_str(lock_contents.as_bytes()));
+        for mut lock_file in lock_files {
+            let mut lock_string: String = "".to_string();
+            lock_file.read_to_string(&mut lock_string)?;
+            hashed_lock_files.push(digest_str(lock_string.as_bytes()));
         }
-
-        Ok(if hashed_lock_files.is_empty() {
-            None
-        } else {
-            Some(hashed_lock_files)
-        })
+        Ok(hashed_lock_files)
     }
 
-    /// Computes a digest of all dependencies in a manifest file but may return None if information
-    /// about some dependencies is not available.
+    /// Computes a digest of all dependencies in a manifest file (or digest of empty list if there
+    /// are no dependencies).
     fn dependency_digest(
         &mut self,
-        root_path: PathBuf,
-        manifest: &PM::SourceManifest,
-    ) -> Result<Option<String>> {
-        let mut dep_hashes = self
-            .dependency_hashes(root_path.clone(), &manifest.dependencies)?
-            .unwrap_or_default();
+        dep_lock_files: Vec<LockFile>,
+        dev_dep_lock_files: Vec<LockFile>,
+    ) -> Result<String> {
+        let mut dep_hashes = self.dependency_hashes(dep_lock_files)?;
 
-        let dev_dep_hashes = self
-            .dependency_hashes(root_path.clone(), &manifest.dev_dependencies)?
-            .unwrap_or_default();
+        let dev_dep_hashes = self.dependency_hashes(dev_dep_lock_files)?;
 
-        if dep_hashes.is_empty() {
-            Ok(None)
+        if dep_hashes.is_empty() && dev_dep_hashes.is_empty() {
+            Ok(digest_str(&[]))
         } else {
             dep_hashes.extend(dev_dep_hashes);
-            Ok(Some(hashed_files_digest(dep_hashes)))
+            Ok(hashed_files_digest(dep_hashes))
         }
     }
 }
@@ -604,6 +566,7 @@ impl DependencyGraph {
         mut dep_graphs: BTreeMap<PM::PackageName, DependencyGraphInfo>,
         parent: &PM::DependencyKind,
         dependencies: &PM::Dependencies,
+        overrides: &BTreeMap<PM::PackageName, Package>,
     ) -> Result<()> {
         if !self.always_deps.is_empty() {
             bail!("Merging dependencies into a graph after calculating its 'always' dependencies");
@@ -637,7 +600,7 @@ impl DependencyGraph {
         // collect all package names in all graphs in package table
         let mut all_packages: BTreeSet<PM::PackageName> =
             BTreeSet::from_iter(self.package_table.keys().cloned());
-        for graph_info in (&dep_graphs).values() {
+        for graph_info in dep_graphs.values() {
             all_packages.extend(graph_info.g.package_table.keys());
         }
 
@@ -651,7 +614,7 @@ impl DependencyGraph {
         // the way
         for pkg_name in all_packages {
             let mut existing_pkg_info: Option<(&DependencyGraph, &Package, bool)> = None;
-            for (_, graph_info) in &dep_graphs {
+            for graph_info in dep_graphs.values() {
                 let Some(pkg) = graph_info.g.package_table.get(&pkg_name) else {
                     continue;
                 };
@@ -671,10 +634,10 @@ impl DependencyGraph {
                         self.root_package,
                         pkg_name,
                         PackageWithResolverTOML(existing_pkg),
-                        PackageWithResolverTOML(&pkg),
+                        PackageWithResolverTOML(pkg),
                         dep_path_from_root(
                             self.root_package,
-                            &existing_graph,
+                            existing_graph,
                             pkg_name,
                             existing_is_external
                         )?,
@@ -691,7 +654,7 @@ impl DependencyGraph {
                 // are the same as well
                 match deps_equal(
                     pkg_name,
-                    &existing_graph,
+                    existing_graph,
                     self.pkg_table_for_deps_compare(
                         pkg_name,
                         existing_graph,
@@ -705,6 +668,7 @@ impl DependencyGraph {
                         &dep_graphs,
                         graph_info.is_external,
                     ),
+                    overrides,
                 ) {
                     Ok(_) => continue,
                     Err((existing_pkg_deps, pkg_deps)) => {
@@ -715,7 +679,7 @@ impl DependencyGraph {
                             format_deps(
                                 dep_path_from_root(
                                     self.root_package,
-                                    &existing_graph,
+                                    existing_graph,
                                     pkg_name,
                                     existing_is_external
                                 )?,
@@ -756,7 +720,7 @@ impl DependencyGraph {
     /// available in a package tables of a respective (dependent) subgraph. This function return the
     /// right package table, depending on whether conflict was detected between pre-populated
     /// combined graph and another sub-graph or between two separate sub-graphs. If we tried to use
-    /// combined graphs's package table "as is" we would get an error in all cases similar to the on
+    /// combined graphs's package table "as is" we would get an error in all cases similar to the one
     /// in the direct_and_indirect_dep test where A is a direct dependency of Root (as C would be
     /// missing from the combined graph's table):
     ///
@@ -808,7 +772,7 @@ impl DependencyGraph {
                 if let Entry::Vacant(entry) = self.package_table.entry(dep_pkg_name) {
                     let mut pkg = Package {
                         kind: kind.clone(),
-                        version: version.clone(),
+                        version: *version,
                         resolver: None,
                     };
                     pkg.kind.reroot(parent)?;
@@ -820,7 +784,7 @@ impl DependencyGraph {
                     Dependency {
                         mode,
                         subst: subst.clone(),
-                        digest: digest.clone(),
+                        digest: *digest,
                         dep_override: *dep_override,
                     },
                 );
@@ -873,7 +837,7 @@ impl DependencyGraph {
 
     /// Helper function to remove an override for a package with a given name for "regular"
     /// dependencies (`dev_only` is false) or "dev" dependencies (`dev_only` is true).
-    fn remove_dep_override<'a>(
+    fn remove_dep_override(
         root_pkg_name: PM::PackageName,
         pkg_name: PM::PackageName,
         overrides: &mut BTreeMap<Symbol, Package>,
@@ -1307,7 +1271,7 @@ impl fmt::Display for Package {
         match &self.kind {
             PM::DependencyKind::Local(local) => {
                 write!(f, "local = ")?;
-                f.write_str(&path_escape(&local)?)?;
+                f.write_str(&path_escape(local)?)?;
             }
 
             PM::DependencyKind::Git(PM::GitInfo {
@@ -1322,7 +1286,7 @@ impl fmt::Display for Package {
                 f.write_str(&str_escape(git_rev.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(&subdir)?)?;
+                f.write_str(&path_escape(subdir)?)?;
             }
 
             PM::DependencyKind::Custom(PM::CustomDepInfo {
@@ -1341,7 +1305,7 @@ impl fmt::Display for Package {
                 f.write_str(&str_escape(package_address.as_str())?)?;
 
                 write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(&subdir)?)?;
+                f.write_str(&path_escape(subdir)?)?;
             }
         }
 
@@ -1462,7 +1426,7 @@ fn format_deps(
     pkg_path: String,
     dependencies: Vec<(&Dependency, PM::PackageName, &Package)>,
 ) -> String {
-    let mut s = format!("\nAt {}", pkg_path).to_string();
+    let mut s = format!("\nAt {}", pkg_path);
     if !dependencies.is_empty() {
         for (dep, pkg_name, pkg) in dependencies {
             s.push_str("\n\t");
@@ -1493,6 +1457,7 @@ fn deps_equal<'a>(
     graph1_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
     graph2: &'a DependencyGraph,
     graph2_pkg_table: &'a BTreeMap<PM::PackageName, Package>,
+    overrides: &'a BTreeMap<PM::PackageName, Package>,
 ) -> std::result::Result<
     (),
     (
@@ -1500,18 +1465,38 @@ fn deps_equal<'a>(
         Vec<(&'a Dependency, PM::PackageName, &'a Package)>,
     ),
 > {
-    let graph1_edges = BTreeSet::from_iter(
-        graph1
-            .package_graph
-            .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, graph1_pkg_table.get(&pkg).unwrap())),
-    );
-    let graph2_edges = BTreeSet::from_iter(
-        graph2
-            .package_graph
-            .edges(pkg_name)
-            .map(|(_, pkg, dep)| (dep, pkg, graph2_pkg_table.get(&pkg).unwrap())),
-    );
+    // Unwraps in the code below are safe as these edges (and target nodes) must exist either in the
+    // sub-graph or in the pre-populated combined graph (see pkg_table_for_deps_compare's doc
+    // comment for a more detailed explanation). If these were to fail, it would indicate a bug in
+    // the algorithm so it's OK to panic here.
+    let graph1_edges: BTreeSet<_> = graph1
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
+            (
+                dep,
+                pkg,
+                graph1_pkg_table
+                    .get(&pkg)
+                    .or_else(|| overrides.get(&pkg))
+                    .unwrap(),
+            )
+        })
+        .collect();
+    let graph2_edges: BTreeSet<_> = graph2
+        .package_graph
+        .edges(pkg_name)
+        .map(|(_, pkg, dep)| {
+            (
+                dep,
+                pkg,
+                graph2_pkg_table
+                    .get(&pkg)
+                    .or_else(|| overrides.get(&pkg))
+                    .unwrap(),
+            )
+        })
+        .collect();
 
     let (graph1_pkgs, graph2_pkgs): (Vec<_>, Vec<_>) = graph1_edges
         .symmetric_difference(&graph2_edges)
@@ -1603,7 +1588,7 @@ fn dep_path_from_root(
                 i.next();
             }
             let p = i.map(|s| s.as_str()).collect::<Vec<_>>();
-            Ok(format!("{}", p.join(" -> ")))
+            Ok(p.join(" -> "))
         }
     }
 }

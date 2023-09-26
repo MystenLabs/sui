@@ -3,13 +3,12 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { LoadingIndicator } from '@mysten/ui';
+import { LoadingIndicator, Text } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 
 import { genTableDataFromTxData } from './TxCardUtils';
 import { Banner } from '~/ui/Banner';
 import { TableCard } from '~/ui/TableCard';
-import { TabHeader } from '~/ui/Tabs';
 
 interface Props {
 	address: string;
@@ -73,12 +72,17 @@ export function TransactionsForAddress({ address, type }: Props) {
 	}
 
 	const tableData = genTableDataFromTxData(data);
+	const hasTxns = data?.length > 0;
 
-	return (
-		<div data-testid="tx">
-			<TabHeader title="Transaction Blocks">
-				<TableCard data={tableData.data} columns={tableData.columns} />
-			</TabHeader>
-		</div>
-	);
+	if (!hasTxns) {
+		return (
+			<div className="flex h-20 items-center justify-center md:h-full">
+				<Text variant="body/medium" color="steel-dark">
+					No transactions found
+				</Text>
+			</div>
+		);
+	}
+
+	return <TableCard noBorderBottom data={tableData.data} columns={tableData.columns} />;
 }

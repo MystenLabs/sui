@@ -7,7 +7,7 @@ type Address implements ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -60,6 +60,47 @@ scalar Base64
 scalar BigInt
 
 
+type Checkpoint {
+	digest: String!
+	sequenceNumber: Int!
+	validatorSignature: Base64
+	previousCheckpointDigest: String
+	liveObjectSetDigest: String
+	networkTotalTransactions: Int
+	rollingGasSummary: GasCostSummary
+	epoch: Epoch
+	endOfEpoch: EndOfEpochData
+}
+
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type Coin {
 	id: ID!
 }
@@ -91,6 +132,36 @@ type CoinEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+type CommitteeMember {
+	authorityName: String
+	stakeUnit: Int
+}
+
+scalar DateTime
+
+type EndOfEpochData {
+	newCommittee: [CommitteeMember!]
+	nextProtocolVersion: Int
+}
+
+type Epoch {
+	epochId: Int!
+	systemStateVersion: BigInt
+	protocolConfigs: ProtocolConfigs
+	referenceGasPrice: BigInt
+	systemParameters: SystemParameters
+	stakeSubsidy: StakeSubsidy
+	validatorSet: ValidatorSet
+	storageFund: StorageFund
+	safeMode: SafeMode
+	startTimestamp: DateTime
+}
+
+enum ExecutionStatus {
+	SUCCESS
+	FAILURE
 }
 
 
@@ -149,7 +220,7 @@ type NameServiceEdge {
 type Object implements ObjectOwner {
 	version: Int!
 	digest: String!
-	storageRebate: Int
+	storageRebate: BigInt
 	bcs: Base64
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind
@@ -157,7 +228,7 @@ type Object implements ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -231,7 +302,7 @@ type Owner implements ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
 	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -283,7 +354,13 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+}
+
+type SafeMode {
+	enabled: Boolean
+	gasSummary: GasCostSummary
 }
 
 type Stake {
@@ -319,15 +396,40 @@ type StakeEdge {
 	cursor: String!
 }
 
+type StakeSubsidy {
+	balance: BigInt
+	distributionCounter: Int
+	currentDistributionAmount: BigInt
+	periodLength: Int
+	decreaseRate: Int
+}
+
+type StorageFund {
+	totalObjectStorageRebates: BigInt
+	nonRefundableBalance: BigInt
+}
+
 
 scalar SuiAddress
 
+type SystemParameters {
+	durationMs: BigInt
+	stakeSubsidyStartEpoch: Int
+	minValidatorCount: Int
+	maxValidatorCount: Int
+	minValidatorJoiningStake: BigInt
+	validatorLowStakeThreshold: BigInt
+	validatorVeryLowStakeThreshold: BigInt
+	validatorLowStakeGracePeriod: BigInt
+}
+
 type TransactionBlock {
-	digest: String!
 	effects: TransactionBlockEffects
 	sender: Address
 	bcs: Base64
 	gasInput: GasInput
+	digest: String!
+	expiration: Epoch
 }
 
 type TransactionBlockConnection {
@@ -360,8 +462,11 @@ type TransactionBlockEdge {
 }
 
 type TransactionBlockEffects {
+	status: ExecutionStatus!
+	errors: String
 	digest: String!
-	gasEffects: GasEffects!
+	gasEffects: GasEffects
+	epoch: Epoch
 }
 
 input TransactionBlockFilter {
@@ -383,7 +488,51 @@ enum TransactionBlockKindInput {
 	SYSTEM_TX
 }
 
+type Validator {
+	address: Address!
+	credentials: ValidatorCredentials
+	nextEpochCredentials: ValidatorCredentials
+	name: String
+	description: String
+	imageUrl: String
+	projectUrl: String
+	exchangeRatesSize: Int
+	stakingPoolActivationEpoch: Int
+	stakingPoolSuiBalance: BigInt
+	rewardsPool: BigInt
+	poolTokenBalance: BigInt
+	pendingStake: BigInt
+	pendingTotalSuiWithdraw: BigInt
+	pendingPoolTokenWithdraw: BigInt
+	votingPower: Int
+	gasPrice: BigInt
+	commissionRate: Int
+	nextEpochStake: BigInt
+	nextEpochGasPrice: BigInt
+	nextEpochCommissionRate: Int
+}
+
+type ValidatorCredentials {
+	protocolPubKey: Base64
+	networkPubKey: Base64
+	workerPubKey: Base64
+	proofOfPossession: Base64
+	netAddress: String
+	p2PAddress: String
+	primaryAddress: String
+	workerAddress: String
+}
+
+type ValidatorSet {
+	totalStake: BigInt
+	activeValidators: [Validator!]
+	pendingRemovals: [Int!]
+	pendingActiveValidatorsSize: Int
+	stakePoolMappingsSize: Int
+	inactivePoolsSize: Int
+	validatorCandidatesSize: Int
+}
+
 schema {
 	query: Query
 }
-

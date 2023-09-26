@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
+
 import {
+	Account,
 	type PasswordUnlockableAccount,
 	type SerializedAccount,
 	type SerializedUIAccount,
-	Account,
 } from './Account';
-import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 
 export interface LedgerAccountSerialized extends SerializedAccount {
 	type: 'ledger';
@@ -56,6 +57,8 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: null,
+			createdAt: Date.now(),
 		};
 	}
 
@@ -76,7 +79,10 @@ export class LedgerAccount
 		return !(await this.getEphemeralValue())?.unlocked;
 	}
 
-	async passwordUnlock(password: string): Promise<void> {
+	async passwordUnlock(password?: string): Promise<void> {
+		if (!password) {
+			throw new Error('Missing password to unlock the account');
+		}
 		const { encrypted } = await this.getStoredData();
 		await decrypt<string>(password, encrypted);
 		await this.setEphemeralValue({ unlocked: true });
@@ -89,7 +95,8 @@ export class LedgerAccount
 	}
 
 	async toUISerialized(): Promise<LedgerAccountSerializedUI> {
-		const { address, type, publicKey, derivationPath, selected } = await this.getStoredData();
+		const { address, type, publicKey, derivationPath, selected, nickname } =
+			await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -99,7 +106,9 @@ export class LedgerAccount
 			derivationPath,
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: false,
 		};
 	}
 }

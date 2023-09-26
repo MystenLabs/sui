@@ -5,7 +5,8 @@ import { EyeClose16, NftTypeImage24 } from '@mysten/icons';
 import { LoadingIndicator } from '@mysten/ui';
 import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'clsx';
-import { useEffect, useState } from 'react';
+import { useAnimate } from 'framer-motion';
+import { type ImgHTMLAttributes, useEffect, useState } from 'react';
 
 import useImage from '~/hooks/useImage';
 import { VISIBILITY } from '~/hooks/useImageMod';
@@ -16,6 +17,7 @@ const imageStyles = cva(null, {
 			full: 'rounded-full',
 			'2xl': 'rounded-2xl',
 			lg: 'rounded-lg',
+			xl: 'rounded-xl',
 			md: 'rounded-md',
 			sm: 'rounded-sm',
 			none: 'rounded-none',
@@ -33,6 +35,9 @@ const imageStyles = cva(null, {
 			lg: 'h-32 w-32',
 			full: 'h-full w-full',
 		},
+		aspect: {
+			square: 'aspect-square',
+		},
 	},
 	defaultVariants: {
 		size: 'full',
@@ -43,11 +48,12 @@ const imageStyles = cva(null, {
 
 type ImageStyleProps = VariantProps<typeof imageStyles>;
 
-export interface ImageProps extends ImageStyleProps, React.ImgHTMLAttributes<HTMLImageElement> {
+export interface ImageProps extends ImageStyleProps, ImgHTMLAttributes<HTMLImageElement> {
 	onClick?: () => void;
 	moderate?: boolean;
 	src: string;
 	visibility?: VISIBILITY;
+	fadeIn?: boolean;
 }
 
 function BaseImage({
@@ -60,19 +66,33 @@ function BaseImage({
 	fit,
 	visibility,
 	onClick,
+	fadeIn,
+	aspect,
 	...imgProps
 }: ImageProps & { status: string }) {
+	const [scope, animate] = useAnimate();
 	const [isBlurred, setIsBlurred] = useState(false);
 	useEffect(() => {
 		if (visibility && visibility !== VISIBILITY.PASS) {
 			setIsBlurred(true);
 		}
 	}, [visibility]);
+
+	const animateFadeIn = fadeIn && status === 'loaded';
+
+	useEffect(() => {
+		if (animateFadeIn) {
+			animate(scope.current, { opacity: 1 }, { duration: 0.3 });
+		}
+	}, [animate, animateFadeIn, scope]);
+
 	return (
 		<div
+			ref={scope}
 			className={cx(
-				imageStyles({ size, rounded }),
+				imageStyles({ size, rounded, aspect }),
 				'relative flex items-center justify-center bg-gray-40 text-gray-65',
+				animateFadeIn && 'opacity-0',
 			)}
 		>
 			{status === 'loading' ? (

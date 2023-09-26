@@ -181,7 +181,7 @@ impl Parameters {
     }
 
     fn default_max_header_delay() -> Duration {
-        Duration::from_secs(2)
+        Duration::from_secs(1)
     }
 
     fn default_min_header_delay() -> Duration {

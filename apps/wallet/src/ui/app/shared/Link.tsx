@@ -53,6 +53,9 @@ const styles = cva(
 
 const iconStyles = cva(['transition flex'], {
 	variants: {
+		beforeColor: {
+			steelDarker: ['text-steel-darker'],
+		},
 		color: {
 			steelDark: [
 				'text-steel group-hover:text-steel-darker group-focus:text-steel-darker group-disabled:text-steel-dark',
@@ -86,6 +89,7 @@ export const Link = forwardRef(
 	(
 		{
 			before,
+			beforeColor,
 			after,
 			text,
 			color,
@@ -102,7 +106,11 @@ export const Link = forwardRef(
 			{...otherProps}
 			ref={ref}
 		>
-			{before ? <div className={iconStyles({ color })}>{before}</div> : null}
+			{before ? (
+				<div className={beforeColor ? iconStyles({ beforeColor }) : iconStyles({ color })}>
+					{before}
+				</div>
+			) : null}
 			{text ? <div className={'truncate leading-none'}>{text}</div> : null}
 			{after ? <div className={iconStyles({ color })}>{after}</div> : null}
 		</ButtonOrLink>

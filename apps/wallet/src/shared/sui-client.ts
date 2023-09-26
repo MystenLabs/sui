@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import networkEnv from '_src/background/NetworkEnv';
+import { API_ENV, ENV_TO_API, type NetworkEnvType } from '_src/shared/api-env';
 import { SentryHttpTransport } from '@mysten/core';
 import { SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
-import networkEnv from '_src/background/NetworkEnv';
-import { API_ENV, type NetworkEnvType, ENV_TO_API } from '_src/shared/api-env';
 
 const suiClientPerNetwork = new Map<string, SuiClient>();
 const SENTRY_MONITORED_ENVS = [API_ENV.mainnet];

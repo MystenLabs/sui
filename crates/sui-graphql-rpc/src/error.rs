@@ -7,7 +7,7 @@ use async_graphql_axum::GraphQLResponse;
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 /// `<https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>`
-pub mod code {
+pub(crate) mod code {
     pub const BAD_REQUEST: &str = "BAD_REQUEST";
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
@@ -19,19 +19,25 @@ pub mod code {
 /// because they will originate from within the GraphQL implementation.  This function is intended
 /// for errors that originated from outside of GraphQL (such as in middleware), but that need to be
 /// ingested by GraphQL clients.
-pub(crate) fn graphql_error(code: &str, message: String) -> GraphQLResponse {
+pub(crate) fn graphql_error_response(code: &str, message: impl Into<String>) -> GraphQLResponse {
+    let error = graphql_error(code, message);
+    Response::from_errors(error.into()).into()
+}
+
+/// Create a generic GraphQL Server Error.
+///
+/// This error has no path, source, or locations, just a message and an error code.
+pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerError {
     let mut ext = ErrorExtensionValues::default();
     ext.set("code", code);
 
-    let error = ServerError {
-        message,
+    ServerError {
+        message: message.into(),
         source: None,
         locations: vec![],
         path: vec![],
         extensions: Some(ext),
-    };
-
-    Response::from_errors(error.into()).into()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +52,8 @@ pub enum Error {
     InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
     CursorConnectionFetchFailed(String),
+    #[error("Error received in multi-get query: {0}")]
+    MultiGet(String),
     #[error("Internal error occurred while processing request.")]
     Internal(String),
 }
@@ -57,7 +65,8 @@ impl ErrorExtensions for Error {
             | Error::CursorNoFirstLast
             | Error::CursorNoReversePagination
             | Error::InvalidCursor(_)
-            | Error::CursorConnectionFetchFailed(_) => {
+            | Error::CursorConnectionFetchFailed(_)
+            | Error::MultiGet(_) => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {

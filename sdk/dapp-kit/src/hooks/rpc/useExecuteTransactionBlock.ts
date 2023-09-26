@@ -10,18 +10,15 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { ExecuteTransactionBlockParams } from '@mysten/sui.js/client';
-import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
-import { useSuiClientQuery } from '../useSuiClientQuery.js';
+import type { UseSuiClientMutationOptions } from '../useSuiClientMutation.js';
+import { useSuiClientMutation } from '../useSuiClientMutation.js';
 
 export function useExecuteTransactionBlock(
-	params: ExecuteTransactionBlockParams,
-	options?: UseSuiClientQueryOptions<'executeTransactionBlock'>,
+	options?: UseSuiClientMutationOptions<'executeTransactionBlock'>,
 ) {
-	return useSuiClientQuery(
+	return useSuiClientMutation(
 		{
 			method: 'executeTransactionBlock',
-			params,
 		},
 		options,
 	);

@@ -1,35 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::VersionDigest;
 use crate::effects::TransactionEvents;
+use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber},
-    object::Object,
-    storage::{DeleteKind, WriteKind},
+    base_types::ObjectID,
+    object::{Object, Owner},
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-pub type WrittenObjects = BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>;
+pub type WrittenObjects = BTreeMap<ObjectID, Object>;
 pub type ObjectMap = BTreeMap<ObjectID, Object>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
-    pub objects: ObjectMap,
-    pub mutable_inputs: Vec<ObjectRef>,
+    pub input_objects: ObjectMap,
+    pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
-    // deleted or wrapped or unwrap-then-delete. The sequence number should have been updated to
-    // the lamport version.
-    pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
-    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
@@ -59,7 +54,7 @@ where
 
     fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
         let obj = self.temp_store.written.get(&ObjectID::from(*id.address()));
-        if let Some((_, o, _)) = obj {
+        if let Some(o) = obj {
             if let Some(p) = o.data.try_as_package() {
                 return Ok(Some(Arc::new(p.deserialize_module(
                     &id.name().into(),

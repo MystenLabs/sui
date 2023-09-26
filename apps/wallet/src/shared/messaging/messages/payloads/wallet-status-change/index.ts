@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isBasePayload } from '_payloads';
-
 import type { BasePayload, Payload } from '_payloads';
 import type { NetworkEnvType } from '_src/shared/api-env';
 

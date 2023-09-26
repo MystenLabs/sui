@@ -101,6 +101,10 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         self.total_votes
     }
 
+    pub fn has_quorum(&self) -> bool {
+        self.total_votes >= self.committee.threshold::<STRENGTH>()
+    }
+
     pub fn validator_sig_count(&self) -> usize {
         self.data.len()
     }
@@ -271,4 +275,92 @@ where
             .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))
             .collect()
     }
+}
+
+/// Like MultiStakeAggregator, but for counting votes for a generic value instead of an envelope, in
+/// scenarios where byzantine validators may submit multiple votes for different values.
+pub struct GenericMultiStakeAggregator<K, const STRENGTH: bool> {
+    committee: Arc<Committee>,
+    stake_maps: HashMap<K, StakeAggregator<(), STRENGTH>>,
+    votes_per_authority: HashMap<AuthorityName, u64>,
+}
+
+impl<K, const STRENGTH: bool> GenericMultiStakeAggregator<K, STRENGTH>
+where
+    K: Hash + Eq,
+{
+    pub fn new(committee: Arc<Committee>) -> Self {
+        Self {
+            committee,
+            stake_maps: Default::default(),
+            votes_per_authority: Default::default(),
+        }
+    }
+
+    pub fn insert(
+        &mut self,
+        authority: AuthorityName,
+        k: K,
+    ) -> InsertResult<&HashMap<AuthorityName, ()>> {
+        let agg = self
+            .stake_maps
+            .entry(k)
+            .or_insert_with(|| StakeAggregator::new(self.committee.clone()));
+
+        if !agg.contains_key(&authority) {
+            *self.votes_per_authority.entry(authority).or_default() += 1;
+        }
+
+        agg.insert_generic(authority, ())
+    }
+
+    pub fn has_quorum_for_key(&self, k: &K) -> bool {
+        if let Some(entry) = self.stake_maps.get(k) {
+            entry.has_quorum()
+        } else {
+            false
+        }
+    }
+
+    pub fn votes_for_authority(&self, authority: AuthorityName) -> u64 {
+        self.votes_per_authority
+            .get(&authority)
+            .copied()
+            .unwrap_or_default()
+    }
+}
+
+#[test]
+fn test_votes_per_authority() {
+    let (committee, _) = Committee::new_simple_test_committee();
+    let authorities: Vec<_> = committee.names().copied().collect();
+
+    let mut agg: GenericMultiStakeAggregator<&str, true> =
+        GenericMultiStakeAggregator::new(Arc::new(committee));
+
+    // 1. Inserting an `authority` and a `key`, and then checking the number of votes for that `authority`.
+    let key1: &str = "key1";
+    let authority1 = authorities[0];
+    agg.insert(authority1, key1);
+    assert_eq!(agg.votes_for_authority(authority1), 1);
+
+    // 2. Inserting the same `authority` and `key` pair multiple times to ensure votes aren't incremented incorrectly.
+    agg.insert(authority1, key1);
+    agg.insert(authority1, key1);
+    assert_eq!(agg.votes_for_authority(authority1), 1);
+
+    // 3. Checking votes for an authority that hasn't voted.
+    let authority2 = authorities[1];
+    assert_eq!(agg.votes_for_authority(authority2), 0);
+
+    // 4. Inserting multiple different authorities and checking their vote counts.
+    let key2: &str = "key2";
+    agg.insert(authority2, key2);
+    assert_eq!(agg.votes_for_authority(authority2), 1);
+    assert_eq!(agg.votes_for_authority(authority1), 1);
+
+    // 5. Verifying that inserting different keys for the same authority increments the vote count.
+    let key3: &str = "key3";
+    agg.insert(authority1, key3);
+    assert_eq!(agg.votes_for_authority(authority1), 2);
 }

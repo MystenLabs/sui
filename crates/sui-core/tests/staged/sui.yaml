@@ -12,6 +12,13 @@ AccountAddress:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
+ActiveJwk:
+  STRUCT:
+    - jwk_id:
+        TYPENAME: JwkId
+    - jwk:
+        TYPENAME: JWK
+    - epoch: U64
 Argument:
   ENUM:
     0:
@@ -27,6 +34,20 @@ Argument:
         TUPLE:
           - U16
           - U16
+AuthenticatorStateExpire:
+  STRUCT:
+    - min_epoch: U64
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
+AuthenticatorStateUpdate:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - new_active_jwks:
+        SEQ:
+          TYPENAME: ActiveJwk
+    - authenticator_obj_initial_shared_version:
+        TYPENAME: SequenceNumber
 AuthorityPublicKeyBytes:
   NEWTYPESTRUCT: BYTES
 CallArg:
@@ -246,6 +267,18 @@ EndOfEpochData:
     - epochCommitments:
         SEQ:
           TYPENAME: CheckpointCommitment
+EndOfEpochTransactionKind:
+  ENUM:
+    0:
+      ChangeEpoch:
+        NEWTYPE:
+          TYPENAME: ChangeEpoch
+    1:
+      AuthenticatorStateCreate: UNIT
+    2:
+      AuthenticatorStateExpire:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateExpire
 Envelope:
   STRUCT:
     - data:
@@ -432,6 +465,16 @@ IntentMessage:
         TYPENAME: Intent
     - value:
         TYPENAME: TransactionData
+JWK:
+  STRUCT:
+    - kty: STR
+    - e: STR
+    - n: STR
+    - alg: STR
+JwkId:
+  STRUCT:
+    - iss: STR
+    - kid: STR
 ModuleId:
   STRUCT:
     - address:
@@ -581,6 +624,13 @@ ObjectArg:
           - initial_shared_version:
               TYPENAME: SequenceNumber
           - mutable: BOOL
+    2:
+      Receiving:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
 ObjectDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -846,6 +896,15 @@ TransactionKind:
       ConsensusCommitPrologue:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologue
+    4:
+      AuthenticatorStateUpdate:
+        NEWTYPE:
+          TYPENAME: AuthenticatorStateUpdate
+    5:
+      EndOfEpochTransaction:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: EndOfEpochTransactionKind
 TypeArgumentError:
   ENUM:
     0:

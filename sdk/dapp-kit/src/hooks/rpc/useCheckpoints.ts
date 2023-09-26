@@ -11,6 +11,9 @@
  */
 
 import type { GetCheckpointsParams } from '@mysten/sui.js/client';
+
+import type { UseSuiClientInfiniteQueryOptions } from '../useSuiClientInfiniteQuery.js';
+import { useSuiClientInfiniteQuery } from '../useSuiClientInfiniteQuery.js';
 import type { UseSuiClientQueryOptions } from '../useSuiClientQuery.js';
 import { useSuiClientQuery } from '../useSuiClientQuery.js';
 
@@ -19,6 +22,19 @@ export function useCheckpoints(
 	options?: UseSuiClientQueryOptions<'getCheckpoints'>,
 ) {
 	return useSuiClientQuery(
+		{
+			method: 'getCheckpoints',
+			params,
+		},
+		options,
+	);
+}
+
+export function useCheckpointsInfinite(
+	params: GetCheckpointsParams,
+	options?: UseSuiClientInfiniteQueryOptions<'getCheckpoints'>,
+) {
+	return useSuiClientInfiniteQuery(
 		{
 			method: 'getCheckpoints',
 			params,

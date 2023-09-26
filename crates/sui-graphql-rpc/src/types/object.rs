@@ -1,24 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
 
+use super::big_int::BigInt;
+use super::digest::Digest;
 use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::{server::context_ext::DataProviderContextExt, types::base64::Base64};
+use crate::context_data::context_ext::DataProviderContextExt;
+use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
+use crate::types::base64::Base64;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub version: u64,
     pub digest: String,
-    pub storage_rebate: Option<u64>,
+    pub storage_rebate: Option<BigInt>,
     pub owner: Option<SuiAddress>,
     pub bcs: Option<Base64>,
-    pub previous_transaction: Option<String>,
+    pub previous_transaction: Option<Digest>,
     pub kind: Option<ObjectKind>,
 }
 
@@ -59,8 +64,8 @@ impl Object {
         self.digest.clone()
     }
 
-    async fn storage_rebate(&self) -> Option<u64> {
-        self.storage_rebate
+    async fn storage_rebate(&self) -> Option<BigInt> {
+        self.storage_rebate.clone()
     }
 
     async fn bcs(&self) -> Option<Base64> {
@@ -72,7 +77,8 @@ impl Object {
         ctx: &Context<'_>,
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
-            ctx.data_provider().fetch_tx(tx).await
+            let loader = ctx.data_unchecked::<DataLoader<SuiClientLoader, LruCache>>();
+            loader.load_one(*tx).await
         } else {
             Ok(None)
         }
@@ -114,12 +120,15 @@ impl Object {
 
     pub async fn balance_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Balance>> {
-        unimplemented!()
+    ) -> Result<Connection<String, Balance>> {
+        ctx.data_provider()
+            .fetch_balance_connection(&self.address, first, after, last, before)
+            .await
     }
 
     pub async fn coin_connection(

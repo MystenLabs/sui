@@ -727,20 +727,14 @@ impl ReadApiServer for ReadApi {
                 );
             }
 
-            let state = self.state.clone();
-            if let Some((_, seq)) = spawn_monitored_task!(async move {
-                // TODO: this is reading from a deprecated DB. The replacement DB however
-                // is in the epoch store, and thus we risk breaking the read API for txes
-                // from old epochs. Should be migrated once we have indexer support, or
-                // when we can tolerate returning None for old txes.
-                state.deprecated_get_transaction_checkpoint(&digest)
-                    .map_err(|e| {
-                        error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
-                        Error::from(e)
-                    })
-            }).await.map_err(Error::from)?? {
-                temp_response.checkpoint_seq = Some(seq);
-            }
+            temp_response.checkpoint_seq = self
+                .transaction_kv_store
+                .deprecated_get_transaction_checkpoint(digest)
+                .await
+                .map_err(|e| {
+                    error!("Failed to retrieve checkpoint sequence for transaction {digest:?} with error: {e:?}");
+                    Error::from(e)
+                })?;
 
             if let Some(checkpoint_seq) = &temp_response.checkpoint_seq {
                 let kv_store = self.transaction_kv_store.clone();

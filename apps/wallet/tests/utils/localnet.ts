@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// eslint-disable-next-line import/order
 import 'tsconfig-paths/register';
+
 import { requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import * as bip39 from '@scure/bip39';

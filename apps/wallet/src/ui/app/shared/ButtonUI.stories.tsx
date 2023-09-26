@@ -26,7 +26,7 @@ export const AllButton: StoryObj<typeof Button> = {
 			'warning',
 			'plain',
 		] as const;
-		const sizes = ['tall', 'narrow', 'tiny'] as const;
+		const sizes = ['tall', 'narrow', 'xs'] as const;
 		return (
 			<div className="grid gap-4 grid-cols-2">
 				{sizes.map((size) =>

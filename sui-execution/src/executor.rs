@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeSet, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::storage::BackingStore;
 use sui_types::{
@@ -24,9 +21,9 @@ use sui_types::{
 
 /// Abstracts over access to the VM across versions of the execution layer.
 pub trait Executor {
-    fn execute_transaction_to_effects<'backing>(
+    fn execute_transaction_to_effects(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync + 'backing>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -37,7 +34,6 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
-        shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -45,7 +41,6 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
@@ -54,7 +49,7 @@ pub trait Executor {
 
     fn dev_inspect_transaction(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
@@ -65,7 +60,6 @@ pub trait Executor {
         epoch_timestamp_ms: u64,
         // Transaction Inputs
         input_objects: InputObjects,
-        shared_object_refs: Vec<ObjectRef>,
         // Gas related
         gas_coins: Vec<ObjectRef>,
         gas_status: SuiGasStatus,
@@ -73,7 +67,6 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
-        transaction_dependencies: BTreeSet<TransactionDigest>,
     ) -> (
         InnerTemporaryStore,
         TransactionEffects,
@@ -82,7 +75,7 @@ pub trait Executor {
 
     fn update_genesis_state(
         &self,
-        store: Arc<dyn BackingStore + Send + Sync>,
+        store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,

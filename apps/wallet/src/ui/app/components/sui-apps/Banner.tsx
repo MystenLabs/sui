@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import ExternalLink from '../external-link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { useFeature } from '@growthbook/growthbook-react';
+
+import ExternalLink from '../external-link';
 
 export type BannerProps = {
 	enabled: boolean;

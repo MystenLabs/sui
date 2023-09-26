@@ -18,6 +18,7 @@ pub mod p2p;
 pub mod transaction_deny_config;
 
 pub use node::{ConsensusConfig, NodeConfig};
+use sui_types::multiaddr::Multiaddr;
 
 const SUI_DIR: &str = ".sui";
 pub const SUI_CONFIG_DIR: &str = "sui_config";
@@ -49,12 +50,21 @@ pub fn sui_config_dir() -> Result<PathBuf, anyhow::Error> {
     })
 }
 
-pub fn validator_config_file(i: usize) -> String {
-    format!("validator-config-{}.yaml", i)
+pub fn validator_config_file(address: Multiaddr, i: usize) -> String {
+    multiaddr_to_filename(address).unwrap_or(format!("validator-config-{}.yaml", i))
 }
 
-pub fn ssfn_config_file(i: usize) -> String {
-    format!("ssfn-config-{}.yaml", i)
+pub fn ssfn_config_file(address: Multiaddr, i: usize) -> String {
+    multiaddr_to_filename(address).unwrap_or(format!("ssfn-config-{}.yaml", i))
+}
+
+fn multiaddr_to_filename(address: Multiaddr) -> Option<String> {
+    if let Some(hostname) = address.hostname() {
+        if let Some(port) = address.port() {
+            return Some(format!("{}-{}.yaml", hostname, port));
+        }
+    }
+    None
 }
 
 pub trait Config

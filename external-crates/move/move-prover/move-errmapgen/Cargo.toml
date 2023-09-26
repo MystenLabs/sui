@@ -12,10 +12,7 @@ move-command-line-common = { path = "../../move-command-line-common" }
 move-model = { path = "../../move-model" }
 move-core-types = { path = "../../move-core/types" }
 
-bcs.workspace = true
-
 # external dependencies
-log = "0.4.14"
 anyhow = "1.0.52"
 serde = { version = "1.0.124", features = ["derive"] }
 

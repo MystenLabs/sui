@@ -60,7 +60,7 @@ ignore = [
     # ansi_term is Unmaintained
     "RUSTSEC-2021-0139",
     # atty
-    "RUSTSEC-2021-0145",
+    # "RUSTSEC-2021-0145",
     # webpki
     "RUSTSEC-2023-0052",
 ]

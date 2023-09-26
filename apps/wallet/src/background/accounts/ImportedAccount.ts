@@ -1,16 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
-import {
-	Account,
-	type PasswordUnlockableAccount,
-	type SerializedUIAccount,
-	type SigningAccount,
-	type SerializedAccount,
-} from './Account';
 import { decrypt, encrypt } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
+import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
+
+import {
+	Account,
+	type KeyPairExportableAccount,
+	type PasswordUnlockableAccount,
+	type SerializedAccount,
+	type SerializedUIAccount,
+	type SigningAccount,
+} from './Account';
 
 type SessionStorageData = { keyPair: ExportedKeypair };
 type EncryptedData = { keyPair: ExportedKeypair };
@@ -34,10 +36,11 @@ export function isImportedAccountSerializedUI(
 
 export class ImportedAccount
 	extends Account<ImportedAccountSerialized, SessionStorageData>
-	implements PasswordUnlockableAccount, SigningAccount
+	implements PasswordUnlockableAccount, SigningAccount, KeyPairExportableAccount
 {
 	readonly canSign = true;
 	readonly unlockType = 'password' as const;
+	readonly exportableKeyPair = true;
 
 	static async createNew(inputs: {
 		keyPair: ExportedKeypair;
@@ -54,6 +57,8 @@ export class ImportedAccount
 			encrypted: await encrypt(inputs.password, dataToEncrypt),
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: null,
+			createdAt: Date.now(),
 		};
 	}
 
@@ -75,7 +80,7 @@ export class ImportedAccount
 	}
 
 	async toUISerialized(): Promise<ImportedAccountSerializedUI> {
-		const { address, publicKey, type, selected } = await this.getStoredData();
+		const { address, publicKey, type, selected, nickname } = await this.getStoredData();
 		return {
 			id: this.id,
 			type,
@@ -84,11 +89,16 @@ export class ImportedAccount
 			isLocked: await this.isLocked(),
 			lastUnlockedOn: await this.lastUnlockedOn,
 			selected,
+			nickname,
 			isPasswordUnlockable: true,
+			isKeyPairExportable: true,
 		};
 	}
 
-	async passwordUnlock(password: string): Promise<void> {
+	async passwordUnlock(password?: string): Promise<void> {
+		if (!password) {
+			throw new Error('Missing password to unlock the account');
+		}
 		const { encrypted } = await this.getStoredData();
 		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
 		await this.setEphemeralValue({ keyPair });
@@ -106,6 +116,12 @@ export class ImportedAccount
 			throw new Error(`Account is locked`);
 		}
 		return this.generateSignature(data, keyPair);
+	}
+
+	async exportKeyPair(password: string): Promise<ExportedKeypair> {
+		const { encrypted } = await this.getStoredData();
+		const { keyPair } = await decrypt<EncryptedData>(password, encrypted);
+		return keyPair;
 	}
 
 	async #getKeyPair() {

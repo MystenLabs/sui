@@ -192,7 +192,7 @@ impl LoopAnalysisProcessor {
                         let affected_variables: BTreeSet<_> = loop_info
                             .val_targets
                             .iter()
-                            .chain(loop_info.mut_targets.iter().map(|(idx, _)| idx))
+                            .chain(loop_info.mut_targets.keys())
                             .collect();
 
                         // Only emit this for user declared locals, not for ones introduced

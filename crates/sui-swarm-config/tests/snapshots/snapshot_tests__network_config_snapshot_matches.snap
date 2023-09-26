@@ -27,7 +27,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -78,6 +78,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -113,7 +114,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -164,6 +165,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -199,7 +201,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -250,6 +252,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -285,7 +288,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -336,6 +339,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -371,7 +375,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -422,6 +426,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -457,7 +462,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -508,6 +513,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -543,7 +549,7 @@ validator_configs:
       narwhal-config:
         header_num_of_batches_threshold: 32
         max_header_num_of_batches: 1000
-        max_header_delay: 2000ms
+        max_header_delay: 1000ms
         min_header_delay: 500ms
         gc_depth: 50
         sync_retry_delay: 5000ms
@@ -594,6 +600,7 @@ validator_configs:
       package_upgrade_disabled: false
       shared_object_disabled: false
       user_transaction_disabled: false
+      receiving_objects_disabled: false
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:

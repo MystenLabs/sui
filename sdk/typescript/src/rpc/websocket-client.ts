@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RequestManager, Client, WebSocketTransport } from '@open-rpc/client-js';
+import { Client, RequestManager, WebSocketTransport } from '@open-rpc/client-js';
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
 	const url = new URL(httpUrl);
@@ -33,32 +33,34 @@ export type WebsocketClientOptions = {
 	/**
 	 * Milliseconds before timing out while calling an RPC method
 	 */
-	callTimeout: number;
+	callTimeout?: number;
 	/**
 	 * Milliseconds between attempts to connect
 	 */
-	reconnectTimeout: number;
+	reconnectTimeout?: number;
 	/**
 	 * Maximum number of times to try connecting before giving up
 	 */
-	maxReconnects: number;
+	maxReconnects?: number;
 };
 
-export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
+export const DEFAULT_CLIENT_OPTIONS = {
 	callTimeout: 30000,
 	reconnectTimeout: 3000,
 	maxReconnects: 5,
-};
+} satisfies WebsocketClientOptions;
 
 export class WebsocketClient {
+	endpoint: string;
+	options: Required<WebsocketClientOptions>;
 	#client: Client | null;
 	#subscriptions: Map<number, SubscriptionRequest & { id: number }>;
 	#disconnects: number;
 
-	constructor(
-		public endpoint: string,
-		public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS,
-	) {
+	constructor(endpoint: string, options: WebsocketClientOptions = {}) {
+		this.endpoint = endpoint;
+		this.options = { ...DEFAULT_CLIENT_OPTIONS, ...options };
+
 		if (this.endpoint.startsWith('http')) {
 			this.endpoint = getWebsocketUrl(this.endpoint);
 		}

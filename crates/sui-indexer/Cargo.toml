@@ -14,6 +14,7 @@ axum.workspace = true
 backoff.workspace = true
 bcs.workspace = true
 chrono.workspace = true
+serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
 diesel.workspace = true
@@ -28,18 +29,13 @@ regex.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tokio-stream.workspace = true
 url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
-sui-config.workspace = true
-sui-core.workspace = true
 sui-json.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
-sui-keys.workspace = true
-sui-node.workspace = true
 sui-open-rpc.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
@@ -49,6 +45,7 @@ sui-rest-api.workspace = true
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
+move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true

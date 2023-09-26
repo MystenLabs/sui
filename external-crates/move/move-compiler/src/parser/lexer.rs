@@ -83,7 +83,7 @@ pub enum Tok {
 }
 
 impl fmt::Display for Tok {
-    fn fmt<'f>(&self, formatter: &mut fmt::Formatter<'f>) -> Result<(), fmt::Error> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         use Tok::*;
         let s = match *self {
             EOF => "[end-of-file]",

@@ -832,7 +832,7 @@ fn resolve_call_args(
         .collect()
 }
 
-/// Resolve a the JSON args of a function into the expected formats to make them usable by Move call
+/// Resolve the JSON args of a function into the expected formats to make them usable by Move call
 /// This is because we have special types which we need to specify in other formats
 pub fn resolve_move_function_args(
     package: &MovePackage,

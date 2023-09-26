@@ -587,9 +587,10 @@ fn compile_friends(
 }
 
 fn compile_imports(context: &mut Context, imports: Vec<ImportDefinition>) -> Result<()> {
-    Ok(for import in imports {
+    for import in imports {
         context.declare_import(import.ident, import.alias)?;
-    })
+    }
+    Ok(())
 }
 
 fn type_parameter_indexes<'a>(
@@ -1076,7 +1077,7 @@ fn compile_expression(
     exp: Exp,
 ) -> Result<()> {
     make_push_instr!(context, code);
-    Ok(match exp.value {
+    match exp.value {
         Exp_::Move(v) => {
             let loc_idx = function_frame.get_local(&v.value)?;
             let load_loc = Bytecode::MoveLoc(loc_idx);
@@ -1321,7 +1322,8 @@ fn compile_expression(
                 compile_expression(context, function_frame, code, e)?;
             }
         }
-    })
+    };
+    Ok(())
 }
 
 fn compile_call(
@@ -1331,7 +1333,7 @@ fn compile_call(
     call: FunctionCall,
 ) -> Result<()> {
     make_push_instr!(context, code);
-    Ok(match call.value {
+    match call.value {
         FunctionCall_::Builtin(function) => {
             match function {
                 Builtin::Exists(name, tys) => {
@@ -1545,7 +1547,8 @@ fn compile_call(
             // Return value of current function is pushed onto the stack.
             function_frame.push()?;
         }
-    })
+    };
+    Ok(())
 }
 
 fn compile_constant(_context: &mut Context, ty: Type, value: MoveValue) -> Result<Constant> {

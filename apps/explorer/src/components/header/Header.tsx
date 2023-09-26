@@ -25,7 +25,7 @@ function Header() {
 		<header
 			className={clsx(
 				'flex h-header justify-center overflow-visible bg-white/40 backdrop-blur-xl transition-shadow',
-				isScrolled && 'shadow-mistyEdge',
+				isScrolled && 'shadow-effect-ui-regular',
 			)}
 		>
 			<div className="flex h-full max-w-[1440px] flex-1 items-center gap-5 px-5 2xl:p-0">
@@ -37,10 +37,12 @@ function Header() {
 					<Sui className="h-[26px] w-5" />
 					<SuiLogoTxt className="h-[17px] w-[27px]" />
 				</LinkWithQuery>
-				<div className="flex-1">
-					<Search />
+				<div className="flex w-full gap-2">
+					<div className="flex-1">
+						<Search />
+					</div>
+					<NetworkSelect />
 				</div>
-				<NetworkSelect />
 			</div>
 		</header>
 	);

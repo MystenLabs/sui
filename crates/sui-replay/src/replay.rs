@@ -36,6 +36,7 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_protocol_config::Chain;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::committee::EpochId;
 use sui_types::digests::ChainIdentifier;
@@ -664,13 +665,6 @@ impl LocalExec {
         Ok((succeeded, num as u64))
     }
 
-    // TODO: Could we get rid of this strange self move?
-    #[allow(clippy::wrong_self_convention, clippy::redundant_allocation)]
-    fn to_backing_store(&mut self) -> Arc<&mut LocalExec> {
-        // Execution interface requires Arc for the store.
-        Arc::new(self)
-    }
-
     pub async fn execution_engine_execute_with_tx_info_impl(
         &mut self,
         tx_info: &OnChainTransactionInfo,
@@ -700,6 +694,14 @@ impl LocalExec {
         // Initialize the state necessary for execution
         // Get the input objects
         let input_objects = self.initialize_execution_env_state(tx_info).await?;
+        assert_eq!(
+            &input_objects.filter_shared_objects(),
+            &tx_info.shared_object_refs
+        );
+        assert_eq!(
+            input_objects.transaction_dependencies(),
+            tx_info.dependencies.clone().into_iter().collect(),
+        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
@@ -720,26 +722,23 @@ impl LocalExec {
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
-        let store = self.to_backing_store();
         let res = if let Ok(gas_status) =
             SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
         {
             executor.execute_transaction_to_effects(
-                store,
+                &self,
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                InputObjects::new(input_objects),
-                tx_info.shared_object_refs.clone(),
+                input_objects,
                 tx_info.gas.clone(),
                 gas_status,
                 override_transaction_kind.unwrap_or(tx_info.kind.clone()),
                 tx_info.sender,
                 *tx_digest,
-                tx_info.dependencies.clone().into_iter().collect(),
             )
         } else {
             unreachable!("Transaction was valid so gas status must be valid");
@@ -1604,7 +1603,7 @@ impl LocalExec {
     async fn initialize_execution_env_state(
         &mut self,
         tx_info: &OnChainTransactionInfo,
-    ) -> Result<Vec<(InputObjectKind, Object)>, ReplayEngineError> {
+    ) -> Result<InputObjects, ReplayEngineError> {
         // We need this for other activities in this session
         self.current_protocol_version = tx_info.protocol_config.version.as_u64();
 
@@ -1634,7 +1633,7 @@ impl LocalExec {
         self.multi_download_and_store(&loaded_child_refs).await?;
         tokio::task::yield_now().await;
 
-        Ok(input_objs)
+        Ok(InputObjects::new(input_objs))
     }
 }
 
@@ -1713,12 +1712,57 @@ impl ChildObjectResolver for LocalExec {
             );
         res
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        fn inner(
+            self_: &LocalExec,
+            owner: &ObjectID,
+            receiving_object_id: &ObjectID,
+            receive_object_at_version: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            let recv_object = match self_.get_object(receiving_object_id)? {
+                None => return Ok(None),
+                Some(o) => o,
+            };
+            if recv_object.version() != receive_object_at_version {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {receiving_object_id} at version \
+                    {receive_object_at_version} but expected the version to be == {receive_object_at_version}"
+                )));
+            }
+            if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+                return Ok(None);
+            }
+            Ok(Some(recv_object))
+        }
+
+        let res = inner(self, owner, receiving_object_id, receive_object_at_version);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ReceiveObject {
+                owner: *owner,
+                receive: *receiving_object_id,
+                receive_at_version: receive_object_at_version,
+                result: res.clone(),
+            });
+        res
+    }
 }
 
 impl ParentSync for LocalExec {
     /// The objects here much already exist in the store because we downloaded them earlier
     /// No download from network
-    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+    fn get_latest_parent_entry_ref_deprecated(
+        &self,
+        object_id: ObjectID,
+    ) -> SuiResult<Option<ObjectRef>> {
         fn inner(self_: &LocalExec, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
             if let Some(v) = self_.storage.live_objects_store.get(&object_id) {
                 return Ok(Some(v.compute_object_reference()));
@@ -1997,7 +2041,12 @@ async fn create_epoch_store(
         store_base_path
     };
 
-    let epoch_start_config = EpochStartConfiguration::new(sys_state, CheckpointDigest::random());
+    let epoch_start_config = EpochStartConfiguration::new(
+        sys_state,
+        CheckpointDigest::random(),
+        get_authenticator_state_obj_initial_shared_version(&authority_state.database)
+            .expect("read cannot fail"),
+    );
 
     let registry = Registry::new();
     let cache_metrics = Arc::new(ResolverMetrics::new(&registry));

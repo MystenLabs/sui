@@ -110,7 +110,7 @@ export interface AddedAccountsProperties {
 	 * |---|---|
 	 * | Enum Values | Ledger, Qredo, Derived, Imported |
 	 */
-	accountType: 'Ledger' | 'Qredo' | 'Derived' | 'Imported';
+	accountType: 'Ledger' | 'Qredo' | 'Derived' | 'Imported' | 'Zklogin';
 	/**
 	 * The number of accounts imported.
 	 *

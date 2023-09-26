@@ -1,8 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
+import { type Message } from '_src/shared/messaging/messages';
+import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
+import { QredoAPI } from '_src/shared/qredo-api';
 import mitt from 'mitt';
 
+import { getQredoAccountSource } from '../account-sources';
+import { QredoAccountSource } from '../account-sources/QredoAccountSource';
+import { addNewAccounts } from '../accounts';
+import { type QredoAccount, type QredoSerializedAccount } from '../accounts/QredoAccount';
+import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
+import Tabs from '../Tabs';
+import { Window } from '../Window';
 import {
 	createPendingRequest,
 	deletePendingRequest,
@@ -11,19 +22,8 @@ import {
 	storeAllPendingRequests,
 	updatePendingRequest,
 } from './storage';
-import { type UIQredoInfo, type QredoConnectPendingRequest } from './types';
+import { type QredoConnectPendingRequest, type UIQredoInfo } from './types';
 import { qredoConnectPageUrl, toUIQredoPendingRequest, validateInputOrThrow } from './utils';
-import Tabs from '../Tabs';
-import { Window } from '../Window';
-import { getQredoAccountSource } from '../account-sources';
-import { QredoAccountSource } from '../account-sources/QredoAccountSource';
-import { addNewAccounts } from '../accounts';
-import { type QredoSerializedAccount } from '../accounts/QredoAccount';
-import { type ContentScriptConnection } from '../connections/ContentScriptConnection';
-import { type QredoConnectInput } from '_src/dapp-interface/WalletStandardInterface';
-import { type Message } from '_src/shared/messaging/messages';
-import { type QredoConnectPayload } from '_src/shared/messaging/messages/payloads/QredoConnect';
-import { QredoAPI } from '_src/shared/qredo-api';
 
 const qredoEvents = mitt<{
 	onConnectionResponse: {
@@ -61,7 +61,7 @@ export async function requestUserApproval(
 				url: qredoConnectUrl,
 				windowID: existingPendingRequest.windowID || undefined,
 				match: ({ url, inAppRedirectUrl }) => {
-					const urlMatch = `/dapp/qredo-connect/${existingPendingRequest.id}`;
+					const urlMatch = `/accounts/qredo-connect/${existingPendingRequest.id}`;
 					return (
 						url.includes(urlMatch) || (!!inAppRedirectUrl && inAppRedirectUrl.includes(urlMatch))
 					);
@@ -235,12 +235,15 @@ export async function acceptQredoConnection({
 			sourceID: qredoAccountSource.id,
 			lastUnlockedOn: null,
 			selected: false,
+			nickname: null,
+			createdAt: Date.now(),
 		});
 	}
-	await addNewAccounts(newQredoAccounts);
+	const connectedAccounts = (await addNewAccounts(newQredoAccounts)) as QredoAccount[];
 	await deletePendingRequest(pendingRequest);
 	qredoEvents.emit('onConnectionResponse', {
 		allowed: true,
 		request: pendingRequest,
 	});
+	return Promise.all(connectedAccounts.map(async (anAccount) => await anAccount.toUISerialized()));
 }

@@ -8,7 +8,7 @@ mod client;
 pub mod headers;
 mod objects;
 
-pub use checkpoints::CheckpointData;
+pub use checkpoints::{CheckpointData, CheckpointTransaction};
 pub use client::Client;
 
 async fn health_check() -> StatusCode {

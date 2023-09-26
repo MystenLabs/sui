@@ -3,15 +3,15 @@
 
 import type { Infer } from 'superstruct';
 import {
+	any,
 	array,
+	boolean,
+	nullable,
 	number,
 	object,
+	optional,
 	string,
 	tuple,
-	boolean,
-	optional,
-	any,
-	nullable,
 } from 'superstruct';
 
 export const GasCostSummary = object({

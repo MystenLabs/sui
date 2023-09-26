@@ -29,8 +29,16 @@ pub fn download_dependency_repos<Progress: Write>(
     root_path: &Path,
     progress_output: &mut Progress,
 ) -> Result<()> {
-    let mut dep_graph_builder =
-        DependencyGraphBuilder::new(build_options.skip_fetch_latest_git_deps, progress_output);
+    let install_dir = build_options
+        .install_dir
+        .as_ref()
+        .unwrap_or(&root_path.to_path_buf())
+        .to_owned();
+    let mut dep_graph_builder = DependencyGraphBuilder::new(
+        build_options.skip_fetch_latest_git_deps,
+        progress_output,
+        install_dir,
+    );
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
         root_path.to_path_buf(),

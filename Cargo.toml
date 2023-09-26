@@ -2,12 +2,12 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move-execution/suivm/move-bytecode-verifier",
-    "external-crates/move-execution/suivm/move-stdlib",
-    "external-crates/move-execution/suivm/move-vm/runtime",
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
     "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move-execution/vm-rework/move-bytecode-verifier",
+    "external-crates/move-execution/vm-rework/move-stdlib",
+    "external-crates/move-execution/vm-rework/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -65,6 +65,7 @@ exclude = [
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
     "external-crates/move/tools/read-write-set/types",
+    "sdk/move-binary-format-wasm",
 ]
 
 members = [
@@ -76,9 +77,12 @@ members = [
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
+    "crates/simulacrum",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
+    "crates/sui-analytics-indexer",
     "crates/sui-archival",
+    "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
     "crates/sui-cluster-test",
     "crates/sui-config",
@@ -131,6 +135,7 @@ members = [
     "crates/sui-tls",
     "crates/sui-tool",
     "crates/sui-transaction-builder",
+    "crates/sui-transaction-checks",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
@@ -158,17 +163,17 @@ members = [
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
-    "sui-execution/suivm/sui-adapter",
-    "sui-execution/suivm/sui-move-natives",
-    "sui-execution/suivm/sui-verifier",
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/vm-rework/sui-adapter",
+    "sui-execution/vm-rework/sui-move-natives",
+    "sui-execution/vm-rework/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.9.0"
+version = "1.11.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -213,8 +218,11 @@ async-graphql = "5.0.10"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 aws-config = "0.56"
+aws-sdk-ec2 = "0.29.0"
 aws-sdk-dynamodb = "0.29.0"
 aws-sdk-s3 = "0.29.0"
+aws-smithy-http = "0.56"
+aws-smithy-runtime-api = "0.56"
 axum = { version = "0.6.6", default-features = false, features = [
   "headers",
   "tokio",
@@ -251,10 +259,10 @@ cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "3.2.17", features = ["derive", "cargo"] }
-# clap = { version = "4.3.2", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "wrap_help"] }
 collectable = "0.0.2"
 colored = "2.0.0"
+color-eyre = "0.6.2"
 comfy-table = "6.1.3"
 console-subscriber = "0.1.6"
 const-str = "0.5.3"
@@ -266,7 +274,8 @@ criterion = { version = "0.5.0", features = [
 crossterm = "0.25.0"
 csv = "1.2.1"
 dashmap = "5.4.0"
-datatest-stable = "0.1.2"
+# datatest-stable = "0.1.2"
+datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derivative = "2.2.0"
 derive-syn-parse = "0.1.5"
 derive_builder = "0.12.0"
@@ -293,6 +302,7 @@ fs_extra = "1.3.0"
 futures = "0.3.25"
 futures-core = "0.3.21"
 git-version = "0.3.5"
+glob = "0.3.1"
 governor = "0.6.0"
 hashbrown = "0.12"
 hdrhistogram = "7.5.1"
@@ -328,8 +338,8 @@ match_opt = "0.1.2"
 mime = "0.3"
 mockall = "0.11.4"
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "bd870b9a11870a2618c55ba703d58fafd41d686c", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "bd870b9a11870a2618c55ba703d58fafd41d686c", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "03b22b1576b5b81fd76fc9aa85009b22ddbfd5b6", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "03b22b1576b5b81fd76fc9aa85009b22ddbfd5b6", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -354,19 +364,20 @@ prometheus = "0.13.3"
 prometheus-http-query = { version = "0.6.6", default_features = false, features = [
   "rustls-tls",
 ] }
+prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
 prost = "0.11.8"
 prost-build = "0.11.8"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
-quinn-proto = "^0.10.0"
+quinn-proto = "^0.10.5"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.9.2"
 regex = "1.7.1"
-reqwest = { version = "0.11.18", default_features = false, features = [
+reqwest = { version = "0.11.20", default_features = false, features = [
   "blocking",
   "json",
   "rustls-tls",
@@ -387,6 +398,8 @@ rusoto_core = { version = "0.48.0", default_features = false, features = [
 rusoto_kms = { version = "0.48.0", default_features = false, features = [
   "rustls",
 ] }
+russh = "0.38.0"
+russh-keys = "0.38.0"
 rust-version = "1.56.1"
 rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
@@ -501,8 +514,8 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4e7debce78340848f0009b648f56d912d6bd02d5", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
@@ -521,6 +534,7 @@ prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
+sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-archival = { path = "crates/sui-archival" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
@@ -571,6 +585,7 @@ sui-tls = { path = "crates/sui-tls" }
 sui-rest-api = { path = "crates/sui-rest-api" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
+sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }

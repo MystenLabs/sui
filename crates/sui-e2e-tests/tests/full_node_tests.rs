@@ -1156,6 +1156,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .with_enable_db_checkpoints_fullnodes()
         .build()
         .await;
+
     let checkpoint_path = test_cluster
         .fullnode_handle
         .sui_node

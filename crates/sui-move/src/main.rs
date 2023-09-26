@@ -37,7 +37,7 @@ const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REV
 )]
 struct Args {
     /// Path to a package which the command should be run with respect to.
-    #[clap(long = "path", short = 'p', global = true, parse(from_os_str))]
+    #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
     /// If true, run the Move bytecode verifier on the bytecode from a successful build
     #[clap(long = "path", short = 'p', global = true)]

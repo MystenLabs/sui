@@ -1,5 +1,29 @@
 # @mysten/deepbook
 
+## 0.5.0
+
+### Minor Changes
+
+- fd8589806: Remove uses of deprecated imports from @mysten/sui.js
+
+### Patch Changes
+
+- Updated dependencies [fd8589806]
+  - @mysten/sui.js@0.42.0
+
+## 0.4.2
+
+### Patch Changes
+
+- @mysten/sui.js@0.41.2
+
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [24c21e1f0]
+  - @mysten/sui.js@0.41.1
+
 ## 0.4.0
 
 ### Minor Changes

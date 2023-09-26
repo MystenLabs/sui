@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import Alert from '_components/alert';
+import { CoinIcon } from '_src/ui/app/components/coin-icon';
+import { Text } from '_src/ui/app/shared/text';
 import {
-	type BalanceChangeSummary,
 	CoinFormat,
-	useFormatCoin,
-	useCoinMetadata,
-	type BalanceChange,
 	getRecognizedUnRecognizedTokenChanges,
+	useCoinMetadata,
+	useFormatCoin,
+	type BalanceChange,
+	type BalanceChangeSummary,
 } from '@mysten/core';
+import classNames from 'classnames';
 import { useMemo } from 'react';
 
 import { Card } from '../Card';
 import { OwnerFooter } from '../OwnerFooter';
-import Alert from '_components/alert';
-import { CoinIcon } from '_src/ui/app/components/coin-icon';
-import { Text } from '_src/ui/app/shared/text';
 
 interface BalanceChangesProps {
 	changes?: BalanceChangeSummary;
@@ -69,7 +70,12 @@ function BalanceChangeEntries({ changes }: { changes: BalanceChange[] }) {
 					<BalanceChangeEntry change={change} key={change.coinType + change.amount} />
 				))}
 				{unRecognizedTokenChanges.length > 0 && (
-					<div className="flex flex-col gap-2 border-t border-gray-45 pt-2">
+					<div
+						className={classNames(
+							'flex flex-col gap-2 pt-2',
+							recognizedTokenChanges?.length && 'border-t border-gray-45',
+						)}
+					>
 						{unRecognizedTokenChanges.map((change, index) => (
 							<BalanceChangeEntry change={change} key={change.coinType + index} />
 						))}

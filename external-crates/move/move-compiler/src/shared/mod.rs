@@ -9,7 +9,7 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
-    editions::{Edition, Flavor},
+    editions::{check_feature as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
     naming::ast::ModuleDefinition,
     sui_mode,
@@ -151,6 +151,7 @@ pub const FILTER_UNUSED_ATTRIBUTE: &str = "unused_attribute";
 pub const FILTER_UNUSED_TYPE_PARAMETER: &str = "unused_type_parameter";
 pub const FILTER_UNUSED_FUNCTION: &str = "unused_function";
 pub const FILTER_UNUSED_STRUCT_FIELD: &str = "unused_field";
+pub const FILTER_UNUSED_CONST: &str = "unused_const";
 pub const FILTER_DEAD_CODE: &str = "dead_code";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
@@ -326,6 +327,7 @@ impl CompilationEnv {
                     },
                 ]),
             ),
+            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant, filter_attr_name),
             known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
         ]);
 
@@ -362,9 +364,8 @@ impl CompilationEnv {
     }
 
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
-        let is_filtered = self
-            .warning_filter
-            .last()
+        let filter = self.warning_filter.last();
+        let is_filtered = filter
             .map(|filter| filter.is_filtered(&diag))
             .unwrap_or(false);
         if !is_filtered {
@@ -372,7 +373,6 @@ impl CompilationEnv {
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
                 if let Some(filter_info) = self.known_filter_names.get(&diag.info().id()) {
-                    //                    if let Some(filter_attr_name) =
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                          applied to the 'module' or module member ('const', 'fun', or 'struct')",
@@ -383,6 +383,9 @@ impl CompilationEnv {
                 }
             }
             self.diags.add(diag)
+        } else if !filter.unwrap().for_dependency() {
+            // unwrap above is safe as the filter has been used (thus it must exist)
+            self.diags.add_source_filtered(diag)
         }
     }
 
@@ -443,7 +446,7 @@ impl CompilationEnv {
             "TODO If triggered this TODO you might want to make this more efficient"
         );
         if let Some(cur_filter) = self.warning_filter.last() {
-            filter.union(&cur_filter)
+            filter.union(cur_filter)
         }
         self.warning_filter.push(filter)
     }
@@ -460,7 +463,7 @@ impl CompilationEnv {
         self.known_filters
             .get(&KnownFilterInfo::new(name, attribute_name))
             .cloned()
-            .unwrap_or_else(BTreeSet::new)
+            .unwrap_or_default()
     }
 
     pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {
@@ -518,6 +521,11 @@ impl CompilationEnv {
 
     pub fn visitors(&self) -> Rc<Visitors> {
         self.visitors.clone()
+    }
+
+    // Logs an error if the feature isn't supported.
+    pub fn check_feature(&mut self, feature: &FeatureGate, package: Option<Symbol>, loc: Loc) {
+        edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
@@ -685,7 +693,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFilters::new(),
+            warning_filter: WarningFilters::new_for_source(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }

@@ -33,7 +33,7 @@ impl WalletContext {
         config_path: &Path,
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
-    ) -> clap::Result<Self, anyhow::Error> {
+    ) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
@@ -55,7 +55,7 @@ impl WalletContext {
         self.config.keystore.addresses()
     }
 
-    pub async fn get_client(&self) -> clap::Result<SuiClient, anyhow::Error> {
+    pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
         let read = self.client.read().await;
 
         Ok(if let Some(client) = read.as_ref() {
@@ -76,7 +76,7 @@ impl WalletContext {
     }
 
     // TODO: Ger rid of mut
-    pub fn active_address(&mut self) -> clap::Result<SuiAddress, anyhow::Error> {
+    pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
         if self.config.keystore.addresses().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
@@ -95,10 +95,7 @@ impl WalletContext {
     }
 
     /// Get the latest object reference given a object id
-    pub async fn get_object_ref(
-        &self,
-        object_id: ObjectID,
-    ) -> clap::Result<ObjectRef, anyhow::Error> {
+    pub async fn get_object_ref(&self, object_id: ObjectID) -> Result<ObjectRef, anyhow::Error> {
         let client = self.get_client().await?;
         Ok(client
             .read_api()
@@ -112,7 +109,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> clap::Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiObjectData)>, anyhow::Error> {
         let client = self.get_client().await?;
 
         let mut objects: Vec<SuiObjectResponse> = Vec::new();
@@ -154,7 +151,7 @@ impl WalletContext {
         Ok(values_objects)
     }
 
-    pub async fn get_object_owner(&self, id: &ObjectID) -> clap::Result<SuiAddress, anyhow::Error> {
+    pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
         let client = self.get_client().await?;
         let object = client
             .read_api()
@@ -170,7 +167,7 @@ impl WalletContext {
     pub async fn try_get_object_owner(
         &self,
         id: &Option<ObjectID>,
-    ) -> clap::Result<Option<SuiAddress>, anyhow::Error> {
+    ) -> Result<Option<SuiAddress>, anyhow::Error> {
         if let Some(id) = id {
             Ok(Some(self.get_object_owner(id).await?))
         } else {
@@ -184,7 +181,7 @@ impl WalletContext {
         address: SuiAddress,
         budget: u64,
         forbidden_gas_objects: BTreeSet<ObjectID>,
-    ) -> clap::Result<(u64, SuiObjectData), anyhow::Error> {
+    ) -> Result<(u64, SuiObjectData), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.object_id) {
                 return Ok((o.0, o.1));
@@ -275,7 +272,7 @@ impl WalletContext {
         Ok(result)
     }
 
-    pub async fn get_reference_gas_price(&self) -> clap::Result<u64, anyhow::Error> {
+    pub async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
         let client = self.get_client().await?;
         let gas_price = client.governance_api().get_reference_gas_price().await?;
         Ok(gas_price)

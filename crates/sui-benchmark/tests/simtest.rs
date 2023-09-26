@@ -310,23 +310,22 @@ mod test {
         // the previous protocol version. It does this by starting a network with
         // the previous protocol version that this binary supports, and then upgrading the network
         // to the latest protocol version.
-        let max_ver = ProtocolVersion::MAX.as_u64();
-        let min_ver = max_ver - 1;
-        let timeout = tokio::time::timeout(
+        tokio::time::timeout(
             Duration::from_secs(1000),
-            test_protocol_upgrade_compatibility_impl(min_ver),
+            test_protocol_upgrade_compatibility_impl(),
         )
-        .await;
-        match timeout {
-            Ok(_) => {}
-            Err(_) => {
-                panic!("testnet upgrade compatibility test timed out");
-            }
-        }
+        .await
+        .expect("testnet upgrade compatibility test timed out");
     }
 
-    async fn test_protocol_upgrade_compatibility_impl(starting_version: u64) {
+    async fn test_protocol_upgrade_compatibility_impl() {
         let max_ver = ProtocolVersion::MAX.as_u64();
+        let manifest = sui_framework_snapshot::load_bytecode_snapshot_manifest();
+
+        let Some((&starting_version, _)) = manifest.range(..max_ver).last() else {
+            panic!("Couldn't find previously supported version");
+        };
+
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
         let mut test_cluster = init_test_cluster_builder(7, 5000)

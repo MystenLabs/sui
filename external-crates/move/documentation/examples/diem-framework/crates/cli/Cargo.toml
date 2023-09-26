@@ -9,13 +9,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.52"
-clap = { version = "3.1.8", features = ["derive"] }
-
-bcs = "0.1.4"
+clap = { version = "4", features = ["derive"] }
 
 move-stdlib = { path = "../../../../../move-stdlib" }
 move-core-types = { path = "../../../../../move-core/types" }
-move-vm-types = { path = "../../../../../move-vm/types" }
 move-cli = { path = "../../../../../tools/move-cli" }
 move-vm-test-utils = { path = "../../../../../move-vm/test-utils" }
 

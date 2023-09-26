@@ -29,7 +29,7 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, SetValue<T
 				window.localStorage.setItem(key, JSON.stringify(newValue));
 				setStoredValue(newValue);
 			} catch (error) {
-				console.warn(`Error setting localStorage key “${key}”:`, error);
+				console.warn(`Error setting localStorage key "${key}":`, error);
 			}
 		},
 		[key, storedValue],

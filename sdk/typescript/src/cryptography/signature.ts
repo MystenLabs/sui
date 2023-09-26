@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import type { PublicKey } from './publickey.js';
-import type { MultiSigStruct } from '../multisig/publickey.js';
+
 import { builder } from '../builder/bcs.js';
+import type { MultiSigStruct } from '../multisig/publickey.js';
+import type { PublicKey } from './publickey.js';
 
 export type SignatureScheme = 'ED25519' | 'Secp256k1' | 'Secp256r1' | 'MultiSig';
 
@@ -51,6 +52,9 @@ export const SIGNATURE_FLAG_TO_SCHEME = {
 
 export type SignatureFlag = keyof typeof SIGNATURE_FLAG_TO_SCHEME;
 
+/**
+ * Takes in a signature, its associated signing scheme and a public key, then serializes this data
+ */
 export function toSerializedSignature({
 	signature,
 	signatureScheme,
@@ -69,6 +73,9 @@ export function toSerializedSignature({
 	return toB64(serializedSignature);
 }
 
+/**
+ * Decodes a serialized signature into its constituent components: the signature scheme, the actual signature, and the public key
+ */
 export function parseSerializedSignature(serializedSignature: SerializedSignature) {
 	const bytes = fromB64(serializedSignature);
 

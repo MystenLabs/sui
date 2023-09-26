@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
-import { type ReactNode } from 'react';
-
 import { Link } from '_src/ui/app/shared/Link';
 import { Text } from '_src/ui/app/shared/text';
+import cl from 'classnames';
+import { type ReactNode } from 'react';
 
 function getDisplayUrl(link: string) {
 	try {

@@ -7,11 +7,9 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{
-        AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId, Visibility,
-    },
+    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, SpecId},
     hlir::{
-        ast::{self as H, Value_, Var},
+        ast::{self as H, Value_, Var, Visibility},
         translate::{display_var, DisplayVar},
     },
     naming::{
@@ -618,8 +616,8 @@ fn function(
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
     let acquires = acquires
-        .into_iter()
-        .map(|(s, _)| context.struct_definition_name(m.unwrap(), s))
+        .into_keys()
+        .map(|s| context.struct_definition_name(m.unwrap(), s))
         .collect();
     let body = match body.value {
         G::FunctionBody_::Native => IR::FunctionBody::Native,

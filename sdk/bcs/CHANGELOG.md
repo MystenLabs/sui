@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.4
+
+### Patch Changes
+
+- 290c8e640: Fix parsing of hex strings where leading 0s have been trimmed
+
 ## 0.7.3
 
 ### Patch Changes

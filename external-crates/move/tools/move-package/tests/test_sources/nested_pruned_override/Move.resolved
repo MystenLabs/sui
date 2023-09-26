@@ -73,10 +73,8 @@ ResolvedGraph {
             "C",
             "Root",
         },
-        manifest_digest: Some(
-            "B0F678B9227387AF29ACA8CFA4EB437787A2FC7690E2627761402DE85C728E51",
-        ),
-        deps_digest: None,
+        manifest_digest: "B0F678B9227387AF29ACA8CFA4EB437787A2FC7690E2627761402DE85C728E51",
+        deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
         dev_mode: true,

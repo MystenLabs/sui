@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BehaviorSubject, filter, map, take } from 'rxjs';
-
 import Keyring from '_src/background/keyring';
 import { isSessionStorageSupported } from '_src/background/storage-utils';
 import { MSG_DISABLE_AUTO_RECONNECT } from '_src/content-script/keep-bg-alive';
-
+import { BehaviorSubject, filter, map, take } from 'rxjs';
 import type { Runtime } from 'webextension-polyfill';
 
 const MIN_DISCONNECT_TIMEOUT = 1000 * 30;

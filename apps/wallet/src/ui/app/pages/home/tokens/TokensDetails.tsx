@@ -1,33 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// import { useFeature } from '@growthbook/growthbook-react';
-import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
-import { useAllBalances, useBalance } from '@mysten/dapp-kit';
-import {
-	Info12,
-	WalletActionBuy24,
-	WalletActionSend24,
-	Swap16,
-	Unpin16,
-	Pin16,
-} from '@mysten/icons';
-
-import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
-import { Coin } from '@mysten/sui.js/framework';
-import { SUI_TYPE_ARG, formatAddress } from '@mysten/sui.js/utils';
-import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-
-import { PortfolioName } from './PortfolioName';
-import { TokenIconLink } from './TokenIconLink';
-import { TokenLink } from './TokenLink';
-import { TokenList } from './TokenList';
-import SvgSuiTokensStack from './TokensStackIcon';
-import { CoinBalance } from './coin-balance';
-import Interstitial, { type InterstitialConfig } from '../interstitial';
-import { useOnrampProviders } from '../onramp/useOnrampProviders';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
@@ -40,11 +13,28 @@ import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
-import { useIsAccountReadLocked } from '_src/ui/app/hooks/useIsAccountReadLocked';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
-import PageTitle from '_src/ui/app/shared/PageTitle';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
+import PageTitle from '_src/ui/app/shared/PageTitle';
+import { useFeature } from '@growthbook/growthbook-react';
+import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
+import { useAllBalances, useBalance } from '@mysten/dapp-kit';
+import { Info12, Pin16, Unpin16 } from '@mysten/icons';
+import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
+import { Coin } from '@mysten/sui.js/framework';
+import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+
+import Interstitial, { type InterstitialConfig } from '../interstitial';
+import { useOnrampProviders } from '../onramp/useOnrampProviders';
+import { CoinBalance } from './coin-balance';
+import { PortfolioName } from './PortfolioName';
+import { TokenIconLink } from './TokenIconLink';
+import { TokenLink } from './TokenLink';
+import { TokenList } from './TokenList';
+import SvgSuiTokensStack from './TokensStackIcon';
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -170,7 +160,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const isAccountLocked = useIsAccountReadLocked(activeAccount);
 	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
@@ -261,17 +250,19 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 				{coinType && <PageTitle title={coinSymbol} back="/tokens" />}
 
 				<div
-					className="flex flex-col h-full flex-1 flex-grow items-center overflow-y-auto gap-8"
+					className="flex flex-col h-full flex-1 flex-grow items-center gap-8"
 					data-testid="coin-page"
 				>
 					<AccountsList />
 					<div className="flex flex-col w-full">
-						<PortfolioName name={domainName ?? formatAddress(activeAccountAddress)} />
-						{isAccountLocked ? null : (
+						<PortfolioName
+							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
+						/>
+						{activeAccount.isLocked ? null : (
 							<>
 								<div
 									data-testid="coin-balance"
-									className="bg-sui/10 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+									className="bg-hero/5 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
 								>
 									{accountHasSui ? (
 										<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
@@ -300,7 +291,6 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 											center
 											to="/onramp"
 											disabled={(coinType && coinType !== SUI_TYPE_ARG) || !providers?.length}
-											top={<WalletActionBuy24 />}
 										>
 											Buy
 										</LargeButton>
@@ -316,12 +306,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 													: ''
 											}`}
 											disabled={!tokenBalance}
-											top={<WalletActionSend24 />}
 										>
 											Send
 										</LargeButton>
 
-										<LargeButton center to="/" disabled top={<Swap16 />}>
+										<LargeButton center to="/" disabled>
 											Swap
 										</LargeButton>
 									</div>
@@ -337,7 +326,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							</>
 						)}
 					</div>
-					{isAccountLocked ? (
+					{activeAccount.isLocked ? (
 						<UnlockAccountButton account={activeAccount} />
 					) : (
 						<MyTokens

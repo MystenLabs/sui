@@ -3,7 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
-use crate::server::context_ext::DataProviderContextExt;
+use crate::context_data::context_ext::DataProviderContextExt;
 
 use super::name_service::NameService;
 use super::{
@@ -72,12 +72,15 @@ impl Address {
 
     pub async fn balance_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Balance>> {
-        unimplemented!()
+    ) -> Result<Connection<String, Balance>> {
+        ctx.data_provider()
+            .fetch_balance_connection(&self.address, first, after, last, before)
+            .await
     }
 
     pub async fn coin_connection(

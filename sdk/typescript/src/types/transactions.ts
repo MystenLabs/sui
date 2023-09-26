@@ -3,18 +3,18 @@
 
 import type { Infer } from 'superstruct';
 import {
-	is,
 	array,
+	assign,
+	boolean,
+	is,
 	literal,
+	nullable,
 	number,
 	object,
 	optional,
 	string,
-	union,
-	boolean,
 	tuple,
-	assign,
-	nullable,
+	union,
 } from 'superstruct';
 
 import { ObjectOwner, SuiJsonValue } from './common.js';

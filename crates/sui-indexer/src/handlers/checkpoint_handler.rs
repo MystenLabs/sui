@@ -6,7 +6,7 @@ use itertools::Itertools;
 use move_core_types::ident_str;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::HashMap;
-use sui_rest_api::CheckpointData;
+use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::Owner;
@@ -202,7 +202,18 @@ where
 }
 
 struct CheckpointDataObjectStore<'a> {
-    objects: &'a [sui_types::object::Object],
+    objects: Vec<&'a sui_types::object::Object>,
+}
+
+impl<'a> CheckpointDataObjectStore<'a> {
+    fn new(data: &'a CheckpointData) -> Self {
+        let objects = data
+            .transactions
+            .iter()
+            .flat_map(|tx| tx.output_objects.iter())
+            .collect();
+        Self { objects }
+    }
 }
 
 impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
@@ -210,7 +221,12 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
         &self,
         object_id: &ObjectID,
     ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
-        Ok(self.objects.iter().find(|o| o.id() == *object_id).cloned())
+        Ok(self
+            .objects
+            .iter()
+            .find(|o| o.id() == *object_id)
+            .cloned()
+            .cloned())
     }
 
     fn get_object_by_key(
@@ -222,6 +238,7 @@ impl<'a> sui_types::storage::ObjectStore for CheckpointDataObjectStore<'a> {
             .objects
             .iter()
             .find(|o| o.id() == *object_id && o.version() == version)
+            .cloned()
             .cloned())
     }
 }
@@ -238,10 +255,9 @@ where
             transactions,
             checkpoint_summary,
             checkpoint_contents: _,
-            objects,
         } = data;
 
-        let checkpoint_object_store = CheckpointDataObjectStore { objects };
+        let checkpoint_object_store = CheckpointDataObjectStore::new(data);
 
         // NOTE: Index epoch when object checkpoint index has reached the same checkpoint,
         // because epoch info is based on the latest system state object by the current checkpoint.
@@ -274,7 +290,7 @@ where
 
             let epoch_event = transactions
                 .iter()
-                .flat_map(|(_, _, events)| events.as_ref().map(|e| &e.data))
+                .flat_map(|tx| tx.events.as_ref().map(|e| &e.data))
                 .flatten()
                 .find(|ev| {
                     ev.type_.address == SUI_SYSTEM_ADDRESS
@@ -370,7 +386,6 @@ where
             transactions,
             checkpoint_summary,
             checkpoint_contents,
-            objects: _,
         } = data;
 
         let mut db_transactions = Vec::new();
@@ -380,7 +395,14 @@ where
         let mut db_move_calls = Vec::new();
         let mut db_recipients = Vec::new();
 
-        for (tx, fx, events) in transactions {
+        for CheckpointTransaction {
+            transaction: tx,
+            effects: fx,
+            events,
+            input_objects: _,
+            output_objects: _,
+        } in transactions
+        {
             let transaction_digest = tx.digest();
             let tx = tx.transaction_data();
 
@@ -865,15 +887,17 @@ where
         let epoch = data.checkpoint_summary.epoch();
         let checkpoint = *data.checkpoint_summary.sequence_number();
         let objects: HashMap<_, _> = data
-            .objects
+            .transactions
             .iter()
+            .flat_map(|tx| tx.output_objects.iter())
             .map(|o| ((o.id(), o.version()), o))
             .collect();
 
         data.transactions
             .iter()
-            .map(|(_, fx, _)| {
-                let changed_objects = fx
+            .map(|tx| {
+                let changed_objects = tx
+                    .effects
                     .all_changed_objects()
                     .into_iter()
                     .map(|(oref, _owner, kind)| {
@@ -882,7 +906,7 @@ where
                     })
                     .collect();
 
-                let deleted_objects = get_deleted_db_objects(fx, epoch, checkpoint);
+                let deleted_objects = get_deleted_db_objects(&tx.effects, epoch, checkpoint);
 
                 TransactionObjectChanges {
                     changed_objects,
@@ -896,12 +920,13 @@ where
         let senders: HashMap<_, _> = checkpoint_data
             .transactions
             .iter()
-            .map(|(tx, _, _)| (tx.digest(), tx.sender_address()))
+            .map(|tx| (tx.transaction.digest(), tx.transaction.sender_address()))
             .collect();
 
         checkpoint_data
-            .objects
+            .transactions
             .iter()
+            .flat_map(|tx| tx.output_objects.iter())
             .filter_map(|o| {
                 if let sui_types::object::Data::Package(p) = &o.data {
                     let sender = senders

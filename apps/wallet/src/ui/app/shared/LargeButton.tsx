@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import LoadingIndicator from '_components/loading/LoadingIndicator';
 import clsx from 'classnames';
 import { forwardRef, type ReactNode, type Ref } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 function Decorator({ disabled, children }: { disabled?: boolean; children: ReactNode }) {
 	return (
@@ -51,10 +51,8 @@ export const LargeButton = forwardRef(
 				ref={ref}
 				{...otherProps}
 				className={clsx(
-					'group border border-solid border-transparent flex rounded-xl items-center py-2 px-8 justify-between no-underline',
-					disabled
-						? 'bg-hero/5 pointer-events-none'
-						: 'bg-sui/10 hover:shadow-drop hover:border-sui/10',
+					'group border border-solid border-transparent flex rounded-md items-center py-2 px-8 justify-between no-underline',
+					disabled ? 'bg-hero-darkest/5 pointer-events-none' : 'bg-white/80 hover:border-sui/10',
 					spacing === 'sm' && '!p-3',
 				)}
 			>

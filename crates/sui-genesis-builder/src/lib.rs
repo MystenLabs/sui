@@ -8,7 +8,7 @@ use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use sui_config::genesis::{
     UnsignedGenesis,
 };
 use sui_execution::{self, Executor};
-use sui_framework::BuiltInFramework;
+use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
@@ -27,7 +27,7 @@ use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
     AuthoritySignature, DefaultHash, SuiAuthoritySignature,
 };
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
@@ -303,6 +303,15 @@ impl Builder {
                 return;
             }
         };
+
+        let protocol_config = get_genesis_protocol_config(ProtocolVersion::new(protocol_version));
+
+        if protocol_config.create_authenticator_state_in_genesis() {
+            let authenticator_state = unsigned_genesis.authenticator_state_object().unwrap();
+            assert!(authenticator_state.active_jwks.is_empty());
+        } else {
+            assert!(unsigned_genesis.authenticator_state_object().is_none());
+        }
 
         assert_eq!(
             self.validators.len(),
@@ -655,13 +664,14 @@ fn create_genesis_context(
     genesis_chain_parameters: &GenesisChainParameters,
     genesis_validators: &[GenesisValidatorMetadata],
     token_distribution_schedule: &TokenDistributionSchedule,
+    system_packages: &[SystemPackage],
 ) -> TxContext {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
     hasher.update(&bcs::to_bytes(genesis_chain_parameters).unwrap());
     hasher.update(&bcs::to_bytes(genesis_validators).unwrap());
     hasher.update(&bcs::to_bytes(token_distribution_schedule).unwrap());
-    for system_package in BuiltInFramework::iter_system_packages() {
+    for system_package in system_packages {
         hasher.update(&bcs::to_bytes(system_package.bytes()).unwrap());
     }
 
@@ -673,6 +683,15 @@ fn create_genesis_context(
         &genesis_transaction_digest,
         epoch_data,
     )
+}
+
+fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
+    // We have a circular dependency here. Protocol config depends on chain ID, which
+    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
+    // depends on protocol config.
+    // However since we know there are no chain specific protocol config options in genesis,
+    // we use Chain::Unknown here.
+    ProtocolConfig::get_for_version(version, Chain::Unknown)
 }
 
 fn build_unsigned_genesis_data(
@@ -699,11 +718,19 @@ fn build_unsigned_genesis_data(
 
     let epoch_data = EpochData::new_genesis(genesis_chain_parameters.chain_start_timestamp_ms);
 
+    // Get the correct system packages for our protocol version. If we cannot find the snapshot
+    // that means that we must be at the latest version and we should use the latest version of the
+    // framework.
+    let system_packages =
+        sui_framework_snapshot::load_bytecode_snapshot(parameters.protocol_version.as_u64())
+            .unwrap_or_else(|_| BuiltInFramework::iter_system_packages().cloned().collect());
+
     let mut genesis_ctx = create_genesis_context(
         &epoch_data,
         &genesis_chain_parameters,
         &genesis_validators,
         token_distribution_schedule,
+        &system_packages,
     );
 
     // Use a throwaway metrics registry for genesis transaction execution.
@@ -716,16 +743,11 @@ fn build_unsigned_genesis_data(
         &genesis_validators,
         &genesis_chain_parameters,
         token_distribution_schedule,
+        system_packages,
         metrics.clone(),
     );
 
-    // We have a circular dependency here. Protocol config depends on chain ID, which
-    // depends on genesis checkpoint (digest), which depends on genesis transaction, which
-    // depends on protocol config.
-    // However since we know there are no chain specific protocol config options in genesis,
-    // we use Chain::Unknown here.
-    let protocol_config =
-        ProtocolConfig::get_for_version(parameters.protocol_version, Chain::Unknown);
+    let protocol_config = get_genesis_protocol_config(parameters.protocol_version);
 
     let (genesis_transaction, genesis_effects, genesis_events, objects) =
         create_genesis_transaction(objects, &protocol_config, metrics, &epoch_data);
@@ -815,40 +837,34 @@ fn create_genesis_transaction(
 
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
-        let shared_object_refs = vec![];
         let transaction_data = &genesis_transaction.data().intent_message().value;
         let (kind, signer, _) = transaction_data.execution_parts();
-        let transaction_dependencies = BTreeSet::new();
+        let input_objects = InputObjects::new(vec![]);
         let (inner_temp_store, effects, _execution_error) = executor
             .execute_transaction_to_effects(
-                InMemoryStorage::new(Vec::new()),
+                &InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,
                 expensive_checks,
                 &certificate_deny_set,
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
-                InputObjects::new(vec![]),
-                shared_object_refs,
+                input_objects,
                 vec![],
                 SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
-                transaction_dependencies,
             );
-        assert!(inner_temp_store.objects.is_empty());
+        assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
-        assert!(inner_temp_store.deleted.is_empty());
+        assert!(effects.mutated().is_empty());
+        assert!(effects.unwrapped().is_empty());
+        assert!(effects.deleted().is_empty());
+        assert!(effects.wrapped().is_empty());
+        assert!(effects.unwrapped_then_deleted().is_empty());
 
-        let objects = inner_temp_store
-            .written
-            .into_iter()
-            .map(|(_, (_, o, kind))| {
-                assert_eq!(kind, sui_types::storage::WriteKind::Create);
-                o
-            })
-            .collect();
+        let objects = inner_temp_store.written.into_values().collect();
         (effects, inner_temp_store.events, objects)
     };
 
@@ -861,6 +877,7 @@ fn create_genesis_objects(
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
+    system_packages: Vec<SystemPackage>,
     metrics: Arc<LimitsMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
@@ -878,7 +895,7 @@ fn create_genesis_objects(
     let executor = sui_execution::executor(&protocol_config, paranoid_checks, silent)
         .expect("Creating an executor should not fail here");
 
-    for system_package in BuiltInFramework::iter_system_packages() {
+    for system_package in system_packages.into_iter() {
         process_package(
             &mut store,
             executor.as_ref(),
@@ -892,7 +909,6 @@ fn create_genesis_objects(
     }
 
     {
-        let store = Arc::get_mut(&mut store).expect("only one reference to store");
         for object in input_objects {
             store.insert_object(object.to_owned());
         }
@@ -909,12 +925,11 @@ fn create_genesis_objects(
     )
     .unwrap();
 
-    let store = Arc::try_unwrap(store).expect("only one reference to store");
     store.into_inner().into_values().collect()
 }
 
 fn process_package(
-    store: &mut Arc<InMemoryStorage>,
+    store: &mut InMemoryStorage,
     executor: &dyn Executor,
     ctx: &mut TxContext,
     modules: &[CompiledModule],
@@ -968,10 +983,8 @@ fn process_package(
         builder.command(Command::Publish(module_bytes, dependencies));
         builder.finish()
     };
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = executor.update_genesis_state(
-        store.clone(),
+    let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
+        &*store,
         protocol_config,
         metrics,
         ctx,
@@ -979,14 +992,13 @@ fn process_package(
         pt,
     )?;
 
-    let store = Arc::get_mut(store).expect("only one reference to store");
-    store.finish(written, deleted);
+    store.finish(written);
 
     Ok(())
 }
 
 pub fn generate_genesis_system_object(
-    store: &mut Arc<InMemoryStorage>,
+    store: &mut InMemoryStorage,
     executor: &dyn Executor,
     genesis_validators: &[GenesisValidatorMetadata],
     genesis_ctx: &mut TxContext,
@@ -1022,7 +1034,19 @@ pub fn generate_genesis_system_object(
             vec![],
         )?;
 
-        // Step 3: Mint the supply of SUI.
+        // Step 3: Create the AuthenticatorState object, unless it has been disabled (which only
+        // happens in tests).
+        if protocol_config.create_authenticator_state_in_genesis() {
+            builder.move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ident_str!("authenticator_state").to_owned(),
+                ident_str!("create").to_owned(),
+                vec![],
+                vec![],
+            )?;
+        }
+
+        // Step 4: Mint the supply of SUI.
         let sui_supply = builder.programmable_move_call(
             SUI_FRAMEWORK_ADDRESS.into(),
             ident_str!("sui").to_owned(),
@@ -1031,7 +1055,7 @@ pub fn generate_genesis_system_object(
             vec![],
         );
 
-        // Step 4: Run genesis.
+        // Step 5: Run genesis.
         // The first argument is the system state uid we got from step 1 and the second one is the SUI supply we
         // got from step 3.
         let mut arguments = vec![sui_system_state_uid, sui_supply];
@@ -1054,10 +1078,8 @@ pub fn generate_genesis_system_object(
         builder.finish()
     };
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = executor.update_genesis_state(
-        store.clone(),
+    let InnerTemporaryStore { mut written, .. } = executor.update_genesis_state(
+        &*store,
         &protocol_config,
         metrics,
         genesis_ctx,
@@ -1065,8 +1087,17 @@ pub fn generate_genesis_system_object(
         pt,
     )?;
 
-    let store = Arc::get_mut(store).expect("only one reference to store");
-    store.finish(written, deleted);
+    // update the value of the clock to match the chain start time
+    {
+        let object = written.get_mut(&sui_types::SUI_CLOCK_OBJECT_ID).unwrap();
+        object
+            .data
+            .try_as_move_mut()
+            .unwrap()
+            .set_clock_timestamp_ms_unsafe(genesis_chain_parameters.chain_start_timestamp_ms);
+    }
+
+    store.finish(written);
 
     Ok(())
 }

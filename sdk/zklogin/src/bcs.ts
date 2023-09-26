@@ -1,33 +1,72 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '@mysten/bcs';
+import { BCS, fromB64, toB64 } from '@mysten/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
+import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
 
 export const zkBcs = new BCS(bcs);
 
-zkBcs.registerStructType('AddressParams', {
-	iss: BCS.STRING,
-	aud: BCS.STRING,
-});
+type ProofPoints = {
+	a: string[];
+	b: string[][];
+	c: string[];
+};
 
-zkBcs.registerStructType('ZkClaim', {
-	name: BCS.STRING,
-	value_base64: BCS.STRING,
-	index_mod_4: BCS.U8,
-});
+type IssBase64 = {
+	value: string;
+	indexMod4: number;
+};
 
-zkBcs.registerStructType('ZkSignature', {
+export interface ZkSignatureInputs {
+	proofPoints: ProofPoints;
+	issBase64Details: IssBase64;
+	headerBase64: string;
+	addressSeed: string;
+}
+
+export interface ZkSignature {
+	inputs: ZkSignatureInputs;
+	maxEpoch: number;
+	userSignature: string | Uint8Array;
+}
+
+zkBcs.registerStructType('ZkloginSignature', {
 	inputs: {
-		proof_points: {
-			pi_a: [BCS.VECTOR, BCS.STRING],
-			pi_b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
-			pi_c: [BCS.VECTOR, BCS.STRING],
+		proofPoints: {
+			a: [BCS.VECTOR, BCS.STRING],
+			b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
+			c: [BCS.VECTOR, BCS.STRING],
 		},
-		address_seed: BCS.STRING,
-		claims: [BCS.VECTOR, 'ZkClaim'],
-		header_base64: BCS.STRING,
+		issBase64Details: {
+			value: BCS.STRING,
+			indexMod4: BCS.U8,
+		},
+		headerBase64: BCS.STRING,
+		addressSeed: BCS.STRING,
 	},
-	max_epoch: BCS.U64,
-	user_signature: [BCS.VECTOR, BCS.U8],
+	maxEpoch: BCS.U64,
+	userSignature: [BCS.VECTOR, BCS.U8],
 });
+
+function getZkSignatureBytes({ inputs, maxEpoch, userSignature }: ZkSignature) {
+	return zkBcs
+		.ser(
+			'ZkloginSignature',
+			{
+				inputs,
+				maxEpoch,
+				userSignature: typeof userSignature === 'string' ? fromB64(userSignature) : userSignature,
+			},
+			{ maxSize: 2048 },
+		)
+		.toBytes();
+}
+
+export function getZkSignature({ inputs, maxEpoch, userSignature }: ZkSignature) {
+	const bytes = getZkSignatureBytes({ inputs, maxEpoch, userSignature });
+	const signatureBytes = new Uint8Array(bytes.length + 1);
+	signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG['Zk']]);
+	signatureBytes.set(bytes, 1);
+	return toB64(signatureBytes);
+}

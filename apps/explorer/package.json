@@ -47,6 +47,7 @@
 		"@tanstack/react-table": "^8.9.3",
 		"@types/d3-array": "^3.0.5",
 		"@types/throttle-debounce": "^5.0.0",
+		"@vanilla-extract/css": "^1.13.0",
 		"@visx/axis": "^3.3.0",
 		"@visx/curve": "^3.3.0",
 		"@visx/event": "^3.3.0",

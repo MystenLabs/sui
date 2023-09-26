@@ -1,53 +1,61 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useResolveSuiNSName } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
 
-import { type ReactNode, useState } from 'react';
+import { useActiveAccount } from '../../hooks/useActiveAccount';
+import { AccountIcon } from './AccountIcon';
 import { AccountItem } from './AccountItem';
 import { LockUnlockButton } from './LockUnlockButton';
-import { useActiveAddress } from '../../hooks';
+import { useUnlockAccount } from './UnlockAccountContext';
 
 type AccountListItemProps = {
-	address: string;
-	icon?: ReactNode;
-	handleLockAccount?: () => void;
-	handleUnlockAccount?: () => void;
+	account: SerializedUIAccount;
 	editable?: boolean;
+	showLock?: boolean;
+	hideCopy?: boolean;
+	hideExplorerLink?: boolean;
 };
 
 export function AccountListItem({
-	address,
-	icon,
-	handleLockAccount,
-	handleUnlockAccount,
+	account,
+	editable,
+	showLock,
+	hideCopy,
+	hideExplorerLink,
 }: AccountListItemProps) {
-	const activeAddress = useActiveAddress();
-	const { data: domainName } = useResolveSuiNSName(address);
-	// todo: remove this when we implement account locking / unlocking
-	const [locked, setLocked] = useState(false);
+	const activeAccount = useActiveAccount();
+	const { unlockAccount, lockAccount, isLoading, accountToUnlock } = useUnlockAccount();
+
 	return (
 		<AccountItem
-			icon={icon}
-			name={domainName ?? formatAddress(address)}
-			selected={address === activeAddress}
+			icon={<AccountIcon account={account} />}
+			isActiveAccount={account.address === activeAccount?.address}
 			after={
-				<div className="ml-auto">
-					<div className="flex items-center justify-center">
-						<LockUnlockButton
-							isLocked={locked}
-							onClick={() => {
-								// todo: this state will be managed elsewhere
-								if (locked) handleUnlockAccount?.();
-								if (!locked) handleLockAccount?.();
-								setLocked((prev) => !prev);
-							}}
-						/>
+				showLock ? (
+					<div className="ml-auto">
+						<div className="flex items-center justify-center">
+							<LockUnlockButton
+								isLocked={account.isLocked}
+								isLoading={isLoading && accountToUnlock?.id === account.id}
+								onClick={(e) => {
+									// prevent the account from being selected when clicking the lock button
+									e.stopPropagation();
+									if (account.isLocked) {
+										unlockAccount(account);
+									} else {
+										lockAccount(account);
+									}
+								}}
+							/>
+						</div>
 					</div>
-				</div>
+				) : null
 			}
-			address={address!}
+			accountID={account.id}
+			editable={editable}
+			hideCopy={hideCopy}
+			hideExplorerLink={hideExplorerLink}
 		/>
 	);
 }

@@ -49,7 +49,7 @@ use tokio::{
     sync::{watch, Notify},
     time::timeout,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, error_span, info, warn, Instrument};
 use typed_store::rocks::{DBMap, MetricConf, TypedStoreError};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::Map;
@@ -314,7 +314,11 @@ impl CheckpointStore {
             .next()
         {
             let mut batch = self.locally_computed_checkpoints.batch();
-            batch.delete_range(&self.locally_computed_checkpoints, &0, &last_local_summary)?;
+            batch.schedule_delete_range(
+                &self.locally_computed_checkpoints,
+                &0,
+                &last_local_summary,
+            )?;
             batch.write()?;
             info!("Pruned local summaries up to {:?}", last_local_summary);
         }
@@ -472,6 +476,16 @@ impl CheckpointStore {
         }
         self.watermarks.insert(
             &CheckpointWatermark::HighestExecuted,
+            &(*checkpoint.sequence_number(), *checkpoint.digest()),
+        )
+    }
+
+    pub fn update_highest_pruned_checkpoint(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> Result<(), TypedStoreError> {
+        self.watermarks.insert(
+            &CheckpointWatermark::HighestPruned,
             &(*checkpoint.sequence_number(), *checkpoint.digest()),
         )
     }
@@ -886,10 +900,12 @@ impl CheckpointBuilder {
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
-                // ConsensusCommitPrologue is guaranteed to be processed before we reach here
+                // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
+                // processed before we reach here
                 if !matches!(
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
+                        | TransactionKind::AuthenticatorStateUpdate(_)
                 ) {
                     transaction_keys.push(SequencedConsensusTransactionKey::External(
                         ConsensusTransactionKey::Certificate(*effects.transaction_digest()),
@@ -959,6 +975,7 @@ impl CheckpointBuilder {
                         &mut signatures,
                         sequence_number,
                     )
+                    .instrument(error_span!("augment_epoch_last_checkpoint"))
                     .await?;
 
                 let committee = system_state_obj.get_current_epoch_committee().committee;
@@ -1359,11 +1376,7 @@ pub trait CheckpointServiceNotify {
         info: &CheckpointSignatureMessage,
     ) -> SuiResult;
 
-    fn notify_checkpoint(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpoint,
-    ) -> SuiResult;
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult;
 }
 
 /// This is a service used to communicate with other pieces of sui(for ex. authority)
@@ -1436,6 +1449,19 @@ impl CheckpointService {
         });
         (service, exit_snd)
     }
+
+    #[cfg(test)]
+    fn write_and_notify_checkpoint_for_testing(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint: PendingCheckpoint,
+    ) -> SuiResult {
+        let mut batch = epoch_store.db_batch_for_test();
+        epoch_store.write_pending_checkpoint(&mut batch, &checkpoint)?;
+        batch.write()?;
+        self.notify_checkpoint(&checkpoint)?;
+        Ok(())
+    }
 }
 
 impl CheckpointServiceNotify for CheckpointService {
@@ -1481,32 +1507,7 @@ impl CheckpointServiceNotify for CheckpointService {
         Ok(())
     }
 
-    fn notify_checkpoint(
-        &self,
-        epoch_store: &AuthorityPerEpochStore,
-        checkpoint: PendingCheckpoint,
-    ) -> SuiResult {
-        if let Some(pending) = epoch_store.get_pending_checkpoint(&checkpoint.height())? {
-            if pending.roots != checkpoint.roots {
-                panic!("Received checkpoint at index {} that contradicts previously stored checkpoint. Old digests: {:?}, new digests: {:?}", checkpoint.height(), pending.roots, checkpoint.roots);
-            }
-            debug!(
-                checkpoint_commit_height = checkpoint.height(),
-                "Ignoring duplicate checkpoint notification",
-            );
-            return Ok(());
-        }
-        debug!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Pending checkpoint has {} roots",
-            checkpoint.roots.len(),
-        );
-        trace!(
-            checkpoint_commit_height = checkpoint.height(),
-            "Transaction roots for pending checkpoint: {:?}",
-            checkpoint.roots
-        );
-        epoch_store.insert_pending_checkpoint(&checkpoint.height(), &checkpoint)?;
+    fn notify_checkpoint(&self, checkpoint: &PendingCheckpoint) -> SuiResult {
         debug!(
             checkpoint_commit_height = checkpoint.height(),
             "Notifying builder about checkpoint",
@@ -1527,7 +1528,7 @@ impl CheckpointServiceNotify for CheckpointServiceNoop {
         Ok(())
     }
 
-    fn notify_checkpoint(&self, _: &AuthorityPerEpochStore, _: PendingCheckpoint) -> SuiResult {
+    fn notify_checkpoint(&self, _: &PendingCheckpoint) -> SuiResult {
         Ok(())
     }
 }
@@ -1677,20 +1678,20 @@ mod tests {
         );
 
         checkpoint_service
-            .notify_checkpoint(&epoch_store, p(0, vec![4]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4]))
             .unwrap();
         // Verify that sending same digests at same height is noop
         checkpoint_service
-            .notify_checkpoint(&epoch_store, p(0, vec![4]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(0, vec![4]))
             .unwrap();
         checkpoint_service
-            .notify_checkpoint(&epoch_store, p(1, vec![1, 3]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(1, vec![1, 3]))
             .unwrap();
         checkpoint_service
-            .notify_checkpoint(&epoch_store, p(2, vec![10, 11, 12, 13]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(2, vec![10, 11, 12, 13]))
             .unwrap();
         checkpoint_service
-            .notify_checkpoint(&epoch_store, p(3, vec![15, 16, 17]))
+            .write_and_notify_checkpoint_for_testing(&epoch_store, p(3, vec![15, 16, 17]))
             .unwrap();
 
         let (c1c, c1s) = result.recv().await.unwrap();

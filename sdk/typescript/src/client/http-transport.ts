@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { RequestManager, HTTPTransport, Client } from '@open-rpc/client-js';
-import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
+import { Client, HTTPTransport, RequestManager } from '@open-rpc/client-js';
+
 import type { WebsocketClientOptions } from '../rpc/websocket-client.js';
 import { WebsocketClient } from '../rpc/websocket-client.js';
+import { PACKAGE_VERSION, TARGETED_RPC_VERSION } from '../version.js';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -47,7 +48,7 @@ export class SuiHTTPTransport implements SuiTransport {
 
 	constructor({
 		url,
-		websocket: { url: websocketUrl, ...websocketOptions } = {} as WebsocketClientOptions,
+		websocket: { url: websocketUrl, ...websocketOptions } = {},
 		rpc,
 	}: SuiHTTPTransportOptions) {
 		const transport = new HTTPTransport(rpc?.url ?? url, {

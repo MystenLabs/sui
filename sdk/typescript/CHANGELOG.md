@@ -1,5 +1,24 @@
 # @mysten/sui.js
 
+## 0.42.0
+
+### Minor Changes
+
+- fd8589806: Remove all previously deprecated exports from @mysten/sui.js
+
+## 0.41.2
+
+### Patch Changes
+
+- Updated dependencies [290c8e640]
+  - @mysten/bcs@0.7.4
+
+## 0.41.1
+
+### Patch Changes
+
+- 24c21e1f0: Fix defaults not being applied correctly in websocket client
+
 ## 0.41.0
 
 ### Minor Changes

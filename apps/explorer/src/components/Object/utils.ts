@@ -51,37 +51,62 @@ export function extractSerializationType(type: SuiMoveNormalizedType | ''): Type
 	return type;
 }
 
-export function getFieldTypeValue(type: SuiMoveNormalizedType | '', objectType: string) {
+function getDisplayName(type: SuiMoveNormalizedType | '', objectType: string) {
 	const normalizedType = extractSerializationType(type);
+
 	if (typeof normalizedType === 'string') {
-		return {
-			displayName: normalizedType,
-			normalizedType: normalizedType,
-		};
+		let parentKey = null;
+		if (typeof type === 'object') {
+			if ('Vector' in type) {
+				parentKey = 'Vector';
+			} else if ('Reference' in type) {
+				parentKey = 'Reference';
+			} else if ('MutableReference' in type) {
+				parentKey = 'MutableReference';
+			} else if ('TypeParameter' in type) {
+				parentKey = 'TypeParameter';
+			} else {
+				parentKey = '';
+			}
+		}
+		return parentKey ? `${parentKey}<${normalizedType}>` : normalizedType;
 	}
-	// For TypeParameter index return the type string index after splitting, where the third index is the type
+
 	if (typeof normalizedType === 'number') {
 		const typeParameter = splitByCommaExcludingBrackets(getContentInsideBrackets(objectType));
 
+		return typeParameter?.[normalizedType]?.split('::').pop() || '';
+	}
+
+	const { name } = normalizedType;
+	let typeParam = '';
+
+	// For nested Structs type.typeArguments  append the typeArguments to the name
+	// Balance<XUS> || Balance<LSP<SUI, USDT>>
+	if (normalizedType.typeArguments?.length) {
+		typeParam = `<${normalizedType.typeArguments
+			.map((typeArg) => getDisplayName(typeArg, objectType))
+			.join(', ')}>`;
+	}
+
+	return `${name}${typeParam}`;
+}
+
+export function getFieldTypeValue(type: SuiMoveNormalizedType | '', objectType: string) {
+	const displayName = getDisplayName(type, objectType);
+
+	const normalizedType = extractSerializationType(type);
+	if (typeof normalizedType === 'string' || typeof normalizedType === 'number') {
 		return {
-			displayName: typeParameter?.[normalizedType]?.split('::').pop() || '',
+			displayName,
 			normalizedType: normalizedType,
 		};
 	}
 
-	// For nested Structs type.typeArguments  append the typeArguments to the name
-	// Balance<XUS> || Balance<LSP<SUI, USDT>>
 	const { address, module, name } = normalizedType;
-	let typeParam = '';
-
-	if (normalizedType.typeArguments?.length) {
-		typeParam = `<${normalizedType.typeArguments
-			.map((typeArg) => getFieldTypeValue(typeArg, objectType).displayName)
-			.join(', ')}>`;
-	}
 
 	return {
-		displayName: `${normalizedType.name}${typeParam}`,
+		displayName,
 		normalizedType: `${address}::${module}::${name}`,
 	};
 }

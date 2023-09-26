@@ -32,7 +32,6 @@ struct Args {
     #[clap(long = "no-verify")]
     pub no_verify: bool,
     /// Path to the Move IR source to compile
-    #[clap(parse(from_os_str))]
     pub source_path: PathBuf,
     /// Instead of compiling the source, emit a dependency list of the compiled source
     #[clap(short = 'l', long = "list-dependencies")]

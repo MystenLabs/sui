@@ -224,6 +224,7 @@ module sui_system::sui_system_state_inner {
     // Errors
     const ENotValidator: u64 = 0;
     const ELimitExceeded: u64 = 1;
+    #[allow(unused_const)]
     const ENotSystemAddress: u64 = 2;
     const ECannotReportOneself: u64 = 3;
     const EReportRecordNotFound: u64 = 4;

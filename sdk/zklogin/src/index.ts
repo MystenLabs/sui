@@ -4,10 +4,11 @@
 export { computeZkAddress, jwtToAddress } from './address.js';
 export type { ComputeZKAddressOptions } from './address.js';
 
-export { zkBcs } from './bcs.js';
+export { getZkSignature } from './bcs.js';
+export type { ZkSignatureInputs } from './bcs.js';
 
 export { poseidonHash } from './poseidon.js';
 
-export { generateNonce } from './nonce.js';
+export { generateNonce, generateRandomness } from './nonce.js';
 
-export { convertBase, hashToField, hashASCIIStrToField, genAddressSeed } from './utils.js';
+export { hashASCIIStrToField, genAddressSeed } from './utils.js';
