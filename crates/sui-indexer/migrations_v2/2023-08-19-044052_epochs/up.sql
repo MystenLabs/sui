@@ -25,8 +25,8 @@ CREATE TABLE epochs
     new_total_stake                 BIGINT,
     -- bcs serialized Vec<EpochCommitment> bytes, found in last CheckpointSummary
     -- of the epoch
-    epoch_commitments               bytea
+    epoch_commitments               bytea,
     -- They are here as part of EndofEpochData that would be returned in `get_epoch(s)`
     next_epoch_reference_gas_price  BIGINT,
-    next_epoch_protocol_version     BIGINT,
+    next_epoch_protocol_version     BIGINT
 );
