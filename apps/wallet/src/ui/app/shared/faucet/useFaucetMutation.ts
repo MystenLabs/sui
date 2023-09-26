@@ -34,7 +34,6 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				throw new Error('Failed, task id not found.');
 			}
 			// Initialize a variable to track possible faucet request status errors
-			let faucetStatusError: string | null = null;
 			let totalMistTransferred: number | null = null;
 
 			// Continuously check the status until it's no longer 'INPROGRESS'
@@ -52,9 +51,8 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 					);
 				}
 
-				if (status?.status !== 'INPROGRESS' || error) {
+				if (status?.status !== 'DISCARDED' || error) {
 					currentStatus = status.status;
-					faucetStatusError = error || null;
 					throw new Error(error ?? status.status);
 				}
 
@@ -62,9 +60,8 @@ export function useFaucetMutation(options?: UseFaucetMutationOptions) {
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 
-			if (error || faucetStatusError) {
-				const errorMessage = error ?? faucetStatusError ?? 'Error occurred';
-				throw new Error(errorMessage);
+			if (error) {
+				throw new Error(error);
 			}
 			return totalMistTransferred;
 		},
