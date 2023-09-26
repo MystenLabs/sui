@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    extensions::limits_info::ShowUsage,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::middleware;
+use axum::{middleware, TypedHeader};
 use axum::{routing::IntoMakeService, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
@@ -85,9 +86,15 @@ impl ServerBuilder {
 
 async fn graphql_handler(
     schema: axum::Extension<SuiGraphQLSchema>,
+    usage: Option<TypedHeader<ShowUsage>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
+    let mut req = req.into_inner();
+    if let Some(TypedHeader(usage)) = usage {
+        req.data.insert(usage)
+    }
+
+    schema.execute(req).await.into()
 }
 
 async fn graphiql() -> impl axum::response::IntoResponse {
