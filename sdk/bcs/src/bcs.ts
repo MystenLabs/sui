@@ -15,6 +15,11 @@ import {
 import { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
 
 export const bcs = {
+	/**
+	 * Creates a BcsType that can be used to read and write an 8-bit unsigned integer.
+	 * @example
+	 * bcs.u8().serialize(255).toBytes() // Uint8Array [ 255 ]
+	 */
 	u8(options?: BcsTypeOptions<number>) {
 		return uIntBcsType({
 			name: 'u8',
@@ -26,6 +31,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write a 16-bit unsigned integer.
+	 * @example
+	 * bcs.u16().serialize(65535).toBytes() // Uint8Array [ 255, 255 ]
+	 */
 	u16(options?: BcsTypeOptions<number>) {
 		return uIntBcsType({
 			name: 'u16',
@@ -37,6 +47,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write a 32-bit unsigned integer.
+	 * @example
+	 * bcs.u32().serialize(4294967295).toBytes() // Uint8Array [ 255, 255, 255, 255 ]
+	 */
 	u32(options?: BcsTypeOptions<number>) {
 		return uIntBcsType({
 			name: 'u32',
@@ -48,6 +63,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write a 64-bit unsigned integer.
+	 * @example
+	 * bcs.u64().serialize(1).toBytes() // Uint8Array [ 1, 0, 0, 0, 0, 0, 0, 0 ]
+	 */
 	u64(options?: BcsTypeOptions<string, number | bigint | string>) {
 		return bigUIntBcsType({
 			name: 'u64',
@@ -59,6 +79,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write a 128-bit unsigned integer.
+	 * @example
+	 * bcs.u128().serialize(1).toBytes() // Uint8Array [ 1, ..., 0 ]
+	 */
 	u128(options?: BcsTypeOptions<string, number | bigint | string>) {
 		return bigUIntBcsType({
 			name: 'u128',
@@ -70,6 +95,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write a 256-bit unsigned integer.
+	 * @example
+	 * bcs.u256().serialize(1).toBytes() // Uint8Array [ 1, ..., 0 ]
+	 */
 	u256(options?: BcsTypeOptions<string, number | bigint | string>) {
 		return bigUIntBcsType({
 			name: 'u256',
@@ -81,6 +111,11 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can be used to read and write boolean values.
+	 * @example
+	 * bcs.bool().serialize(true).toBytes() // Uint8Array [ 1 ]
+	 */
 	bool(options?: BcsTypeOptions<boolean>) {
 		return fixedSizeBcsType<boolean>({
 			name: 'bool',
@@ -88,10 +123,20 @@ export const bcs = {
 			read: (reader) => reader.read8() === 1,
 			write: (value, writer) => writer.write8(value ? 1 : 0),
 			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (typeof value !== 'boolean') {
+					throw new TypeError(`Expected boolean, found ${typeof value}`);
+				}
+			},
 		});
 	},
 
-	// TODO should be a bigint?
+	/**
+	 * Creates a BcsType that can be used to read and write unsigned LEB encoded integers
+	 * @example
+	 *
+	 */
 	uleb128(options?: BcsTypeOptions<number>) {
 		return dynamicSizeBcsType<number>({
 			name: 'uleb128',
@@ -103,6 +148,12 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a BcsType representing a fixed length byte array
+	 * @param size The number of bytes this types represents
+	 * @example
+	 * bcs.bytes(3).serialize(new Uint8Array([1, 2, 3])).toBytes() // Uint8Array [1, 2, 3]
+	 */
 	bytes<T extends number>(size: T, options?: BcsTypeOptions<Uint8Array, Iterable<number>>) {
 		return fixedSizeBcsType<Uint8Array>({
 			name: `bytes[${size}]`,
@@ -114,9 +165,23 @@ export const bcs = {
 				}
 			},
 			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (!('length' in value)) {
+					throw new TypeError(`Expected array, found ${typeof value}`);
+				}
+				if (value.length !== size) {
+					throw new TypeError(`Expected array of length ${size}, found ${value.length}`);
+				}
+			},
 		});
 	},
 
+	/**
+	 * Creates a BcsType that can ser/de string values.  Strings will be UTF-8 encoded
+	 * @example
+	 * bcs.string().serialize('a').toBytes() // Uint8Array [ 1, 97 ]
+	 */
 	string(options?: BcsTypeOptions<string>) {
 		return stringLikeBcsType({
 			name: 'string',
@@ -126,7 +191,18 @@ export const bcs = {
 		});
 	},
 
-	fixedArray<T, Input>(size: number, type: BcsType<T, Input>) {
+	/**
+	 * Creates a BcsType that represents a fixed length array of a given type
+	 * @param size The number of elements in the array
+	 * @param type The BcsType of each element in the array
+	 * @example
+	 * bcs.fixedArray(3, bcs.u8()).serialize([1, 2, 3]).toBytes() // Uint8Array [ 1, 2, 3 ]
+	 */
+	fixedArray<T, Input>(
+		size: number,
+		type: BcsType<T, Input>,
+		options?: BcsTypeOptions<T[], Iterable<Input> & { length: number }>,
+	) {
 		return new BcsType<T[], Iterable<Input> & { length: number }>({
 			name: `${type.name}[${size}]`,
 			read: (reader) => {
@@ -141,9 +217,26 @@ export const bcs = {
 					type.write(item, writer);
 				}
 			},
+			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (!('length' in value)) {
+					throw new TypeError(`Expected array, found ${typeof value}`);
+				}
+				if (value.length !== size) {
+					throw new TypeError(`Expected array of length ${size}, found ${value.length}`);
+				}
+			},
 		});
 	},
 
+	/**
+	 * Creates a BcsType representing an optional value
+	 * @param type The BcsType of the optional value
+	 * @example
+	 * bcs.option(bcs.u8()).serialize(null).toBytes() // Uint8Array [ 0 ]
+	 * bcs.option(bcs.u8()).serialize(1).toBytes() // Uint8Array [ 1, 1 ]
+	 */
 	option<T, Input>(type: BcsType<T, Input>) {
 		return bcs
 			.enum(`Option<${type.name}>`, {
@@ -168,7 +261,17 @@ export const bcs = {
 			});
 	},
 
-	vector<T, Input>(type: BcsType<T, Input>) {
+	/**
+	 * Creates a BcsType representing a variable length vector of a given type
+	 * @param type The BcsType of each element in the vector
+	 *
+	 * @example
+	 * bcs.vector(bcs.u8()).toBytes([1, 2, 3]) // Uint8Array [ 3, 1, 2, 3 ]
+	 */
+	vector<T, Input>(
+		type: BcsType<T, Input>,
+		options?: BcsTypeOptions<T[], Iterable<Input> & { length: number }>,
+	) {
 		return new BcsType<T[], Iterable<Input> & { length: number }>({
 			name: `vector<${type.name}>`,
 			read: (reader) => {
@@ -185,10 +288,35 @@ export const bcs = {
 					type.write(item, writer);
 				}
 			},
+			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (!('length' in value)) {
+					throw new TypeError(`Expected array, found ${typeof value}`);
+				}
+			},
 		});
 	},
 
-	tuple<const Types extends readonly BcsType<any>[]>(types: Types) {
+	/**
+	 * Creates a BcsType representing a tuple of a given set of types
+	 * @param types The BcsTypes for each element in the tuple
+	 *
+	 * @example
+	 * const tuple = bcs.tuple([bcs.u8(), bcs.string(), bcs.bool()])
+	 * tuple.serialize([1, 'a', true]).toBytes() // Uint8Array [ 1, 1, 97, 1 ]
+	 */
+	tuple<const Types extends readonly BcsType<any>[]>(
+		types: Types,
+		options?: BcsTypeOptions<
+			{
+				-readonly [K in keyof Types]: Types[K] extends BcsType<infer T, any> ? T : never;
+			},
+			{
+				[K in keyof Types]: Types[K] extends BcsType<any, infer T> ? T : never;
+			}
+		>,
+	) {
 		return new BcsType<
 			{
 				-readonly [K in keyof Types]: Types[K] extends BcsType<infer T, any> ? T : never;
@@ -223,9 +351,31 @@ export const bcs = {
 					types[i].write(value[i], writer);
 				}
 			},
+			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (!Array.isArray(value)) {
+					throw new TypeError(`Expected array, found ${typeof value}`);
+				}
+				if (value.length !== types.length) {
+					throw new TypeError(`Expected array of length ${types.length}, found ${value.length}`);
+				}
+			},
 		});
 	},
 
+	/**
+	 * Creates a BcsType representing a struct of a given set of fields
+	 * @param name The name of the struct
+	 * @param fields The fields of the struct. The order of the fields affects how data is serialized and deserialized
+	 *
+	 * @example
+	 * const struct = bcs.struct('MyStruct', {
+	 *  a: bcs.u8(),
+	 *  b: bcs.string(),
+	 * })
+	 * struct.serialize({ a: 1, b: 'a' }).toBytes() // Uint8Array [ 1, 1, 97 ]
+	 */
 	struct<T extends Record<string, BcsType<any>>>(
 		name: string,
 		fields: T,
@@ -279,10 +429,32 @@ export const bcs = {
 				}
 			},
 			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (typeof value !== 'object' || value == null) {
+					throw new TypeError(`Expected object, found ${typeof value}`);
+				}
+			},
 		});
 	},
 
-	enum<T>(
+	/**
+	 * Creates a BcsType representing an enum of a given set of options
+	 * @param name The name of the enum
+	 * @param values The values of the enum. The order of the values affects how data is serialized and deserialized.
+	 * null can be used to represent a variant with no data.
+	 *
+	 * @example
+	 * const enum = bcs.enum('MyEnum', {
+	 *   A: bcs.u8(),
+	 *   B: bcs.string(),
+	 *   C: null,
+	 * })
+	 * enum.serialize({ A: 1 }).toBytes() // Uint8Array [ 0, 1 ]
+	 * enum.serialize({ B: 'a' }).toBytes() // Uint8Array [ 1, 1, 97 ]
+	 * enum.serialize({ C: true }).toBytes() // Uint8Array [ 2 ]
+	 */
+	enum<T extends Record<string, BcsType<any> | null>>(
 		name: string,
 		values: T,
 		options?: Omit<
@@ -332,9 +504,34 @@ export const bcs = {
 				}
 			},
 			...options,
+			validate: (value) => {
+				options?.validate?.(value);
+				if (typeof value !== 'object' || value == null) {
+					throw new TypeError(`Expected object, found ${typeof value}`);
+				}
+
+				const keys = Object.keys(value);
+				if (keys.length !== 1) {
+					throw new TypeError(`Expected object with one key, found ${keys.length}`);
+				}
+
+				const [name] = keys;
+
+				if (!Object.hasOwn(values, name)) {
+					throw new TypeError(`Invalid enum variant ${name}`);
+				}
+			},
 		});
 	},
 
+	/**
+	 * Creates a BcsType representing a map of a given key and value type
+	 * @param keyType The BcsType of the key
+	 * @param valueType The BcsType of the value
+	 * @example
+	 * const map = bcs.map(bcs.u8(), bcs.string())
+	 * map.serialize(new Map([[2, 'a']])).toBytes() // Uint8Array [ 1, 2, 1, 97 ]
+	 */
 	map<K, V, InputK = K, InputV = V>(keyType: BcsType<K, InputK>, valueType: BcsType<V, InputV>) {
 		return bcs.vector(bcs.tuple([keyType, valueType])).transform({
 			name: `Map<${keyType.name}, ${valueType.name}>`,
@@ -351,6 +548,16 @@ export const bcs = {
 		});
 	},
 
+	/**
+	 * Creates a helper function representing a generic type. This method returns
+	 * a function that can be used to create concrete version of the generic type.
+	 * @param names The names of the generic parameters
+	 * @param cb A callback that returns the generic type
+	 * @example
+	 * const MyStruct = bcs.generic(['T'], (T) => bcs.struct('MyStruct', { inner: T }))
+	 * MyStruct(bcs.u8()).serialize({ inner: 1 }).toBytes() // Uint8Array [ 1 ]
+	 * MyStruct(bcs.string()).serialize({ inner: 'a' }).toBytes() // Uint8Array [ 1, 97 ]
+	 */
 	generic<const Names extends readonly string[], const Type extends BcsType<any>>(
 		names: Names,
 		cb: (...types: { [K in keyof Names]: BcsType<GenericPlaceholder<Names[K]>> }) => Type,
@@ -366,6 +573,10 @@ export const bcs = {
 		};
 	},
 
+	/**
+	 * Creates a BcsType that wraps another BcsType which is lazily evaluated. This is useful for creating recursive types.
+	 * @param cb A callback that returns the BcsType
+	 */
 	lazy<T extends BcsType<any>>(cb: () => T): T {
 		return lazyBcsType(cb) as T;
 	},
