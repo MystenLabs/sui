@@ -631,6 +631,10 @@ type MoveTypeSignature =
         typeParameters: [MoveTypeSignature],
       }
     }
+<<<<<<< HEAD
+=======
+
+>>>>>>> 70eac4c07c ([GraphQL] MoveType and MoveTypeSignature)
 """
 scalar MoveTypeSignature
 
