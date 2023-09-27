@@ -106,7 +106,7 @@ export async function zkLogin({
 	return jwt;
 }
 
-const saltRegistryUrl = 'https://salt.api.mystenlabs.com/get_salt';
+const saltRegistryUrl = 'https://salt.api.mystenlabs.com';
 
 export async function fetchSalt(jwt: string): Promise<string> {
 	const response = await fetchWithSentry('fetchUserSalt', `${saltRegistryUrl}/get_salt`, {
