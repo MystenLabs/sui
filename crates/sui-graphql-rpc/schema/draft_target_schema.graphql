@@ -68,7 +68,7 @@ type Query {
   epoch(epochId: Int): Epoch
 
   # `protocolVersion` defaults to the latest protocol version.
-  protocolConfig(protocolVersion: Int): ProtocolConfig
+  protocolConfig(protocolVersion: Int): ProtocolConfigs
 
   # If no `id` is provided, fetch the latest available checkpoint.
   checkpoint(id: CheckpointID): Checkpoint
@@ -273,7 +273,7 @@ input TransactionBlockFilter {
   inputObject: SuiAddress
   changedObject: SuiAddress
 
-  transactionIDs: [TransactionBlockID!]
+  transactionIDs: [String!]
 
   # Enhancement (post-MVP), consistency with EventFilter -- timestamp
   # comes from checkpoint timestamp.
