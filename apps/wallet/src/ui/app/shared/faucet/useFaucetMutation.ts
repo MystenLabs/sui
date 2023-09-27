@@ -11,7 +11,7 @@ type UseFaucetMutationOptions = Pick<UseMutationOptions, 'onError'> & {
 	address?: string;
 };
 
-const MAX_FAUCET_REQUESTS_STATUS = 10;
+const MAX_FAUCET_REQUESTS_STATUS = 20;
 const FAUCET_REQUEST_DELAY = 1500;
 
 export function useFaucetMutation(options?: UseFaucetMutationOptions) {
