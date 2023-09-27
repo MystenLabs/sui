@@ -4,8 +4,8 @@
 import { poseidonHash } from './poseidon.js';
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 32;
-const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
-const MAX_AUD_VALUE_LENGTH = 145;
+export const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
+export const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
 /**
