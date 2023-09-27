@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use crate::{diag, parser::ast::Visibility, shared::CompilationEnv};
+use crate::{diag, shared::CompilationEnv};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -60,8 +60,9 @@ pub fn check_feature(
             (
                 loc,
                 format!(
-                    "{feature} not supported by current edition '{edition}', \
-                    only '{valid_editions}' support this feature"
+                    "{} not supported by current edition '{edition}', \
+                    only '{valid_editions}' support this feature",
+                    feature.error_prefix(),
                 )
             )
         );
@@ -158,6 +159,16 @@ impl Flavor {
     pub const GLOBAL_STORAGE: &str = "global-storage";
     pub const SUI: &str = "sui";
     pub const ALL: &[Self] = &[Self::GlobalStorage, Self::Sui];
+}
+
+impl FeatureGate {
+    fn error_prefix(&self) -> &'static str {
+        match self {
+            FeatureGate::PublicPackage => "'public(package)' is",
+            FeatureGate::PostFixAbilities => "Postfix abilities are",
+            FeatureGate::DotCall => "Method syntax is",
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -261,15 +272,6 @@ impl Serialize for Flavor {
         S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
-    }
-}
-
-impl Display for FeatureGate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FeatureGate::PublicPackage => write!(f, "'{}'", Visibility::PACKAGE),
-            FeatureGate::DotCall => write!(f, "method syntax"),
-        }
     }
 }
 

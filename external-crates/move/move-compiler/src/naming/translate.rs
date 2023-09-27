@@ -627,8 +627,7 @@ fn explicit_use_fun(
             Some((module, function))
         }
         ResolvedFunction::Builtin(_) => {
-            let msg =
-                "Invalid 'use fun'. Cannot associate a builtin function as a method for a type";
+            let msg = "Invalid 'use fun'. Cannot use a builtin function as a method";
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
@@ -653,7 +652,7 @@ fn explicit_use_fun(
                 Declarations::InvalidUseFun,
                 (
                     loc,
-                    "Invalid 'use fun'. Cannot associate a function as a method a type parameter"
+                    "Invalid 'use fun'. Cannot associate a method a type parameter"
                 ),
                 (tloc, tmsg)
             ));

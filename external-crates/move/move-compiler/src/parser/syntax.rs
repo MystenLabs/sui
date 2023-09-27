@@ -2171,7 +2171,7 @@ fn parse_postfix_ability_declarations(
 
     if postfix_ability_declaration {
         context.env.check_feature(
-            &FeatureGate::PostFixAbilities,
+            FeatureGate::PostFixAbilities,
             context.package_name,
             has_location,
         );
