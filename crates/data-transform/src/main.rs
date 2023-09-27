@@ -1,8 +1,6 @@
 use data_transform::*;
 use diesel::prelude::*;
 use diesel::RunQueryDsl;
-use diesel::QueryableByName;
-use diesel::pg::sql_types::Bytea;
 use anyhow::anyhow;
 use std::sync::Arc;
 use std::process::exit;
@@ -23,7 +21,6 @@ use sui_indexer::errors::IndexerError;
 use sui_types::parse_sui_struct_tag;
 use sui_json_rpc_types::SuiMoveStruct;
 use move_core_types::language_storage::ModuleId;
-use move_bytecode_utils::module_cache::GetModule;
 use std::collections::{HashMap, HashSet};
 use move_core_types::resolver::ModuleResolver;
 
@@ -180,13 +177,6 @@ fn map_typus_address(address: &AccountAddress) -> AccountAddress {
 }
 
 fn main() {
-    #[derive(QueryableByName)]
-    #[derive(Debug)]
-    struct ModuleBytes {
-        #[diesel(sql_type = Bytea)]
-        data: Vec<u8>,
-    }
-
 
     use self::schema::events::dsl::*;
     use self::schema::events_json::dsl::*;
@@ -217,7 +207,7 @@ fn main() {
     let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     //let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
     //
-    let module_cache = Arc::new(SyncModuleCache::new(GrootModuleResolver::new(blocking_cp.expect("REASON").clone())));
+    let module_cache = Arc::new(SyncModuleCache::new(GrootModuleResolver::new(blocking_cp.expect("REASON"))));
 
     for target_id in start_id.. {
 
