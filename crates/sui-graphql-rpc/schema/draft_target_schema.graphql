@@ -201,10 +201,12 @@ scalar MoveData
 #   | "u8" | "u16" | ... | "u256"
 #   | { vector: MoveTypeSignature }
 #   | {
-#       package: string,
-#       module: string,
-#       type: string,
-#       typeParameters: [MoveTypeSignature]?,
+#       struct: {
+#         package: string,
+#         module: string,
+#         type: string,
+#         typeParameters: [MoveTypeSignature],
+#       }
 #     }
 scalar MoveTypeSignature
 
