@@ -291,8 +291,10 @@ impl IndexedObject {
     ) -> Self {
         let (object_json, struct_tag) = if let Some(struct_tag) = object.data.struct_tag() {
             let struct_tag_string = struct_tag.to_string();
-            if struct_tag_string.contains("game_8192::Game8192")
-                || struct_tag_string.contains("game_8192::GameMove8192")
+            // if struct_tag_string.contains("game_8192::Game8192")
+            //     || struct_tag_string.contains("game_8192::GameMove8192")
+            // Before fully synced, skip object json
+            if true
             {
                 (None, Some(struct_tag_string))
             } else {
