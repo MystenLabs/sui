@@ -6,7 +6,7 @@
 //! Such extensions are enabled by cfg features and must be compiled into the test
 //! to be usable.
 
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_types::natives::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{fmt::Write, sync::Mutex};
 
@@ -103,7 +103,7 @@ static DUMMY_RESOLVER: Lazy<BlankStorage> = Lazy::new(|| BlankStorage);
 mod tests {
     use crate::extensions::{new_extensions, set_extension_hook};
     use better_any::{Tid, TidAble};
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
+    use move_vm_types::natives::native_extensions::NativeContextExtensions;
 
     /// A test that extension hooks work as expected.
     #[test]

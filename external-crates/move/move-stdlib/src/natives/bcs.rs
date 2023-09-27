@@ -8,13 +8,13 @@ use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
     pop_arg,
     values::{values_impl::Reference, Value},
 };
@@ -42,7 +42,7 @@ pub struct ToBytesGasParameters {
 #[inline]
 fn native_to_bytes(
     gas_params: &ToBytesGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

@@ -7,13 +7,13 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
     pop_arg,
     values::{Value, VectorRef},
 };
@@ -41,7 +41,7 @@ pub struct CheckUtf8GasParameters {
 
 fn native_check_utf8(
     gas_params: &CheckUtf8GasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -80,7 +80,7 @@ pub struct IsCharBoundaryGasParameters {
 
 fn native_is_char_boundary(
     gas_params: &IsCharBoundaryGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -121,7 +121,7 @@ pub struct SubStringGasParameters {
 
 fn native_sub_string(
     gas_params: &SubStringGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -172,7 +172,7 @@ pub struct IndexOfGasParameters {
 
 fn native_index_of(
     gas_params: &IndexOfGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

@@ -14,10 +14,9 @@ use move_core_types::{
     value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
-use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    natives::{function::NativeResult, native_functions::NativeContext},
     pop_arg,
     values::{self, StructRef, Value},
 };
@@ -43,7 +42,7 @@ type Set<K> = LinkedHashMap<K, ()>;
 // transaction
 // native fun end_transaction(): TransactionResult;
 pub fn end_transaction(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -248,7 +247,7 @@ pub fn end_transaction(
 
 // native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
 pub fn take_from_address_by_id(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -282,7 +281,7 @@ pub fn take_from_address_by_id(
 
 // native fun ids_for_address<T: key>(account: address): vector<ID>;
 pub fn ids_for_address(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -303,7 +302,7 @@ pub fn ids_for_address(
 
 // native fun most_recent_id_for_address<T: key>(account: address): Option<ID>;
 pub fn most_recent_id_for_address(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -324,7 +323,7 @@ pub fn most_recent_id_for_address(
 
 // native fun was_taken_from_address(account: address, id: ID): bool;
 pub fn was_taken_from_address(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -347,7 +346,7 @@ pub fn was_taken_from_address(
 
 // native fun take_immutable_by_id<T: key>(id: ID): T;
 pub fn take_immutable_by_id(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -386,7 +385,7 @@ pub fn take_immutable_by_id(
 
 // native fun most_recent_immutable_id<T: key>(): Option<ID>;
 pub fn most_recent_immutable_id(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -407,7 +406,7 @@ pub fn most_recent_immutable_id(
 
 // native fun was_taken_immutable(id: ID): bool;
 pub fn was_taken_immutable(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -429,7 +428,7 @@ pub fn was_taken_immutable(
 
 // native fun take_shared_by_id<T: key>(id: ID): T;
 pub fn take_shared_by_id(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -461,7 +460,7 @@ pub fn take_shared_by_id(
 
 // native fun most_recent_id_shared<T: key>(): Option<ID>;
 pub fn most_recent_id_shared(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -482,7 +481,7 @@ pub fn most_recent_id_shared(
 
 // native fun was_taken_shared(id: ID): bool;
 pub fn was_taken_shared(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -633,7 +632,7 @@ fn pack_option(opt: Option<Value>) -> Value {
 }
 
 fn find_all_wrapped_objects<'a>(
-    context: &NativeContext,
+    context: &dyn NativeContext,
     ids: &mut BTreeSet<ObjectID>,
     new_object_values: impl IntoIterator<Item = (&'a ObjectID, &'a Type, impl Borrow<Value>)>,
 ) {

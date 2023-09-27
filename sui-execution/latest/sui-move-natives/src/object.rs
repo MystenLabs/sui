@@ -4,10 +4,10 @@
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
     pop_arg,
     values::{StructRef, Value},
 };
@@ -24,7 +24,7 @@ pub struct BorrowUidCostParams {
  *   gas cost: object_borrow_uid_cost_base                | this is hard to calculate as it's very sensitive to `borrow_field` impl. Making it flat
  **************************************************************************************************/
 pub fn borrow_uid(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -56,7 +56,7 @@ pub struct DeleteImplCostParams {
  *   gas cost: cost_base                | this is a simple ID deletion
  **************************************************************************************************/
 pub fn delete_impl(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -93,7 +93,7 @@ pub struct RecordNewIdCostParams {
  *   gas cost: object_record_new_uid_cost_base                | this is a simple ID addition
  **************************************************************************************************/
 pub fn record_new_uid(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

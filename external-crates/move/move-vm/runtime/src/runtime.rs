@@ -6,8 +6,6 @@ use crate::{
     data_cache::TransactionDataCache,
     interpreter::Interpreter,
     loader::{Function, Loader},
-    native_extensions::NativeContextExtensions,
-    native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
 use move_binary_format::{
@@ -32,6 +30,10 @@ use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
     loaded_data::runtime_types::{CachedStructIndex, StructType, Type},
+    natives::{
+        native_extensions::NativeContextExtensions,
+        native_functions::{NativeFunction, NativeFunctions},
+    },
     values::{Locals, Reference, VMValueCast, Value},
 };
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};

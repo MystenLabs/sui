@@ -14,11 +14,10 @@ use move_core_types::{
     value::MoveTypeLayout,
     vm_status::StatusCode,
 };
-use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
     pop_arg,
     values::{StructRef, Value},
 };
@@ -78,7 +77,7 @@ pub struct DynamicFieldHashTypeAndKeyCostParams {
  *              + dynamic_field_hash_type_and_key_type_tag_cost_per_byte * size_of(type_tag(k))    | covers cost of operating on the type tag of `K`
  **************************************************************************************************/
 pub fn hash_type_and_key(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -164,7 +163,7 @@ pub struct DynamicFieldAddChildObjectCostParams {
  *              + dynamic_field_add_child_object_struct_tag_cost_per_byte * size_of(struct)tag(Child))  | covers cost of operating on the struct tag of `Child`
  **************************************************************************************************/
 pub fn add_child_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -259,7 +258,7 @@ pub struct DynamicFieldBorrowChildObjectCostParams {
  *              + dynamic_field_borrow_child_object_type_cost_per_byte  * size_of(Child)        | covers cost of operating on type `Child`
  **************************************************************************************************/
 pub fn borrow_child_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -335,7 +334,7 @@ pub struct DynamicFieldRemoveChildObjectCostParams {
  *              + dynamic_field_remove_child_object_child_cost_per_byte  * size_of(child)     | covers cost of fetching and returning value of type `Child`
  **************************************************************************************************/
 pub fn remove_child_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -398,7 +397,7 @@ pub struct DynamicFieldHasChildObjectCostParams {
  *   gas cost: dynamic_field_has_child_object_cost_base                    | covers various fixed costs in the oper
  **************************************************************************************************/
 pub fn has_child_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -439,7 +438,7 @@ pub struct DynamicFieldHasChildObjectWithTyCostParams {
  *              + dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte * size_of(Child)    | covers cost of fetching and returning value of type tag for `Child`
  **************************************************************************************************/
 pub fn has_child_object_with_ty(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -499,7 +498,7 @@ pub fn has_child_object_with_ty(
 }
 
 fn get_tag_and_layouts(
-    context: &NativeContext,
+    context: &dyn NativeContext,
     ty: &Type,
 ) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {

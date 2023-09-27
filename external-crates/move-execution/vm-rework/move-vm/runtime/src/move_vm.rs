@@ -4,10 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::{
-    data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
-    native_functions::NativeFunction, runtime::VMRuntime, session::Session,
-};
+use crate::{data_cache::TransactionDataCache, runtime::VMRuntime, session::Session};
 use move_binary_format::{
     errors::{Location, VMResult},
     CompiledModule,
@@ -17,6 +14,9 @@ use move_core_types::{
     metadata::Metadata, resolver::MoveResolver,
 };
 use move_vm_config::runtime::VMConfig;
+use move_vm_types::natives::{
+    native_extensions::NativeContextExtensions, native_functions::NativeFunction,
+};
 
 pub struct MoveVM {
     runtime: VMRuntime,

@@ -8,7 +8,10 @@ use std::sync::Arc;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{error::SuiResult, metrics::BytecodeVerifierMetrics};
 
+use move_vm_types::natives::native_functions::NativeFunctionTable;
+
 pub use executor::Executor;
+pub use verifier::UnmeteredVerifier;
 pub use verifier::Verifier;
 
 pub mod executor;
@@ -65,6 +68,24 @@ pub fn verifier<'m>(
             is_metered,
             metrics,
         )),
+        v => panic!("Unsupported execution version {v}"),
+    }
+}
+
+pub fn unmetered_verifier<'m>(execution_version: u64) -> Box<dyn UnmeteredVerifier + 'm> {
+    match execution_version {
+        0 => Box::new(v0::UnmeteredVerifier::new()),
+        1 => Box::new(latest::UnmeteredVerifier::new()),
+        VM_REWORK => Box::new(vm_rework::UnmeteredVerifier::new()),
+        v => panic!("Unsupported execution version {v}"),
+    }
+}
+
+pub fn all_natives(execution_version: u64, silent: bool) -> NativeFunctionTable {
+    match execution_version {
+        0 => v0::all_natives(silent),
+        1 => latest::all_natives(silent),
+        VM_REWORK => vm_rework::all_natives(silent),
         v => panic!("Unsupported execution version {v}"),
     }
 }

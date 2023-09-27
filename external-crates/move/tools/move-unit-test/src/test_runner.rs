@@ -41,17 +41,18 @@ use move_stackless_bytecode_interpreter::{
 };
 #[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
-use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::{
     gas_schedule::{unit_cost_schedule, CostTable, Gas, GasStatus},
     InMemoryStorage,
 };
 #[cfg(debug_assertions)]
 use move_vm_types::gas::GasMeter;
+use move_vm_types::natives::{
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+};
 use rayon::prelude::*;
 use std::{collections::BTreeMap, io::Write, marker::Send, sync::Mutex, time::Instant};
-
-use move_vm_runtime::native_extensions::NativeContextExtensions;
 
 /// Test state common to all tests
 pub struct SharedTestingConfig {

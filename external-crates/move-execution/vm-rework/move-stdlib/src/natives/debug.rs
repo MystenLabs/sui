@@ -5,11 +5,13 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::native_functions::{NativeContext, NativeFunction};
 #[allow(unused_imports)]
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
     pop_arg,
     values::{Reference, Value},
 };
@@ -40,7 +42,7 @@ fn native_print_nop(
 #[inline]
 fn native_print(
     gas_params: &PrintGasParameters,
-    _context: &mut NativeContext,
+    _context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
     _move_std_addr: AccountAddress,
@@ -123,7 +125,7 @@ fn native_print_stack_trace_nop(
 #[inline]
 fn native_print_stack_trace(
     gas_params: &PrintStackTraceGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -196,8 +198,9 @@ mod testing {
         value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
         vm_status::StatusCode,
     };
-    use move_vm_runtime::native_functions::NativeContext;
-    use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+    use move_vm_types::{
+        loaded_data::runtime_types::Type, natives::native_functions::NativeContext, values::Value,
+    };
     use std::{fmt, fmt::Write};
 
     const VECTOR_BEGIN: &str = "[";
@@ -221,7 +224,7 @@ mod testing {
     }
 
     fn get_annotated_struct_layout(
-        context: &NativeContext,
+        context: &dyn NativeContext,
         ty: &Type,
     ) -> PartialVMResult<MoveStructLayout> {
         let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
@@ -294,7 +297,7 @@ mod testing {
 
     /// Prints any `Value` in a user-friendly manner.
     pub(crate) fn print_value(
-        context: &NativeContext,
+        context: &dyn NativeContext,
         out: &mut String,
         val: Value,
         ty: Type,

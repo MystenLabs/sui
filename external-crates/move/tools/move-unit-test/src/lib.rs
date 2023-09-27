@@ -18,8 +18,8 @@ use move_compiler::{
     Compiler, Flags, PASS_CFGIR,
 };
 use move_core_types::language_storage::ModuleId;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_types::natives::native_functions::NativeFunctionTable;
 use std::{
     collections::BTreeMap,
     io::{Result, Write},

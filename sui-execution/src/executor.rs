@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_vm_types::natives::native_extensions::NativeContextExtensions;
 use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingStore, ChildObjectResolver};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
     committee::EpochId,
@@ -90,4 +91,12 @@ pub trait Executor {
         &'vm self,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r>;
+
+    fn add_extensions<'a>(
+        &self,
+        ext: &mut NativeContextExtensions<'a>,
+        object_resolver: &'a dyn ChildObjectResolver,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError>;
 }

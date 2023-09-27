@@ -11,10 +11,10 @@ use fastcrypto::{
 };
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
     pop_arg,
     values::{Value, VectorRef},
 };
@@ -59,7 +59,7 @@ pub struct EcdsaK1EcrecoverCostParams {
  *       `signature` is fixed size, so the cost is included in the base cost.
  **************************************************************************************************/
 pub fn ecrecover(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -141,7 +141,7 @@ pub struct EcdsaK1DecompressPubkeyCostParams {
     pub ecdsa_k1_decompress_pubkey_cost_base: InternalGas,
 }
 pub fn decompress_pubkey(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -205,7 +205,7 @@ pub struct EcdsaK1Secp256k1VerifyCostParams {
  *       `signature` and `public_key` are fixed size, so their costs are included in the base cost.
  **************************************************************************************************/
 pub fn secp256k1_verify(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

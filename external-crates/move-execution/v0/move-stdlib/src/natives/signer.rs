@@ -5,13 +5,13 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
     pop_arg,
     values::{values_impl::SignerRef, Value},
 };
@@ -32,7 +32,7 @@ pub struct BorrowAddressGasParameters {
 #[inline]
 fn native_borrow_address(
     gas_params: &BorrowAddressGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

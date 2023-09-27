@@ -8,13 +8,13 @@ use move_core_types::{
     gas_algebra::{InternalGas, InternalGasPerAbstractMemoryUnit},
     vm_status::StatusCode,
 };
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
     pop_arg,
     values::{Value, Vector, VectorRef},
     views::ValueView,
@@ -34,7 +34,7 @@ pub struct EmptyGasParameters {
 
 pub fn native_empty(
     gas_params: &EmptyGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -67,7 +67,7 @@ pub struct LengthGasParameters {
 
 pub fn native_length(
     gas_params: &LengthGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -102,7 +102,7 @@ pub struct PushBackGasParameters {
 
 pub fn native_push_back(
     gas_params: &PushBackGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -151,7 +151,7 @@ pub struct BorrowGasParameters {
 
 pub fn native_borrow(
     gas_params: &BorrowGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -189,7 +189,7 @@ pub struct PopBackGasParameters {
 
 pub fn native_pop_back(
     gas_params: &PopBackGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -225,7 +225,7 @@ pub struct DestroyEmptyGasParameters {
 
 pub fn native_destroy_empty(
     gas_params: &DestroyEmptyGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -259,7 +259,7 @@ pub struct SwapGasParameters {
 
 pub fn native_swap(
     gas_params: &SwapGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

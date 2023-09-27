@@ -4,9 +4,12 @@
 use crate::NativesCostTable;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas, u256::U256};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    pop_arg,
+    values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -23,7 +26,7 @@ pub struct AddressFromBytesCostParams {
  *   gas cost: address_from_bytes_cost_base                                        | addresses are constant size, so base cost suffices
  **************************************************************************************************/
 pub fn from_bytes(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -62,7 +65,7 @@ pub struct AddressToU256CostParams {
  *   gas cost:  address_to_u256_cost_base                   | addresses and u256 are constant size, so base cost suffices
  **************************************************************************************************/
 pub fn to_u256(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -101,7 +104,7 @@ pub struct AddressFromU256CostParams {
  *   gas cost: address_from_u256_cost_base              | addresses and u256 are constant size, so base cost suffices
  **************************************************************************************************/
 pub fn from_u256(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

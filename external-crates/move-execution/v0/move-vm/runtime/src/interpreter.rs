@@ -2,10 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::native_extensions::NativeContextExtensions;
 use crate::{
     loader::{Function, Loader, Resolver},
-    native_functions::NativeContext,
+    native_functions::NativeContextImpl,
     trace,
 };
 use fail::fail_point;
@@ -29,6 +28,7 @@ use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
+    natives::native_extensions::NativeContextExtensions,
     values::{
         self, GlobalValue, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value,
         Vector, VectorRef,
@@ -519,7 +519,7 @@ impl Interpreter {
             }
         }
 
-        let mut native_context = NativeContext::new(
+        let mut native_context = NativeContextImpl::new(
             self,
             data_store,
             resolver,
@@ -806,9 +806,9 @@ impl Interpreter {
     }
 
     #[allow(dead_code)]
-    fn debug_print_frame<B: Write>(
+    fn debug_print_frame(
         &self,
-        buf: &mut B,
+        buf: &mut dyn Write,
         loader: &Loader,
         idx: usize,
         frame: &Frame,
@@ -870,9 +870,9 @@ impl Interpreter {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn debug_print_stack_trace<B: Write>(
+    pub(crate) fn debug_print_stack_trace(
         &self,
-        buf: &mut B,
+        buf: &mut dyn Write,
         loader: &Loader,
     ) -> PartialVMResult<()> {
         debug_writeln!(buf, "Call Stack:")?;

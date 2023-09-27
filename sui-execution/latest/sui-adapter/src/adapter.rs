@@ -16,9 +16,9 @@ mod checked {
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
     };
-    use move_vm_runtime::{
-        move_vm::MoveVM, native_extensions::NativeContextExtensions,
-        native_functions::NativeFunctionTable,
+    use move_vm_runtime::move_vm::MoveVM;
+    use move_vm_types::natives::{
+        native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
     };
     use sui_move_natives::object_runtime;
     use sui_types::metrics::BytecodeVerifierMetrics;

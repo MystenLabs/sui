@@ -4,6 +4,7 @@
 use move_binary_format::CompiledModule;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::error::SuiResult;
+use sui_types::move_package::FnInfoMap;
 
 pub trait Verifier {
     /// Run the bytecode verifier with a meter limit
@@ -46,6 +47,12 @@ pub trait Verifier {
         protocol_config: &ProtocolConfig,
         config_overrides: &VerifierOverrides,
     ) -> SuiResult<VerifierMeteredValues>;
+}
+
+pub trait UnmeteredVerifier {
+    /// Verifies a single module with both the move and the sui verifier.
+    /// It does not meter execution.
+    fn verify_module(&self, module: &CompiledModule, fn_info_map: &FnInfoMap) -> SuiResult<()>;
 }
 
 /// Controls verifier config values to override.

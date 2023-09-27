@@ -2743,43 +2743,43 @@ pub mod debug {
     use super::*;
     use std::fmt::Write;
 
-    fn print_invalid<B: Write>(buf: &mut B) -> PartialVMResult<()> {
+    fn print_invalid(buf: &mut dyn Write) -> PartialVMResult<()> {
         debug_write!(buf, "-")
     }
 
-    fn print_u8<B: Write>(buf: &mut B, x: &u8) -> PartialVMResult<()> {
+    fn print_u8(buf: &mut dyn Write, x: &u8) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_u16<B: Write>(buf: &mut B, x: &u16) -> PartialVMResult<()> {
+    fn print_u16(buf: &mut dyn Write, x: &u16) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_u32<B: Write>(buf: &mut B, x: &u32) -> PartialVMResult<()> {
+    fn print_u32(buf: &mut dyn Write, x: &u32) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_u64<B: Write>(buf: &mut B, x: &u64) -> PartialVMResult<()> {
+    fn print_u64(buf: &mut dyn Write, x: &u64) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_u128<B: Write>(buf: &mut B, x: &u128) -> PartialVMResult<()> {
+    fn print_u128(buf: &mut dyn Write, x: &u128) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_u256<B: Write>(buf: &mut B, x: &u256::U256) -> PartialVMResult<()> {
+    fn print_u256(buf: &mut dyn Write, x: &u256::U256) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_bool<B: Write>(buf: &mut B, x: &bool) -> PartialVMResult<()> {
+    fn print_bool(buf: &mut dyn Write, x: &bool) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_address<B: Write>(buf: &mut B, x: &AccountAddress) -> PartialVMResult<()> {
+    fn print_address(buf: &mut dyn Write, x: &AccountAddress) -> PartialVMResult<()> {
         debug_write!(buf, "{}", x)
     }
 
-    fn print_value_impl<B: Write>(buf: &mut B, val: &ValueImpl) -> PartialVMResult<()> {
+    fn print_value_impl(buf: &mut dyn Write, val: &ValueImpl) -> PartialVMResult<()> {
         match val {
             ValueImpl::Invalid => print_invalid(buf),
 
@@ -2799,18 +2799,17 @@ pub mod debug {
         }
     }
 
-    fn print_list<'a, B, I, X, F>(
-        buf: &mut B,
+    fn print_list<'a, I, X, F>(
+        buf: &mut dyn Write,
         begin: &str,
         items: I,
         print: F,
         end: &str,
     ) -> PartialVMResult<()>
     where
-        B: Write,
         X: 'a,
         I: IntoIterator<Item = &'a X>,
-        F: Fn(&mut B, &X) -> PartialVMResult<()>,
+        F: Fn(&mut dyn Write, &X) -> PartialVMResult<()>,
     {
         debug_write!(buf, "{}", begin)?;
         let mut it = items.into_iter();
@@ -2825,7 +2824,7 @@ pub mod debug {
         Ok(())
     }
 
-    fn print_container<B: Write>(buf: &mut B, c: &Container) -> PartialVMResult<()> {
+    fn print_container(buf: &mut dyn Write, c: &Container) -> PartialVMResult<()> {
         match c {
             Container::Vec(r) => print_list(buf, "[", r.borrow().iter(), print_value_impl, "]"),
 
@@ -2849,15 +2848,19 @@ pub mod debug {
         }
     }
 
-    fn print_container_ref<B: Write>(buf: &mut B, r: &ContainerRef) -> PartialVMResult<()> {
+    fn print_container_ref(buf: &mut dyn Write, r: &ContainerRef) -> PartialVMResult<()> {
         debug_write!(buf, "(&) ")?;
         print_container(buf, r.container())
     }
 
-    fn print_slice_elem<B, X, F>(buf: &mut B, v: &[X], idx: usize, print: F) -> PartialVMResult<()>
+    fn print_slice_elem<X, F>(
+        buf: &mut dyn Write,
+        v: &[X],
+        idx: usize,
+        print: F,
+    ) -> PartialVMResult<()>
     where
-        B: Write,
-        F: FnOnce(&mut B, &X) -> PartialVMResult<()>,
+        F: FnOnce(&mut dyn Write, &X) -> PartialVMResult<()>,
     {
         match v.get(idx) {
             Some(x) => print(buf, x),
@@ -2868,7 +2871,7 @@ pub mod debug {
         }
     }
 
-    fn print_indexed_ref<B: Write>(buf: &mut B, r: &IndexedRef) -> PartialVMResult<()> {
+    fn print_indexed_ref(buf: &mut dyn Write, r: &IndexedRef) -> PartialVMResult<()> {
         let idx = r.idx;
         match r.container_ref.container() {
             Container::Locals(r) | Container::Vec(r) | Container::Struct(r) => {
@@ -2887,14 +2890,14 @@ pub mod debug {
     }
 
     // TODO: This function was used in an old implementation of std::debug::print, and can probably be removed.
-    pub fn print_reference<B: Write>(buf: &mut B, r: &Reference) -> PartialVMResult<()> {
+    pub fn print_reference(buf: &mut dyn Write, r: &Reference) -> PartialVMResult<()> {
         match &r.0 {
             ReferenceImpl::ContainerRef(r) => print_container_ref(buf, r),
             ReferenceImpl::IndexedRef(r) => print_indexed_ref(buf, r),
         }
     }
 
-    pub fn print_locals<B: Write>(buf: &mut B, locals: &Locals) -> PartialVMResult<()> {
+    pub fn print_locals(buf: &mut dyn Write, locals: &Locals) -> PartialVMResult<()> {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in locals.0.borrow().iter().enumerate() {
             debug_write!(buf, "            [{}] ", idx)?;
@@ -2904,7 +2907,7 @@ pub mod debug {
         Ok(())
     }
 
-    pub fn print_value<B: Write>(buf: &mut B, val: &Value) -> PartialVMResult<()> {
+    pub fn print_value(buf: &mut dyn Write, val: &Value) -> PartialVMResult<()> {
         print_value_impl(buf, &val.0)
     }
 }

@@ -4,10 +4,10 @@ use crate::NativesCostTable;
 use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
     pop_arg,
     values::{Value, VectorRef},
 };
@@ -18,7 +18,7 @@ const BLAKE_2B256_BLOCK_SIZE: u16 = 128;
 const KECCAK_256_BLOCK_SIZE: u16 = 136;
 
 fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
     // The caller provides the cost per byte
@@ -71,7 +71,7 @@ pub struct HashKeccak256CostParams {
  *              + hash_keccak256_data_cost_per_block * num_blocks     | cost depends on number of blocks in message
  **************************************************************************************************/
 pub fn keccak256(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -111,7 +111,7 @@ pub struct HashBlake2b256CostParams {
  *              + hash_blake2b256_data_cost_per_block * num_blocks     | cost depends on number of blocks in message
  **************************************************************************************************/
 pub fn blake2b256(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

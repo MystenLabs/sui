@@ -5,12 +5,15 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGasPerAbstractMemoryUnit;
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
+    pop_arg,
+    values::Value,
     views::ValueView,
 };
 use smallvec::smallvec;
@@ -30,7 +33,7 @@ pub struct WriteToEventStoreGasParameters {
 #[inline]
 fn native_write_to_event_store(
     gas_params: &WriteToEventStoreGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_vm_runtime::native_functions::NativeFunction;
+use move_vm_types::natives::native_functions::NativeFunction;
 
 pub fn make_module_natives(
     natives: impl IntoIterator<Item = (impl Into<String>, NativeFunction)>,

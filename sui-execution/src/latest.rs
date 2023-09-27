@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
@@ -17,12 +18,18 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    move_package::FnInfoMap,
+    storage::{BackingStore, ChildObjectResolver},
     transaction::{InputObjects, ProgrammableTransaction, TransactionKind},
     type_resolver::LayoutResolver,
 };
 
 use move_bytecode_verifier_latest::meter::Scope;
 use move_vm_runtime_latest::move_vm::MoveVM;
+
+use move_vm_types::natives::{
+    native_extensions::NativeContextExtensions, native_functions::NativeFunctionTable,
+};
 use sui_adapter_latest::adapter::{
     default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
 };
@@ -30,8 +37,8 @@ use sui_adapter_latest::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
 use sui_adapter_latest::type_layout_resolver::TypeLayoutResolver;
-use sui_move_natives_latest::all_natives;
-use sui_types::storage::BackingStore;
+use sui_move_natives_latest::object_runtime::ObjectRuntime;
+use sui_move_natives_latest::{all_natives as all_natives_impl, NativesCostTable};
 use sui_verifier_latest::meter::SuiVerifierMeter;
 
 use crate::executor;
@@ -179,6 +186,25 @@ impl executor::Executor for Executor {
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
     }
+
+    fn add_extensions<'a>(
+        &self,
+        ext: &mut NativeContextExtensions<'a>,
+        object_resolver: &'a dyn ChildObjectResolver,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+    ) -> Result<(), ExecutionError> {
+        ext.add(ObjectRuntime::new(
+            object_resolver,
+            BTreeMap::new(),
+            false,
+            protocol_config,
+            metrics,
+            0, // epoch id
+        ));
+        ext.add(NativesCostTable::from_protocol_config(protocol_config));
+        Ok(())
+    }
 }
 
 impl<'m> verifier::Verifier for Verifier<'m> {
@@ -211,4 +237,42 @@ impl<'m> verifier::Verifier for Verifier<'m> {
             mod_meter_units_result,
         ))
     }
+}
+
+pub(crate) struct UnmeteredVerifier {
+    #[allow(unused)]
+    config: VerifierConfig,
+}
+
+impl UnmeteredVerifier {
+    pub(crate) fn new() -> Self {
+        let config = VerifierConfig {
+            max_back_edges_per_function: None,
+            max_back_edges_per_module: None,
+            max_basic_blocks_in_script: None,
+            max_per_fun_meter_units: None,
+            max_per_mod_meter_units: None,
+            ..VerifierConfig::default()
+        };
+        Self { config }
+    }
+}
+
+impl verifier::UnmeteredVerifier for UnmeteredVerifier {
+    fn verify_module(&self, module: &CompiledModule, fn_info_map: &FnInfoMap) -> SuiResult<()> {
+        move_bytecode_verifier_latest::verify_module_unmetered(module).map_err(|err| {
+            SuiError::ModuleVerificationFailure {
+                error: err.to_string(),
+            }
+        })?;
+        sui_verifier_latest::verifier::sui_verify_module_unmetered(module, fn_info_map).map_err(
+            |err| SuiError::ModuleVerificationFailure {
+                error: err.to_string(),
+            },
+        )
+    }
+}
+
+pub fn all_natives(silent: bool) -> NativeFunctionTable {
+    all_natives_impl(silent)
 }

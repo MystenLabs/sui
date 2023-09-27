@@ -52,7 +52,6 @@ use sui_types::{
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
     DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::verifier as sui_bytecode_verifier;
 
 use crate::linters::{
     coin_field::CoinFieldVisitor, collection_equality::CollectionEqualityVisitor,
@@ -260,13 +259,9 @@ pub fn build_from_resolution_graph(
     };
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
+        let verifier = sui_execution::unmetered_verifier(1);
         for m in compiled_modules.iter_modules() {
-            move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
-                SuiError::ModuleVerificationFailure {
-                    error: err.to_string(),
-                }
-            })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info)?;
+            verifier.verify_module(m, &fn_info)?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }

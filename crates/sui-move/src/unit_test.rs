@@ -9,10 +9,9 @@ use move_cli::base::{
 };
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
-use move_vm_runtime::native_extensions::NativeContextExtensions;
+use move_vm_types::natives::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
-use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+use std::{path::PathBuf, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
@@ -118,7 +117,7 @@ pub fn run_move_unit_tests(
             ignore_compile_warnings: true,
             ..config
         },
-        sui_move_natives::all_natives(/* silent */ false),
+        sui_execution::all_natives(1, /* silent */ false),
         Some(initial_cost_schedule_for_unit_tests()),
         compute_coverage,
         &mut std::io::sink(),
@@ -131,16 +130,9 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
     let registry = prometheus::Registry::new();
     let metrics = Arc::new(LimitsMetrics::new(&registry));
     let store = Lazy::force(&TEST_STORE);
-
-    ext.add(ObjectRuntime::new(
-        store,
-        BTreeMap::new(),
-        false,
-        &ProtocolConfig::get_for_min_version(),
-        metrics,
-        0, // epoch id
-    ));
-    ext.add(NativesCostTable::from_protocol_config(
-        &ProtocolConfig::get_for_min_version(),
-    ));
+    let config = ProtocolConfig::get_for_min_version();
+    let executor = sui_execution::executor(&config, false, true).expect("Getting Executor failed");
+    executor
+        .add_extensions(ext, store, &config, metrics)
+        .expect("Adding NativeContextExtensions failed");
 }

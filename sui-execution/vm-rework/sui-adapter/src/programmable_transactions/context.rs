@@ -31,7 +31,6 @@ mod checked {
     };
     #[cfg(debug_assertions)]
     use move_vm_profiler::GasProfiler;
-    use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -40,6 +39,7 @@ mod checked {
     #[cfg(debug_assertions)]
     use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
+    use move_vm_types::natives::native_extensions::NativeContextExtensions;
     use move_vm_types::values::{GlobalValue, Value as VMValue};
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,

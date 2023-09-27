@@ -37,9 +37,11 @@ use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
-use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
 use move_vm_types::{
-    natives::function::NativeResult,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeFunction, NativeFunctionTable},
+    },
     values::{Struct, Value},
 };
 use std::sync::Arc;

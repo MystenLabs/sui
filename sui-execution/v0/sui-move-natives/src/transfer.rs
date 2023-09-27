@@ -8,9 +8,12 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    pop_arg,
+    values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -28,7 +31,7 @@ pub struct TransferInternalCostParams {
 *   gas cost: transfer_transfer_internal_cost_base                  |  covers various fixed costs in the oper
 **************************************************************************************************/
 pub fn transfer_internal(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -65,7 +68,7 @@ pub struct TransferFreezeObjectCostParams {
 *   gas cost: transfer_freeze_object_cost_base                  |  covers various fixed costs in the oper
 **************************************************************************************************/
 pub fn freeze_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -100,7 +103,7 @@ pub struct TransferShareObjectCostParams {
 *   gas cost: transfer_share_object_cost_base                  |  covers various fixed costs in the oper
 **************************************************************************************************/
 pub fn share_object(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -142,7 +145,7 @@ pub fn share_object(
 }
 
 fn object_runtime_transfer(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     owner: Owner,
     ty: Type,
     obj: Value,

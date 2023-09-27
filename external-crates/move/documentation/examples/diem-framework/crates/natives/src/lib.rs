@@ -8,7 +8,7 @@ pub mod signature;
 use std::sync::Arc;
 
 use move_core_types::account_address::AccountAddress;
-use move_vm_runtime::native_functions::{
+use move_vm_types::natives::native_functions::{
     make_table_from_iter, NativeFunction, NativeFunctionTable,
 };
 

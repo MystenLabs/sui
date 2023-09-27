@@ -43,10 +43,12 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
-use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction, NativeFunctionTable},
+    },
     values::{Struct, Value},
 };
 use std::sync::Arc;
@@ -751,7 +753,7 @@ pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError>
 
 /// Returns the struct tag, non-annotated type layout, and fully annotated type layout of `ty`.
 pub(crate) fn get_tag_and_layouts(
-    context: &NativeContext,
+    context: &dyn NativeContext,
     ty: &Type,
 ) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {

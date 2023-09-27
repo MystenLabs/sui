@@ -8,12 +8,15 @@ use move_core_types::{
     account_address::AccountAddress,
     gas_algebra::{InternalGas, InternalGasPerArg, NumArgs},
 };
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
+    pop_arg,
+    values::Value,
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, sync::Arc};
@@ -39,7 +42,7 @@ pub struct CreateSignersForTestingGasParameters {
 
 fn native_create_signers_for_testing(
     gas_params: &CreateSignersForTestingGasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

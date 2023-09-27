@@ -26,8 +26,8 @@ use clap::Parser;
 use move_core_types::{
     account_address::AccountAddress, errmap::ErrorMapping, identifier::Identifier,
 };
-use move_vm_runtime::native_functions::NativeFunction;
 use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_types::natives::native_functions::NativeFunction;
 use std::path::PathBuf;
 
 type NativeFunctionRecord = (AccountAddress, Identifier, Identifier, NativeFunction);

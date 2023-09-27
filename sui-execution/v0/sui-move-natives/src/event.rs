@@ -4,9 +4,11 @@
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -29,7 +31,7 @@ pub struct EventEmitCostParams {
  *              + event_emit_output_cost_per_byte * (tag_size + event_size)       | emitting the actual event
  **************************************************************************************************/
 pub fn emit(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

@@ -60,8 +60,8 @@ impl<'a> NativeContextExtensions<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::native_extensions::NativeContextExtensions;
     use better_any::{Tid, TidAble};
+    use move_vm_types::natives::native_extensions::NativeContextExtensions;
 
     #[derive(Tid)]
     struct Ext<'a> {

@@ -7,9 +7,11 @@ use move_core_types::{
     language_storage::TypeTag,
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -59,7 +61,7 @@ pub struct TypesIsOneTimeWitnessCostParams {
  *              + types_is_one_time_witness_type_cost_per_byte * ty.size()                  | cost per byte of converting type to type layout
  **************************************************************************************************/
 pub fn is_one_time_witness(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

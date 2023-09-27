@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_command_line_common::files::find_filenames;
-use move_vm_runtime::native_functions::NativeFunctionTable;
 use move_vm_test_utils::gas_schedule::CostTable;
+use move_vm_types::natives::native_functions::NativeFunctionTable;
 
 use crate::UnitTestingConfig;
 

@@ -5,12 +5,15 @@
 use crate::natives::helpers::make_module_natives;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
-use move_vm_runtime::{
-    native_charge_gas_early_exit,
-    native_functions::{NativeContext, NativeFunction},
-};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{
+        function::NativeResult,
+        native_functions::{NativeContext, NativeFunction},
+    },
+    pop_arg,
+    values::Value,
 };
 use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
@@ -33,7 +36,7 @@ pub struct Sha2_256GasParameters {
 #[inline]
 fn native_sha2_256(
     gas_params: &Sha2_256GasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -82,7 +85,7 @@ pub struct Sha3_256GasParameters {
 #[inline]
 fn native_sha3_256(
     gas_params: &Sha3_256GasParameters,
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut arguments: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

@@ -2,11 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    logging::expect_no_verification_errors,
-    native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
-    session::LoadedFunctionInstantiation,
-};
+use crate::{logging::expect_no_verification_errors, session::LoadedFunctionInstantiation};
 use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
     binary_views::BinaryIndexedView,
@@ -33,6 +29,7 @@ use move_vm_config::runtime::VMConfig;
 use move_vm_types::{
     data_store::DataStore,
     loaded_data::runtime_types::{CachedStructIndex, DepthFormula, StructType, Type},
+    natives::native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
 };
 use parking_lot::RwLock;
 use sha3::{Digest, Sha3_256};

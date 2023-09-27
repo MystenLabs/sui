@@ -3,9 +3,12 @@
 
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+    loaded_data::runtime_types::Type,
+    native_charge_gas_early_exit,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    pop_arg,
+    values::Value,
 };
 use smallvec::smallvec;
 use std::{collections::VecDeque, convert::TryFrom};
@@ -23,7 +26,7 @@ pub struct TxContextDeriveIdCostParams {
  *   gas cost: tx_context_derive_id_cost_base                | we operate on fixed size data structures
  **************************************************************************************************/
 pub fn derive_id(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {

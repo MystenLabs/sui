@@ -4,15 +4,16 @@
 use crate::{legacy_test_cost, types::is_otw_struct};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{gas_algebra::InternalGas, value::MoveTypeLayout};
-use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+    loaded_data::runtime_types::Type,
+    natives::{function::NativeResult, native_functions::NativeContext},
+    values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
 pub fn destroy(
-    _context: &mut NativeContext,
+    _context: &mut dyn NativeContext,
     _ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -21,7 +22,7 @@ pub fn destroy(
 }
 
 pub fn create_one_time_witness(
-    context: &mut NativeContext,
+    context: &mut dyn NativeContext,
     mut ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
