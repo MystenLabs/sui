@@ -6,6 +6,7 @@ import {
 	any,
 	array,
 	assign,
+	bigint,
 	boolean,
 	is,
 	literal,
@@ -18,7 +19,6 @@ import {
 	tuple,
 	union,
 	unknown,
-	bigint,
 } from 'superstruct';
 
 import { ObjectOwner } from './common.js';

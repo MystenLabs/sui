@@ -5,7 +5,7 @@ import { fromB64, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
-import { builder } from '../builder/bcs.js';
+import { bcs } from '../bcs/index.js';
 import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import type {
 	SerializedSignature,
@@ -20,7 +20,6 @@ import {
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
-import { bcs } from '../bcs/index.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }

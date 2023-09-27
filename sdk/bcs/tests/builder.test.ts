@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, test } from 'vitest';
-import { bcs } from '../src/bcs.js';
-import { toHEX, BcsWriter, BcsReader, toB58, toB64 } from '../src';
+
+import { BcsReader, BcsWriter, toB58, toB64, toHEX } from '../src';
 import { BcsType } from '../src/bcs-type.js';
+import { bcs } from '../src/bcs.js';
 
 describe('bcs', () => {
 	describe('base types', () => {

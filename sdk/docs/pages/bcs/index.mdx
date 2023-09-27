@@ -298,7 +298,7 @@ preserves type information for the serialized bytes, and can be used to get raw 
 formats.
 
 ```ts
-import { bcs, fromHex, fromB64, fromB58 } from '@mysten/bcs';
+import { bcs, fromB58, fromB64, fromHex } from '@mysten/bcs';
 
 const serializedString = bcs.string().serialize('this is a string');
 

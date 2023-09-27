@@ -1,18 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ulebEncode } from './uleb.js';
 import {
-	BcsTypeOptions,
 	BcsType,
+	BcsTypeOptions,
 	bigUIntBcsType,
 	dynamicSizeBcsType,
 	fixedSizeBcsType,
+	lazyBcsType,
 	stringLikeBcsType,
 	uIntBcsType,
-	lazyBcsType,
 } from './bcs-type.js';
 import { GenericPlaceholder, ReplaceBcsGenerics } from './types.js';
+import { ulebEncode } from './uleb.js';
 
 export const bcs = {
 	/**
