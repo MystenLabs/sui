@@ -16,7 +16,7 @@ anyhow = "1.0.71"
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_json = { version = "1.0.95", features = ["preserve_order", "arbitrary_precision"] }
 tracing = "0.1.37"
-base64 = "0.12"
+base64 = "0.21.2"
 sui-types.workspace = true
 sui-indexer.workspace = true
 move-core-types.workspace = true
