@@ -38,6 +38,7 @@ pub mod apis;
 pub mod errors;
 pub mod framework;
 mod handlers;
+pub mod indexer_reader;
 pub mod indexer_v2;
 pub mod metrics;
 pub mod models;
@@ -279,7 +280,7 @@ pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerE
 }
 
 #[derive(Debug, Clone, Copy)]
-struct PgConectionPoolConfig {
+pub struct PgConectionPoolConfig {
     pool_size: u32,
     connection_timeout: Duration,
     statement_timeout: Duration,
@@ -293,6 +294,7 @@ impl PgConectionPoolConfig {
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
             statement_timeout: self.statement_timeout,
+            read_only: false,
         }
     }
 }
@@ -323,6 +325,7 @@ impl Default for PgConectionPoolConfig {
 #[derive(Debug, Clone, Copy)]
 struct PgConnectionConfig {
     statement_timeout: Duration,
+    read_only: bool,
 }
 
 impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for PgConnectionConfig {
@@ -335,6 +338,13 @@ impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for Pg
         ))
         .execute(conn)
         .map_err(diesel::r2d2::Error::QueryError)?;
+
+        if self.read_only {
+            sql_query("SET default_transaction_read_only = 't'")
+                .execute(conn)
+                .map_err(diesel::r2d2::Error::QueryError)?;
+        }
+
         Ok(())
     }
 }

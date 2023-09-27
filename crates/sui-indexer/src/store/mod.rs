@@ -14,7 +14,7 @@ mod pg_indexer_store;
 mod pg_indexer_store_v2;
 mod query;
 
-mod diesel_marco {
+pub(crate) mod diesel_macro {
     macro_rules! read_only_blocking {
         ($pool:expr, $query:expr) => {{
             let mut pg_pool_conn = crate::get_pg_pool_connection($pool)?;

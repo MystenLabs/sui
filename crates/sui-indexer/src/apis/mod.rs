@@ -18,6 +18,7 @@ mod governance_api_v2;
 mod indexer_api;
 mod indexer_api_v2;
 mod move_utils;
+mod move_utils_v2;
 mod read_api;
 mod read_api_v2;
 mod transaction_builder_api;

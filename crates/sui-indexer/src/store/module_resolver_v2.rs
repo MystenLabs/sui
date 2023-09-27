@@ -19,7 +19,7 @@ use sui_types::move_package::MovePackage;
 
 use crate::errors::{Context, IndexerError};
 use crate::models_v2::packages::StoredPackage;
-use crate::store::diesel_marco::read_only_blocking;
+use crate::store::diesel_macro::read_only_blocking;
 use crate::PgConnectionPool;
 
 /// A package resolver that reads packages from the database.
