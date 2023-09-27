@@ -11,7 +11,7 @@ module sui::zklogin {
     /// Error if any of the inputs are longer than the allowed upper bounds
     const EInvalidInput: u64 = 0;
 
-    /// Posession of a VerifiedID proves that the uses's address was created using zklogin and the
+    /// Posession of a VerifiedID proves that the user's address was created using zklogin and the
     /// given parameters
     struct VerifiedID {
         /// The name of the claim
