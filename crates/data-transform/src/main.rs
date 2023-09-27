@@ -96,7 +96,10 @@ impl GrootModuleResolver {
                 println!("Invalid base64 encoding for math");
             }
         }
-        Self{ module_map, original }
+        Self {
+            module_map,
+            original
+        }
     }
 }
 
@@ -138,36 +141,52 @@ static TYPUS_LATEST: Lazy<AccountAddress> = Lazy::new(|| {
 static TYPUS_ADDRESS_SET: Lazy<HashSet<AccountAddress>> = Lazy::new(|| {
     let mut set = HashSet::new();
     set.insert(
-        AccountAddress::from_str("0xa76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xa76499eda1d37751473de5f30e106f35943ada2f6ea764861243e7f5aa5bcc97",
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0xfbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xfbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0x4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b")
-            .unwrap()
+        AccountAddress::from_str(
+            "0x4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0xf84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xf84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0xa390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xa390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0xf0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xf0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0x5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284")
-            .unwrap()
+        AccountAddress::from_str(
+            "0x5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284"
+        )
+        .unwrap(),
     );
     set.insert(
-        AccountAddress::from_str("0xd95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4")
-            .unwrap()
+        AccountAddress::from_str(
+            "0xd95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4"
+        )
+        .unwrap(),
     );
     set
 });
