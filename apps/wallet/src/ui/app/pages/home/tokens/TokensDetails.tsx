@@ -107,11 +107,13 @@ export function TokenRow({
 	renderActions,
 	onClick,
 	as: Tag = 'div',
+	borderBottom,
 }: {
 	coinBalance: CoinBalanceType;
 	renderActions?: boolean;
 	as?: 'div' | 'button';
 	onClick?: () => void;
+	borderBottom?: boolean;
 }) {
 	const coinType = coinBalance.coinType;
 	const balance = BigInt(coinBalance.totalBalance);
@@ -122,8 +124,10 @@ export function TokenRow({
 	return (
 		<Tag
 			className={clsx(
-				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center',
-				isButton && 'border-transparent bg-transparent hover:cursor-pointer',
+				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center border-solid border-t-transparent border-x-transparent',
+				isButton && 'bg-transparent hover:cursor-pointer',
+				borderBottom && 'border-b border-gray-45',
+				!borderBottom && 'border-b-transparent',
 			)}
 			onClick={isButton ? onClick : undefined}
 		>
@@ -146,7 +150,7 @@ export function TokenRow({
 								{symbol}
 							</Text>
 							<Text variant="subtitleSmall" weight="medium" color="steel-dark">
-								{coinType}
+								{formatAddress(coinType)}
 							</Text>
 						</div>
 					)}
@@ -154,9 +158,11 @@ export function TokenRow({
 			</div>
 
 			<div className="ml-auto flex flex-col items-end gap-1.5">
-				<Text variant="body" color="gray-90" weight="medium">
-					{formatted} {symbol}
-				</Text>
+				{formatted !== '0' && (
+					<Text variant="body" color="gray-90" weight="medium">
+						{formatted} {symbol}
+					</Text>
+				)}
 
 				{isSui && <TokenRowSuiToUSDC suiBalance={balance} />}
 			</div>

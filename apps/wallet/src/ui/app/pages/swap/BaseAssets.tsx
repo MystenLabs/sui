@@ -3,6 +3,7 @@
 
 import { getSendOrSwapUrl } from '_app/helpers/getSendOrSwapUrl';
 import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
+import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
@@ -10,12 +11,12 @@ import { TokenRow } from '_pages/home/tokens/TokensDetails';
 import { useAllBalances } from '@mysten/dapp-kit';
 import { useNavigate } from 'react-router-dom';
 
-export function Assets() {
+export function BaseAssets() {
 	const navigate = useNavigate();
 	const selectedAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 
-	const { data: coins } = useAllBalances(
+	const { data: coins, isLoading } = useAllBalances(
 		{ owner: selectedAddress! },
 		{
 			enabled: !!selectedAddress,
@@ -28,19 +29,24 @@ export function Assets() {
 	const { recognized } = useSortedCoinsByCategories(coins ?? []);
 
 	return (
-		<Overlay showModal title="Swap" closeOverlay={() => navigate(-1)}>
-			<div className="flex flex-shrink-0 justify-start flex-col w-full">
-				{recognized?.map((coinBalance) => (
-					<TokenRow
-						key={coinBalance.coinType}
-						as="button"
-						coinBalance={coinBalance}
-						onClick={() => {
-							navigate(getSendOrSwapUrl('swap', coinBalance.coinType));
-						}}
-					/>
-				))}
-			</div>
+		<Overlay showModal title="Select a Coin" closeOverlay={() => navigate(-1)}>
+			<Loading loading={isLoading}>
+				<div className="flex flex-shrink-0 justify-start flex-col w-full">
+					{recognized?.map((coinBalance, index) => {
+						return (
+							<TokenRow
+								borderBottom={index !== recognized.length - 1}
+								key={coinBalance.coinType}
+								as="button"
+								coinBalance={coinBalance}
+								onClick={() => {
+									navigate(getSendOrSwapUrl('swap', coinBalance.coinType));
+								}}
+							/>
+						);
+					})}
+				</div>
+			</Loading>
 		</Overlay>
 	);
 }
