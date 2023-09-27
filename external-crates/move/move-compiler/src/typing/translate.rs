@@ -2168,7 +2168,7 @@ fn method_call(
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
                         "Method style syntax is not supported on type parameters. \
-                      Got an expression of type: {tsubst}",
+                        Got an expression of type: {tsubst}",
                     )
                 }
                 Ty::UnresolvedError => {

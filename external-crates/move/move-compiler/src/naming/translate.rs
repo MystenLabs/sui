@@ -262,8 +262,8 @@ impl<'env> Context<'env> {
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) => {
-                let Some((decl_loc, abilities, arity)) =
-                self.resolve_module_type(nloc, &m, &n) else {
+                let Some((decl_loc, abilities, arity)) = self.resolve_module_type(nloc, &m, &n)
+                else {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
                 };
@@ -304,7 +304,7 @@ impl<'env> Context<'env> {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ ResolvedType::BuiltinType(_) | rt @ ResolvedType::TParam(_, _) => {
+            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
                 let (rtloc, msg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -627,7 +627,8 @@ fn explicit_use_fun(
             Some((module, function))
         }
         ResolvedFunction::Builtin(_) => {
-            let msg = "Invalid 'use fun'. Cannot associate a builtin function with a type";
+            let msg =
+                "Invalid 'use fun'. Cannot associate a builtin function as a method for a type";
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
@@ -652,7 +653,7 @@ fn explicit_use_fun(
                 Declarations::InvalidUseFun,
                 (
                     loc,
-                    "Invalid 'use fun'. Cannot associate a function with a type parameter"
+                    "Invalid 'use fun'. Cannot associate a function as a method a type parameter"
                 ),
                 (tloc, tmsg)
             ));

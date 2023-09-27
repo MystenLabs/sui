@@ -168,10 +168,6 @@ impl<'env> Context<'env> {
                     }
                     _ => (),
                 }
-                if matches!(
-                    nuf.kind,
-                    UseFunKind::Explicit | UseFunKind::UseAlias { used: false }
-                ) {}
                 let cur_methods = use_funs.entry(tn.clone()).or_default();
                 cur_methods.remove(&method);
                 cur_methods.add(method, nuf).unwrap();

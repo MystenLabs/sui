@@ -97,10 +97,10 @@ impl<'env, 'map> Context<'env, 'map> {
                     E::ImplicitUseFunKind::UseAlias { used } => Some(used),
                 });
             if let Some(used) = use_fun_used_opt {
+                // We do not report the use error if it is a function alias, since these will be
+                // reported after method calls are fully resolved
                 *used = false;
             } else {
-                // do not report the use error if it is a function alias, since
-                // these will be reported after method calls are fully resolved
                 unused_alias(self, alias)
             }
         }
@@ -247,7 +247,7 @@ pub fn program(
         keyed
     };
 
-    super::primitive_definers::determine(context.env, pre_compiled_lib, &module_map);
+    super::primitive_definers::modules(context.env, pre_compiled_lib, &module_map);
     E::Program {
         modules: module_map,
         scripts,

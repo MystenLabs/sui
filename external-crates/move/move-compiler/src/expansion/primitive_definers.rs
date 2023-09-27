@@ -17,7 +17,9 @@ use crate::{
 
 use super::ast::{AttributeName_, Attribute_};
 
-pub fn determine(
+/// Gather primitive defines from module declarations, erroring on duplicates for a given base
+/// type or for unknown base types.
+pub fn modules(
     env: &mut CompilationEnv,
     pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,

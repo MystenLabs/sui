@@ -1173,6 +1173,7 @@ fn parse_name_exp(context: &mut Context) -> Result<Exp_, Box<Diagnostic>> {
     // assume that the '<' is a boolean operator.
     let mut tys = None;
     if context.tokens.peek() == Tok::Exclaim {
+        // TODO(macro) handle type arguments
         context.tokens.advance()?;
         let is_macro = true;
         let rhs = parse_call_args(context)?;
@@ -1475,12 +1476,6 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 //          | <DotOrIndexChain> <OptionalTypeArgs> "(" Comma<Exp> ")"
 //          | <Term>
 fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
-    fn is_start_of_call(context: &Context, n: &Name) -> bool {
-        let call_start = context.tokens.start_loc();
-        let peeked = context.tokens.peek();
-        (peeked == Tok::Less && n.loc.end() as usize == call_start) || peeked == Tok::LParen
-    }
-
     let start_loc = context.tokens.start_loc();
     let mut lhs = parse_term(context)?;
     loop {
@@ -1488,7 +1483,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
             Tok::Period => {
                 context.tokens.advance()?;
                 let n = parse_identifier(context)?;
-                if is_start_of_call(context, &n) {
+                if is_start_of_call_after_function_name(context, &n) {
                     let call_start = context.tokens.start_loc();
                     let mut tys = None;
                     if context.tokens.peek() == Tok::Less && n.loc.end() as usize == call_start {
@@ -1515,6 +1510,16 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
         lhs = spanned(context.tokens.file_hash(), start_loc, end_loc, exp);
     }
     Ok(lhs)
+}
+
+// Look ahead to determine if this is the start of a call expression. Used when parsing method calls
+// to determine if we should parse the type arguments and args following a name. Otherwise, we will
+// parse a field access
+fn is_start_of_call_after_function_name(context: &Context, n: &Name) -> bool {
+    // TODO(macro) consider macro Tok::Exlaim
+    let call_start = context.tokens.start_loc();
+    let peeked = context.tokens.peek();
+    (peeked == Tok::Less && n.loc.end() as usize == call_start) || peeked == Tok::LParen
 }
 
 // Lookahead to determine whether this is a quantifier. This matches

@@ -117,7 +117,10 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             let loc = nuf.loc;
             let (m, f) = nuf.target_function;
             let kind = nuf.kind;
-            assert!(kind == N::UseFunKind::Explicit);
+            assert!(
+                kind == N::UseFunKind::Explicit,
+                "ICE all resolved use funs should be explicit at this stage. kind {kind}"
+            );
             let (first_ty_loc, first_ty) = first_arg_type(context, &m, &f);
             let is_valid = match first_ty
                 .as_ref()
@@ -137,7 +140,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
                         let msg = "Invalid visibility for 'use fun' declaration";
                         let vis_msg = format!(
                             "Module level 'use fun' declarations can be '{}' for the \
-                            module's types, otherwise they must internal to declared scope.",
+                            module's types, otherwise they must be internal to the declared scope.",
                             Visibility::PUBLIC
                         );
                         let mut diag = diag!(
@@ -182,7 +185,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     resolved.retain(|_, methods| !methods.is_empty());
 
     // resolve implicit candidates, removing if
-    // - It is not a valid method (i.e. if it would be valid to declare as a 'use fun')
+    // - It is not a valid method (i.e. if it would be invalid to declare as a 'use fun')
     // - The name is already bound
     for (method, implicit) in std::mem::take(implicit_candidates) {
         let E::ImplicitUseFunCandidate {
