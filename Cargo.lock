@@ -3489,7 +3489,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.6"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab472a0598874fee405235004d12f740d0809506#ab472a0598874fee405235004d12f740d0809506"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3545,7 +3545,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab472a0598874fee405235004d12f740d0809506#ab472a0598874fee405235004d12f740d0809506"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3554,9 +3554,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab472a0598874fee405235004d12f740d0809506#ab472a0598874fee405235004d12f740d0809506"
+dependencies = [
+ "bcs",
+ "bincode",
+ "digest 0.10.6",
+ "fastcrypto",
+ "fastcrypto-derive",
+ "itertools",
+ "rand 0.8.5",
+ "serde",
+ "sha3 0.10.6",
+ "typenum",
+ "zeroize",
+]
+
+[[package]]
 name = "fastcrypto-zkp"
 version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=3547ed059927007c7ff48e729ed59da3dbb6a2e3#3547ed059927007c7ff48e729ed59da3dbb6a2e3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=ab472a0598874fee405235004d12f740d0809506#ab472a0598874fee405235004d12f740d0809506"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -6190,6 +6208,7 @@ dependencies = [
  "cfg-if",
  "ed25519-consensus",
  "fastcrypto",
+ "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
  "indexmap 1.9.3",
@@ -6530,6 +6549,7 @@ dependencies = [
  "derive_builder",
  "enum_dispatch",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "indexmap 1.9.3",
  "mockall",
@@ -13678,6 +13698,7 @@ dependencies = [
  "fast_chemail",
  "fastcrypto",
  "fastcrypto-derive",
+ "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand 1.8.0",
  "fastrand 2.0.0",

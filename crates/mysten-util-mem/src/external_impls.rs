@@ -22,6 +22,13 @@ impl MallocSizeOf for fastcrypto::ed25519::Ed25519AggregateSignature {
         self.sigs.size_of(ops)
     }
 }
+impl MallocSizeOf for fastcrypto_tbls::polynomial::Poly<fastcrypto::groups::bls12381::G2Element> {
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        (self.degree() as usize + 1)
+            * std::mem::size_of::<fastcrypto::groups::bls12381::G2Element>()
+    }
+}
+malloc_size_of_is_0!(fastcrypto::groups::bls12381::G1Element);
 
 // hash_map
 malloc_size_of_is_0!(std::collections::hash_map::RandomState);

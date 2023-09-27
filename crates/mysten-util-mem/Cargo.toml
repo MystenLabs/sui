@@ -15,6 +15,7 @@ hashbrown = { workspace = true, optional = true }
 mysten-util-mem-derive.workspace = true
 impl-trait-for-tuples.workspace = true
 fastcrypto = { workspace = true }
+fastcrypto-tbls.workspace = true
 indexmap.workspace = true
 roaring.workspace = true
 ed25519-consensus.workspace = true

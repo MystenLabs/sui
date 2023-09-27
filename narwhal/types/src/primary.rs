@@ -18,6 +18,7 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
+use fastcrypto_tbls::tbls::ThresholdBls;
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
 use once_cell::sync::OnceCell;
@@ -28,6 +29,7 @@ use serde_with::serde_as;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -368,9 +370,63 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
 }
 
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
+#[enum_dispatch(RandomnessAPI)]
+pub enum Randomness {
+    V1(RandomnessV1),
+}
+
+impl Randomness {
+    pub fn validate(&self) -> DagResult<()> {
+        match self {
+            Randomness::V1(data) => data.validate(),
+        }
+    }
+}
+
+#[enum_dispatch]
+pub trait RandomnessAPI {
+    fn vss_pk(&self) -> Arc<fastcrypto_tbls::types::PublicVssKey>;
+    fn id(&self) -> u64;
+    fn signature(&self) -> fastcrypto_tbls::types::Signature;
+}
+
+#[derive(Builder, Clone, Deserialize, MallocSizeOf, Serialize)]
+pub struct RandomnessV1 {
+    vss_pk: Arc<fastcrypto_tbls::types::PublicVssKey>,
+    id: u64,
+    signature: fastcrypto_tbls::types::Signature,
+}
+
+impl RandomnessAPI for RandomnessV1 {
+    fn vss_pk(&self) -> Arc<fastcrypto_tbls::types::PublicVssKey> {
+        self.vss_pk.clone()
+    }
+
+    fn id(&self) -> u64 {
+        self.id
+    }
+
+    fn signature(&self) -> fastcrypto_tbls::types::Signature {
+        self.signature
+    }
+}
+
+impl RandomnessV1 {
+    pub fn validate(&self) -> DagResult<()> {
+        fastcrypto_tbls::types::ThresholdBls12381MinSig::verify(
+            self.vss_pk.c0(),
+            self.id.to_be_bytes().as_slice(),
+            &self.signature,
+        )
+        .map_err(|_| DagError::InvalidRandomnessSignature)
+    }
+}
+
+#[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
 #[enum_dispatch(HeaderAPI)]
 pub enum Header {
     V1(HeaderV1),
+    V2(HeaderV2), 
 }
 
 // TODO: Revisit if we should not impl Default for Header and just use
@@ -383,6 +439,7 @@ impl Default for Header {
 
 impl Header {
     // TODO: Add version number and match on that.
+    // TODO-DNS how to generate V2 when appropriate?
     pub async fn new(
         author: AuthorityIdentifier,
         round: Round,
@@ -396,12 +453,22 @@ impl Header {
     pub fn digest(&self) -> HeaderDigest {
         match self {
             Header::V1(data) => data.digest(),
+            Header::V2(data) => data.digest(),
         }
     }
 
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         match self {
             Header::V1(data) => data.validate(committee, worker_cache),
+            Header::V2(data) => data.validate(committee, worker_cache),
+        }
+    }
+    
+    // #[cfg(test)] TODO-DNS
+    pub fn unwrap_v1(self) -> HeaderV1 {
+        match self {
+            Header::V1(data) => data,
+            Header::V2(_) => panic!("called into_v1 on Header::V2"),
         }
     }
 }
@@ -412,6 +479,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
     fn digest(&self) -> HeaderDigest {
         match self {
             Header::V1(data) => data.digest(),
+            Header::V2(data) => data.digest(),
         }
     }
 }
@@ -424,6 +492,7 @@ pub trait HeaderAPI {
     fn created_at(&self) -> &TimestampMs;
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
     fn parents(&self) -> &BTreeSet<CertificateDigest>;
+    fn randomness(&self) -> &Option<Randomness>;
 
     // Used for testing.
     fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>);
@@ -465,6 +534,9 @@ impl HeaderAPI for HeaderV1 {
     }
     fn parents(&self) -> &BTreeSet<CertificateDigest> {
         &self.parents
+    }
+    fn randomness(&self) -> &Option<Randomness> {
+        &None
     }
 
     // Used for testing.
@@ -576,6 +648,163 @@ impl HeaderV1 {
     }
 }
 
+#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[builder(pattern = "owned", build_fn(skip))]
+pub struct HeaderV2 {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
+    pub author: AuthorityIdentifier,
+    pub round: Round,
+    pub epoch: Epoch,
+    pub created_at: TimestampMs,
+    #[serde(with = "indexmap::serde_seq")]
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+    pub parents: BTreeSet<CertificateDigest>,
+    pub randomness: Option<Randomness>,
+    #[serde(skip)]
+    digest: OnceCell<HeaderDigest>,
+}
+
+impl HeaderAPI for HeaderV2 {
+    fn author(&self) -> AuthorityIdentifier {
+        self.author
+    }
+    fn round(&self) -> Round {
+        self.round
+    }
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+    fn created_at(&self) -> &TimestampMs {
+        &self.created_at
+    }
+    fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+        &self.payload
+    }
+    fn parents(&self) -> &BTreeSet<CertificateDigest> {
+        &self.parents
+    }
+    fn randomness(&self) ->  &Option<Randomness> {
+        &self.randomness
+    }
+
+    // Used for testing.
+    fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
+        self.payload = new_payload;
+    }
+    fn update_round(&mut self, new_round: Round) {
+        self.round = new_round;
+    }
+    fn clear_parents(&mut self) {
+        self.parents.clear();
+    }
+}
+
+impl HeaderV2Builder {
+    pub fn build(self) -> Result<HeaderV2, fastcrypto::error::FastCryptoError> {
+        let h = HeaderV2 {
+            author: self.author.unwrap(),
+            round: self.round.unwrap(),
+            epoch: self.epoch.unwrap(),
+            created_at: self.created_at.unwrap_or(0),
+            payload: self.payload.unwrap(),
+            parents: self.parents.unwrap(),
+            randomness: self.randomness.flatten(),
+            digest: OnceCell::default(),
+        };
+        h.digest.set(Hash::digest(&h)).unwrap();
+
+        Ok(h)
+    }
+
+    // helper method to set directly values to the payload
+    pub fn with_payload_batch(
+        mut self,
+        batch: Batch,
+        worker_id: WorkerId,
+        created_at: TimestampMs,
+    ) -> Self {
+        if self.payload.is_none() {
+            self.payload = Some(Default::default());
+        }
+        let payload = self.payload.as_mut().unwrap();
+
+        payload.insert(batch.digest(), (worker_id, created_at));
+
+        self
+    }
+}
+
+impl HeaderV2 {
+    pub async fn new(
+        author: AuthorityIdentifier,
+        round: Round,
+        epoch: Epoch,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+        parents: BTreeSet<CertificateDigest>,
+        randomness: Option<Randomness>,
+    ) -> Self {
+        let header = Self {
+            author,
+            round,
+            epoch,
+            created_at: now(),
+            payload,
+            parents,
+            randomness,
+            digest: OnceCell::default(),
+        };
+        let digest = Hash::digest(&header);
+        header.digest.set(digest).unwrap();
+        header
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        *self.digest.get_or_init(|| Hash::digest(self))
+    }
+
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch
+            }
+        );
+
+        // Ensure the header digest is well formed.
+        ensure!(
+            Hash::digest(self) == self.digest(),
+            DagError::InvalidHeaderDigest
+        );
+
+        // Ensure the authority has voting rights.
+        let voting_rights = committee.stake_by_id(self.author);
+        ensure!(
+            voting_rights > 0,
+            DagError::UnknownAuthority(self.author.to_string())
+        );
+
+        // Ensure all worker ids are correct.
+        for (worker_id, _) in self.payload.values() {
+            worker_cache
+                .worker(
+                    committee.authority(&self.author).unwrap().protocol_key(),
+                    worker_id,
+                )
+                .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
+        }
+
+        // Verify the randomness signature.
+        if let Some(ref randomness) = self.randomness {
+            randomness.validate()?
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(
     Clone,
     Copy,
@@ -630,6 +859,16 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV1 {
     }
 }
 
+impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV2 {
+    type TypedDigest = HeaderDigest;
+
+    fn digest(&self) -> HeaderDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
+        HeaderDigest(hasher.finalize().into())
+    }
+}
+
 impl fmt::Debug for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
@@ -647,6 +886,21 @@ impl fmt::Debug for Header {
                         .sum::<usize>(),
                 )
             }
+            Self::V2(data) => {
+                write!(
+                    f,
+                    "{}: B{}({}, E{}, {}B, {}R)",
+                    data.digest.get().cloned().unwrap_or_default(),
+                    data.round,
+                    data.author,
+                    data.epoch,
+                    data.payload
+                        .keys()
+                        .map(|x| Digest::from(*x).size())
+                        .sum::<usize>(),
+                    if data.randomness.is_some() { "+" } else { "-" }
+                )
+            }
         }
     }
 }
@@ -657,6 +911,9 @@ impl fmt::Display for Header {
             Self::V1(data) => {
                 write!(f, "B{}({})", data.round, data.author)
             }
+            Self::V2(data) => {
+                write!(f, "B{}({})", data.round, data.author)
+            }
         }
     }
 }
@@ -665,6 +922,7 @@ impl PartialEq for Header {
     fn eq(&self, other: &Self) -> bool {
         match self {
             Self::V1(data) => data.digest() == other.digest(),
+            Self::V2(data) => data.digest() == other.digest(),
         }
     }
 }
