@@ -26,6 +26,8 @@ pub struct StoredObject {
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
+    pub struct_tag: Option<String>,
+    pub object_json: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
@@ -51,7 +53,9 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
+            struct_tag: o.struct_tag,
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
+            object_json: o.object_json,
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
             df_kind: o.df_info.as_ref().map(|k| match k.type_ {

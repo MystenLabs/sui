@@ -8,6 +8,10 @@ CREATE TABLE objects (
     -- bytes of SuiAddress/ObjectID of the owner ID.
     -- Non-null for objects with an owner: Addresso or Objects
     owner_id                    bytea,
+    -- struct tag
+    struct_tag                  text,
+    -- json of Object
+    object_json                 text,
     -- bcs serialized Object
     serialized_object           bytea         NOT NULL,
     -- Non-null when the object is a coin.

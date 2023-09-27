@@ -239,6 +239,20 @@ where
         package_cache: Arc<Mutex<IndexingPackageCache>>,
         metrics: &IndexerMetrics,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
+        let checkpoint_seq = data.checkpoint_summary.sequence_number;
+        info!(checkpoint_seq, "Indexing checkpoint data blob");
+        // Index Packages & Objects
+        let packages = Self::index_packages(&data, metrics);
+        let module_resolver = InterimModuleResolver::new(
+            state.module_cache(),
+            package_cache.clone(),
+            &packages,
+            checkpoint_seq,
+            metrics.clone(),
+        );
+        let object_changes =
+            Self::index_objects(state, data.clone(), &packages, metrics, &module_resolver);
+
         let (checkpoint, db_transactions, db_events, db_indices) = {
             let CheckpointData {
                 transactions,
@@ -299,6 +313,7 @@ where
                         tx_digest,
                         event,
                         checkpoint_summary.timestamp_ms,
+                        &module_resolver,
                     )
                 }));
 
@@ -398,10 +413,6 @@ where
 
         let epoch = Self::index_epoch(state, &data).await?;
 
-        // Index Objects
-        let (object_changes, packages) =
-            Self::index_checkpoint(state, data, package_cache, metrics);
-
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,
@@ -413,37 +424,15 @@ where
         })
     }
 
-    fn index_checkpoint(
-        state: &S,
-        data: CheckpointData,
-        package_cache: Arc<Mutex<IndexingPackageCache>>,
-        metrics: &IndexerMetrics,
-    ) -> (TransactionObjectChangesToCommit, Vec<IndexedPackage>) {
-        let checkpoint_seq = data.checkpoint_summary.sequence_number;
-        info!(checkpoint_seq, "Indexing checkpoint");
-        let packages = Self::index_packages(&data, metrics);
-
-        let object_changes = Self::index_objects(state, data, &packages, package_cache, metrics);
-
-        (object_changes, packages)
-    }
-
     fn index_objects(
         state: &S,
         data: CheckpointData,
         packages: &[IndexedPackage],
-        package_cache: Arc<Mutex<IndexingPackageCache>>,
         metrics: &IndexerMetrics,
+        module_resolver: &impl GetModule,
     ) -> TransactionObjectChangesToCommit {
         let _timer = metrics.indexing_objects_latency.start_timer();
         let checkpoint_seq = data.checkpoint_summary.sequence_number;
-        let module_resolver = InterimModuleResolver::new(
-            state.module_cache(),
-            package_cache,
-            packages,
-            checkpoint_seq,
-            metrics.clone(),
-        );
         let deleted_objects = data
             .transactions
             .iter()
@@ -484,7 +473,7 @@ where
                         });
                         assert_eq!(oref.1, object.version());
                         let df_info =
-                            try_create_dynamic_field_info(object, &objects, &module_resolver)
+                            try_create_dynamic_field_info(object, &objects, module_resolver)
                                 .unwrap_or_else(|e| {
                                     panic!(
                                 "failed to create dynamic field info for obj: {:?}:{:?}. Err: {e}",
@@ -497,6 +486,7 @@ where
                             checkpoint_seq,
                             object.clone(),
                             df_info,
+                            module_resolver,
                         ))
                     })
                     .collect::<Vec<_>>()

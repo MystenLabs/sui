@@ -37,7 +37,8 @@ use crate::types_v2::IndexedPackage;
 use crate::types_v2::{IndexedObjectChange, IndexerResult};
 
 // GC the cache every 10 minutes
-pub const PACKAGE_CACHE_GC_INTERVAL: Duration = Duration::from_secs(600);
+// "Never" GC for Quest 3 pipelines
+pub const PACKAGE_CACHE_GC_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24 * 365);
 
 /// An in-mem cache for packages during writer path indexing.
 /// It has static lifetime. Since we batch process checkpoints,
@@ -56,6 +57,7 @@ impl IndexingPackageCache {
         let cache = Arc::new(Mutex::new(Self {
             packages: HashMap::new(),
         }));
+
         let cache_clone = cache.clone();
         spawn_monitored_task!(Self::remove_committed(cache_clone, commit_watcher));
         cache
@@ -108,6 +110,7 @@ impl IndexingPackageCache {
                     })
             })
             .collect::<HashMap<_, _>>();
+        // System packages will be overwritten by new packages
         self.packages.extend(new_packages);
     }
 

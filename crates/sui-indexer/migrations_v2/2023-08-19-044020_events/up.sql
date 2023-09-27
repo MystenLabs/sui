@@ -15,6 +15,8 @@ CREATE TABLE events
     timestamp_ms                BIGINT       NOT NULL,
     -- bcs of the Event contents (Event.contents)
     bcs                         BYTEA        NOT NULL,
+    -- json of the Event contents (Event.contents)
+    event_json                  text,
     PRIMARY KEY(tx_sequence_number, event_sequence_number)
 );
 

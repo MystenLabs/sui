@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::large_enum_variant)]
+
 use core::result::Result::Ok;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
@@ -175,6 +177,8 @@ impl PgIndexerStoreV2 {
                                 .eq(excluded(objects::checkpoint_sequence_number)),
                             objects::owner_type.eq(excluded(objects::owner_type)),
                             objects::owner_id.eq(excluded(objects::owner_id)),
+                            objects::struct_tag.eq(excluded(objects::struct_tag)),
+                            objects::object_json.eq(excluded(objects::object_json)),
                             objects::serialized_object.eq(excluded(objects::serialized_object)),
                             objects::coin_type.eq(excluded(objects::coin_type)),
                             objects::coin_balance.eq(excluded(objects::coin_balance)),

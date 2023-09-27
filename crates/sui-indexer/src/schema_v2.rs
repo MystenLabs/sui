@@ -61,6 +61,7 @@ diesel::table! {
         event_type -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+        event_json -> Nullable<Text>,
     }
 }
 
@@ -72,6 +73,8 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
+        struct_tag -> Nullable<Text>,
+        object_json -> Nullable<Text>,
         serialized_object -> Bytea,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
