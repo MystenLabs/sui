@@ -5,8 +5,8 @@ pub mod models;
 pub mod schema;
 
 use diesel::pg::PgConnection;
-use diesel::r2d2::ConnectionManager;
 use diesel::prelude::*;
+use diesel::r2d2::ConnectionManager;
 use dotenvy::dotenv;
 use std::env;
 
