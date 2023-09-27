@@ -171,8 +171,15 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should timeout
-        let resp = test_timeout(timeout, timeout).await;
-        assert!(resp.is_err());
+        let errs: Vec<_> = test_timeout(timeout, timeout)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!("Request timed out. Limit: {}s", timeout.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
     }
 
     #[tokio::test]
@@ -198,14 +205,26 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should fail
-        let resp = exec_query_depth_limit(0, "{ chainIdentifier }").await;
-        assert!(resp.is_err());
-        let resp = exec_query_depth_limit(
+        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+
+        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_err());
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
     #[tokio::test]
@@ -231,13 +250,25 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should fail
-        let resp = exec_query_node_limit(0, "{ chainIdentifier }").await;
-        assert!(resp.is_err());
-        let resp = exec_query_node_limit(
+        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+
+        let err: Vec<_> = exec_query_node_limit(
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_err());
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 }
