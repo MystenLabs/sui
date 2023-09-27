@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use data_transform::*;
 use diesel::prelude::*;
 use diesel::RunQueryDsl;
