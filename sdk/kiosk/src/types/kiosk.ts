@@ -108,6 +108,22 @@ export type KioskItem = {
 	/** Optional Kiosk Data */
 	data?: SuiObjectData;
 };
+
+/**
+ * Hold the KioskExtension data
+ */
+export type KioskExtension = {
+	objectId: string;
+	type: string;
+	/** These fields are only there if we have `withExtensions` flag */
+	isEnabled?: boolean;
+	permissions?: string;
+	storage?: {
+		id: string;
+		size: number;
+	};
+};
+
 /**
  * Aggregated data from the Kiosk.
  */
@@ -116,7 +132,7 @@ export type KioskData = {
 	itemIds: string[];
 	listingIds: string[];
 	kiosk?: Kiosk;
-	extensions: any[]; // type will be defined on later versions of the SDK.
+	extensions: KioskExtension[]; // type will be defined on later versions of the SDK.
 };
 
 export type PagedKioskData = {
@@ -130,6 +146,8 @@ export type FetchKioskOptions = {
 	withKioskFields?: boolean;
 	/** Include the listing prices. */
 	withListingPrices?: boolean;
+	/** Include extension metadata */
+	withExtensionDetails?: boolean;
 	/** Include the objects for the Items in the kiosk. Defaults to `display` only. */
 	withObjects?: boolean;
 	/** Pass the data options for the objects, when fetching, in case you want to query other details. */

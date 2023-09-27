@@ -20,6 +20,7 @@ import {
 	Kiosk,
 	KIOSK_TYPE,
 	KioskData,
+	KioskExtension,
 	KioskListing,
 	TRANSFER_POLICY_CAP_TYPE,
 	TransferPolicyCap,
@@ -77,11 +78,11 @@ export function extractKioskData(
 	listings: KioskListing[],
 	lockedItemIds: string[],
 	kioskId: string,
+	extensions: KioskExtension[],
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
 			const type = getTypeWithoutPackageAddress(val.name.type);
-
 			switch (type) {
 				case 'kiosk::Item':
 					acc.itemIds.push(val.objectId);
@@ -103,6 +104,12 @@ export function extractKioskData(
 				case 'kiosk::Lock':
 					lockedItemIds?.push((val.name.value as { id: string }).id);
 					break;
+				case 'kiosk_extension::ExtensionKey':
+					extensions.push({
+						objectId: val.objectId,
+						type: getInnerType(val.name?.type),
+					});
+					break;
 			}
 			return acc;
 		},
@@ -112,7 +119,26 @@ export function extractKioskData(
 
 // e.g. 0x2::kiosk::Item -> kiosk::Item
 export function getTypeWithoutPackageAddress(type: string) {
-	return type.split('::').slice(-2).join('::');
+	return type.split('<')[0].split('::').slice(-2).join('::');
+}
+
+/**
+ * Returns the FIRST inner type
+ * E.g. 0x2::kiosk_extension::ExtensionKey<0x5::game::Game> -> 0x5::game::Game
+ * Or 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::game::Game<0x5::test::Test>
+ */
+export function getInnerType(type: string, depth: number = 1): string {
+	const inner = type.split('<');
+	// remove first part left of first `<`.
+	inner.shift();
+	const innerWithoutFirstType = inner.join('<');
+	const removeLast = innerWithoutFirstType.split('>');
+	// remove last part from latest `>`.
+	removeLast.pop();
+
+	const result = removeLast.join('>');
+
+	return depth === 1 ? result : getInnerType(result, depth - 1);
 }
 
 /**

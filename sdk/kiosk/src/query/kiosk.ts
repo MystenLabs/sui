@@ -13,6 +13,7 @@ import { isValidSuiAddress } from '@mysten/sui.js/utils';
 import {
 	FetchKioskOptions,
 	KIOSK_OWNER_CAP,
+	KioskExtension,
 	KioskListing,
 	OwnedKiosks,
 	PagedKioskData,
@@ -41,9 +42,10 @@ export async function fetchKiosk(
 
 	const listings: KioskListing[] = [];
 	const lockedItemIds: string[] = [];
+	const extensions: KioskExtension[] = [];
 
 	// extracted kiosk data.
-	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId);
+	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId, extensions);
 
 	// split the fetching in two queries as we are most likely passing different options for each kind.
 	// For items, we usually seek the Display.
@@ -71,6 +73,9 @@ export async function fetchKiosk(
 		kioskData,
 		items.filter((x) => !!x.data).map((x) => x.data!),
 	);
+
+	/// TODO: Fetch extensions, if option is there, and then set.
+	kioskData.extensions = extensions;
 
 	return {
 		data: kioskData,
