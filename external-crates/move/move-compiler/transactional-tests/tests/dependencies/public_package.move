@@ -3,7 +3,7 @@
 //# publish
 address 0x42 {
     module x {
-        struct T has drop {}
+        public struct T has drop {}
 
         public(package) fun new(): T {
             T {}
