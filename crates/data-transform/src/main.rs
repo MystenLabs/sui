@@ -1,36 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use data_transform::*;
 use diesel::prelude::*;
 use diesel::RunQueryDsl;
-use anyhow::anyhow;
-use std::sync::Arc;
+use once_cell::sync::Lazy;
 use std::process::exit;
 use std::str::FromStr;
-use once_cell::sync::Lazy;
+use std::sync::Arc;
 
-use sui_types::object::MoveObject;
-use sui_types::object::ObjectFormatOptions;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::value::MoveStruct;
+use sui_types::object::MoveObject;
+use sui_types::object::ObjectFormatOptions;
 
-use sui_indexer::new_pg_connection_pool;
 use self::models::*;
 use std::env;
-use sui_indexer::store::module_resolver::IndexerModuleResolver;
 use sui_indexer::errors::IndexerError;
+use sui_indexer::new_pg_connection_pool;
+use sui_indexer::store::module_resolver::IndexerModuleResolver;
 
-use sui_types::parse_sui_struct_tag;
-use sui_json_rpc_types::SuiMoveStruct;
 use move_core_types::language_storage::ModuleId;
-use std::collections::{HashMap, HashSet};
 use move_core_types::resolver::ModuleResolver;
+use std::collections::{HashMap, HashSet};
+use sui_json_rpc_types::SuiMoveStruct;
+use sui_types::parse_sui_struct_tag;
 
 use tracing::debug;
 extern crate base64;
-use base64::engine::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::engine::Engine as _;
 use move_core_types::account_address::AccountAddress;
 
 struct GrootModuleResolver {
