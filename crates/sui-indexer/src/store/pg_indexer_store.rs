@@ -62,7 +62,7 @@ use crate::schema::{
     epochs, events, input_objects, move_calls, objects, objects_history, packages, recipients,
     system_states, transactions, validators,
 };
-use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
+use crate::store::diesel_macro::{read_only_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
