@@ -72,7 +72,7 @@ module sui::zklogin {
         pin_hash: u256
     ): bool;
 
-    /// Posession of a VerifiedIssuer proves that the uses's address was created using zklogin and
+    /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and
     /// with the given issuer (identity provider).
     struct VerifiedIssuer {
         /// The issuer
