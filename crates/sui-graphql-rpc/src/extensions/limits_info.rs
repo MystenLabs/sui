@@ -5,12 +5,41 @@ use async_graphql::{
     extensions::{Extension, ExtensionContext, ExtensionFactory, NextRequest, NextValidation},
     value, Response, ServerError, ValidationResult,
 };
+use axum::{
+    headers,
+    http::{HeaderName, HeaderValue},
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::config::ServiceConfig;
+static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
 
-pub struct LimitsInfo;
+/// Only display usage information if this header was in the request.
+pub(crate) struct ShowUsage;
+
+pub(crate) struct LimitsInfo;
+
+#[derive(Default)]
+struct LimitsInfoExtension {
+    validation_result: Mutex<Option<ValidationResult>>,
+}
+
+impl headers::Header for ShowUsage {
+    fn name() -> &'static HeaderName {
+        &LIMITS_HEADER
+    }
+
+    fn decode<'i, I>(_: &mut I) -> Result<Self, headers::Error>
+    where
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        Ok(ShowUsage)
+    }
+
+    fn encode<E: Extend<HeaderValue>>(&self, _: &mut E) {
+        unimplemented!()
+    }
+}
 
 impl ExtensionFactory for LimitsInfo {
     fn create(&self) -> Arc<dyn Extension> {
@@ -18,36 +47,22 @@ impl ExtensionFactory for LimitsInfo {
     }
 }
 
-#[derive(Default)]
-struct LimitsInfoExtension {
-    validation_result: Mutex<Option<ValidationResult>>,
-}
-
 #[async_trait::async_trait]
 impl Extension for LimitsInfoExtension {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
-        let cfg = ctx
-            .data::<ServiceConfig>()
-            .expect("No service config provided in schema data");
-        let mut resp = next.run(ctx).await;
+        let resp = next.run(ctx).await;
         let validation_result = self.validation_result.lock().await.take();
         if let Some(validation_result) = validation_result {
-            resp = resp.extension(
-                "usage", // need better name for this
+            resp.extension(
+                "usage",
                 value! ({
                     "nodes": validation_result.complexity,
                     "depth": validation_result.depth,
                 }),
-            );
-            resp = resp.extension(
-                "limits",
-                value! ({
-                    "maxNodes": cfg.limits.max_query_nodes,
-                    "maxDepth": cfg.limits.max_query_depth,
-                }),
-            );
+            )
+        } else {
+            resp
         }
-        resp
     }
 
     async fn validation(
@@ -56,7 +71,9 @@ impl Extension for LimitsInfoExtension {
         next: NextValidation<'_>,
     ) -> Result<ValidationResult, Vec<ServerError>> {
         let res = next.run(ctx).await?;
-        *self.validation_result.lock().await = Some(res);
+        if ctx.data_opt::<ShowUsage>().is_some() {
+            *self.validation_result.lock().await = Some(res);
+        }
         Ok(res)
     }
 }

@@ -14,7 +14,7 @@ use std::fs::{create_dir_all, remove_file};
 use std::path::Path;
 use std::{fs::File, path::PathBuf};
 
-use crate::tables::MoveCallEntry;
+use crate::tables::{MoveCallEntry, MovePackageEntry};
 use sui_storage::object_store::util::path_to_filesystem;
 use sui_types::base_types::EpochId;
 
@@ -27,6 +27,7 @@ pub(crate) struct CSVWriter {
     object_csv: Writer<File>,
     event_csv: Writer<File>,
     move_call_csv: Writer<File>,
+    move_package_csv: Writer<File>,
     filename_suffix: u128,
 }
 
@@ -89,6 +90,13 @@ impl CSVWriter {
             checkpoint_seq_num,
             filename_suffix,
         )?;
+        let move_package_csv = Self::make_writer(
+            root_dir_path.to_path_buf(),
+            FileType::MovePackage,
+            epoch_num,
+            checkpoint_seq_num,
+            filename_suffix,
+        )?;
 
         Ok(CSVWriter {
             root_dir_path: root_dir_path.to_path_buf(),
@@ -98,6 +106,7 @@ impl CSVWriter {
             object_csv,
             event_csv,
             move_call_csv,
+            move_package_csv,
             filename_suffix,
         })
     }
@@ -172,6 +181,13 @@ impl TableWriter for CSVWriter {
     fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]) -> Result<()> {
         for entry in move_call_entries {
             self.move_call_csv.serialize(entry)?;
+        }
+        Ok(())
+    }
+
+    fn write_move_packages(&mut self, package_entries: &[MovePackageEntry]) -> Result<()> {
+        for entry in package_entries {
+            self.move_package_csv.serialize(entry)?;
         }
         Ok(())
     }

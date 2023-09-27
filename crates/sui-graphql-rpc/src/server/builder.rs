@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    extensions::limits_info::ShowUsage,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::middleware;
+use axum::{middleware, TypedHeader};
 use axum::{routing::IntoMakeService, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
@@ -44,13 +45,13 @@ impl ServerBuilder {
         format!("{}:{}", self.host, self.port)
     }
 
-    pub fn max_query_depth(mut self, max_depth: usize) -> Self {
-        self.schema = self.schema.limit_depth(max_depth);
+    pub fn max_query_depth(mut self, max_depth: u32) -> Self {
+        self.schema = self.schema.limit_depth(max_depth as usize);
         self
     }
 
-    pub fn max_query_nodes(mut self, max_nodes: usize) -> Self {
-        self.schema = self.schema.limit_complexity(max_nodes);
+    pub fn max_query_nodes(mut self, max_nodes: u32) -> Self {
+        self.schema = self.schema.limit_complexity(max_nodes as usize);
         self
     }
 
@@ -85,9 +86,15 @@ impl ServerBuilder {
 
 async fn graphql_handler(
     schema: axum::Extension<SuiGraphQLSchema>,
+    usage: Option<TypedHeader<ShowUsage>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
+    let mut req = req.into_inner();
+    if let Some(TypedHeader(usage)) = usage {
+        req.data.insert(usage)
+    }
+
+    schema.execute(req).await.into()
 }
 
 async fn graphiql() -> impl axum::response::IntoResponse {
@@ -170,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_depth_limit() {
-        async fn exec_query_depth_limit(depth: usize, query: &str) -> Response {
+        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
@@ -203,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_node_limit() {
-        async fn exec_query_node_limit(nodes: usize, query: &str) -> Response {
+        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())

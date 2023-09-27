@@ -3,12 +3,13 @@
 
 use std::collections::BTreeSet;
 
+use async_graphql::*;
 use serde::{Deserialize, Serialize};
 
 use crate::functional_group::FunctionalGroup;
 
-const MAX_QUERY_DEPTH: usize = 10;
-const MAX_QUERY_NODES: usize = 100;
+const MAX_QUERY_DEPTH: u32 = 10;
+const MAX_QUERY_NODES: u32 = 100;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 pub struct ConnectionConfig {
@@ -18,7 +19,7 @@ pub struct ConnectionConfig {
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
@@ -31,16 +32,16 @@ pub struct ServiceConfig {
     pub(crate) experiments: Experiments,
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
-    pub(crate) max_query_depth: usize,
+    pub(crate) max_query_depth: u32,
     #[serde(default)]
-    pub(crate) max_query_nodes: usize,
+    pub(crate) max_query_nodes: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {
     // Add experimental flags here, to provide access to them through-out the GraphQL
@@ -63,6 +64,33 @@ impl ConnectionConfig {
 impl ServiceConfig {
     pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
         toml::de::from_str::<Self>(contents)
+    }
+}
+
+#[Object]
+impl ServiceConfig {
+    /// Check whether `feature` is enabled on this GraphQL service.
+    async fn is_enabled(&self, feature: FunctionalGroup) -> Result<bool> {
+        Ok(!self.disabled_features.contains(&feature))
+    }
+
+    /// List of all features that are enabled on this GraphQL service.
+    async fn enabled_features(&self) -> Result<Vec<FunctionalGroup>> {
+        Ok(FunctionalGroup::all()
+            .iter()
+            .filter(|g| !self.disabled_features.contains(g))
+            .copied()
+            .collect())
+    }
+
+    /// The maximum depth a GraphQL query can be to be accepted by this service.
+    async fn max_query_depth(&self) -> Result<u32> {
+        Ok(self.limits.max_query_depth)
+    }
+
+    /// The maximum number of nodes (field names) the service will accept in a single query.
+    async fn max_query_nodes(&self) -> Result<u32> {
+        Ok(self.limits.max_query_nodes)
     }
 }
 

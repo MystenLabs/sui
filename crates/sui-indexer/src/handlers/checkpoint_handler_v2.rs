@@ -347,6 +347,9 @@ where
                     .map(|(object_ref, _owner, _write_kind)| object_ref.0)
                     .collect::<Vec<_>>();
 
+                // Payers
+                let payers = vec![tx.gas_owner()];
+
                 // Senders
                 let senders = vec![tx.sender()];
 
@@ -375,6 +378,7 @@ where
                     input_objects,
                     changed_objects,
                     senders,
+                    payers,
                     recipients,
                     move_calls,
                 });

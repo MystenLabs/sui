@@ -42,6 +42,7 @@ const TRANSACTION_DIR_PREFIX: &str = "transactions";
 const EVENT_DIR_PREFIX: &str = "events";
 const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
+const MOVE_PACKAGE_PREFIX: &str = "move_package";
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -130,6 +131,7 @@ pub enum FileType {
     TransactionObjects,
     Event,
     MoveCall,
+    MovePackage,
 }
 
 impl FileType {
@@ -141,6 +143,7 @@ impl FileType {
             FileType::Object => Path::from(OBJECT_DIR_PREFIX),
             FileType::Event => Path::from(EVENT_DIR_PREFIX),
             FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
+            FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
         }
     }
 

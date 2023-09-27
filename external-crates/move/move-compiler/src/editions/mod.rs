@@ -28,6 +28,7 @@ pub struct Edition {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum FeatureGate {
     PublicPackage,
+    PostFixAbilities,
     DotCall,
 }
 
@@ -42,7 +43,12 @@ pub enum Flavor {
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: FeatureGate, loc: Loc) {
+pub fn check_feature(
+    env: &mut CompilationEnv,
+    edition: Edition,
+    feature: FeatureGate,
+    loc: Loc,
+) -> bool {
     if !edition.supports(feature) {
         let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
@@ -64,6 +70,9 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: Featur
             or via command line flag if invoking the compiler directly.",
         );
         env.add_diag(diag);
+        false
+    } else {
+        true
     }
 }
 
@@ -81,6 +90,12 @@ pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
 
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
+
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
+    FeatureGate::PublicPackage,
+    FeatureGate::PostFixAbilities,
+    FeatureGate::DotCall,
+];
 
 impl Edition {
     pub const LEGACY: Self = Self {
@@ -116,7 +131,7 @@ impl Edition {
             Self::LEGACY => BTreeSet::new(),
             Self::E2024_ALPHA => {
                 let mut features = self.prev().unwrap().features();
-                features.extend([FeatureGate::PublicPackage, FeatureGate::DotCall]);
+                features.extend(E2024_ALPHA_FEATURES);
                 features
             }
             _ => self.unknown_edition_panic(),

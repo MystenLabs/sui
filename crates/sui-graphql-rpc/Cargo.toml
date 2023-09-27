@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 async-graphql = {workspace = true, features = ["dataloader"] }
-async-graphql-axum = { version = "5.0.10" }
+async-graphql-axum.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
@@ -17,6 +17,7 @@ clap.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 hex.workspace = true
 hyper.workspace = true
+move-core-types.workspace = true
 once_cell.workspace = true
 serde.workspace = true
 serde_json.workspace = true

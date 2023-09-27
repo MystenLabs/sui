@@ -20,12 +20,15 @@ schema {
 
 type Query {
   # First four bytes of the network's genesis checkpoint digest
-  # (uniquely defines the network)
+  # (uniquely identifies the network)
   chainIdentifier: String!
 
   # Range of checkpoints that the RPC has data available for (for data
   # that can be tied to a particular checkpoint).
   availableRange: AvailableRange!
+
+  # Configuration for this RPC service
+  serviceConfig: ServiceConfig!
 
   # Simulate running a transaction to inspect its effects without
   # committing to them on-chain.
@@ -174,6 +177,20 @@ scalar Base64
 # ISO-8601 Date and Time
 scalar DateTime
 
+# Scalar representing the contents of a Move Value, corresponding to
+# the following recursive type:
+#
+# type MoveData =
+#     { Number:  BigInt }
+#   | { Bool:    bool }
+#   | { Address: SuiAddress }
+#   | { UID:     SuiAddress }
+#   | { String:  string }
+#   | { Vector:  [MoveData] }
+#   | { Option:   MoveData? }
+#   | { Struct:  [{ name: string, value: MoveData }] }
+scalar MoveData
+
 # The extra data required to turn a `TransactionKind` into a
 # `TransactionData` in a dry-run.
 input TransactionMetadata {
@@ -285,6 +302,23 @@ input DynamicFieldFilter {
 type AvailableRange {
   first: Checkpoint
   last: Checkpoint
+}
+
+type ServiceConfig {
+  enabledFeatures: [Feature!]
+  isEnabled(feature: Feature!): Boolean!
+
+  maxQueryDepth: Int
+  maxQueryNodes: Int
+}
+
+enum Feature {
+  ANALYTICS
+  COINS
+  DYNAMIC_FIELDS
+  NAME_SERVICE
+  SUBSCRIPTIONS
+  SYSTEM_STATE
 }
 
 interface ObjectOwner {
@@ -922,7 +956,7 @@ type MoveModule {
   fileFormatVersion: Int!
 
   moduleId: MoveModuleId!
-  friends: [MoveModuleId]
+  friends: [MoveModule!]
 
   struct(name: String!): MoveStructDecl
   structConnection(
@@ -950,10 +984,10 @@ type MoveStructDecl {
   name: String!
   abilities: [MoveAbility]
   typeParameters: [MoveStructTypeParameterDecl]
-  fields: [MoveField]
+  fields: [MoveFieldDecl]
 }
 
-type MoveField {
+type MoveFieldDecl {
   name: String
   type: OpenMoveType
 }
@@ -976,30 +1010,6 @@ type MoveValue {
   data: MoveData
 
   bcs: Base64
-}
-
-union MoveData =
-    MoveNumber
-  | MoveBool
-  | MoveAddress
-  | MoveUID
-  | MoveString
-  | MoveVector
-  | MoveOption
-  | MoveStruct
-
-type MoveNumber  { number: String! }
-type MoveBool    { bool: Boolean! }
-type MoveAddress { address: SuiAddress! }
-type MoveUID     { uid: SuiAddress! }
-type MoveString  { string: String! }
-type MoveVector  { elements: [MoveValue!]! }
-type MoveOption  { element: MoveValue }
-type MoveStruct  { fields: [MoveField!]! }
-
-type MoveField {
-  name: String!
-  value: MoveValue!
 }
 
 type MoveTypeName {

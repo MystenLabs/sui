@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 
 use crate::tables::{
-    CheckpointEntry, EventEntry, MoveCallEntry, ObjectEntry, TransactionEntry,
+    CheckpointEntry, EventEntry, MoveCallEntry, MovePackageEntry, ObjectEntry, TransactionEntry,
     TransactionObjectEntry,
 };
 use anyhow::Result;
@@ -22,6 +22,7 @@ pub(crate) trait TableWriter: Send + Sync + 'static {
     fn write_objects(&mut self, object_entries: &[ObjectEntry]) -> Result<()>;
     fn write_events(&mut self, event_entries: &[EventEntry]) -> Result<()>;
     fn write_move_calls(&mut self, move_call_entries: &[MoveCallEntry]) -> Result<()>;
+    fn write_move_packages(&mut self, move_package_entries: &[MovePackageEntry]) -> Result<()>;
     fn flush(&mut self) -> Result<()>;
     fn reset(&mut self, epoch_num: EpochId, checkpoint_seq_num: u64) -> Result<()>;
 }
@@ -40,6 +41,7 @@ pub(crate) struct CheckpointWriter {
     object_entries: Vec<ObjectEntry>,
     event_entries: Vec<EventEntry>,
     move_call_entries: Vec<MoveCallEntry>,
+    package_entries: Vec<MovePackageEntry>,
 }
 
 impl CheckpointWriter {
@@ -51,6 +53,7 @@ impl CheckpointWriter {
             object_entries: Vec::with_capacity(INITIAL_CAPACITY),
             event_entries: Vec::with_capacity(INITIAL_CAPACITY),
             move_call_entries: Vec::with_capacity(INITIAL_CAPACITY),
+            package_entries: Vec::with_capacity(INITIAL_CAPACITY),
         }
     }
 
@@ -62,12 +65,14 @@ impl CheckpointWriter {
         writer.write_objects(&self.object_entries)?;
         writer.write_events(&self.event_entries)?;
         writer.write_move_calls(&self.move_call_entries)?;
+        writer.write_move_packages(&self.package_entries)?;
         self.checkpoint_entries.clear();
         self.transaction_entries.clear();
         self.transaction_object_entries.clear();
         self.object_entries.clear();
         self.event_entries.clear();
         self.move_call_entries.clear();
+        self.package_entries.clear();
         Ok(())
     }
 
@@ -83,15 +88,19 @@ impl CheckpointWriter {
         self.transaction_object_entries.push(entry);
     }
 
-    pub(crate) fn write_objects(&mut self, entry: ObjectEntry) {
+    pub(crate) fn write_object(&mut self, entry: ObjectEntry) {
         self.object_entries.push(entry);
     }
 
-    pub(crate) fn write_events(&mut self, entry: EventEntry) {
+    pub(crate) fn write_event(&mut self, entry: EventEntry) {
         self.event_entries.push(entry);
     }
 
-    pub(crate) fn write_move_calls(&mut self, entry: MoveCallEntry) {
+    pub(crate) fn write_move_call(&mut self, entry: MoveCallEntry) {
         self.move_call_entries.push(entry);
+    }
+
+    pub(crate) fn write_package(&mut self, entry: MovePackageEntry) {
+        self.package_entries.push(entry);
     }
 }
