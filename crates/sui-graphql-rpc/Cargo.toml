@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 async-graphql = {workspace = true, features = ["dataloader"] }
-async-graphql-axum = { version = "5.0.10" }
+async-graphql-axum.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true

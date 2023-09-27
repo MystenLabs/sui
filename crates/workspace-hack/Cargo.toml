@@ -59,10 +59,10 @@ ascii_utils = { version = "0.9", default-features = false }
 asn1-rs = { version = "0.5", features = ["datetime"] }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
-async-graphql = { version = "5", features = ["dataloader"] }
-async-graphql-axum = { version = "5", default-features = false }
-async-graphql-parser = { version = "5", default-features = false }
-async-graphql-value = { version = "5", default-features = false }
+async-graphql = { version = "6", features = ["dataloader"] }
+async-graphql-axum = { version = "6", default-features = false }
+async-graphql-parser = { version = "6", default-features = false }
+async-graphql-value = { version = "6", default-features = false }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async_once = { version = "0.2", default-features = false }
@@ -245,6 +245,7 @@ encode_unicode-dff4ba8e3ae991db = { package = "encode_unicode", version = "1" }
 encoding_rs = { version = "0.8" }
 endian-type = { version = "0.1", default-features = false }
 enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
+equivalent = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
@@ -299,6 +300,7 @@ h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 handlebars = { version = "4" }
+hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", default-features = false, features = ["raw"] }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
@@ -329,7 +331,8 @@ impl-codec = { version = "0.5", default-features = false, features = ["std"] }
 impl-serde = { version = "0.3", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
-indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2", features = ["serde"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
@@ -628,7 +631,7 @@ spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = 
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim = { version = "0.10", default-features = false }
-strum = { version = "0.24", features = ["derive"] }
+strum-adf3d7031871b0af = { package = "strum", version = "0.24", features = ["derive"] }
 subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
@@ -797,11 +800,11 @@ asn1-rs-derive = { version = "0.4", default-features = false }
 asn1-rs-impl = { version = "0.1", default-features = false }
 assert_cmd = { version = "2", default-features = false }
 async-compression = { version = "0.3", features = ["brotli", "gzip", "tokio", "zlib"] }
-async-graphql = { version = "5", features = ["dataloader"] }
-async-graphql-axum = { version = "5", default-features = false }
-async-graphql-derive = { version = "5", default-features = false }
-async-graphql-parser = { version = "5", default-features = false }
-async-graphql-value = { version = "5", default-features = false }
+async-graphql = { version = "6", features = ["dataloader"] }
+async-graphql-axum = { version = "6", default-features = false }
+async-graphql-derive = { version = "6", default-features = false }
+async-graphql-parser = { version = "6", default-features = false }
+async-graphql-value = { version = "6", default-features = false }
 async-lock = { version = "2", default-features = false }
 async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
@@ -953,9 +956,12 @@ ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "4", features = ["digest"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
-darling = { version = "0.14" }
-darling_core = { version = "0.14", default-features = false, features = ["suggestions"] }
-darling_macro = { version = "0.14", default-features = false }
+darling-56bd22fc3884b12 = { package = "darling", version = "0.20" }
+darling-582f2526e08bb6a0 = { package = "darling", version = "0.14" }
+darling_core-56bd22fc3884b12 = { package = "darling_core", version = "0.20", default-features = false, features = ["suggestions"] }
+darling_core-582f2526e08bb6a0 = { package = "darling_core", version = "0.14", default-features = false, features = ["suggestions"] }
+darling_macro-56bd22fc3884b12 = { package = "darling_macro", version = "0.20", default-features = false }
+darling_macro-582f2526e08bb6a0 = { package = "darling_macro", version = "0.14", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
 data-encoding-macro = { version = "0.1", default-features = false }
@@ -1013,6 +1019,7 @@ encoding_rs = { version = "0.8" }
 endian-type = { version = "0.1", default-features = false }
 enum-compat-util = { path = "../../external-crates/move/testing-infra/enum-compat-util", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
+equivalent = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
 expect-test = { version = "1", default-features = false }
@@ -1070,6 +1077,7 @@ h2 = { version = "0.3", default-features = false }
 hakari = { version = "0.13", default-features = false, features = ["cli-support"] }
 half = { version = "1", default-features = false }
 handlebars = { version = "4" }
+hashbrown-582f2526e08bb6a0 = { package = "hashbrown", version = "0.14", default-features = false, features = ["raw"] }
 hashbrown-594e8ee84c453af0 = { package = "hashbrown", version = "0.13", features = ["raw"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["raw"] }
 hdrhistogram = { version = "7" }
@@ -1107,7 +1115,8 @@ impl-trait-for-tuples = { version = "0.2", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
-indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-dff4ba8e3ae991db = { package = "indexmap", version = "1", default-features = false, features = ["serde", "std"] }
+indexmap-f595c2ba2a3f28df = { package = "indexmap", version = "2", features = ["serde"] }
 indicatif = { version = "0.17" }
 inout = { version = "0.1", default-features = false, features = ["std"] }
 inquire = { version = "0.6" }
@@ -1456,14 +1465,16 @@ spki-ca01ad9e24f5d932 = { package = "spki", version = "0.7", default-features = 
 static_assertions = { version = "1", default-features = false }
 strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim = { version = "0.10", default-features = false }
-strum = { version = "0.24", features = ["derive"] }
-strum_macros = { version = "0.24", default-features = false }
+strum-2ffb4c3fe830441c = { package = "strum", version = "0.25", features = ["derive"] }
+strum-adf3d7031871b0af = { package = "strum", version = "0.24", features = ["derive"] }
+strum_macros-2ffb4c3fe830441c = { package = "strum_macros", version = "0.25", default-features = false }
+strum_macros-adf3d7031871b0af = { package = "strum_macros", version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
 subtle = { version = "2" }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["extra-traits", "full", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit-mut"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 synstructure = { version = "0.12" }
 sysinfo = { version = "0.27" }
