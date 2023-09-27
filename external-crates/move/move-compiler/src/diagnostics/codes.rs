@@ -251,7 +251,7 @@ codes!(
                 (NOTE: this may become an error in the future)",
             severity: Warning
         },
-        InvalidMethodCall: { msg: "invalid method style call", severity: BlockingError },
+        InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

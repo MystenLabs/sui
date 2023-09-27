@@ -2356,7 +2356,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                     .env
                     .check_feature(FeatureGate::DotCall, context.current_package, loc);
                 if context.in_spec_context {
-                    let msg = "method-style syntax is not supported in specifications";
+                    let msg = "method syntax is not supported in specifications";
                     context
                         .env
                         .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));

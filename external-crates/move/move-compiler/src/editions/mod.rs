@@ -253,7 +253,7 @@ impl Display for FeatureGate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FeatureGate::PublicPackage => write!(f, "'{}'", Visibility::PACKAGE),
-            FeatureGate::DotCall => write!(f, "method style syntax"),
+            FeatureGate::DotCall => write!(f, "method syntax"),
         }
     }
 }

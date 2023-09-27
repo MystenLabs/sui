@@ -2154,20 +2154,19 @@ fn method_call(
         t => {
             let msg = match t {
                 Ty::Anything => {
-                    "Unable to infer type for method style call. Try annotating this type"
-                        .to_owned()
+                    "Unable to infer type for method call. Try annotating this type".to_owned()
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) => {
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
-                        "Method style syntax is only supported on single types. \
+                        "Method calls are only supported on single types. \
                           Got an expression of type: {tsubst}",
                     )
                 }
                 Ty::Param(_) => {
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
-                        "Method style syntax is not supported on type parameters. \
+                        "Method calls are not supported on type parameters. \
                         Got an expression of type: {tsubst}",
                     )
                 }
@@ -2180,7 +2179,7 @@ fn method_call(
             };
             context.env.add_diag(diag!(
                 TypeSafety::InvalidMethodCall,
-                (loc, "Invalid method style syntax usage"),
+                (loc, "Invalid method call"),
                 (edotted_ty.loc, msg),
             ));
             return None;

@@ -119,7 +119,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             let kind = nuf.kind;
             assert!(
                 kind == N::UseFunKind::Explicit,
-                "ICE all resolved use funs should be explicit at this stage. kind {kind}"
+                "ICE all resolved use funs should be explicit at this stage. kind {kind:?}"
             );
             let (first_ty_loc, first_ty) = first_arg_type(context, &m, &f);
             let is_valid = match first_ty

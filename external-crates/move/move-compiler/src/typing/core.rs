@@ -843,8 +843,8 @@ pub fn make_method_call_type(
                 None => "but it takes no arguments".to_owned(),
             };
             let msg = format!(
-                "Invalid method style syntax usage. \
-                Unbound alias for method style call of '{method}' on type '{lhs_ty_str}'"
+                "Invalid method call. \
+                No known method '{method}' on type '{lhs_ty_str}'"
             );
             let fmsg = format!("The function '{m}::{method}' exists, {arg_msg}");
             context.env.add_diag(diag!(
@@ -854,8 +854,8 @@ pub fn make_method_call_type(
             ));
         } else {
             let msg = format!(
-                "Invalid method style syntax usage. \
-                Unbound alias for method style call of '{method}' on type '{lhs_ty_str}'"
+                "Invalid method call. \
+                No known method '{method}' on type '{lhs_ty_str}'"
             );
             let decl_msg = match defining_module {
                 Some(m) => {
