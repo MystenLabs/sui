@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getSendOrSwapUrl } from '_app/helpers/getSendOrSwapUrl';
-import { getUSDCurrency } from '_app/helpers/getUSDCurrency';
-import { useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
+import { getUSDCurrency, useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
 import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
@@ -28,8 +27,9 @@ import { useAllBalances, useBalance } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, MIST_PER_SUI, SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
+import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -64,11 +64,13 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 }
 
 function TokenRowSuiToUSDC({ suiBalance }: { suiBalance: BigInt }) {
-	const usd = useSuiBalanceInUSDC(suiBalance);
+	const { rawValue } = useSuiBalanceInUSDC(
+		new BigNumber(suiBalance.toString()).shiftedBy(-1 * SUI_DECIMALS),
+	);
 
 	return (
 		<Text variant="subtitle" color="steel-dark" weight="medium">
-			{getUSDCurrency(usd)}
+			{getUSDCurrency(rawValue)}
 		</Text>
 	);
 }
@@ -307,7 +309,10 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	const tokenBalance = BigInt(coinBalance?.totalBalance ?? 0);
 
-	const walletBalanceInUSD = useSuiBalanceInUSDC(tokenBalance);
+	const { rawValue: rawBalanceInUSD } = useSuiBalanceInUSDC(
+		new BigNumber(tokenBalance.toString()).shiftedBy(-1 * SUI_DECIMALS),
+	);
+	const walletBalanceInUSD = getUSDCurrency(rawBalanceInUSD);
 
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
@@ -371,7 +376,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 											<CoinBalance amount={tokenBalance} type={activeCoinType} />
 											{walletBalanceInUSD && isDefiWalletEnabled && (
 												<Text variant="caption" weight="medium" color="hero-darkest">
-													{getUSDCurrency(walletBalanceInUSD)}
+													{walletBalanceInUSD}
 												</Text>
 											)}
 										</div>

@@ -1,18 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getSendOrSwapUrl } from '_app/helpers/getSendOrSwapUrl';
 import { coinsMap } from '_app/hooks/useDeepbook';
 import Overlay from '_components/overlay';
 import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
 import { useBalance } from '@mysten/dapp-kit';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 const recognizedCoins = Object.values(coinsMap);
 
-function QuoteAsset({ coinType, borderBottom }: { coinType: string; borderBottom?: boolean }) {
-	const navigate = useNavigate();
+function QuoteAsset({
+	coinType,
+	borderBottom,
+	onClick,
+}: {
+	coinType: string;
+	onClick: (coinType: string) => void;
+	borderBottom?: boolean;
+}) {
 	const accountAddress = useActiveAddress();
 	const [searchParams] = useSearchParams();
 	const activeCoinType = searchParams.get('type');
@@ -34,23 +40,30 @@ function QuoteAsset({ coinType, borderBottom }: { coinType: string; borderBottom
 			borderBottom={borderBottom}
 			coinBalance={coinBalance}
 			onClick={() => {
-				navigate(getSendOrSwapUrl('swap', activeCoinType || '', coinType));
+				onClick(coinType);
 			}}
 		/>
 	);
 }
 
-export function QuoteAssets() {
-	const navigate = useNavigate();
-
+export function QuoteAssets({
+	setOpen,
+	isOpen,
+	onRowClick,
+}: {
+	setOpen: (isOpen: boolean) => void;
+	isOpen: boolean;
+	onRowClick: (coinType: string) => void;
+}) {
 	return (
-		<Overlay showModal title="Select a Coin" closeOverlay={() => navigate(-1)}>
+		<Overlay showModal={isOpen} title="Select a Coin" closeOverlay={() => setOpen(false)}>
 			<div className="flex flex-shrink-0 justify-start flex-col w-full">
 				{recognizedCoins.map((coinType, index) => (
 					<QuoteAsset
 						key={coinType}
 						borderBottom={index !== recognizedCoins.length - 1}
 						coinType={coinType}
+						onClick={onRowClick}
 					/>
 				))}
 			</div>
