@@ -120,7 +120,7 @@ pub async fn perform_zk_login_test_tx(
         .await?;
     println!(
         "Faucet requested and created test transaction: {:?}",
-        Base64::encode(&bcs::to_bytes(&txb_res).unwrap())
+        Base64::encode(bcs::to_bytes(&txb_res).unwrap())
     );
 
     // Sign transaction with the ephemeral key
