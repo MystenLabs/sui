@@ -8,8 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::functional_group::FunctionalGroup;
 
-const MAX_QUERY_DEPTH: u32 = 3;
-const MAX_QUERY_NODES: u32 = 10;
+const MAX_QUERY_DEPTH: u32 = 10;
+const MAX_QUERY_NODES: u32 = 100;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 pub struct ConnectionConfig {
