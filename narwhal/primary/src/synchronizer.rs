@@ -706,17 +706,9 @@ impl Synchronizer {
 
         if !verified_indirectly {
             // Verify the certificate (and the embedded header).
-            // TODO(arun): Re-enable verification
-            // certificate
-            //     .verify(&self.inner.committee, &self.inner.worker_cache)
-            //     .map_err(DagError::from)?;
-            if self.inner.protocol_config.narwhal_certificate_v2() {
-                certificate.set_aggregate_signature_state(
-                    AggregateSignatureState::VerifiedDirectly(
-                        certificate.aggregated_signature().clone(),
-                    ),
-                );
-            }
+            certificate
+                .verify(&self.inner.committee, &self.inner.worker_cache)
+                .map_err(DagError::from)?;
         } else {
             if self.inner.protocol_config.narwhal_certificate_v2() {
                 certificate.set_aggregate_signature_state(
