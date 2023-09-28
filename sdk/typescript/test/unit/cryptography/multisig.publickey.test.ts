@@ -10,10 +10,8 @@ import { bcs } from '../../../src/bcs/index.js';
 import { IntentScope, messageWithIntent } from '../../../src/cryptography/intent';
 import { decodeMultiSig } from '../../../src/cryptography/multisig';
 import { PublicKey } from '../../../src/cryptography/publickey';
-import {
-	parseSerializedSignature,
-	SIGNATURE_SCHEME_TO_FLAG,
-} from '../../../src/cryptography/signature';
+import { SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography/signature-scheme.js';
+import { parseSerializedSignature } from '../../../src/cryptography/signature.js';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
