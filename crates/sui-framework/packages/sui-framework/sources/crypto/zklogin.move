@@ -14,8 +14,7 @@ module sui::zklogin {
     /// Error if the proof consisting of the inputs provided to the verification function is invalid.
     const EInvalidProof: u64 = 1;
 
-    /// Posession of a VerifiedID proves that the user's address was created using zklogin and the
-    /// given parameters
+    /// Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
     struct VerifiedID has key {
 
         /// The ID of this VerifiedID
@@ -62,9 +61,9 @@ module sui::zklogin {
         verified_id.aud
     }
 
-    /// Verify that the caller's address was created using zklogin and the given parameters. If so,
-    /// a VerifiedID cantaining the caller's id (claim name and value, issuer and wallet id) is
-    /// returned. Otherwise, abort.
+    /// Verify that the caller's address was created using zklogin and the given parameters. If so, a VerifiedID with
+    /// the caller's id (claim name and value, issuer and wallet id) is returned. Aborts with code `EInvalidProof` if
+    /// the verification fails.
     public fun verify_zklogin_id(
         kc_name: String,
         kc_value: String,
@@ -104,8 +103,8 @@ module sui::zklogin {
         pin_hash: u256
     ): bool;
 
-    /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and
-    /// with the given issuer (identity provider).
+    /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and with the given issuer
+    /// (identity provider).
     struct VerifiedIssuer has key {
 
         /// The ID of this VerifiedIssuer
@@ -128,8 +127,8 @@ module sui::zklogin {
         verified_issuer.iss
     }
 
-    /// Verify that the caller's address was created using zklogin with the given issuer. If so,
-    /// a VerifiedIssuer object cantaining the issuers id returned. Otherwise, None is returned.
+    /// Verify that the caller's address was created using zklogin with the given issuer. If so, a VerifiedIssuer object
+    /// with the issuers id returned. Aborts with code `EInvalidProof` if the verification fails.
     public fun verify_zklogin_iss(
         address_seed: u256,
         iss: String,
