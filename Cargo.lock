@@ -1404,12 +1404,6 @@ checksum = "4c7f02d4ea65f2c1853089ffd8d2787bdbc63de2f0d29dedbcf8ccdfa0ccd4cf"
 
 [[package]]
 name = "base64"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3441f0f7b02788e948e47f457ca01f1d7e6d92c693bc132c22b087d3141c03ff"
-
-[[package]]
-name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
@@ -2773,7 +2767,7 @@ name = "data-transform"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64 0.12.3",
+ "base64 0.21.2",
  "diesel",
  "dotenvy",
  "fastcrypto",
@@ -2786,6 +2780,7 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-types",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -13594,6 +13589,7 @@ dependencies = [
  "displaydoc",
  "dissimilar",
  "doc-comment",
+ "dotenvy",
  "downcast",
  "duration-str",
  "dyn-clone",
