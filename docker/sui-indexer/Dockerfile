@@ -21,8 +21,8 @@ RUN cargo build --profile ${PROFILE} --bin sui-indexer
 FROM debian:bullseye-slim AS runtime
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
-# sui-indexer needs postgres libpq5 and ca-certificates
-RUN apt update && apt install -y libpq5 ca-certificates
+# sui-indexer needs postgres libpq5 and ca-certificates, mysql needs libmariadb3
+RUN apt update && apt install -y libpq5 ca-certificates libmariadb3
 
 ARG BUILD_DATE
 ARG GIT_REVISION

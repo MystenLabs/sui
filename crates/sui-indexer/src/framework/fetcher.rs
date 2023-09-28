@@ -15,7 +15,7 @@ pub struct CheckpointFetcher {
 
 impl CheckpointFetcher {
     const INTERVAL_PERIOD: std::time::Duration = std::time::Duration::from_secs(5);
-    const CHECKPOINT_DOWNLOAD_CONCURRENCY: usize = 100;
+    const CHECKPOINT_DOWNLOAD_CONCURRENCY: usize = 1000;
 
     pub fn new(
         client: Client,
@@ -71,10 +71,15 @@ impl CheckpointFetcher {
             info!("Starting download of checkpoints {checkpoint_range:?}");
         }
 
+        let cp_download_concurrency = std::env::var("CP_DOWNLOAD_CONCURRENCY")
+            .unwrap_or(Self::CHECKPOINT_DOWNLOAD_CONCURRENCY.to_string())
+            .parse::<usize>()
+            .unwrap();
         let mut checkpoint_stream = checkpoint_range
             .map(|next| self.client.get_full_checkpoint(next))
             .pipe(futures::stream::iter)
-            .buffered(Self::CHECKPOINT_DOWNLOAD_CONCURRENCY);
+            .buffered(cp_download_concurrency);
+        info!("Starting download with concurrency {cp_download_concurrency}");
 
         while let Some(maybe_checkpoint) = checkpoint_stream.next().await {
             let checkpoint = maybe_checkpoint?;

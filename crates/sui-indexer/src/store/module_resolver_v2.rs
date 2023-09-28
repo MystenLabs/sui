@@ -14,23 +14,21 @@ use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::ObjectID;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::MovePackage;
 
 use crate::errors::{Context, IndexerError};
 use crate::models_v2::packages::StoredPackage;
-use crate::store::diesel_marco::read_only_blocking;
-use crate::PgConnectionPool;
+use crate::store::diesel_marco::read_only_blocking_v2;
+use crate::DbConnectionPool;
 
 /// A package resolver that reads packages from the database.
 pub struct IndexerStoreModuleResolver {
-    cp: PgConnectionPool,
+    cp: DbConnectionPool,
 }
 
 impl IndexerStoreModuleResolver {
-    // TODO remove this after integration is done
     #[allow(dead_code)]
-    pub fn new(cp: PgConnectionPool) -> Self {
+    pub fn new(cp: DbConnectionPool) -> Self {
         Self { cp }
     }
 }
@@ -39,12 +37,12 @@ impl ModuleResolver for IndexerStoreModuleResolver {
     type Error = IndexerError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let package_id = ObjectID::from(*id.address()).to_vec();
+        let package_id = ObjectID::from(*id.address()).to_string();
         let module_name = id.name().to_string();
 
         // Note: this implementation is potentially vulnerable to package upgrade race conditions
         // for framework packages because they reuse the same package IDs.
-        let stored_package: StoredPackage = read_only_blocking!(&self.cp, |conn| {
+        let stored_package: StoredPackage = read_only_blocking_v2!(&self.cp, |conn| {
             packages::dsl::packages
                 .filter(packages::dsl::package_id.eq(package_id))
                 .first::<StoredPackage>(conn)
@@ -75,19 +73,14 @@ pub struct InterimModuleResolver<GM> {
 }
 
 impl<GM> InterimModuleResolver<GM> {
-    // TODO remove this after integration is done
     #[allow(dead_code)]
     pub fn new(
         backup: GM,
         package_cache: Arc<Mutex<IndexingPackageCache>>,
         new_packages: &[IndexedPackage],
-        checkpoint_seq: CheckpointSequenceNumber,
         metrics: IndexerMetrics,
     ) -> Self {
-        package_cache
-            .lock()
-            .unwrap()
-            .insert_packages(new_packages, checkpoint_seq);
+        package_cache.lock().unwrap().insert_packages(new_packages);
         Self {
             backup,
             package_cache,

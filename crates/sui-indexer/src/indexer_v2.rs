@@ -20,7 +20,7 @@ use crate::store::IndexerStoreV2;
 
 pub struct IndexerV2;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 1000;
+const DOWNLOAD_QUEUE_SIZE: usize = 5000;
 
 impl IndexerV2 {
     pub async fn start<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
@@ -56,10 +56,14 @@ impl IndexerV2 {
 
         info!("Starting fullnode sync worker");
         // None will be returned when checkpoints table is empty.
-        let last_seq_from_db = store
-            .get_latest_tx_checkpoint_sequence_number()
-            .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB");
+        // let last_seq_from_db = store
+        //     .get_latest_tx_checkpoint_sequence_number()
+        //     .await
+        //     .expect("Failed to get latest tx checkpoint sequence number from DB");
+        let last_seq_from_db = std::env::var("START_CP")
+            .unwrap_or("7141961".to_string())
+            .parse::<u64>()
+            .unwrap();
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
                 DOWNLOAD_QUEUE_SIZE,
@@ -73,7 +77,7 @@ impl IndexerV2 {
         let rest_client = sui_rest_api::Client::new(&rest_api_url);
         let fetcher = CheckpointFetcher::new(
             rest_client.clone(),
-            last_seq_from_db,
+            Some(last_seq_from_db),
             downloaded_checkpoint_data_sender,
         );
         spawn_monitored_task!(fetcher.run());

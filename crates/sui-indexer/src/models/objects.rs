@@ -50,12 +50,12 @@ pub struct Object {
     pub object_id: String,
     pub version: i64,
     pub object_digest: String,
-    pub owner_type: OwnerType,
+    pub owner_type: String,
     pub owner_address: Option<String>,
     pub initial_shared_version: Option<i64>,
     pub previous_transaction: String,
     pub object_type: String,
-    pub object_status: ObjectStatus,
+    pub object_status: String,
     pub has_public_transfer: bool,
     pub storage_rebate: i64,
     pub bcs: Vec<NamedBcsBytes>,
@@ -86,10 +86,10 @@ pub struct DeletedObject {
     pub object_id: String,
     pub version: i64,
     pub object_digest: String,
-    pub owner_type: OwnerType,
+    pub owner_type: String,
     pub previous_transaction: String,
     pub object_type: String,
-    pub object_status: ObjectStatus,
+    pub object_status: String,
     pub has_public_transfer: bool,
 }
 
@@ -125,6 +125,31 @@ pub enum ObjectStatus {
     Wrapped,
     Unwrapped,
     UnwrappedThenDeleted,
+}
+
+impl ObjectStatus {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            ObjectStatus::Created => "Created",
+            ObjectStatus::Mutated => "Mutated",
+            ObjectStatus::Deleted => "Deleted",
+            ObjectStatus::Wrapped => "Wrapped",
+            ObjectStatus::Unwrapped => "Unwrapped",
+            ObjectStatus::UnwrappedThenDeleted => "UnwrappedThenDeleted",
+        }
+    }
+
+    pub fn from_string(s: &str) -> Option<Self> {
+        match s {
+            "Created" => Some(ObjectStatus::Created),
+            "Mutated" => Some(ObjectStatus::Mutated),
+            "Deleted" => Some(ObjectStatus::Deleted),
+            "Wrapped" => Some(ObjectStatus::Wrapped),
+            "Unwrapped" => Some(ObjectStatus::Unwrapped),
+            "UnwrappedThenDeleted" => Some(ObjectStatus::UnwrappedThenDeleted),
+            _ => None,
+        }
+    }
 }
 
 impl From<WriteKind> for ObjectStatus {
@@ -164,12 +189,12 @@ impl Object {
             object_id: object.id().to_string(),
             version: object.version().value() as i64,
             object_digest: object.digest().to_string(),
-            owner_type,
+            owner_type: format!("{:?}", owner_type),
             owner_address,
             initial_shared_version,
             previous_transaction: object.previous_transaction.to_string(),
             object_type,
-            object_status: kind.into(),
+            object_status: format!("{:?}", kind),
             has_public_transfer,
             storage_rebate: object.storage_rebate as i64,
             bcs: vec![NamedBcsBytes(
@@ -210,7 +235,7 @@ impl Object {
             object_id: o.object_id.to_string(),
             version: o.version.value() as i64,
             object_digest: o.digest.base58_encode(),
-            owner_type,
+            owner_type: owner_type.to_string().to_string(),
             owner_address,
             initial_shared_version,
             previous_transaction: o
@@ -222,7 +247,7 @@ impl Object {
                 .as_ref()
                 .expect("Expect the object type to be non-empty")
                 .to_string(),
-            object_status: *status,
+            object_status: status.to_string().to_string(),
             has_public_transfer,
             storage_rebate: o.storage_rebate.unwrap_or_default() as i64,
             bcs,
@@ -233,7 +258,9 @@ impl Object {
         self,
         module_cache: &impl GetModule,
     ) -> Result<ObjectRead, IndexerError> {
-        Ok(match self.object_status {
+        let parsed_status = ObjectStatus::from_string(&self.object_status)
+            .ok_or_else(|| IndexerError::SerdeError("Invalid object status".to_string()))?;
+        Ok(match parsed_status {
             ObjectStatus::Deleted | ObjectStatus::UnwrappedThenDeleted => {
                 ObjectRead::Deleted(self.get_object_ref()?)
             }
@@ -265,7 +292,10 @@ impl TryFrom<Object> for sui_types::object::Object {
         let object_type = ObjectType::from_str(&o.object_type)?;
         let object_id = ObjectID::from_str(&o.object_id)?;
         let version = SequenceNumber::from_u64(o.version as u64);
-        let owner = match o.owner_type {
+        let parsed_owner_type = OwnerType::from_string(&o.owner_type).ok_or_else(|| {
+            IndexerError::SerdeError(format!("Invalid owner type: {}", o.owner_type))
+        })?;
+        let owner = match parsed_owner_type {
             OwnerType::AddressOwner => Owner::AddressOwner(SuiAddress::from_str(
                 &o.owner_address.expect("Owner address should not be empty."),
             )?),
@@ -355,10 +385,10 @@ impl DeletedObject {
             // DeleteObject is use for upsert only, this value will not be inserted into the DB
             // this dummy value is use to satisfy non null constrain.
             object_digest: "DELETED".to_string(),
-            owner_type: OwnerType::AddressOwner,
+            owner_type: OwnerType::AddressOwner.to_string().to_string(),
             previous_transaction: previous_tx.base58_encode(),
             object_type: "DELETED".to_string(),
-            object_status: *status,
+            object_status: status.to_string().to_string(),
             has_public_transfer: false,
         }
     }

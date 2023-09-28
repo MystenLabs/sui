@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use diesel::prelude::*;
 use sui_types::digests::ObjectDigest;
 
@@ -20,12 +22,12 @@ use crate::types_v2::IndexedObject;
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct StoredObject {
-    pub object_id: Vec<u8>,
+    pub object_id: String,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_digest: String,
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
-    pub owner_id: Option<Vec<u8>>,
+    pub owner_id: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
@@ -39,18 +41,18 @@ pub struct StoredObject {
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects, primary_key(object_id))]
 pub struct StoredDeletedObject {
-    pub object_id: Vec<u8>,
+    pub object_id: String,
 }
 
 impl From<IndexedObject> for StoredObject {
     fn from(o: IndexedObject) -> Self {
         Self {
-            object_id: o.object_id.to_vec(),
+            object_id: o.object_id.to_hex_literal(),
             object_version: o.object_version as i64,
-            object_digest: o.object_digest.into_inner().to_vec(),
+            object_digest: o.object_digest.to_string(),
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
-            owner_id: o.owner_id.map(|id| id.to_vec()),
+            owner_id: o.owner_id.map(|id| id.to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -95,13 +97,13 @@ impl StoredObject {
         }
 
         // Past this point, if there is any unexpected field, it's a data corruption error
-        let object_id = ObjectID::from_bytes(&self.object_id).map_err(|_| {
+        let object_id = ObjectID::from_hex_literal(&self.object_id).map_err(|_| {
             IndexerError::PersistentStorageDataCorruptionError(format!(
                 "Can't convert {:?} to object_id",
                 self.object_id
             ))
         })?;
-        let object_digest = ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|e| {
+        let object_digest = ObjectDigest::from_str(&self.object_digest).map_err(|e| {
             IndexerError::PersistentStorageDataCorruptionError(format!(
                 "object {} has incompatible object digest. Error: {e}",
                 object_id
@@ -162,16 +164,15 @@ impl StoredObject {
     }
 
     pub fn get_object_ref(&self) -> Result<ObjectRef, IndexerError> {
-        let object_id = ObjectID::from_bytes(self.object_id.clone()).map_err(|_| {
+        let object_id = ObjectID::from_hex_literal(&self.object_id).map_err(|_| {
             IndexerError::SerdeError(format!("Can't convert {:?} to object_id", self.object_id))
         })?;
-        let object_digest =
-            ObjectDigest::try_from(self.object_digest.as_slice()).map_err(|_| {
-                IndexerError::SerdeError(format!(
-                    "Can't convert {:?} to object_digest",
-                    self.object_digest
-                ))
-            })?;
+        let object_digest = ObjectDigest::from_str(&self.object_digest).map_err(|_| {
+            IndexerError::SerdeError(format!(
+                "Can't convert {:?} to object_digest",
+                self.object_digest
+            ))
+        })?;
         Ok((
             object_id,
             (self.object_version as u64).into(),

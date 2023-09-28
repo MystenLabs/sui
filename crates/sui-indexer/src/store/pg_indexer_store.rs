@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use cached::proc_macro::once;
 use diesel::dsl::{count, max};
-use diesel::pg::PgConnection;
+use diesel::mysql::MysqlConnection;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
@@ -67,7 +67,7 @@ use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
 use crate::store::{IndexerStore, TemporaryEpochStore};
-use crate::PgConnectionPool;
+use crate::DbConnectionPool;
 
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
@@ -92,7 +92,7 @@ struct TempDigestTable {
 
 #[derive(Clone)]
 pub struct PgIndexerStore {
-    blocking_cp: PgConnectionPool,
+    blocking_cp: DbConnectionPool,
     // MUSTFIX(gegaowp): temporarily disable partition management.
     #[allow(dead_code)]
     partition_manager: PartitionManager,
@@ -101,7 +101,7 @@ pub struct PgIndexerStore {
 }
 
 impl PgIndexerStore {
-    pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(blocking_cp: DbConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(
             blocking_cp.clone(),
         )));
@@ -1251,13 +1251,13 @@ impl PgIndexerStore {
         transactions: &[Transaction],
         counter_committed_tx: IntCounter,
     ) -> Result<(), IndexerError> {
-        transactional_blocking!(&self.blocking_cp, |conn| {
+        transactional_blocking!(&self.blocking_cp, |mut conn| {
             // Commit indexed transactions
             for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE) {
                 diesel::insert_into(transactions::table)
                     .values(transaction_chunk)
                     .on_conflict_do_nothing()
-                    .execute(conn)
+                    .execute(&mut conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing transactions to PostgresDB")?;
                 counter_committed_tx.inc();
@@ -1269,7 +1269,7 @@ impl PgIndexerStore {
                 diesel::insert_into(checkpoints::table)
                     .values(checkpoint_chunk)
                     .on_conflict_do_nothing()
-                    .execute(conn)
+                    .execute(&mut conn)
                     .map_err(IndexerError::from)
                     .context("Failed writing checkpoint to PostgresDB")?;
                 counter_committed_tx.inc();
@@ -2477,7 +2477,7 @@ impl IndexerStore for PgIndexerStore {
 }
 
 fn persist_object_mutations(
-    conn: &mut PgConnection,
+    conn: &mut MysqlConnection,
     mutated_objects: Vec<Object>,
     object_mutation_latency: Histogram,
     object_commit_chunk_counter: IntCounter,
@@ -2506,7 +2506,7 @@ fn persist_object_mutations(
 }
 
 fn persist_object_deletions(
-    conn: &mut PgConnection,
+    conn: &mut MysqlConnection,
     deleted_objects: Vec<Object>,
     object_deletion_latency: Histogram,
     object_commit_chunk_counter: IntCounter,
@@ -2541,11 +2541,11 @@ fn persist_object_deletions(
 
 #[derive(Clone)]
 struct PartitionManager {
-    cp: PgConnectionPool,
+    cp: DbConnectionPool,
 }
 
 impl PartitionManager {
-    fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
+    fn new(cp: DbConnectionPool) -> Result<Self, IndexerError> {
         // Find all tables with partition
         let manager = Self { cp };
         let tables = manager.get_table_partitions()?;
@@ -2623,7 +2623,7 @@ impl PartitionManager {
 
 // Run this function only once every `time` seconds
 #[once(time = 20, result = true)]
-fn get_network_metrics_cached(cp: &PgConnectionPool) -> Result<NetworkMetrics, IndexerError> {
+fn get_network_metrics_cached(cp: &DbConnectionPool) -> Result<NetworkMetrics, IndexerError> {
     let metrics = read_only_blocking!(cp, |conn| diesel::sql_query(
         "SELECT * FROM network_metrics;"
     )

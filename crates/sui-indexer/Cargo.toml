@@ -64,7 +64,3 @@ criterion.workspace = true
 [[bin]]
 name = "sui-indexer"
 path = "src/main.rs"
-
-[[bench]]
-name = "indexer_benchmark"
-harness = false
