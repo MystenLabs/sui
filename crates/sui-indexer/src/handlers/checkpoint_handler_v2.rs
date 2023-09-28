@@ -141,7 +141,7 @@ where
         );
 
         // Index checkpoint data
-        let index_timer = self.metrics.checkpoint_index_latency.start_timer();
+        let indexing_timer = self.metrics.checkpoint_index_latency.start_timer();
         let packages = Self::index_packages(checkpoints, &self.metrics);
         let module_resolver = Arc::new(InterimModuleResolver::new(
             self.state.module_cache(),
@@ -157,26 +157,36 @@ where
                 .push(package);
         }
         let mut tasks = vec![];
+        let state_clone = Arc::new(self.state.clone());
+        let metrics_clone = self.metrics.clone();
         for checkpoint in checkpoints {
             let packages = packages_per_checkpoint
                 .remove(checkpoint.checkpoint_summary.sequence_number())
                 .unwrap_or_default();
-            tasks.push(Self::index_checkpoint_and_epoch(
-                &self.state,
+            tasks.push(tokio::task::spawn(Self::index_one_checkpoint(
+                state_clone.clone(),
                 checkpoint.clone(),
-                &self.metrics,
+                metrics_clone.clone(),
                 packages,
                 module_resolver.clone(),
-            ));
+            )));
         }
         let checkpoint_data_to_commit = futures::future::join_all(tasks)
             .await
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .tap_err(|e| {
+                error!(
+                    "Failed to join all checkpoint indexing tasks with error: {}",
+                    e.to_string()
+                );
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| {
                 error!("Failed to index checkpoints with error: {}", e.to_string());
             })?;
-        let elapsed = index_timer.stop_and_record();
+        let elapsed = indexing_timer.stop_and_record();
 
         info!(
             first_checkpoint_seq,
@@ -209,7 +219,7 @@ where
     S: IndexerStoreV2 + Clone + Sync + Send + 'static,
 {
     async fn index_epoch(
-        state: &S,
+        state: &Arc<S>,
         data: &CheckpointData,
     ) -> Result<Option<EpochToCommit>, IndexerError> {
         let checkpoint_object_store = EpochEndIndexingObjectStore::new(data);
@@ -274,11 +284,10 @@ where
         }))
     }
 
-    async fn index_checkpoint_and_epoch(
-        state: &S,
+    async fn index_one_checkpoint(
+        state: Arc<S>,
         data: CheckpointData,
-        // package_cache: Arc<Mutex<IndexingPackageCache>>,
-        metrics: &IndexerMetrics,
+        metrics: IndexerMetrics,
         packages: Vec<IndexedPackage>,
         module_resolver: Arc<impl GetModule>,
     ) -> Result<CheckpointDataToCommit, IndexerError> {
@@ -287,7 +296,9 @@ where
 
         // Index Objects
         let object_changes =
-            Self::index_objects(state, data.clone(), &packages, metrics, &module_resolver);
+            Self::index_objects(&state, data.clone(), &packages, &metrics, &module_resolver);
+
+        let epoch = Self::index_epoch(&state, &data).await?;
 
         let (checkpoint, db_transactions, db_events, db_indices) = {
             let CheckpointData {
@@ -447,8 +458,6 @@ where
             )
         };
 
-        let epoch = Self::index_epoch(state, &data).await?;
-
         Ok(CheckpointDataToCommit {
             checkpoint,
             transactions: db_transactions,
@@ -461,7 +470,7 @@ where
     }
 
     fn index_objects(
-        state: &S,
+        state: &Arc<S>,
         data: CheckpointData,
         packages: &[IndexedPackage],
         metrics: &IndexerMetrics,
