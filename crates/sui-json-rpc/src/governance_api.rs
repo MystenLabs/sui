@@ -3,7 +3,6 @@
 
 use std::cmp::max;
 use std::collections::BTreeMap;
-use std::fs::File;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -12,7 +11,6 @@ use cached::SizedCache;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use serde_json::json;
 use tracing::{info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
@@ -324,7 +322,8 @@ fn calculate_apys(
 #[test]
 fn test_apys_calculation_filter_outliers() {
     // staking pool exchange rates extracted from mainnet
-    let file = File::open("src/unit_tests/data/validator_exchange_rate/rates.json").unwrap();
+    let file =
+        std::fs::File::open("src/unit_tests/data/validator_exchange_rate/rates.json").unwrap();
     let rates: BTreeMap<String, Vec<(u64, PoolTokenExchangeRate)>> =
         serde_json::from_reader(file).unwrap();
 
