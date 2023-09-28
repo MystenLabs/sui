@@ -32,7 +32,7 @@ pub struct ServiceConfig {
     pub(crate) experiments: Experiments,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub struct Limits {
     #[serde(default)]
