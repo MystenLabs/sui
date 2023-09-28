@@ -98,7 +98,7 @@ impl GrootModuleResolver {
         }
         Self {
             module_map,
-            original
+            original,
         }
     }
 }
@@ -148,43 +148,43 @@ static TYPUS_ADDRESS_SET: Lazy<HashSet<AccountAddress>> = Lazy::new(|| {
     );
     set.insert(
         AccountAddress::from_str(
-            "0xfbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068"
+            "0xfbdf925b067055a8a3ddac9739a56e61aea41f38345926b6034aa5645f5f7068",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0x4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b"
+            "0x4db258013df88d79fde54eb0ecdec2bb1865c4585a897d7c1c9d20b6b768a71b",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0xf84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c"
+            "0xf84c82986dad0b89731ced890226639c8c1859f5b61f12394548c48706bcf04c",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0xa390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd"
+            "0xa390965beb1f120a469183ac10ccbac83e78dd7f505e9dcc803a93c7a079d9fd",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0xf0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698"
+            "0xf0ba0f41946081992325cbc52a73ded90aa969b868ce9f907dd60d5e7ad8698",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0x5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284"
+            "0x5a8d167ae1279043c73a8a0d383c6a07f20c5dc3c1309ba560f89028447dc284",
         )
         .unwrap(),
     );
     set.insert(
         AccountAddress::from_str(
-            "0xd95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4"
+            "0xd95d83e5fdef4a5c042270e4a97e1284658bf0057f00f4989f9c13f56b7afed4",
         )
         .unwrap(),
     );
@@ -200,7 +200,6 @@ fn map_typus_address(address: &AccountAddress) -> AccountAddress {
 }
 
 fn main() {
-
     use self::schema::events::dsl::*;
     use self::schema::events_json::dsl::*;
 
@@ -227,13 +226,15 @@ fn main() {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
 
-    let blocking_cp = new_pg_connection_pool(&database_url).map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
+    let blocking_cp = new_pg_connection_pool(&database_url)
+        .map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     //let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
     //
-    let module_cache = Arc::new(SyncModuleCache::new(GrootModuleResolver::new(blocking_cp.expect("REASON"))));
+    let module_cache = Arc::new(SyncModuleCache::new(GrootModuleResolver::new(
+        blocking_cp.expect("REASON"),
+    )));
 
     for target_id in start_id.. {
-
         let event = events
             .find(target_id)
             .select(Event::as_select())
@@ -279,7 +280,6 @@ fn main() {
                     }
                 }
 
-
                 // JSON parsing starts here
                 let type_ = parse_sui_struct_tag(&event.event_type).expect("cannot load StructTag");
 
@@ -287,7 +287,7 @@ fn main() {
                     type_.clone(),
                     ObjectFormatOptions::default(),
                     &module_cache,
-                    );
+                );
 
                 match layout {
                     Ok(l) => {
@@ -297,10 +297,14 @@ fn main() {
                         match move_object {
                             Ok(m) => {
                                 let parsed_json = SuiMoveStruct::from(m).to_json_value();
-                                let final_result = serde_json::to_string_pretty(&parsed_json).unwrap();
+                                let final_result = 
+                                    serde_json::to_string_pretty(&parsed_json).unwrap();
                                 println!("event json = {}", final_result);
 
-                                let new_event_json = EventsJson { id: event.id, event_json: final_result };
+                                let new_event_json = EventsJson { 
+                                    id: event.id, 
+                                    event_json: final_result 
+                                };
 
                                 let _inserted_event_json = diesel::insert_into(events_json)
                                     .values(&new_event_json)
@@ -308,8 +312,7 @@ fn main() {
                                     .expect("Error saving new events json");
 
                                 println!("Inserted new event_json id: {}", event.id);
-
-                            }|
+                            }
                             Err(e) => {
                                 println!("error in deserialize:{} {}", e, type_);
                                 continue;
