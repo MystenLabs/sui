@@ -301,8 +301,8 @@ fn main() {
                                     serde_json::to_string_pretty(&parsed_json).unwrap();
                                 println!("event json = {}", final_result);
 
-                                let new_event_json = EventsJson { 
-                                    id: event.id, 
+                                let new_event_json = EventsJson {
+                                    id: event.id,
                                     event_json: final_result,
                                 };
 
