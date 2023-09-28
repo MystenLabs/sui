@@ -5,7 +5,6 @@ use crate::config::{ConnectionConfig, ServiceConfig};
 use crate::context_data::data_provider::DataProvider;
 use crate::context_data::sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0};
 use crate::extensions::feature_gate::FeatureGate;
-use crate::extensions::limits_info::LimitsInfo;
 use crate::extensions::logger::Logger;
 use crate::extensions::query_limits_checker::QueryLimitsChecker;
 use crate::extensions::timeout::Timeout;
@@ -31,9 +30,8 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_provider)
         .context_data(data_loader)
         .context_data(service_config)
-        .extension(QueryLimitsChecker)
+        .extension(QueryLimitsChecker::default())
         .extension(FeatureGate)
-        .extension(LimitsInfo)
         .extension(Logger::default())
         .extension(Timeout::default())
         .build()

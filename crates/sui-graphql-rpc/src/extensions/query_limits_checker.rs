@@ -3,29 +3,86 @@
 
 use crate::config::ServiceConfig;
 use async_graphql::extensions::NextParseQuery;
+use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::ExecutableDocument;
 use async_graphql::parser::types::Selection::Field;
+use async_graphql::value;
 use async_graphql::Pos;
+use async_graphql::Response;
 use async_graphql::ServerResult;
 use async_graphql::Variables;
 use async_graphql::{
     extensions::{Extension, ExtensionContext, ExtensionFactory},
     ServerError,
 };
+use axum::headers;
+use axum::http::HeaderName;
+use axum::http::HeaderValue;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use tokio::sync::Mutex;
+
+static LIMITS_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-show-usage");
+
+/// Only display usage information if this header was in the request.
+pub(crate) struct ShowUsage;
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct QueryLimitsChecker;
+struct ValidationRes {
+    num_nodes: u32,
+    depth: u32,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct QueryLimitsChecker {
+    validation_result: Mutex<Option<ValidationRes>>,
+}
+
+impl headers::Header for ShowUsage {
+    fn name() -> &'static HeaderName {
+        &LIMITS_HEADER
+    }
+
+    fn decode<'i, I>(_: &mut I) -> Result<Self, headers::Error>
+    where
+        I: Iterator<Item = &'i HeaderValue>,
+    {
+        Ok(ShowUsage)
+    }
+
+    fn encode<E: Extend<HeaderValue>>(&self, _: &mut E) {
+        unimplemented!()
+    }
+}
 
 impl ExtensionFactory for QueryLimitsChecker {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(QueryLimitsChecker)
+        Arc::new(QueryLimitsChecker {
+            validation_result: Mutex::new(None),
+        })
     }
 }
 
 #[async_trait::async_trait]
 impl Extension for QueryLimitsChecker {
+    async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
+        let resp = next.run(ctx).await;
+        let validation_result = self.validation_result.lock().await.take();
+        if let Some(validation_result) = validation_result {
+            resp.extension(
+                "usage",
+                value! ({
+                    "nodes": validation_result.num_nodes,
+                    "depth": validation_result.depth,
+                }),
+            )
+        } else {
+            resp
+        }
+    }
+
+    /// Validates the query against the limits set in the service config
+    /// If the limits are hit, the operation terminates early
     async fn parse_query(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -81,7 +138,9 @@ impl Extension for QueryLimitsChecker {
             }
             level_len = que.len();
         }
-
+        if ctx.data_opt::<ShowUsage>().is_some() {
+            *self.validation_result.lock().await = Some(ValidationRes { num_nodes, depth });
+        }
         Ok(doc)
     }
 }
