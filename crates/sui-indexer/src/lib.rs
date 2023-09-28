@@ -9,6 +9,7 @@ use std::{collections::HashMap, time::Duration};
 use anyhow::{anyhow, Result};
 use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use clap::Parser;
+use diesel::mysql::MysqlConnection;
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
@@ -19,20 +20,20 @@ use tokio::runtime::Handle;
 use tracing::{info, warn};
 use url::Url;
 
-use apis::{
-    CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, ReadApi, TransactionBuilderApi,
-    WriteApi,
-};
+// use apis::{
+//     CoinReadApi, ExtendedApi, GovernanceReadApi, IndexerApi, ReadApi, TransactionBuilderApi,
+//     WriteApi,
+// };
 use errors::IndexerError;
 use mysten_metrics::{spawn_monitored_task, RegistryService};
-use processors::processor_orchestrator::ProcessorOrchestrator;
-use store::IndexerStore;
-use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TYPE_HEADER};
+// use processors::processor_orchestrator::ProcessorOrchestrator;
+use store::IndexerStoreV2;
+// use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle, ServerType, CLIENT_SDK_TYPE_HEADER};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 
-use crate::apis::MoveUtilsApi;
+// use crate::apis::MoveUtilsApi;
 use crate::framework::IndexerBuilder;
-use crate::handlers::checkpoint_handler::new_handlers;
+use crate::handlers::checkpoint_handler_v2::new_handlers;
 
 pub mod apis;
 pub mod errors;
@@ -53,6 +54,8 @@ pub mod utils;
 
 pub type PgConnectionPool = diesel::r2d2::Pool<ConnectionManager<PgConnection>>;
 pub type PgPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<PgConnection>>;
+pub type DbConnectionPool = diesel::r2d2::Pool<ConnectionManager<MysqlConnection>>;
+pub type DbPoolConnection = diesel::r2d2::PooledConnection<ConnectionManager<MysqlConnection>>;
 
 const METRICS_ROUTE: &str = "/metrics";
 /// Returns all endpoints for which we have implemented on the indexer,
@@ -177,7 +180,7 @@ impl Default for IndexerConfig {
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start<S: IndexerStore + Sync + Send + Clone + 'static>(
+    pub async fn start<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
         config: &IndexerConfig,
         registry: &Registry,
         store: S,
@@ -192,37 +195,33 @@ impl Indexer {
 
         if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
-            let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
-                .await
-                .expect("Json rpc server should not run into errors upon start.");
-            handle.stopped().await;
+            // let handle = build_json_rpc_server(registry, store.clone(), config, custom_runtime)
+            //     .await
+            //     .expect("Json rpc server should not run into errors upon start.");
+            // handle.stopped().await;
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
-            spawn_monitored_task!(processor_orchestrator.run_forever());
-
+            // let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            // spawn_monitored_task!(processor_orchestrator.run_forever());
             // -1 will be returned when checkpoints table is empty.
             let last_seq_from_db = store
                 .get_latest_tx_checkpoint_sequence_number()
                 .await
-                .expect("Failed to get latest tx checkpoint sequence number from DB");
+                .expect("Failed to get latest tx checkpoint sequence number from DB").unwrap_or(0);
             let last_downloaded_checkpoint = if last_seq_from_db < 0 {
                 None
             } else {
                 Some(last_seq_from_db as u64)
             };
 
-            let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
-
+            let checkpoint_handler = new_handlers(store, metrics, config).await?;
             IndexerBuilder::new()
                 .last_downloaded_checkpoint(last_downloaded_checkpoint)
                 .rest_url(&config.rpc_client_url)
                 .handler(checkpoint_handler)
-                .handler(object_handler)
                 .run()
                 .await;
         }
-
         Ok(())
     }
 }
@@ -245,7 +244,7 @@ pub async fn new_rpc_client(http_url: &str) -> Result<SuiClient, IndexerError> {
 
 fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
     let mut headers = HeaderMap::new();
-    headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
+    // headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("indexer"));
 
     HttpClientBuilder::default()
         .max_request_body_size(2 << 30)
@@ -271,7 +270,24 @@ pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerE
         .connection_customizer(Box::new(pool_config.connection_config()))
         .build(manager)
         .map_err(|e| {
-            IndexerError::PgConnectionPoolInitError(format!(
+            IndexerError::DbConnectionPoolInitError(format!(
+                "Failed to initialize connection pool with error: {:?}",
+                e
+            ))
+        })
+}
+
+pub fn new_db_connection_pool(db_url: &str) -> Result<DbConnectionPool, IndexerError> {
+    let pool_config = PgConectionPoolConfig::default();
+    let manager = ConnectionManager::<MysqlConnection>::new(db_url);
+
+    diesel::r2d2::Pool::builder()
+        .max_size(pool_config.pool_size)
+        // .connection_timeout(pool_config.connection_timeout)
+        // .connection_customizer(Box::new(pool_config.connection_config_v2()))
+        .build(manager)
+        .map_err(|e| {
+            IndexerError::DbConnectionPoolInitError(format!(
                 "Failed to initialize connection pool with error: {:?}",
                 e
             ))
@@ -292,6 +308,12 @@ impl PgConectionPoolConfig {
 
     fn connection_config(&self) -> PgConnectionConfig {
         PgConnectionConfig {
+            statement_timeout: self.statement_timeout,
+        }
+    }
+
+    fn connection_config_v2(&self) -> DbConnectionConfig {
+        DbConnectionConfig {
             statement_timeout: self.statement_timeout,
         }
     }
@@ -339,6 +361,30 @@ impl diesel::r2d2::CustomizeConnection<PgConnection, diesel::r2d2::Error> for Pg
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct DbConnectionConfig {
+    statement_timeout: Duration,
+}
+
+impl diesel::r2d2::CustomizeConnection<MysqlConnection, diesel::r2d2::Error>
+    for DbConnectionConfig
+{
+    fn on_acquire(
+        &self,
+        conn: &mut MysqlConnection,
+    ) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::{sql_query, RunQueryDsl};
+
+        sql_query(format!(
+            "SET statement_timeout = {}",
+            self.statement_timeout.as_millis(),
+        ))
+        .execute(conn)
+        .map_err(diesel::r2d2::Error::QueryError)?;
+        Ok(())
+    }
+}
+
 pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnection, IndexerError> {
     pool.get().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
@@ -348,40 +394,49 @@ pub fn get_pg_pool_connection(pool: &PgConnectionPool) -> Result<PgPoolConnectio
     })
 }
 
-pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
-    prometheus_registry: &Registry,
-    state: S,
-    config: &IndexerConfig,
-    custom_runtime: Option<Handle>,
-) -> Result<ServerHandle, IndexerError> {
-    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
-    let http_client = get_http_client(config.rpc_client_url.as_str())?;
-
-    builder.register_module(ReadApi::new(
-        state.clone(),
-        http_client.clone(),
-        config.migrated_methods.clone(),
-    ))?;
-    builder.register_module(CoinReadApi::new(http_client.clone()))?;
-    builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
-    builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
-    builder.register_module(IndexerApi::new(
-        state.clone(),
-        http_client.clone(),
-        config.migrated_methods.clone(),
-    ))?;
-    builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
-    builder.register_module(ExtendedApi::new(state.clone()))?;
-    builder.register_module(MoveUtilsApi::new(http_client))?;
-    let default_socket_addr = SocketAddr::new(
-        // unwrap() here is safe b/c the address is a static config.
-        config.rpc_server_url.as_str().parse().unwrap(),
-        config.rpc_server_port,
-    );
-    Ok(builder
-        .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
-        .await?)
+pub fn get_db_pool_connection(pool: &DbConnectionPool) -> Result<DbPoolConnection, IndexerError> {
+    pool.get().map_err(|e| {
+        IndexerError::PgPoolConnectionError(format!(
+            "Failed to get connection from PG connection pool with error: {:?}",
+            e
+        ))
+    })
 }
+
+// pub async fn build_json_rpc_server<S: IndexerStore + Sync + Send + 'static + Clone>(
+//     prometheus_registry: &Registry,
+//     state: S,
+//     config: &IndexerConfig,
+//     custom_runtime: Option<Handle>,
+// ) -> Result<ServerHandle, IndexerError> {
+//     let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+//     let http_client = get_http_client(config.rpc_client_url.as_str())?;
+
+//     builder.register_module(ReadApi::new(
+//         state.clone(),
+//         http_client.clone(),
+//         config.migrated_methods.clone(),
+//     ))?;
+//     builder.register_module(CoinReadApi::new(http_client.clone()))?;
+//     builder.register_module(TransactionBuilderApi::new(http_client.clone()))?;
+//     builder.register_module(GovernanceReadApi::new(http_client.clone()))?;
+//     builder.register_module(IndexerApi::new(
+//         state.clone(),
+//         http_client.clone(),
+//         config.migrated_methods.clone(),
+//     ))?;
+//     builder.register_module(WriteApi::new(state.clone(), http_client.clone()))?;
+//     builder.register_module(ExtendedApi::new(state.clone()))?;
+//     builder.register_module(MoveUtilsApi::new(http_client))?;
+//     let default_socket_addr = SocketAddr::new(
+//         // unwrap() here is safe b/c the address is a static config.
+//         config.rpc_server_url.as_str().parse().unwrap(),
+//         config.rpc_server_port,
+//     );
+//     Ok(builder
+//         .start(default_socket_addr, custom_runtime, Some(ServerType::Http))
+//         .await?)
+// }
 
 fn convert_url(url_str: &str) -> Option<String> {
     // NOTE: unwrap here is safe because the regex is a constant.

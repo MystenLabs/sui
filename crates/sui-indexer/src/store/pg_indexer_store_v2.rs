@@ -35,12 +35,12 @@ use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
 use crate::models_v2::tx_indices::StoredTxIndex;
 use crate::schema_v2::{checkpoints, epochs, events, objects, packages, transactions, tx_indices};
-use crate::store::diesel_marco::{read_only_blocking, transactional_blocking_with_retry};
+use crate::store::diesel_marco::{read_only_blocking_v2, transactional_blocking_v2};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
-use crate::PgConnectionPool;
+use crate::DbConnectionPool;
 
 use super::IndexerStoreV2;
 
@@ -70,7 +70,7 @@ const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
-    blocking_cp: PgConnectionPool,
+    blocking_cp: DbConnectionPool,
     module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>>,
     metrics: IndexerMetrics,
     parallel_chunk_size: usize,
@@ -78,7 +78,7 @@ pub struct PgIndexerStoreV2 {
 }
 
 impl PgIndexerStoreV2 {
-    pub fn new(blocking_cp: PgConnectionPool, metrics: IndexerMetrics) -> Self {
+    pub fn new(blocking_cp: DbConnectionPool, metrics: IndexerMetrics) -> Self {
         let module_cache: Arc<SyncModuleCache<IndexerStoreModuleResolver>> = Arc::new(
             SyncModuleCache::new(IndexerStoreModuleResolver::new(blocking_cp.clone())),
         );
@@ -100,7 +100,7 @@ impl PgIndexerStoreV2 {
     }
 
     fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
+        read_only_blocking_v2!(&self.blocking_cp, |mut conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))
                 .first::<Option<i64>>(conn)
@@ -116,9 +116,9 @@ impl PgIndexerStoreV2 {
         version: Option<SequenceNumber>,
     ) -> Result<ObjectRead, IndexerError> {
         // TOOD: read remote object_history kv store
-        read_only_blocking!(&self.blocking_cp, |conn| {
+        read_only_blocking_v2!(&self.blocking_cp, |mut conn| {
             let query =
-                objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.to_vec()));
+                objects::dsl::objects.filter(objects::dsl::object_id.eq(object_id.to_string()));
             let boxed_query = if let Some(version) = version {
                 query
                     .filter(objects::dsl::object_version.eq(version.value() as i64))
@@ -156,38 +156,51 @@ impl PgIndexerStoreV2 {
             }
         }
 
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 // Persist mutated objects
                 for mutated_object_change_chunk in
                     mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
                     diesel::insert_into(objects::table)
                         .values(mutated_object_change_chunk)
-                        .on_conflict(objects::object_id)
-                        .do_update()
-                        .set((
-                            objects::object_id.eq(excluded(objects::object_id)),
-                            objects::object_version.eq(excluded(objects::object_version)),
-                            objects::object_digest.eq(excluded(objects::object_digest)),
-                            objects::checkpoint_sequence_number
-                                .eq(excluded(objects::checkpoint_sequence_number)),
-                            objects::owner_type.eq(excluded(objects::owner_type)),
-                            objects::owner_id.eq(excluded(objects::owner_id)),
-                            objects::serialized_object.eq(excluded(objects::serialized_object)),
-                            objects::coin_type.eq(excluded(objects::coin_type)),
-                            objects::coin_balance.eq(excluded(objects::coin_balance)),
-                            objects::df_kind.eq(excluded(objects::df_kind)),
-                            objects::df_name.eq(excluded(objects::df_name)),
-                            objects::df_object_type.eq(excluded(objects::df_object_type)),
-                            objects::df_object_id.eq(excluded(objects::df_object_id)),
-                        ))
-                        .execute(conn)
+                        .on_conflict_do_nothing()
+                        // .on_conflict(objects::object_id)
+                        // .do_update()
+                        // .set((
+                        //     objects::object_id.eq(excluded(objects::object_id)),
+                        //     objects::object_version.eq(excluded(objects::object_version)),
+                        //     objects::object_digest.eq(excluded(objects::object_digest)),
+                        //     objects::checkpoint_sequence_number
+                        //         .eq(excluded(objects::checkpoint_sequence_number)),
+                        //     objects::owner_type.eq(excluded(objects::owner_type)),
+                        //     objects::owner_id.eq(excluded(objects::owner_id)),
+                        //     objects::serialized_object.eq(excluded(objects::serialized_object)),
+                        //     objects::coin_type.eq(excluded(objects::coin_type)),
+                        //     objects::coin_balance.eq(excluded(objects::coin_balance)),
+                        //     objects::df_kind.eq(excluded(objects::df_kind)),
+                        //     objects::df_name.eq(excluded(objects::df_name)),
+                        //     objects::df_object_type.eq(excluded(objects::df_object_type)),
+                        //     objects::df_object_id.eq(excluded(objects::df_object_id)),
+                        // ))
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write object mutation to PostgresDB")?;
                 }
+                Ok::<(), IndexerError>(())
+            }
+        )
+        .tap(|_| {
+            info!(
+                "Persisted {} mutated chunked objects",
+                mutated_objects.len(),
+            )
+        });
 
+        transactional_blocking_v2!(
+            &self.blocking_cp,
+            |mut conn| {
                 // Persist deleted objects
                 for deleted_objects_chunk in
                     deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
@@ -197,26 +210,25 @@ impl PgIndexerStoreV2 {
                             objects::object_id.eq_any(
                                 deleted_objects_chunk
                                     .iter()
-                                    .map(|o| o.to_vec())
+                                    .map(|o| o.to_string())
                                     .collect::<Vec<_>>(),
                             ),
                         ),
                     )
-                    .execute(conn)
+                    .execute(&mut conn)
                     .map_err(IndexerError::from)
                     .context("Failed to write object deletion to PostgresDB")?;
                 }
 
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
             info!(
                 elapsed,
-                "Persisted {} chunked objects",
-                mutated_objects.len() + deleted_object_ids.len(),
+                "Persisted {} deleted chunked objects",
+                deleted_object_ids.len(),
             )
         })
     }
@@ -234,20 +246,19 @@ impl PgIndexerStoreV2 {
             .iter()
             .map(StoredCheckpoint::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for checkpoint_chunk in checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
                     diesel::insert_into(checkpoints::table)
                         .values(checkpoint_chunk)
                         .on_conflict_do_nothing()
-                        .execute(conn)
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write checkpoints to PostgresDB")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -273,20 +284,19 @@ impl PgIndexerStoreV2 {
             .collect::<Vec<_>>();
         drop(transformation_guard);
 
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
                     diesel::insert_into(transactions::table)
                         .values(transaction_chunk)
                         .on_conflict_do_nothing()
-                        .execute(conn)
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write transactions to PostgresDB")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -307,20 +317,20 @@ impl PgIndexerStoreV2 {
             .into_iter()
             .map(StoredEvent::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
                     diesel::insert_into(events::table)
                         .values(event_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
+                        // NOTE: likely due to the primary key notation
+                        // .on_conflict_do_nothing()
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write events to PostgresDB")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -340,25 +350,25 @@ impl PgIndexerStoreV2 {
             .into_iter()
             .map(StoredPackage::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
                     diesel::insert_into(packages::table)
                         .values(packages_chunk)
                         // System packages such as 0x2/0x9 will have their package_id
                         // unchanged during upgrades. In this case, we override the modules
                         // TODO: race condition is possible here. Figure out how to avoid/detect
-                        .on_conflict(packages::package_id)
-                        .do_update()
-                        .set(packages::move_package.eq(excluded(packages::move_package)))
-                        .execute(conn)
+                        // .on_conflict(packages::package_id)
+                        // .do_update()
+                        // .set(packages::move_package.eq(excluded(packages::move_package)))
+                        .on_conflict_do_nothing()
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write packages to PostgresDB")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -375,20 +385,19 @@ impl PgIndexerStoreV2 {
             .into_iter()
             .map(StoredTxIndex::from)
             .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for indices_chunk in indices.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
                     diesel::insert_into(tx_indices::table)
                         .values(indices_chunk)
                         .on_conflict_do_nothing()
-                        .execute(conn)
+                        .execute(&mut conn)
                         .map_err(IndexerError::from)
                         .context("Failed to write tx_indices to PostgresDB")?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -404,9 +413,9 @@ impl PgIndexerStoreV2 {
             .metrics
             .checkpoint_db_commit_latency_epochs
             .start_timer();
-        transactional_blocking_with_retry!(
+        transactional_blocking_v2!(
             &self.blocking_cp,
-            |conn| {
+            |mut conn| {
                 for epoch_data in data {
                     if let Some(last_epoch) = &epoch_data.last_epoch {
                         let last_epoch_id = last_epoch.epoch;
@@ -414,38 +423,39 @@ impl PgIndexerStoreV2 {
                         info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
                         diesel::insert_into(epochs::table)
                             .values(last_epoch)
-                            .on_conflict(epochs::epoch)
-                            .do_update()
-                            .set((
-                                // Note: it's crucial that we don't include epoch beinning info
-                                // below as we don't want to override them. They are
-                                // validators, first_checkpoint_id, epoch_start_timestamp and so on.
-                                epochs::epoch_total_transactions
-                                    .eq(excluded(epochs::epoch_total_transactions)),
-                                epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
-                                epochs::epoch_end_timestamp
-                                    .eq(excluded(epochs::epoch_end_timestamp)),
-                                epochs::storage_fund_reinvestment
-                                    .eq(excluded(epochs::storage_fund_reinvestment)),
-                                epochs::storage_charge.eq(excluded(epochs::storage_charge)),
-                                epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
-                                epochs::storage_fund_balance
-                                    .eq(excluded(epochs::storage_fund_balance)),
-                                epochs::stake_subsidy_amount
-                                    .eq(excluded(epochs::stake_subsidy_amount)),
-                                epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
-                                epochs::total_stake_rewards_distributed
-                                    .eq(excluded(epochs::total_stake_rewards_distributed)),
-                                epochs::leftover_storage_fund_inflow
-                                    .eq(excluded(epochs::leftover_storage_fund_inflow)),
-                                epochs::new_total_stake.eq(excluded(epochs::new_total_stake)),
-                                epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                                epochs::next_epoch_reference_gas_price
-                                    .eq(excluded(epochs::next_epoch_reference_gas_price)),
-                                epochs::next_epoch_protocol_version
-                                    .eq(excluded(epochs::next_epoch_protocol_version)),
-                            ))
-                            .execute(conn)?;
+                            // .on_conflict(epochs::epoch)
+                            // .do_update()
+                            // .set((
+                            //     // Note: it's crucial that we don't include epoch beinning info
+                            //     // below as we don't want to override them. They are
+                            //     // validators, first_checkpoint_id, epoch_start_timestamp and so on.
+                            //     epochs::epoch_total_transactions
+                            //         .eq(excluded(epochs::epoch_total_transactions)),
+                            //     epochs::last_checkpoint_id.eq(excluded(epochs::last_checkpoint_id)),
+                            //     epochs::epoch_end_timestamp
+                            //         .eq(excluded(epochs::epoch_end_timestamp)),
+                            //     epochs::storage_fund_reinvestment
+                            //         .eq(excluded(epochs::storage_fund_reinvestment)),
+                            //     epochs::storage_charge.eq(excluded(epochs::storage_charge)),
+                            //     epochs::storage_rebate.eq(excluded(epochs::storage_rebate)),
+                            //     epochs::storage_fund_balance
+                            //         .eq(excluded(epochs::storage_fund_balance)),
+                            //     epochs::stake_subsidy_amount
+                            //         .eq(excluded(epochs::stake_subsidy_amount)),
+                            //     epochs::total_gas_fees.eq(excluded(epochs::total_gas_fees)),
+                            //     epochs::total_stake_rewards_distributed
+                            //         .eq(excluded(epochs::total_stake_rewards_distributed)),
+                            //     epochs::leftover_storage_fund_inflow
+                            //         .eq(excluded(epochs::leftover_storage_fund_inflow)),
+                            //     epochs::new_total_stake.eq(excluded(epochs::new_total_stake)),
+                            //     epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
+                            //     epochs::next_epoch_reference_gas_price
+                            //         .eq(excluded(epochs::next_epoch_reference_gas_price)),
+                            //     epochs::next_epoch_protocol_version
+                            //         .eq(excluded(epochs::next_epoch_protocol_version)),
+                            // ))
+                            .on_conflict_do_nothing()
+                            .execute(&mut conn)?;
                     }
                     let epoch_id = epoch_data.new_epoch.epoch;
                     info!(epoch_id, "Persisting initial epoch state");
@@ -454,11 +464,10 @@ impl PgIndexerStoreV2 {
                     diesel::insert_into(epochs::table)
                         .values(new_epoch)
                         .on_conflict_do_nothing()
-                        .execute(conn)?;
+                        .execute(&mut conn)?;
                 }
                 Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
+            }
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
@@ -470,7 +479,7 @@ impl PgIndexerStoreV2 {
         &self,
         epoch: u64,
     ) -> Result<u64, IndexerError> {
-        read_only_blocking!(&self.blocking_cp, |conn| {
+        read_only_blocking_v2!(&self.blocking_cp, |conn| {
             checkpoints::table
                 .filter(checkpoints::epoch.eq(epoch as i64))
                 .select(max(checkpoints::network_total_transactions))

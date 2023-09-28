@@ -15,7 +15,7 @@ use tokio::runtime::Runtime;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::models::checkpoints::Checkpoint;
 use sui_indexer::models::transactions::Transaction;
-use sui_indexer::new_pg_connection_pool;
+use sui_indexer::new_db_connection_pool;
 use sui_indexer::store::{IndexerStore, PgIndexerStore, TemporaryCheckpointStore};
 use sui_indexer::utils::reset_database;
 use sui_json_rpc_types::CheckpointId;
@@ -33,7 +33,7 @@ fn indexer_benchmark(c: &mut Criterion) {
 
     let rt: Runtime = Runtime::new().unwrap();
     let (mut _checkpoints, store) = rt.block_on(async {
-        let blocking_cp = new_pg_connection_pool(&db_url).unwrap();
+        let blocking_cp = new_db_connection_pool(&db_url).unwrap();
         reset_database(&mut blocking_cp.get().unwrap(), true, false).unwrap();
         let registry = Registry::default();
         let indexer_metrics = IndexerMetrics::new(&registry);

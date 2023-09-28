@@ -198,14 +198,14 @@ diesel::table! {
         version -> Int8,
         #[max_length = 44]
         object_digest -> Varchar,
-        owner_type -> OwnerType,
+        owner_type -> Varchar,
         #[max_length = 66]
         owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         #[max_length = 44]
         previous_transaction -> Varchar,
         object_type -> Varchar,
-        object_status -> ObjectStatus,
+        object_status -> Varchar,
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,
@@ -226,17 +226,17 @@ diesel::table! {
         version -> Int8,
         #[max_length = 44]
         object_digest -> Varchar,
-        owner_type -> OwnerType,
+        owner_type -> Varchar,
         #[max_length = 66]
         owner_address -> Nullable<Varchar>,
-        old_owner_type -> Nullable<OwnerType>,
+        old_owner_type -> Nullable<Varchar>,
         #[max_length = 66]
         old_owner_address -> Nullable<Varchar>,
         initial_shared_version -> Nullable<Int8>,
         #[max_length = 44]
         previous_transaction -> Varchar,
         object_type -> Varchar,
-        object_status -> ObjectStatus,
+        object_status -> Varchar,
         has_public_transfer -> Bool,
         storage_rebate -> Int8,
         bcs -> Array<Nullable<BcsBytes>>,

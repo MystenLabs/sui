@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::PgPoolConnection;
+use crate::DbPoolConnection;
 use anyhow::anyhow;
 use diesel::migration::MigrationSource;
-use diesel::{PgConnection, RunQueryDsl};
+use diesel::{RunQueryDsl};
+use diesel::mysql::MysqlConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::info;
 
@@ -17,7 +18,7 @@ const MIGRATIONS_V2: EmbeddedMigrations = embed_migrations!("migrations_v2");
 /// resetting the migrations. This option is destructive and will result in the loss of all
 /// data in the tables. Use with caution, especially in production environments.
 pub fn reset_database(
-    conn: &mut PgPoolConnection,
+    conn: &mut DbPoolConnection,
     drop_all: bool,
     use_v2: bool,
 ) -> Result<(), anyhow::Error> {
@@ -37,7 +38,7 @@ pub fn reset_database(
     Ok(())
 }
 
-pub fn drop_all_tables(conn: &mut PgConnection) -> Result<(), diesel::result::Error> {
+pub fn drop_all_tables(conn: &mut MysqlConnection) -> Result<(), diesel::result::Error> {
     info!("Dropping all tables in the database");
     let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
         "

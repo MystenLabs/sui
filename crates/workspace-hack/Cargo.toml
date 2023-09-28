@@ -211,7 +211,7 @@ der-parser = { version = "8", features = ["bigint"] }
 derive_builder = { version = "0.12" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "r2d2", "serde_json"] }
+diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "mysql", "r2d2", "serde_json"] }
 diesel_migrations = { version = "2" }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
@@ -980,7 +980,7 @@ derive_builder_macro = { version = "0.12", default-features = false }
 derive_more = { version = "0.99" }
 determinator = { version = "0.10", default-features = false }
 deunicode = { version = "0.4", default-features = false }
-diesel = { version = "2", features = ["64-column-tables", "chrono", "postgres", "r2d2", "serde_json"] }
+diesel = { version = "2", features = ["64-column-tables", "chrono", "mysql", "postgres", "r2d2", "serde_json"] }
 diesel-derive-enum = { version = "2", default-features = false, features = ["postgres"] }
 diesel_derives = { version = "2", features = ["64-column-tables", "postgres", "r2d2", "with-deprecated"] }
 diesel_migrations = { version = "2" }
