@@ -272,6 +272,7 @@ impl IndexedObject {
 pub struct IndexedPackage {
     pub package_id: ObjectID,
     pub move_package: MovePackage,
+    pub checkpoint_sequence_number: u64,
 }
 
 #[derive(Debug, Clone)]

@@ -64,15 +64,8 @@ pub struct AnalyticsProcessor {
     filename_suffix: u128,
 }
 
-// Main callback from the indexer framework.
-// All processing starts here.
-#[async_trait::async_trait]
-impl Handler for AnalyticsProcessor {
-    fn name(&self) -> &str {
-        "checkpoint-analytics-processor"
-    }
-
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+impl AnalyticsProcessor {
+    async fn process_one_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
         // get epoch id, checkpoint sequence number and timestamp, those are important
         // indexes when operating on data
         let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();
@@ -131,6 +124,22 @@ impl Handler for AnalyticsProcessor {
             .end
             .checked_add(1)
             .context("Checkpoint sequence num overflow")?;
+        Ok(())
+    }
+}
+
+// Main callback from the indexer framework.
+// All processing starts here.
+#[async_trait::async_trait]
+impl Handler for AnalyticsProcessor {
+    fn name(&self) -> &str {
+        "checkpoint-analytics-processor"
+    }
+
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> Result<()> {
+        for checkpoint in checkpoints {
+            self.process_one_checkpoint(checkpoint).await?;
+        }
         Ok(())
     }
 }
