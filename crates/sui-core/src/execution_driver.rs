@@ -7,6 +7,7 @@ use std::{
 };
 
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use sui_macros::fail_point_async;
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use tokio::{
@@ -95,6 +96,8 @@ pub async fn execution_process(
             }
             let mut attempts = 0;
             loop {
+                fail_point_async!("transaction_execution_delay");
+
                 attempts += 1;
                 let res = authority
                     .try_execute_immediately(&certificate, expected_effects_digest, &epoch_store)

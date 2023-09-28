@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::join;
+use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::{
     publish_basics_package, publish_basics_package_and_make_counter, TestTransactionBuilder,
 };
@@ -16,6 +18,7 @@ use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_cluster::TestClusterBuilder;
+use tokio::time::sleep;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
 #[sim_test]
@@ -72,6 +75,121 @@ async fn shared_object_deletion() {
     // assert the shared object was deleted
     let deleted_obj_id = effects.deleted()[0].object_id;
     assert_eq!(deleted_obj_id, counter_id);
+}
+
+/// Test for execution of shared object certs that are sequenced after a shared object is deleted.
+/// The test strategy is:
+/// 0. Inject a random delay just before execution of a transaction.
+/// 1. Create a shared object
+/// 2. Create a delete cert and two increment certs, but do not execute any of them yet.
+/// 3. Execute the delete cert.
+/// 4. Execute the two increment certs.
+///
+/// The two execution certs should be immediately executable (because they have a missing
+/// input). Therefore validators may execute them in either order. The injected delay ensures that
+/// we will explore all possible orders, and `submit_transaction_to_validators` verifies that we
+/// get the same effects regardless of the order. (checkpoint fork detection will also test this).
+#[sim_test]
+async fn shared_object_deletion_multi_certs() {
+    // cause random delay just before tx is executed
+    register_fail_point_async("transaction_execution_delay", move || async move {
+        let delay = {
+            let dist = rand::distributions::Uniform::new(0, 1000);
+            let mut rng = rand::thread_rng();
+            dist.sample(&mut rng)
+        };
+        sleep(Duration::from_millis(delay)).await;
+    });
+
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+
+    let sender = accounts_and_gas[0].0;
+    let gas1 = accounts_and_gas[0].1[0];
+    let gas2 = accounts_and_gas[0].1[1];
+    let gas3 = accounts_and_gas[0].1[2];
+
+    // Make a transaction to delete the counter.
+    let delete_tx = test_cluster
+        .test_transaction_builder_with_gas_object(sender, gas1)
+        .await
+        .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let delete_tx = test_cluster.sign_transaction(&delete_tx);
+
+    let inc_tx_a = test_cluster
+        .test_transaction_builder_with_gas_object(sender, gas2)
+        .await
+        .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let inc_tx_a = test_cluster.sign_transaction(&inc_tx_a);
+    let inc_tx_a_digest = *inc_tx_a.digest();
+
+    let inc_tx_b = test_cluster
+        .test_transaction_builder_with_gas_object(sender, gas3)
+        .await
+        .call_counter_increment(package_id, counter_id, counter_initial_shared_version)
+        .build();
+    let inc_tx_b = test_cluster.sign_transaction(&inc_tx_b);
+    let inc_tx_b_digest = *inc_tx_b.digest();
+
+    let _ = test_cluster
+        .create_certificate(delete_tx.clone())
+        .await
+        .unwrap();
+    let _ = test_cluster
+        .create_certificate(inc_tx_a.clone())
+        .await
+        .unwrap();
+    let _ = test_cluster
+        .create_certificate(inc_tx_b.clone())
+        .await
+        .unwrap();
+
+    let validators = test_cluster.get_validator_pubkeys();
+
+    // delete obj on all validators, await effects
+    test_cluster
+        .submit_transaction_to_validators(delete_tx, &validators)
+        .await
+        .unwrap();
+
+    // now submit remaining txns simultaneously
+    join!(
+        async {
+            test_cluster
+                .submit_transaction_to_validators(inc_tx_a, &validators)
+                .await
+                .unwrap()
+        },
+        async {
+            test_cluster
+                .submit_transaction_to_validators(inc_tx_b, &validators)
+                .await
+                .unwrap()
+        }
+    );
+
+    // Start a new fullnode that is not on the write path
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
+        .await
+        .unwrap();
+
+    wait_for_t
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,
