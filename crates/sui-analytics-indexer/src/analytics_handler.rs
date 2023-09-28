@@ -72,65 +72,67 @@ impl Handler for AnalyticsProcessor {
         "checkpoint-analytics-processor"
     }
 
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
-        // get epoch id, checkpoint sequence number and timestamp, those are important
-        // indexes when operating on data
-        let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();
-        let checkpoint_num: u64 = *checkpoint_data.checkpoint_summary.sequence_number();
-        let timestamp: u64 = checkpoint_data.checkpoint_summary.data().timestamp_ms;
-        info!("Processing checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> Result<()> {
+        for checkpoint_data in checkpoints {
+            // get epoch id, checkpoint sequence number and timestamp, those are important
+            // indexes when operating on data
+            let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();
+            let checkpoint_num: u64 = *checkpoint_data.checkpoint_summary.sequence_number();
+            let timestamp: u64 = checkpoint_data.checkpoint_summary.data().timestamp_ms;
+            info!("Processing checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
 
-        if epoch
-            == self
-                .current_epoch
-                .checked_add(1)
-                .context("Epoch num overflow")?
-        {
-            self.cut().await?;
-            self.update_to_next_epoch();
-            self.create_epoch_dirs()?;
-            self.reset()?;
-        }
-
-        assert_eq!(epoch, self.current_epoch);
-
-        assert_eq!(checkpoint_num, self.current_checkpoint_range.end);
-
-        let num_checkpoints_processed =
-            self.current_checkpoint_range.end - self.current_checkpoint_range.start;
-        let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
-            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s);
-        if cut_new_files {
-            self.cut().await?;
-            self.reset()?;
-        }
-
-        let CheckpointData {
-            checkpoint_summary,
-            transactions: checkpoint_transactions,
-            ..
-        } = checkpoint_data;
-
-        self.process_checkpoints(checkpoint_summary, checkpoint_transactions);
-        for checkpoint_transaction in checkpoint_transactions {
-            let digest = checkpoint_transaction.transaction.digest();
-            self.process_transaction(
-                epoch,
-                checkpoint_num,
-                timestamp,
-                checkpoint_transaction,
-                &checkpoint_transaction.effects,
-            );
-            if let Some(events) = &checkpoint_transaction.events {
-                self.process_events(epoch, checkpoint_num, digest, timestamp, events);
+            if epoch
+                == self
+                    .current_epoch
+                    .checked_add(1)
+                    .context("Epoch num overflow")?
+            {
+                self.cut().await?;
+                self.update_to_next_epoch();
+                self.create_epoch_dirs()?;
+                self.reset()?;
             }
+
+            assert_eq!(epoch, self.current_epoch);
+
+            assert_eq!(checkpoint_num, self.current_checkpoint_range.end);
+
+            let num_checkpoints_processed =
+                self.current_checkpoint_range.end - self.current_checkpoint_range.start;
+            let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
+                || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s);
+            if cut_new_files {
+                self.cut().await?;
+                self.reset()?;
+            }
+
+            let CheckpointData {
+                checkpoint_summary,
+                transactions: checkpoint_transactions,
+                ..
+            } = checkpoint_data;
+
+            self.process_checkpoints(checkpoint_summary, checkpoint_transactions);
+            for checkpoint_transaction in checkpoint_transactions {
+                let digest = checkpoint_transaction.transaction.digest();
+                self.process_transaction(
+                    epoch,
+                    checkpoint_num,
+                    timestamp,
+                    checkpoint_transaction,
+                    &checkpoint_transaction.effects,
+                );
+                if let Some(events) = &checkpoint_transaction.events {
+                    self.process_events(epoch, checkpoint_num, digest, timestamp, events);
+                }
+            }
+            self.save_locally()?;
+            self.current_checkpoint_range.end = self
+                .current_checkpoint_range
+                .end
+                .checked_add(1)
+                .context("Checkpoint sequence num overflow")?;
         }
-        self.save_locally()?;
-        self.current_checkpoint_range.end = self
-            .current_checkpoint_range
-            .end
-            .checked_add(1)
-            .context("Checkpoint sequence num overflow")?;
         Ok(())
     }
 }

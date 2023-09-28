@@ -294,8 +294,7 @@ impl IndexedObject {
             // if struct_tag_string.contains("game_8192::Game8192")
             //     || struct_tag_string.contains("game_8192::GameMove8192")
             // Before fully synced, skip object json
-            if true
-            {
+            if true {
                 (None, Some(struct_tag_string))
             } else {
                 let move_object = object.data.try_as_move().unwrap();
@@ -354,6 +353,8 @@ impl IndexedObject {
 pub struct IndexedPackage {
     pub package_id: ObjectID,
     pub move_package: MovePackage,
+    // The checkpoint where this package is published.
+    pub checkpoint_sequence_number: u64,
 }
 
 #[derive(Debug, Clone)]

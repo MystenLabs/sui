@@ -136,67 +136,69 @@ where
         "checkpoint-transaction-and-epoch-indexer"
     }
 
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
-        info!(
-            checkpoint_seq = checkpoint_data.checkpoint_summary.sequence_number(),
-            "Checkpoint received by indexing processor"
-        );
-        // Index checkpoint data
-        let index_timer = self.metrics.checkpoint_index_latency.start_timer();
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
+        for checkpoint_data in checkpoints {
+            info!(
+                checkpoint_seq = checkpoint_data.checkpoint_summary.sequence_number(),
+                "Checkpoint received by indexing processor"
+            );
+            // Index checkpoint data
+            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
 
-        let (checkpoint, epoch) = Self::index_checkpoint_and_epoch(&self.state, checkpoint_data)
-            .await
-            .tap_err(|e| {
-                error!(
-                    "Failed to index checkpoints {:?} with error: {}",
-                    checkpoint_data,
-                    e.to_string()
-                );
-            })?;
-        let elapsed = index_timer.stop_and_record();
+            let (checkpoint, epoch) =
+                Self::index_checkpoint_and_epoch(&self.state, checkpoint_data)
+                    .await
+                    .tap_err(|e| {
+                        error!(
+                            "Failed to index checkpoints {:?} with error: {}",
+                            checkpoint_data,
+                            e.to_string()
+                        );
+                    })?;
+            let elapsed = index_timer.stop_and_record();
 
-        // commit first epoch immediately, send other epochs to channel to be committed later.
-        if let Some(epoch) = epoch {
-            if epoch.last_epoch.is_none() {
-                let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
-                info!("Persisting genesis epoch...");
-                let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
-                while persist_first_epoch_res.is_err() {
-                    warn!("Failed to persist first epoch, retrying...");
-                    persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+            // commit first epoch immediately, send other epochs to channel to be committed later.
+            if let Some(epoch) = epoch {
+                if epoch.last_epoch.is_none() {
+                    let epoch_db_guard = self.metrics.epoch_db_commit_latency.start_timer();
+                    info!("Persisting genesis epoch...");
+                    let mut persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    while persist_first_epoch_res.is_err() {
+                        warn!("Failed to persist first epoch, retrying...");
+                        persist_first_epoch_res = self.state.persist_epoch(&epoch).await;
+                    }
+                    epoch_db_guard.stop_and_record();
+                    self.metrics.total_epoch_committed.inc();
+                    info!("Persisted genesis epoch");
+                } else {
+                    // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
+                    self.epoch_indexing_sender.send(epoch).await.map_err(|e| {
+                        error!(
+                            "Failed to send indexed epoch to epoch commit handler with error {}",
+                            e.to_string()
+                        );
+                        IndexerError::MpscChannelError(e.to_string())
+                    })?;
                 }
-                epoch_db_guard.stop_and_record();
-                self.metrics.total_epoch_committed.inc();
-                info!("Persisted genesis epoch");
-            } else {
-                // NOTE: when the channel is full, epoch_sender_guard will wait until the channel has space.
-                self.epoch_indexing_sender.send(epoch).await.map_err(|e| {
-                    error!(
-                        "Failed to send indexed epoch to epoch commit handler with error {}",
-                        e.to_string()
-                    );
-                    IndexerError::MpscChannelError(e.to_string())
-                })?;
             }
+            let seq = checkpoint.checkpoint.sequence_number;
+            info!(
+                checkpoint_seq = seq,
+                elapsed, "Checkpoint indexing finished, about to sending to commit handler"
+            );
+            // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
+            // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
+            self.checkpoint_sender
+                .send(checkpoint)
+                .await
+                .tap_ok(|_| info!(checkpoint_seq = seq, "Checkpoint sent to commit handler"))
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "checkpoint channel send should not fail, but got error: {:?}",
+                        e
+                    )
+                });
         }
-        let seq = checkpoint.checkpoint.sequence_number;
-        info!(
-            checkpoint_seq = seq,
-            elapsed, "Checkpoint indexing finished, about to sending to commit handler"
-        );
-        // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
-        // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
-        self.checkpoint_sender
-            .send(checkpoint)
-            .await
-            .tap_ok(|_| info!(checkpoint_seq = seq, "Checkpoint sent to commit handler"))
-            .unwrap_or_else(|e| {
-                panic!(
-                    "checkpoint channel send should not fail, but got error: {:?}",
-                    e
-                )
-            });
-
         Ok(())
     }
 }
@@ -833,26 +835,28 @@ where
         "objects-indexer"
     }
 
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
-        let checkpoint_seq = *checkpoint_data.checkpoint_summary.sequence_number();
-        info!(checkpoint_seq, "Objects received by indexing processor");
-        // Index checkpoint data
-        let index_timer = self.metrics.checkpoint_index_latency.start_timer();
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
+        for checkpoint_data in checkpoints {
+            let checkpoint_seq = *checkpoint_data.checkpoint_summary.sequence_number();
+            info!(checkpoint_seq, "Objects received by indexing processor");
+            // Index checkpoint data
+            let index_timer = self.metrics.checkpoint_index_latency.start_timer();
 
-        let object_changes =
-            Self::index_checkpoint_objects(self.state.clone(), checkpoint_data).await;
-        index_timer.stop_and_record();
+            let object_changes =
+                Self::index_checkpoint_objects(self.state.clone(), checkpoint_data).await;
+            index_timer.stop_and_record();
 
-        self.object_indexing_sender
-            .send((checkpoint_seq, object_changes))
-            .await
-            .tap_ok(|_| info!(checkpoint_seq, "Objects sent to commit handler"))
-            .unwrap_or_else(|e| {
-                panic!(
-                    "checkpoint channel send should not fail, but got error: {:?}",
-                    e
-                )
-            });
+            self.object_indexing_sender
+                .send((checkpoint_seq, object_changes))
+                .await
+                .tap_ok(|_| info!(checkpoint_seq, "Objects sent to commit handler"))
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "checkpoint channel send should not fail, but got error: {:?}",
+                        e
+                    )
+                });
+        }
 
         Ok(())
     }

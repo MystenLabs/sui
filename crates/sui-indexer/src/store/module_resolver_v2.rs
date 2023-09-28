@@ -14,7 +14,6 @@ use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
 use std::sync::{Arc, Mutex};
 use sui_types::base_types::ObjectID;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::MovePackage;
 
 use crate::errors::{Context, IndexerError};
@@ -81,13 +80,10 @@ impl<GM> InterimModuleResolver<GM> {
         backup: GM,
         package_cache: Arc<Mutex<IndexingPackageCache>>,
         new_packages: &[IndexedPackage],
-        checkpoint_seq: CheckpointSequenceNumber,
+        // checkpoint_seq: CheckpointSequenceNumber,
         metrics: IndexerMetrics,
     ) -> Self {
-        package_cache
-            .lock()
-            .unwrap()
-            .insert_packages(new_packages, checkpoint_seq);
+        package_cache.lock().unwrap().insert_packages(new_packages);
         Self {
             backup,
             package_cache,
