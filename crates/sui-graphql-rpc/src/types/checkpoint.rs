@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::db_data_provider::PgManager;
+use crate::context_data::sui_indexer_reader::PgManager;
 
 use super::{
     base64::Base64, digest::Digest, end_of_epoch_data::EndOfEpochData, epoch::Epoch,

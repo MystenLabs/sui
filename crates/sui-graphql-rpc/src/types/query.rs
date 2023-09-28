@@ -15,7 +15,7 @@ use super::{
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager},
+    context_data::{context_ext::DataProviderContextExt, sui_indexer_reader::PgManager},
     error::{code, graphql_error, Error},
 };
 
