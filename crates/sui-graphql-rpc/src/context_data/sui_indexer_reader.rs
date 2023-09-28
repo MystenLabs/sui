@@ -80,7 +80,7 @@ impl PgManager {
         .await
     }
 
-    pub(crate) async fn fetch_epoch_strict(&self, epoch_id: u64) -> Result<StoredEpochInfo, Error> {
+    pub(crate) async fn fetch_epoch_strict(&self, epoch_id: i64) -> Result<StoredEpochInfo, Error> {
         let result = self.fetch_epoch(epoch_id).await?;
         match result {
             Some(epoch) => Ok(epoch),
@@ -100,14 +100,13 @@ impl PgManager {
 
     pub(crate) async fn fetch_checkpoint(
         &self,
-        digest: Option<&str>,
+        digest: Option<Vec<u8>>,
         sequence_number: Option<u64>,
-    ) -> Result<Option<StoredCheckpoint>, Error> {
+    ) -> IndexerResult<Option<StoredCheckpoint>> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
         match (digest, sequence_number) {
             (Some(digest), None) => {
-                let digest = Digest::from_str(digest)?.into_vec();
                 query = query.filter(checkpoints::dsl::checkpoint_digest.eq(digest));
             }
             (None, Some(sequence_number)) => {
