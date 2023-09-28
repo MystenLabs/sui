@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
@@ -93,7 +94,7 @@ export function take(
 	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
 	});
 
 	return item;
@@ -117,8 +118,8 @@ export function list(
 		arguments: [
 			objArg(tx, kiosk),
 			objArg(tx, kioskCap),
-			tx.pure(itemId, 'address'),
-			tx.pure(price, 'u64'),
+			tx.pure(bcs.Address.serialize(itemId)),
+			tx.pure(bcs.U64.serialize(price)),
 		],
 	});
 }
@@ -137,7 +138,7 @@ export function delist(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::delist`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
 	});
 }
 
@@ -156,7 +157,12 @@ export function placeAndList(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::place_and_list`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure(price, 'u64')],
+		arguments: [
+			objArg(tx, kiosk),
+			objArg(tx, kioskCap),
+			objArg(tx, item),
+			tx.pure(bcs.U64.serialize(price)),
+		],
 	});
 }
 
@@ -174,7 +180,7 @@ export function purchase(
 	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), tx.pure(itemId, 'address'), objArg(tx, payment)],
+		arguments: [objArg(tx, kiosk), tx.pure(bcs.Address.serialize(itemId)), objArg(tx, payment)],
 	});
 
 	return [item, transferRequest];
@@ -190,7 +196,7 @@ export function withdrawFromKiosk(
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
 ): TransactionArgument {
-	const amountArg = tx.pure(amount ? { Some: amount } : { None: true }, 'Option<u64>');
+	const amountArg = tx.pure(bcs.option(bcs.u64()).serialize(amount));
 
 	const [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,
@@ -216,7 +222,7 @@ export function borrowValue(
 	const [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
 	});
 
 	return [item, promise];

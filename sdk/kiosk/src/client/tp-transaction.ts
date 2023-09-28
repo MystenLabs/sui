@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import {
@@ -69,7 +70,10 @@ export class TransferPolicyTransaction {
 			if (policies.length > 0) throw new Error("There's already transfer policy for this Type.");
 		}
 		const cap = createTransferPolicy(this.transactionBlock, type, publisher);
-		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure(address, 'address'));
+		this.transactionBlock.transferObjects(
+			[cap],
+			this.transactionBlock.pure(bcs.Address.serialize(address)),
+		);
 	}
 
 	/**
@@ -112,7 +116,7 @@ export class TransferPolicyTransaction {
 		shareTransferPolicy(this.transactionBlock, this.type, this.policy as TransactionArgument);
 		this.transactionBlock.transferObjects(
 			[this.policyCap as TransactionArgument],
-			this.transactionBlock.pure(address, 'address'),
+			this.transactionBlock.pure(bcs.Address.serialize(address)),
 		);
 	}
 
@@ -141,7 +145,10 @@ export class TransferPolicyTransaction {
 			amount,
 		);
 
-		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure(address, 'address'));
+		this.transactionBlock.transferObjects(
+			[coin],
+			this.transactionBlock.pure(bcs.Address.serialize(address)),
+		);
 
 		return this;
 	}

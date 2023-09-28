@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import type { SerializedBcs } from '@mysten/bcs';
+import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
 
+import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 import { SUI_TYPE_ARG } from '../framework/framework.js';
@@ -315,6 +317,16 @@ export class TransactionBlock {
 	 */
 	pure(
 		/**
+		 * The pure value, serialized to BCS. If this is a Uint8Array, then the value
+		 * is assumed to be raw bytes, and will be used directly.
+		 */
+		value: SerializedBcs<any, any> | Uint8Array,
+	): TransactionBlockInput;
+	/**
+	 * @deprecated Pass the pure value as SerializedBcs instead.
+	 */
+	pure(
+		/**
 		 * The pure value that will be used as the input value. If this is a Uint8Array, then the value
 		 * is assumed to be raw bytes, and will be used directly.
 		 */
@@ -324,7 +336,14 @@ export class TransactionBlock {
 		 * based on how the input is used.
 		 */
 		type?: string,
-	) {
+	): TransactionBlockInput;
+	pure(value: unknown, type?: string): TransactionBlockInput {
+		if (isSerializedBcs(value)) {
+			return this.#input('pure', {
+				Pure: Array.from(value.toBytes()),
+			});
+		}
+
 		// TODO: we can also do some deduplication here
 		return this.#input(
 			'pure',
@@ -340,8 +359,20 @@ export class TransactionBlock {
 
 	// Method shorthands:
 
-	splitCoins(...args: Parameters<(typeof Transactions)['SplitCoins']>) {
-		return this.add(Transactions.SplitCoins(...args));
+	splitCoins(
+		coin: TransactionArgument,
+		amounts: (TransactionArgument | number | string | bigint)[],
+	) {
+		return this.add(
+			Transactions.SplitCoins(
+				coin,
+				amounts.map((amount) =>
+					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
+						? this.pure(bcs.U64.serialize(amount))
+						: amount,
+				),
+			),
+		);
 	}
 	mergeCoins(...args: Parameters<(typeof Transactions)['MergeCoins']>) {
 		return this.add(Transactions.MergeCoins(...args));
@@ -355,8 +386,13 @@ export class TransactionBlock {
 	moveCall(...args: Parameters<(typeof Transactions)['MoveCall']>) {
 		return this.add(Transactions.MoveCall(...args));
 	}
-	transferObjects(...args: Parameters<(typeof Transactions)['TransferObjects']>) {
-		return this.add(Transactions.TransferObjects(...args));
+	transferObjects(objects: TransactionArgument[], address: TransactionArgument | string) {
+		return this.add(
+			Transactions.TransferObjects(
+				objects,
+				typeof address === 'string' ? this.pure(bcs.Address.serialize(address)) : address,
+			),
+		);
 	}
 	makeMoveVec(...args: Parameters<(typeof Transactions)['MakeMoveVec']>) {
 		return this.add(Transactions.MakeMoveVec(...args));

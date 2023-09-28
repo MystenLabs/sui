@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { type ObjectArgument } from '../../types';
@@ -38,8 +39,8 @@ export function attachRoyaltyRuleTx(
 		arguments: [
 			objArg(tx, policy),
 			objArg(tx, policyCap),
-			tx.pure(percentageBps, 'u16'),
-			tx.pure(minAmount, 'u64'),
+			tx.pure(bcs.U16.serialize(Number(percentageBps))),
+			tx.pure(bcs.U64.serialize(minAmount)),
 		],
 	});
 }
@@ -69,6 +70,6 @@ export function attachFloorPriceRuleTx(
 	tx.moveCall({
 		target: `${packageId}::floor_price_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure(minPrice, 'u64')],
+		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure(bcs.U64.serialize(minPrice))],
 	});
 }

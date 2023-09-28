@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
@@ -68,7 +69,7 @@ export function withdrawFromPolicy(
 	policyCap: ObjectArgument,
 	amount?: string | bigint | null,
 ): TransactionArgument {
-	const amountArg = tx.pure(amount ? { Some: amount } : { None: true }, 'Option<u64>');
+	const amountArg = tx.pure(bcs.option(bcs.u64()).serialize(amount));
 
 	const [profits] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::withdraw`,

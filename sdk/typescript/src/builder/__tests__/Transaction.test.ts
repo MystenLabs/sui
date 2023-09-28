@@ -15,7 +15,7 @@ it('can construct and serialize an empty tranaction', () => {
 
 it('can be serialized and deserialized to the same values', () => {
 	const tx = new TransactionBlock();
-	tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+	tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(bcs.U64.serialize(100))]));
 	const serialized = tx.serialize();
 	const tx2 = TransactionBlock.from(serialized);
 	expect(serialized).toEqual(tx2.serialize());
@@ -23,7 +23,7 @@ it('can be serialized and deserialized to the same values', () => {
 
 it('allows transfer with the result of split transactions', () => {
 	const tx = new TransactionBlock();
-	const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+	const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(bcs.U64.serialize(100))]));
 	tx.add(Transactions.TransferObjects([coin], tx.object('0x2')));
 });
 
@@ -94,16 +94,16 @@ describe('offline build', () => {
 
 	it('builds a more complex interaction', async () => {
 		const tx = setup();
-		const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		const coin = tx.splitCoins(tx.gas, [100]);
 		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
 			Transactions.MoveCall({
 				target: '0x2::devnet_nft::mint',
 				typeArguments: [],
 				arguments: [
-					tx.pure(Inputs.Pure('foo', 'string')),
-					tx.pure(Inputs.Pure('bar', 'string')),
-					tx.pure(Inputs.Pure('baz', 'string')),
+					tx.pure(bcs.String.serialize('foo')),
+					tx.pure(bcs.String.serialize('bar')),
+					tx.pure(bcs.String.serialize('baz')),
 				],
 			}),
 		);
@@ -112,16 +112,16 @@ describe('offline build', () => {
 
 	it('builds a more complex interaction', async () => {
 		const tx = setup();
-		const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		const coin = tx.splitCoins(tx.gas, [100]);
 		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
 		tx.add(
 			Transactions.MoveCall({
 				target: '0x2::devnet_nft::mint',
 				typeArguments: [],
 				arguments: [
-					tx.pure(Inputs.Pure('foo', 'string')),
-					tx.pure(Inputs.Pure('bar', 'string')),
-					tx.pure(Inputs.Pure('baz', 'string')),
+					tx.pure(bcs.String.serialize('foo')),
+					tx.pure(bcs.String.serialize('bar')),
+					tx.pure(bcs.String.serialize('baz')),
 				],
 			}),
 		);
