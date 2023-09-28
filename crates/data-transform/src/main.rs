@@ -297,13 +297,13 @@ fn main() {
                         match move_object {
                             Ok(m) => {
                                 let parsed_json = SuiMoveStruct::from(m).to_json_value();
-                                let final_result = 
+                                let final_result =
                                     serde_json::to_string_pretty(&parsed_json).unwrap();
                                 println!("event json = {}", final_result);
 
                                 let new_event_json = EventsJson { 
                                     id: event.id, 
-                                    event_json: final_result 
+                                    event_json: final_result,
                                 };
 
                                 let _inserted_event_json = diesel::insert_into(events_json)
