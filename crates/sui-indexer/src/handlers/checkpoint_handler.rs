@@ -127,16 +127,14 @@ pub struct CheckpointProcessor<S> {
     checkpoint_sender: mysten_metrics::metered_channel::Sender<TemporaryCheckpointStore>,
 }
 
-#[async_trait::async_trait]
-impl<S> Handler for CheckpointProcessor<S>
+impl<S> CheckpointProcessor<S>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
-    fn name(&self) -> &str {
-        "checkpoint-transaction-and-epoch-indexer"
-    }
-
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_one_checkpoint(
+        &mut self,
+        checkpoint_data: &CheckpointData,
+    ) -> anyhow::Result<()> {
         info!(
             checkpoint_seq = checkpoint_data.checkpoint_summary.sequence_number(),
             "Checkpoint received by indexing processor"
@@ -197,6 +195,23 @@ where
                 )
             });
 
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<S> Handler for CheckpointProcessor<S>
+where
+    S: IndexerStore + Clone + Sync + Send + 'static,
+{
+    fn name(&self) -> &str {
+        "checkpoint-transaction-and-epoch-indexer"
+    }
+
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
+        for checkpoint_data in checkpoints {
+            self.process_one_checkpoint(checkpoint_data).await?;
+        }
         Ok(())
     }
 }
@@ -824,16 +839,14 @@ pub struct ObjectsProcessor<S> {
     state: S,
 }
 
-#[async_trait::async_trait]
-impl<S> Handler for ObjectsProcessor<S>
+impl<S> ObjectsProcessor<S>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
-    fn name(&self) -> &str {
-        "objects-indexer"
-    }
-
-    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
+    async fn process_one_checkpoint(
+        &mut self,
+        checkpoint_data: &CheckpointData,
+    ) -> anyhow::Result<()> {
         let checkpoint_seq = *checkpoint_data.checkpoint_summary.sequence_number();
         info!(checkpoint_seq, "Objects received by indexing processor");
         // Index checkpoint data
@@ -853,7 +866,23 @@ where
                     e
                 )
             });
+        Ok(())
+    }
+}
 
+#[async_trait::async_trait]
+impl<S> Handler for ObjectsProcessor<S>
+where
+    S: IndexerStore + Clone + Sync + Send + 'static,
+{
+    fn name(&self) -> &str {
+        "objects-indexer"
+    }
+
+    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
+        for checkpoint_data in checkpoints {
+            self.process_one_checkpoint(checkpoint_data).await?;
+        }
         Ok(())
     }
 }
