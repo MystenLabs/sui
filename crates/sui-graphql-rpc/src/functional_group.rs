@@ -3,14 +3,16 @@
 
 use std::collections::BTreeMap;
 
+use async_graphql::*;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json as json;
 
-/// Logical Groups categorise APIs exposed by GraphQL.  Groups can be enabled or disabled based on
-/// settings in the RPC's TOML configuration file.
-#[derive(Copy, Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd)]
+/// Groups of features served by the RPC service.  The GraphQL Service can be configured to enable
+/// or disable these features.
+#[derive(Enum, Copy, Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "kebab-case")]
+#[graphql(name = "Feature")]
 pub(crate) enum FunctionalGroup {
     /// Statistics about how the network was running (TPS, top packages, APY, etc)
     Analytics,
@@ -37,6 +39,20 @@ impl FunctionalGroup {
     /// Not a suitable `Display` implementation because it enquotes the representation.
     pub(crate) fn name(&self) -> String {
         json::ser::to_string(self).expect("Serializing `FunctionalGroup` cannot fail.")
+    }
+
+    /// List of all functional groups
+    pub(crate) fn all() -> &'static [FunctionalGroup] {
+        use FunctionalGroup as G;
+        static ALL: &[FunctionalGroup] = &[
+            G::Analytics,
+            G::Coins,
+            G::DynamicFields,
+            G::NameService,
+            G::Subscriptions,
+            G::SystemState,
+        ];
+        ALL
     }
 }
 

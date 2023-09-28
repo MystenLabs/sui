@@ -7,7 +7,11 @@ use super::{
     address::Address, checkpoint::Checkpoint, object::Object, owner::ObjectOwner,
     protocol_config::ProtocolConfigs, sui_address::SuiAddress,
 };
-use crate::context_data::context_ext::DataProviderContextExt;
+use crate::{
+    config::ServiceConfig,
+    context_data::context_ext::DataProviderContextExt,
+    error::{code, graphql_error},
+};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, EmptySubscription>;
@@ -16,8 +20,23 @@ pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, EmptyMutation, E
 #[allow(unused_variables)]
 #[Object]
 impl Query {
+    /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
+    /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
         ctx.data_provider().fetch_chain_id().await
+    }
+
+    /// Configuration for this RPC service
+    async fn service_config(&self, ctx: &Context<'_>) -> Result<ServiceConfig> {
+        Ok(ctx
+            .data()
+            .map_err(|_| {
+                graphql_error(
+                    code::INTERNAL_SERVER_ERROR,
+                    "Unable to fetch service configuration",
+                )
+            })
+            .cloned()?)
     }
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {

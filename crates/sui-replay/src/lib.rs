@@ -28,6 +28,9 @@ mod replay;
 pub mod transaction_provider;
 pub mod types;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Parser, Clone)]
 #[command(rename_all = "kebab-case")]
 pub enum ReplayToolCommand {

@@ -3,10 +3,9 @@
 
 use criterion::*;
 
+use criterion::Criterion;
 use sui_core::signature_verifier::{SignatureVerifierMetrics, VerifiedDigestCache};
 use sui_types::digests::CertificateDigest;
-
-use criterion::Criterion;
 
 fn verified_cert_cache_bench(c: &mut Criterion) {
     let mut digests: Vec<_> = (0..(1 << 18))

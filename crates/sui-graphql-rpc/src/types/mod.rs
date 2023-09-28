@@ -14,6 +14,7 @@ pub(crate) mod display;
 pub(crate) mod end_of_epoch_data;
 pub(crate) mod epoch;
 pub(crate) mod gas;
+pub(crate) mod move_value;
 pub(crate) mod name_service;
 pub(crate) mod object;
 pub(crate) mod owner;

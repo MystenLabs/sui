@@ -70,6 +70,7 @@ exclude = [
 
 members = [
     "crates/anemo-benchmark",
+    "crates/data-transform",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -214,7 +215,8 @@ opt-level = 1
 anyhow = "1.0.71"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
-async-graphql = "5.0.10"
+async-graphql = "6.0.7"
+async-graphql-axum = "6.0.7"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 aws-config = "0.56"
@@ -514,8 +516,8 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "3547ed059927007c7ff48e729ed59da3dbb6a2e3", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }

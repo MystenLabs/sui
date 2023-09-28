@@ -1,8 +1,7 @@
 # Migrating from Kiosk SDK V1
 
-The original version of Kiosk SDK V1 provided basic experimentation with the Kiosk API. The new
-version of the SDK provides a more robust experience for building kiosk/transfer policy
-transactions.
+The original version of Kiosk SDK provided basic experimentation with the Kiosk API. The new version
+of the SDK (0.7+) provides a more robust experience for building kiosk/transfer policy transactions.
 
 The new SDK offers a builder-pattern API, which provides better autocomplete capabilities, and also
 makes code more readable.
@@ -11,14 +10,14 @@ While a one-to-one mapping between the old and new SDK is not possible, the foll
 should help you get started.
 
 > An important benefit of the new SDK is that it works seamlessly with Personal Kiosk, which was not
-> the case with the V1 SDK (you would always have to wrap the transaction with `borrow_cap` /
+> the case with the previous SDK (you would always have to wrap the transaction with `borrow_cap` /
 > `return_cap` calls depending on whether the kiosk is personal or not).
 
 ## Placing an item to kiosk and listing it for sale
 
 The following example is from the original Kiosk SDK V1 documentation.
 
-### V1 implementation
+### Before
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
@@ -40,7 +39,7 @@ const placeAndListToKiosk = async () => {
 };
 ```
 
-### V2 implementation
+### After
 
 Using the new SDK, you can build the same transaction as follows:
 
@@ -76,7 +75,7 @@ const placeAndListToKiosk = async () => {
 
 The following example is from the original Kiosk SDK V1 documentation.
 
-### V1 implementation
+### Before
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
@@ -95,7 +94,7 @@ const createKiosk = async () => {
 };
 ```
 
-### V2 implementation
+### After
 
 Using the new SDK, you can build the same transaction as follows:
 
@@ -123,7 +122,7 @@ const placeAndListToKiosk = async () => {
 
 The following example is from the original Kiosk SDK V1 documentation.
 
-### V1 implementation
+### Before
 
 ```typescript
 import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
@@ -183,7 +182,7 @@ const purchaseItem = async (item, kioskId) => {
 };
 ```
 
-### V2 implementation
+### After
 
 Using the new SDK, you can build the same transaction as follows:
 
@@ -236,7 +235,7 @@ const purchase = async () => {
 
 The following example was taken from the original Kiosk SDK V1 documentation.
 
-### V1 implementation
+### Before
 
 ```typescript
 import {
@@ -281,7 +280,7 @@ const attachStrongRoyalties = async () => {
 };
 ```
 
-### V2 implementation
+### After
 
 On the new SDK, the same transaction can be built as follows:
 
