@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
 use anyhow::anyhow;
 use bip32::DerivationPath;
 use clap::*;
@@ -9,10 +10,14 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
 use fastcrypto_zkp::bn254::utils::get_oidc_url;
-use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
+use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider};
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
+use im::hashmap::HashMap as ImHashMap;
 use json_to_table::{json_to_table, Orientation};
 use num_bigint::BigUint;
 use rand::rngs::StdRng;
+use rand::Rng;
 use rand::SeedableRng;
 use rusoto_core::Region;
 use rusoto_kms::{Kms, KmsClient, SignRequest};
@@ -22,6 +27,7 @@ use shared_crypto::intent::{Intent, IntentMessage};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use sui_keys::key_derive::generate_new_key;
 use sui_keys::keypair_file::{
     read_authority_keypair_from_file, read_keypair_from_file, write_authority_keypair_to_file,
@@ -32,18 +38,16 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{get_authority_key_pair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair};
 use sui_types::crypto::{DefaultHash, PublicKey, Signature};
+use sui_types::error::SuiResult;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use sui_types::transaction::TransactionData;
-use tracing::info;
-
-use rand::Rng;
+use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
-
-use crate::zklogin_commands_util::{perform_zk_login_test_tx, read_cli_line};
+use tracing::info;
 
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
@@ -204,6 +208,20 @@ pub enum KeyToolCommand {
         #[clap(long, default_value = "devnet")]
         network: String,
     },
+
+    /// Given a zkLogin signature, parse it if valid. If tx_bytes provided,
+    /// it verifies the zkLogin signature based on provider and its latest JWK fetched.
+    /// Example request: sui keytool zk-login-sig-verify --sig $SERIALIZED_ZKLOGIN_SIG --tx-bytes $TX_BYTES --provider Google --curr-epoch 10
+    ZkLoginSigVerify {
+        #[clap(long)]
+        sig: String,
+        #[clap(long)]
+        tx_bytes: Option<String>,
+        #[clap(long)]
+        provider: Option<String>,
+        #[clap(long)]
+        curr_epoch: Option<EpochId>,
+    },
 }
 
 // Command Output types
@@ -320,6 +338,14 @@ pub struct ZkLoginSignAndExecuteTx {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZkLoginSigVerifyResponse {
+    parsed: ZkLoginAuthenticator,
+    res: Option<SuiResult>,
+    jwks: Option<Vec<(JwkId, JWK)>>,
+}
+
+#[derive(Serialize)]
 #[serde(untagged)]
 pub enum CommandOutput {
     Convert(ConvertOutput),
@@ -338,6 +364,7 @@ pub enum CommandOutput {
     Sign(SignData),
     SignKMS(SerializedSig),
     ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx),
+    ZkLoginSigVerify(ZkLoginSigVerifyResponse),
 }
 
 impl KeyToolCommand {
@@ -803,6 +830,61 @@ impl KeyToolCommand {
                 )
                 .await?;
                 CommandOutput::ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx { tx_digest })
+            }
+
+            KeyToolCommand::ZkLoginSigVerify {
+                sig,
+                tx_bytes,
+                provider,
+                curr_epoch,
+            } => {
+                match GenericSignature::from_bytes(
+                    &Base64::decode(&sig).map_err(|e| anyhow!("Invalid base64 sig: {:?}", e))?,
+                )? {
+                    GenericSignature::ZkLoginAuthenticator(zk) => {
+                        if tx_bytes.is_none() || provider.is_none() || curr_epoch.is_none() {
+                            return Ok(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
+                                parsed: zk,
+                                res: None,
+                                jwks: None,
+                            }));
+                        }
+
+                        let tx_data: TransactionData = bcs::from_bytes(
+                            &Base64::decode(&tx_bytes.unwrap())
+                                .map_err(|e| anyhow!("Invalid base64 tx data: {:?}", e))?,
+                        )?;
+                        let client = reqwest::Client::new();
+                        let jwks = fetch_jwks(
+                            &OIDCProvider::from_str(&provider.clone().unwrap())
+                                .map_err(|_| anyhow!("Unsupported provider:"))?,
+                            &client,
+                        )
+                        .await?;
+                        let parsed: ImHashMap<JwkId, JWK> = jwks.clone().into_iter().collect();
+                        let aux_verify_data = VerifyParams::new(
+                            parsed,
+                            vec![
+                                OIDCProvider::Facebook,
+                                OIDCProvider::Twitch,
+                                OIDCProvider::Google,
+                            ],
+                            ZkLoginEnv::Prod,
+                        );
+                        let res = zk.verify_authenticator(
+                            &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+                            tx_data.execution_parts().1,
+                            Some(curr_epoch.unwrap()),
+                            &aux_verify_data,
+                        );
+                        CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
+                            parsed: zk,
+                            res: Some(res),
+                            jwks: Some(jwks),
+                        })
+                    }
+                    _ => CommandOutput::Error("Not a zkLogin signature".to_string()),
+                }
             }
         });
 
