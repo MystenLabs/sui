@@ -24,7 +24,10 @@ export async function verifyMessage(
 	if (scope === IntentScope.PersonalMessage) {
 		const messageBytes = messageWithIntent(
 			scope,
-			bcs.ser(['vector', 'u8'], typeof message === 'string' ? fromB64(message) : message).toBytes(),
+			bcs
+				.vector(bcs.u8())
+				.serialize(typeof message === 'string' ? fromB64(message) : message)
+				.toBytes(),
 		);
 
 		if (await signature.pubKey.verify(blake2b(messageBytes, { dkLen: 32 }), signature.signature)) {

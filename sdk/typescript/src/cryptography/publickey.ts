@@ -86,7 +86,7 @@ export abstract class PublicKey {
 		signature: Uint8Array | SerializedSignature,
 	): Promise<boolean> {
 		return this.verifyWithIntent(
-			bcs.ser(['vector', 'u8'], message).toBytes(),
+			bcs.vector(bcs.u8()).serialize(message).toBytes(),
 			signature,
 			IntentScope.PersonalMessage,
 		);

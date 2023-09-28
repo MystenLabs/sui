@@ -19,6 +19,7 @@ import {
 	unknown,
 } from 'superstruct';
 
+import type { TypeTag } from '../bcs/index.js';
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { WellKnownEncoding } from './utils.js';
@@ -99,7 +100,9 @@ export const MakeMoveVecTransaction = object({
 	// TODO: ideally we should use `TypeTag` instead of `record()` here,
 	// but TypeTag is recursively defined and it's tricky to define a
 	// recursive struct in superstruct
-	type: optional(option(record(string(), unknown()))),
+	type: optional(option(record(string(), unknown()))) as never as Struct<
+		{ Some: TypeTag } | { None: true | null }
+	>,
 	objects: array(ObjectTransactionArgument),
 });
 export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;

@@ -4,7 +4,8 @@
 import { toB58 } from '@mysten/bcs';
 import { describe, expect, it } from 'vitest';
 
-import { builder, TransactionBlock, Transactions } from '../index.js';
+import { bcs } from '../../bcs/index.js';
+import { TransactionBlock, Transactions } from '../index.js';
 import { Inputs } from '../Inputs.js';
 
 it('can construct and serialize an empty tranaction', () => {
@@ -83,7 +84,7 @@ describe('offline build', () => {
 
 	it('supports pre-serialized inputs as Uint8Array', async () => {
 		const tx = setup();
-		const inputBytes = builder.ser('u64', 100n).toBytes();
+		const inputBytes = bcs.ser('u64', 100n).toBytes();
 		// Use bytes directly in pure value:
 		tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(inputBytes)]));
 		// Use bytes in input helper:

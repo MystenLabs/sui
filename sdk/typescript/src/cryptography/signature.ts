@@ -3,7 +3,7 @@
 
 import { fromB64, toB64 } from '@mysten/bcs';
 
-import { builder } from '../builder/bcs.js';
+import { bcs } from '../bcs/index.js';
 import type { MultiSigStruct } from '../multisig/publickey.js';
 import type { PublicKey } from './publickey.js';
 
@@ -83,7 +83,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
 	if (signatureScheme === 'MultiSig') {
-		const multisig: MultiSigStruct = builder.de('MultiSig', bytes.slice(1));
+		const multisig: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
 		return {
 			serializedSignature,
 			signatureScheme,
