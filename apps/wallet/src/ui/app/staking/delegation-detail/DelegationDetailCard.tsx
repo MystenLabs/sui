@@ -15,7 +15,7 @@ import { API_ENV } from '_src/shared/api-env';
 import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import { useCoinMetadata, useGetValidatorsApy } from '@mysten/core';
-import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowLeft16, StakeAdd16, StakeRemove16 } from '@mysten/icons';
 import type { StakeObject } from '@mysten/sui.js/client';
 import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -38,7 +38,7 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 		data: system,
 		isLoading: loadingValidators,
 		isError: errorValidators,
-	} = useLatestSuiSystemState();
+	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const accountAddress = useActiveAddress();
 
@@ -46,7 +46,8 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiCoinBalance } = useBalance(
+	const { data: suiCoinBalance } = useSuiClientQuery(
+		'getBalance',
 		{ coinType: SUI_TYPE_ARG, owner: accountAddress!! },
 		{ refetchInterval, staleTime, enabled: !!accountAddress },
 	);

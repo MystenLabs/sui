@@ -19,7 +19,7 @@ import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
 import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
-import { useAllBalances, useBalance } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
@@ -167,7 +167,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		isError,
 		isLoading,
 		isFetched,
-	} = useBalance(
+	} = useSuiClientQuery(
+		'getBalance',
 		{ coinType: activeCoinType, owner: activeAccountAddress! },
 		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
 	);
@@ -189,7 +190,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		data: coinBalances,
 		isLoading: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
-	} = useAllBalances(
+	} = useSuiClientQuery(
+		'getAllBalances',
 		{ owner: activeAccountAddress! },
 		{
 			enabled: !!activeAccountAddress,

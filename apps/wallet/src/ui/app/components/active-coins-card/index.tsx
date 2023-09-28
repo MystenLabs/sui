@@ -5,7 +5,7 @@ import { useActiveAddress } from '_app/hooks/useActiveAddress';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useCoinsReFetchingConfig } from '_hooks';
-import { useAllBalances } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { Link } from 'react-router-dom';
 
@@ -21,7 +21,8 @@ export function ActiveCoinsCard({
 	const selectedAddress = useActiveAddress();
 
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: coins, isLoading } = useAllBalances(
+	const { data: coins, isLoading } = useSuiClientQuery(
+		'getAllBalances',
 		{ owner: selectedAddress! },
 		{
 			enabled: !!selectedAddress,

@@ -8,7 +8,7 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { ampli } from '_src/shared/analytics/ampli';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Plus12 } from '@mysten/icons';
 import type { StakeObject } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
@@ -28,7 +28,7 @@ export function ValidatorsCard() {
 		error,
 	} = useGetDelegatedStake(accountAddress || '');
 
-	const { data: system } = useLatestSuiSystemState();
+	const { data: system } = useSuiClientQuery('getLatestSuiSystemState');
 	const activeValidators = system?.activeValidators;
 
 	// Total active stake for all Staked validators

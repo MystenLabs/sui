@@ -24,7 +24,7 @@ export type SuiRpcMethods = {
 		? {
 				name: K;
 				result: R;
-				params: undefined;
+				params: undefined | object;
 		  }
 		: never;
 };
@@ -35,20 +35,21 @@ export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = Omit<
 >;
 
 export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
-	{
-		method,
-		params,
-	}: {
-		method: T;
-		params: SuiRpcMethods[T]['params'];
-	},
-	{ queryKey, enabled = !!params, ...options }: UseSuiClientQueryOptions<T> = {},
+	...args: undefined extends SuiRpcMethods[T]['params']
+		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
+		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
 ) {
+	const [method, params, { queryKey = [], enabled = !!params, ...options } = {}] = args as [
+		method: T,
+		params?: SuiRpcMethods[T]['params'],
+		options?: UseSuiClientQueryOptions<T>,
+	];
+
 	const suiContext = useSuiClientContext();
 
 	return useQuery({
 		...options,
-		queryKey: [suiContext.network, method, params],
+		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);

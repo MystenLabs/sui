@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useLatestCheckpointSequenceNumber } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowRight12 } from '@mysten/icons';
 import { Text } from '@mysten/ui';
 import { useMemo, useState } from 'react';
@@ -32,7 +32,7 @@ export function CheckpointsTable({
 }: Props) {
 	const [limit, setLimit] = useState(initialLimit);
 
-	const countQuery = useLatestCheckpointSequenceNumber();
+	const countQuery = useSuiClientQuery('getLatestCheckpointSequenceNumber');
 
 	const checkpoints = useGetCheckpoints(initialCursor, limit);
 
