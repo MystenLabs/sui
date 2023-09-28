@@ -1,7 +1,7 @@
 CREATE TABLE epochs
 (
     epoch                           BIGINT      PRIMARY KEY,
-    validators                      bytea[]     NOT NULL,
+    validators                      JSON     NOT NULL,
     first_checkpoint_id             BIGINT      NOT NULL,
     epoch_start_timestamp           BIGINT      NOT NULL,
     reference_gas_price             BIGINT      NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE epochs
     new_total_stake                 BIGINT,
     -- bcs serialized Vec<EpochCommitment> bytes, found in last CheckpointSummary
     -- of the epoch
-    epoch_commitments               bytea,
+    epoch_commitments               BLOB,
     -- They are here as part of EndofEpochData that would be returned in `get_epoch(s)`
     next_epoch_reference_gas_price  BIGINT,
     next_epoch_protocol_version     BIGINT

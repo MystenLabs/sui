@@ -1,6 +1,6 @@
 CREATE TABLE packages 
 (
-    package_id                   bytea          PRIMARY KEY,
+    package_id                   VARCHAR(255)          PRIMARY KEY,
     -- bcs serialized MovePackage
-    move_package                 bytea          NOT NULL
+    move_package                 BLOB          NOT NULL
 );

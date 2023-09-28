@@ -28,7 +28,7 @@ pub mod pg_integration_test {
     use sui_indexer::schema::objects;
     use sui_indexer::store::{IndexerStore, PgIndexerStore};
     use sui_indexer::test_utils::{start_test_indexer, SuiTransactionBlockResponseBuilder};
-    use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, IndexerConfig};
+    use sui_indexer::{get_db_pool_connection, new_db_connection_pool, IndexerConfig};
     use sui_json_rpc::api::ExtendedApiClient;
     use sui_json_rpc::api::IndexerApiClient;
     use sui_json_rpc::api::{ReadApiClient, TransactionBuilderClient, WriteApiClient};

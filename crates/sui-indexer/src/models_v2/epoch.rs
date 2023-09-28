@@ -12,7 +12,8 @@ use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
 #[diesel(table_name = epochs)]
 pub struct StoredEpochInfo {
     pub epoch: i64,
-    pub validators: Vec<Option<Vec<u8>>>,
+    // pub validators: Vec<Option<Vec<u8>>>,
+    pub validators: serde_json::Value,
     pub first_checkpoint_id: i64,
     pub epoch_start_timestamp: i64,
     pub reference_gas_price: i64,
@@ -36,13 +37,15 @@ pub struct StoredEpochInfo {
 
 impl StoredEpochInfo {
     pub fn from_epoch_beginning_info(e: &IndexedEpochInfo) -> Self {
+        let validators: Vec<Option<Vec<u8>>> = e
+            .validators
+            .iter()
+            .map(|v| Some(bcs::to_bytes(v).unwrap()))
+            .collect();
+
         Self {
             epoch: e.epoch as i64,
-            validators: e
-                .validators
-                .iter()
-                .map(|v| Some(bcs::to_bytes(v).unwrap()))
-                .collect(),
+            validators: serde_json::json!(validators),
             first_checkpoint_id: e.first_checkpoint_id as i64,
             epoch_start_timestamp: e.epoch_start_timestamp as i64,
             reference_gas_price: e.reference_gas_price as i64,
@@ -77,7 +80,7 @@ impl StoredEpochInfo {
             // we don't update these columns when persisting EndOfEpoch data.
             // However if the data is partial, diesel would interpret them
             // as Null and hence cause errors.
-            validators: vec![],
+            validators: serde_json::json!([]),
             first_checkpoint_id: 0,
             epoch_start_timestamp: 0,
             reference_gas_price: 0,
@@ -112,11 +115,16 @@ impl TryInto<EpochInfo> for StoredEpochInfo {
     type Error = IndexerError;
     fn try_into(self) -> Result<EpochInfo, Self::Error> {
         let epoch = self.epoch as u64;
-
         let end_of_epoch_info = (&self).into();
-
-        let validators = self
-            .validators
+        let parsed_validators: Vec<Option<Vec<u8>>> = serde_json::from_value(self.validators)
+            .map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to deserialize `validators` for epoch {epoch}, error: {e}",
+                    epoch = epoch,
+                    e = e
+                ))
+            })?;
+        let validators = parsed_validators
             .into_iter()
             .flatten()
             .map(|v| {

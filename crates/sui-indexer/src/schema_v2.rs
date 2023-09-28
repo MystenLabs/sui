@@ -4,119 +4,131 @@
 
 diesel::table! {
     checkpoints (sequence_number) {
-        sequence_number -> Int8,
-        checkpoint_digest -> Bytea,
-        epoch -> Int8,
-        network_total_transactions -> Int8,
-        previous_checkpoint_digest -> Nullable<Bytea>,
+        sequence_number -> Bigint,
+        #[max_length = 255]
+        checkpoint_digest -> Varchar,
+        epoch -> Bigint,
+        network_total_transactions -> Bigint,
+        #[max_length = 255]
+        previous_checkpoint_digest -> Nullable<Varchar>,
         end_of_epoch -> Bool,
-        tx_digests -> Array<Nullable<Bytea>>,
-        timestamp_ms -> Int8,
-        total_gas_cost -> Int8,
-        computation_cost -> Int8,
-        storage_cost -> Int8,
-        storage_rebate -> Int8,
-        non_refundable_storage_fee -> Int8,
-        checkpoint_commitments -> Bytea,
-        validator_signature -> Bytea,
-        end_of_epoch_data -> Nullable<Bytea>,
+        tx_digests -> Json,
+        timestamp_ms -> Bigint,
+        total_gas_cost -> Bigint,
+        computation_cost -> Bigint,
+        storage_cost -> Bigint,
+        storage_rebate -> Bigint,
+        non_refundable_storage_fee -> Bigint,
+        checkpoint_commitments -> Blob,
+        validator_signature -> Blob,
+        end_of_epoch_data -> Nullable<Blob>,
     }
 }
 
 diesel::table! {
     epochs (epoch) {
-        epoch -> Int8,
-        validators -> Array<Nullable<Bytea>>,
-        first_checkpoint_id -> Int8,
-        epoch_start_timestamp -> Int8,
-        reference_gas_price -> Int8,
-        protocol_version -> Int8,
-        epoch_total_transactions -> Nullable<Int8>,
-        last_checkpoint_id -> Nullable<Int8>,
-        epoch_end_timestamp -> Nullable<Int8>,
-        storage_fund_reinvestment -> Nullable<Int8>,
-        storage_charge -> Nullable<Int8>,
-        storage_rebate -> Nullable<Int8>,
-        storage_fund_balance -> Nullable<Int8>,
-        stake_subsidy_amount -> Nullable<Int8>,
-        total_gas_fees -> Nullable<Int8>,
-        total_stake_rewards_distributed -> Nullable<Int8>,
-        leftover_storage_fund_inflow -> Nullable<Int8>,
-        new_total_stake -> Nullable<Int8>,
-        epoch_commitments -> Nullable<Bytea>,
-        next_epoch_reference_gas_price -> Nullable<Int8>,
-        next_epoch_protocol_version -> Nullable<Int8>,
+        epoch -> Bigint,
+        validators -> Json,
+        first_checkpoint_id -> Bigint,
+        epoch_start_timestamp -> Bigint,
+        reference_gas_price -> Bigint,
+        protocol_version -> Bigint,
+        epoch_total_transactions -> Nullable<Bigint>,
+        last_checkpoint_id -> Nullable<Bigint>,
+        epoch_end_timestamp -> Nullable<Bigint>,
+        storage_fund_reinvestment -> Nullable<Bigint>,
+        storage_charge -> Nullable<Bigint>,
+        storage_rebate -> Nullable<Bigint>,
+        storage_fund_balance -> Nullable<Bigint>,
+        stake_subsidy_amount -> Nullable<Bigint>,
+        total_gas_fees -> Nullable<Bigint>,
+        total_stake_rewards_distributed -> Nullable<Bigint>,
+        leftover_storage_fund_inflow -> Nullable<Bigint>,
+        new_total_stake -> Nullable<Bigint>,
+        epoch_commitments -> Nullable<Blob>,
+        next_epoch_reference_gas_price -> Nullable<Bigint>,
+        next_epoch_protocol_version -> Nullable<Bigint>,
     }
 }
 
 diesel::table! {
     events (tx_sequence_number, event_sequence_number) {
-        tx_sequence_number -> Int8,
-        event_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        senders -> Array<Nullable<Bytea>>,
-        package -> Bytea,
-        module -> Text,
-        event_type -> Text,
-        timestamp_ms -> Int8,
-        bcs -> Bytea,
+        tx_sequence_number -> Bigint,
+        event_sequence_number -> Bigint,
+        transaction_digest -> Blob,
+        checkpoint_sequence_number -> Bigint,
+        senders -> Json,
+        #[max_length = 255]
+        package -> Varchar,
+        #[max_length = 127]
+        module -> Varchar,
+        #[max_length = 255]
+        event_type -> Varchar,
+        timestamp_ms -> Bigint,
+        bcs -> Blob,
     }
 }
 
 diesel::table! {
     objects (object_id) {
-        object_id -> Bytea,
-        object_version -> Int8,
-        object_digest -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        owner_type -> Int2,
-        owner_id -> Nullable<Bytea>,
-        serialized_object -> Bytea,
-        coin_type -> Nullable<Text>,
-        coin_balance -> Nullable<Int8>,
-        df_kind -> Nullable<Int2>,
-        df_name -> Nullable<Bytea>,
+        #[max_length = 255]
+        object_id -> Varchar,
+        object_version -> Bigint,
+        #[max_length = 255]
+        object_digest -> Varchar,
+        checkpoint_sequence_number -> Bigint,
+        owner_type -> Smallint,
+        #[max_length = 255]
+        owner_id -> Nullable<Varchar>,
+        serialized_object -> Blob,
+        #[max_length = 255]
+        coin_type -> Nullable<Varchar>,
+        coin_balance -> Nullable<Bigint>,
+        df_kind -> Nullable<Smallint>,
+        df_name -> Nullable<Blob>,
         df_object_type -> Nullable<Text>,
-        df_object_id -> Nullable<Bytea>,
+        df_object_id -> Nullable<Blob>,
     }
 }
 
 diesel::table! {
     packages (package_id) {
-        package_id -> Bytea,
-        move_package -> Bytea,
+        #[max_length = 255]
+        package_id -> Varchar,
+        move_package -> Blob,
     }
 }
 
 diesel::table! {
     transactions (tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        raw_transaction -> Bytea,
-        raw_effects -> Bytea,
-        checkpoint_sequence_number -> Int8,
-        timestamp_ms -> Int8,
-        object_changes -> Array<Nullable<Bytea>>,
-        balance_changes -> Array<Nullable<Bytea>>,
-        events -> Array<Nullable<Bytea>>,
-        transaction_kind -> Int2,
+        tx_sequence_number -> Bigint,
+        #[max_length = 255]
+        transaction_digest -> Varchar,
+        raw_transaction -> Blob,
+        raw_effects -> Blob,
+        checkpoint_sequence_number -> Bigint,
+        timestamp_ms -> Bigint,
+        object_changes -> Json,
+        balance_changes -> Json,
+        events -> Json,
+        transaction_kind -> Smallint,
     }
 }
 
 diesel::table! {
     tx_indices (tx_sequence_number) {
-        tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
-        transaction_digest -> Bytea,
-        input_objects -> Array<Nullable<Bytea>>,
-        changed_objects -> Array<Nullable<Bytea>>,
-        senders -> Array<Nullable<Bytea>>,
-        payers -> Array<Nullable<Bytea>>,
-        recipients -> Array<Nullable<Bytea>>,
-        packages -> Array<Nullable<Bytea>>,
-        package_modules -> Array<Nullable<Text>>,
-        package_module_functions -> Array<Nullable<Text>>,
+        tx_sequence_number -> Bigint,
+        checkpoint_sequence_number -> Bigint,
+        #[max_length = 255]
+        transaction_digest -> Varchar,
+        input_objects -> Json,
+        changed_objects -> Json,
+        senders -> Json,
+        payers -> Json,
+        recipients -> Json,
+        packages -> Json,
+        package_modules -> Json,
+        package_module_functions -> Json,
     }
 }
 

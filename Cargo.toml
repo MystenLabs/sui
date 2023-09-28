@@ -284,6 +284,7 @@ derive_more = "0.99.17"
 diesel = { version = "2.1.0", features = [
   "chrono",
   "postgres",
+  "mysql",
   "r2d2",
   "serde_json",
   "64-column-tables",

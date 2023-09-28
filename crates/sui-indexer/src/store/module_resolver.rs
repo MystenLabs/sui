@@ -12,14 +12,14 @@ use sui_types::base_types::ObjectID;
 
 use crate::errors::{Context, IndexerError};
 use crate::store::diesel_marco::read_only_blocking;
-use crate::PgConnectionPool;
+use crate::DbConnectionPool;
 
 pub struct IndexerModuleResolver {
-    cp: PgConnectionPool,
+    cp: DbConnectionPool,
 }
 
 impl IndexerModuleResolver {
-    pub fn new(cp: PgConnectionPool) -> Self {
+    pub fn new(cp: DbConnectionPool) -> Self {
         Self { cp }
     }
 }

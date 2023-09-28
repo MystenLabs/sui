@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use diesel::prelude::*;
 
 use sui_json_rpc_types::Checkpoint as RpcCheckpoint;
@@ -16,11 +18,14 @@ use crate::types_v2::IndexedCheckpoint;
 #[diesel(table_name = checkpoints)]
 pub struct StoredCheckpoint {
     pub sequence_number: i64,
-    pub checkpoint_digest: Vec<u8>,
+    // pub checkpoint_digest: Vec<u8>,
+    pub checkpoint_digest: String,
     pub epoch: i64,
     pub network_total_transactions: i64,
-    pub previous_checkpoint_digest: Option<Vec<u8>>,
-    pub tx_digests: Vec<Option<Vec<u8>>>,
+    // pub previous_checkpoint_digest: Option<Vec<u8>>,
+    pub previous_checkpoint_digest: Option<String>,
+    // pub tx_digests: Vec<Option<Vec<u8>>>,
+    pub tx_digests: serde_json::Value,
     pub timestamp_ms: i64,
     pub total_gas_cost: i64,
     pub computation_cost: i64,
@@ -35,20 +40,22 @@ pub struct StoredCheckpoint {
 
 impl From<&IndexedCheckpoint> for StoredCheckpoint {
     fn from(c: &IndexedCheckpoint) -> Self {
+        let tx_digests: Vec<Option<Vec<u8>>> = c
+            .tx_digests
+            .iter()
+            .map(|tx| Some(tx.into_inner().to_vec()))
+            .collect();
+
         Self {
             sequence_number: c.sequence_number as i64,
-            checkpoint_digest: c.checkpoint_digest.into_inner().to_vec(),
+            checkpoint_digest: c.checkpoint_digest.to_string(),
             epoch: c.epoch as i64,
-            tx_digests: c
-                .tx_digests
-                .iter()
-                .map(|tx| Some(tx.into_inner().to_vec()))
-                .collect(),
+            tx_digests: serde_json::json!(tx_digests),
             network_total_transactions: c.network_total_transactions as i64,
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
                 .as_ref()
-                .map(|d| (*d).into_inner().to_vec()),
+                .map(|d| (*d).to_string()),
             timestamp_ms: c.timestamp_ms as i64,
             total_gas_cost: c.total_gas_cost,
             computation_cost: c.computation_cost as i64,
@@ -69,8 +76,8 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
 impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
     type Error = IndexerError;
     fn try_from(checkpoint: StoredCheckpoint) -> Result<RpcCheckpoint, IndexerError> {
-        let parsed_digest = CheckpointDigest::try_from(checkpoint.checkpoint_digest.clone())
-            .map_err(|e| {
+        let parsed_digest =
+            CheckpointDigest::from_str(&checkpoint.checkpoint_digest).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to decode checkpoint digest: {:?} with err: {:?}",
                     checkpoint.checkpoint_digest, e
@@ -80,7 +87,7 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
         let parsed_previous_digest: Option<CheckpointDigest> = checkpoint
             .previous_checkpoint_digest
             .map(|digest| {
-                CheckpointDigest::try_from(digest.clone()).map_err(|e| {
+                CheckpointDigest::from_str(&digest).map_err(|e| {
                     IndexerError::PersistentStorageDataCorruptionError(format!(
                         "Failed to decode previous checkpoint digest: {:?} with err: {:?}",
                         digest, e
@@ -89,8 +96,14 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
             })
             .transpose()?;
 
-        let transactions: Vec<TransactionDigest> = checkpoint
-            .tx_digests
+        let parsed_tx_digests: Vec<Option<Vec<u8>>> =
+            serde_json::from_value(checkpoint.tx_digests.clone()).map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to decode tx digests: {:?} with err: {:?}",
+                    checkpoint.tx_digests, e
+                ))
+            })?;
+        let transactions: Vec<TransactionDigest> = parsed_tx_digests
             .into_iter()
             .map(|tx_digest| match tx_digest {
                 None => Err(IndexerError::PersistentStorageDataCorruptionError(

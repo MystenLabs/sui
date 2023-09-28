@@ -51,8 +51,8 @@ pub enum IndexerError {
     #[error("Indexer failed to find object mutations, which should never happen.")]
     ObjectMutationNotAvailable,
 
-    #[error("Indexer failed to build PG connection pool with error: `{0}`")]
-    PgConnectionPoolInitError(String),
+    #[error("Indexer failed to build DB connection pool with error: `{0}`")]
+    DbConnectionPoolInitError(String),
 
     #[error("Indexer failed to get a pool connection from PG connection pool with error: `{0}`")]
     PgPoolConnectionError(String),
