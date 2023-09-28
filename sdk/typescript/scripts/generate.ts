@@ -8,7 +8,6 @@ import ts from 'typescript';
 
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
-import { generateHooks } from './hooks';
 import {
 	OpenRpcMethod,
 	OpenRpcParam,
@@ -318,7 +317,6 @@ await fs.writeFile(
 	path.resolve(packageRoot, './src/client/types/generated.ts'),
 	await fileGenerator.printFile(),
 );
-await generateHooks();
 
 const methodGenerator = new FileGenerator();
 

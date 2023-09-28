@@ -14,7 +14,7 @@ import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata } from '@mysten/core';
-import { useBalance, useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowLeft16 } from '@mysten/icons';
 import type { StakeObject } from '@mysten/sui.js/client';
 import { MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -52,7 +52,8 @@ function StakingCard() {
 	const activeAccount = useActiveAccount();
 	const accountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiBalance, isLoading: loadingSuiBalances } = useBalance(
+	const { data: suiBalance, isLoading: loadingSuiBalances } = useSuiClientQuery(
+		'getBalance',
 		{ coinType: SUI_TYPE_ARG, owner: accountAddress! },
 		{ refetchInterval, staleTime, enabled: !!accountAddress },
 	);
@@ -66,7 +67,8 @@ function StakingCard() {
 		FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string,
 	);
 
-	const { data: system, isLoading: validatorsIsloading } = useLatestSuiSystemState();
+	const { data: system, isLoading: validatorsIsloading } =
+		useSuiClientQuery('getLatestSuiSystemState');
 
 	const totalTokenBalance = useMemo(() => {
 		if (!allDelegation) return 0n;

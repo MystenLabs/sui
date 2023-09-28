@@ -13,11 +13,7 @@ export type UseSuiClientMutationOptions<T extends keyof SuiRpcMethods> = Omit<
 >;
 
 export function useSuiClientMutation<T extends keyof SuiRpcMethods>(
-	{
-		method,
-	}: {
-		method: T;
-	},
+	method: T,
 	options: UseSuiClientMutationOptions<T> = {},
 ) {
 	const suiContext = useSuiClientContext();
