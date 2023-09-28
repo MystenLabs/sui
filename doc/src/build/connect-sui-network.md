@@ -41,7 +41,7 @@ See the [Sui Releases](https://github.com/MystenLabs/sui/releases) page to view 
 
 ## Configure Sui client
 
-If you previously ran `sui genesis` to create a local network, it created a Sui client configuration file (client.yaml) that connects to `localhost` at `http://0.0.0.0:9000`. See [Connect to custom RPC endpoint](#connect-to-custom-rpc-endpoint) to update the client.yaml file.
+If you previously ran `sui genesis` to create a local network, it created a Sui client configuration file (client.yaml) that connects to `localhost` at `http://0.0.0.0:9000`. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to update the client.yaml file.
 
 To connect the Sui client to a network, run the following command:
 
@@ -49,7 +49,7 @@ To connect the Sui client to a network, run the following command:
 sui client
 ```
 
-If you receive the `sui-client` help output in the console, you already have a client.yaml file. See [Connect to custom RPC endpoint](#connect-to-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
+If you receive the `sui-client` help output in the console, you already have a client.yaml file. See [Connect to a custom RPC endpoint](#connect-to-a-custom-rpc-endpoint) to add a new environment alias or to switch the currently active network.
 
 The first time you start Sui client without having a client.yaml file, the console displays the following message:
 
