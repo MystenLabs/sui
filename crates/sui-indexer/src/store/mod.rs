@@ -8,7 +8,7 @@ pub use pg_indexer_store_v2::PgIndexerStoreV2;
 
 mod indexer_store;
 mod indexer_store_v2;
-mod module_resolver;
+pub mod module_resolver;
 pub(crate) mod module_resolver_v2;
 mod pg_indexer_store;
 mod pg_indexer_store_v2;

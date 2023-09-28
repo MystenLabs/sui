@@ -228,6 +228,7 @@ dirs-sys-9fbad63c4bcf4a8f = { package = "dirs-sys", version = "0.4", default-fea
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
+dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11" }
 duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
@@ -1001,6 +1002,7 @@ dirs-sys-next = { version = "0.1", default-features = false }
 displaydoc = { version = "0.2" }
 dissimilar = { version = "1", default-features = false }
 doc-comment = { version = "0.3", default-features = false }
+dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11" }
 duration-str = { version = "0.5" }
 dyn-clone = { version = "1", default-features = false }
