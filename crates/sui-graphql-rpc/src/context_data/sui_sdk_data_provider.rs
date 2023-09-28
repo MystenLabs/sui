@@ -412,7 +412,7 @@ pub(crate) fn convert_json_rpc_checkpoint(
         live_object_set_digest: None, // TODO fix this
         network_total_transactions,
         rolling_gas_summary: Some(rolling_gas_summary),
-        epoch_id: c.epoch,
+        epoch: Epoch::new(c.epoch),
         end_of_epoch,
     })
 }

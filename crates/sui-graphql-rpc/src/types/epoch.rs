@@ -10,7 +10,6 @@ use super::storage_fund::StorageFund;
 use super::system_parameters::SystemParameters;
 use super::validator_set::ValidatorSet;
 use async_graphql::*;
-use sui_indexer::models_v2::epoch::StoredEpochInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct Epoch {
@@ -27,13 +26,13 @@ pub(crate) struct Epoch {
     // pub end_timestamp: Option<DateTime>, //TODO decide if we want this data exposed or not
 }
 
-impl From<StoredEpochInfo> for Epoch {
-    fn from(e: StoredEpochInfo) -> Self {
+impl Epoch {
+    pub fn new(epoch_id: u64) -> Self {
         Self {
-            epoch_id: e.epoch as u64,
+            epoch_id,
             system_state_version: None,
             protocol_configs: None,
-            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
+            reference_gas_price: None,
             system_parameters: None,
             stake_subsidy: None,
             validator_set: None,

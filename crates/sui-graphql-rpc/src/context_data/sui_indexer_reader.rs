@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{error::Error, types::digest::Digest};
+use crate::{{error::Error, types::{checkpoint::Checkpoint, digest::Digest, gas::GasCostSummary, epoch::Epoch, big_int::BigInt}}, types::digest::Digest};
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use std::str::FromStr;
 use sui_indexer::{
@@ -117,5 +117,187 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredCheckpoint>(conn).optional())
             .await
+    }
+}
+
+
+impl TryFrom<StoredCheckpoint> for Checkpoint {
+    type Error = Error;
+    fn try_from(c: StoredCheckpoint) -> Result<Self, Self::Error> {
+        Ok(Self {
+            digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
+            sequence_number: c.sequence_number as u64,
+            validator_signature: Some(c.validator_signature.into()),
+            previous_checkpoint_digest: c
+                .previous_checkpoint_digest
+                .map(|d| Digest::try_from(d).map(|digest| digest.to_string()))
+                .transpose()?,
+            live_object_set_digest: None,
+            network_total_transactions: Some(c.network_total_transactions as u64),
+            rolling_gas_summary: Some(GasCostSummary {
+                computation_cost: c.computation_cost as u64,
+                storage_cost: c.storage_cost as u64,
+                storage_rebate: c.storage_rebate as u64,
+                non_refundable_storage_fee: c.non_refundable_storage_fee as u64,
+            }),
+            epoch: Epoch::new(c.epoch as u64),
+            end_of_epoch: None,
+        })
+    }
+}
+
+impl From<StoredEpochInfo> for Epoch {
+    fn from(e: StoredEpochInfo) -> Self {
+        Self {
+            epoch_id: e.epoch as u64,
+            system_state_version: None,
+            protocol_configs: None,
+            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
+            system_parameters: None,
+            stake_subsidy: None,
+            validator_set: None,
+            storage_fund: None,
+            safe_mode: None,
+            start_timestamp: None,
+        }
+    }
+}
+
+
+impl TryFrom<StoredTransaction> for TransactionBlock {
+    type Error = Error;
+
+    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
+        // TODO (wlmyng): Split the below into resolver methods
+        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
+
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
+                ))
+            })?;
+
+        let sender = Address {
+            address: SuiAddress::from_array(
+                sender_signed_data
+                    .intent_message()
+                    .value
+                    .sender()
+                    .to_inner(),
+            ),
+        };
+
+        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
+        let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects).map_err(|e| {
+            Error::Internal(format!(
+                "Can't convert raw_effects into TransactionEffects. Error: {e}",
+            ))
+        })?;
+        let effects = match SuiTransactionBlockEffects::try_from(effects) {
+            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects))),
+            Err(e) => Err(Error::Internal(format!(
+                "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
+            ))),
+        }?;
+
+        Ok(Self {
+            digest,
+            effects,
+            sender: Some(sender),
+            bcs: Some(Base64::from(&tx.raw_transaction)),
+            gas_input: Some(gas_input),
+        })
+    }
+}
+
+
+impl TryFrom<StoredCheckpoint> for Checkpoint {
+    type Error = Error;
+    fn try_from(c: StoredCheckpoint) -> Result<Self, Self::Error> {
+        Ok(Self {
+            digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
+            sequence_number: c.sequence_number as u64,
+            validator_signature: Some(c.validator_signature.into()),
+            previous_checkpoint_digest: c
+                .previous_checkpoint_digest
+                .map(|d| Digest::try_from(d).map(|digest| digest.to_string()))
+                .transpose()?,
+            live_object_set_digest: None,
+            network_total_transactions: Some(c.network_total_transactions as u64),
+            rolling_gas_summary: Some(GasCostSummary {
+                computation_cost: c.computation_cost as u64,
+                storage_cost: c.storage_cost as u64,
+                storage_rebate: c.storage_rebate as u64,
+                non_refundable_storage_fee: c.non_refundable_storage_fee as u64,
+            }),
+            epoch: Epoch::new(c.epoch as u64),
+            end_of_epoch: None,
+        })
+    }
+}
+
+impl From<StoredEpochInfo> for Epoch {
+    fn from(e: StoredEpochInfo) -> Self {
+        Self {
+            epoch_id: e.epoch as u64,
+            system_state_version: None,
+            protocol_configs: None,
+            reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
+            system_parameters: None,
+            stake_subsidy: None,
+            validator_set: None,
+            storage_fund: None,
+            safe_mode: None,
+            start_timestamp: None,
+        }
+    }
+}
+
+
+impl TryFrom<StoredTransaction> for TransactionBlock {
+    type Error = Error;
+
+    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
+        // TODO (wlmyng): Split the below into resolver methods
+        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
+
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
+                ))
+            })?;
+
+        let sender = Address {
+            address: SuiAddress::from_array(
+                sender_signed_data
+                    .intent_message()
+                    .value
+                    .sender()
+                    .to_inner(),
+            ),
+        };
+
+        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
+        let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects).map_err(|e| {
+            Error::Internal(format!(
+                "Can't convert raw_effects into TransactionEffects. Error: {e}",
+            ))
+        })?;
+        let effects = match SuiTransactionBlockEffects::try_from(effects) {
+            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects))),
+            Err(e) => Err(Error::Internal(format!(
+                "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
+            ))),
+        }?;
+
+        Ok(Self {
+            digest,
+            effects,
+            sender: Some(sender),
+            bcs: Some(Base64::from(&tx.raw_transaction)),
+            gas_input: Some(gas_input),
+        })
     }
 }
