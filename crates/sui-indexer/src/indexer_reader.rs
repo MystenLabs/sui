@@ -9,8 +9,11 @@ use std::{
 use crate::{
     errors::IndexerError,
     models_v2::objects::StoredObject,
-    models_v2::{epoch::StoredEpochInfo, packages::StoredPackage},
-    schema_v2::{epochs, objects, packages},
+    models_v2::{
+        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, packages::StoredPackage,
+        transactions::StoredTransaction,
+    },
+    schema_v2::{checkpoints, epochs, objects, packages, transactions},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
@@ -18,10 +21,11 @@ use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
-use sui_json_rpc_types::EpochInfo;
+use sui_json_rpc_types::{CheckpointId, EpochInfo};
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     committee::EpochId,
+    digests::TransactionDigest,
     move_package::MovePackage,
     object::Object,
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
@@ -211,16 +215,24 @@ impl IndexerReader {
             if let Some(epoch) = epoch {
                 epochs::dsl::epochs
                     .filter(epochs::epoch.eq(epoch as i64))
-                    .limit(1)
                     .first::<StoredEpochInfo>(conn)
                     .optional()
             } else {
                 epochs::dsl::epochs
                     .order_by(epochs::epoch.desc())
-                    .limit(1)
                     .first::<StoredEpochInfo>(conn)
                     .optional()
             }
+        })?;
+
+        Ok(stored_epoch)
+    }
+
+    pub fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
+        let stored_epoch = self.run_query(|conn| {
+            epochs::dsl::epochs
+                .order_by(epochs::epoch.desc())
+                .first::<StoredEpochInfo>(conn)
         })?;
 
         Ok(stored_epoch)
@@ -246,6 +258,184 @@ impl IndexerReader {
             sui_types::sui_system_state::get_sui_system_state(self)?
                 .into_sui_system_state_summary();
         Ok(system_state)
+    }
+
+    pub fn get_checkpoint_from_db(
+        &self,
+        checkpoint_id: CheckpointId,
+    ) -> Result<Option<StoredCheckpoint>, IndexerError> {
+        let stored_checkpoint = self.run_query(|conn| match checkpoint_id {
+            CheckpointId::SequenceNumber(seq) => checkpoints::dsl::checkpoints
+                .filter(checkpoints::sequence_number.eq(seq as i64))
+                .first::<StoredCheckpoint>(conn)
+                .optional(),
+            CheckpointId::Digest(digest) => checkpoints::dsl::checkpoints
+                .filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
+                .first::<StoredCheckpoint>(conn)
+                .optional(),
+        })?;
+
+        Ok(stored_checkpoint)
+    }
+
+    pub fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
+        let stored_checkpoint = self.run_query(|conn| {
+            checkpoints::dsl::checkpoints
+                .order_by(checkpoints::sequence_number.desc())
+                .first::<StoredCheckpoint>(conn)
+        })?;
+
+        Ok(stored_checkpoint)
+    }
+
+    pub fn get_checkpoint(
+        &self,
+        checkpoint_id: CheckpointId,
+    ) -> Result<Option<sui_json_rpc_types::Checkpoint>, IndexerError> {
+        let stored_checkpoint = match self.get_checkpoint_from_db(checkpoint_id)? {
+            Some(stored_checkpoint) => stored_checkpoint,
+            None => return Ok(None),
+        };
+
+        let checkpoint = sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)?;
+        Ok(Some(checkpoint))
+    }
+
+    pub fn get_latest_checkpoint(&self) -> Result<sui_json_rpc_types::Checkpoint, IndexerError> {
+        let stored_checkpoint = self.get_latest_checkpoint_from_db()?;
+
+        sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
+    }
+
+    pub fn get_checkpoints_from_db(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<StoredCheckpoint>, IndexerError> {
+        self.run_query(|conn| {
+            let mut boxed_query = checkpoints::table.into_boxed();
+            if let Some(cursor) = cursor {
+                if descending_order {
+                    boxed_query =
+                        boxed_query.filter(checkpoints::sequence_number.lt(cursor as i64));
+                } else {
+                    boxed_query =
+                        boxed_query.filter(checkpoints::sequence_number.gt(cursor as i64));
+                }
+            }
+            if descending_order {
+                boxed_query = boxed_query.order_by(checkpoints::sequence_number.desc());
+            } else {
+                boxed_query = boxed_query.order_by(checkpoints::sequence_number.asc());
+            }
+
+            boxed_query
+                .limit(limit as i64)
+                .load::<StoredCheckpoint>(conn)
+        })
+    }
+
+    pub fn get_checkpoints(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<sui_json_rpc_types::Checkpoint>, IndexerError> {
+        self.get_checkpoints_from_db(cursor, limit, descending_order)?
+            .into_iter()
+            .map(sui_json_rpc_types::Checkpoint::try_from)
+            .collect()
+    }
+
+    pub fn get_transaction(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Option<StoredTransaction>, IndexerError> {
+        self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+                .first::<StoredTransaction>(conn)
+                .optional()
+        })
+    }
+
+    pub fn multi_get_transactions(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Vec<StoredTransaction>, IndexerError> {
+        let digests = digests
+            .iter()
+            .map(|digest| digest.inner().to_vec())
+            .collect::<Vec<_>>();
+        self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq_any(digests))
+                .load::<StoredTransaction>(conn)
+        })
+    }
+
+    pub fn multi_get_transaction_block_response(
+        &self,
+        digests: &[TransactionDigest],
+        options: &sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+        self.multi_get_transactions(digests)?
+            .into_iter()
+            .map(|transaction| transaction.try_into_sui_transaction_block_response(options, self))
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    pub async fn multi_get_transaction_block_response_async(
+        &self,
+        digests: Vec<TransactionDigest>,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.multi_get_transaction_block_response(&digests, &options)
+        })
+        .await
+    }
+
+    pub fn get_transaction_events(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
+        let (timestamp_ms, serialized_events) = self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+                .select((transactions::timestamp_ms, transactions::events))
+                .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
+        })?;
+
+        let events = serialized_events
+            .into_iter()
+            .flatten()
+            .map(|event| bcs::from_bytes::<sui_types::event::Event>(&event))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        events
+            .into_iter()
+            .enumerate()
+            .map(|(i, event)| {
+                sui_json_rpc_types::SuiEvent::try_from(
+                    event,
+                    digest,
+                    i as u64,
+                    Some(timestamp_ms as u64),
+                    self,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
+    pub async fn get_transaction_events_async(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_transaction_events(digest))
+            .await
     }
 }
 
@@ -295,5 +485,29 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     ) -> Result<Option<sui_types::object::Object>, sui_types::error::SuiError> {
         self.get_object(object_id, Some(version))
             .map_err(|e| sui_types::error::SuiError::GenericStorageError(e.to_string()))
+    }
+}
+
+impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
+    type Error = IndexerError;
+    type Item = move_binary_format::CompiledModule;
+
+    fn get_module_by_id(
+        &self,
+        id: &move_core_types::language_storage::ModuleId,
+    ) -> Result<Option<Self::Item>, Self::Error> {
+        let package_id = ObjectID::from(*id.address());
+        let module_name = id.name().to_string();
+        // TODO: we need a cache here for deserialized module and take care of package upgrades
+        self.get_package(&package_id)?
+            .and_then(|package| package.serialized_module_map().get(&module_name).cloned())
+            .map(|bytes| move_binary_format::CompiledModule::deserialize_with_defaults(&bytes))
+            .transpose()
+            .map_err(|e| {
+                IndexerError::ModuleResolutionError(format!(
+                    "Error deserializing module {}: {}",
+                    id, e
+                ))
+            })
     }
 }
