@@ -1,7 +1,7 @@
 #[allow(unused_use)]
 module a::m {
     use fun foo as X.f;
-    struct X {}
+    public struct X {}
     public fun foo(_: &X) {}
 }
 

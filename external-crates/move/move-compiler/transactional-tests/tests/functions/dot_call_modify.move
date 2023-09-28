@@ -4,8 +4,8 @@
 
 module 0x42::t {
 
-struct X has copy, drop { count: u64 }
-struct Y has copy, drop { x: X }
+public struct X has copy, drop { count: u64 }
+public struct Y has copy, drop { x: X }
 
 public fun bump(self: &mut X) { self.count = self.count + 1 }
 public fun count(self: &X): u64 { self.count }

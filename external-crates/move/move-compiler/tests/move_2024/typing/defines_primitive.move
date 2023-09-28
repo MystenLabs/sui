@@ -1,5 +1,5 @@
 module a::m {
-    struct S {}
+    public struct S {}
     public fun test(s: &signer) {
         let _: &address = s.as_address();
         let _: address = s.to_address();

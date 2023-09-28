@@ -1,7 +1,7 @@
 module a::m {
 
-    struct X has drop {}
-    struct Y has drop {}
+    public struct X has drop {}
+    public struct Y has drop {}
 
     fun ximm(_: &X): &Y { abort 0 }
     fun xmut(_: &mut X): &mut Y { abort 0}

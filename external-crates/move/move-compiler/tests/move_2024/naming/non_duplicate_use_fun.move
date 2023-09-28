@@ -2,10 +2,10 @@
 // do not for some reasons (see comments on each case)
 
 module a::vals {
-    struct Num has copy, drop {
+    public struct Num has copy, drop {
         num: u64,
     }
-    struct Cond has copy, drop {
+    public struct Cond has copy, drop {
         cond: bool,
     }
 

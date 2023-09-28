@@ -4,8 +4,8 @@
 
 module 0x42::t {
 
-struct X has copy, drop {}
-struct Y has copy, drop { x: X }
+public struct X has copy, drop {}
+public struct Y has copy, drop { x: X }
 
 public fun f(_self: &X): bool { true }
 

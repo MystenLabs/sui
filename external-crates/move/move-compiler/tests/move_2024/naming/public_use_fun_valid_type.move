@@ -1,5 +1,5 @@
 module std::utilities {
-    struct X {}
+    public struct X {}
 
     public use fun x_ex as X.ex;
     fun x_ex(_: &X) {

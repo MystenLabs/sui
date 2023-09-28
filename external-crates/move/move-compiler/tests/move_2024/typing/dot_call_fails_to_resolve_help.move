@@ -1,11 +1,11 @@
 // tests the helper when a dot call fails to resolve
 module a::space {
-    struct Point has copy, drop {
+    public struct Point has copy, drop {
         x: u64,
         y: u64,
     }
 
-    struct Line has copy, drop {
+    public struct Line has copy, drop {
         a: Point,
         b: Point,
     }

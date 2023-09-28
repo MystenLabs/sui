@@ -12,10 +12,10 @@ error[E04007]: incompatible types
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:10:5
    │
- 3 │ struct X has drop {}
-   │        - To satisfy the constraint, the 'copy' ability would need to be added here
- 4 │ struct Y has drop { x: X }
-   │                        - The type '0x42::t::X' does not have the ability 'copy'
+ 3 │ public struct X has drop {}
+   │               - To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ public struct Y has drop { x: X }
+   │                               - The type '0x42::t::X' does not have the ability 'copy'
    ·
 10 │     y1.x.f();
    │     ^^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability
@@ -23,10 +23,10 @@ error[E05001]: ability constraint not satisfied
 error[E05001]: ability constraint not satisfied
    ┌─ tests/move_2024/typing/dot_call_owned_invalid.move:11:5
    │
- 3 │ struct X has drop {}
-   │        - To satisfy the constraint, the 'copy' ability would need to be added here
- 4 │ struct Y has drop { x: X }
-   │                        - The type '0x42::t::X' does not have the ability 'copy'
+ 3 │ public struct X has drop {}
+   │               - To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ public struct Y has drop { x: X }
+   │                               - The type '0x42::t::X' does not have the ability 'copy'
    ·
 11 │     y2.x.f();
    │     ^^^^^^^^ Invalid implicit copy of field 'x' without the 'copy' ability

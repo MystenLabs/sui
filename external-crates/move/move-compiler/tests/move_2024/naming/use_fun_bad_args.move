@@ -1,6 +1,6 @@
 module a::m {
-    struct X {}
-    struct Y {}
+    public struct X {}
+    public struct Y {}
 
     public fun val_u64(_: u64) { abort 0 }
     public fun imm_vec(_: &vector<u64>) { abort 0 }

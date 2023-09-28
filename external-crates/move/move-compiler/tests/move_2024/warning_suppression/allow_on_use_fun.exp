@@ -12,7 +12,7 @@ error[E02017]: invalid 'use fun' declaration
   │
 3 │     use fun foo as X.f;
   │     ^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for '(a=0x42)::m::X.f'. Expected a '(a=0x42)::m::X' type as the first argument (either by reference '&' '&mut' or by value)
-4 │     struct X {}
+4 │     public struct X {}
 5 │     fun foo() {}
   │         --- But '(a=0x42)::m::foo' takes no arguments
 

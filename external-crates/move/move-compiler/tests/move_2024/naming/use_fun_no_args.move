@@ -1,5 +1,5 @@
 module a::m {
-    struct Y {}
+    public struct Y {}
 
     public fun no() { abort 0 }
 

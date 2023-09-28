@@ -2,8 +2,8 @@
 
 module a::m {
 
-    struct X has drop {}
-    struct Y has drop {}
+    public struct X has drop {}
+    public struct Y has drop {}
 
     fun xeat(_: X) { abort 0 }
     fun ximm(_: &X): &Y { abort 0 }

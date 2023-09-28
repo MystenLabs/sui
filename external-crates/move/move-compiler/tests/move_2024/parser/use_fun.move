@@ -1,6 +1,6 @@
 #[allow(unused_use)]
 module a::m {
-    struct X {}
+    public struct X {}
 
     use fun Self::foo as X.f1;
     use fun a::m::foo as X.f2;

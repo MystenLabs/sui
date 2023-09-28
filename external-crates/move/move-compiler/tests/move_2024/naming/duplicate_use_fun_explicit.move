@@ -2,7 +2,7 @@
 // visibility should not affect these tests, but we are being exhausive
 // for this first test
 module a::m {
-    struct X has copy, drop, store {}
+    public struct X has copy, drop, store {}
 
     public use fun foobar as X.f;
     public fun foobar(_: &X) {}
@@ -17,7 +17,7 @@ module a::m {
 
 // public+internal
 module a::m2 {
-    struct X has copy, drop, store {}
+    public struct X has copy, drop, store {}
 
     public use fun foobar as X.f;
     public fun foobar(_: &X) {}
@@ -32,7 +32,7 @@ module a::m2 {
 
 // internal+internal
 module a::m3 {
-    struct X has copy, drop, store {}
+    public struct X has copy, drop, store {}
 
     use fun foobar as X.f;
     public fun foobar(_: &X) {}

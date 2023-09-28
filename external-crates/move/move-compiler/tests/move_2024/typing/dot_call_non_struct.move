@@ -1,6 +1,6 @@
 module 0x42::t {
 
-struct Cup<T: drop> has drop { value: T }
+public struct Cup<T: drop> has drop { value: T }
 
 fun call<T: drop>(t: T) {
     let x;

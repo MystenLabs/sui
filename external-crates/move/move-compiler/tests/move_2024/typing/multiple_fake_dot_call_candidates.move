@@ -1,5 +1,5 @@
 module a::m {
-    struct S {}
+    public struct S {}
     public fun foo(_: &S) {}
 }
 

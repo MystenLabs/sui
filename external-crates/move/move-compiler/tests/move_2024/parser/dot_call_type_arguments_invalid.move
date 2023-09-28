@@ -1,5 +1,5 @@
 module a::m {
-    struct Cup<T> {
+    public struct Cup<T> {
         value: T
     }
     public fun uncup<T>(c: Cup<T>): T {

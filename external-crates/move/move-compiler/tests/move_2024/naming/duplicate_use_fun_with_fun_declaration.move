@@ -1,5 +1,5 @@
 module a::m {
-    struct X has copy, drop, store {}
+    public struct X has copy, drop, store {}
 
     public use fun foobar as X.foobaz;
     public fun foobar(_: &X) {}

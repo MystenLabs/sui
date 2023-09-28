@@ -1,8 +1,8 @@
 error[E02017]: invalid 'use fun' declaration
    ┌─ tests/move_2024/naming/public_use_fun_invalid_type.move:21:5
    │
- 3 │     struct X {}
-   │            - Type defined in another module here
+ 3 │     public struct X {}
+   │                   - Type defined in another module here
    ·
 21 │     public use fun std::utilities::x_ex as std::utilities::X.ex;
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

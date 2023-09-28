@@ -1,6 +1,6 @@
 #[defines_primitive(u64)]
 module std::utilities {
-    struct X {}
+    public struct X {}
 
     public fun x_ex(_: &X) {
         abort 0

@@ -1,6 +1,6 @@
 #[defines_primitive(X)]
 module a::m {
-    struct X {}
+    public struct X {}
 }
 
 #[defines_primitive(Y)]
