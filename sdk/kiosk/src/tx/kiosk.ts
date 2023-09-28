@@ -94,7 +94,7 @@ export function take(
 	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 
 	return item;
@@ -118,8 +118,8 @@ export function list(
 		arguments: [
 			objArg(tx, kiosk),
 			objArg(tx, kioskCap),
-			tx.pure(bcs.Address.serialize(itemId)),
-			tx.pure(bcs.U64.serialize(price)),
+			tx.pure.address(itemId),
+			tx.pure.u64(price),
 		],
 	});
 }
@@ -138,7 +138,7 @@ export function delist(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::delist`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 }
 
@@ -157,12 +157,7 @@ export function placeAndList(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::place_and_list`,
 		typeArguments: [itemType],
-		arguments: [
-			objArg(tx, kiosk),
-			objArg(tx, kioskCap),
-			objArg(tx, item),
-			tx.pure(bcs.U64.serialize(price)),
-		],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure.u64(price)],
 	});
 }
 
@@ -180,7 +175,7 @@ export function purchase(
 	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), tx.pure(bcs.Address.serialize(itemId)), objArg(tx, payment)],
+		arguments: [objArg(tx, kiosk), tx.pure.address(itemId), objArg(tx, payment)],
 	});
 
 	return [item, transferRequest];
@@ -222,7 +217,7 @@ export function borrowValue(
 	const [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(bcs.Address.serialize(itemId))],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 
 	return [item, promise];

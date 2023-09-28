@@ -40,7 +40,7 @@ export function attachRoyaltyRuleTx(
 			objArg(tx, policy),
 			objArg(tx, policyCap),
 			tx.pure(bcs.U16.serialize(Number(percentageBps))),
-			tx.pure(bcs.U64.serialize(minAmount)),
+			tx.pure.u64(minAmount),
 		],
 	});
 }
@@ -70,6 +70,6 @@ export function attachFloorPriceRuleTx(
 	tx.moveCall({
 		target: `${packageId}::floor_price_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure(bcs.U64.serialize(minPrice))],
+		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure.u64(minPrice)],
 	});
 }

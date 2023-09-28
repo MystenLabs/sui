@@ -1,11 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
 
-import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 import { SUI_TYPE_ARG } from '../framework/framework.js';
@@ -26,6 +24,7 @@ import {
 	isMutableSharedObjectInput,
 	PureCallArg,
 } from './Inputs.js';
+import { createPure } from './pure.js';
 import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
@@ -312,32 +311,7 @@ export class TransactionBlock {
 		return this.object(Inputs.SharedObjectRef(...args));
 	}
 
-	/**
-	 * Add a new non-object input to the transaction.
-	 */
-	pure(
-		/**
-		 * The pure value, serialized to BCS. If this is a Uint8Array, then the value
-		 * is assumed to be raw bytes, and will be used directly.
-		 */
-		value: SerializedBcs<any, any> | Uint8Array,
-	): TransactionBlockInput;
-	/**
-	 * @deprecated Pass the pure value as SerializedBcs instead.
-	 */
-	pure(
-		/**
-		 * The pure value that will be used as the input value. If this is a Uint8Array, then the value
-		 * is assumed to be raw bytes, and will be used directly.
-		 */
-		value: unknown,
-		/**
-		 * The BCS type to serialize the value into. If not provided, the type will automatically be determined
-		 * based on how the input is used.
-		 */
-		type?: string,
-	): TransactionBlockInput;
-	pure(value: unknown, type?: string): TransactionBlockInput {
+	pure = createPure((value, type) => {
 		if (isSerializedBcs(value)) {
 			return this.#input('pure', {
 				Pure: Array.from(value.toBytes()),
@@ -349,7 +323,7 @@ export class TransactionBlock {
 			'pure',
 			value instanceof Uint8Array ? Inputs.Pure(value) : type ? Inputs.Pure(value, type) : value,
 		);
-	}
+	});
 
 	/** Add a transaction to the transaction block. */
 	add(transaction: TransactionType) {
@@ -368,7 +342,7 @@ export class TransactionBlock {
 				coin,
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
-						? this.pure(bcs.U64.serialize(amount))
+						? this.pure.u64(amount)
 						: amount,
 				),
 			),
@@ -390,7 +364,7 @@ export class TransactionBlock {
 		return this.add(
 			Transactions.TransferObjects(
 				objects,
-				typeof address === 'string' ? this.pure(bcs.Address.serialize(address)) : address,
+				typeof address === 'string' ? this.pure.address(address) : address,
 			),
 		);
 	}

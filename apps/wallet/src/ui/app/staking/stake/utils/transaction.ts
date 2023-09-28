@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { SUI_SYSTEM_STATE_OBJECT_ID } from '@mysten/sui.js/utils';
 
@@ -17,7 +16,7 @@ export function createStakeTransaction(amount: bigint, validator: string) {
 				mutable: true,
 			}),
 			stakeCoin,
-			tx.pure(bcs.Address.serialize(validator)),
+			tx.pure.address(validator),
 		],
 	});
 	return tx;

@@ -77,7 +77,7 @@ describe('Transaction Builders', () => {
 		tx.moveCall({
 			target: '0x2::pay::split',
 			typeArguments: ['0x2::sui::SUI'],
-			arguments: [tx.object(coin_0.objectId), tx.pure(bcs.u64().serialize(DEFAULT_GAS_BUDGET * 2))],
+			arguments: [tx.object(coin_0.objectId), tx.pure.u64(DEFAULT_GAS_BUDGET * 2)],
 		});
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
@@ -96,7 +96,7 @@ describe('Transaction Builders', () => {
 				arguments: [
 					tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
 					tx.object(coin_2.objectId),
-					tx.pure(bcs.Address.serialize(validatorAddress)),
+					tx.pure.address(validatorAddress),
 				],
 			});
 

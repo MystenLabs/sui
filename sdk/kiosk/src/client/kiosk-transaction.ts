@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
 import { type TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import * as kioskTx from '../tx/kiosk';
@@ -115,10 +114,7 @@ export class KioskTransaction {
 	createAndShare(address: string) {
 		this.#validateFinalizedStatus();
 		const cap = kioskTx.createKioskAndShare(this.transactionBlock);
-		this.transactionBlock.transferObjects(
-			[cap],
-			this.transactionBlock.pure(bcs.Address.serialize(address)),
-		);
+		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure.address(address));
 	}
 
 	/**
@@ -141,7 +137,7 @@ export class KioskTransaction {
 		this.share();
 		this.transactionBlock.transferObjects(
 			[this.kioskCap!],
-			this.transactionBlock.pure(bcs.Address.serialize(address)),
+			this.transactionBlock.pure.address(address),
 		);
 	}
 
@@ -206,10 +202,7 @@ export class KioskTransaction {
 			this.kioskCap!,
 			amount,
 		);
-		this.transactionBlock.transferObjects(
-			[coin],
-			this.transactionBlock.pure(bcs.Address.serialize(address)),
-		);
+		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure.address(address));
 		return this;
 	}
 
@@ -280,10 +273,7 @@ export class KioskTransaction {
 	transfer({ itemType, itemId, address }: ItemId & { address: string }) {
 		this.#validateKioskIsSet();
 		const item = this.take({ itemType, itemId });
-		this.transactionBlock.transferObjects(
-			[item],
-			this.transactionBlock.pure(bcs.Address.serialize(address)),
-		);
+		this.transactionBlock.transferObjects([item], this.transactionBlock.pure.address(address));
 		return this;
 	}
 
@@ -317,7 +307,7 @@ export class KioskTransaction {
 	}: ItemId & Price & { sellerKiosk: ObjectArgument }): [TransactionArgument, TransactionArgument] {
 		// Split the coin for the amount of the listing.
 		const coin = this.transactionBlock.splitCoins(this.transactionBlock.gas, [
-			this.transactionBlock.pure(bcs.U64.serialize(price)),
+			this.transactionBlock.pure.u64(price),
 		]);
 		return kioskTx.purchase(this.transactionBlock, itemType, sellerKiosk, itemId, coin);
 	}

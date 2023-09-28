@@ -81,11 +81,7 @@ export class DeepBookClient {
 		txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_pool`,
-			arguments: [
-				txb.pure(bcs.U64.serialize(tickSize)),
-				txb.pure(bcs.U64.serialize(lotSize)),
-				coin,
-			],
+			arguments: [txb.pure.u64(tickSize), txb.pure.u64(lotSize), coin],
 		});
 		return txb;
 	}
@@ -114,10 +110,10 @@ export class DeepBookClient {
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_customized_pool`,
 			arguments: [
-				txb.pure(bcs.U64.serialize(tickSize)),
-				txb.pure(bcs.U64.serialize(lotSize)),
-				txb.pure(bcs.U64.serialize(takerFeeRate)),
-				txb.pure(bcs.U64.serialize(makerRebateRate)),
+				txb.pure.u64(tickSize),
+				txb.pure.u64(lotSize),
+				txb.pure.u64(takerFeeRate),
+				txb.pure.u64(makerRebateRate),
 				coin,
 			],
 		});
@@ -220,11 +216,7 @@ export class DeepBookClient {
 		const [withdraw] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::${functionName}`,
-			arguments: [
-				txb.object(poolId),
-				txb.pure(bcs.U64.serialize(quantity)),
-				txb.object(this.#checkAccountCap()),
-			],
+			arguments: [txb.object(poolId), txb.pure.u64(quantity), txb.object(this.#checkAccountCap())],
 		});
 		txb.transferObjects([withdraw], this.#checkAddress(recipientAddress));
 		return txb;
@@ -256,13 +248,13 @@ export class DeepBookClient {
 		const txb = new TransactionBlock();
 		const args = [
 			txb.object(poolId),
-			txb.pure(bcs.U64.serialize(clientOrderId ?? this.#nextClientOrderId())),
-			txb.pure(bcs.U64.serialize(price)),
-			txb.pure(bcs.U64.serialize(quantity)),
-			txb.pure(bcs.U8.serialize(selfMatchingPrevention)),
-			txb.pure(bcs.Bool.serialize(orderType === 'bid')),
-			txb.pure(bcs.U64.serialize(expirationTimestamp)),
-			txb.pure(bcs.U8.serialize(restriction)),
+			txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
+			txb.pure.u64(price),
+			txb.pure.u64(quantity),
+			txb.pure.u8(selfMatchingPrevention),
+			txb.pure.bool(orderType === 'bid'),
+			txb.pure.u64(expirationTimestamp),
+			txb.pure.u8(restriction),
 			txb.object(SUI_CLOCK_OBJECT_ID),
 			txb.object(this.#checkAccountCap()),
 		];
@@ -312,9 +304,9 @@ export class DeepBookClient {
 			arguments: [
 				txb.object(poolId),
 				txb.object(this.#checkAccountCap()),
-				txb.pure(bcs.U64.serialize(clientOrderId ?? this.#nextClientOrderId())),
-				txb.pure(bcs.U64.serialize(quantity)),
-				txb.pure(bcs.Bool.serialize(orderType === 'bid')),
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
+				txb.pure.u64(quantity),
+				txb.pure.bool(orderType === 'bid'),
 				baseCoin ? txb.object(baseCoin) : emptyCoin,
 				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
@@ -349,7 +341,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_quote_for_base`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(bcs.U64.serialize(clientOrderId ?? this.#nextClientOrderId())),
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
 				txb.object(String(amountIn)),
 				txb.object(SUI_CLOCK_OBJECT_ID),
@@ -384,7 +376,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::swap_exact_base_for_quote`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(bcs.U64.serialize(clientOrderId ?? this.#nextClientOrderId())),
+				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
 				txb.object(String(amountIn)),
 				txb.object(tokenObjectIn),
@@ -411,11 +403,7 @@ export class DeepBookClient {
 		txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::cancel_order`,
-			arguments: [
-				txb.object(poolId),
-				txb.pure(bcs.U64.serialize(orderId)),
-				txb.object(this.#checkAccountCap()),
-			],
+			arguments: [txb.object(poolId), txb.pure.u64(orderId), txb.object(this.#checkAccountCap())],
 		});
 		return txb;
 	}
@@ -676,8 +664,8 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(bcs.U64.serialize(lowerPrice)),
-				txb.pure(bcs.U64.serialize(higherPrice)),
+				txb.pure.u64(lowerPrice),
+				txb.pure.u64(higherPrice),
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
