@@ -404,7 +404,7 @@ impl AuthorityStore {
             .contains_key(digest)?)
     }
 
-    pub fn shared_object_deleted(
+    pub fn get_deleted_shared_object_last_digest(
         &self,
         object_id: &ObjectID,
         epoch_id: EpochId,
@@ -422,25 +422,6 @@ impl AuthorityStore {
             Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
             _ => Ok(None),
         }
-    }
-
-    pub fn update_deleted_shared_object_dependency(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-        digest: TransactionDigest,
-    ) -> Result<(), TypedStoreError> {
-        let object_key = (
-            epoch_id,
-            ObjectKey(*object_id, SHARED_OBJECT_MARKER_VERSION),
-        );
-
-        let mut batch = self.perpetual_tables.object_per_epoch_marker_table.batch();
-        batch.insert_batch(
-            &self.perpetual_tables.object_per_epoch_marker_table,
-            iter::once((object_key, MarkerValue::SharedDeleted(digest))),
-        )?;
-        batch.write()
     }
 
     /// Returns future containing the state hash for the given epoch
@@ -729,8 +710,10 @@ impl AuthorityStore {
                         epoch_store.epoch(),
                     )?;
                 versioned_results.push((*idx, is_available));
-            } else if self
-                .shared_object_deleted(&input_key.id(), epoch_store.epoch())?
+            }
+            // if the object is an already deleted shared object, mark it as available to continue execution
+            else if self
+                .get_deleted_shared_object_last_digest(&input_key.id(), epoch_store.epoch())?
                 .is_some()
             {
                 versioned_results.push((*idx, true));
@@ -817,12 +800,10 @@ impl AuthorityStore {
                     match self.get_object_by_key(id, *version)? {
                         Some(obj) => result.push((*kind, obj)),
                         None => {
-                            // If the object was deleted by a concurrently certified tx then return this separately and add the digest of the current transaction 
-                            // to be used as the dependency of the next transaction that has the deleted shared object as input
+                            // If the object was deleted by a concurrently certified tx then return this separately
                             let epoch = epoch_store.committee().epoch;
-                            if let Some(dependency) = self.shared_object_deleted(id, epoch)? {
+                            if let Some(dependency) = self.get_deleted_shared_object_last_digest(id, epoch)? {
                                 deleted_shared_objects.push((*id, *version, dependency));
-                                self.update_deleted_shared_object_dependency(id, epoch, *digest).expect("Could not update dependency for previously deleted shared object");
                             } else {
                                 panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
                             }
@@ -1071,6 +1052,17 @@ impl AuthorityStore {
             &self.perpetual_tables.transactions,
             iter::once((transaction_digest, transaction.serializable_ref())),
         )?;
+
+        // If there were any deleted shared objects as input to this transaction, update the marker table with our digest to be used as dependency of
+        // the next transaction that takes this object as an input
+        for (obj_id, _) in inner_temporary_store.deleted_shared_object_keys.clone() {
+            let object_key = (epoch_id, ObjectKey(obj_id, SHARED_OBJECT_MARKER_VERSION));
+
+            write_batch.insert_batch(
+                &self.perpetual_tables.object_per_epoch_marker_table,
+                iter::once((object_key, MarkerValue::SharedDeleted(*transaction_digest))),
+            )?;
+        }
 
         // Add batched writes for objects and locks.
         let effects_digest = effects.digest();

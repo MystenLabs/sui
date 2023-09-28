@@ -75,7 +75,7 @@ const MAX_PROTOCOL_VERSION: u64 = 26;
 //             JWK / authenticator state flags.
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
-//             Add support for receiving objects off of other objects in devnet only.
+//             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1476,10 +1476,6 @@ impl ProtocolConfig {
                         cfg.max_jwk_votes_per_validator_per_epoch = Some(240);
                         cfg.max_age_of_jwk_in_epochs = Some(1);
                     }
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.shared_object_deletion = true;
-                    }
                 }
                 25 => {
                     // Enable zkLogin for all providers in all networks.
@@ -1501,6 +1497,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
+                        cfg.feature_flags.shared_object_deletion = true;
                     }
                 }
                 // Use this template when making changes:

@@ -84,7 +84,7 @@ mod checked {
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 
         let inputs = check_input_objects(store, &input_objects, protocol_config)?;
-        let objects: Vec<Object> = inputs.clone().iter().map(|(_, o)| o.clone()).collect();
+        let objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let gas_status = get_gas_status(
             &objects,
@@ -117,13 +117,15 @@ mod checked {
         transaction.validity_check_no_gas_check(protocol_config)?;
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
         let receiving_objects = transaction.receiving_objects();
-        let mut input_objects = transaction.input_objects()?;
-        let inputs = check_input_objects(store, &input_objects, protocol_config)?;
-        let mut objects: Vec<Object> = inputs.clone().iter().map(|(_, o)| o.clone()).collect();
+        let input_object_kinds = transaction.input_objects()?;
+        let mut inputs = check_input_objects(store, &input_object_kinds, protocol_config)?;
 
         let gas_object_ref = gas_object.compute_object_reference();
-        input_objects.push(InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref));
-        objects.push(gas_object);
+        inputs.push((
+            InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref),
+            gas_object,
+        ));
+        let objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let gas_status = get_gas_status(
             &objects,
@@ -162,7 +164,7 @@ mod checked {
         }
         let mut input_objects = kind.input_objects()?;
         let inputs = check_input_objects(store, &input_objects, config)?;
-        let mut objects: Vec<Object> = inputs.clone().iter().map(|(_, o)| o.clone()).collect();
+        let mut objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
         for object in &objects {

@@ -1101,24 +1101,10 @@ impl AuthorityState {
     /// new function to generate next version of deleted shared object
     fn get_next_version(
         &self,
-        mutated: Vec<(ObjectRef, Owner)>,
+        effects: &TransactionEffects,
         smeared_version: SequenceNumber,
     ) -> SequenceNumber {
-        let mut sequence_numbers = Vec::new();
-        for (obj_ref, owner) in mutated {
-            match owner {
-                Owner::AddressOwner(_) => {}
-                _ => {
-                    sequence_numbers.push(obj_ref.1);
-                }
-            }
-        }
-
-        if !sequence_numbers.is_empty() {
-            max(sequence_numbers[0], smeared_version.next())
-        } else {
-            smeared_version.next()
-        }
+        max(effects.lamport_version(), smeared_version.next())
     }
 
     async fn commit_cert_and_notify(
@@ -1177,7 +1163,7 @@ impl AuthorityState {
 
         // add transactions that operate on deleted shared objects to the outputkeys that then get sent to notify_commit
         for (id, seq) in inner_temporary_store.deleted_shared_object_keys.iter() {
-            let next_version = self.get_next_version(effects.mutated(), *seq);
+            let next_version = self.get_next_version(effects, *seq);
             let key = InputKey::VersionedObject {
                 id: *id,
                 version: next_version,

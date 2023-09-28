@@ -177,9 +177,6 @@ pub enum ExecutionFailureStatus {
     #[error("Certificate is on the deny list")]
     CertificateDenied,
 
-    #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
-    InputObjectDeleted,
-
     #[error(
         "Sui Move Bytecode Verification Timeout. \
         Please run the Sui Move Verifier for more information."
@@ -191,6 +188,9 @@ pub enum ExecutionFailureStatus {
         allowed."
     )]
     SharedObjectOperationNotAllowed,
+
+    #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
+    InputObjectDeleted,
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

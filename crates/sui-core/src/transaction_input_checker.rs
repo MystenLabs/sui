@@ -44,7 +44,7 @@ mod checked {
         } else {
             store.check_sequenced_input_objects(cert.digest(), &input_object_kinds, epoch_store)?
         };
-        let objects: Vec<Object> = inputs.clone().iter().map(|(_, obj)| obj.clone()).collect();
+        let objects: Vec<Object> = inputs.iter().map(|(_, obj)| obj.clone()).collect();
         let gas_status = get_gas_status(
             &objects,
             tx_data.gas(),

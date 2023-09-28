@@ -465,7 +465,7 @@ impl TestRunner {
     ) -> Option<TransactionDigest> {
         self.authority_state
             .database
-            .shared_object_deleted(object_id, epoch)
+            .get_deleted_shared_object_last_digest(object_id, epoch)
             .unwrap()
     }
 }
@@ -580,14 +580,7 @@ async fn test_mutate_after_delete() {
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
 
-    let mut found_digest_in_dependencies = false;
-    for dependency in effects.dependencies() {
-        if dependency == digest {
-            found_digest_in_dependencies = true;
-        }
-    }
-
-    assert!(found_digest_in_dependencies);
+    assert!(effects.dependencies().contains(digest));
 }
 
 #[tokio::test]
@@ -645,6 +638,8 @@ async fn test_mutate_after_delete_enqueued() {
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
 
+    let digest = effects.transaction_digest();
+
     let effects = res.get(2).unwrap();
     assert!(effects.status().is_err());
     assert_eq!(effects.deleted().len(), 0);
@@ -655,6 +650,8 @@ async fn test_mutate_after_delete_enqueued() {
 
     // The gas coin gets mutated
     assert_eq!(effects.mutated().len(), 1);
+
+    assert!(effects.dependencies().contains(digest));
 }
 
 #[tokio::test]

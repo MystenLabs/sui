@@ -31,3 +31,4 @@
 29: CertificateDenied
 30: SuiMoveVerificationTimedout
 31: SharedObjectOperationNotAllowed
+32: InputObjectDeleted
