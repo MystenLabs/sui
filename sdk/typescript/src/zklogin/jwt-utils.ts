@@ -81,7 +81,6 @@ export function decodeBase64URL(s: string, i: number): string {
 		const byte = parseInt(bitChunk.join(''), 2);
 		bytes.push(byte);
 	}
-	console.log();
 	return new TextDecoder().decode(new Uint8Array(bytes));
 }
 
