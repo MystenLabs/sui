@@ -802,6 +802,7 @@ async fn fetch_certificates_v2_basic() {
         })
         .unwrap();
 
+    println!("Figure IF this is taking so long");
     // The certificates 4 + 62 + 58 + 204 = 328 should become available in store eventually.
     verify_certificates_v2_in_store(
         &certificate_store,

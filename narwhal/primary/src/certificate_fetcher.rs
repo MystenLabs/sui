@@ -28,6 +28,7 @@ use tokio::{
     time::{sleep, timeout, Instant},
 };
 use tracing::{debug, error, instrument, trace, warn};
+use types::AggregateSignatureState;
 use types::{
     error::{DagError, DagResult},
     validate_received_certificate_version, Certificate, CertificateAPI,
@@ -502,7 +503,7 @@ async fn process_certificates_v1_helper(
             spawn_blocking(move || {
                 let now = Instant::now();
                 for c in &mut certs {
-                    sync.sanitize_certificate(c, false)?;
+                    sync.sanitize_certificate(c)?;
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
@@ -536,10 +537,6 @@ async fn process_certificates_v2_helper(
     synchronizer: &Synchronizer,
     metrics: Arc<PrimaryMetrics>,
 ) -> DagResult<()> {
-    warn!(
-        "[arun] In processing certificates v2 helper. We fetched {} certificates and in this order : {:?}",
-        response.certificates.len(), response.certificates
-    );
     let mut all_certificates = response.certificates;
     let mut all_parents = HashSet::new();
     for cert in all_certificates.iter_mut() {
@@ -555,52 +552,37 @@ async fn process_certificates_v2_helper(
             all_parents.insert(parent_digest.clone());
         }
     }
-    warn!(
-        "[arun] We identified {} parent certificates and these are the certs: {:?}",
-        all_parents.len(),
-        all_parents
-    );
 
     let all_certificates_count = all_certificates.len() as u64;
-    let mut non_parents_count: u64 = 0;
 
-    // Classify certs as parent or non-parent but maintain the order that the
-    // certificates were received so that they can be validated in the same
-    // response order to avoid certificate suspensions
+    // Classify non-parent certs and preemptively set the parent certificates
+    // as verified indirectly. This is safe because any non-parent certs that
+    // fail verification will cancel processing for all fetched certs.
     let mut non_parent_certs = Vec::new();
-    let mut classified_certs: Vec<(Certificate, bool)> = vec![];
-    for (idx, c) in all_certificates.into_iter().enumerate() {
-        let is_parent = all_parents.contains(&c.digest());
-        if !is_parent {
-            non_parents_count += 1;
+    for (idx, c) in all_certificates.iter_mut().enumerate() {
+        if !all_parents.contains(&c.digest()) {
             non_parent_certs.push((idx, c.clone()));
+        } else {
+            c.set_aggregate_signature_state(AggregateSignatureState::VerifiedIndirectly(
+                c.aggregated_signature().clone(),
+            ))
         }
-        classified_certs.push((c, is_parent));
     }
 
-    warn!(
-        "[arun] We identified {} non parent certificates and these are the certs: {:?}",
-        non_parent_certs.len(),
-        non_parent_certs
-    );
+    let non_parents_count = non_parent_certs.len() as u64;
 
-    // First, create verify_tasks only for non_parent_certs
+    // Create verify tasks only for non-parent certs. Parent certs are then set
+    // as indirectly verified.
     let non_parent_verify_tasks = non_parent_certs
         .chunks(VERIFY_NON_PARENT_CERTIFICATES_BATCH_SIZE)
         .map(|chunk| {
             let mut certs = chunk.to_vec();
             let sync = synchronizer.clone();
             let metrics = metrics.clone();
-            // For each chunk, spawn a blocking task to sanitize the non parent certificates
             spawn_blocking(move || {
                 let now = Instant::now();
                 for (_, c) in &mut certs {
-                    warn!(
-                        "[arun] Non parent cert {:?} being sent for sanitization",
-                        c.digest()
-                    );
-                    sync.sanitize_certificate(c, false)?;
-                    warn!("[arun] Non parent cert {:?} passed sanitizion", c.digest());
+                    sync.sanitize_certificate(c)?;
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
@@ -610,81 +592,31 @@ async fn process_certificates_v2_helper(
         })
         .collect_vec();
 
-    // Await all non parent tasks and ensure they are all successful before proceeding
+    // We ensure sanitization of certificates completes for all non-parents
+    // fetched certificates before accepting any certficates.
     for task in non_parent_verify_tasks.into_iter() {
+        // Any certificates that fail to be verified should cancel the entire
+        // batch of fetched certficates.
         let idx_and_certs = task.await.map_err(|err| {
             error!("Cancelling due to {err:?}");
             DagError::Canceled
         })??;
         for (idx, cert) in idx_and_certs {
-            classified_certs[idx].0 = cert;
+            all_certificates[idx] = cert;
         }
     }
 
-    let verify_tasks = classified_certs
-        .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
-        .map(|chunk| {
-            let mut certs_and_classification = chunk.to_vec();
-            let sync = synchronizer.clone();
-            let metrics = metrics.clone();
-            warn!("[arun] Processing chunk of size {}", chunk.len());
-            // Use threads dedicated to computation heavy work.
-            spawn_blocking(move || {
-                let now = Instant::now();
-                for (c, is_parent) in &mut certs_and_classification {
-                    warn!(
-                        "[arun] Parent cert {:?} being sent for sanitization",
-                        c.digest()
-                    );
-                    if *is_parent {
-                        sync.sanitize_certificate(c, *is_parent)?;
-                    }
-                    warn!(
-                        "[arun] Parent cert {:?} passed sanitizion, and is_parent = {is_parent}",
-                        c.digest()
-                    );
-                }
-                metrics
-                    .certificate_fetcher_total_verification_us
-                    .inc_by(now.elapsed().as_micros() as u64);
-                let certs = certs_and_classification
-                    .into_iter()
-                    .map(|(c, _)| c)
-                    .collect();
-                Ok::<Vec<Certificate>, DagError>(certs)
-            })
-        })
-        .collect_vec();
-
-    // Process verified certificates in the same order as received. We ensure
-    // that sanitize certificate completes for all fetched certificates before
-    // accepting any certficates because we have to be sure that all non-parent
-    // certificates successfully sanitized before accepting any of the parent
-    // certificates. This is because parent certificates will be processed before
-    // non parent certificates.
-    for task in verify_tasks.into_iter() {
-        // Any certificates that fail to be verified should cancel the entire
-        // batch of fetched certficates that are being processed to protect
-        // against byzantine validators.
-        let certificates = task.await.map_err(|err| {
-            error!("Cancelling due to {err:?}");
-            DagError::Canceled
-        })??;
-        let now = Instant::now();
-        for cert in certificates {
-            let cert_digest = cert.digest();
-            if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
-                // It is possible that subsequent certificates are useful,
-                // so not stopping early.
-                warn!(
-                    "[arun] Failed to accept fetched certificate {:?}: {e}",
-                    cert_digest
-                );
-            }
+    // Process verified certificates in the same order as received.
+    for cert in all_certificates {
+        let cert_digest = cert.digest();
+        if let Err(e) = synchronizer.try_accept_fetched_certificate(cert).await {
+            // It is possible that subsequent certificates are useful,
+            // so not stopping early.
+            warn!(
+                "Failed to accept fetched certificate {:?}: {e}",
+                cert_digest
+            );
         }
-        metrics
-            .certificate_fetcher_total_accept_us
-            .inc_by(now.elapsed().as_micros() as u64);
     }
 
     metrics
