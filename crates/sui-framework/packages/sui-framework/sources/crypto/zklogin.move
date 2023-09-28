@@ -13,11 +13,11 @@ module sui::zklogin {
 
     /// Posession of a VerifiedID proves that the user's address was created using zklogin and the
     /// given parameters
-    struct VerifiedID {
-        /// The name of the claim
+    struct VerifiedID has key {
+        /// The name of the key claim
         kc_name: String,
 
-        /// The value of the claim
+        /// The value of the key claim
         kc_value: String,
 
         /// The issuer
@@ -31,12 +31,12 @@ module sui::zklogin {
     /// a VerifiedID cantaining the caller's id (claim name and value, issuer and wallet id) is
     /// returned. Otherwise, None is returned.
     public fun verify_zklogin_id(
-        ctx: &TxContext,
         kc_name: String,
         kc_value: String,
         iss: String,
         aud: String,
-        pin_hash: u256
+        pin_hash: u256,
+        ctx: &TxContext,
     ): Option<VerifiedID> {
         if (check_zklogin_id(tx_context::sender(ctx), &kc_name, &kc_value, &iss, &aud, pin_hash)) {
             option::some(VerifiedID {kc_name, kc_value, iss, aud})
@@ -74,7 +74,7 @@ module sui::zklogin {
 
     /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and
     /// with the given issuer (identity provider).
-    struct VerifiedIssuer {
+    struct VerifiedIssuer has key {
         /// The issuer
         iss: String,
     }
@@ -82,9 +82,9 @@ module sui::zklogin {
     /// Verify that the caller's address was created using zklogin with the given issuer. If so,
     /// a VerifiedIssuer object cantaining the issuers id returned. Otherwise, None is returned.
     public fun verify_zklogin_iss(
-        ctx: &mut TxContext,
         address_seed: u256,
         iss: String,
+        ctx: &mut TxContext,
     ): Option<VerifiedIssuer> {
         if (check_zklogin_iss(tx_context::sender(ctx), address_seed, &iss)) {
             option::some(VerifiedIssuer {iss})
