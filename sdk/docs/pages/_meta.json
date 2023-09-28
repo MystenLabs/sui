@@ -15,5 +15,9 @@
 	"kiosk": {
 		"title": "Kiosk SDK",
 		"type": "page"
+	},
+	"bcs": {
+		"title": "BCS",
+		"type": "page"
 	}
 }

@@ -388,6 +388,7 @@ impl LocalExec {
     /// But it should only be called once per epoch.
     pub async fn init_for_execution(mut self) -> Result<Self, ReplayEngineError> {
         self.populate_protocol_version_tables().await?;
+        tokio::task::yield_now().await;
         Ok(self)
     }
 
@@ -494,6 +495,7 @@ impl LocalExec {
                     .insert(o_ref.0, obj.clone());
             }
         }
+        tokio::task::yield_now().await;
         Ok(objs)
     }
 
@@ -1634,6 +1636,7 @@ impl LocalExec {
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
         self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
+        tokio::task::yield_now().await;
 
         Ok(InputObjects::new(input_objs))
     }

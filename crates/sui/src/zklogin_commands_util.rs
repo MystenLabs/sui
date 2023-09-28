@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::jwt_utils::parse_and_validate_jwt;
 use fastcrypto::traits::EncodeDecodeBase64;
 use fastcrypto_zkp::bn254::utils::{gen_address_seed, get_zk_login_address};
@@ -13,6 +14,8 @@ use serde_json::json;
 use shared_crypto::intent::Intent;
 use std::io;
 use std::io::Write;
+use std::thread::sleep;
+use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_sdk::SuiClientBuilder;
@@ -95,6 +98,7 @@ pub async fn perform_zk_login_test_tx(
     // Request some coin from faucet and build a test transaction.
     let sui = SuiClientBuilder::default().build(fullnode_url).await?;
     request_tokens_from_faucet(zklogin_address, gas_url).await?;
+    sleep(Duration::from_secs(10));
 
     let Some(coin) = sui
         .coin_read_api()
@@ -116,7 +120,7 @@ pub async fn perform_zk_login_test_tx(
         .await?;
     println!(
         "Faucet requested and created test transaction: {:?}",
-        txb_res
+        Base64::encode(bcs::to_bytes(&txb_res).unwrap())
     );
 
     // Sign transaction with the ephemeral key

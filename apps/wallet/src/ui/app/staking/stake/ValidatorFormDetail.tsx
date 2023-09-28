@@ -7,7 +7,7 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -32,7 +32,7 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		data: system,
 		isLoading: loadingValidators,
 		isError: errorValidators,
-	} = useLatestSuiSystemState();
+	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const { data: stakeData, isLoading, isError, error } = useGetDelegatedStake(accountAddress || '');
 

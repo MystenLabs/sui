@@ -78,7 +78,7 @@ export abstract class SignerWithProvider implements Signer {
 		const signature = await this.signData(
 			messageWithIntent(
 				IntentScope.PersonalMessage,
-				bcs.ser(['vector', 'u8'], input.message).toBytes(),
+				bcs.vector(bcs.u8()).serialize(input.message).toBytes(),
 			),
 		);
 

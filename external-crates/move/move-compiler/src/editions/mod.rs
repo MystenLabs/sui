@@ -29,6 +29,7 @@ pub struct Edition {
 pub enum FeatureGate {
     PublicPackage,
     PostFixAbilities,
+    StructTypeVisibility,
     DotCall,
 }
 
@@ -49,7 +50,8 @@ pub fn check_feature(
     feature: FeatureGate,
     loc: Loc,
 ) -> bool {
-    if !edition.supports(feature) {
+    let supports_feature = edition.supports(feature);
+    if !supports_feature {
         let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
             .map(|e| e.to_string())
@@ -71,10 +73,8 @@ pub fn check_feature(
             or via command line flag if invoking the compiler directly.",
         );
         env.add_diag(diag);
-        false
-    } else {
-        true
     }
+    supports_feature
 }
 
 pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
@@ -95,6 +95,7 @@ static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
 const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
+    FeatureGate::StructTypeVisibility,
     FeatureGate::DotCall,
 ];
 
@@ -166,6 +167,7 @@ impl FeatureGate {
         match self {
             FeatureGate::PublicPackage => "'public(package)' is",
             FeatureGate::PostFixAbilities => "Postfix abilities are",
+            FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
             FeatureGate::DotCall => "Method syntax is",
         }
     }

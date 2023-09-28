@@ -18,7 +18,7 @@ zkLogin is designed with the following goals in mind:
 
 1. **Accessible**: zkLogin is one of several native Sui signature schemes thanks to Sui's [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). It smoothly integrates with other powerful Sui primitives like sponsored transactions and multisig.
 
-1. **Built with Rigor**. The [code](https://github.com/sui-foundation/zklogin-circuit) for zkLogin is open source and has been independently [audited](https://github.com/sui-foundation/zk-ceremony-client) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string attracted contributions from more than 100 participants.
+1. **Built with Rigor**. The [code](https://github.com/sui-foundation/zklogin-circuit) for zkLogin is open source and has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string attracted contributions from more than 100 participants.
 
 Are you a builder who wants to integrate zkLogin into your application or wallet? Dive into our [Integration guide](#integration-guide).
 
@@ -192,7 +192,7 @@ User salt is used when computing the zkLogin Sui address (see [definition](#addr
 Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
 
 ```bash
-curl -X POST http://salt.api-devnet.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
+curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
 
 Response: {"salt":"129390038577185583942388216820280642146"}
 ```
@@ -386,56 +386,31 @@ We call the claim used to derive a users' address as the "key claim" e.g., sub o
 
 ## Ceremony
 
-Through zero-knowledge proof, we hide sensitive credentials during proof generation while verifying user information on the blockchain. This involves treating the JWT as a private witness within a circuit that internally validates both the OAuth provider's RSA signature in the JWT token and the expected user information.
+In order to preserve privacy of the OAuth artifacts, a zero-knowledge proof of possession of the artifacts is provided. zkLogin employs the Groth16 zkSNARK to instantiate the zero-knowledge proofs, as it is the most efficient general-purpose zkSNARK in terms of proof size and verification efficiency. 
 
-The non-interactive ZK proofs (NIZK) share a public, universal common reference string (CRS) for all users. Traditional NIZK applications require a trusted setup, involving trusted parties, distributed ceremonies, or inefficient transparent methods. Leveraging the Groth16 zkSNARK system, we benefit from compact proofs and efficient verifiers, with a one-time setup cost. Therefore, we establish a common CRS through a one-time ceremony accessible to everyone.
+However, Groth16 needs a computation-specific Common Reference String (CRS) to be setup by a trusted party. With zkLogin expected to ensure the safe-keeping of high value transactions and the integrity of critical smart contracts, we cannot base the security of the system on the honesty of a single entity. Hence, to generate the CRS for the zkLogin circuit, it is vital to run a protocol which bases its security on the assumed honesty of a small fraction of a large number of parties.
 
-### What is The Ceremony?
+### What is the ceremony?
 
-The ceremony's objective is to compute a public common reference string (CRS). Achieving this involves using the circuit description and confidentially-generated random numbers for sampling. Although these random numbers are not needed in the subsequent protocols, if they are leaked, the security of the protocols will be compromised. Therefore, we need to trust the setup process in two crucial ways: (1) ensuring a faithful sampling process, and (2) securely discarding the confidential random numbers.
+The Sui zkLogin ceremony is essentially a cryptographic multi-party computation (MPC) performed by a diverse group of participants to generate this CRS. We follow the MPC protocol [MMORPG](https://eprint.iacr.org/2017/1050.pdf) described by Bowe, Gabizon and Miers. The protocol roughly proceeds in 2 phases. The first phase results in a series of powers of a secret quantity tau in the exponent of an elliptic curve element. Since this phase is circuit-agnostic, we adopted the result of the existing community contributed [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master). Our ceremony was the second phase, which is specific to the zkLogin circuit.
 
-We adopt a distributed setup process  instead of relying on a single central party to adhere to the requirements. Through a distributed protocol involving numerous parties, we ensure the setup affords the intended security and privacy assurances. Even if only one party follows the protocol honestly, the final setup remains reliable. Refer to [this page](https://sui.io/zklogin) for more details.
+The MMORPG protocol is a sequential protocol, which allows an indefinite number of parties to participate in sequence, without the need of any prior synchronization or ordering. Each party needs to download the output of the previous party, generate entropy of its own and then layer it on top of the received result, producing its own contribution, which is then relayed to the next party. The protocol guarantees security, if at least one of the the participants follows the protocol faithfully, generates strong entropy and discards it reliably.
 
-### Who is participating?
+### How was the ceremony performed?
 
-The following groups are invited to participate:
+We sent invitations to 100+ people with diverse backgrounds and affiliations: Sui validators, cryptographers, web3 experts, world-renowned academicians, and business leaders. We planned the ceremony to take place on the dates September 12-18, 2023, but allowed participants to join when they wanted with no fixed slots. 
 
-1. Experts: People who work in Web3, cryptography, and distributed systems, and who have possibly participated in similar ceremonies.
-2. Validators: Entities that have already participated in securing the Sui Network.
+Since the MPC is sequential, each contributor needed to wait till the previous contributor finished in order to receive the previous contribution, follow the MPC steps and produce their own contribution. Due to this structure, we provisioned a queue where participants waited, while those who joined before them finished. To authenticate participants, we sent a unique activation code to each of them. The activation code was the secret key of a signing key pair, which had a dual purpose: it allowed the coordination server to associate the participant's email with the contribution, and to verify the contribution with the corresponding public key.
 
-The ceremony's security guarantees that among the participants, at least one adheres to the protocol and handles entropy safely. With several participants, the likelihood of this outcome is elevated.
+Participants had two options to contribute: through a browser or a docker. The browser option was more user-friendly for contributors to participate as everything happens in the browser. The Docker option required Docker setup but is more transparent—the Dockerfile and contributor source code are open-sourced and the whole process is verifiable. Moreover, the browser option utilizes [snarkjs](https://github.com/iden3/snarkjs) while the Docker option utilizes [Kobi's implementation](https://github.com/iseriohn/phase2-bn254). This provided software variety and contributors could choose to contribute by whichever method they trust. In addition, participants could generate entropy via entering random text or making random cursor movements.
 
-### What exactly happens during the contribution?
-
-Contributions to the ceremony are made one-by-one in sequence, with participants forming a queue. A participant joins the queue upon entering the invitation code in their browser. The coordinator server then assigns each participant a position according to their queue entry.
-
-When a participant is at the head of the queue, they have an option to choose to contribute within the browser or with Docker. Opting for the browser is the simplest method as all processes run in the background; the Docker choice demands command line execution with dependencies.
-
-Throughout the contribution process, whether through browser interaction or running the Docker command, a series of events take place:
-
-1. The latest contribution file is fetched from the coordinator server.
-
-1. The file's integrity is verified within the browser.
-
-1. An entropy is input.
-
-1. The previous contribution is downloaded and the contribution code is executed.
-
-1. The contribution hash is signed.
-
-1. The contribution is uploaded to the coordinator server.
-
-Once the coordinator server confirms the accurately computed uploaded contribution and verifies the signed hash, it stores the latest contribution on-disk. Then, it advances to the next participant in the queue, who repeats the same steps. This cycle continues until the queue is empty.
-
-If for any reason, the participant at the head of the queue did not finish uploading the verified contribution in time, the coordinator discards the participant and moves on to the next one in the queue. Note that throughout the time, the coordinator does not have access to any private information about the contribution.
-
-We encourage the participant to use an entropy that is easy to discard, like using the mouse-moving option that contains high entropy. As long as one participant safely disposes of their entropy, we consider the resulting CRS is trustworthy.
+The zkLogin [circuit](https://github.com/sui-foundation/zklogin-circuit) and the ceremony client [code](https://github.com/sui-foundation/zk-ceremony-client) were made open source and the links were made available to the participants to review before the ceremony, if they chose to do so. In addition, we also posted developer [docs](https://docs.sui.io/build/zk_login) and an audit [report](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) on the circuit from zkSecurity. We adopted [challenge #0081](https://pse-trusted-setup-ppot.s3.eu-central-1.amazonaws.com/challenge_0081) (resulting from 80 community contributions) from [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master/0080_carter_response) in phase 1, which is circuit agnostic. We applied the output of the [Drand](http://drand.love) random beacon at epoch #3298000 to remove bias. For phase 2, our ceremony had 111 contributions, 82 from browser and 29 from docker. Finally, we applied the output of the Drand random beacon at epoch #3320606 to remove bias from contributions. All intermediate files can be reproduced following instructions [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase1/README.md) for phase 1 and [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/README.md) for phase 2.
 
 ## Finalization
 
-Once all contributions are concluded, the ultimate CRS and a verification script will be made available for public examination. The Sui Foundation will run the verification to ensure the integrity of the ceremony and we also invite anyone to verify the same.
+The final CRS along with the transcript of contribution of every participant is available in a public repository. Contributors received both the hash of the previous contribution they were working on and the resulting hash after their contribution, displayed on-screen and sent via email. They can compare these hashes with the transcripts publicly available on the ceremony site. In addition, anyone is able to check that the hashes are computed correctly and each contribution is properly incorporated in the finalized parameters.
 
-Eventually, the final CRS will be used to generate the proving key and verifying key. The proving key will be used to generate zero knowledge proof for ZkLogin, stored with the ZK proving service. The verifying key will be deployed as part of the validator software that is used to verify the zkLogin transaction on Sui.
+Eventually, the final CRS was used to generate the proving key and verifying key. The proving key is used to generate zero knowledge proof for zkLogin, stored with the ZK proving service. The verifying key was [deployed](https://github.com/MystenLabs/sui/pull/13822) as part of the validator software (protocol version 25 in [release 1.10.1](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.10.1)) that is used to verify the zkLogin transaction on Sui.
 
 ## Security and Privacy
 

@@ -9,14 +9,17 @@ use crate::{
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{middleware, TypedHeader};
-use axum::{routing::IntoMakeService, Router};
+use axum::Router;
+use axum::{
+    extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
+    middleware, TypedHeader,
+};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
-use std::any::Any;
+use std::{any::Any, net::SocketAddr};
 
 pub(crate) struct Server {
-    pub server: HyperServer<HyperAddrIncoming, IntoMakeService<Router>>,
+    pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
 
 impl Server {
@@ -79,12 +82,14 @@ impl ServerBuilder {
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
         Server {
-            server: axum::Server::bind(&address.parse().unwrap()).serve(app.into_make_service()),
+            server: axum::Server::bind(&address.parse().unwrap())
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
         }
     }
 }
 
 async fn graphql_handler(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
     usage: Option<TypedHeader<ShowUsage>>,
     req: GraphQLRequest,
@@ -93,7 +98,9 @@ async fn graphql_handler(
     if let Some(TypedHeader(usage)) = usage {
         req.data.insert(usage)
     }
-
+    // Capture the IP address of the client
+    // Note: if a load balancer is used it must be configured to forward the client IP address
+    req.data.insert(addr);
     schema.execute(req).await.into()
 }
 
@@ -171,8 +178,15 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should timeout
-        let resp = test_timeout(timeout, timeout).await;
-        assert!(resp.is_err());
+        let errs: Vec<_> = test_timeout(timeout, timeout)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!("Request timed out. Limit: {}s", timeout.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
     }
 
     #[tokio::test]
@@ -198,14 +212,26 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should fail
-        let resp = exec_query_depth_limit(0, "{ chainIdentifier }").await;
-        assert!(resp.is_err());
-        let resp = exec_query_depth_limit(
+        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+
+        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
+        let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_err());
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
     #[tokio::test]
@@ -231,13 +257,25 @@ mod tests {
         assert!(resp.is_ok());
 
         // Should fail
-        let resp = exec_query_node_limit(0, "{ chainIdentifier }").await;
-        assert!(resp.is_err());
-        let resp = exec_query_node_limit(
+        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        assert_eq!(err, vec!["Query is too complex.".to_string()]);
+
+        let err: Vec<_> = exec_query_node_limit(
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
         )
-        .await;
-        assert!(resp.is_err());
+        .await
+        .into_result()
+        .unwrap_err()
+        .into_iter()
+        .map(|e| e.message)
+        .collect();
+        assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 }

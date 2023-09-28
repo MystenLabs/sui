@@ -8,7 +8,7 @@ import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { ampli } from '_src/shared/analytics/ampli';
 import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
 import cl from 'classnames';
 import { useMemo, useState } from 'react';
@@ -34,7 +34,7 @@ export function SelectValidatorCard() {
 	const [selectedValidator, setSelectedValidator] = useState<Validator | null>(null);
 	const [sortKey, setSortKey] = useState<SortKeys | null>(null);
 	const [sortAscending, setSortAscending] = useState(true);
-	const { data, isLoading, isError } = useLatestSuiSystemState();
+	const { data, isLoading, isError } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 

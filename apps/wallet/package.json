@@ -117,6 +117,7 @@
 		"@metamask/browser-passworder": "^4.1.0",
 		"@mysten/core": "workspace:*",
 		"@mysten/dapp-kit": "workspace:*",
+		"@mysten/deepbook": "workspace:*",
 		"@mysten/icons": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/ledgerjs-hw-app-sui": "workspace:*",

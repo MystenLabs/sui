@@ -43,20 +43,15 @@ export type UseSuiClientInfiniteQueryOptions<T extends keyof SuiRpcPaginatedMeth
 >;
 
 export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods>(
-	{
-		method,
-		params,
-	}: {
-		method: T;
-		params: SuiRpcPaginatedMethods[T]['params'];
-	},
-	{ queryKey, enabled = !!params, ...options }: UseSuiClientInfiniteQueryOptions<T> = {},
+	method: T,
+	params: SuiRpcPaginatedMethods[T]['params'],
+	{ queryKey = [], enabled = !!params, ...options }: UseSuiClientInfiniteQueryOptions<T> = {},
 ) {
 	const suiContext = useSuiClientContext();
 
 	return useInfiniteQuery({
 		...options,
-		queryKey: [suiContext.network, method, params],
+		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);
