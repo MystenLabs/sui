@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{{error::Error, types::{checkpoint::Checkpoint, digest::Digest, gas::GasCostSummary, epoch::Epoch, big_int::BigInt}}, types::digest::Digest};
+use crate::{{error::Error, types::{checkpoint::Checkpoint, digest::Digest, gas::{GasCostSummary, GasInput}, epoch::Epoch, big_int::BigInt, transaction_block::{TransactionBlock, TransactionBlockEffects}, address::Address, sui_address::SuiAddress, base64::Base64}}, types::digest::Digest};
+use async_trait::async_trait;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_sdk::types::{transaction::{SenderSignedData, TransactionDataAPI}, effects::TransactionEffects};
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -146,6 +149,47 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
     }
 }
 
+#[async_trait]
+impl DataProvider for PgManager {
+    async fn fetch_tx(&self, digest: Vec<u8>) -> Result<Option<TransactionBlock>> {
+        let result = self.fetch_tx(digest).await?;
+        match result {
+            Some(tx) => Ok(Some(TransactionBlock::try_from(tx)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn fetch_latest_epoch(&self) -> Result<Epoch> {
+        let result = self.fetch_latest_epoch().await?;
+        Ok(Epoch::from(result))
+    }
+
+    async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>> {
+        let result = self.fetch_epoch(epoch_id as i64).await?;
+        match result {
+            Some(epoch) => Ok(Some(Epoch::from(epoch))),
+            None => Ok(None),
+        }
+    }
+
+    async fn fetch_latest_checkpoint(&self) -> Result<Checkpoint> {
+        let result = self.fetch_latest_checkpoint().await?;
+        Ok(Checkpoint::try_from(result)?)
+    }
+
+    async fn fetch_checkpoint(
+        &self,
+        digest: Option<Vec<u8>>,
+        sequence_number: Option<u64>,
+    ) -> Result<Option<Checkpoint>> {
+        let result = self.fetch_checkpoint(digest, sequence_number).await?;
+        match result {
+            Some(checkpoint) => Ok(Some(Checkpoint::try_from(checkpoint)?)),
+            None => Ok(None),
+        }
+    }
+}
+
 impl From<StoredEpochInfo> for Epoch {
     fn from(e: StoredEpochInfo) -> Self {
         Self {
@@ -202,7 +246,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         }?;
 
         Ok(Self {
-            digest,
+            digest: digest.to_string(),
             effects,
             sender: Some(sender),
             bcs: Some(Base64::from(&tx.raw_transaction)),
@@ -237,6 +281,47 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
     }
 }
 
+#[async_trait]
+impl DataProvider for PgManager {
+    async fn fetch_tx(&self, digest: Vec<u8>) -> Result<Option<TransactionBlock>> {
+        let result = self.fetch_tx(digest).await?;
+        match result {
+            Some(tx) => Ok(Some(TransactionBlock::try_from(tx)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn fetch_latest_epoch(&self) -> Result<Epoch> {
+        let result = self.fetch_latest_epoch().await?;
+        Ok(Epoch::from(result))
+    }
+
+    async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>> {
+        let result = self.fetch_epoch(epoch_id as i64).await?;
+        match result {
+            Some(epoch) => Ok(Some(Epoch::from(epoch))),
+            None => Ok(None),
+        }
+    }
+
+    async fn fetch_latest_checkpoint(&self) -> Result<Checkpoint> {
+        let result = self.fetch_latest_checkpoint().await?;
+        Ok(Checkpoint::try_from(result)?)
+    }
+
+    async fn fetch_checkpoint(
+        &self,
+        digest: Option<Vec<u8>>,
+        sequence_number: Option<u64>,
+    ) -> Result<Option<Checkpoint>> {
+        let result = self.fetch_checkpoint(digest, sequence_number).await?;
+        match result {
+            Some(checkpoint) => Ok(Some(Checkpoint::try_from(checkpoint)?)),
+            None => Ok(None),
+        }
+    }
+}
+
 impl From<StoredEpochInfo> for Epoch {
     fn from(e: StoredEpochInfo) -> Self {
         Self {
@@ -293,7 +378,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         }?;
 
         Ok(Self {
-            digest,
+            digest: digest.to_string(),
             effects,
             sender: Some(sender),
             bcs: Some(Base64::from(&tx.raw_transaction)),

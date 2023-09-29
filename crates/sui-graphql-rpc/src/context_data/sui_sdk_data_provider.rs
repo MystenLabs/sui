@@ -23,12 +23,12 @@ use crate::types::stake_subsidy::StakeSubsidy;
 use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
 use crate::types::system_parameters::SystemParameters;
-use crate::types::transaction_block::TransactionBlock;
+use crate::types::transaction_block::{TransactionBlock, TransactionBlockEffects, ExecutionStatus};
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
-use crate::types::gas::GasCostSummary;
+use crate::types::gas::{GasCostSummary, GasInput, GasEffects};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::dataloader::*;
 use async_graphql::*;
@@ -39,7 +39,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
-    SuiTransactionBlockResponseOptions,
+    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponse, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
 };
 use sui_sdk::types::digests::TransactionDigest;
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
@@ -631,4 +631,39 @@ fn ensure_forward_pagination(
         return Err(Error::CursorNoReversePagination.extend());
     }
     Ok(())
+}
+
+impl From<SuiTransactionBlockResponse> for TransactionBlock {
+    fn from(tx_block: SuiTransactionBlockResponse) -> Self {
+        let transaction = tx_block.transaction.as_ref();
+        let sender = transaction.map(|tx| Address {
+            address: SuiAddress::from_array(tx.data.sender().to_inner()),
+        });
+        let gas_input = transaction.map(|tx| GasInput::from(tx.data.gas_data()));
+
+        Self {
+            digest: Digest::from_array(tx_block.digest.into_inner()).to_string(),
+            effects: tx_block.effects.as_ref().map(TransactionBlockEffects::from),
+            sender,
+            bcs: Some(Base64::from(&tx_block.raw_transaction)),
+            gas_input,
+        }
+    }
+}
+
+impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
+    fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+        let (status, errors) = match tx_effects.status() {
+            SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
+            SuiExecutionStatus::Failure { error } => {
+                (ExecutionStatus::Failure, Some(error.clone()))
+            }
+        };
+
+        Self {
+            gas_effects: Some(GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object()))),
+            status,
+            errors,
+        }
+    }
 }

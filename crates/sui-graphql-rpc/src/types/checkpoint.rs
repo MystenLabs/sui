@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::sui_indexer_reader::PgManager;
+use crate::context_data::context_ext::DataProviderContextExt;
 
 use super::{
     base64::Base64, end_of_epoch_data::EndOfEpochData, epoch::Epoch,
@@ -38,10 +38,9 @@ pub(crate) struct Checkpoint {
 #[ComplexObject]
 impl Checkpoint {
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let result = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.epoch)
-            .await?;
-        Ok(Some(Epoch::from(result)))
+        ctx
+            .data_provider()
+            .fetch_epoch(self.epoch.epoch_id)
+            .await
     }
 }

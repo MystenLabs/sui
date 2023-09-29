@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
+use sui_graphql_rpc::config::{RpcConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::simple_server::start_example_server;
 
@@ -27,9 +27,14 @@ async fn main() {
             rpc_url,
             port,
             host,
+            db_url,
+            pool_size,
+            connection_timeout,
+            statement_timeout,
             config,
         } => {
-            let conn = ConnectionConfig::new(port, host, rpc_url);
+            let conn = RpcConnectionConfig::new(port, host, rpc_url);
+
             let service_config = service_config(config);
 
             println!("Starting server...");

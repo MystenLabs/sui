@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use async_graphql::{connection::Connection, *};
 
 use super::{
@@ -11,11 +13,11 @@ use super::{
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
-    transaction_block::TransactionBlock,
+    transaction_block::TransactionBlock, digest::Digest,
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{context_ext::DataProviderContextExt, sui_indexer_reader::PgManager},
+    context_data::context_ext::DataProviderContextExt,
     error::{code, graphql_error, Error},
 };
 
@@ -70,23 +72,17 @@ impl Query {
         ctx: &Context<'_>,
         digest: String,
     ) -> Result<Option<TransactionBlock>> {
-        let result = ctx.data_unchecked::<PgManager>().fetch_tx(&digest).await?;
-        result.map(TransactionBlock::try_from).transpose().extend()
+        let digest = Digest::from_str(&digest)?;
+        ctx.data_provider().fetch_tx(digest.into_vec()).await
     }
 
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        let result = if let Some(epoch_id) = id {
-            ctx.data_unchecked::<PgManager>()
-                .fetch_epoch(epoch_id)
-                .await?
+        if let Some(epoch_id) = id {
+            ctx.data_provider().fetch_epoch(epoch_id).await
         } else {
-            Some(
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_latest_epoch()
-                    .await?,
-            )
-        };
-        Ok(result.map(Epoch::from))
+            let result = ctx.data_provider().fetch_latest_epoch().await?;
+            Ok(Some(result))
+        }
     }
 
     async fn checkpoint(
@@ -94,24 +90,21 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        let result = if let Some(id) = id {
+        if let Some(id) = id {
             match (&id.digest, &id.sequence_number) {
                 (Some(_), Some(_)) => return Err(Error::InvalidCheckpointQuery.extend()),
                 _ => {
-                    ctx.data_unchecked::<PgManager>()
-                        .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
-                        .await?
+                    let digest = id.digest.as_ref().map(|s| Digest::from_str(s).map(|d| d.into_vec())).transpose()?;
+                    ctx.data_provider().fetch_checkpoint(
+                        digest,
+                        id.sequence_number,
+                    ).await
                 }
             }
         } else {
-            Some(
-                ctx.data_unchecked::<PgManager>()
-                    .fetch_latest_checkpoint()
-                    .await?,
-            )
-        };
-
-        result.map(Checkpoint::try_from).transpose().extend()
+            let result = ctx.data_provider().fetch_latest_checkpoint().await?;
+            Ok(Some(result))
+        }
     }
 
     async fn checkpoint_connection(

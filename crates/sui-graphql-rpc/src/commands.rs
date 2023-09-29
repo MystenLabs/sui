@@ -28,6 +28,15 @@ pub enum Command {
         /// Host to bind the server to
         #[clap(long)]
         host: Option<String>,
+        /// URL of the database server for data fetching
+        #[clap(short, long)]
+        db_url: Option<String>,
+        #[clap(long)]
+        pool_size: Option<u32>,
+        #[clap(long)]
+        connection_timeout: Option<u64>,
+        #[clap(long)]
+        statement_timeout: Option<u64>,
         /// Path to TOML file containing configuration for service.
         #[clap(short, long)]
         config: Option<PathBuf>,
