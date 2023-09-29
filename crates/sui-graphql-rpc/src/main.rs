@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs};
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{RpcConnectionConfig, ServiceConfig};
+use sui_graphql_rpc::config::{ConnectionConfig, DataSourceConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::simple_server::start_example_server;
 
@@ -33,12 +33,21 @@ async fn main() {
             statement_timeout,
             config,
         } => {
-            let conn = RpcConnectionConfig::new(port, host, rpc_url);
+            let db_url = db_url.or_else(|| env::var("PG_DB_URL").ok());
+
+            let datasource_config = DataSourceConfig::new(
+                rpc_url,
+                db_url,
+                pool_size,
+                connection_timeout,
+                statement_timeout,
+            );
+            let conn = ConnectionConfig::new(port, host);
 
             let service_config = service_config(config);
 
             println!("Starting server...");
-            let result = start_example_server(conn, service_config).await;
+            let result = start_example_server(conn, datasource_config, service_config).await;
             println!("Server stopped: {:?}", result);
         }
     }

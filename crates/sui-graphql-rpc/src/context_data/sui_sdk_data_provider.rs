@@ -23,12 +23,12 @@ use crate::types::stake_subsidy::StakeSubsidy;
 use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
 use crate::types::system_parameters::SystemParameters;
-use crate::types::transaction_block::{TransactionBlock, TransactionBlockEffects, ExecutionStatus};
+use crate::types::transaction_block::{ExecutionStatus, TransactionBlock, TransactionBlockEffects};
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
 use crate::types::validator_set::ValidatorSet;
 
-use crate::types::gas::{GasCostSummary, GasInput, GasEffects};
+use crate::types::gas::{GasCostSummary, GasEffects, GasInput};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::dataloader::*;
 use async_graphql::*;
@@ -38,8 +38,9 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse, SuiRawData,
-    SuiTransactionBlockResponseOptions, SuiTransactionBlockResponse, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects, SuiExecutionStatus, SuiTransactionBlockEffectsAPI,
+    SuiExecutionStatus, SuiObjectDataOptions, SuiObjectResponseQuery, SuiPastObjectResponse,
+    SuiRawData, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::types::digests::TransactionDigest;
 use sui_sdk::types::sui_serde::BigInt as SerdeBigInt;
@@ -649,19 +650,22 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
         Self {
             digest: Digest::from_array(tx_block.digest.into_inner()).to_string(),
-            effects: tx_block.effects.map(
-                |effects| TransactionBlockEffects::from(&effects, tx_block.checkpoint),
-            ),
+            effects: tx_block
+                .effects
+                .map(|effects| TransactionBlockEffects::from(&effects, tx_block.checkpoint)),
             sender,
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
-            checkpoint_sequence_number: tx_block.checkpoint
+            checkpoint_sequence_number: tx_block.checkpoint,
         }
     }
 }
 
 impl TransactionBlockEffects {
-    pub fn from(tx_effects: &SuiTransactionBlockEffects, checkpoint_sequence_number: Option<u64>) -> Self {
+    pub fn from(
+        tx_effects: &SuiTransactionBlockEffects,
+        checkpoint_sequence_number: Option<u64>,
+    ) -> Self {
         let (status, errors) = match tx_effects.status() {
             SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
             SuiExecutionStatus::Failure { error } => {
@@ -670,10 +674,13 @@ impl TransactionBlockEffects {
         };
 
         Self {
-            gas_effects: Some(GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object()))),
+            gas_effects: Some(GasEffects::from((
+                tx_effects.gas_cost_summary(),
+                tx_effects.gas_object(),
+            ))),
             status,
             errors,
-            checkpoint_sequence_number
+            checkpoint_sequence_number,
         }
     }
 }

@@ -3,12 +3,8 @@
 
 use crate::context_data::context_ext::DataProviderContextExt;
 
-use super::{
-    base64::Base64, end_of_epoch_data::EndOfEpochData, epoch::Epoch,
-    gas::GasCostSummary,
-};
+use super::{base64::Base64, end_of_epoch_data::EndOfEpochData, epoch::Epoch, gas::GasCostSummary};
 use async_graphql::*;
-
 
 #[derive(InputObject)]
 pub(crate) struct CheckpointId {
@@ -38,9 +34,6 @@ pub(crate) struct Checkpoint {
 #[ComplexObject]
 impl Checkpoint {
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        ctx
-            .data_provider()
-            .fetch_epoch(self.epoch.epoch_id)
-            .await
+        ctx.data_provider().fetch_epoch(self.epoch.epoch_id).await
     }
 }

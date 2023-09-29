@@ -1,16 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::{
-    context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch,
-};
+use crate::context_data::context_ext::DataProviderContextExt;
 
 use super::{
     address::Address,
     base64::Base64,
+    checkpoint::Checkpoint,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
-    sui_address::SuiAddress, checkpoint::Checkpoint,
+    sui_address::SuiAddress,
 };
 use async_graphql::*;
 
@@ -30,7 +29,10 @@ pub(crate) struct TransactionBlock {
 #[ComplexObject]
 impl TransactionBlock {
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let checkpoint = ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await?;
+        let checkpoint = ctx
+            .data_provider()
+            .fetch_checkpoint(None, self.checkpoint_sequence_number)
+            .await?;
         let epoch_id = checkpoint.map(|c| c.epoch.epoch_id);
         if let Some(epoch_id) = epoch_id {
             let epoch = ctx.data_provider().fetch_epoch(epoch_id).await?;
@@ -53,7 +55,6 @@ pub(crate) struct TransactionBlockEffects {
     // pub object_reads: Vec<Object>,
     // pub object_changes: Vec<ObjectChange>,
     // pub balance_changes: Vec<BalanceChange>,
-
     #[graphql(skip)]
     pub checkpoint_sequence_number: Option<u64>,
 }
@@ -61,11 +62,16 @@ pub(crate) struct TransactionBlockEffects {
 #[ComplexObject]
 impl TransactionBlockEffects {
     async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
-        ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await
+        ctx.data_provider()
+            .fetch_checkpoint(None, self.checkpoint_sequence_number)
+            .await
     }
 
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let checkpoint = ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await?;
+        let checkpoint = ctx
+            .data_provider()
+            .fetch_checkpoint(None, self.checkpoint_sequence_number)
+            .await?;
         let epoch_id = checkpoint.map(|c| c.epoch.epoch_id);
         if let Some(epoch_id) = epoch_id {
             let epoch = ctx.data_provider().fetch_epoch(epoch_id).await?;

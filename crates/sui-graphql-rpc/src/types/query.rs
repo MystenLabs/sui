@@ -8,12 +8,13 @@ use async_graphql::{connection::Connection, *};
 use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
+    digest::Digest,
     epoch::Epoch,
     object::Object,
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
-    transaction_block::TransactionBlock, digest::Digest,
+    transaction_block::TransactionBlock,
 };
 use crate::{
     config::ServiceConfig,
@@ -92,13 +93,16 @@ impl Query {
     ) -> Result<Option<Checkpoint>> {
         if let Some(id) = id {
             match (&id.digest, &id.sequence_number) {
-                (Some(_), Some(_)) => return Err(Error::InvalidCheckpointQuery.extend()),
+                (Some(_), Some(_)) => Err(Error::InvalidCheckpointQuery.extend()),
                 _ => {
-                    let digest = id.digest.as_ref().map(|s| Digest::from_str(s).map(|d| d.into_vec())).transpose()?;
-                    ctx.data_provider().fetch_checkpoint(
-                        digest,
-                        id.sequence_number,
-                    ).await
+                    let digest = id
+                        .digest
+                        .as_ref()
+                        .map(|s| Digest::from_str(s).map(|d| d.into_vec()))
+                        .transpose()?;
+                    ctx.data_provider()
+                        .fetch_checkpoint(digest, id.sequence_number)
+                        .await
                 }
             }
         } else {

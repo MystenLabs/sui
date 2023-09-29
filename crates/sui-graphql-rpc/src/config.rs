@@ -1,21 +1,69 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Duration};
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
+use sui_indexer::PgConnectionPoolConfig;
 
 use crate::functional_group::FunctionalGroup;
 
 const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
 
-/// Configuration on connections for the RPC, passed in as command-line arguments.
-pub struct RpcConnectionConfig {
+pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
+}
+
+/// Configuration on connections for the RPC, passed in as command-line arguments.
+pub struct RpcConfig {
     pub(crate) rpc_url: String,
+}
+
+pub struct DbConfig {
+    pub(crate) db_url: String,
+    pub(crate) config: PgConnectionPoolConfig,
+}
+
+pub enum DataSourceConfig {
+    Rpc(RpcConfig),
+    Db(DbConfig),
+}
+
+impl DataSourceConfig {
+    pub fn new(
+        rpc_url: Option<String>,
+        db_url: Option<String>,
+        pool_size: Option<u32>,
+        connection_timeout: Option<u64>,
+        statement_timeout: Option<u64>,
+    ) -> Self {
+        if let Some(db_url) = db_url {
+            Self::for_db(db_url, pool_size, connection_timeout, statement_timeout)
+        } else {
+            Self::for_rpc(rpc_url)
+        }
+    }
+
+    pub fn for_db(
+        db_url: String,
+        pool_size: Option<u32>,
+        connection_timeout: Option<u64>,
+        statement_timeout: Option<u64>,
+    ) -> Self {
+        Self::Db(DbConfig::new(
+            db_url,
+            pool_size,
+            connection_timeout,
+            statement_timeout,
+        ))
+    }
+
+    pub fn for_rpc(rpc_url: Option<String>) -> Self {
+        Self::Rpc(RpcConfig::new(rpc_url))
+    }
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -50,14 +98,38 @@ pub struct Experiments {
     test_flag: bool,
 }
 
-impl RpcConnectionConfig {
-    pub fn new(port: Option<u16>, host: Option<String>, rpc_url: Option<String>) -> Self {
+impl ConnectionConfig {
+    pub fn new(port: Option<u16>, host: Option<String>) -> Self {
         let default = Self::default();
         Self {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
+        }
+    }
+}
+
+impl RpcConfig {
+    pub fn new(rpc_url: Option<String>) -> Self {
+        let default = Self::default();
+        Self {
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
         }
+    }
+}
+
+impl DbConfig {
+    pub fn new(
+        db_url: String,
+        pool_size: Option<u32>,
+        connection_timeout: Option<u64>,
+        statement_timeout: Option<u64>,
+    ) -> Self {
+        let mut config = PgConnectionPoolConfig::default();
+        config.set_pool_size(pool_size.unwrap_or(30));
+        config.set_connection_timeout(Duration::from_secs(connection_timeout.unwrap_or(30)));
+        config.set_statement_timeout(Duration::from_secs(statement_timeout.unwrap_or(30)));
+
+        Self { db_url, config }
     }
 }
 
@@ -94,11 +166,18 @@ impl ServiceConfig {
     }
 }
 
-impl Default for RpcConnectionConfig {
+impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
             port: 8000,
             host: "127.0.0.1".to_string(),
+        }
+    }
+}
+
+impl Default for RpcConfig {
+    fn default() -> Self {
+        Self {
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
         }
     }

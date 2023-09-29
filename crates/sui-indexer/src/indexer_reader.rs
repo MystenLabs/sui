@@ -52,9 +52,9 @@ impl IndexerReader {
         };
 
         let pool = diesel::r2d2::Pool::builder()
-            // .max_size(config.pool_size)
-            // .connection_timeout(config.connection_timeout)
-            // .connection_customizer(Box::new(connection_config))
+            .max_size(config.pool_size)
+            .connection_timeout(config.connection_timeout)
+            .connection_customizer(Box::new(connection_config))
             .build(manager)
             .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
 
