@@ -20,7 +20,6 @@ module sui::zklogin_verified_id {
         id: UID,
         /// The address this VerifiedID is associated with
         address: address,
-
         /// The name of the key claim
         kc_name: String,
 
