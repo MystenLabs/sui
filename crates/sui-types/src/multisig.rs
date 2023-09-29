@@ -78,7 +78,7 @@ impl AuthenticatorTrait for MultiSig {
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
         Ok(())
     }
-    
+
     fn verify_uncached_checks<T>(
         &self,
         _value: &IntentMessage<T>,
@@ -90,7 +90,7 @@ impl AuthenticatorTrait for MultiSig {
     {
         Ok(())
     }
-    
+
     fn verify_claims<T>(
         &self,
         value: &IntentMessage<T>,
@@ -100,10 +100,9 @@ impl AuthenticatorTrait for MultiSig {
     where
         T: Serialize,
     {
-        self.validate()
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid multisig".to_string(),
-            })?;
+        self.validate().map_err(|_| SuiError::InvalidSignature {
+            error: "Invalid multisig".to_string(),
+        })?;
 
         if SuiAddress::from(&self.multisig_pk) != author {
             return Err(SuiError::InvalidSignature {
@@ -361,7 +360,8 @@ impl MultiSigPublicKey {
                 .map(|w| *w as ThresholdUnit)
                 .sum::<ThresholdUnit>()
                 < threshold
-            || pks.iter()
+            || pks
+                .iter()
                 .enumerate()
                 .any(|(i, pk)| pks.iter().skip(i + 1).any(|other_pk| *pk == *other_pk))
         {
@@ -399,10 +399,12 @@ impl MultiSigPublicKey {
                 .map(|(_pk, weight)| *weight as ThresholdUnit)
                 .sum::<ThresholdUnit>()
                 < self.threshold
-            || pk_map
-            .iter()
-            .enumerate()
-            .any(|(i, (pk, _weight))| pk_map.iter().skip(i + 1).any(|(other_pk, _weight, )| *pk == *other_pk))
+            || pk_map.iter().enumerate().any(|(i, (pk, _weight))| {
+                pk_map
+                    .iter()
+                    .skip(i + 1)
+                    .any(|(other_pk, _weight)| *pk == *other_pk)
+            })
         {
             return Err(FastCryptoError::InvalidInput);
         }
