@@ -13,6 +13,7 @@ use crate::extensions::timeout::Timeout;
 use crate::server::builder::ServerBuilder;
 
 use std::default::Default;
+use std::env;
 
 pub async fn start_example_server(conn: ConnectionConfig, service_config: ServiceConfig) {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -23,7 +24,14 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
     let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
-    let pg_conn_pool = PgManager::new();
+    // TODO (wlmyng): Allow users to choose which data sources to back graphql
+    let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+    let pg_conn_pool = PgManager::new(db_url, None)
+        .map_err(|e| {
+            println!("Failed to create pg connection pool: {}", e);
+            e
+        })
+        .unwrap();
 
     let builder = ServerBuilder::new(conn.port, conn.host);
     println!("Launch GraphiQL IDE at: http://{}", builder.address());
