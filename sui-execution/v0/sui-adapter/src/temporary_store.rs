@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
+use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
@@ -56,7 +56,7 @@ pub struct TemporaryStore<'backing> {
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
     /// Child objects loaded during dynamic field opers
     /// Currently onply populated for full nodes, not for validators
-    loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+    loaded_child_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     protocol_config: ProtocolConfig,
@@ -76,7 +76,7 @@ impl<'backing> TemporaryStore<'backing> {
         protocol_config: &ProtocolConfig,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
-        let lamport_timestamp = input_objects.lamport_timestamp();
+        let lamport_timestamp = input_objects.lamport_timestamp(&[]);
         let objects = input_objects.into_object_map();
         Self {
             store,
@@ -153,11 +153,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .collect(),
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
-            loaded_child_objects: self
-                .loaded_child_objects
-                .into_iter()
-                .map(|(id, metadata)| (id, metadata.version))
-                .collect(),
+            loaded_runtime_objects: self.loaded_child_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
         }
@@ -422,26 +418,26 @@ impl<'backing> TemporaryStore<'backing> {
         }
     }
 
-    pub fn save_loaded_child_objects(
+    pub fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
         #[cfg(debug_assertions)]
         {
-            for (id, v1) in &loaded_child_objects {
+            for (id, v1) in &loaded_runtime_objects {
                 if let Some(v2) = self.loaded_child_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
             for (id, v1) in &self.loaded_child_objects {
-                if let Some(v2) = loaded_child_objects.get(id) {
+                if let Some(v2) = loaded_runtime_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
         }
         // Merge the two maps because we may be calling the execution engine more than once
         // (e.g. in advance epoch transaction, where we may be publishing a new system package).
-        self.loaded_child_objects.extend(loaded_child_objects);
+        self.loaded_child_objects.extend(loaded_runtime_objects);
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -941,6 +937,25 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
                 .read_child_object(parent, child, child_version_upper_bound)
         }
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        // You should never be able to try and receive an object after deleting it or writing it in the same
+        // transaction since `Receiving` doesn't have copy.
+        debug_assert!(self.deleted.get(receiving_object_id).is_none());
+        debug_assert!(self.written.get(receiving_object_id).is_none());
+        self.store.get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<'backing> Storage for TemporaryStore<'backing> {
@@ -962,11 +977,11 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         }
     }
 
-    fn save_loaded_child_objects(
+    fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
-        TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
+        TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
     }
 }
 

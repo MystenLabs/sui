@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SuiObjectData } from '@mysten/sui.js/client';
-import { parseStructTag, formatAddress } from '@mysten/sui.js/utils';
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
+import { type SuiObjectData } from '@mysten/sui.js/client';
+import { formatAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 export default function NonVisualAssets({ items }: { items: SuiObjectData[] }) {
 	return (

@@ -4,13 +4,11 @@
 import { X32 } from '@mysten/icons';
 import cl from 'classnames';
 import { useCallback } from 'react';
+import type { ReactNode } from 'react';
 
 import useAppSelector from '../../hooks/useAppSelector';
 import { AppType } from '../../redux/slices/app/AppType';
 import { Portal } from '../../shared/Portal';
-
-import type { ReactNode } from 'react';
-
 import st from './Overlay.module.scss';
 
 type OverlayProps = {

@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Check24 } from '@mysten/icons';
-import cl from 'classnames';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
-
-import { CustomRPCInput } from './custom-rpc-input';
 import { API_ENV_TO_INFO, generateActiveNetworkList } from '_app/ApiProvider';
-import { useAppSelector, useAppDispatch } from '_hooks';
+import { useAppDispatch, useAppSelector } from '_hooks';
 import { changeActiveNetwork } from '_redux/slices/app';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
+import { Check24 } from '@mysten/icons';
+import cl from 'classnames';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
+import { CustomRPCInput } from './custom-rpc-input';
 import st from './NetworkSelector.module.scss';
 
 const NetworkSelector = () => {

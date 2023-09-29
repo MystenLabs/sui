@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import clsx from 'classnames';
+import type { ReactNode } from 'react';
 
 import { Text } from '../shared/text';
-
-import type { ReactNode } from 'react';
 
 export type SummaryCardProps = {
 	header?: string;

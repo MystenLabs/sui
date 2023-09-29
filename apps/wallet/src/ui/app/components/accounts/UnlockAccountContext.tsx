@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { createContext, useContext, useState, type ReactNode, useCallback } from 'react';
-
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import React, { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
-import { UnlockAccountModal } from './UnlockAccountModal';
+
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { useUnlockMutation } from '../../hooks/useUnlockMutation';
-import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { UnlockAccountModal } from './UnlockAccountModal';
 
 interface UnlockAccountContextType {
 	isUnlockModalOpen: boolean;

@@ -1,34 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	type SerializedSignature,
-	type ExportedKeypair,
-	toSerializedSignature,
-	type PublicKey,
-} from '@mysten/sui.js/cryptography';
-import { computeZkAddress, genAddressSeed, getZkSignature } from '@mysten/zklogin';
-import { blake2b } from '@noble/hashes/blake2b';
-import { decodeJwt } from 'jose';
-import { getCurrentEpoch } from './current-epoch';
-import { type ZkProvider } from './providers';
-import {
-	type PartialZkSignature,
-	createPartialZKSignature,
-	fetchSalt,
-	prepareZKLogin,
-	zkLogin,
-} from './utils';
-import {
-	Account,
-	type SerializedUIAccount,
-	type SigningAccount,
-	type SerializedAccount,
-} from '../Account';
 import networkEnv from '_src/background/NetworkEnv';
 import { type NetworkEnvType } from '_src/shared/api-env';
 import { deobfuscate, obfuscate } from '_src/shared/cryptography/keystore';
 import { fromExportedKeypair } from '_src/shared/utils/from-exported-keypair';
+import {
+	toSerializedSignature,
+	type ExportedKeypair,
+	type PublicKey,
+	type SerializedSignature,
+} from '@mysten/sui.js/cryptography';
+import { computeZkAddress, genAddressSeed, getZkSignature } from '@mysten/zklogin';
+import { blake2b } from '@noble/hashes/blake2b';
+import { decodeJwt } from 'jose';
+
+import {
+	Account,
+	type SerializedAccount,
+	type SerializedUIAccount,
+	type SigningAccount,
+} from '../Account';
+import { getCurrentEpoch } from './current-epoch';
+import { type ZkProvider } from './providers';
+import {
+	createPartialZKSignature,
+	fetchSalt,
+	prepareZKLogin,
+	zkLogin,
+	type PartialZkSignature,
+} from './utils';
 
 type SerializedNetwork = `${NetworkEnvType['env']}_${NetworkEnvType['customRpcUrl']}`;
 
@@ -78,6 +79,7 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	 * the name/key of the claim in claims used for the address sub or email
 	 */
 	claimName: 'sub' | 'email';
+	warningAcknowledged?: boolean;
 }
 
 export interface ZkAccountSerializedUI extends SerializedUIAccount {
@@ -85,6 +87,7 @@ export interface ZkAccountSerializedUI extends SerializedUIAccount {
 	email: string | null;
 	picture: string | null;
 	provider: ZkProvider;
+	warningAcknowledged: boolean;
 }
 
 export function isZkAccountSerializedUI(
@@ -173,7 +176,7 @@ export class ZkAccount
 	}
 
 	async toUISerialized(): Promise<ZkAccountSerializedUI> {
-		const { address, publicKey, type, claims, selected, provider, nickname } =
+		const { address, publicKey, type, claims, selected, provider, nickname, warningAcknowledged } =
 			await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
 		return {
@@ -190,6 +193,7 @@ export class ZkAccount
 			isPasswordUnlockable: false,
 			provider,
 			isKeyPairExportable: false,
+			warningAcknowledged: !!warningAcknowledged,
 		};
 	}
 

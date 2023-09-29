@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cva, type VariantProps, cx } from 'class-variance-authority';
+import { cva, cx, type VariantProps } from 'class-variance-authority';
 import clsx from 'classnames';
-import { type ComponentProps, forwardRef, type ReactNode } from 'react';
+import { forwardRef, type ComponentProps, type ReactNode } from 'react';
 
 const styles = cva(
 	[

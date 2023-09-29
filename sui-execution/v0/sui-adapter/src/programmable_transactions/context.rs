@@ -380,7 +380,7 @@ mod checked {
             // Immutable objects and shared objects cannot be taken by value
             if matches!(
                 input_metadata_opt,
-                Some(InputObjectMetadata {
+                Some(InputObjectMetadata::InputObject {
                     owner: Owner::Immutable | Owner::Shared { .. },
                     ..
                 })
@@ -424,7 +424,11 @@ mod checked {
                 // error if taken
                 return Err(CommandArgumentError::InvalidValueUsage);
             };
-            if input_metadata_opt.is_some() && !input_metadata_opt.unwrap().is_mutable_input {
+            if let Some(InputObjectMetadata::InputObject {
+                is_mutable_input: false,
+                ..
+            }) = input_metadata_opt
+            {
                 return Err(CommandArgumentError::InvalidObjectByMutRef);
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
@@ -586,20 +590,25 @@ mod checked {
                     inner: ResultValue { value, .. },
                 } = input;
                 let Some(object_metadata) = object_metadata_opt else { return Ok(()) };
-                let is_mutable_input = object_metadata.is_mutable_input;
-                let owner = object_metadata.owner;
-                let id = object_metadata.id;
-                input_object_metadata.insert(object_metadata.id, object_metadata);
+                let InputObjectMetadata::InputObject  {
+                    is_mutable_input,
+                    owner,
+                    id,
+                    ..
+                } = &object_metadata else {
+                    unreachable!("Found non-input object metadata for input object when adding writes to input objects -- impossible in v0");
+                };
+                input_object_metadata.insert(object_metadata.id(), object_metadata.clone());
                 let Some(Value::Object(object_value)) = value else {
-                by_value_inputs.insert(id);
+                by_value_inputs.insert(*id);
                 return Ok(())
             };
-                if is_mutable_input {
-                    add_additional_write(&mut additional_writes, owner, object_value)?;
+                if *is_mutable_input {
+                    add_additional_write(&mut additional_writes, *owner, object_value)?;
                 }
                 Ok(())
             };
-            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id);
+            let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             add_input_object_write(gas)?;
             for input in inputs {
                 add_input_object_write(input)?
@@ -648,6 +657,9 @@ mod checked {
                                         msg,
                                     ));
                                 }
+                            }
+                            Some(Value::Receiving(_, _, _)) => {
+                                unreachable!("Impossible to hit Receiving in v0")
                             }
                         }
                     }
@@ -785,10 +797,10 @@ mod checked {
                         let old_version = match input_object_metadata.get(&id) {
                         Some(metadata) => {
                             assert_invariant!(
-                                !matches!(metadata.owner, Owner::Immutable),
+                                !matches!(metadata, InputObjectMetadata::InputObject { owner: Owner::Immutable, .. }),
                                 "Attempting to delete immutable object {id} via delete kind {delete_kind}"
                             );
-                            metadata.version
+                            metadata.version()
                         }
                         None => {
                             match loaded_child_objects.get(&id) {
@@ -1176,7 +1188,7 @@ mod checked {
         };
         let owner = obj.owner;
         let version = obj.version();
-        let object_metadata = InputObjectMetadata {
+        let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
             owner,
@@ -1249,6 +1261,7 @@ mod checked {
                 /* imm override */ !mutable,
                 id,
             ),
+            ObjectArg::Receiving(_) => unreachable!("Impossible to hit Receiving in v0"),
         }
     }
 
@@ -1337,7 +1350,7 @@ mod checked {
         );
 
         let old_obj_ver = metadata_opt
-            .map(|metadata| metadata.version)
+            .map(|metadata| metadata.version())
             .or_else(|| loaded_child_version_opt.copied());
 
         debug_assert!(

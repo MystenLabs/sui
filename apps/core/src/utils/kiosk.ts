@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
 import { KIOSK_OWNER_CAP } from '@mysten/kiosk';
+import { SuiObjectData, SuiObjectResponse } from '@mysten/sui.js/client';
 
 export const ORIGINBYTE_KIOSK_MODULE =
 	'0x95a441d389b07437d00dd07e0b6f05f513d7659b13fd7c5d3923c7d9d847199b::ob_kiosk';

@@ -19,7 +19,9 @@ use sui_types::{
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    storage::{
+        BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, ReceivedMarkerQuery,
+    },
     transaction::VerifiedTransaction,
 };
 
@@ -274,6 +276,41 @@ impl ChildObjectResolver for InMemoryStore {
         }
 
         Ok(Some(child_object))
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        let recv_object = match self.get_object(receiving_object_id).cloned() {
+            None => return Ok(None),
+            Some(obj) => obj,
+        };
+        if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+            return Ok(None);
+        }
+
+        if recv_object.version() != receive_object_at_version {
+            return Ok(None);
+        }
+        Ok(Some(recv_object))
+    }
+}
+
+impl ReceivedMarkerQuery for InMemoryStore {
+    fn have_received_object_at_version(
+        &self,
+        _object_id: &ObjectID,
+        _version: sui_types::base_types::VersionNumber,
+        _epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        // In simulation, we always have the object don't have a marker table, and we don't need to
+        // worry about equivocation protection. So we simply return false if ever asked if we
+        // received this object.
+        Ok(false)
     }
 }
 

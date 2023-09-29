@@ -356,12 +356,12 @@ impl ProcessTransactionState {
 
     pub fn check_if_error_indicates_tx_finalized_with_different_user_sig(
         &self,
-        quorum_threshold: StakeUnit,
+        validity_threshold: StakeUnit,
     ) -> bool {
         // In some edge cases, the client may send the same transaction multiple times but with different user signatures.
         // When this happens, the "minority" tx will fail in safe_client because the certificate verification would fail
         // and return Sui::FailedToVerifyTxCertWithExecutedEffects.
-        // Here, we check if there are 2f+1 validators return this error. If so, the transaction is already finalized
+        // Here, we check if there are f+1 validators return this error. If so, the transaction is already finalized
         // with a different set of user signatures. It's not trivial to return the results of that successful transaction
         // because we don't want fullnode to store the transaction with non-canonical user signatures. Given that this is
         // very rare, we simply return an error here.
@@ -376,7 +376,7 @@ impl ProcessTransactionState {
                 }
             })
             .sum();
-        invalid_sig_stake >= quorum_threshold
+        invalid_sig_stake >= validity_threshold
     }
 }
 
@@ -1350,7 +1350,7 @@ where
         if !state.retryable {
             if state.tx_finalized_with_different_user_sig
                 || state.check_if_error_indicates_tx_finalized_with_different_user_sig(
-                    self.committee.quorum_threshold(),
+                    self.committee.validity_threshold(),
                 )
             {
                 return AggregatorProcessTransactionError::TxAlreadyFinalizedWithDifferentUserSignatures;
@@ -1531,7 +1531,7 @@ where
                 < self.committee.quorum_threshold()
             {
                 if state.check_if_error_indicates_tx_finalized_with_different_user_sig(
-                    self.committee.quorum_threshold(),
+                    self.committee.validity_threshold(),
                 ) {
                     state.retryable = false;
                     state.tx_finalized_with_different_user_sig = true;

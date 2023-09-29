@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { formatAmount, formatDate } from '@mysten/core';
-import { useSuiClient, useTotalTransactionBlocks } from '@mysten/dapp-kit';
+import { useSuiClient, useSuiClientQuery } from '@mysten/dapp-kit';
 import { Heading, Text, LoadingIndicator } from '@mysten/ui';
 import { useQuery } from '@tanstack/react-query';
 import { ParentSize } from '@visx/responsive';
@@ -64,7 +64,8 @@ function useEpochTransactions() {
 }
 
 export function TransactionsCardGraph() {
-	const { data: totalTransactions } = useTotalTransactionBlocks(
+	const { data: totalTransactions } = useSuiClientQuery(
+		'getTotalTransactionBlocks',
 		{},
 		{
 			cacheTime: 24 * 60 * 60 * 1000,

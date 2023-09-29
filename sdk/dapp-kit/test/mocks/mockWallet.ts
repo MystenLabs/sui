@@ -4,12 +4,12 @@
 import type {
 	IdentifierRecord,
 	ReadonlyWalletAccount,
-	WalletWithRequiredFeatures,
 	StandardEventsChangeProperties,
 	StandardEventsOnMethod,
+	Wallet,
+	WalletWithRequiredFeatures,
 } from '@mysten/wallet-standard';
 import { SUI_CHAINS } from '@mysten/wallet-standard';
-import type { Wallet } from '@mysten/wallet-standard';
 
 export class MockWallet implements Wallet {
 	version = '1.0.0' as const;

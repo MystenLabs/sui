@@ -80,14 +80,20 @@ module sui::authenticator_state {
         }
     }
 
-    fun jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
+    fun active_jwk_equal(a: &ActiveJwk, b: &ActiveJwk): bool {
         // note: epoch is ignored
-        (&a.jwk.kty == &b.jwk.kty) &&
-           (&a.jwk.e == &b.jwk.e) &&
-           (&a.jwk.n == &b.jwk.n) &&
-           (&a.jwk.alg == &b.jwk.alg) &&
-           (&a.jwk_id.iss == &b.jwk_id.iss) &&
-           (&a.jwk_id.kid == &b.jwk_id.kid)
+        jwk_equal(&a.jwk, &b.jwk) && jwk_id_equal(&a.jwk_id, &b.jwk_id)
+    }
+
+    fun jwk_equal(a: &JWK, b: &JWK): bool {
+        (&a.kty == &b.kty) &&
+           (&a.e == &b.e) &&
+           (&a.n == &b.n) &&
+           (&a.alg == &b.alg)
+    }
+
+    fun jwk_id_equal(a: &JwkId, b: &JwkId): bool {
+        (&a.iss == &b.iss) && (&a.kid == &b.kid)
     }
 
     // Compare the underlying byte arrays lexicographically. Since the strings may be utf8 this
@@ -213,6 +219,7 @@ module sui::authenticator_state {
         assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
 
         check_sorted(&new_active_jwks);
+        let new_active_jwks = deduplicate(new_active_jwks);
 
         let inner = load_inner_mut(self);
 
@@ -227,10 +234,17 @@ module sui::authenticator_state {
             let new_jwk = vector::borrow(&new_active_jwks, j);
 
             // when they are equal, push only one, but use the max epoch of the two
-            if (jwk_equal(old_jwk, new_jwk)) {
+            if (active_jwk_equal(old_jwk, new_jwk)) {
                 let jwk = *old_jwk;
                 jwk.epoch = math::max(old_jwk.epoch, new_jwk.epoch);
                 vector::push_back(&mut res, jwk);
+                i = i + 1;
+                j = j + 1;
+            } else if (jwk_id_equal(&old_jwk.jwk_id, &new_jwk.jwk_id)) {
+                // if only jwk_id is equal, then the key has changed. Providers should not send
+                // JWKs like this, but if they do, we must ignore the new JWK to avoid having a
+                // liveness / forking issues
+                vector::push_back(&mut res, *old_jwk);
                 i = i + 1;
                 j = j + 1;
             } else if (jwk_lt(old_jwk, new_jwk)) {
@@ -252,6 +266,27 @@ module sui::authenticator_state {
         };
 
         inner.active_jwks = res;
+    }
+
+    fun deduplicate(jwks: vector<ActiveJwk>): vector<ActiveJwk> {
+        let res = vector[];
+        let i = 0;
+        let prev: Option<JwkId> = option::none();
+        while (i < vector::length(&jwks)) {
+            let jwk = vector::borrow(&jwks, i);
+            if (option::is_none(&prev)) {
+                option::fill(&mut prev, jwk.jwk_id);
+            } else if (jwk_id_equal(option::borrow(&prev), &jwk.jwk_id)) {
+                // skip duplicate jwks in input
+                i = i + 1;
+                continue;
+            } else {
+                *option::borrow_mut(&mut prev) = jwk.jwk_id;
+            };
+            vector::push_back(&mut res, *jwk);
+            i = i + 1;
+        };
+        res
     }
 
     #[allow(unused_function)]

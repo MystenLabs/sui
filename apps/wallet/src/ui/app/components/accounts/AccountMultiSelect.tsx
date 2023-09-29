@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as ToggleGroup from '@radix-ui/react-toggle-group';
-
-import { useState } from 'react';
-import { AccountMultiSelectItem } from './AccountMultiSelectItem';
-import { Button } from '../../shared/ButtonUI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import { useState } from 'react';
+
+import { Button } from '../../shared/ButtonUI';
+import { AccountMultiSelectItem } from './AccountMultiSelectItem';
 
 type AccountMultiSelectProps = {
 	accounts: SerializedUIAccount[];

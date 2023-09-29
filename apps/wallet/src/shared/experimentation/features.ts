@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { API_ENV } from '_src/shared/api-env';
 import { GrowthBook } from '@growthbook/growthbook';
 import Browser from 'webextension-polyfill';
-
-import { API_ENV } from '_src/shared/api-env';
 
 export const growthbook = new GrowthBook({
 	// If you want to develop locally, you can set the API host to this:

@@ -15,54 +15,54 @@ use super::name_service::NameService;
 
 #[derive(Interface)]
 #[graphql(
-    field(name = "location", type = "SuiAddress"),
+    field(name = "location", ty = "SuiAddress"),
     field(
         name = "object_connection",
-        type = "Option<Connection<String, Object>>",
-        arg(name = "first", type = "Option<u64>"),
-        arg(name = "after", type = "Option<String>"),
-        arg(name = "last", type = "Option<u64>"),
-        arg(name = "before", type = "Option<String>"),
-        arg(name = "filter", type = "Option<ObjectFilter>")
+        ty = "Option<Connection<String, Object>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>"),
+        arg(name = "filter", ty = "Option<ObjectFilter>")
     ),
     field(
         name = "balance",
-        type = "Balance",
-        arg(name = "type", type = "Option<String>")
+        ty = "Balance",
+        arg(name = "type", ty = "Option<String>")
     ),
     field(
         name = "balance_connection",
-        type = "Option<Connection<String, Balance>>",
-        arg(name = "first", type = "Option<u64>"),
-        arg(name = "after", type = "Option<String>"),
-        arg(name = "last", type = "Option<u64>"),
-        arg(name = "before", type = "Option<String>")
+        ty = "Option<Connection<String, Balance>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>")
     ),
     field(
         name = "coin_connection",
-        type = "Option<Connection<String, Coin>>",
-        arg(name = "first", type = "Option<u64>"),
-        arg(name = "after", type = "Option<String>"),
-        arg(name = "last", type = "Option<u64>"),
-        arg(name = "before", type = "Option<String>"),
-        arg(name = "type", type = "Option<String>")
+        ty = "Option<Connection<String, Coin>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>"),
+        arg(name = "type", ty = "Option<String>")
     ),
     field(
         name = "stake_connection",
-        type = "Option<Connection<String, Stake>>",
-        arg(name = "first", type = "Option<u64>"),
-        arg(name = "after", type = "Option<String>"),
-        arg(name = "last", type = "Option<u64>"),
-        arg(name = "before", type = "Option<String>")
+        ty = "Option<Connection<String, Stake>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>")
     ),
-    field(name = "default_name_service_name", type = "Option<String>"),
+    field(name = "default_name_service_name", ty = "Option<String>"),
     field(
         name = "name_service_connection",
-        type = "Option<Connection<String, NameService>>",
-        arg(name = "first", type = "Option<u64>"),
-        arg(name = "after", type = "Option<String>"),
-        arg(name = "last", type = "Option<u64>"),
-        arg(name = "before", type = "Option<String>")
+        ty = "Option<Connection<String, NameService>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>")
     )
 )]
 #[derive(Clone, Eq, PartialEq, Debug)]

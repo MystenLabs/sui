@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ReactNode } from 'react';
 import { Collapsible } from '_src/ui/app/shared/collapse';
+import { type ReactNode } from 'react';
 
 type Props = {
 	title: string;

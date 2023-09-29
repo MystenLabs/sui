@@ -11,7 +11,7 @@ use move_core_types::resolver::ModuleResolver;
 use sui_types::base_types::ObjectID;
 
 use crate::errors::{Context, IndexerError};
-use crate::store::diesel_marco::read_only_blocking;
+use crate::store::diesel_macro::read_only_blocking;
 use crate::PgConnectionPool;
 
 pub struct IndexerModuleResolver {

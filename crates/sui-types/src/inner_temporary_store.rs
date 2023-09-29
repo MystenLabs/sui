@@ -3,15 +3,14 @@
 
 use crate::base_types::VersionDigest;
 use crate::effects::TransactionEvents;
+use crate::execution::DynamicallyLoadedObjectMetadata;
 use crate::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::ObjectID,
     object::{Object, Owner},
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -19,14 +18,13 @@ pub type WrittenObjects = BTreeMap<ObjectID, Object>;
 pub type ObjectMap = BTreeMap<ObjectID, Object>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
-    pub loaded_child_objects: BTreeMap<ObjectID, SequenceNumber>,
+    pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,

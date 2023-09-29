@@ -29,7 +29,6 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::digests::ChainIdentifier;
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -122,16 +121,6 @@ impl<'a> TestAuthorityBuilder<'a> {
     pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
         assert!(self.expensive_safety_checks.replace(config).is_none());
         self
-    }
-
-    pub async fn side_load_objects(
-        authority_state: Arc<AuthorityState>,
-        objects: &'a [Object],
-    ) -> SuiResult {
-        authority_state
-            .database
-            .insert_raw_object_unchecked_for_testing(objects)
-            .await
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {

@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_app/shared/ButtonUI';
+import { CardLayout } from '_app/shared/card-layout';
+import { Text } from '_app/shared/text';
+import Alert from '_components/alert';
+import Loading from '_components/loading';
+import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 import { ArrowLeft16, Check12 } from '@mysten/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -8,12 +14,6 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { VerifyPasswordModal } from '../../components/accounts/VerifyPasswordModal';
 import { useAccountSources } from '../../hooks/useAccountSources';
 import { useExportPassphraseMutation } from '../../hooks/useExportPassphraseMutation';
-import { Button } from '_app/shared/ButtonUI';
-import { CardLayout } from '_app/shared/card-layout';
-import { Text } from '_app/shared/text';
-import Alert from '_components/alert';
-import Loading from '_components/loading';
-import { HideShowDisplayBox } from '_src/ui/app/components/HideShowDisplayBox';
 
 export function BackupMnemonicPage() {
 	const [passwordCopied, setPasswordCopied] = useState(false);

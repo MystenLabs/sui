@@ -624,6 +624,13 @@ ObjectArg:
           - initial_shared_version:
               TYPENAME: SequenceNumber
           - mutable: BOOL
+    2:
+      Receiving:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
 ObjectDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest

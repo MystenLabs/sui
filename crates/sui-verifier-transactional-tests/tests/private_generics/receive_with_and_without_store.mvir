@@ -1,0 +1,25 @@
+//# publish
+module 0x0.m {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_good<T: key>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}
+
+//# publish
+module 0x0.m1 {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_good<T: key + store>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}

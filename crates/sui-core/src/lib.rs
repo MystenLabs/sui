@@ -15,7 +15,6 @@ pub mod consensus_validator;
 pub mod db_checkpoint_handler;
 pub mod epoch;
 mod execution_driver;
-mod math;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
@@ -47,6 +46,9 @@ mod move_package_upgrade_tests;
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;
+#[cfg(test)]
+#[path = "unit_tests/transfer_to_object_tests.rs"]
+mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;

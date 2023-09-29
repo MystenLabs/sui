@@ -16,6 +16,7 @@ use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
+use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tokio::sync::OwnedMutexGuard;
 
 use crate::mutex_table::MutexTable;
@@ -459,7 +460,7 @@ impl IndexStore {
         digest: &TransactionDigest,
         timestamp_ms: u64,
         tx_coins: Option<TxCoins>,
-        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) -> SuiResult<u64> {
         let sequence = self.next_sequence_number.fetch_add(1, Ordering::SeqCst);
         let mut batch = self.tables.transactions_from_addr.batch();
@@ -603,7 +604,10 @@ impl IndexStore {
         )?;
 
         // Loaded child objects table
-        let loaded_child_objects: Vec<_> = loaded_child_objects.clone().into_iter().collect();
+        let loaded_child_objects: Vec<_> = loaded_child_objects
+            .iter()
+            .map(|(oid, meta)| (*oid, meta.version))
+            .collect();
         batch.insert_batch(
             &self.tables.loaded_child_object_versions,
             std::iter::once((*digest, loaded_child_objects)),

@@ -4,16 +4,16 @@
 import type { Infer } from 'superstruct';
 import {
 	array,
-	object,
-	string,
-	union,
 	boolean,
 	define,
-	number,
-	literal,
-	record,
 	is,
+	literal,
+	number,
+	object,
+	record,
+	string,
 	tuple,
+	union,
 } from 'superstruct';
 
 export type SuiMoveFunctionArgTypesResponse = Infer<typeof SuiMoveFunctionArgType>[];

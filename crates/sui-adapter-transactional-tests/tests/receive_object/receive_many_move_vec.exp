@@ -1,0 +1,97 @@
+processed 22 tasks
+
+task 1 'publish'. lines 6-80:
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11286000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 82-82:
+created: object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'view-object'. lines 84-84:
+Owner: Account Address ( _ )
+Version: 3
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 4 'view-object'. lines 86-86:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+
+task 5 'view-object'. lines 88-88:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+
+task 6 'view-object'. lines 90-90:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}}
+
+task 7 'view-object'. lines 92-94:
+Owner: Account Address ( fake(2,0) )
+Version: 3
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,4)}}}
+
+task 8 'programmable'. lines 95-98:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 9 'programmable'. lines 99-103:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
+
+task 10 'programmable'. lines 104-108:
+mutated: object(0,0), object(2,0), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 5852000,  storage_rebate: 5793480, non_refundable_storage_fee: 58520
+
+task 11 'programmable'. lines 109-114:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 12 'programmable'. lines 115-120:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 13 'programmable'. lines 121-126:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 14 'programmable'. lines 127-132:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 15 'programmable'. lines 133-138:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 16 'programmable'. lines 139-141:
+mutated: object(0,0), object(2,0), object(2,1), object(2,2), object(2,3), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 7068000,  storage_rebate: 6997320, non_refundable_storage_fee: 70680
+
+task 17 'view-object'. lines 143-143:
+Owner: Account Address ( _ )
+Version: 12
+Contents: tto::M1::A {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+
+task 18 'view-object'. lines 145-145:
+Owner: Account Address ( _ )
+Version: 12
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+
+task 19 'view-object'. lines 147-147:
+Owner: Account Address ( _ )
+Version: 12
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,2)}}}
+
+task 20 'view-object'. lines 149-149:
+Owner: Account Address ( _ )
+Version: 12
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,3)}}}
+
+task 21 'view-object'. lines 151-151:
+Owner: Account Address ( _ )
+Version: 12
+Contents: tto::M1::B {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,4)}}}

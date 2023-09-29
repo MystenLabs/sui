@@ -80,9 +80,15 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let shared_object_refs = input_objects.filter_shared_objects();
+        let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let mut temporary_store =
-            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let mut temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            receiving_objects,
+            transaction_digest,
+            protocol_config,
+        );
 
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
@@ -174,7 +180,7 @@ mod checked {
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
-            transaction_dependencies.into_iter().collect(),
+            transaction_dependencies,
             gas_cost_summary,
             status,
             &mut gas_charger,
@@ -192,8 +198,13 @@ mod checked {
         input_objects: InputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
-        let mut temporary_store =
-            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            vec![],
+            tx_context.digest(),
+            protocol_config,
+        );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,

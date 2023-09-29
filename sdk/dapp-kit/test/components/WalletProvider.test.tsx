@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 import {
 	useAccounts,
 	useConnectWallet,
@@ -11,8 +10,10 @@ import {
 	useDisconnectWallet,
 	useWallets,
 } from 'dapp-kit/src';
+
 import { createMockAccount } from '../mocks/mockAccount.js';
 import { superCoolFeature } from '../mocks/mockFeatures.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('WalletProvider', () => {
 	test('the correct wallet and account information is returned on initial render', () => {

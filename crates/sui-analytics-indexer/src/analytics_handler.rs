@@ -8,8 +8,8 @@ use crate::{
     csv_writer::CSVWriter,
     read_manifest,
     tables::{
-        CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, ObjectEntry, ObjectStatus,
-        OwnerType, TransactionEntry, TransactionObjectEntry,
+        CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, MovePackageEntry, ObjectEntry,
+        ObjectStatus, OwnerType, TransactionEntry, TransactionObjectEntry,
     },
     write_manifest,
     writer::CheckpointWriter,
@@ -28,7 +28,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use strum::IntoEnumIterator;
 use sui_indexer::framework::interface::Handler;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
@@ -61,6 +61,7 @@ pub struct AnalyticsProcessor {
     remote_object_store: Arc<DynObjectStore>,
     kill_sender: OneshotSender<()>,
     sender: Sender<CheckpointUpdates>,
+    filename_suffix: u128,
 }
 
 // Main callback from the indexer framework.
@@ -171,11 +172,13 @@ impl AnalyticsProcessor {
             kill_receiver,
             metrics.clone(),
         ));
+        let time_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
         let table_writer = match config.file_format {
             FileFormat::CSV => Box::new(CSVWriter::new(
                 &config.checkpoint_dir,
                 epoch,
                 next_checkpoint_seq_num,
+                time_since_epoch,
             )?),
         };
         info!(
@@ -194,6 +197,7 @@ impl AnalyticsProcessor {
             remote_object_store,
             kill_sender,
             sender,
+            filename_suffix: time_since_epoch,
         })
     }
 
@@ -244,9 +248,10 @@ impl AnalyticsProcessor {
             epoch: *epoch,
             end_of_epoch: end_of_epoch_data.is_some(),
             total_gas_cost,
-            total_computation_cost: epoch_rolling_gas_cost_summary.computation_cost,
-            total_storage_cost: epoch_rolling_gas_cost_summary.storage_cost,
-            total_storage_rebate: epoch_rolling_gas_cost_summary.storage_rebate,
+            computation_cost: epoch_rolling_gas_cost_summary.computation_cost,
+            storage_cost: epoch_rolling_gas_cost_summary.storage_cost,
+            storage_rebate: epoch_rolling_gas_cost_summary.storage_rebate,
+            non_refundable_storage_fee: epoch_rolling_gas_cost_summary.non_refundable_storage_fee,
             total_transaction_blocks,
             total_transactions,
             total_successful_transaction_blocks,
@@ -370,6 +375,12 @@ impl AnalyticsProcessor {
                 )
             });
 
+        // packages
+        checkpoint_transaction
+            .output_objects
+            .iter()
+            .for_each(|object| self.process_package(epoch, checkpoint, timestamp_ms, object));
+
         // objects
         checkpoint_transaction
             .output_objects
@@ -414,7 +425,20 @@ impl AnalyticsProcessor {
                 event_type: type_.to_string(),
                 bcs: Base64::encode(contents.clone()),
             };
-            self.writer.write_events(entry);
+            self.writer.write_event(entry);
+        }
+    }
+
+    fn process_package(&mut self, epoch: u64, checkpoint: u64, timestamp_ms: u64, object: &Object) {
+        if let sui_types::object::Data::Package(p) = &object.data {
+            let package = MovePackageEntry {
+                object_id: p.id().to_string(),
+                checkpoint,
+                epoch,
+                timestamp_ms,
+                bcs: Base64::encode(bcs::to_bytes(p).unwrap()),
+            };
+            self.writer.write_package(package)
         }
     }
 
@@ -453,7 +477,7 @@ impl AnalyticsProcessor {
             storage_rebate: object.storage_rebate,
             bcs: Base64::encode(bcs::to_bytes(object).unwrap()),
         };
-        self.writer.write_objects(entry);
+        self.writer.write_object(entry);
     }
 
     // Transaction object data.
@@ -501,7 +525,7 @@ impl AnalyticsProcessor {
                 module: module.to_string(),
                 function: function.to_string(),
             };
-            self.writer.write_move_calls(entry);
+            self.writer.write_move_call(entry);
         }
     }
 
@@ -573,6 +597,7 @@ impl AnalyticsProcessor {
                 self.config.file_format,
                 self.current_epoch,
                 self.current_checkpoint_range.clone(),
+                self.filename_suffix,
                 &mut self.manifest,
             );
             self.sender.send(checkpoint_updates).await?;

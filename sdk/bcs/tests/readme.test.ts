@@ -7,6 +7,7 @@
  */
 
 import { describe, it } from 'vitest';
+
 import { SUI_ADDRESS_LENGTH } from '../../typescript/src/utils';
 import { BCS, BcsWriter, getRustConfig, getSuiMoveConfig } from './../src/index';
 

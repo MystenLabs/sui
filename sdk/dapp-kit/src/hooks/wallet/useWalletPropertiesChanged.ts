@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
+
 import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWalletStore } from './useWalletStore.js';
 

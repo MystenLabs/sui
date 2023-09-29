@@ -335,7 +335,7 @@ impl LocalExec {
 
         if let Some(url) = rpc_url.clone() {
             info!("Using RPC URL: {}", url);
-            if let Ok(x) = inner_exec(
+            match inner_exec(
                 url,
                 tx_digest,
                 expensive_safety_check_config.clone(),
@@ -345,9 +345,14 @@ impl LocalExec {
             )
             .await
             {
-                return Ok(x);
+                Ok(exec_state) => return Ok(exec_state),
+                Err(e) => {
+                    warn!(
+                        "Failed to execute transaction with provided RPC URL: Error {}",
+                        e
+                    );
+                }
             }
-            warn!("Failed to execute transaction with provided RPC URL. Attempting to load configs from file");
         }
 
         let cfg = ReplayableNetworkConfigSet::load_config(path)?;
@@ -383,6 +388,7 @@ impl LocalExec {
     /// But it should only be called once per epoch.
     pub async fn init_for_execution(mut self) -> Result<Self, ReplayEngineError> {
         self.populate_protocol_version_tables().await?;
+        tokio::task::yield_now().await;
         Ok(self)
     }
 
@@ -489,6 +495,7 @@ impl LocalExec {
                     .insert(o_ref.0, obj.clone());
             }
         }
+        tokio::task::yield_now().await;
         Ok(objs)
     }
 
@@ -1629,6 +1636,7 @@ impl LocalExec {
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
         self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
+        tokio::task::yield_now().await;
 
         Ok(InputObjects::new(input_objs))
     }
@@ -1707,6 +1715,48 @@ impl ChildObjectResolver for LocalExec {
                     result: res.clone(),
                 },
             );
+        res
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        fn inner(
+            self_: &LocalExec,
+            owner: &ObjectID,
+            receiving_object_id: &ObjectID,
+            receive_object_at_version: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            let recv_object = match self_.get_object(receiving_object_id)? {
+                None => return Ok(None),
+                Some(o) => o,
+            };
+            if recv_object.version() != receive_object_at_version {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {receiving_object_id} at version \
+                    {receive_object_at_version} but expected the version to be == {receive_object_at_version}"
+                )));
+            }
+            if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+                return Ok(None);
+            }
+            Ok(Some(recv_object))
+        }
+
+        let res = inner(self, owner, receiving_object_id, receive_object_at_version);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ReceiveObject {
+                owner: *owner,
+                receive: *receiving_object_id,
+                receive_at_version: receive_object_at_version,
+                result: res.clone(),
+            });
         res
     }
 }

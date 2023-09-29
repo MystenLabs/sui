@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import ts from 'typescript';
-import { format } from 'prettier';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import {
-	OpenRpcType,
-	type OpenRpcSpec,
-	OpenRpcTypeRef,
-	OpenRpcMethod,
-	OpenRpcParam,
-} from './open-rpc';
+import { format } from 'prettier';
+import ts from 'typescript';
+
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
-import { generateHooks } from './hooks';
+import {
+	OpenRpcMethod,
+	OpenRpcParam,
+	OpenRpcType,
+	OpenRpcTypeRef,
+	type OpenRpcSpec,
+} from './open-rpc';
 
 const packageRoot = path.resolve(import.meta.url.slice(5), '../..');
 const openRpcSpec: OpenRpcSpec = JSON.parse(
@@ -317,7 +317,6 @@ await fs.writeFile(
 	path.resolve(packageRoot, './src/client/types/generated.ts'),
 	await fileGenerator.printFile(),
 );
-await generateHooks();
 
 const methodGenerator = new FileGenerator();
 

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { SuiObjectData } from '../../src/client';
+import { beforeAll, describe, expect, it } from 'vitest';
+
 import { TransactionBlock } from '../../src/builder';
-import { publishPackage, setup, TestToolbox } from './utils/setup';
+import { SuiClient, SuiObjectData } from '../../src/client';
 import { Keypair } from '../../src/cryptography';
-import { SuiClient } from '../../src/client';
+import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test dev inspect', () => {
 	let toolbox: TestToolbox;

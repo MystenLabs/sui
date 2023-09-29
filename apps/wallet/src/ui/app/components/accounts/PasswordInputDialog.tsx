@@ -1,26 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_src/ui/app/shared/ButtonUI';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '_src/ui/app/shared/Dialog';
 import { useZodForm } from '@mysten/core';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { v4 as uuidV4 } from 'uuid';
 import { z } from 'zod';
+
 import { useAccountSources } from '../../hooks/useAccountSources';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { Link } from '../../shared/Link';
+import { PasswordInput } from '../../shared/forms/controls/PasswordInput';
 import { Form } from '../../shared/forms/Form';
 import FormField from '../../shared/forms/FormField';
-import { PasswordInput } from '../../shared/forms/controls/PasswordInput';
-import { Button } from '_src/ui/app/shared/ButtonUI';
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogFooter,
-	DialogTitle,
-	DialogDescription,
-} from '_src/ui/app/shared/Dialog';
+import { Link } from '../../shared/Link';
 
 const formSchema = z.object({
 	password: z.string().nonempty('Required'),

@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_postfix_missing_commas.move:4:36
+  │
+4 │     public struct Foo {} has store copy;
+  │                                    ^^^^
+  │                                    │
+  │                                    Unexpected 'copy'
+  │                                    Expected one of: ',' or ';'
+

@@ -10,7 +10,7 @@ relevant URL to the `url` parameter. The following example establishes a connect
 requests SUI from that network's faucet.
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // use getFullnodeUrl to define Devnet RPC location
 const rpcUrl = getFullnodeUrl('devnet');
@@ -45,7 +45,7 @@ methods are built into `SuiClient`, but you can use `call` to leverage any metho
 RPC.
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({ url: getFullnodeUrl('devnet') });
 
@@ -61,7 +61,7 @@ For a full list of available RPC methods, see the
 In addition to calling RPC methods, you can use `SuiClient` to subscribe to network events:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -86,7 +86,7 @@ await unsubscribe();
 Similar to subscribing to events, the `SuiClient` also supports subscribing to transactions:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -113,7 +113,7 @@ You can construct a custom transport instance if you need to pass any custom opt
 headers or timeout values.
 
 ```typescript
-import { SuiClient, SuiHTTPTransport, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient, SuiHTTPTransport } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	transport: new SuiHTTPTransport({

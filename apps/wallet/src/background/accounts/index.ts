@@ -1,32 +1,33 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage, type Message } from '_src/shared/messaging/messages';
+import {
+	isMethodPayload,
+	type MethodPayload,
+} from '_src/shared/messaging/messages/payloads/MethodPayload';
+import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 import { fromB64 } from '@mysten/sui.js/utils';
 import Dexie from 'dexie';
+
+import { getAccountSourceByID } from '../account-sources';
+import { accountSourcesEvents } from '../account-sources/events';
+import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
+import { type UiConnection } from '../connections/UiConnection';
+import { backupDB, getDB } from '../db';
+import { makeUniqueKey } from '../storage-utils';
 import {
 	isKeyPairExportableAccount,
 	isPasswordUnLockable,
 	isSigningAccount,
 	type SerializedAccount,
 } from './Account';
+import { accountsEvents } from './events';
 import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
-import { accountsEvents } from './events';
-import { ZkAccount } from './zk/ZkAccount';
-import { getAccountSourceByID } from '../account-sources';
-import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
-import { accountSourcesEvents } from '../account-sources/events';
-import { type UiConnection } from '../connections/UiConnection';
-import { backupDB, getDB } from '../db';
-import { makeUniqueKey } from '../storage-utils';
-import { createMessage, type Message } from '_src/shared/messaging/messages';
-import {
-	type MethodPayload,
-	isMethodPayload,
-} from '_src/shared/messaging/messages/payloads/MethodPayload';
-import { type WalletStatusChange } from '_src/shared/messaging/messages/payloads/wallet-status-change';
+import { ZkAccount, type ZkAccountSerialized } from './zk/ZkAccount';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -358,6 +359,21 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		await backupDB();
 		accountsEvents.emit('accountsChanged');
 		accountSourcesEvents.emit('accountSourcesChanged');
+		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+		return true;
+	}
+	if (isMethodPayload(payload, 'acknowledgeZkLoginWarning')) {
+		const { accountID } = payload.args;
+		const account = await getAccountByID(accountID);
+		if (!account) {
+			throw new Error(`Account with id ${accountID} not found.`);
+		}
+		if (!(account instanceof ZkAccount)) {
+			throw new Error(`Account with id ${accountID} is not a zkLogin account.`);
+		}
+		const updates: Partial<ZkAccountSerialized> = { warningAcknowledged: true };
+		await (await getDB()).accounts.update(accountID, updates);
+		accountsEvents.emit('accountStatusChanged', { accountID });
 		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
 		return true;
 	}

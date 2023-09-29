@@ -4,6 +4,7 @@
 import { hasDisplayData, isKioskOwnerToken, useGetOwnedObjects } from '@mysten/core';
 import { type SuiObjectData } from '@mysten/sui.js/client';
 import { useMemo } from 'react';
+
 import { useHiddenAssets } from '../pages/home/hidden-assets/HiddenAssetsProvider';
 
 type OwnedAssets = {

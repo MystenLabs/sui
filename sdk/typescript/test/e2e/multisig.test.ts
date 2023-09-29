@@ -1,29 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
 // import { setupSuiClient, executeTransactionBlock } from './setup';
 import { fromB64, toB58 } from '@mysten/bcs';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { bcs } from '../../src/bcs/index';
+import { TransactionBlock } from '../../src/builder';
+import { parseSerializedSignature } from '../../src/cryptography';
 // import { setup, TestToolbox } from './utils/setup';
 import { SignatureWithBytes } from '../../src/cryptography/keypair';
-import { parseSerializedSignature } from '../../src/cryptography';
 import {
-	PubkeyWeightPair,
-	toMultiSigAddress,
 	combinePartialSigs,
 	decodeMultiSig,
+	PubkeyWeightPair,
+	toMultiSigAddress,
 } from '../../src/cryptography/multisig';
 import { PublicKey } from '../../src/cryptography/publickey';
-import {
-	MultiSigPublicKey,
-	parsePartialSignatures,
-	MultiSigStruct,
-} from '../../src/multisig/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../src/keypairs/secp256r1';
-import { TransactionBlock } from '../../src/builder';
-import { builder } from '../../src/builder/bcs.js';
+import {
+	MultiSigPublicKey,
+	MultiSigStruct,
+	parsePartialSignatures,
+} from '../../src/multisig/publickey';
 
 describe('Multisig scenarios', () => {
 	it('multisig address creation and combine sigs using Secp256r1Keypair', async () => {
@@ -221,7 +222,7 @@ describe('Multisig scenarios', () => {
 		const combinedP = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const bytes = fromB64(combinedP);
-		const multiSigStruct: MultiSigStruct = builder.de('MultiSig', bytes.slice(1));
+		const multiSigStruct: MultiSigStruct = bcs.de('MultiSig', bytes.slice(1));
 
 		let decodedM = decodeMultiSig(combinedM);
 		let parsedP = parsePartialSignatures(multiSigStruct);
@@ -778,7 +779,7 @@ describe('Multisig address creation:', () => {
 					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow(new Error('Validation failed for type u8, data: 256'));
+		).toThrow(new Error('Invalid u8 value: 256. Expected value in range 0-255'));
 
 		expect(() =>
 			MultiSigPublicKey.fromPublicKeys({
@@ -789,7 +790,7 @@ describe('Multisig address creation:', () => {
 					{ publicKey: pk3, weight: 3 },
 				],
 			}),
-		).toThrow(new Error('Validation failed for type u16, data: 65536'));
+		).toThrow(new Error('Invalid u16 value: 65536. Expected value in range 0-65535'));
 	});
 
 	it('with zero weight value', async () => {
