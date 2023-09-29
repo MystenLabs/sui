@@ -74,7 +74,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
-        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        sui_protocol_config::ProtoqcolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 15).await;
     }
@@ -492,6 +492,7 @@ mod test {
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+        let duration = Interval::from_str("unbounded").unwrap();
 
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
@@ -499,8 +500,10 @@ mod test {
 
         let shared_counter_hotness_factor = 50;
         let shared_counter_max_tip = 0;
+        let gas_request_chunk_size = 100;
 
-        let workloads = WorkloadConfiguration::build_workloads(
+        let workloads_builders = WorkloadConfiguration::create_workload_builders(
+            0,
             num_workers,
             num_transfer_accounts,
             shared_counter_weight,
@@ -514,9 +517,8 @@ mod test {
             shared_counter_max_tip,
             target_qps,
             in_flight_ratio,
-            bank,
+            duration,
             system_state_observer.clone(),
-            100,
         )
         .await
         .unwrap();
