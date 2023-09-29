@@ -34,6 +34,7 @@ use std::time::Duration;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
+use tokio::task::JoinSet;
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info};
 
@@ -178,6 +179,8 @@ pub struct BenchWorker {
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
     pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
+    pub group: u32,
+    pub duration: Interval,
 }
 
 pub struct BenchDriver {
@@ -249,6 +252,8 @@ impl BenchDriver {
                     target_qps,
                     payload: payloads,
                     proxy: proxy.clone(),
+                    group: workload_info.workload_params.group,
+                    duration: workload_info.workload_params.duration,
                 });
                 payloads = remaining;
                 qps -= target_qps;
@@ -304,25 +309,85 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
         info!("Setting up {:?} workers...", num_workers);
-        let progress = Arc::new(match run_duration {
-            Interval::Count(count) => ProgressBar::new(count)
-                .with_prefix("Running benchmark(count):")
-                .with_style(
-                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}")
-                        .unwrap(),
-                ),
-            Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-            Interval::Time(duration) => ProgressBar::new(duration.as_secs())
-                .with_prefix("Running benchmark(duration):")
-                .with_style(
-                    ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap(),
-                ),
+        let total_benchmark_progress = Arc::new(create_progress_bar(run_duration));
+
+        /*
+
+         0    1         0   1    0   1   0    1
+        100s 40s ---> 100s 40s 100s 40s 100s 40s
+        100s 40s unbounded
+
+
+        1. first spin up the workers of the groups starting from the lowest to highest 0 -> ...
+        */
+
+        // group the workload by the group id and order them in a list
+        let mut groupped_bench_workers: BTreeMap<u32, Vec<BenchWorker>> = BTreeMap::new();
+        for worker in bench_workers.into_iter() {
+            groupped_bench_workers
+                .entry(worker.group)
+                .or_default()
+                .push(worker);
+        }
+
+        let cloned_token = self.token.clone();
+        let total_benchmark_progress_cloned = total_benchmark_progress.clone();
+        let _tx_cloned = tx.clone();
+        let _cloned_barrier = barrier.clone();
+        let _metrics_cloned = metrics.clone();
+
+        // Now spin up a task that will cycle through the groupped bench workers
+        let scheduler = tokio::spawn(async move {
+            let _workers = groupped_bench_workers;
+            let mut check_interval = time::interval(Duration::from_millis(500));
+            check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
+
+            //let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
+            let mut running_workers: JoinSet<()> = JoinSet::new();
+
+            loop {
+                tokio::select! {
+                        _ = cloned_token.cancelled() => {
+                            break;
+                        },
+                        // Consume the next running worker that has been finished. When all finished
+                        // be ready to spin up the next workers - if not total benchmark already finished.
+                        Some(_) = running_workers.join_next() => {
+                            if total_benchmark_progress_cloned.is_finished() {
+                                info!("Benchmark finished, now exiting the scheduler loop");
+                                break;
+                            }
+                        },
+                        // Check every now and then if the overall benchmark has been finished
+                        _ = check_interval.tick() => {
+                            if total_benchmark_progress_cloned.is_finished() {
+                                info!("Benchmark finished, now exiting the scheduler loop");
+                                break;
+                            }
+                        }
+                }
+            }
         });
+
+        tasks.push(scheduler);
+
+        /*
+        2. let the workers run until the next worker tasks have finished up (check by time and cancel them? or just wait for all tasks to finish)
+
+        3. pick then next workers from next group. Spin them up and let them run. If the interval is "unbounded" then do not attempt ever to terminate them
+
+        4. cycle through the workloads
+
+        5. listen also to termination signals
+
+        */
+
+        /*
         for (i, worker) in bench_workers.into_iter().enumerate() {
             let cloned_token = self.token.clone();
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool: VecDeque<_> = worker.payload.into_iter().collect();
-            let progress_cloned = progress.clone();
+            let progress_cloned = total_benchmark_progress.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -542,7 +607,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 }
             });
             tasks.push(runner);
-        }
+        }*/
 
         let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
@@ -616,7 +681,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
 
         if self.stress_stat_collection {
             tasks.push(stress_stats_collector(
-                progress.clone(),
+                total_benchmark_progress.clone(),
                 metrics.clone(),
                 stress_stat_tx.clone(),
             ));
@@ -667,6 +732,22 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let benchmark_stat = benchmark_stat_task.await.unwrap();
         let stress_stat = stress_stat_task.await.unwrap();
         Ok((benchmark_stat, stress_stat))
+    }
+}
+
+/// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
+/// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
+fn create_progress_bar(duration: Interval) -> ProgressBar {
+    match duration {
+        Interval::Count(count) => ProgressBar::new(count)
+            .with_prefix("Running benchmark(count):")
+            .with_style(
+                ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
+            ),
+        Interval::Time(Duration::MAX) => ProgressBar::hidden(),
+        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+            .with_prefix("Running benchmark(duration):")
+            .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
     }
 }
 
