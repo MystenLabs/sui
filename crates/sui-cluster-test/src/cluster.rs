@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
-use sui_indexer::test_utils::start_test_indexer;
+// use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::IndexerConfig;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
@@ -223,18 +223,18 @@ impl Cluster for LocalNewCluster {
         } else {
             vec![]
         };
-        if options.pg_address.is_some() && indexer_address.is_some() {
-            let config = IndexerConfig {
-                db_url: Some(options.pg_address.clone().unwrap()),
-                rpc_client_url: fullnode_url.clone(),
-                rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
-                rpc_server_port: indexer_address.as_ref().unwrap().port(),
-                migrated_methods,
-                reset_db: true,
-                ..Default::default()
-            };
-            start_test_indexer(config).await.unwrap();
-        }
+        // if options.pg_address.is_some() && indexer_address.is_some() {
+        //     let config = IndexerConfig {
+        //         db_url: Some(options.pg_address.clone().unwrap()),
+        //         rpc_client_url: fullnode_url.clone(),
+        //         rpc_server_url: indexer_address.as_ref().unwrap().ip().to_string(),
+        //         rpc_server_port: indexer_address.as_ref().unwrap().port(),
+        //         migrated_methods,
+        //         reset_db: true,
+        //         ..Default::default()
+        //     };
+        //     start_test_indexer(config).await.unwrap();
+        // }
 
         // Let nodes connect to one another
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
