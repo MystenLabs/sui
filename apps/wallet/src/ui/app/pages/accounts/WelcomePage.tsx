@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
-import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
-import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 import { Button } from '_app/shared/ButtonUI';
 import { Heading } from '_app/shared/heading';
 import { Text } from '_app/shared/text';
@@ -13,6 +8,12 @@ import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useFullscreenGuard, useInitializedGuard } from '_hooks';
 import WelcomeSplash from '_src/ui/assets/images/WelcomeSplash.svg';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
+import { ZkLoginButtons } from '../../components/accounts/ZkLoginButtons';
+import { useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
 
 export function WelcomePage() {
 	const createAccountsMutation = useCreateAccountsMutation();

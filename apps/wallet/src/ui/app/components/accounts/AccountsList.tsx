@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli } from '_src/shared/analytics/ampli';
+import { Collapsible } from '_src/ui/app/shared/collapse';
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
 import { useMemo } from 'react';
-import { AccountListItem } from './AccountListItem';
-import { FooterLink } from './FooterLink';
+
 import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
-
-import { ampli } from '_src/shared/analytics/ampli';
-import { Collapsible } from '_src/ui/app/shared/collapse';
+import { AccountListItem } from './AccountListItem';
+import { FooterLink } from './FooterLink';
 
 export function AccountsList() {
 	const accountGroups = useAccountGroups();

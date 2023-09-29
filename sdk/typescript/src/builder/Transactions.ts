@@ -4,24 +4,26 @@
 import { BCS, fromB64 } from '@mysten/bcs';
 import type { Infer, Struct } from 'superstruct';
 import {
-	is,
 	any,
 	array,
+	assert,
+	define,
 	integer,
+	is,
 	literal,
 	object,
 	optional,
+	record,
 	string,
 	union,
-	assert,
-	define,
 	unknown,
-	record,
 } from 'superstruct';
-import type { WellKnownEncoding } from './utils.js';
-import { TRANSACTION_TYPE, create } from './utils.js';
+
+import type { TypeTag } from '../bcs/index.js';
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
+import type { WellKnownEncoding } from './utils.js';
+import { create, TRANSACTION_TYPE } from './utils.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
 	union([object({ None: union([literal(true), literal(null)]) }), object({ Some: some })]);
@@ -98,7 +100,9 @@ export const MakeMoveVecTransaction = object({
 	// TODO: ideally we should use `TypeTag` instead of `record()` here,
 	// but TypeTag is recursively defined and it's tricky to define a
 	// recursive struct in superstruct
-	type: optional(option(record(string(), unknown()))),
+	type: optional(option(record(string(), unknown()))) as never as Struct<
+		{ Some: TypeTag } | { None: true | null }
+	>,
 	objects: array(ObjectTransactionArgument),
 });
 export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;

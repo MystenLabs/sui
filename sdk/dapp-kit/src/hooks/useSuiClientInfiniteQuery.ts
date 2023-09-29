@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseInfiniteQueryOptions } from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
+
 import { useSuiClientContext } from './useSuiClient.js';
-import type { SuiClient } from '@mysten/sui.js/client';
 
 interface PaginatedResult {
 	data?: unknown;
@@ -42,20 +43,15 @@ export type UseSuiClientInfiniteQueryOptions<T extends keyof SuiRpcPaginatedMeth
 >;
 
 export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods>(
-	{
-		method,
-		params,
-	}: {
-		method: T;
-		params: SuiRpcPaginatedMethods[T]['params'];
-	},
-	{ queryKey, enabled = !!params, ...options }: UseSuiClientInfiniteQueryOptions<T> = {},
+	method: T,
+	params: SuiRpcPaginatedMethods[T]['params'],
+	{ queryKey = [], enabled = !!params, ...options }: UseSuiClientInfiniteQueryOptions<T> = {},
 ) {
 	const suiContext = useSuiClientContext();
 
 	return useInfiniteQuery({
 		...options,
-		queryKey: [suiContext.network, method, params],
+		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);

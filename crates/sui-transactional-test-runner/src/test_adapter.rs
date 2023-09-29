@@ -948,6 +948,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     }
                     SuiValue::Digest(_) => bail!("digest is not supported as an input"),
                     SuiValue::ObjVec(_) => bail!("obj vec is not supported as an input"),
+                    SuiValue::Receiving(_, _) => bail!("receiving is not supported as an input"),
                 };
                 let value = NumericalAddress::new(value.into_bytes(), NumberFormat::Hex);
                 self.compiled_state

@@ -4,7 +4,7 @@
 import type { Wallet, WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;

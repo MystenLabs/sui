@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useTimeAgo, TimeUnit } from '@mysten/core';
+import { TimeUnit, useTimeAgo } from '@mysten/core';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 const timeStyle = cva([], {

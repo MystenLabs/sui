@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowRight16 } from '@mysten/icons';
-import { useEffect, useState } from 'react';
-import { useParams, useLocation, Navigate, useNavigate } from 'react-router-dom';
-
-import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
-import { useQredoUIPendingRequest } from './hooks';
-import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
-import { Button } from '../../shared/ButtonUI';
 import Overlay from '_components/overlay';
 import { type Wallet } from '_src/shared/qredo-api';
+import { ArrowRight16 } from '@mysten/icons';
+import { useEffect, useState } from 'react';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
+import { Button } from '../../shared/ButtonUI';
+import { SelectQredoAccountsSummaryCard } from './components/SelectQredoAccountsSummaryCard';
+import { useQredoUIPendingRequest } from './hooks';
 
 export function SelectQredoAccountsPage() {
 	const { id } = useParams();

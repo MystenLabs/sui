@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiSignAndExecuteTransactionBlockInput } from '@mysten/wallet-standard';
-import type { SuiSignAndExecuteTransactionBlockOutput } from '@mysten/wallet-standard';
+import type {
+	SuiSignAndExecuteTransactionBlockInput,
+	SuiSignAndExecuteTransactionBlockOutput,
+} from '@mysten/wallet-standard';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
+
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import {
 	WalletFeatureNotSupportedError,

@@ -40,6 +40,7 @@ sui-swarm-config.workspace = true
 telemetry-subscribers.workspace = true
 roaring.workspace = true
 regex.workspace = true
+fastcrypto-zkp.workspace = true
 
 move-core-types.workspace = true
 mysten-metrics.workspace = true

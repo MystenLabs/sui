@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { cx } from 'class-variance-authority';
-
 import { Text } from '_app/shared/text';
 import { NftImage } from '_components/nft-display/NftImage';
 import { useGetNFTMeta } from '_hooks';
+import { cx } from 'class-variance-authority';
 
 //TODO merge all NFT image displays
 export function TxnImage({ id, actionLabel }: { id: string; actionLabel?: string }) {

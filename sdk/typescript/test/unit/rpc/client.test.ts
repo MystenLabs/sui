@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll, afterAll, vi, afterEach } from 'vitest';
-import { JsonRpcClient } from '../../../src/rpc/client';
-import { SuiObjectData } from '../../../src/client';
-import { GetOwnedObjectsResponse } from '../../../src/types';
-
-import { setupServer } from 'msw/node';
 import { rest } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { SuiObjectData } from '../../../src/client';
+import { JsonRpcClient } from '../../../src/rpc/client';
+import { GetOwnedObjectsResponse } from '../../../src/types';
 
 const EXAMPLE_OBJECT: SuiObjectData = {
 	objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',

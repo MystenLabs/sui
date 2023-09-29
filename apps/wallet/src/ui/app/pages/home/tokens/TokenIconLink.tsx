@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFormatCoin } from '@mysten/core';
-import { WalletActionStake24 } from '@mysten/icons';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import { useMemo } from 'react';
-
 import { LargeButton } from '_app/shared/LargeButton';
 import { useGetDelegatedStake } from '_app/staking/useGetDelegatedStake';
 import { ampli } from '_src/shared/analytics/ampli';
 import { Text } from '_src/ui/app/shared/text';
+import { useFormatCoin } from '@mysten/core';
+import { WalletActionStake24 } from '@mysten/icons';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { useMemo } from 'react';
 
 export function TokenIconLink({
 	accountAddress,

@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useZodForm } from '@mysten/core';
-import { type SubmitHandler } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
-import { z } from 'zod';
-import Alert from '../alert';
 import { Button } from '_app/shared/ButtonUI';
 import { normalizeMnemonics, validateMnemonics } from '_src/shared/utils/bip39';
 import { PasswordInput } from '_src/ui/app/shared/forms/controls/PasswordInput';
 import { Text } from '_src/ui/app/shared/text';
+import { useZodForm } from '@mysten/core';
+import { type SubmitHandler } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
+
+import Alert from '../alert';
 
 const RECOVERY_PHRASE_WORD_COUNT = 12;
 

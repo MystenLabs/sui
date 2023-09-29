@@ -8,6 +8,7 @@ use fastcrypto::traits::KeyPair;
 use narwhal_config::{NetworkAdminServerParameters, PrometheusMetricsParameters};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityStorePruningConfig, DBCheckpointConfig,
@@ -30,6 +31,7 @@ pub struct ValidatorConfigBuilder {
     config_directory: Option<PathBuf>,
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     force_unpruned_checkpoints: bool,
+    jwk_fetch_interval: Option<Duration>,
 }
 
 impl ValidatorConfigBuilder {
@@ -54,6 +56,11 @@ impl ValidatorConfigBuilder {
 
     pub fn with_unpruned_checkpoints(mut self) -> Self {
         self.force_unpruned_checkpoints = true;
+        self
+    }
+
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
         self
     }
 
@@ -157,6 +164,10 @@ impl ValidatorConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: None,
             enable_experimental_rest_api: true,
+            jwk_fetch_interval_seconds: self
+                .jwk_fetch_interval
+                .map(|i| i.as_secs())
+                .unwrap_or(3600),
         }
     }
 
@@ -390,6 +401,8 @@ impl FullnodeConfigBuilder {
             transaction_kv_store_read_config: Default::default(),
             transaction_kv_store_write_config: Default::default(),
             enable_experimental_rest_api: true,
+            // note: not used by fullnodes.
+            jwk_fetch_interval_seconds: 3600,
         }
     }
 }

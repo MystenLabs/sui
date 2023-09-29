@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ArrowLeft16, ArrowRight16 } from '@mysten/icons';
-import classNames from 'classnames';
-import { Formik, Form, ErrorMessage } from 'formik';
-import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
-import { object, string as YupString } from 'yup';
-
-import Alert from './alert';
 import { useBackgroundClient } from '_src/ui/app/hooks/useBackgroundClient';
 import { Button } from '_src/ui/app/shared/ButtonUI';
 import FieldLabel from '_src/ui/app/shared/field-label';
 import { Heading } from '_src/ui/app/shared/heading';
 import { PasswordInputField } from '_src/ui/app/shared/input/password';
 import { Text } from '_src/ui/app/shared/text';
+import { ArrowLeft16, ArrowRight16 } from '@mysten/icons';
+import classNames from 'classnames';
+import { ErrorMessage, Form, Formik } from 'formik';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { object, string as YupString } from 'yup';
+
+import Alert from './alert';
 
 const validation = object({
 	password: YupString().ensure().required().label('Password'),

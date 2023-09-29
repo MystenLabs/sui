@@ -4,6 +4,7 @@
 import type { WalletAccount } from '@mysten/wallet-standard';
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
+
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletAccountNotFoundError, WalletNotConnectedError } from '../../errors/walletErrors.js';
 import { useCurrentWallet } from './useCurrentWallet.js';

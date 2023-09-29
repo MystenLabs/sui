@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type Serializable } from '_src/shared/cryptography/keystore';
+
 import { getDB } from '../db';
 import {
 	clearEphemeralValue,
 	getEphemeralValue,
 	setEphemeralValue,
 } from '../session-ephemeral-values';
-import { type Serializable } from '_src/shared/cryptography/keystore';
 
 export type AccountSourceType = 'mnemonic' | 'qredo';
 

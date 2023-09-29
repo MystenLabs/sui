@@ -1,0 +1,593 @@
+type Address implements ObjectOwner {
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+enum AddressTransactionBlockRelationship {
+	SIGN
+	SENT
+	RECV
+	PAID
+}
+
+type Balance {
+	coinObjectCount: Int!
+	totalBalance: BigInt!
+}
+
+type BalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+scalar Base64
+
+scalar BigInt
+
+
+type Checkpoint {
+	digest: String!
+	sequenceNumber: Int!
+	validatorSignature: Base64
+	previousCheckpointDigest: String
+	liveObjectSetDigest: String
+	networkTotalTransactions: Int
+	rollingGasSummary: GasCostSummary
+	epoch: Epoch
+	endOfEpoch: EndOfEpochData
+}
+
+type CheckpointConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CheckpointEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Checkpoint!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CheckpointEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Checkpoint!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Coin {
+	id: ID!
+}
+
+type CoinConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Coin!]!
+}
+
+"""
+An edge in a connection.
+"""
+type CoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Coin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type CommitteeMember {
+	authorityName: String
+	stakeUnit: Int
+}
+
+scalar DateTime
+
+type EndOfEpochData {
+	newCommittee: [CommitteeMember!]
+	nextProtocolVersion: Int
+}
+
+type Epoch {
+	epochId: Int!
+	systemStateVersion: BigInt
+	protocolConfigs: ProtocolConfigs
+	referenceGasPrice: BigInt
+	systemParameters: SystemParameters
+	stakeSubsidy: StakeSubsidy
+	validatorSet: ValidatorSet
+	storageFund: StorageFund
+	safeMode: SafeMode
+	startTimestamp: DateTime
+}
+
+enum ExecutionStatus {
+	SUCCESS
+	FAILURE
+}
+
+"""
+Groups of features served by the RPC service.  The GraphQL Service can be configured to enable
+or disable these features.
+"""
+enum Feature {
+	"""
+	Statistics about how the network was running (TPS, top packages, APY, etc)
+	"""
+	ANALYTICS
+	"""
+	Coin metadata, per-address coin and balance information.
+	"""
+	COINS
+	"""
+	Querying an object's dynamic fields.
+	"""
+	DYNAMIC_FIELDS
+	"""
+	SuiNS name and reverse name look-up.
+	"""
+	NAME_SERVICE
+	"""
+	Transaction and Event subscriptions.
+	"""
+	SUBSCRIPTIONS
+	"""
+	Information about the system that changes from epoch to epoch (protocol config, committee,
+	reference gas price).
+	"""
+	SYSTEM_STATE
+}
+
+
+type GasCostSummary {
+	computationCost: BigInt
+	storageCost: BigInt
+	storageRebate: BigInt
+	nonRefundableStorageFee: BigInt
+}
+
+type GasEffects {
+	gasObject: Object
+	gasSummary: GasCostSummary
+}
+
+type GasInput {
+	gasSponsor: Address
+	gasPayment: [Object!]
+	gasPrice: BigInt
+	gasBudget: BigInt
+}
+
+
+
+scalar NameService
+
+type NameServiceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [NameServiceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [NameService!]!
+}
+
+"""
+An edge in a connection.
+"""
+type NameServiceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: NameService!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Object implements ObjectOwner {
+	version: Int!
+	digest: String!
+	storageRebate: BigInt
+	bcs: Base64
+	previousTransactionBlock: TransactionBlock
+	kind: ObjectKind
+	owner: Owner
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type ObjectConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Object!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Object!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input ObjectFilter {
+	package: SuiAddress
+	module: String
+	ty: String
+	owner: SuiAddress
+	objectIds: [SuiAddress!]
+	objectKeys: [ObjectKey!]
+}
+
+input ObjectKey {
+	objectId: SuiAddress!
+	version: Int!
+}
+
+enum ObjectKind {
+	OWNED
+	CHILD
+	SHARED
+	IMMUTABLE
+}
+
+interface ObjectOwner {
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+type Owner implements ObjectOwner {
+	asAddress: Address
+	asObject: Object
+	location: SuiAddress!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	balance(type: String): Balance!
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
+	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
+	defaultNameServiceName: String
+	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type ProtocolConfigAttr {
+	key: String!
+	value: String!
+}
+
+type ProtocolConfigFeatureFlag {
+	key: String!
+	value: Boolean!
+}
+
+type ProtocolConfigs {
+	configs: [ProtocolConfigAttr!]
+	featureFlags: [ProtocolConfigFeatureFlag!]
+	protocolVersion: Int!
+	config(key: String!): ProtocolConfigAttr
+	featureFlag(key: String!): ProtocolConfigFeatureFlag
+}
+
+type Query {
+	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the
+	network).
+	"""
+	chainIdentifier: String!
+	"""
+	Configuration for this RPC service
+	"""
+	serviceConfig: ServiceConfig!
+	owner(address: SuiAddress!): ObjectOwner
+	object(address: SuiAddress!, version: Int): Object
+	address(address: SuiAddress!): Address
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+}
+
+type SafeMode {
+	enabled: Boolean
+	gasSummary: GasCostSummary
+}
+
+type ServiceConfig {
+	"""
+	Check whether `feature` is enabled on this GraphQL service.
+	"""
+	isEnabled(feature: Feature!): Boolean!
+	"""
+	List of all features that are enabled on this GraphQL service.
+	"""
+	enabledFeatures: [Feature!]!
+	"""
+	The maximum depth a GraphQL query can be to be accepted by this service.
+	"""
+	maxQueryDepth: Int!
+	"""
+	The maximum number of nodes (field names) the service will accept in a single query.
+	"""
+	maxQueryNodes: Int!
+}
+
+type Stake {
+	id: ID!
+}
+
+type StakeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [StakeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Stake!]!
+}
+
+"""
+An edge in a connection.
+"""
+type StakeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Stake!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type StakeSubsidy {
+	balance: BigInt
+	distributionCounter: Int
+	currentDistributionAmount: BigInt
+	periodLength: Int
+	decreaseRate: Int
+}
+
+type StorageFund {
+	totalObjectStorageRebates: BigInt
+	nonRefundableBalance: BigInt
+}
+
+
+scalar SuiAddress
+
+type SystemParameters {
+	durationMs: BigInt
+	stakeSubsidyStartEpoch: Int
+	minValidatorCount: Int
+	maxValidatorCount: Int
+	minValidatorJoiningStake: BigInt
+	validatorLowStakeThreshold: BigInt
+	validatorVeryLowStakeThreshold: BigInt
+	validatorLowStakeGracePeriod: BigInt
+}
+
+type TransactionBlock {
+	effects: TransactionBlockEffects
+	sender: Address
+	bcs: Base64
+	gasInput: GasInput
+	digest: String!
+	expiration: Epoch
+}
+
+type TransactionBlockConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionBlockEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [TransactionBlock!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionBlockEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: TransactionBlock!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type TransactionBlockEffects {
+	status: ExecutionStatus!
+	errors: String
+	digest: String!
+	gasEffects: GasEffects
+	epoch: Epoch
+}
+
+input TransactionBlockFilter {
+	package: SuiAddress
+	module: String
+	function: String
+	kind: TransactionBlockKindInput
+	checkpoint: Int
+	signAddress: SuiAddress
+	sentAddress: SuiAddress
+	recvAddress: SuiAddress
+	paidAddress: SuiAddress
+	inputObject: SuiAddress
+	changedObject: SuiAddress
+}
+
+enum TransactionBlockKindInput {
+	PROGRAMMABLE_TX
+	SYSTEM_TX
+}
+
+type Validator {
+	address: Address!
+	credentials: ValidatorCredentials
+	nextEpochCredentials: ValidatorCredentials
+	name: String
+	description: String
+	imageUrl: String
+	projectUrl: String
+	exchangeRatesSize: Int
+	stakingPoolActivationEpoch: Int
+	stakingPoolSuiBalance: BigInt
+	rewardsPool: BigInt
+	poolTokenBalance: BigInt
+	pendingStake: BigInt
+	pendingTotalSuiWithdraw: BigInt
+	pendingPoolTokenWithdraw: BigInt
+	votingPower: Int
+	gasPrice: BigInt
+	commissionRate: Int
+	nextEpochStake: BigInt
+	nextEpochGasPrice: BigInt
+	nextEpochCommissionRate: Int
+}
+
+type ValidatorCredentials {
+	protocolPubKey: Base64
+	networkPubKey: Base64
+	workerPubKey: Base64
+	proofOfPossession: Base64
+	netAddress: String
+	p2PAddress: String
+	primaryAddress: String
+	workerAddress: String
+}
+
+type ValidatorSet {
+	totalStake: BigInt
+	activeValidators: [Validator!]
+	pendingRemovals: [Int!]
+	pendingActiveValidatorsSize: Int
+	stakePoolMappingsSize: Int
+	inactivePoolsSize: Int
+	validatorCandidatesSize: Int
+}
+
+schema {
+	query: Query
+}

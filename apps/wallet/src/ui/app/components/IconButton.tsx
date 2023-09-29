@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type VariantProps, cva } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
+
 import { ButtonOrLink, type ButtonOrLinkProps } from '../shared/utils/ButtonOrLink';
 
 interface IconButtonProps extends ButtonOrLinkProps, VariantProps<typeof buttonStyles> {

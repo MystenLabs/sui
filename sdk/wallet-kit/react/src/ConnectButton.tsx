@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ComponentProps, ReactNode, useState } from 'react';
-import { ConnectModal } from './ConnectModal';
-import { Button } from './utils/ui';
-import { useWalletKit } from './WalletKitContext';
 import { Menu } from '@headlessui/react';
 import { formatAddress } from '@mysten/sui.js/utils';
 import { styled } from '@stitches/react';
+import { ComponentProps, ReactNode, useState } from 'react';
+
+import { ConnectModal } from './ConnectModal';
 import { CheckIcon, ChevronIcon } from './utils/icons';
+import { Button } from './utils/ui';
+import { useWalletKit } from './WalletKitContext';
 
 interface ConnectButtonProps extends ComponentProps<typeof Button> {
 	connectText?: ReactNode;

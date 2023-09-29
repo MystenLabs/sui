@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { base64url } from 'jose';
-import { toBigIntBE } from 'bigint-buffer';
-import { randomBytes } from '@noble/hashes/utils';
 import { PublicKey } from '@mysten/sui.js/cryptography';
+import { randomBytes } from '@noble/hashes/utils';
+import { toBigIntBE } from 'bigint-buffer';
+import { base64url } from 'jose';
+
 import { poseidonHash } from './poseidon.js';
 import { toBufferBE } from './utils.js';
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// <reference types="vitest" />
+import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import pluginRewriteAll from 'vite-plugin-rewrite-all';
@@ -12,7 +13,7 @@ process.env.VITE_VERCEL_ENV = process.env.VERCEL_ENV || 'development';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-	plugins: [react(), svgr(), pluginRewriteAll()],
+	plugins: [react(), svgr(), pluginRewriteAll(), vanillaExtractPlugin()],
 	test: {
 		// Omit end-to-end tests:
 		exclude: [...configDefaults.exclude, 'tests/**'],

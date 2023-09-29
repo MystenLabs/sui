@@ -98,6 +98,7 @@ impl EpochState {
             store,
             &self.protocol_config,
             self.epoch_start_state.reference_gas_price(),
+            self.epoch(),
             transaction.data().transaction_data(),
             deny_config,
             &self.bytecode_verifier_metrics,

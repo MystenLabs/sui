@@ -35,7 +35,7 @@ use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
 use crate::models_v2::tx_indices::StoredTxIndex;
 use crate::schema_v2::{checkpoints, epochs, events, objects, packages, transactions, tx_indices};
-use crate::store::diesel_marco::{read_only_blocking, transactional_blocking_with_retry};
+use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,

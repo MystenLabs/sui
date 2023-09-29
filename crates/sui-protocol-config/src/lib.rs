@@ -75,6 +75,7 @@ const MAX_PROTOCOL_VERSION: u64 = 26;
 //             JWK / authenticator state flags.
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
+//             Add support for receiving objects off of other objects in devnet only.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -286,6 +287,10 @@ struct FeatureFlags {
     // If true, use the new child object format type logging
     #[serde(skip_serializing_if = "is_false")]
     loaded_child_object_format_type: bool,
+
+    // Enable receiving sent objects
+    #[serde(skip_serializing_if = "is_false")]
+    receive_objects: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -655,6 +660,9 @@ pub struct ProtocolConfig {
     transfer_freeze_object_cost_base: Option<u64>,
     // Cost params for the Move native function `share_object<T: key>(obj: T)`
     transfer_share_object_cost_base: Option<u64>,
+    // Cost params for the Move native function
+    // `receive_object<T: key>(p: &mut UID, recv: Receiving<T>T)`
+    transfer_receive_object_cost_base: Option<u64>,
 
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -797,6 +805,10 @@ impl ProtocolConfig {
                 self.version
             )))
         }
+    }
+
+    pub fn receiving_objects_supported(&self) -> bool {
+        self.feature_flags.receive_objects
     }
 
     pub fn package_upgrades_supported(&self) -> bool {
@@ -1171,6 +1183,7 @@ impl ProtocolConfig {
             transfer_freeze_object_cost_base: Some(52),
             // Cost params for the Move native function `share_object<T: key>(obj: T)`
             transfer_share_object_cost_base: Some(52),
+            transfer_receive_object_cost_base: None,
 
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
@@ -1472,6 +1485,11 @@ impl ProtocolConfig {
                 }
                 26 => {
                     cfg.gas_model_version = Some(7);
+                    // Only enable receiving objects in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.transfer_receive_object_cost_base = Some(52);
+                        cfg.feature_flags.receive_objects = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -1539,6 +1557,9 @@ impl ProtocolConfig {
     }
     pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
         self.feature_flags.zklogin_supported_providers = list
+    }
+    pub fn set_receive_object_for_testing(&mut self, val: bool) {
+        self.feature_flags.receive_objects = val
     }
 }
 

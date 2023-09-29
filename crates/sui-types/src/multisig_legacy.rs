@@ -90,6 +90,18 @@ impl AuthenticatorTrait for MultiSigLegacy {
         Ok(())
     }
 
+    fn verify_uncached_checks<T>(
+        &self,
+        _value: &IntentMessage<T>,
+        _author: SuiAddress,
+        _aux_verify_data: &VerifyParams,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        Ok(())
+    }
+
     fn verify_claims<T>(
         &self,
         value: &IntentMessage<T>,

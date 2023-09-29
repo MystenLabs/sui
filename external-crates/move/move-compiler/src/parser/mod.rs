@@ -75,7 +75,8 @@ pub(crate) fn parse_program(
         named_address_map,
     } in targets
     {
-        let (defs, comments, ds, file_hash) = parse_file(compilation_env, &mut files, path)?;
+        let (defs, comments, ds, file_hash) =
+            parse_file(compilation_env, &mut files, path, package)?;
         source_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
@@ -91,7 +92,7 @@ pub(crate) fn parse_program(
         named_address_map,
     } in deps
     {
-        let (defs, _, ds, _) = parse_file(compilation_env, &mut files, path)?;
+        let (defs, _, ds, _) = parse_file(compilation_env, &mut files, path, package)?;
         lib_definitions.extend(defs.into_iter().map(|def| PackageDefinition {
             package,
             named_address_map,
@@ -164,6 +165,7 @@ fn parse_file(
     compilation_env: &mut CompilationEnv,
     files: &mut FilesSourceText,
     fname: Symbol,
+    package: Option<Symbol>,
 ) -> anyhow::Result<(
     Vec<parser::ast::Definition>,
     MatchedFileCommentMap,
@@ -184,7 +186,7 @@ fn parse_file(
         }
         Ok(()) => &source_buffer,
     };
-    let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer) {
+    let (defs, comments) = match parse_file_string(compilation_env, file_hash, buffer, package) {
         Ok(defs_and_comments) => defs_and_comments,
         Err(ds) => {
             diags.extend(ds);

@@ -3,16 +3,15 @@
 
 import { v4 as uuid } from 'uuid';
 
-import { isSameQredoConnection } from './utils';
 import {
-	setToSessionStorage,
+	getFromLocalStorage,
 	getFromSessionStorage,
 	isSessionStorageSupported,
-	getFromLocalStorage,
 	setToLocalStorage,
+	setToSessionStorage,
 } from '../storage-utils';
-
-import type { QredoConnectPendingRequest, QredoConnectIdentity, QredoConnection } from './types';
+import type { QredoConnectIdentity, QredoConnection, QredoConnectPendingRequest } from './types';
+import { isSameQredoConnection } from './utils';
 
 const SESSION_STORAGE_KEY = 'qredo-connect-requests';
 const STORAGE_ACCEPTED_CONNECTIONS_KEY = 'qredo-connections';

@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { API_ENV_TO_INFO } from '_app/ApiProvider';
+import { Button, type ButtonProps } from '_app/shared/ButtonUI';
+import { useAppSelector } from '_hooks';
+import { API_ENV } from '_src/shared/api-env';
 import { FaucetRateLimitError, getFaucetHost } from '@mysten/sui.js/faucet';
 import { toast } from 'react-hot-toast';
 
 import FaucetMessageInfo from './FaucetMessageInfo';
 import { useFaucetMutation } from './useFaucetMutation';
 import { useFaucetRateLimiter } from './useFaucetRateLimiter';
-import { API_ENV_TO_INFO } from '_app/ApiProvider';
-import { Button, type ButtonProps } from '_app/shared/ButtonUI';
-import { useAppSelector } from '_hooks';
-import { API_ENV } from '_src/shared/api-env';
 
 export type FaucetRequestButtonProps = {
 	variant?: ButtonProps['variant'];

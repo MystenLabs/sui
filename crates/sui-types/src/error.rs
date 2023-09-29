@@ -245,6 +245,9 @@ pub enum UserInputError {
         max_publish_commands: u64,
         publish_count: u64,
     },
+
+    #[error("Immutable parameter provided, mutable parameter expected.")]
+    MutableParameterExpected { object_id: ObjectID },
 }
 
 #[derive(

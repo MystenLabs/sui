@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { PublicKey } from './publickey.js';
-import type { SerializedSignature } from './signature.js';
-import { toSerializedSignature } from './signature.js';
-import type { SignatureScheme } from './signature.js';
-import { IntentScope, messageWithIntent } from './intent.js';
-import { blake2b } from '@noble/hashes/blake2b';
-import { bcs } from '../bcs/index.js';
 import { toB64 } from '@mysten/bcs';
+import { blake2b } from '@noble/hashes/blake2b';
+
+import { bcs } from '../bcs/index.js';
+import { IntentScope, messageWithIntent } from './intent.js';
+import type { PublicKey } from './publickey.js';
+import type { SerializedSignature, SignatureScheme } from './signature.js';
+import { toSerializedSignature } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;
 export const LEGACY_PRIVATE_KEY_SIZE = 64;
@@ -58,7 +58,7 @@ export abstract class BaseSigner {
 	 */
 	async signPersonalMessage(bytes: Uint8Array) {
 		return this.signWithIntent(
-			bcs.ser(['vector', 'u8'], bytes).toBytes(),
+			bcs.vector(bcs.u8()).serialize(bytes).toBytes(),
 			IntentScope.PersonalMessage,
 		);
 	}

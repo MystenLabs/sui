@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';
-import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import { createWalletStore } from '../walletStore.js';
 import type { StateStorage } from 'zustand/middleware';
-import { getRegisteredWallets } from '../utils/walletUtils.js';
+
+import { WalletContext } from '../contexts/walletContext.js';
 import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
-import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
-import { WalletContext } from '../contexts/walletContext.js';
 import { useWalletPropertiesChanged } from '../hooks/wallet/useWalletPropertiesChanged.js';
+import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
+import { getRegisteredWallets } from '../utils/walletUtils.js';
+import { createWalletStore } from '../walletStore.js';
 
 type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */

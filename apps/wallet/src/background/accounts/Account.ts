@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type Serializable } from '_src/shared/cryptography/keystore';
 import {
-	type SerializedSignature,
 	toSerializedSignature,
-	type Keypair,
 	type ExportedKeypair,
+	type Keypair,
+	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
-import { accountsEvents } from './events';
+
 import { setupAutoLockAlarm } from '../auto-lock-accounts';
 import { getDB } from '../db';
 import {
@@ -16,7 +17,7 @@ import {
 	getEphemeralValue,
 	setEphemeralValue,
 } from '../session-ephemeral-values';
-import { type Serializable } from '_src/shared/cryptography/keystore';
+import { accountsEvents } from './events';
 
 export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo' | 'zk';
 

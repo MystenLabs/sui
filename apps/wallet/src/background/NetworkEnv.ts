@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mitt from 'mitt';
-import Browser from 'webextension-polyfill';
-
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
 import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { isValidUrl } from '_src/shared/utils';
+import mitt from 'mitt';
+import Browser from 'webextension-polyfill';
 
 class NetworkEnv {
 	#events = mitt<{ changed: NetworkEnvType }>();

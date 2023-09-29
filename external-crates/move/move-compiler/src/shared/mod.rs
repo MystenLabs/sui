@@ -523,9 +523,19 @@ impl CompilationEnv {
         self.visitors.clone()
     }
 
-    // Logs an error if the feature isn't supported.
-    pub fn check_feature(&mut self, feature: &FeatureGate, package: Option<Symbol>, loc: Loc) {
+    // Logs an error if the feature isn't supported. Returns `false` if the feature is not
+    // supported, and `true` otherwise.
+    pub fn check_feature(
+        &mut self,
+        feature: &FeatureGate,
+        package: Option<Symbol>,
+        loc: Loc,
+    ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
+    }
+
+    pub fn supports_feature(&self, package: Option<Symbol>, feature: &FeatureGate) -> bool {
+        self.package_config(package).edition.supports(feature)
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {

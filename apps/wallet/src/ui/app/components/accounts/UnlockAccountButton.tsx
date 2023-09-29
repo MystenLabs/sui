@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useUnlockAccount } from './UnlockAccountContext';
+import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 
 import { Button } from '../../shared/ButtonUI';
 import { SocialButton } from '../../shared/SocialButton';
-import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { useUnlockAccount } from './UnlockAccountContext';
 
 export type UnlockAccountButtonProps = {
 	account: SerializedUIAccount;

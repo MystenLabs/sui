@@ -1,21 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_app/shared/ButtonUI';
+import { ToS_LINK } from '_src/shared/constants';
 import { useZodForm } from '@mysten/core';
 import { useEffect } from 'react';
 import { type SubmitHandler } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import zxcvbn from 'zxcvbn';
-import { AutoLockSelector, zodSchema } from './AutoLockSelector';
+
 import { parseAutoLock, useAutoLockMinutes } from '../../hooks/useAutoLockMinutes';
-import { Link } from '../../shared/Link';
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
 import { TextField } from '../../shared/forms/TextField';
 import { addDot } from '../../shared/input/password/validation';
-import { Button } from '_app/shared/ButtonUI';
-import { ToS_LINK } from '_src/shared/constants';
+import { Link } from '../../shared/Link';
+import { AutoLockSelector, zodSchema } from './AutoLockSelector';
 
 const formSchema = z
 	.object({
@@ -111,13 +112,17 @@ export function ProtectAccountForm({
 					<CheckboxField
 						name="acceptedTos"
 						label={
-							<Link
-								href={ToS_LINK}
-								beforeColor="steelDarker"
-								color="suiDark"
-								text="Terms of Services"
-								before="I read and agreed to the"
-							/>
+							<div className="text-bodySmall whitespace-nowrap">
+								I read and agreed to the{' '}
+								<span className="inline-block">
+									<Link
+										href={ToS_LINK}
+										beforeColor="steelDarker"
+										color="suiDark"
+										text="Terms of Services"
+									/>
+								</span>
+							</div>
 						}
 					/>
 				)}

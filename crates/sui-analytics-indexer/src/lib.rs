@@ -42,6 +42,7 @@ const TRANSACTION_DIR_PREFIX: &str = "transactions";
 const EVENT_DIR_PREFIX: &str = "events";
 const TRANSACTION_OBJECT_DIR_PREFIX: &str = "transaction_objects";
 const MOVE_CALL_PREFIX: &str = "move_call";
+const MOVE_PACKAGE_PREFIX: &str = "move_package";
 
 #[derive(Parser, Clone, Debug)]
 #[clap(
@@ -130,6 +131,7 @@ pub enum FileType {
     TransactionObjects,
     Event,
     MoveCall,
+    MovePackage,
 }
 
 impl FileType {
@@ -141,6 +143,7 @@ impl FileType {
             FileType::Object => Path::from(OBJECT_DIR_PREFIX),
             FileType::Event => Path::from(EVENT_DIR_PREFIX),
             FileType::MoveCall => Path::from(MOVE_CALL_PREFIX),
+            FileType::MovePackage => Path::from(MOVE_PACKAGE_PREFIX),
         }
     }
 
@@ -149,12 +152,14 @@ impl FileType {
         file_format: FileFormat,
         epoch_num: EpochId,
         checkpoint_sequence_num: u64,
+        filename_suffix: u128,
     ) -> Path {
         self.dir_prefix()
             .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
             .child(format!(
-                "{}.{}",
+                "{}_{}.{}",
                 checkpoint_sequence_num,
+                filename_suffix,
                 file_format.file_suffix()
             ))
     }
@@ -166,6 +171,7 @@ pub struct FileMetadata {
     pub file_format: FileFormat,
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
+    pub filename_suffix: u128,
 }
 
 impl FileMetadata {
@@ -174,12 +180,14 @@ impl FileMetadata {
         file_format: FileFormat,
         epoch_num: u64,
         checkpoint_seq_range: Range<u64>,
+        filename_suffix: u128,
     ) -> FileMetadata {
         FileMetadata {
             file_type,
             file_format,
             epoch_num,
             checkpoint_seq_range,
+            filename_suffix,
         }
     }
 
@@ -188,6 +196,7 @@ impl FileMetadata {
             self.file_format,
             self.epoch_num,
             self.checkpoint_seq_range.start,
+            self.filename_suffix,
         )
     }
 }
@@ -216,10 +225,19 @@ impl CheckpointUpdates {
         file_format: FileFormat,
         epoch_num: u64,
         checkpoint_range: Range<u64>,
+        filename_suffix: u128,
         manifest: &mut Manifest,
     ) -> Self {
         let files: Vec<_> = FileType::iter()
-            .map(|f| FileMetadata::new(f, file_format, epoch_num, checkpoint_range.clone()))
+            .map(|f| {
+                FileMetadata::new(
+                    f,
+                    file_format,
+                    epoch_num,
+                    checkpoint_range.clone(),
+                    filename_suffix,
+                )
+            })
             .collect();
         CheckpointUpdates::new(epoch_num, checkpoint_range.end, files, manifest)
     }

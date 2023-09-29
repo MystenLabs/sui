@@ -232,13 +232,14 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             ));
         }
 
-        // TODO: spawn a separate task for this as an optimization
         update_low_scoring_authorities(
             self.low_scoring_authorities.clone(),
             &self.committee,
             consensus_output.sub_dag.reputation_score.clone(),
             &self.metrics,
-            self.epoch_store.protocol_config(),
+            self.epoch_store
+                .protocol_config()
+                .consensus_bad_nodes_stake_threshold(),
         );
 
         self.metrics

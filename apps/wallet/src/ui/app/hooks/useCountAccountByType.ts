@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
-import { useAccounts } from './useAccounts';
 import { type AccountType } from '_src/background/accounts/Account';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
 import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { useMemo } from 'react';
+
+import { useAccounts } from './useAccounts';
 
 export function useCountAccountsByType() {
 	const { data: accounts, isLoading } = useAccounts();

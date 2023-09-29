@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type MouseEventHandler, useCallback } from 'react';
+import { useCallback, type MouseEventHandler } from 'react';
 import { toast } from 'react-hot-toast';
 
 export type CopyOptions = {

@@ -44,6 +44,7 @@ pub struct IndexedCheckpoint {
     pub validator_signature: AggregateAuthoritySignature,
     pub successful_tx_num: usize,
     pub end_of_epoch_data: Option<EndOfEpochData>,
+    pub end_of_epoch: bool,
 }
 
 impl IndexedCheckpoint {
@@ -64,6 +65,7 @@ impl IndexedCheckpoint {
             tx_digests,
             previous_checkpoint_digest: checkpoint.previous_digest,
             end_of_epoch_data: checkpoint.end_of_epoch_data.clone(),
+            end_of_epoch: checkpoint.end_of_epoch_data.clone().is_some(),
             total_gas_cost,
             computation_cost: checkpoint.epoch_rolling_gas_cost_summary.computation_cost,
             storage_cost: checkpoint.epoch_rolling_gas_cost_summary.storage_cost,
@@ -300,6 +302,7 @@ pub struct TxIndex {
     pub checkpoint_sequence_number: u64,
     pub input_objects: Vec<ObjectID>,
     pub changed_objects: Vec<ObjectID>,
+    pub payers: Vec<SuiAddress>,
     pub senders: Vec<SuiAddress>,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,

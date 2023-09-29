@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { getKioskIdFromOwnerCap, hasDisplayData, useGetKioskContents } from '@mysten/core';
-
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { getObjectDisplay } from '@mysten/sui.js/types';
 import cl from 'classnames';
 
-import { NftImage, type NftImageProps } from './NftImage';
 import { useActiveAddress } from '../../hooks';
 import { Text } from '../../shared/text';
+import { NftImage, type NftImageProps } from './NftImage';
 
 type KioskProps = {
 	object: SuiObjectResponse;

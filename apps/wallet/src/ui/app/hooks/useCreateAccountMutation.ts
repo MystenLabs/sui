@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli, type AddedAccountsProperties } from '_src/shared/analytics/ampli';
 import { useMutation } from '@tanstack/react-query';
-import { useBackgroundClient } from './useBackgroundClient';
+
 import {
-	type AccountsFormValues,
 	useAccountsFormContext,
+	type AccountsFormValues,
 } from '../components/accounts/AccountsFormContext';
-import { type AddedAccountsProperties, ampli } from '_src/shared/analytics/ampli';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export type CreateType = NonNullable<AccountsFormValues>['type'];
 

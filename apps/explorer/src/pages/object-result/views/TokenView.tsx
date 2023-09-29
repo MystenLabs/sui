@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetDynamicFields, useGetObject } from '@mysten/core';
-import { useNormalizedMoveStruct } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type SuiObjectResponse } from '@mysten/sui.js/client';
 import { Heading } from '@mysten/ui';
 import { type ReactNode, useState } from 'react';
@@ -41,7 +41,8 @@ function useObjectFieldsCard(id: string) {
 		data: normalizedStructData,
 		isLoading: loadingNormalizedStruct,
 		isError: errorNormalizedMoveStruct,
-	} = useNormalizedMoveStruct(
+	} = useSuiClientQuery(
+		'getNormalizedMoveStruct',
 		{
 			package: packageId,
 			module: moduleName,

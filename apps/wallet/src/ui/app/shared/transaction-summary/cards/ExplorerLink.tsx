@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
+import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 import { ArrowUpRight12 } from '@mysten/icons';
 import { useEffect, useState } from 'react';
 
 import { Text } from '../../text';
 import { Card } from '../Card';
-import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
-import { useExplorerLink } from '_src/ui/app/hooks/useExplorerLink';
 
 const TIME_TO_WAIT_FOR_EXPLORER = 60 * 1000;
 
