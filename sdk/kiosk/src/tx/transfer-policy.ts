@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	TransactionArgument,
+	TransactionBlock,
+	TransactionObjectArgument,
+} from '@mysten/sui.js/transactions';
 
 import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
 import { objArg } from '../utils';
@@ -15,7 +19,7 @@ export function createTransferPolicy(
 	tx: TransactionBlock,
 	itemType: string,
 	publisher: ObjectArgument,
-): TransactionArgument {
+): TransactionObjectArgument {
 	const [transferPolicy, transferPolicyCap] = createTransferPolicyWithoutSharing(
 		tx,
 		itemType,
@@ -35,7 +39,7 @@ export function createTransferPolicyWithoutSharing(
 	tx: TransactionBlock,
 	itemType: string,
 	publisher: ObjectArgument,
-): [TransactionArgument, TransactionArgument] {
+): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [transferPolicy, transferPolicyCap] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::new`,
 		typeArguments: [itemType],
@@ -50,7 +54,7 @@ export function createTransferPolicyWithoutSharing(
 export function shareTransferPolicy(
 	tx: TransactionBlock,
 	itemType: string,
-	transferPolicy: TransactionArgument,
+	transferPolicy: TransactionObjectArgument,
 ) {
 	tx.moveCall({
 		target: `0x2::transfer::public_share_object`,
@@ -68,7 +72,7 @@ export function withdrawFromPolicy(
 	policy: ObjectArgument,
 	policyCap: ObjectArgument,
 	amount?: string | bigint | null,
-): TransactionArgument {
+): TransactionObjectArgument {
 	const amountArg = bcs.option(bcs.u64()).serialize(amount);
 
 	const [profits] = tx.moveCall({

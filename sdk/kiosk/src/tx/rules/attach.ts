@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
 import { type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { type ObjectArgument } from '../../types';

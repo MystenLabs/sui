@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import {
 	attachFloorPriceRuleTx,
@@ -109,9 +109,9 @@ export class TransferPolicyTransaction {
 		if (!this.type || !this.policyCap || !this.policy)
 			throw new Error('This function can only be called after `transferPolicyManager.create`');
 
-		shareTransferPolicy(this.transactionBlock, this.type, this.policy as TransactionArgument);
+		shareTransferPolicy(this.transactionBlock, this.type, this.policy as TransactionObjectArgument);
 		this.transactionBlock.transferObjects(
-			[this.policyCap as TransactionArgument],
+			[this.policyCap as TransactionObjectArgument],
 			this.transactionBlock.pure.address(address),
 		);
 	}

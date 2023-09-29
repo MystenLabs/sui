@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	TransactionArgument,
+	TransactionBlock,
+	TransactionObjectArgument,
+} from '@mysten/sui.js/transactions';
 
 import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
 import { objArg } from '../utils';
@@ -10,7 +14,9 @@ import { objArg } from '../utils';
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
-export function createKiosk(tx: TransactionBlock): [TransactionArgument, TransactionArgument] {
+export function createKiosk(
+	tx: TransactionBlock,
+): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [kiosk, kioskOwnerCap] = tx.moveCall({
 		target: `${KIOSK_MODULE}::new`,
 	});
@@ -22,7 +28,7 @@ export function createKiosk(tx: TransactionBlock): [TransactionArgument, Transac
  * Calls the `kiosk::new()` function and shares the kiosk.
  * Returns the `kioskOwnerCap` object.
  */
-export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
+export function createKioskAndShare(tx: TransactionBlock): TransactionObjectArgument {
 	const [kiosk, kioskOwnerCap] = createKiosk(tx);
 	shareKiosk(tx, kiosk);
 	return kioskOwnerCap;
@@ -90,7 +96,7 @@ export function take(
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
 	itemId: string,
-): TransactionArgument {
+): TransactionObjectArgument {
 	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
@@ -171,7 +177,7 @@ export function purchase(
 	kiosk: ObjectArgument,
 	itemId: string,
 	payment: ObjectArgument,
-): [TransactionArgument, TransactionArgument] {
+): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
@@ -190,7 +196,7 @@ export function withdrawFromKiosk(
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
-): TransactionArgument {
+): TransactionObjectArgument {
 	const amountArg = bcs.option(bcs.u64()).serialize(amount);
 
 	const [coin] = tx.moveCall({
