@@ -5,7 +5,7 @@ CREATE TABLE events
     transaction_digest          BLOB        NOT NULL,
     checkpoint_sequence_number  bigint       NOT NULL,
     -- array of SuiAddress in bytes. All signers of the transaction.
-    senders                     JSON      NOT NULL,
+    senders                     BLOB      NOT NULL,
     -- TODO: verify the real limit of package, module and event_type
     -- bytes of the entry package ID
     package                     VARCHAR(255)        NOT NULL,

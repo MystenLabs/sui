@@ -32,11 +32,11 @@ pub struct StoredTransaction {
     pub checkpoint_sequence_number: i64,
     pub timestamp_ms: i64,
     // pub object_changes: Vec<Option<Vec<u8>>>,
-    pub object_changes: serde_json::Value,
+    pub object_changes: Vec<u8>,
     // pub balance_changes: Vec<Option<Vec<u8>>>,
-    pub balance_changes: serde_json::Value,
+    pub balance_changes: Vec<u8>,
     // pub events: Vec<Option<Vec<u8>>>,
-    pub events: serde_json::Value,
+    pub events: Vec<u8>,
     pub transaction_kind: i16,
 }
 
@@ -47,16 +47,21 @@ impl From<&IndexedTransaction> for StoredTransaction {
             .iter()
             .map(|oc| Some(bcs::to_bytes(&oc).unwrap()))
             .collect();
+        let flattened_object_changes: Vec<u8> = object_changes.into_iter().filter_map(|opt| opt).flatten().collect();
+
         let balance_changes: Vec<Option<Vec<u8>>> = tx
             .balance_change
             .iter()
             .map(|bc| Some(bcs::to_bytes(&bc).unwrap()))
             .collect();
+        let flattened_balance_changes: Vec<u8> = balance_changes.into_iter().filter_map(|opt| opt).flatten().collect();
+
         let events: Vec<Option<Vec<u8>>> = tx
             .events
             .iter()
             .map(|e| Some(bcs::to_bytes(&e).unwrap()))
             .collect();
+        let flattened_events: Vec<u8> = events.into_iter().filter_map(|opt| opt).flatten().collect();
 
         StoredTransaction {
             tx_sequence_number: tx.tx_sequence_number as i64,
@@ -64,9 +69,9 @@ impl From<&IndexedTransaction> for StoredTransaction {
             raw_transaction: bcs::to_bytes(&tx.sender_signed_data).unwrap(),
             raw_effects: bcs::to_bytes(&tx.effects).unwrap(),
             checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
-            object_changes: serde_json::json!(object_changes),
-            balance_changes: serde_json::json!(balance_changes),
-            events: serde_json::json!(events),
+            object_changes: flattened_object_changes,
+            balance_changes: flattened_balance_changes,
+            events: flattened_events,
             transaction_kind: tx.transaction_kind.clone() as i16,
             timestamp_ms: tx.timestamp_ms as i64,
         }
@@ -100,13 +105,14 @@ impl StoredTransaction {
         })?;
         let effects = SuiTransactionBlockEffects::try_from(effects)?;
 
-        let parsed_events: Vec<Option<Vec<u8>>> = serde_json::from_value(self.events.clone())
-            .map_err(|e| {
-                IndexerError::SerdeError(format!(
-                    "Failed to parse transaction events: {:?}, error: {}",
-                    self.events, e
-                ))
-            })?;
+        // let parsed_events: Vec<Option<Vec<u8>>> = serde_json::from_value(self.events.clone())
+        //     .map_err(|e| {
+        //         IndexerError::SerdeError(format!(
+        //             "Failed to parse transaction events: {:?}, error: {}",
+        //             self.events, e
+        //         ))
+        //     })?;
+        let parsed_events: Vec<Option<Vec<u8>>> = vec![];
         let events = parsed_events
             .into_iter()
             .map(|event| match event {
@@ -130,13 +136,14 @@ impl StoredTransaction {
         let tx_events =
             SuiTransactionBlockEvents::try_from(tx_events, tx_digest, Some(timestamp), module)?;
 
-        let parsed_object_changes: Vec<Option<Vec<u8>>> =
-            serde_json::from_value(self.object_changes.clone()).map_err(|e| {
-                IndexerError::SerdeError(format!(
-                    "Failed to parse object changes: {:?}, error: {}",
-                    self.object_changes, e
-                ))
-            })?;
+        // let parsed_object_changes: Vec<Option<Vec<u8>>> =
+        //     serde_json::from_value(self.object_changes.clone()).map_err(|e| {
+        //         IndexerError::SerdeError(format!(
+        //             "Failed to parse object changes: {:?}, error: {}",
+        //             self.object_changes, e
+        //         ))
+        //     })?;
+        let parsed_object_changes: Vec<Option<Vec<u8>>> = vec![];
         let object_changes = parsed_object_changes.into_iter().map(|object_change| {
             match object_change {
                 Some(object_change) => {
@@ -150,13 +157,14 @@ impl StoredTransaction {
             }
         }).collect::<Result<Vec<ObjectChange>, IndexerError>>()?;
 
-        let parsed_balance_changes: Vec<Option<Vec<u8>>> =
-            serde_json::from_value(self.balance_changes.clone()).map_err(|e| {
-                IndexerError::SerdeError(format!(
-                    "Failed to parse balance changes: {:?}, error: {}",
-                    self.balance_changes, e
-                ))
-            })?;
+        // let parsed_balance_changes: Vec<Option<Vec<u8>>> =
+        //     serde_json::from_value(self.balance_changes.clone()).map_err(|e| {
+        //         IndexerError::SerdeError(format!(
+        //             "Failed to parse balance changes: {:?}, error: {}",
+        //             self.balance_changes, e
+        //         ))
+        //     })?;
+        let parsed_balance_changes: Vec<Option<Vec<u8>>> = vec![];
         let balance_changes = parsed_balance_changes.into_iter().map(|balance_change| {
             match balance_change {
                 Some(balance_change) => {

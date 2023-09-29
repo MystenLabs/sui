@@ -8,11 +8,11 @@ CREATE TABLE transactions (
     checkpoint_sequence_number  BIGINT       NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     -- array of bcs serialized IndexedObjectChange bytes
-    object_changes              JSON      NOT NULL,
+    object_changes              BLOB      NOT NULL,
     -- array of bcs serialized BalanceChange bytes
-    balance_changes             JSON      NOT NULL,
+    balance_changes             BLOB      NOT NULL,
     -- array of bcs serialized StoredEvent bytes
-    events                      JSON      NOT NULL,
+    events                      BLOB      NOT NULL,
     -- SystemTransaction/ProgrammableTransaction. See types_v2.rs
     transaction_kind            smallint     NOT NULL
 );

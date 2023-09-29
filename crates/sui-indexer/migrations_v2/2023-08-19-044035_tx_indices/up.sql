@@ -4,23 +4,23 @@ CREATE TABLE tx_indices (
     -- bytes of the transaction digest
     transaction_digest          VARCHAR(255)        NOT NULL,
     -- array of ObjectID in bytes.
-    input_objects               JSON      NOT NULL,
+    input_objects               BLOB      NOT NULL,
     -- array of ObjectID in bytes
-    changed_objects             JSON      NOT NULL,
+    changed_objects             BLOB      NOT NULL,
     -- array of SuiAddress in bytes. All signers of the transaction.
-    senders                     JSON      NOT NULL,
+    senders                     BLOB      NOT NULL,
     -- array of SuiAddress in bytes. All gas owners of the transaction.
-    payers                      JSON      NOT NULL,
+    payers                      BLOB      NOT NULL,
     -- array of SuiAddress in bytes. 
-    recipients                  JSON      NOT NULL,
+    recipients                  BLOB      NOT NULL,
     -- array of PackageID in bytes of all MoveCalls of the transaction.
-    packages                    JSON      NOT NULL,
+    packages                    BLOB      NOT NULL,
     -- array of "package::module" of all MoveCalls of the transaction.
     -- e.g. "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system"
-    package_modules             JSON      NOT NULL,
+    package_modules             BLOB      NOT NULL,
     -- array of "package::module::function" of all MoveCalls of the transaction.
     -- e.g. "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system::request_add_stake"
-    package_module_functions    JSON      NOT NULL
+    package_module_functions    BLOB      NOT NULL
 );
 
 -- TODO: mysql does not support array or GIN index, need separate tables to join these.

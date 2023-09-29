@@ -57,7 +57,7 @@ diesel::table! {
         event_sequence_number -> Bigint,
         transaction_digest -> Blob,
         checkpoint_sequence_number -> Bigint,
-        senders -> Json,
+        senders -> Blob,
         #[max_length = 255]
         package -> Varchar,
         #[max_length = 127]
@@ -108,9 +108,9 @@ diesel::table! {
         raw_effects -> Blob,
         checkpoint_sequence_number -> Bigint,
         timestamp_ms -> Bigint,
-        object_changes -> Json,
-        balance_changes -> Json,
-        events -> Json,
+        object_changes -> Blob,
+        balance_changes -> Blob,
+        events -> Blob,
         transaction_kind -> Smallint,
     }
 }
@@ -121,14 +121,14 @@ diesel::table! {
         checkpoint_sequence_number -> Bigint,
         #[max_length = 255]
         transaction_digest -> Varchar,
-        input_objects -> Json,
-        changed_objects -> Json,
-        senders -> Json,
-        payers -> Json,
-        recipients -> Json,
-        packages -> Json,
-        package_modules -> Json,
-        package_module_functions -> Json,
+        input_objects -> Blob,
+        changed_objects -> Blob,
+        senders -> Blob,
+        payers -> Blob,
+        recipients -> Blob,
+        packages -> Blob,
+        package_modules -> Blob,
+        package_module_functions -> Blob,
     }
 }
 

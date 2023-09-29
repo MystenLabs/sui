@@ -26,7 +26,7 @@ pub struct StoredEvent {
     pub transaction_digest: Vec<u8>,
     pub checkpoint_sequence_number: i64,
     // pub senders: Vec<Option<Vec<u8>>>,
-    pub senders: serde_json::Value,
+    pub senders: Vec<u8>,
     pub package: String,
     pub module: String,
     pub event_type: String,
@@ -41,13 +41,13 @@ impl From<IndexedEvent> for StoredEvent {
             .into_iter()
             .map(|sender| Some(sender.to_vec()))
             .collect();
-
+        let flattened_senders: Vec<u8> = senders.into_iter().filter_map(|opt| opt).flatten().collect();
         Self {
             tx_sequence_number: event.tx_sequence_number as i64,
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
             checkpoint_sequence_number: event.checkpoint_sequence_number as i64,
-            senders: serde_json::json!(senders),
+            senders: flattened_senders,
             // TODO: which string func to use
             package: event.package.to_hex_literal(),
             module: event.module.clone(),
@@ -70,13 +70,14 @@ impl StoredEvent {
             ))
         })?;
         // Note: SuiEvent only has one sender today, so we always use the first one.
-        let parsed_senders: Vec<Option<Vec<u8>>> = serde_json::from_value(self.senders.clone())
-            .map_err(|e| {
-                IndexerError::SerdeError(format!(
-                    "Failed to parse event senders: {:?}, error: {}",
-                    self.senders, e
-                ))
-            })?;
+        // let parsed_senders: Vec<Option<Vec<u8>>> = serde_json::from_value(self.senders.clone())
+        //     .map_err(|e| {
+        //         IndexerError::SerdeError(format!(
+        //             "Failed to parse event senders: {:?}, error: {}",
+        //             self.senders, e
+        //         ))
+        //     })?;
+        let parsed_senders: Vec<Option<Vec<u8>>> = vec![];
         let sender = parsed_senders.first().ok_or_else(|| {
             IndexerError::PersistentStorageDataCorruptionError(
                 "Event senders should contain at least one address".to_string(),
