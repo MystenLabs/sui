@@ -208,7 +208,9 @@ impl<'a> Context<'a> {
 
     fn ir_module_alias(sp!(_, ModuleIdent_ { address, module }): &ModuleIdent) -> IR::ModuleName {
         let s = match address {
-            Address::Numerical(_, sp!(_, a_)) => format!("{:X}::{}", a_, module),
+            Address::Numerical {
+                value: sp!(_, a_), ..
+            } => format!("{:X}::{}", a_, module),
             Address::NamedUnassigned(name) => format!("{}::{}", name, module),
         };
         IR::ModuleName(s.into())
