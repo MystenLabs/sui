@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
+use fastcrypto::traits::ToFromBytes;
 use move_core_types::identifier::Identifier;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -8,7 +11,9 @@ use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 
+use sui_types::base_types::AuthorityName;
 use sui_types::base_types::{EpochId, ObjectID};
+use sui_types::committee::Committee;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_serde::BigInt;
 use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
@@ -40,6 +45,17 @@ pub struct EpochInfo {
     pub epoch_start_timestamp: u64,
     pub end_of_epoch_info: Option<EndOfEpochInfo>,
     pub reference_gas_price: Option<u64>,
+}
+
+impl EpochInfo {
+    pub fn committee(&self) -> Result<Committee, fastcrypto::error::FastCryptoError> {
+        let mut voting_rights = BTreeMap::new();
+        for validator in &self.validators {
+            let name = AuthorityName::from_bytes(&validator.protocol_pubkey_bytes)?;
+            voting_rights.insert(name, validator.voting_power);
+        }
+        Ok(Committee::new(self.epoch, voting_rights))
+    }
 }
 
 #[serde_as]

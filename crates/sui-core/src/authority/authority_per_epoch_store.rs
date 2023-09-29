@@ -29,7 +29,7 @@ use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
     TransactionDataAPI, VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, error_span, info, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
@@ -73,7 +73,9 @@ use sui_types::messages_consensus::{
     check_total_jwk_size, AuthorityCapabilities, ConsensusTransaction, ConsensusTransactionKey,
     ConsensusTransactionKind,
 };
-use sui_types::storage::{transaction_input_object_keys, ObjectKey, ObjectStore};
+use sui_types::storage::{
+    transaction_input_object_keys, transaction_receiving_object_keys, ObjectKey, ObjectStore,
+};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
@@ -429,6 +431,10 @@ impl AuthorityPerEpochStore {
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
+
+        let span = error_span!("AuthorityPerEpochStore::new", ?epoch_id);
+        let _guard = span.enter();
+
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
             StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
@@ -1382,6 +1388,10 @@ impl AuthorityPerEpochStore {
         let mut input_object_keys = transaction_input_object_keys(certificate)?;
         let mut assigned_versions = Vec::with_capacity(shared_input_objects.len());
         let mut is_mutable_input = Vec::with_capacity(shared_input_objects.len());
+        // Record receiving object versions towards the shared version computation.
+        let receiving_object_keys = transaction_receiving_object_keys(certificate);
+        input_object_keys.extend(receiving_object_keys);
+
         for (SharedInputObject { id, mutable, .. }, version) in shared_input_objects
             .iter()
             .map(|obj| (obj, *shared_input_next_versions.get(&obj.id()).unwrap()))

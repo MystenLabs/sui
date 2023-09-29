@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { renderHook, waitFor, act } from '@testing-library/react';
-import { useConnectWallet, useCurrentWallet, useCurrentAccount } from 'dapp-kit/src';
-import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { useConnectWallet, useCurrentAccount, useCurrentWallet } from 'dapp-kit/src';
 import type { Mock } from 'vitest';
+
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('useConnectWallet', () => {
 	test('throws an error when a user fails to connect their wallet', async () => {

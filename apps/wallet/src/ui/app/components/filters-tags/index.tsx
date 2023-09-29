@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { memo, useState, useEffect } from 'react';
+import { memo, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { NavLink } from 'react-router-dom';
 

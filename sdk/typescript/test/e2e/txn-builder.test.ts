@@ -1,25 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-	SuiTransactionBlockResponse,
-	SuiObjectData,
+	SuiClient,
 	SuiObjectChangeCreated,
+	SuiObjectData,
+	SuiTransactionBlockResponse,
 } from '../../src/client';
-import { SUI_SYSTEM_STATE_OBJECT_ID, normalizeSuiObjectId } from '../../src/utils';
 import type { Keypair } from '../../src/cryptography';
+import { normalizeSuiObjectId, SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 import {
-	DEFAULT_RECIPIENT,
 	DEFAULT_GAS_BUDGET,
+	DEFAULT_RECIPIENT,
+	publishPackage,
 	setup,
 	TestToolbox,
-	publishPackage,
 	upgradePackage,
 } from './utils/setup';
-import { SuiClient } from '../../src/client';
-import {} from '../../src/builder/TransactionBlockData';
+
+import '../../src/builder/TransactionBlockData';
+
 import { TransactionBlock } from '../../src/builder';
 
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');

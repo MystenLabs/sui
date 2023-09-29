@@ -10,6 +10,7 @@ import {
 	getRecognizedUnRecognizedTokenChanges,
 } from '@mysten/core';
 import { Heading, Text } from '@mysten/ui';
+import clsx from 'clsx';
 import { useMemo } from 'react';
 
 import { Banner } from '~/ui/Banner';
@@ -111,7 +112,12 @@ function BalanceChangeCard({ changes, owner }: { changes: BalanceChange[]; owner
 					</CollapsibleSection>
 				))}
 				{unRecognizedTokenChanges.length > 0 && (
-					<div className="flex flex-col gap-2 border-t border-gray-45 pt-2">
+					<div
+						className={clsx(
+							'flex flex-col gap-2',
+							recognizedTokenChanges?.length && 'border-t border-gray-45 pt-2',
+						)}
+					>
 						{unRecognizedTokenChanges.map((change, index) => (
 							<CollapsibleSection key={index + change.coinType}>
 								<BalanceChangeEntry change={change} />

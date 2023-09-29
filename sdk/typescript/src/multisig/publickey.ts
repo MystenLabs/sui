@@ -4,19 +4,20 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
-import { PublicKey, bytesEqual } from '../cryptography/publickey.js';
+
+import { bcs } from '../bcs/index.js';
+import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import type {
 	SerializedSignature,
 	SignatureFlag,
 	SignatureScheme,
 } from '../cryptography/signature.js';
 import {
+	parseSerializedSignature,
 	SIGNATURE_FLAG_TO_SCHEME,
 	SIGNATURE_SCHEME_TO_FLAG,
-	parseSerializedSignature,
 } from '../cryptography/signature.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { builder } from '../builder/bcs.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
 
@@ -75,13 +76,14 @@ export class MultiSigPublicKey extends PublicKey {
 
 		if (typeof value === 'string') {
 			this.rawBytes = fromB64(value);
-			this.multisigPublicKey = builder.de('MultiSigPublicKey', this.rawBytes);
+
+			this.multisigPublicKey = bcs.MultiSigPublicKey.parse(this.rawBytes);
 		} else if (value instanceof Uint8Array) {
 			this.rawBytes = value;
-			this.multisigPublicKey = builder.de('MultiSigPublicKey', this.rawBytes);
+			this.multisigPublicKey = bcs.MultiSigPublicKey.parse(this.rawBytes);
 		} else {
 			this.multisigPublicKey = value;
-			this.rawBytes = builder.ser('MultiSigPublicKey', value).toBytes();
+			this.rawBytes = bcs.MultiSigPublicKey.serialize(value).toBytes();
 		}
 		if (this.multisigPublicKey.threshold < 1) {
 			throw new Error('Invalid threshold');
@@ -173,7 +175,7 @@ export class MultiSigPublicKey extends PublicKey {
 		const tmp = new Uint8Array(maxLength);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 
-		tmp.set(builder.ser('u16', this.multisigPublicKey.threshold).toBytes(), 1);
+		tmp.set(bcs.u16().serialize(this.multisigPublicKey.threshold).toBytes(), 1);
 		// The initial value 3 ensures that following data will be after the flag byte and threshold bytes
 		let i = 3;
 		for (const { publicKey, weight } of this.publicKeys) {
@@ -207,8 +209,8 @@ export class MultiSigPublicKey extends PublicKey {
 
 		if (
 			!bytesEqual(
-				builder.ser('MultiSigPublicKey', this.multisigPublicKey).toBytes(),
-				builder.ser('MultiSigPublicKey', multisig.multisig_pk).toBytes(),
+				bcs.MultiSigPublicKey.serialize(this.multisigPublicKey).toBytes(),
+				bcs.MultiSigPublicKey.serialize(multisig.multisig_pk).toBytes(),
 			)
 		) {
 			return false;
@@ -279,7 +281,7 @@ export class MultiSigPublicKey extends PublicKey {
 			multisig_pk: this.multisigPublicKey,
 		};
 
-		const bytes = builder.ser('MultiSig', multisig).toBytes();
+		const bytes = bcs.MultiSig.serialize(multisig).toBytes();
 		let tmp = new Uint8Array(bytes.length + 1);
 		tmp.set([SIGNATURE_SCHEME_TO_FLAG['MultiSig']]);
 		tmp.set(bytes, 1);

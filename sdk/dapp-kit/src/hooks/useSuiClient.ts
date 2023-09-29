@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useContext } from 'react';
+
 import { SuiClientContext } from '../components/SuiClientProvider.js';
 
 export function useSuiClientContext() {

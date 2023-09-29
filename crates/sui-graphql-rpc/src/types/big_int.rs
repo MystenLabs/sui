@@ -4,8 +4,11 @@
 use std::str::FromStr;
 
 use async_graphql::*;
+use move_core_types::u256::U256;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(transparent)]
 pub(crate) struct BigInt(String);
 
 #[Scalar]
@@ -49,11 +52,17 @@ impl FromStr for BigInt {
     }
 }
 
-impl From<u64> for BigInt {
-    fn from(value: u64) -> Self {
-        BigInt::from_str(&value.to_string()).expect("Cannot parse u64 into BigInt")
+macro_rules! impl_From {
+    ($($t:ident),*) => {
+        $(impl From<$t> for BigInt {
+            fn from(value: $t) -> Self {
+                BigInt(value.to_string())
+            }
+        })*
     }
 }
+
+impl_From!(u8, u16, u32, u64, u128, U256);
 
 #[cfg(test)]
 mod tests {
@@ -61,84 +70,47 @@ mod tests {
 
     #[test]
     fn from_value() {
+        assert_eq!(BigInt::from_str("123").unwrap(), BigInt("123".to_string()));
         assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("123".to_string())).unwrap(),
-            BigInt("123".to_string())
-        );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("123".to_string()))).unwrap(),
-            BigInt("123".to_string())
-        );
-
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("-123".to_string())).unwrap(),
+            BigInt::from_str("-123").unwrap(),
             BigInt("-123".to_string())
         );
         assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("-123".to_string()))).unwrap(),
-            BigInt("-123".to_string())
-        );
-
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("00233".to_string())).unwrap(),
+            BigInt::from_str("00233").unwrap(),
             BigInt("233".to_string())
         );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("00233".to_string()))).unwrap(),
-            BigInt("233".to_string())
-        );
+        assert_eq!(BigInt::from_str("0").unwrap(), BigInt("0".to_string()));
+        assert_eq!(BigInt::from_str("-0").unwrap(), BigInt("0".to_string()));
+        assert_eq!(BigInt::from_str("000").unwrap(), BigInt("0".to_string()));
+        assert_eq!(BigInt::from_str("-000").unwrap(), BigInt("0".to_string()));
 
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("0".to_string())).unwrap(),
-            BigInt("0".to_string())
-        );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("0".to_string()))).unwrap(),
-            BigInt("0".to_string())
-        );
-
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("-0".to_string())).unwrap(),
-            BigInt("0".to_string())
-        );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("-0".to_string()))).unwrap(),
-            BigInt("0".to_string())
-        );
-
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("000".to_string())).unwrap(),
-            BigInt("0".to_string())
-        );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("000".to_string()))).unwrap(),
-            BigInt("0".to_string())
-        );
-
-        assert_eq!(
-            <BigInt as ScalarType>::parse(Value::String("-000".to_string())).unwrap(),
-            BigInt("0".to_string())
-        );
-        assert_eq!(
-            <BigInt as InputType>::parse(Some(Value::String("-000".to_string()))).unwrap(),
-            BigInt("0".to_string())
-        );
-
-        assert!(<BigInt as ScalarType>::parse(Value::String("123a".to_string())).is_err());
-        assert!(<BigInt as InputType>::parse(Some(Value::String("123a".to_string()))).is_err());
-
-        assert!(<BigInt as ScalarType>::parse(Value::String("a123".to_string())).is_err());
-        assert!(<BigInt as InputType>::parse(Some(Value::String("a123".to_string()))).is_err());
-
-        assert!(<BigInt as ScalarType>::parse(Value::String("123-".to_string())).is_err());
-        assert!(<BigInt as InputType>::parse(Some(Value::String("123-".to_string()))).is_err());
-
-        assert!(<BigInt as ScalarType>::parse(Value::String(" 123".to_string())).is_err());
-        assert!(<BigInt as InputType>::parse(Some(Value::String(" 123".to_string()))).is_err());
+        assert!(BigInt::from_str("123a").is_err());
+        assert!(BigInt::from_str("a123").is_err());
+        assert!(BigInt::from_str("123-").is_err());
+        assert!(BigInt::from_str(" 123").is_err());
     }
 
     #[test]
-    fn from_u64() {
-        assert_eq!(BigInt::from_str("123").unwrap(), BigInt::from(123));
+    fn from_primitives() {
+        assert_eq!(BigInt::from(123u8), BigInt("123".to_string()));
+
+        assert_eq!(BigInt::from(12_345u16), BigInt("12345".to_string()));
+
+        assert_eq!(BigInt::from(123_456u32), BigInt("123456".to_string()));
+
+        assert_eq!(
+            BigInt::from(12_345_678_901u64),
+            BigInt("12345678901".to_string()),
+        );
+
+        assert_eq!(
+            BigInt::from(123_456_789_012_345_678_901u128),
+            BigInt("123456789012345678901".to_string()),
+        );
+
+        assert_eq!(
+            BigInt::from(U256::from_str("12345678901234567890123456789012345678901").unwrap()),
+            BigInt("12345678901234567890123456789012345678901".to_string())
+        );
     }
 }

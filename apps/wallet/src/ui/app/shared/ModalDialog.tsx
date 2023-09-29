@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, type ReactNode, useEffect } from 'react';
+import { Fragment, useEffect, type ReactNode } from 'react';
 
 import { Heading } from './heading';
 

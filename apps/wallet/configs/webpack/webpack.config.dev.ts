@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import ESLintPlugin from 'eslint-webpack-plugin';
+import type { Configuration } from 'webpack';
 import { merge } from 'webpack-merge';
 
 import configCommon from './webpack.config.common';
-
-import type { Configuration } from 'webpack';
 
 const configDev: Configuration = {
 	mode: 'development',

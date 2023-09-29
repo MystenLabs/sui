@@ -11,5 +11,13 @@
 		"title": "dApp Kit",
 		"type": "page",
 		"display": "hidden"
+	},
+	"kiosk": {
+		"title": "Kiosk SDK",
+		"type": "page"
+	},
+	"bcs": {
+		"title": "BCS",
+		"type": "page"
 	}
 }

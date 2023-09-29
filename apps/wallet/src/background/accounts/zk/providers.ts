@@ -13,7 +13,11 @@ export interface ZkProviderData {
 		params: URLSearchParams;
 	}) => void;
 	enabled: boolean;
+	hidden?: boolean;
+	mfaLink?: string;
 }
+
+const isDev = process.env.NODE_ENV === 'development';
 
 export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 	google: {
@@ -32,6 +36,7 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 			}
 		},
 		enabled: true,
+		mfaLink: 'https://support.google.com/accounts/answer/185839',
 	},
 	twitch: {
 		clientID: 'uzpfot3uotf7fp9hklsyctn2735bcw',
@@ -54,6 +59,7 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 			}
 		},
 		enabled: true,
+		mfaLink: 'https://help.twitch.tv/s/article/two-factor-authentication',
 	},
 	facebook: {
 		clientID: '829226485248571',
@@ -62,6 +68,8 @@ export const zkProviderDataMap: Record<ZkProvider, ZkProviderData> = {
 			response_type: 'id_token',
 			scope: 'openid email',
 		},
-		enabled: true,
+		enabled: isDev,
+		hidden: !isDev,
+		mfaLink: 'https://www.facebook.com/help/148233965247823',
 	},
 };

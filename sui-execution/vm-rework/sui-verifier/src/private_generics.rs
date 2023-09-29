@@ -23,6 +23,7 @@ pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
     ident_str!("public_freeze_object"),
     ident_str!("public_share_object"),
+    ident_str!("receive"),
 ];
 pub const PRIVATE_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer"),
@@ -33,6 +34,7 @@ pub const TRANSFER_IMPL_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("transfer_impl"),
     ident_str!("freeze_object_impl"),
     ident_str!("share_object_impl"),
+    ident_str!("receive_impl"),
 ];
 
 /// All transfer functions (the functions in `sui::transfer`) are "private" in that they are

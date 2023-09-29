@@ -3,6 +3,15 @@
 
 import '@fontsource-variable/inter';
 import '@fontsource-variable/red-hat-mono';
+
+import { ErrorBoundary } from '_components/error-boundary';
+import { initAppType } from '_redux/slices/app';
+import { AppType, getFromLocationSearch } from '_redux/slices/app/AppType';
+import { initAmplitude } from '_src/shared/analytics/amplitude';
+import { setAttributes } from '_src/shared/experimentation/features';
+import initSentry from '_src/ui/app/helpers/sentry';
+import store from '_store';
+import { thunkExtras } from '_store/thunk-extras';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -13,20 +22,14 @@ import { Provider } from 'react-redux';
 import { HashRouter } from 'react-router-dom';
 
 import App from './app';
+import { walletApiProvider } from './app/ApiProvider';
 import { AccountsFormProvider } from './app/components/accounts/AccountsFormContext';
 import { UnlockAccountProvider } from './app/components/accounts/UnlockAccountContext';
+import { ZkLoginAccountWarningModal } from './app/components/accounts/ZkLoginAccountWaringModal';
 import { SuiLedgerClientProvider } from './app/components/ledger/SuiLedgerClientProvider';
 import { growthbook } from './app/experimentation/feature-gating';
 import { persister, queryClient } from './app/helpers/queryClient';
 import { useAppSelector } from './app/hooks';
-import { ErrorBoundary } from '_components/error-boundary';
-import { initAppType } from '_redux/slices/app';
-import { AppType, getFromLocationSearch } from '_redux/slices/app/AppType';
-import { initAmplitude } from '_src/shared/analytics/amplitude';
-import { setAttributes } from '_src/shared/experimentation/features';
-import initSentry from '_src/ui/app/helpers/sentry';
-import store from '_store';
-import { api, thunkExtras } from '_store/thunk-extras';
 
 import './styles/global.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
@@ -78,7 +81,9 @@ function AppWrapper() {
 								},
 							}}
 						>
-							<SuiClientProvider networks={{ [api.apiEnv]: api.instance.fullNode }}>
+							<SuiClientProvider
+								networks={{ [walletApiProvider.apiEnv]: walletApiProvider.instance.fullNode }}
+							>
 								<AccountsFormProvider>
 									<UnlockAccountProvider>
 										<div
@@ -89,6 +94,7 @@ function AppWrapper() {
 										>
 											<ErrorBoundary>
 												<App />
+												<ZkLoginAccountWarningModal />
 											</ErrorBoundary>
 											<div id="overlay-portal-container"></div>
 											<div id="toaster-portal-container"></div>

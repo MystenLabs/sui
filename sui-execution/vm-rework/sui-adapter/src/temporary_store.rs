@@ -8,12 +8,12 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
 use parking_lot::RwLock;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{ExecutionResults, LoadedChildObjectMetadata};
+use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::{BackingStore, DeleteKindWithOldVersion};
@@ -54,9 +54,8 @@ pub struct TemporaryStore<'backing> {
     written: BTreeMap<ObjectID, (Object, WriteKind)>, // Objects written
     /// Objects actively deleted.
     deleted: BTreeMap<ObjectID, DeleteKindWithOldVersion>,
-    /// Child objects loaded during dynamic field opers
-    /// Currently onply populated for full nodes, not for validators
-    loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+    /// Objects that were loaded during execution (dynamic fields + received objects).
+    loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     protocol_config: ProtocolConfig,
@@ -64,6 +63,10 @@ pub struct TemporaryStore<'backing> {
     /// Every package that was loaded from DB store during execution.
     /// These packages were not previously loaded into the temporary store.
     runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
+
+    /// The set of objects that we may receive during execution. Not guaranteed to receive all, or
+    /// any of the objects referenced in this set.
+    receiving_objects: Vec<ObjectRef>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -72,11 +75,12 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn new(
         store: &'backing dyn BackingStore,
         input_objects: InputObjects,
+        receiving_objects: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
         protocol_config: &ProtocolConfig,
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
-        let lamport_timestamp = input_objects.lamport_timestamp();
+        let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
         let objects = input_objects.into_object_map();
         Self {
             store,
@@ -88,8 +92,9 @@ impl<'backing> TemporaryStore<'backing> {
             deleted: BTreeMap::new(),
             events: Vec::new(),
             protocol_config: protocol_config.clone(),
-            loaded_child_objects: BTreeMap::new(),
+            loaded_runtime_objects: BTreeMap::new(),
             runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
+            receiving_objects,
         }
     }
 
@@ -153,11 +158,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .collect(),
             events: TransactionEvents { data: self.events },
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
-            loaded_child_objects: self
-                .loaded_child_objects
-                .into_iter()
-                .map(|(id, metadata)| (id, metadata.version))
-                .collect(),
+            loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
         }
@@ -186,13 +187,32 @@ impl<'backing> TemporaryStore<'backing> {
         mut self,
         shared_object_refs: Vec<ObjectRef>,
         transaction_digest: &TransactionDigest,
-        transaction_dependencies: Vec<TransactionDigest>,
+        mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
         status: ExecutionStatus,
         gas_charger: &mut GasCharger,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let mut modified_at_versions = vec![];
+
+        // Regardless of execution status (including aborts), we insert the previous transaction
+        // for any successfully received objects during the transaction.
+        for (id, expected_version, expected_digest) in &self.receiving_objects {
+            // If the receiving object is in the loaded runtime objects, then that means that it
+            // was actually successfully loaded (so existed, and there was authenticated mutable
+            // access to it). So we insert the previous transaction as a dependency.
+            if let Some(obj_meta) = self.loaded_runtime_objects.get(id) {
+                // Check that the expected version, digest, and owner match the loaded version,
+                // digest, and owner. If they don't then don't register a dependency.
+                // This is because this could be "spoofed" by loading a dynamic object field.
+                let loaded_via_receive = obj_meta.version == *expected_version
+                    && obj_meta.digest == *expected_digest
+                    && obj_meta.owner.is_address_owned();
+                if loaded_via_receive {
+                    transaction_dependencies.insert(obj_meta.previous_transaction);
+                }
+            }
+        }
 
         // Remember the versions objects were updated from in case of rollback.
         self.written.iter_mut().for_each(|(id, (obj, kind))| {
@@ -284,7 +304,7 @@ impl<'backing> TemporaryStore<'backing> {
             } else {
                 Some(inner.events.digest())
             },
-            transaction_dependencies,
+            transaction_dependencies.into_iter().collect(),
         );
         (inner, effects)
     }
@@ -422,26 +442,27 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
     }
-    pub fn save_loaded_child_objects(
+
+    pub fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
         #[cfg(debug_assertions)]
         {
-            for (id, v1) in &loaded_child_objects {
-                if let Some(v2) = self.loaded_child_objects.get(id) {
+            for (id, v1) in &loaded_runtime_objects {
+                if let Some(v2) = self.loaded_runtime_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
-            for (id, v1) in &self.loaded_child_objects {
-                if let Some(v2) = loaded_child_objects.get(id) {
+            for (id, v1) in &self.loaded_runtime_objects {
+                if let Some(v2) = loaded_runtime_objects.get(id) {
                     assert_eq!(v1, v2);
                 }
             }
         }
         // Merge the two maps because we may be calling the execution engine more than once
         // (e.g. in advance epoch transaction, where we may be publishing a new system package).
-        self.loaded_child_objects.extend(loaded_child_objects);
+        self.loaded_runtime_objects.extend(loaded_runtime_objects);
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -493,7 +514,7 @@ impl<'backing> TemporaryStore<'backing> {
             .get(object_id)
             .cloned()
             .or_else(|| {
-                self.loaded_child_objects
+                self.loaded_runtime_objects
                     .get(object_id)
                     .map(|metadata| ((metadata.version, metadata.digest), metadata.owner))
             })
@@ -562,10 +583,12 @@ impl<'backing> TemporaryStore<'backing> {
                         panic!("Mutated object must exist in the store: ID = {:?}", id)
                     });
                     match &old_obj.owner {
-                        Owner::ObjectOwner(_parent) => {
+                        // ObjectOwner = dynamic field mutations
+                        // AddressOwner = received object
+                        Owner::ObjectOwner(_) | Owner::AddressOwner(_) => {
                             objs_to_authenticate.push(*id);
                         }
-                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                        Owner::Shared { .. } => {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => {
@@ -595,10 +618,10 @@ impl<'backing> TemporaryStore<'backing> {
                     // get owner at beginning of tx
                     let old_obj = self.store.get_object(id)?.unwrap();
                     match &old_obj.owner {
-                        Owner::ObjectOwner(_) => {
+                        Owner::AddressOwner(_) | Owner::ObjectOwner(_) => {
                             objs_to_authenticate.push(*id);
                         }
-                        Owner::AddressOwner(_) | Owner::Shared { .. } => {
+                        Owner::Shared { .. } => {
                             unreachable!("Should already be in authenticated_objs")
                         }
                         Owner::Immutable => unreachable!("Immutable objects cannot be deleted"),
@@ -633,7 +656,7 @@ impl<'backing> TemporaryStore<'backing> {
                 continue;
             };
             let parent = match &old_obj.owner {
-                Owner::ObjectOwner(parent) => ObjectID::from(*parent),
+                Owner::ObjectOwner(parent) | Owner::AddressOwner(parent) => ObjectID::from(*parent),
                 owner => panic!(
                     "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
              Potentially covering objects in: {covered:#?}",
@@ -658,7 +681,7 @@ impl<'backing> TemporaryStore<'backing> {
         // A mutated object must either be from input object or child object.
         if let Some(old_obj) = self.input_objects.get(id) {
             old_obj.storage_rebate
-        } else if let Some(metadata) = self.loaded_child_objects.get(id) {
+        } else if let Some(metadata) = self.loaded_runtime_objects.get(id) {
             debug_assert_eq!(metadata.version, expected_version);
             metadata.storage_rebate
         } else if let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) {
@@ -967,6 +990,25 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
                 .read_child_object(parent, child, child_version_upper_bound)
         }
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        // You should never be able to try and receive an object after deleting it or writing it in the same
+        // transaction since `Receiving` doesn't have copy.
+        debug_assert!(self.deleted.get(receiving_object_id).is_none());
+        debug_assert!(self.written.get(receiving_object_id).is_none());
+        self.store.get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
 }
 
 impl<'backing> Storage for TemporaryStore<'backing> {
@@ -1018,11 +1060,11 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         }
     }
 
-    fn save_loaded_child_objects(
+    fn save_loaded_runtime_objects(
         &mut self,
-        loaded_child_objects: BTreeMap<ObjectID, LoadedChildObjectMetadata>,
+        loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) {
-        TemporaryStore::save_loaded_child_objects(self, loaded_child_objects)
+        TemporaryStore::save_loaded_runtime_objects(self, loaded_runtime_objects)
     }
 }
 

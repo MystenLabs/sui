@@ -108,14 +108,15 @@ impl From<&StoredEpochInfo> for Option<EndOfEpochInfo> {
     }
 }
 
-impl TryInto<EpochInfo> for StoredEpochInfo {
+impl TryFrom<StoredEpochInfo> for EpochInfo {
     type Error = IndexerError;
-    fn try_into(self) -> Result<EpochInfo, Self::Error> {
-        let epoch = self.epoch as u64;
 
-        let end_of_epoch_info = (&self).into();
+    fn try_from(value: StoredEpochInfo) -> Result<Self, Self::Error> {
+        let epoch = value.epoch as u64;
 
-        let validators = self
+        let end_of_epoch_info = (&value).into();
+
+        let validators = value
             .validators
             .into_iter()
             .flatten()
@@ -128,13 +129,13 @@ impl TryInto<EpochInfo> for StoredEpochInfo {
             })
             .collect::<Result<Vec<_>, IndexerError>>()?;
         Ok(EpochInfo {
-            epoch: self.epoch as u64,
+            epoch: value.epoch as u64,
             validators,
-            epoch_total_transactions: self.epoch_total_transactions.unwrap_or(0) as u64,
-            first_checkpoint_id: self.first_checkpoint_id as u64,
-            epoch_start_timestamp: self.epoch_start_timestamp as u64,
+            epoch_total_transactions: value.epoch_total_transactions.unwrap_or(0) as u64,
+            first_checkpoint_id: value.first_checkpoint_id as u64,
+            epoch_start_timestamp: value.epoch_start_timestamp as u64,
             end_of_epoch_info,
-            reference_gas_price: Some(self.reference_gas_price as u64),
+            reference_gas_price: Some(value.reference_gas_price as u64),
         })
     }
 }

@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { useWalletStore } from './useWalletStore.js';
+
 import { useConnectWallet } from './useConnectWallet.js';
 import { useWallets } from './useWallets.js';
+import { useWalletStore } from './useWalletStore.js';
 
 export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const { mutate: connectWallet } = useConnectWallet();

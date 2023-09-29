@@ -1,26 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-	useFloating,
-	useInteractions,
-	useClick,
-	useDismiss,
-	offset,
-	arrow,
-} from '@floating-ui/react';
-import { ChevronDown12, Dot12 } from '@mysten/icons';
-import { motion, AnimatePresence } from 'framer-motion';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
-
-import { appDisconnect } from './actions';
-import { useActiveAddress } from '../../hooks/useActiveAddress';
-import { ButtonConnectedTo } from '../ButtonConnectedTo';
 import Loading from '_components/loading';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createDappStatusSelector } from '_redux/slices/permissions';
 import { ampli } from '_src/shared/analytics/ampli';
+import {
+	arrow,
+	offset,
+	useClick,
+	useDismiss,
+	useFloating,
+	useInteractions,
+} from '@floating-ui/react';
+import { ChevronDown12, Dot12 } from '@mysten/icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 
+import { useActiveAddress } from '../../hooks/useActiveAddress';
+import { ButtonConnectedTo } from '../ButtonConnectedTo';
+import { appDisconnect } from './actions';
 import st from './DappStatus.module.scss';
 
 function DappStatus() {

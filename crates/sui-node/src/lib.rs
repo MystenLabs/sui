@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
 #[cfg(msim)]
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -140,11 +140,61 @@ pub struct ValidatorComponents {
 }
 
 #[cfg(msim)]
-struct SimState {
-    sim_node: sui_simulator::runtime::NodeHandle,
-    sim_safe_mode_expected: AtomicBool,
-    _leak_detector: sui_simulator::NodeLeakDetector,
+mod simulator {
+    use super::*;
+    use std::sync::atomic::AtomicBool;
+    pub(super) struct SimState {
+        pub sim_node: sui_simulator::runtime::NodeHandle,
+        pub sim_safe_mode_expected: AtomicBool,
+        _leak_detector: sui_simulator::NodeLeakDetector,
+    }
+
+    impl Default for SimState {
+        fn default() -> Self {
+            Self {
+                sim_node: sui_simulator::runtime::NodeHandle::current(),
+                sim_safe_mode_expected: AtomicBool::new(false),
+                _leak_detector: sui_simulator::NodeLeakDetector::new(),
+            }
+        }
+    }
+
+    type JwkInjector = dyn Fn(AuthorityName, &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>>
+        + Send
+        + Sync
+        + 'static;
+
+    fn default_fetch_jwks(
+        _authority: AuthorityName,
+        _provider: &OIDCProvider,
+    ) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
+        // Just load a default Twitch jwk for testing.
+        parse_jwks(
+            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
+            &OIDCProvider::Twitch,
+        )
+        .map_err(|_| SuiError::JWKRetrievalError)
+    }
+
+    thread_local! {
+        static JWK_INJECTOR: std::cell::RefCell<Arc<JwkInjector>> = std::cell::RefCell::new(Arc::new(default_fetch_jwks));
+    }
+
+    pub(super) fn get_jwk_injector() -> Arc<JwkInjector> {
+        JWK_INJECTOR.with(|injector| injector.borrow().clone())
+    }
+
+    pub fn set_jwk_injector(injector: Arc<JwkInjector>) {
+        JWK_INJECTOR.with(|cell| *cell.borrow_mut() = injector);
+    }
 }
+
+#[cfg(msim)]
+use simulator::*;
+
+#[cfg(msim)]
+pub use simulator::set_jwk_injector;
 
 pub struct SuiNode {
     config: NodeConfig,
@@ -206,6 +256,7 @@ impl SuiNode {
     }
 
     fn start_jwk_updater(
+        config: &NodeConfig,
         authority: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
@@ -218,9 +269,11 @@ impl SuiNode {
             .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
             .collect::<Vec<_>>();
 
+        let fetch_interval = Duration::from_secs(config.jwk_fetch_interval_seconds);
+
         info!(
-            "Starting JWK updater tasks with supported providers: {:?}",
-            supported_providers
+            ?fetch_interval,
+            "Starting JWK updater tasks with supported providers: {:?}", supported_providers
         );
 
         fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
@@ -259,7 +312,7 @@ impl SuiNode {
                     let mut seen = HashSet::new();
                     loop {
                         info!("fetching JWK for provider {:?}", p);
-                        match Self::fetch_jwks(&p).await {
+                        match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
@@ -290,34 +343,12 @@ impl SuiNode {
                                 }
                             }
                         }
-                        // Sleep for 1 hour
-                        tokio::time::sleep(Duration::from_secs(3600)).await;
+                        tokio::time::sleep(fetch_interval).await;
                     }
                 }
                 .instrument(error_span!("jwk_updater_task", epoch)),
             ));
         }
-    }
-
-    #[cfg(not(msim))]
-    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
-        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
-        let client = reqwest::Client::new();
-        fetch_jwks(provider, &client)
-            .await
-            .map_err(|_| SuiError::JWKRetrievalError)
-    }
-
-    #[cfg(msim)]
-    #[allow(unused_variables)]
-    async fn fetch_jwks(provider: &OIDCProvider) -> SuiResult<Vec<(JwkId, JWK)>> {
-        use fastcrypto_zkp::bn254::zk_login::parse_jwks;
-        // Just load a default Twitch jwk for testing.
-        parse_jwks(
-            sui_types::zk_login_util::DEFAULT_JWK_BYTES,
-            &OIDCProvider::Twitch,
-        )
-        .map_err(|_| SuiError::JWKRetrievalError)
     }
 
     pub async fn start_async(
@@ -637,11 +668,7 @@ impl SuiNode {
             _db_checkpoint_handle: db_checkpoint_handle,
 
             #[cfg(msim)]
-            sim_state: SimState {
-                sim_node: sui_simulator::runtime::NodeHandle::current(),
-                sim_safe_mode_expected: AtomicBool::new(false),
-                _leak_detector: sui_simulator::NodeLeakDetector::new(),
-            },
+            sim_state: Default::default(),
 
             _state_archive_handle: state_archive_handle,
             _state_snapshot_uploader_handle: state_snapshot_handle,
@@ -661,14 +688,6 @@ impl SuiNode {
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
         self.end_of_epoch_channel.subscribe()
-    }
-
-    #[cfg(msim)]
-    pub fn set_safe_mode_expected(&self, new_value: bool) {
-        info!("Setting safe mode expected to {}", new_value);
-        self.sim_state
-            .sim_safe_mode_expected
-            .store(new_value, Ordering::Relaxed);
     }
 
     pub fn current_epoch_for_testing(&self) -> EpochId {
@@ -1045,7 +1064,12 @@ impl SuiNode {
             .await;
 
         if epoch_store.authenticator_state_enabled() {
-            Self::start_jwk_updater(state.name, epoch_store.clone(), consensus_adapter.clone());
+            Self::start_jwk_updater(
+                config,
+                state.name,
+                epoch_store.clone(),
+                consensus_adapter.clone(),
+            );
         }
 
         Ok(ValidatorComponents {
@@ -1488,13 +1512,44 @@ impl SuiNode {
         new_epoch_store
     }
 
-    #[cfg(msim)]
+    pub fn get_config(&self) -> &NodeConfig {
+        &self.config
+    }
+}
+
+#[cfg(not(msim))]
+impl SuiNode {
+    async fn fetch_jwks(
+        _authority: AuthorityName,
+        provider: &OIDCProvider,
+    ) -> SuiResult<Vec<(JwkId, JWK)>> {
+        use fastcrypto_zkp::bn254::zk_login::fetch_jwks;
+        let client = reqwest::Client::new();
+        fetch_jwks(provider, &client)
+            .await
+            .map_err(|_| SuiError::JWKRetrievalError)
+    }
+}
+
+#[cfg(msim)]
+impl SuiNode {
     pub fn get_sim_node_id(&self) -> sui_simulator::task::NodeId {
         self.sim_state.sim_node.id()
     }
 
-    pub fn get_config(&self) -> &NodeConfig {
-        &self.config
+    pub fn set_safe_mode_expected(&self, new_value: bool) {
+        info!("Setting safe mode expected to {}", new_value);
+        self.sim_state
+            .sim_safe_mode_expected
+            .store(new_value, Ordering::Relaxed);
+    }
+
+    #[allow(unused_variables)]
+    async fn fetch_jwks(
+        authority: AuthorityName,
+        provider: &OIDCProvider,
+    ) -> SuiResult<Vec<(JwkId, JWK)>> {
+        get_jwk_injector()(authority, provider)
     }
 }
 

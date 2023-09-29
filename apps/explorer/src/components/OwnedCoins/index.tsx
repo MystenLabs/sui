@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getCoinSymbol } from '@mysten/core';
-import { useAllBalances } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info16 } from '@mysten/icons';
 import { type CoinBalance } from '@mysten/sui.js/client';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
@@ -27,7 +27,9 @@ export function OwnedCoins({ id }: { id: string }) {
 	const [currentSlice, setCurrentSlice] = useState(1);
 	const [limit, setLimit] = useState(20);
 	const [filterValue, setFilterValue] = useState(COIN_FILTERS.RECOGNIZED);
-	const { isLoading, data, isError } = useAllBalances({ owner: normalizeSuiAddress(id) });
+	const { isLoading, data, isError } = useSuiClientQuery('getAllBalances', {
+		owner: normalizeSuiAddress(id),
+	});
 	const recognizedPackages = useRecognizedPackages();
 
 	const balances: Record<COIN_FILTERS, CoinBalanceVerified[]> = useMemo(() => {

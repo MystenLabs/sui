@@ -3,6 +3,7 @@
 
 import { Dialog } from '@headlessui/react';
 import { ComponentType } from 'react';
+
 import { styled } from '../stitches';
 import { CloseIcon } from './icons';
 

@@ -1,19 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-
-import { useQredoUIPendingRequest } from './hooks';
-import { isUntrustedQredoConnect } from './utils';
-import { useBackgroundClient } from '../../hooks/useBackgroundClient';
-import { Heading } from '../../shared/heading';
-import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
-import { Text } from '../../shared/text';
 import { LabelValueItem } from '_components/LabelValueItem';
 import { LabelValuesContainer } from '_components/LabelValuesContainer';
 import { SummaryCard } from '_components/SummaryCard';
 import { UserApproveContainer } from '_components/user-approve-container';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+
+import { useBackgroundClient } from '../../hooks/useBackgroundClient';
+import { Heading } from '../../shared/heading';
+import { PageMainLayoutTitle } from '../../shared/page-main-layout/PageMainLayoutTitle';
+import { Text } from '../../shared/text';
+import { useQredoUIPendingRequest } from './hooks';
+import { isUntrustedQredoConnect } from './utils';
 
 export function QredoConnectInfoPage() {
 	const { requestID } = useParams();

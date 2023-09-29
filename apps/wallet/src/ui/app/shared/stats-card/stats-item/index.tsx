@@ -3,7 +3,6 @@
 
 import cl from 'classnames';
 import { memo } from 'react';
-
 import type { ReactNode } from 'react';
 
 import st from './StatsItem.module.scss';

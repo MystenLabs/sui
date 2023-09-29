@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { QredoTransaction } from './QredoTransaction';
 import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import { NoActivityCard } from '_components/transactions-card/NoActivityCard';
@@ -10,6 +9,8 @@ import { type TransactionStatus } from '_src/shared/qredo-api';
 import Alert from '_src/ui/app/components/alert';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useGetQredoTransactions } from '_src/ui/app/hooks/useGetQredoTransactions';
+
+import { QredoTransaction } from './QredoTransaction';
 
 const PENDING_QREDO_TRANSACTION_STATUSES: TransactionStatus[] = [
 	'approved',

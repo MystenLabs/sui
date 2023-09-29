@@ -1,26 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
 import {
-	SUI_CLOCK_OBJECT_ID,
-	SUI_FRAMEWORK_ADDRESS,
+	getFullnodeUrl,
+	OrderArguments,
+	PaginatedEvents,
+	PaginationArguments,
+	SuiClient,
+} from '@mysten/sui.js/client';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
+import {
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
+	SUI_CLOCK_OBJECT_ID,
+	SUI_FRAMEWORK_ADDRESS,
 } from '@mysten/sui.js/utils';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 import {
-	MODULE_CLOB,
-	PACKAGE_ID,
-	NORMALIZED_SUI_COIN_TYPE,
-	CREATION_FEE,
-	MODULE_CUSTODIAN,
-	ORDER_DEFAULT_EXPIRATION_IN_MS,
-} from './utils';
-import {
+	bcs,
 	Level2BookStatusPoint,
 	LimitOrderType,
 	MarketPrice,
@@ -29,8 +28,15 @@ import {
 	PoolSummary,
 	SelfMatchingPreventionStyle,
 	UserPosition,
-	bcs,
 } from './types';
+import {
+	CREATION_FEE,
+	MODULE_CLOB,
+	MODULE_CUSTODIAN,
+	NORMALIZED_SUI_COIN_TYPE,
+	ORDER_DEFAULT_EXPIRATION_IN_MS,
+	PACKAGE_ID,
+} from './utils';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
 
@@ -640,7 +646,7 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param isBidSide true: query bid side, false: query ask side
+	 * @param side { 'bid' | 'ask' } bid or ask side
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
@@ -659,6 +665,7 @@ export class DeepBookClient {
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
+
 		const results = (
 			await this.suiClient.devInspectTransactionBlock({
 				transactionBlock: txb,

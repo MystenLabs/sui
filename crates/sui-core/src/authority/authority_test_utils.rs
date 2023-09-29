@@ -47,19 +47,10 @@ pub async fn send_and_confirm_transaction_(
     Ok((txn, effects))
 }
 
-pub async fn send_and_confirm_transaction_with_execution_error(
+pub async fn certify_transaction(
     authority: &AuthorityState,
-    fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool, // transaction includes shared objects
-) -> Result<
-    (
-        CertifiedTransaction,
-        SignedTransactionEffects,
-        Option<ExecutionError>,
-    ),
-    SuiError,
-> {
+) -> Result<VerifiedCertificate, SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let transaction = authority.verify_transaction(transaction).unwrap();
@@ -71,12 +62,27 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
-    let certificate =
-        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
-            .unwrap()
-            .verify_authenticated(&committee, &Default::default())
-            .unwrap();
+    let certificate = CertifiedTransaction::new(transaction.into_message(), vec![vote], &committee)
+        .unwrap()
+        .verify_authenticated(&committee, &Default::default())
+        .unwrap();
+    Ok(certificate)
+}
 
+pub async fn execute_certificate_with_execution_error(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    certificate: VerifiedCertificate,
+    with_shared: bool, // transaction includes shared objects
+) -> Result<
+    (
+        CertifiedTransaction,
+        SignedTransactionEffects,
+        Option<ExecutionError>,
+    ),
+    SuiError,
+> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
@@ -115,6 +121,23 @@ pub async fn send_and_confirm_transaction_with_execution_error(
         result.into_inner(),
         execution_error_opt,
     ))
+}
+
+pub async fn send_and_confirm_transaction_with_execution_error(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    transaction: Transaction,
+    with_shared: bool, // transaction includes shared objects
+) -> Result<
+    (
+        CertifiedTransaction,
+        SignedTransactionEffects,
+        Option<ExecutionError>,
+    ),
+    SuiError,
+> {
+    let certificate = certify_transaction(authority, transaction).await?;
+    execute_certificate_with_execution_error(authority, fullnode, certificate, with_shared).await
 }
 
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {

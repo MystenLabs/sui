@@ -15,7 +15,9 @@ use std::{
 use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed};
 use sui_types::{
     base_types::{MoveObjectType, ObjectID, SequenceNumber},
+    committee::EpochId,
     error::VMMemoryLimitExceededSubStatusCode,
+    execution::DynamicallyLoadedObjectMetadata,
     metrics::LimitsMetrics,
     object::{Data, MoveObject, Object, Owner},
     storage::ChildObjectResolver,
@@ -52,6 +54,8 @@ struct Inner<'a> {
     local_config: LocalProtocolConfig,
     // Metrics for reporting exceeded limits
     metrics: Arc<LimitsMetrics>,
+    // Epoch ID for the current transaction. Used for receiving objects.
+    current_epoch_id: EpochId,
 }
 
 // maintains the runtime GlobalValues for child objects and manages the fetching of objects
@@ -75,6 +79,69 @@ pub(crate) enum ObjectResult<V> {
 }
 
 impl<'a> Inner<'a> {
+    fn receive_object_from_store(
+        &self,
+        owner: ObjectID,
+        child: ObjectID,
+        version: SequenceNumber,
+    ) -> PartialVMResult<Option<(MoveObject, DynamicallyLoadedObjectMetadata)>> {
+        let child_opt = self
+            .resolver
+            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
+            .map_err(|msg| {
+                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
+            })?;
+        let obj_opt = if let Some(object) = child_opt {
+            // guard against bugs in `receive_object_at_version`: if it returns a child object such that
+            // C.parent != parent, we raise an invariant violation since that should be checked by
+            // `receive_object_at_version`.
+            if object.owner != Owner::AddressOwner(owner.into()) {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Bad owner for {child}. \
+                        Expected owner {owner} but found owner {}",
+                        object.owner
+                    )),
+                );
+            }
+            let loaded_metadata = DynamicallyLoadedObjectMetadata {
+                version,
+                digest: object.digest(),
+                storage_rebate: object.storage_rebate,
+                owner: object.owner,
+                previous_transaction: object.previous_transaction,
+            };
+
+            // `ChildObjectResolver::receive_object_at_version` should return the object at the
+            // version or nothing at all. If it returns an object with a different version, we
+            // should raise an invariant violation since it should be checked by
+            // `receive_object_at_version`.
+            if object.version() != version {
+                return Err(
+                    PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!(
+                        "Bad version for {child}. \
+                        Expected version {version} but found version {}",
+                        object.version()
+                    )),
+                );
+            }
+            match object.data {
+                Data::Package(_) => {
+                    return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
+                        format!(
+                            "Mismatched object type for {child}. \
+                                Expected a Move object but found a Move package"
+                        ),
+                    ))
+                }
+                Data::Move(mo @ MoveObject { .. }) => Some((mo, loaded_metadata)),
+            }
+        } else {
+            None
+        };
+        Ok(obj_opt)
+    }
+
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,
@@ -231,6 +298,34 @@ impl<'a> Inner<'a> {
     }
 }
 
+fn deserialize_move_object(
+    obj: &MoveObject,
+    child_ty: &Type,
+    child_ty_layout: &MoveTypeLayout,
+    child_move_type: MoveObjectType,
+) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, Value)>> {
+    let child_id = obj.id();
+    // object exists, but the type does not match
+    if obj.type_() != &child_move_type {
+        return Ok(ObjectResult::MismatchedType);
+    }
+    let value = match Value::simple_deserialize(obj.contents(), child_ty_layout) {
+        Some(v) => v,
+        None => {
+            return Err(
+                PartialVMError::new(StatusCode::FAILED_TO_DESERIALIZE_RESOURCE).with_message(
+                    format!("Failed to deserialize object {child_id} with type {child_move_type}",),
+                ),
+            )
+        }
+    };
+    Ok(ObjectResult::Loaded((
+        child_ty.clone(),
+        child_move_type,
+        value,
+    )))
+}
+
 impl<'a> ChildObjectStore<'a> {
     pub(super) fn new(
         resolver: &'a dyn ChildObjectResolver,
@@ -238,6 +333,7 @@ impl<'a> ChildObjectStore<'a> {
         is_metered: bool,
         local_config: LocalProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        current_epoch_id: EpochId,
     ) -> Self {
         Self {
             inner: Inner {
@@ -247,10 +343,50 @@ impl<'a> ChildObjectStore<'a> {
                 is_metered,
                 local_config,
                 metrics,
+                current_epoch_id,
             },
             store: BTreeMap::new(),
             is_metered,
         }
+    }
+
+    pub(super) fn receive_object(
+        &mut self,
+        parent: ObjectID,
+        child: ObjectID,
+        child_version: SequenceNumber,
+        child_ty: &Type,
+        child_layout: &MoveTypeLayout,
+        child_fully_annotated_layout: &MoveTypeLayout,
+        child_move_type: MoveObjectType,
+    ) -> PartialVMResult<Option<(ObjectResult<Value>, DynamicallyLoadedObjectMetadata)>> {
+        let Some((obj, obj_meta)) = self
+            .inner
+            .receive_object_from_store(parent, child, child_version)? else {
+                return Ok(None)
+            };
+
+        Ok(Some(
+            match deserialize_move_object(&obj, child_ty, child_layout, child_move_type)? {
+                ObjectResult::MismatchedType => (ObjectResult::MismatchedType, obj_meta),
+                ObjectResult::Loaded((_, _, v)) => {
+                    // Find all UIDs inside of the value and update the object parent maps with the contained
+                    // UIDs in the received value. They should all have an upper bound version as the receiving object.
+                    // Only do this if we successfully load the object though.
+                    let contained_uids = get_all_uids(child_fully_annotated_layout, obj.contents())
+                        .map_err(|e| {
+                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                                .with_message(format!(
+                                    "Failed to find UIDs for receiving object. ERROR: {e}"
+                                ))
+                        })?;
+                    for id in contained_uids {
+                        self.inner.root_version.insert(id, child_version);
+                    }
+                    (ObjectResult::Loaded(v), obj_meta)
+                }
+            },
+        ))
     }
 
     pub(super) fn object_exists(

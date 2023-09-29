@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Root, type SwitchProps, Thumb } from '@radix-ui/react-switch';
+import { Root, Thumb, type SwitchProps } from '@radix-ui/react-switch';
 
 export function Toggle(props: Omit<SwitchProps, 'className'>) {
 	return (

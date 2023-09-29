@@ -34,6 +34,7 @@ feature_flags:
   end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
+  receive_objects: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -135,6 +136,7 @@ object_record_new_uid_cost_base: 52
 transfer_transfer_internal_cost_base: 52
 transfer_freeze_object_cost_base: 52
 transfer_share_object_cost_base: 52
+transfer_receive_object_cost_base: 52
 tx_context_derive_id_cost_base: 52
 types_is_one_time_witness_cost_base: 52
 types_is_one_time_witness_type_tag_cost_per_byte: 2

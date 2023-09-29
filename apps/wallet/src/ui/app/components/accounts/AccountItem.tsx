@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_src/ui/app/shared/text';
 import { useResolveSuiNSName } from '@mysten/core';
 import { ArrowUpRight12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
-
 import cn from 'classnames';
 import { forwardRef, type ReactNode } from 'react';
-import { EditableAccountName } from './EditableAccountName';
+
 import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useExplorerLink } from '../../hooks/useExplorerLink';
-import { IconButton } from '../IconButton';
 import { ExplorerLinkType } from '../explorer-link/ExplorerLinkType';
-import { Text } from '_src/ui/app/shared/text';
+import { IconButton } from '../IconButton';
+import { EditableAccountName } from './EditableAccountName';
 
 interface AccountItemProps {
 	accountID: string;

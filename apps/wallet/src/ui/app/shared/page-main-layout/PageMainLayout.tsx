@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ErrorBoundary } from '_components/error-boundary';
+import { MenuContent } from '_components/menu';
+import { Navigation } from '_components/navigation';
 import cn from 'classnames';
-import { createContext, type ReactNode, useState } from 'react';
+import { createContext, useState, type ReactNode } from 'react';
 
 import { WalletSettingsButton } from '../../components/menu/button/WalletSettingsButton';
 import { useAppSelector } from '../../hooks';
@@ -10,9 +13,6 @@ import { AppType } from '../../redux/slices/app/AppType';
 import DappStatus from '../dapp-status';
 import { Header } from '../header/Header';
 import { Toaster } from '../toaster';
-import { ErrorBoundary } from '_components/error-boundary';
-import { MenuContent } from '_components/menu';
-import { Navigation } from '_components/navigation';
 
 export const PageMainLayoutContext = createContext<HTMLDivElement | null>(null);
 
@@ -46,7 +46,7 @@ export function PageMainLayout({
 				middleContent={dappStatusEnabled ? <DappStatus /> : <div ref={setTitlePortalContainer} />}
 				rightContent={topNavMenuEnabled ? <WalletSettingsButton /> : undefined}
 			/>
-			<div className="relative flex flex-col flex-nowrap flex-grow overflow-hidden rounded-t-xl">
+			<div className="relative flex flex-col flex-nowrap flex-grow overflow-hidden rounded-t-xl shadow-wallet-content">
 				<div className="flex flex-col flex-nowrap bg-white flex-grow overflow-y-auto overflow-x-hidden rounded-t-xl">
 					<main className={cn('flex-grow w-full', { 'p-5': bottomNavEnabled })}>
 						<PageMainLayoutContext.Provider value={titlePortalContainer}>

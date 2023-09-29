@@ -1,18 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { createMessage } from '_messages';
+import type { Message } from '_messages';
+import type { ErrorPayload } from '_payloads';
+import { isKeyringPayload } from '_payloads/keyring';
 import mitt from 'mitt';
 
+import type { UiConnection } from '../connections/UiConnection';
+import { getFromLocalStorage } from '../storage-utils';
 import { type Account } from './Account';
 import { type SerializedLedgerAccount } from './LedgerAccount';
 import { VaultStorage } from './VaultStorage';
-import { getFromLocalStorage } from '../storage-utils';
-import { createMessage } from '_messages';
-import { isKeyringPayload } from '_payloads/keyring';
-
-import type { UiConnection } from '../connections/UiConnection';
-import type { Message } from '_messages';
-import type { ErrorPayload } from '_payloads';
 
 /** The key for the extension's storage, that holds the index of the last derived account (zero based) */
 export const STORAGE_LAST_ACCOUNT_INDEX_KEY = 'last_account_index';

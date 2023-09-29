@@ -33,6 +33,7 @@ const-str.workspace = true
 num-bigint.workspace = true
 regex.workspace = true
 reqwest.workspace = true
+im.workspace = true
 
 sui-config.workspace = true
 sui-execution = { path = "../../sui-execution" }
