@@ -6,12 +6,12 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
-        Friend, ModuleIdent, SpecId, Value, Value_, Visibility,
+        Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_, Visibility,
     },
     parser::ast::{
         Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
     },
-    shared::{ast_debug::*, unique_map::UniqueMap, *},
+    shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -27,6 +27,12 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub info: NamingProgramInfo,
+    pub inner: Program_,
+}
+
+#[derive(Debug, Clone)]
+pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
     pub scripts: BTreeMap<Symbol, Script>,
 }
@@ -37,6 +43,35 @@ pub enum Neighbor_ {
     Friend,
 }
 pub type Neighbor = Spanned<Neighbor_>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UseFunKind {
+    Explicit,
+    // From a function declaration in the module
+    FunctionDeclaration,
+    // From a normal, non 'use fun' use declaration,
+    UseAlias { used: bool },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UseFun {
+    pub loc: Loc,
+    pub attributes: Attributes,
+    pub is_public: Option<Loc>,
+    pub target_function: (ModuleIdent, FunctionName),
+    // If None, disregard any use/unused information.
+    // If Some, we track whether or not the associated function alias was used prior to receiver
+    pub kind: UseFunKind,
+}
+
+// Mapping from type to their possible "methods"
+pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UseFuns {
+    pub resolved: ResolvedUseFuns,
+    pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
+}
 
 //**************************************************************************************************
 // Scripts
@@ -49,6 +84,7 @@ pub struct Script {
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub loc: Loc,
+    pub use_funs: UseFuns,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub function_name: FunctionName,
     pub function: Function,
@@ -68,6 +104,7 @@ pub struct ModuleDefinition {
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
     pub is_source_module: bool,
+    pub use_funs: UseFuns,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<StructName, StructDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
@@ -153,7 +190,7 @@ pub struct Constant {
 // Types
 //**************************************************************************************************
 
-#[derive(Debug, PartialEq, Clone, PartialOrd, Eq, Ord)]
+#[derive(Debug, PartialEq, Clone, Copy, PartialOrd, Eq, Ord)]
 pub enum BuiltinTypeName_ {
     // address
     Address,
@@ -271,6 +308,7 @@ pub enum Exp_ {
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
+    MethodCall(ExpDotted, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
@@ -310,7 +348,7 @@ pub enum Exp_ {
 }
 pub type Exp = Spanned<Exp_>;
 
-pub type Sequence = VecDeque<SequenceItem>;
+pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
 pub enum SequenceItem_ {
     Seq(Exp),
@@ -630,6 +668,14 @@ impl Type_ {
         }
     }
 
+    pub fn unfold_to_type_name(&self) -> Option<&TypeName> {
+        match self {
+            Type_::Apply(_, tn, _) => Some(tn),
+            Type_::Ref(_, inner) => return inner.value.unfold_to_type_name(),
+            _ => None,
+        }
+    }
+
     pub fn is(
         &self,
         address: impl AsRef<str>,
@@ -724,7 +770,13 @@ impl fmt::Display for TypeName_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, scripts } = self;
+        self.inner.ast_debug(w)
+    }
+}
+
+impl AstDebug for Program_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Self { modules, scripts } = self;
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
             w.block(|w| mdef.ast_debug(w));
@@ -748,6 +800,66 @@ impl AstDebug for Neighbor_ {
     }
 }
 
+impl AstDebug for UseFun {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let UseFun {
+            loc: _,
+            attributes,
+            is_public,
+            target_function: (target_m, target_f),
+            kind,
+        } = self;
+        attributes.ast_debug(w);
+        w.new_line();
+        if is_public.is_some() {
+            w.write("public ")
+        }
+        let kind_str = match kind {
+            UseFunKind::Explicit => "",
+            UseFunKind::UseAlias { used: true } => "#used",
+            UseFunKind::UseAlias { used: false } => "#unused",
+            UseFunKind::FunctionDeclaration => "#fundecl",
+        };
+        w.write(&format!("use{kind_str} {target_m}::{target_f}"));
+    }
+}
+
+impl AstDebug for (&TypeName, &UniqueMap<Name, UseFun>) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (tn, methods) = *self;
+        for (_, method_f, use_fun) in methods {
+            use_fun.ast_debug(w);
+            w.write(" as ");
+            tn.ast_debug(w);
+            w.writeln(&format!(".{method_f};"));
+        }
+    }
+}
+
+impl AstDebug for ResolvedUseFuns {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        for (tn, methods) in self {
+            (tn, methods).ast_debug(w);
+        }
+    }
+}
+
+impl AstDebug for UseFuns {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Self {
+            resolved,
+            implicit_candidates,
+        } = self;
+        resolved.ast_debug(w);
+        w.write("unresolved ");
+        w.block(|w| {
+            for (_, _, implicit) in implicit_candidates {
+                implicit.ast_debug(w)
+            }
+        })
+    }
+}
+
 impl AstDebug for Script {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Script {
@@ -755,6 +867,7 @@ impl AstDebug for Script {
             package_name,
             attributes,
             loc: _loc,
+            use_funs,
             constants,
             function_name,
             function,
@@ -765,6 +878,7 @@ impl AstDebug for Script {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
+        use_funs.ast_debug(w);
         for (m, neighbor) in spec_dependencies {
             w.write(&format!("spec_dep {m} is"));
             neighbor.ast_debug(w);
@@ -786,6 +900,7 @@ impl AstDebug for ModuleDefinition {
             package_name,
             attributes,
             is_source_module,
+            use_funs,
             friends,
             structs,
             constants,
@@ -802,6 +917,7 @@ impl AstDebug for ModuleDefinition {
         } else {
             w.writeln("source module")
         }
+        use_funs.ast_debug(w);
         for (m, neighbor) in spec_dependencies {
             w.write(&format!("spec_dep {m} is"));
             neighbor.ast_debug(w);
@@ -892,7 +1008,7 @@ impl AstDebug for (FunctionName, &Function) {
             w.write(" ")
         }
         match &body.value {
-            FunctionBody_::Defined(body) => w.block(|w| body.ast_debug(w)),
+            FunctionBody_::Defined(body) => body.ast_debug(w),
             FunctionBody_::Native => w.writeln(";"),
         }
     }
@@ -1073,9 +1189,13 @@ impl AstDebug for Vec<Type> {
     }
 }
 
-impl AstDebug for VecDeque<SequenceItem> {
+impl AstDebug for Sequence {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.semicolon(self, |w, item| item.ast_debug(w))
+        w.block(|w| {
+            let (use_funs, items) = self;
+            use_funs.ast_debug(w);
+            w.semicolon(items, |w, item| item.ast_debug(w))
+        })
     }
 }
 
@@ -1123,6 +1243,18 @@ impl AstDebug for Exp_ {
             E::Constant(Some(m), c) => w.write(&format!("{}::{}", m, c)),
             E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
+            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+                e.ast_debug(w);
+                w.write(&format!(".{}", f));
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -1182,7 +1314,7 @@ impl AstDebug for Exp_ {
                 w.write("loop ");
                 e.ast_debug(w);
             }
-            E::Block(seq) => w.block(|w| seq.ast_debug(w)),
+            E::Block(seq) => seq.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

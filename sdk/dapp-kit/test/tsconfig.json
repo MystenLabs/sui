@@ -5,6 +5,7 @@
 		"rootDir": "..",
 		"noEmit": true,
 		"moduleResolution": "NodeNext",
+		"module": "NodeNext",
 		"emitDeclarationOnly": false,
 		"resolveJsonModule": true,
 		"types": ["vitest/globals"]

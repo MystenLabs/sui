@@ -10,8 +10,8 @@ use move_compiler::{
     diagnostics::codes::{custom, DiagnosticInfo, Severity},
     expansion::ast as E,
     naming::ast as N,
-    shared::{CompilationEnv, Identifier},
-    typing::{ast as T, core::TypingProgramInfo, visitor::TypingVisitor},
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
+    typing::{ast as T, visitor::TypingVisitor},
 };
 use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::Loc;
@@ -37,7 +37,7 @@ impl TypingVisitor for CoinFieldVisitor {
         &mut self,
         env: &mut CompilationEnv,
         _program_info: &TypingProgramInfo,
-        program: &mut T::Program,
+        program: &mut T::Program_,
     ) {
         for (_, _, mdef) in program.modules.iter() {
             env.add_warning_filter_scope(mdef.warning_filter.clone());

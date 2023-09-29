@@ -204,6 +204,7 @@ codes!(
         InvalidAttribute: { msg: "invalid attribute", severity: NonblockingError },
         InvalidVisibilityModifier:
             { msg: "invalid visibility modifier", severity: NonblockingError },
+        InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -250,6 +251,7 @@ codes!(
                 (NOTE: this may become an error in the future)",
             severity: Warning
         },
+        InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
