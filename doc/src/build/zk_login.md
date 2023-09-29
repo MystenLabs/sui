@@ -189,7 +189,24 @@ http://host/auth#state=redirect_url_______&id_token=tokenPartA.tokenPartB.tokenP
 ```
 
 The `id_token` param is actually the JWT token in encoded format. You can validate the correctness of the encoded token
-and investigate it's structure by pasting it in the [jwt.io](jwt.io) website.
+and investigate its structure by pasting it in the [jwt.io](jwt.io) website.
+
+To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
+
+```typescript
+
+const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
+
+export interface JwtPayload {
+   iss?: string;  
+   sub?: string;  //Subject ID
+   aud?: string[] | string;
+   exp?: number;
+   nbf?: number;
+   iat?: number;
+   jti?: string;
+}
+```
 
 
 ## User Salt Management
@@ -219,7 +236,7 @@ Once the OAuth flow completes, the JWT token can be found in the redirect URL. A
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
 
-const address = jwtToAddress(jwt, userSalt)
+const zkUserAddress = jwtToAddress(jwt, userSalt)
 ```
 
 ## Get the Zero-Knowledge Proof
@@ -273,7 +290,7 @@ const partialZkSignature: ZkSignatureInputs = proofResponse as ZkSignatureInputs
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
   ```typescript
  const ephemeralKeyPair = new Ed25519Keypair();
 
@@ -281,18 +298,31 @@ const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
 
+txb.setSender(zkUserAddress);
+
 const { bytes, signature: userSignature } = await txb.sign({
    client,
    signer: ephemeralKeyPair,
 });
   ```
 
-Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
-  ```typescript
-  import { getZkSignature } from "@mysten/zklogin";
+Next, generate an Address Seed by combining `userSalt`, `sub` (subject ID) and `aud` (audience).
 
-const zkSignature = getZkSignature({
-   inputs,
+Set the address Seed and the partial ZK Signature to be the `inputs` param.
+
+You can now serialize the zkLogin signature by combining the ZK proof (`inputs`),
+the `maxEpoch` and the ephemeral signature (`userSignature`).
+
+  ```typescript
+import { genAddressSeed, getZkSignature } from "@mysten/zklogin";
+
+const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
+
+const zkSignature : SerializedSignature = getZkSignature({
+   inputs: {
+      ...partialZkSignature,
+      addressSeed
+   },
    maxEpoch,
    userSignature,
 });
