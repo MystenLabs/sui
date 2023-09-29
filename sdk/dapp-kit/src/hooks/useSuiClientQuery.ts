@@ -39,7 +39,7 @@ export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
 		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
 ) {
-	const [method, params, { queryKey = [], enabled = !!params, ...options } = {}] = args as [
+	const [method, params, { queryKey = [], ...options } = {}] = args as [
 		method: T,
 		params?: SuiRpcMethods[T]['params'],
 		options?: UseSuiClientQueryOptions<T>,
@@ -50,7 +50,6 @@ export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 	return useQuery({
 		...options,
 		queryKey: [suiContext.network, method, params, ...queryKey],
-		enabled,
 		queryFn: async () => {
 			return await suiContext.client[method](params as never);
 		},
