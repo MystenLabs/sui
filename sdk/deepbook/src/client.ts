@@ -434,7 +434,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::batch_cancel_order`,
 			arguments: [
 				txb.object(poolId),
-				txb.pure(bcs.vector(bcs.U64).serialize(orderIds)),
+				bcs.vector(bcs.U64).serialize(orderIds),
 				txb.object(this.#checkAccountCap()),
 			],
 		});
@@ -458,8 +458,8 @@ export class DeepBookClient {
 			arguments: [
 				txb.object(poolId),
 				txb.object(SUI_CLOCK_OBJECT_ID),
-				txb.pure(bcs.vector(bcs.U64).serialize(orderIds)),
-				txb.pure(bcs.vector(bcs.Address).serialize(orderOwners)),
+				bcs.vector(bcs.U64).serialize(orderIds),
+				bcs.vector(bcs.Address).serialize(orderOwners),
 			],
 		});
 		return txb;

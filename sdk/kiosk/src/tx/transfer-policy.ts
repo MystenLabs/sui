@@ -69,7 +69,7 @@ export function withdrawFromPolicy(
 	policyCap: ObjectArgument,
 	amount?: string | bigint | null,
 ): TransactionArgument {
-	const amountArg = tx.pure(bcs.option(bcs.u64()).serialize(amount));
+	const amountArg = bcs.option(bcs.u64()).serialize(amount);
 
 	const [profits] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::withdraw`,

@@ -191,7 +191,7 @@ export function withdrawFromKiosk(
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
 ): TransactionArgument {
-	const amountArg = tx.pure(bcs.option(bcs.u64()).serialize(amount));
+	const amountArg = bcs.option(bcs.u64()).serialize(amount);
 
 	const [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,

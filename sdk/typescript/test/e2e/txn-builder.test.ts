@@ -55,7 +55,7 @@ describe('Transaction Builders', () => {
 		const coin_0 = coins[0].data as SuiObjectData;
 
 		const coin = tx.splitCoins(tx.object(coin_0.objectId), [
-			tx.pure(bcs.u64().serialize(DEFAULT_GAS_BUDGET * 2)),
+			bcs.u64().serialize(DEFAULT_GAS_BUDGET * 2),
 		]);
 		tx.transferObjects([coin], toolbox.address());
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);

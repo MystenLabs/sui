@@ -39,7 +39,7 @@ export function attachRoyaltyRuleTx(
 		arguments: [
 			objArg(tx, policy),
 			objArg(tx, policyCap),
-			tx.pure(bcs.U16.serialize(Number(percentageBps))),
+			tx.pure.u16(Number(percentageBps)),
 			tx.pure.u64(minAmount),
 		],
 	});

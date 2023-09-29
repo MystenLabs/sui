@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
 
@@ -33,7 +34,12 @@ import { getTransactionType, TransactionBlockInput, Transactions } from './Trans
 import type { WellKnownEncoding } from './utils.js';
 import { create, TRANSACTION_TYPE } from './utils.js';
 
-type TransactionResult = TransactionArgument & TransactionArgument[];
+export type TransactionObjectArgument = Exclude<
+	TransactionArgument,
+	{ kind: 'Input'; type: 'pure' }
+>;
+type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
+	Extract<TransactionArgument, { kind: 'NestedResult' }>[];
 
 const DefaultOfflineLimits = {
 	maxPureArgumentSize: 16 * 1024,
@@ -254,7 +260,7 @@ export class TransactionBlock {
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
-	get gas(): TransactionArgument {
+	get gas(): TransactionObjectArgument {
 		return { kind: 'GasCoin' };
 	}
 
@@ -267,7 +273,7 @@ export class TransactionBlock {
 	 * is the format required for custom serialization.
 	 *
 	 */
-	#input(type: 'object' | 'pure', value?: unknown) {
+	#input<T extends 'object' | 'pure'>(type: T, value?: unknown) {
 		const index = this.#blockData.inputs.length;
 		const input = create(
 			{
@@ -280,7 +286,7 @@ export class TransactionBlock {
 			TransactionBlockInput,
 		);
 		this.#blockData.inputs.push(input);
-		return input;
+		return input as Extract<typeof input, { type: T }>;
 	}
 
 	/**
@@ -291,7 +297,7 @@ export class TransactionBlock {
 		// deduplicate
 		const inserted = this.#blockData.inputs.find(
 			(i) => i.type === 'object' && id === getIdFromCallArg(i.value),
-		);
+		) as Extract<TransactionArgument, { type?: 'object' }> | undefined;
 		return inserted ?? this.#input('object', value);
 	}
 
@@ -331,11 +337,21 @@ export class TransactionBlock {
 		return createTransactionResult(index - 1);
 	}
 
+	#normalizeTransactionArgument(
+		arg: TransactionArgument | SerializedBcs<any>,
+	): TransactionArgument {
+		if (isSerializedBcs(arg)) {
+			return this.pure(arg);
+		}
+
+		return arg as TransactionArgument;
+	}
+
 	// Method shorthands:
 
 	splitCoins(
-		coin: TransactionArgument,
-		amounts: (TransactionArgument | number | string | bigint)[],
+		coin: TransactionObjectArgument,
+		amounts: (TransactionArgument | SerializedBcs<any> | number | string | bigint)[],
 	) {
 		return this.add(
 			Transactions.SplitCoins(
@@ -343,33 +359,74 @@ export class TransactionBlock {
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
 						? this.pure.u64(amount)
-						: amount,
+						: this.#normalizeTransactionArgument(amount),
 				),
 			),
 		);
 	}
-	mergeCoins(...args: Parameters<(typeof Transactions)['MergeCoins']>) {
-		return this.add(Transactions.MergeCoins(...args));
+	mergeCoins(destination: TransactionObjectArgument, sources: TransactionObjectArgument[]) {
+		return this.add(Transactions.MergeCoins(destination, sources));
 	}
-	publish(...args: Parameters<(typeof Transactions)['Publish']>) {
-		return this.add(Transactions.Publish(...args));
+	publish({ modules, dependencies }: { modules: number[][] | string[]; dependencies: string[] }) {
+		return this.add(
+			Transactions.Publish({
+				modules,
+				dependencies,
+			}),
+		);
 	}
-	upgrade(...args: Parameters<(typeof Transactions)['Upgrade']>) {
-		return this.add(Transactions.Upgrade(...args));
+	upgrade({
+		modules,
+		dependencies,
+		packageId,
+		ticket,
+	}: {
+		modules: number[][] | string[];
+		dependencies: string[];
+		packageId: string;
+		ticket: TransactionObjectArgument;
+	}) {
+		return this.add(
+			Transactions.Upgrade({
+				modules,
+				dependencies,
+				packageId,
+				ticket,
+			}),
+		);
 	}
-	moveCall(...args: Parameters<(typeof Transactions)['MoveCall']>) {
-		return this.add(Transactions.MoveCall(...args));
+	moveCall({
+		arguments: args,
+		typeArguments,
+		target,
+	}: {
+		arguments?: (TransactionArgument | SerializedBcs<any>)[];
+		typeArguments?: string[];
+		target: `${string}::${string}::${string}`;
+	}) {
+		return this.add(
+			Transactions.MoveCall({
+				arguments: args?.map((arg) => this.#normalizeTransactionArgument(arg)),
+				typeArguments,
+				target,
+			}),
+		);
 	}
-	transferObjects(objects: TransactionArgument[], address: TransactionArgument | string) {
+	transferObjects(
+		objects: TransactionObjectArgument[],
+		address: TransactionArgument | SerializedBcs<any> | string,
+	) {
 		return this.add(
 			Transactions.TransferObjects(
 				objects,
-				typeof address === 'string' ? this.pure.address(address) : address,
+				typeof address === 'string'
+					? this.pure.address(address)
+					: this.#normalizeTransactionArgument(address),
 			),
 		);
 	}
-	makeMoveVec(...args: Parameters<(typeof Transactions)['MakeMoveVec']>) {
-		return this.add(Transactions.MakeMoveVec(...args));
+	makeMoveVec({ type, objects }: { objects: TransactionObjectArgument[]; type?: string }) {
+		return this.add(Transactions.MakeMoveVec({ type, objects }));
 	}
 
 	/**

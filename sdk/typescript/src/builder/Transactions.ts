@@ -28,12 +28,20 @@ import { create, TRANSACTION_TYPE } from './utils.js';
 const option = <T extends Struct<any, any>>(some: T) =>
 	union([object({ None: union([literal(true), literal(null)]) }), object({ Some: some })]);
 
-export const TransactionBlockInput = object({
-	kind: literal('Input'),
-	index: integer(),
-	value: optional(any()),
-	type: optional(union([literal('pure'), literal('object')])),
-});
+export const TransactionBlockInput = union([
+	object({
+		kind: literal('Input'),
+		index: integer(),
+		value: optional(any()),
+		type: optional(literal('object')),
+	}),
+	object({
+		kind: literal('Input'),
+		index: integer(),
+		value: optional(any()),
+		type: literal('pure'),
+	}),
+]);
 export type TransactionBlockInput = Infer<typeof TransactionBlockInput>;
 
 const TransactionArgumentTypes = [
