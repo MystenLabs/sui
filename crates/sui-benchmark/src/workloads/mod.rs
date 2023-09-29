@@ -18,7 +18,7 @@ use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use workload::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WorkloadParams {
     pub group: u32,
     pub target_qps: u64,

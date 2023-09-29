@@ -47,17 +47,6 @@ impl WorkloadConfiguration {
             } => {
                 info!("Number of benchmarks to run: {}", num_of_benchmarks);
 
-                /*
-                // validate durations - should be in ascending order
-                let mut duration_copy = duration.clone();
-                assert_eq!(
-                    duration,
-                    duration_copy.sort(),
-                    "Duration values should be provided in ascending order"
-                );
-
-                 */
-
                 for workload_group in 0..num_of_benchmarks {
                     let i = workload_group as usize;
                     let builders = Self::create_workload_builders(
