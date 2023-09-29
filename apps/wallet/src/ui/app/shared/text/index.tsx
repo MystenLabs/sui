@@ -47,9 +47,6 @@ const textStyles = cva([], {
 			'success-dark': 'text-success-dark',
 			'issue-dark': 'text-issue-dark',
 		},
-		opacity: {
-			'40': 'text-opacity-40',
-		},
 		italic: {
 			true: 'italic',
 			false: '',

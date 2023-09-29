@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getUSDCurrency, useSuiBalanceInUSDC } from '_app/hooks/useDeepbook';
+import { allowedSwapCoinsList } from '_app/hooks/useDeepBook';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import { LargeButton } from '_app/shared/LargeButton';
@@ -27,9 +27,8 @@ import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, MIST_PER_SUI, SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
-import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -60,18 +59,6 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 		>
 			{unpin ? <Unpin16 /> : <Pin16 />}
 		</button>
-	);
-}
-
-function TokenRowSuiToUSDC({ suiBalance }: { suiBalance: BigInt }) {
-	const { rawValue } = useSuiBalanceInUSDC(
-		new BigNumber(suiBalance.toString()).shiftedBy(-1 * SUI_DECIMALS),
-	);
-
-	return (
-		<Text variant="subtitle" color="steel-dark" weight="medium">
-			{getUSDCurrency(rawValue)}
-		</Text>
 	);
 }
 
@@ -125,7 +112,10 @@ export function TokenRow({
 	const balance = BigInt(coinBalance.totalBalance);
 	const [formatted, symbol] = useFormatCoin(balance, coinType);
 	const isButton = Tag === 'button';
-	const isSui = coinType === SUI_TYPE_ARG;
+
+	const isRenderSwapButton = useMemo(() => {
+		return allowedSwapCoinsList.includes(coinType);
+	}, [coinType]);
 
 	return (
 		<Tag
@@ -147,7 +137,9 @@ export function TokenRow({
 					{renderActions ? (
 						<div className="flex gap-2.5 items-center">
 							<TokenRowButton coinBalance={coinBalance} page="send" copy="Send" />
-							<TokenRowButton coinBalance={coinBalance} page="swap" copy="Swap" />
+							{isRenderSwapButton && (
+								<TokenRowButton coinBalance={coinBalance} page="swap" copy="Swap" />
+							)}
 						</div>
 					) : (
 						<div className="flex gap-1 items-center">
@@ -168,8 +160,6 @@ export function TokenRow({
 						{formatted} {symbol}
 					</Text>
 				)}
-
-				{isSui && <TokenRowSuiToUSDC suiBalance={balance} />}
 			</div>
 		</Tag>
 	);
@@ -255,23 +245,6 @@ export function MyTokens({
 				</TokenList>
 			)}
 		</Loading>
-	);
-}
-
-function WalletBalanceUSD({ tokenBalance }: { tokenBalance: bigint }) {
-	const { rawValue: rawBalanceInUSD } = useSuiBalanceInUSDC(
-		new BigNumber(tokenBalance.toString()).shiftedBy(-1 * SUI_DECIMALS),
-	);
-	const balanceInUSD = getUSDCurrency(rawBalanceInUSD);
-
-	if (!balanceInUSD) {
-		return null;
-	}
-
-	return (
-		<Text variant="caption" weight="medium" color="hero-darkest">
-			{balanceInUSD}
-		</Text>
 	);
 }
 
@@ -387,12 +360,14 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							<>
 								<div
 									data-testid="coin-balance"
-									className="bg-hero/5 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+									className={clsx(
+										'rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4',
+										isDefiWalletEnabled ? 'bg-gradients-graph-cards' : 'bg-hero/5',
+									)}
 								>
 									{accountHasSui ? (
 										<div className="flex flex-col gap-1 items-center">
 											<CoinBalance amount={tokenBalance} type={activeCoinType} />
-											{isDefiWalletEnabled && <WalletBalanceUSD tokenBalance={tokenBalance} />}
 										</div>
 									) : (
 										<div className="flex flex-col gap-5">
