@@ -189,24 +189,3 @@ pub enum RunSpec {
         duration: Vec<Interval>,
     },
 }
-
-/*
-
- 0    1         0   1    0   1   0    1
-100s 40s ---> 100s 40s 100s 40s 100s 40s
-100s 40s unbounded
-
-
-group the workload by the group id and order them in a list
-
-1. first spin up the workers of the groups starting from the lowest to highest 0 -> ...
-
-2. let the workers run until the next worker tasks have finished up (check by time and cancel them? or just wait for all tasks to finish)
-
-3. pick then next workers from next group. Spin them up and let them run. If the interval is "unbounded" then do not attempt ever to terminate them
-
-4. cycle through the workloads
-
-5. listen also to termination signals
-
-*/
