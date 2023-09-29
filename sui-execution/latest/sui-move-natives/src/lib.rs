@@ -696,12 +696,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(test_utils::create_one_time_witness),
         ),
         (
-            "zklogin",
+            "zklogin_verified_id",
             "check_zklogin_id_internal",
             make_native!(zklogin::check_zklogin_id_internal),
         ),
         (
-            "zklogin",
+            "zklogin_verified_iss",
             "check_zklogin_iss_internal",
             make_native!(zklogin::check_zklogin_iss_internal),
         ),

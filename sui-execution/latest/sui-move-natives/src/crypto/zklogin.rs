@@ -23,10 +23,21 @@ pub struct CheckZkloginIdCostParams {
     /// Base cost for invoking the `check_zklogin_id` function
     pub check_zklogin_id_cost_base: Option<InternalGas>,
 }
+
 /***************************************************************************************************
- * native fun check_zklogin_id
- * Implementation of the Move native function `zklogin::check_zklogin_id(address: &address, name: &String, value: &String, iss: &String, aud: &String, pin_hash: &u256): bool;`
- *   gas cost: check_zklogin_id_cost | The values name, value, iss and aud are hashed as part of this function, but their sizes are bounded from above, so we may assume that the cost is constant.
+ * native fun check_zklogin_id_internal
+ *
+ * Implementation of the Move native function `zklogin_verified_id::check_zklogin_id_internal(
+ *      address: address,
+ *      kc_name: &vector<u8>,
+ *      kc_value: &vector<u8>,
+ *      iss: &vector<u8>,
+ *      aud: &vector<u8>,
+ *      pin_hash: u256
+ *  ): bool;`
+ *
+ * Gas cost: check_zklogin_id_cost | The values name, value, iss and aud are hashed as part of this
+ * function, but their sizes are bounded from above, so we may assume that the cost is constant.
  **************************************************************************************************/
 pub fn check_zklogin_id_internal(
     context: &mut NativeContext,
@@ -72,7 +83,7 @@ pub fn check_zklogin_id_internal(
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
-    let result = verify_zk_login_id_internal(
+    let result = check_id_internal(
         &address,
         &kc_name.as_bytes_ref(),
         &kc_value.as_bytes_ref(),
@@ -90,7 +101,7 @@ pub fn check_zklogin_id_internal(
     }
 }
 
-fn verify_zk_login_id_internal(
+fn check_id_internal(
     address: &AccountAddress,
     kc_name: &[u8],
     kc_value: &[u8],
@@ -117,10 +128,18 @@ pub struct CheckZkloginIssCostParams {
     /// Base cost for invoking the `check_zklogin_iss` function
     pub check_zklogin_iss_cost_base: Option<InternalGas>,
 }
+
 /***************************************************************************************************
- * native fun check_zklogin_iss
- * Implementation of the Move native function `zklogin::check_zklogin_iss(address: &address, iss: &String, address_seed: &u256): bool;`
- *   gas cost: check_zklogin_iss_cost | The iss value is hashed as part of this function, but its size is bounded from above so we may assume that the cost is constant.
+ * native fun check_zklogin_iss_internal
+ *
+ * Implementation of the Move native function `zklogin_verified_iss::check_zklogin_iss_internal(
+ *      address: address,
+ *      address_seed: u256,
+ *      iss: &vector<u8>,
+ *  ): bool;`
+ *
+ * Gas cost: check_zklogin_iss_cost | The iss value is hashed as part of this function, but its size
+ * is bounded from above so we may assume that the cost is constant.
  **************************************************************************************************/
 pub fn check_zklogin_iss_internal(
     context: &mut NativeContext,
@@ -157,7 +176,7 @@ pub fn check_zklogin_iss_internal(
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
-    let result = verify_zk_login_iss_internal(&address, &address_seed, &iss.as_bytes_ref());
+    let result = check_iss_internal(&address, &address_seed, &iss.as_bytes_ref());
 
     match result {
         Ok(result) => Ok(NativeResult::ok(
@@ -168,7 +187,7 @@ pub fn check_zklogin_iss_internal(
     }
 }
 
-fn verify_zk_login_iss_internal(
+fn check_iss_internal(
     address: &AccountAddress,
     address_seed: &U256,
     iss: &[u8],
@@ -180,6 +199,9 @@ fn verify_zk_login_iss_internal(
     ) {
         Ok(_) => Ok(true),
         Err(FastCryptoError::InvalidProof) => Ok(false),
+        // This will only happen if the address_seed as a string cannot be converted to a BigInt in
+        // fastcrypto. This should not happen, so an InvalidInput error from `check_iss_internal`
+        // implies that the `iss` bytes array could not be parsed as an UTF-8 string.
         Err(_) => Err(FastCryptoError::InvalidInput),
     }
 }
