@@ -22,10 +22,8 @@ module sui::zklogin_verified_id {
         address: address,
         /// The name of the key claim
         kc_name: String,
-
         /// The value of the key claim
         kc_value: String,
-
         /// The issuer
         iss: String,
 
@@ -34,28 +32,28 @@ module sui::zklogin_verified_id {
     }
 
     /// Returns the address associated with the given VerifiedID
-    public fun get_address(verified_id: &VerifiedID): address {
+    public fun address(verified_id: &VerifiedID): address {
         verified_id.address
     }
 
     /// Returns the name of the key claim associated with the given VerifiedID
-    public fun get_kc_name(verified_id: &VerifiedID): String {
-        verified_id.kc_name
+    public fun kc_name(verified_id: &VerifiedID): &String {
+        &verified_id.kc_name
     }
 
     /// Returns the value of the key claim associated with the given VerifiedID
-    public fun get_kc_value(verified_id: &VerifiedID): String {
-        verified_id.kc_value
+    public fun kc_value(verified_id: &VerifiedID): String {
+        &verified_id.kc_value
     }
 
     /// Returns the issuer associated with the given VerifiedID
-    public fun get_iss(verified_id: &VerifiedID): String {
-        verified_id.iss
+    public fun iss(verified_id: &VerifiedID): &String {
+        &verified_id.iss
     }
 
     /// Returns the audience (wallet) associated with the given VerifiedID
-    public fun get_aud(verified_id: &VerifiedID): String {
-        verified_id.aud
+    public fun aud(verified_id: &VerifiedID): &String {
+        &verified_id.aud
     }
 
     /// Verify that the caller's address was created using zklogin and the given parametersand returns a `VerifiedID`
