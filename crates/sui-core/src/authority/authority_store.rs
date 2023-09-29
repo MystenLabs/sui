@@ -254,7 +254,7 @@ impl AuthorityStore {
             .expect("Database read should not fail at init.")
         {
             store
-                .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
+                .bulk_insert_genesis_objects(genesis.objects())
                 .await
                 .expect("Cannot bulk insert genesis objects");
 
@@ -831,16 +831,8 @@ impl AuthorityStore {
     }
 
     /// NOTE: this function is only to be used for fuzzing and testing. Never use in prod
-    #[cfg(not(release))]
-    pub(crate) async fn insert_raw_object_unchecked_for_testing(
-        &self,
-        objects: &[Object],
-    ) -> SuiResult {
-        // Sideload directly
-        for o in objects {
-            self.insert_object_direct(o.compute_object_reference(), o)?;
-        }
-        Ok(())
+    pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
+        self.bulk_insert_genesis_objects(objects).await
     }
 
     /// Insert objects directly into the object table, but do not touch other tables.
@@ -878,7 +870,7 @@ impl AuthorityStore {
     }
 
     /// This function should only be used for initializing genesis and should remain private.
-    async fn bulk_object_insert(&self, objects: &[&Object]) -> SuiResult<()> {
+    async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();
         let ref_and_objects: Vec<_> = objects
             .iter()
