@@ -20,14 +20,14 @@ module sui::zklogin_verified_iss {
         /// The ID of this VerifiedIssuer
         id: UID,
         /// The address this VerifiedID is associated with
-        address: address,
+        owner: address,
         /// The issuer
         iss: String,
     }
 
     /// Returns the address associated with the given VerifiedIssuer
-    public fun address(verified_issuer: &VerifiedIssuer): address {
-        verified_issuer.address
+    public fun owner(verified_issuer: &VerifiedIssuer): address {
+        verified_issuer.owner
     }
 
     /// Returns the issuer associated with the given VerifiedIssuer
@@ -45,7 +45,7 @@ module sui::zklogin_verified_iss {
         ctx: &mut TxContext,
     ): VerifiedIssuer {
         assert!(check_zklogin_iss(tx_context::sender(ctx), address_seed, &iss), EInvalidProof);
-        VerifiedIssuer {id: object::new(ctx), address: tx_context::sender(ctx), iss}
+        VerifiedIssuer {id: object::new(ctx), owner: tx_context::sender(ctx), iss}
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.

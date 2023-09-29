@@ -19,21 +19,20 @@ module sui::zklogin_verified_id {
         /// The ID of this VerifiedID
         id: UID,
         /// The address this VerifiedID is associated with
-        address: address,
+        owner: address,
         /// The name of the key claim
         kc_name: String,
         /// The value of the key claim
         kc_value: String,
         /// The issuer
         iss: String,
-
         /// The audience (wallet)
         aud: String,
     }
 
     /// Returns the address associated with the given VerifiedID
-    public fun address(verified_id: &VerifiedID): address {
-        verified_id.address
+    public fun owner(verified_id: &VerifiedID): address {
+        verified_id.owner
     }
 
     /// Returns the name of the key claim associated with the given VerifiedID
@@ -42,7 +41,7 @@ module sui::zklogin_verified_id {
     }
 
     /// Returns the value of the key claim associated with the given VerifiedID
-    public fun kc_value(verified_id: &VerifiedID): String {
+    public fun kc_value(verified_id: &VerifiedID): &String {
         &verified_id.kc_value
     }
 
@@ -72,7 +71,7 @@ module sui::zklogin_verified_id {
         ctx: &mut TxContext,
     ): VerifiedID {
         assert!(check_zklogin_id(tx_context::sender(ctx), &kc_name, &kc_value, &iss, &aud, pin_hash), EInvalidProof);
-        VerifiedID { id: object::new(ctx), address: tx_context::sender(ctx), kc_name, kc_value, iss, aud}
+        VerifiedID { id: object::new(ctx), owner: tx_context::sender(ctx), kc_name, kc_value, iss, aud}
     }
 
     /// Returns true if `address` was created using zklogin and the given parameters.
