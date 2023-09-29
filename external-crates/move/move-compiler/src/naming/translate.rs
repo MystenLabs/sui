@@ -6,12 +6,12 @@ use crate::{
     diag,
     diagnostics::codes::*,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent},
+        ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
     },
     naming::ast::{self as N, Neighbor_},
     parser::ast::{self as P, Ability_, ConstantName, Field, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, *},
+    shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -29,20 +29,34 @@ use super::{
 
 #[derive(Debug, Clone)]
 enum ResolvedType {
+    Module(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
-    BuiltinType,
+    BuiltinType(N::BuiltinTypeName_),
+    Unbound,
 }
 
-impl ResolvedType {
-    fn error_msg(&self, n: &Name) -> (Loc, String) {
-        match self {
-            ResolvedType::TParam(loc, _) => (
-                *loc,
-                format!("But '{}' was declared as a type parameter here", n),
-            ),
-            ResolvedType::BuiltinType => (n.loc, format!("But '{}' is a builtin type", n)),
-        }
-    }
+#[derive(Debug, Clone)]
+struct ResolvedModuleType {
+    // original names/locs are provided to preserve loc information if needed
+    original_loc: Loc,
+    original_mident: ModuleIdent,
+    original_type_name: Name,
+    decl_loc: Loc,
+    declared_abilities: AbilitySet,
+    arity: usize,
+}
+
+enum ResolvedFunction {
+    Builtin(N::BuiltinFunction),
+    Module(Box<ResolvedModuleFunction>),
+    Unbound,
+}
+
+struct ResolvedModuleFunction {
+    // original names/locs are provided to preserve loc information if needed
+    module: ModuleIdent,
+    function: FunctionName,
+    ty_args: Option<Vec<N::Type>>,
 }
 
 struct Context<'env> {
@@ -118,7 +132,10 @@ impl<'env> Context<'env> {
             .collect();
         let unscoped_types = N::BuiltinTypeName_::all_names()
             .iter()
-            .map(|s| (*s, RT::BuiltinType))
+            .map(|s| {
+                let b_ = RT::BuiltinType(N::BuiltinTypeName_::resolve(s.as_str()).unwrap());
+                (*s, b_)
+            })
             .collect();
         Self {
             env: compilation_env,
@@ -155,7 +172,7 @@ impl<'env> Context<'env> {
         loc: Loc,
         m: &ModuleIdent,
         n: &Name,
-    ) -> Option<(Loc, StructName, AbilitySet, usize)> {
+    ) -> Option<(Loc, AbilitySet, usize)> {
         let types = match self.scoped_types.get(m) {
             None => {
                 self.env.add_diag(diag!(
@@ -176,9 +193,7 @@ impl<'env> Context<'env> {
                     .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
                 None
             }
-            Some((decl_loc, _, abilities, arity)) => {
-                Some((*decl_loc, StructName(*n), abilities.clone(), *arity))
-            }
+            Some((decl_loc, _, abilities, arity)) => Some((*decl_loc, abilities.clone(), *arity)),
         }
     }
 
@@ -242,15 +257,38 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolve_unscoped_type(&mut self, n: &Name) -> Option<ResolvedType> {
+    fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
+        use E::ModuleAccess_ as EN;
+        match ma_ {
+            EN::Name(n) => self.resolve_unscoped_type(nloc, n),
+            EN::ModuleAccess(m, n) => {
+                let Some((decl_loc, abilities, arity)) = self.resolve_module_type(nloc, &m, &n)
+                else {
+                    assert!(self.env.has_errors());
+                    return ResolvedType::Unbound;
+                };
+                let mt = ResolvedModuleType {
+                    original_loc: nloc,
+                    original_mident: m,
+                    original_type_name: n,
+                    decl_loc,
+                    declared_abilities: abilities,
+                    arity,
+                };
+                ResolvedType::Module(Box::new(mt))
+            }
+        }
+    }
+
+    fn resolve_unscoped_type(&mut self, loc: Loc, n: Name) -> ResolvedType {
         match self.unscoped_types.get(&n.value) {
             None => {
                 let msg = format!("Unbound type '{}' in current scope", n);
                 self.env
-                    .add_diag(diag!(NameResolution::UnboundType, (n.loc, msg)));
-                None
+                    .add_diag(diag!(NameResolution::UnboundType, (loc, msg)));
+                ResolvedType::Unbound
             }
-            Some(rn) => Some(rn.clone()),
+            Some(rn) => rn.clone(),
         }
     }
 
@@ -258,40 +296,49 @@ impl<'env> Context<'env> {
         &mut self,
         loc: Loc,
         verb: &str,
-        sp!(nloc, ma_): E::ModuleAccess,
+        ma: E::ModuleAccess,
         etys_opt: Option<Vec<E::Type>>,
     ) -> Option<(ModuleIdent, StructName, Option<Vec<N::Type>>)> {
-        use E::ModuleAccess_ as EA;
-
-        match ma_ {
-            EA::Name(n) => match self.resolve_unscoped_type(&n) {
-                None => {
-                    assert!(self.env.has_errors());
-                    None
-                }
-                Some(rt) => {
-                    self.env.add_diag(diag!(
-                        NameResolution::NamePositionMismatch,
-                        (nloc, format!("Invalid {}. Expected a struct name", verb)),
-                        rt.error_msg(&n),
-                    ));
-                    None
-                }
-            },
-            EA::ModuleAccess(m, n) => match self.resolve_module_type(nloc, &m, &n) {
-                None => {
-                    assert!(self.env.has_errors());
-                    None
-                }
-                Some((_, _, _, arity)) => {
-                    let tys_opt = etys_opt.map(|etys| {
-                        let tys = types(self, etys);
-                        let name_f = || format!("{}::{}", &m, &n);
-                        check_type_argument_arity(self, loc, name_f, tys, arity)
-                    });
-                    Some((m, StructName(n), tys_opt))
-                }
-            },
+        match self.resolve_type(ma) {
+            ResolvedType::Unbound => {
+                assert!(self.env.has_errors());
+                None
+            }
+            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
+                let (rtloc, msg) = match rt {
+                    ResolvedType::TParam(loc, tp) => (
+                        loc,
+                        format!(
+                            "But '{}' was declared as a type parameter here",
+                            tp.user_specified_name
+                        ),
+                    ),
+                    ResolvedType::BuiltinType(n) => {
+                        (ma.loc, format!("But '{n}' is a builtin type"))
+                    }
+                    _ => unreachable!(),
+                };
+                self.env.add_diag(diag!(
+                    NameResolution::NamePositionMismatch,
+                    (ma.loc, format!("Invalid {}. Expected a struct name", verb)),
+                    (rtloc, msg)
+                ));
+                None
+            }
+            ResolvedType::Module(mt) => {
+                let ResolvedModuleType {
+                    original_mident: m,
+                    original_type_name: n,
+                    arity,
+                    ..
+                } = *mt;
+                let tys_opt = etys_opt.map(|etys| {
+                    let tys = types(self, etys);
+                    let name_f = || format!("{}::{}", &m, &n);
+                    check_type_argument_arity(self, loc, name_f, tys, arity)
+                });
+                Some((m, StructName(n), tys_opt))
+            }
         }
     }
 
@@ -400,7 +447,10 @@ pub fn program(
     } = prog;
     let modules = modules(&mut context, emodules);
     let scripts = scripts(&mut context, escripts);
-    N::Program { modules, scripts }
+    let mut inner = N::Program_ { modules, scripts };
+    let mut info = NamingProgramInfo::new(pre_compiled_lib, &inner);
+    super::resolve_use_funs::program(compilation_env, &mut info, &mut inner);
+    N::Program { info, inner }
 }
 
 fn modules(
@@ -422,6 +472,7 @@ fn module(
         package_name,
         attributes,
         is_source_module,
+        use_funs: euse_funs,
         friends: efriends,
         structs: estructs,
         functions: efunctions,
@@ -429,10 +480,11 @@ fn module(
         specs,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    let unscoped = context.save_unscoped();
     let mut spec_dependencies = BTreeSet::new();
     spec_blocks(&mut spec_dependencies, &specs);
+    let use_funs = use_funs(context, euse_funs);
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
-    let unscoped = context.save_unscoped();
     let structs = estructs.map(|name, s| {
         context.restore_unscoped(unscoped.clone());
         struct_def(context, name, s)
@@ -453,6 +505,7 @@ fn module(
         package_name,
         attributes,
         is_source_module,
+        use_funs,
         friends,
         structs,
         constants,
@@ -477,15 +530,17 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         package_name,
         attributes,
         loc,
+        use_funs: euse_funs,
         constants: econstants,
         function_name,
         function: efunction,
         specs,
     } = escript;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    let outer_unscoped = context.save_unscoped();
     let mut spec_dependencies = BTreeSet::new();
     spec_blocks(&mut spec_dependencies, &specs);
-    let outer_unscoped = context.save_unscoped();
+    let use_funs = use_funs(context, euse_funs);
     for (loc, s, _) in &econstants {
         context.bind_constant(*s, loc)
     }
@@ -509,10 +564,173 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         package_name,
         attributes,
         loc,
+        use_funs,
         constants,
         function_name,
         function,
         spec_dependencies,
+    }
+}
+
+//**************************************************************************************************
+// Use Funs
+//**************************************************************************************************
+
+fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
+    let E::UseFuns {
+        explicit: eexplicit,
+        implicit: eimplicit,
+    } = eufs;
+    let mut resolved = N::ResolvedUseFuns::new();
+    let resolved_vec: Vec<_> = eexplicit
+        .into_iter()
+        .flat_map(|e| explicit_use_fun(context, e))
+        .collect();
+    for (tn, method, nuf) in resolved_vec {
+        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
+        let nuf_loc = nuf.loc;
+        if let Err((_, prev)) = methods.add(method, nuf) {
+            let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
+            context.env.add_diag(diag!(
+                Declarations::DuplicateItem,
+                (nuf_loc, msg),
+                (prev, "Previously declared here"),
+            ))
+        }
+    }
+    N::UseFuns {
+        resolved,
+        implicit_candidates: eimplicit,
+    }
+}
+
+fn explicit_use_fun(
+    context: &mut Context,
+    e: E::ExplicitUseFun,
+) -> Option<(N::TypeName, Name, N::UseFun)> {
+    let E::ExplicitUseFun {
+        loc,
+        attributes,
+        is_public,
+        function,
+        ty,
+        method,
+    } = e;
+    let m_f_opt = match resolve_function(context, loc, function, None) {
+        ResolvedFunction::Module(mf) => {
+            let ResolvedModuleFunction {
+                module,
+                function,
+                ty_args,
+            } = *mf;
+            assert!(ty_args.is_none());
+            Some((module, function))
+        }
+        ResolvedFunction::Builtin(_) => {
+            let msg = "Invalid 'use fun'. Cannot use a builtin function as a method";
+            context
+                .env
+                .add_diag(diag!(Declarations::InvalidUseFun, (loc, msg)));
+            None
+        }
+        ResolvedFunction::Unbound => {
+            assert!(context.env.has_errors());
+            None
+        }
+    };
+    let tn_opt = match context.resolve_type(ty) {
+        ResolvedType::Unbound => {
+            assert!(context.env.has_errors());
+            None
+        }
+        ResolvedType::TParam(tloc, tp) => {
+            let tmsg = format!(
+                "But '{}' was declared as a type parameter here",
+                tp.user_specified_name
+            );
+            context.env.add_diag(diag!(
+                Declarations::InvalidUseFun,
+                (
+                    loc,
+                    "Invalid 'use fun'. Cannot associate a method a type parameter"
+                ),
+                (tloc, tmsg)
+            ));
+            None
+        }
+        ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
+        ResolvedType::Module(mt) => {
+            let mt = *mt;
+            Some(N::TypeName_::ModuleType(
+                mt.original_mident,
+                StructName(mt.original_type_name),
+            ))
+        }
+    };
+    let tn_ = tn_opt?;
+    let tn = sp(ty.loc, tn_);
+    if let Some(pub_loc) = is_public {
+        let current_module = context.current_module;
+        if let Err(def_loc_opt) = use_fun_module_defines(context, current_module, &tn) {
+            let msg = "Invalid 'use fun'. Cannot publicly associate a function with a \
+                type defined in another module";
+            let pub_msg = format!(
+                "Declared '{}' here. Consider removing to make a local 'use fun' instead",
+                Visibility::PUBLIC
+            );
+            let mut diag = diag!(Declarations::InvalidUseFun, (loc, msg), (pub_loc, pub_msg));
+            if let Some(def_loc) = def_loc_opt {
+                diag.add_secondary_label((def_loc, "Type defined in another module here"));
+            }
+            context.env.add_diag(diag);
+            return None;
+        }
+    }
+    let target_function = m_f_opt?;
+    let use_fun = N::UseFun {
+        loc,
+        attributes,
+        is_public,
+        target_function,
+        kind: N::UseFunKind::Explicit,
+    };
+    Some((tn, method, use_fun))
+}
+
+fn use_fun_module_defines(
+    context: &mut Context,
+    specified: Option<ModuleIdent>,
+    tn: &N::TypeName,
+) -> Result<(), Option<Loc>> {
+    match &tn.value {
+        N::TypeName_::Builtin(sp!(_, b_)) => {
+            let definer_opt = context.env.primitive_definer(*b_);
+            match (definer_opt, &specified) {
+                (None, _) => Err(None),
+                (Some(d), None) => Err(Some(d.loc)),
+                (Some(d), Some(s)) => {
+                    if d == s {
+                        Ok(())
+                    } else {
+                        Err(Some(d.loc))
+                    }
+                }
+            }
+        }
+        N::TypeName_::ModuleType(m, s) => {
+            if specified.as_ref().is_some_and(|s| s == m) {
+                Ok(())
+            } else {
+                let (decl_loc, _, _, _) = context
+                    .scoped_types
+                    .get(m)
+                    .unwrap()
+                    .get(&s.value())
+                    .unwrap();
+                Err(Some(*decl_loc))
+            }
+        }
+        N::TypeName_::Multiple(_) => panic!("ICE tuple should not be reachable from use fun"),
     }
 }
 
@@ -680,14 +898,18 @@ fn function_acquires(
     acquires
 }
 
-fn acquires_type(context: &mut Context, sp!(loc, en_): E::ModuleAccess) -> Option<StructName> {
+fn acquires_type(context: &mut Context, ma: E::ModuleAccess) -> Option<StructName> {
     use ResolvedType as RT;
-    use E::ModuleAccess_ as EN;
-    match en_ {
-        EN::Name(n) => {
-            let case = match context.resolve_unscoped_type(&n)? {
-                RT::BuiltinType => "builtin type",
+    match context.resolve_type(ma) {
+        RT::Unbound => {
+            assert!(context.env.has_errors());
+            None
+        }
+        rt @ RT::BuiltinType(_) | rt @ RT::TParam(_, _) => {
+            let case = match rt {
+                RT::BuiltinType(_) => "builtin type",
                 RT::TParam(_, _) => "type parameter",
+                _ => unreachable!(),
             };
             let msg = format!(
                 "Invalid acquires item. Expected a struct name, but got a {}",
@@ -695,11 +917,18 @@ fn acquires_type(context: &mut Context, sp!(loc, en_): E::ModuleAccess) -> Optio
             );
             context
                 .env
-                .add_diag(diag!(NameResolution::NamePositionMismatch, (loc, msg)));
+                .add_diag(diag!(NameResolution::NamePositionMismatch, (ma.loc, msg)));
             None
         }
-        EN::ModuleAccess(m, n) => {
-            let (decl_loc, _, abilities, _) = context.resolve_module_type(loc, &m, &n)?;
+        RT::Module(mt) => {
+            let ResolvedModuleType {
+                original_loc: loc,
+                original_mident: m,
+                original_type_name: n,
+                decl_loc,
+                declared_abilities: abilities,
+                arity: _,
+            } = *mt;
             acquires_type_struct(context, loc, decl_loc, m, StructName(n), &abilities)
         }
     }
@@ -892,7 +1121,7 @@ fn types(context: &mut Context, tys: Vec<E::Type>) -> Vec<N::Type> {
 
 fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
     use ResolvedType as RT;
-    use E::{ModuleAccess_ as EN, Type_ as ET};
+    use E::Type_ as ET;
     use N::{TypeName_ as NN, Type_ as NT};
     let ty_ = match ety_ {
         ET::Unit => NT::Unit,
@@ -904,20 +1133,19 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
             assert!(context.env.has_errors());
             NT::UnresolvedError
         }
-        ET::Apply(sp!(_, EN::Name(n)), tys) => match context.resolve_unscoped_type(&n) {
-            None => {
+        ET::Apply(ma, tys) => match context.resolve_type(ma) {
+            RT::Unbound => {
                 assert!(context.env.has_errors());
                 NT::UnresolvedError
             }
-            Some(RT::BuiltinType) => {
-                let bn_ = N::BuiltinTypeName_::resolve(&n.value).unwrap();
+            RT::BuiltinType(bn_) => {
                 let name_f = || format!("{}", &bn_);
                 let arity = bn_.tparam_constraints(loc).len();
                 let tys = types(context, tys);
                 let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
-                NT::builtin_(sp(loc, bn_), tys)
+                NT::builtin_(sp(ma.loc, bn_), tys)
             }
-            Some(RT::TParam(_, tp)) => {
+            RT::TParam(_, tp) => {
                 if !tys.is_empty() {
                     context.env.add_diag(diag!(
                         NameResolution::NamePositionMismatch,
@@ -931,22 +1159,21 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                     NT::Param(tp)
                 }
             }
-        },
-        ET::Apply(sp!(nloc, EN::ModuleAccess(m, n)), tys) => {
-            match context.resolve_module_type(nloc, &m, &n) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NT::UnresolvedError
-                }
-                Some((_, _, _, arity)) => {
-                    let tn = sp(nloc, NN::ModuleType(m, StructName(n)));
-                    let tys = types(context, tys);
-                    let name_f = || format!("{}", tn);
-                    let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
-                    NT::Apply(None, tn, tys)
-                }
+            RT::Module(mt) => {
+                let ResolvedModuleType {
+                    original_loc: nloc,
+                    original_mident: m,
+                    original_type_name: n,
+                    arity,
+                    ..
+                } = *mt;
+                let tn = sp(nloc, NN::ModuleType(m, StructName(n)));
+                let tys = types(context, tys);
+                let name_f = || format!("{}", tn);
+                let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
+                NT::Apply(None, tn, tys)
             }
-        }
+        },
         ET::Fun(_, _) => panic!("ICE only allowed in spec context"),
     };
     sp(loc, ty_)
@@ -990,11 +1217,12 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 // Exp
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, seq: E::Sequence) -> N::Sequence {
+fn sequence(context: &mut Context, (euse_funs, seq): E::Sequence) -> N::Sequence {
     context.new_local_scope();
+    let nuse_funs = use_funs(context, euse_funs);
     let nseq = seq.into_iter().map(|s| sequence_item(context, s)).collect();
     context.close_local_scope();
-    nseq
+    (nuse_funs, nseq)
 }
 
 fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::SequenceItem {
@@ -1183,37 +1411,36 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
             }
         }
-        EE::Call(sp!(mloc, ma_), false, tys_opt, rhs) => {
-            use E::ModuleAccess_ as EA;
+        EE::Call(ma, false, tys_opt, rhs) => {
             let ty_args = tys_opt.map(|tys| types(context, tys));
             let nes = call_args(context, rhs);
-            match ma_ {
-                EA::Name(n) if N::BuiltinFunction_::all_names().contains(&n.value) => {
-                    match resolve_builtin_function(context, eloc, &n, ty_args) {
-                        None => {
-                            assert!(context.env.has_errors());
-                            NE::UnresolvedError
-                        }
-                        Some(f) => NE::Builtin(sp(mloc, f), nes),
-                    }
+            match resolve_function(context, eloc, ma, ty_args) {
+                ResolvedFunction::Builtin(f) => NE::Builtin(f, nes),
+                ResolvedFunction::Module(mf) => {
+                    let ResolvedModuleFunction {
+                        module,
+                        function,
+                        ty_args,
+                    } = *mf;
+                    NE::ModuleCall(module, function, ty_args, nes)
                 }
-
-                EA::Name(n) => {
-                    context.env.add_diag(diag!(
-                        NameResolution::UnboundUnscopedName,
-                        (n.loc, format!("Unbound function '{}' in current scope", n)),
-                    ));
+                ResolvedFunction::Unbound => {
+                    assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                EA::ModuleAccess(m, n) => match context.resolve_module_function(mloc, &m, &n) {
-                    None => {
-                        assert!(context.env.has_errors());
-                        NE::UnresolvedError
-                    }
-                    Some(_) => NE::ModuleCall(m, FunctionName(n), ty_args, nes),
-                },
             }
         }
+        EE::MethodCall(edot, n, tys_opt, rhs) => match dotted(context, *edot) {
+            None => {
+                assert!(context.env.has_errors());
+                NE::UnresolvedError
+            }
+            Some(d) => {
+                let ty_args = tys_opt.map(|tys| types(context, tys));
+                let nes = call_args(context, rhs);
+                NE::MethodCall(d, n, ty_args, nes)
+            }
+        },
         EE::Vector(vec_loc, tys_opt, rhs) => {
             let ty_args = tys_opt.map(|tys| types(context, tys));
             let nes = call_args(context, rhs);
@@ -1275,7 +1502,7 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
     let sp!(loc, edot_) = edot;
     let nedot_ = match edot_ {
         E::ExpDotted_::Exp(e) => {
-            let ne = exp(context, e);
+            let ne = exp(context, *e);
             match &ne.value {
                 N::Exp_::UnresolvedError => return None,
                 _ => N::ExpDotted_::Exp(ne),
@@ -1384,6 +1611,44 @@ fn lvalue_list(
             .map(|inner| lvalue(context, seen_locals, case, inner))
             .collect::<Option<_>>()?,
     ))
+}
+
+fn resolve_function(
+    context: &mut Context,
+    loc: Loc,
+    sp!(mloc, ma_): E::ModuleAccess,
+    ty_args: Option<Vec<N::Type>>,
+) -> ResolvedFunction {
+    use E::ModuleAccess_ as EA;
+    match ma_ {
+        EA::Name(n) if N::BuiltinFunction_::all_names().contains(&n.value) => {
+            match resolve_builtin_function(context, loc, &n, ty_args) {
+                None => {
+                    assert!(context.env.has_errors());
+                    ResolvedFunction::Unbound
+                }
+                Some(f) => ResolvedFunction::Builtin(sp(mloc, f)),
+            }
+        }
+        EA::Name(n) => {
+            context.env.add_diag(diag!(
+                NameResolution::UnboundUnscopedName,
+                (n.loc, format!("Unbound function '{}' in current scope", n)),
+            ));
+            ResolvedFunction::Unbound
+        }
+        EA::ModuleAccess(m, n) => match context.resolve_module_function(mloc, &m, &n) {
+            None => {
+                assert!(context.env.has_errors());
+                ResolvedFunction::Unbound
+            }
+            Some(_) => ResolvedFunction::Module(Box::new(ResolvedModuleFunction {
+                module: m,
+                function: FunctionName(n),
+                ty_args,
+            })),
+        },
+    }
 }
 
 fn resolve_builtin_function(
@@ -1521,7 +1786,7 @@ fn remove_unused_bindings_seq(
     used: &BTreeSet<N::Var_>,
     seq: &mut N::Sequence,
 ) {
-    for sp!(_, item_) in seq {
+    for sp!(_, item_) in &mut seq.1 {
         match item_ {
             N::SequenceItem_::Seq(e) => remove_unused_bindings_exp(context, used, e),
             N::SequenceItem_::Declare(lvalues, _) => {
@@ -1634,6 +1899,12 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Vector(_, _, sp!(_, es))
         | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
         | N::Exp_::ExpList(es) => {
+            for e in es {
+                remove_unused_bindings_exp(context, used, e)
+            }
+        }
+        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+            remove_unused_bindings_exp_dotted(context, used, ed);
             for e in es {
                 remove_unused_bindings_exp(context, used, e)
             }
@@ -1756,7 +2027,7 @@ fn spec_block_member(
 }
 
 fn spec_sequence(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, seq: &E::Sequence) {
-    for item in seq {
+    for item in &seq.1 {
         spec_sequence_item(used, item)
     }
 }
@@ -1862,6 +2133,15 @@ fn spec_exp(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, e_): &E::Exp) {
             spec_module_access(used, ma);
             if let Some(tys) = tys_opt {
                 spec_types(used, tys)
+            }
+        }
+        E::Exp_::MethodCall(edotted, _, tys_opt, sp!(_, args_)) => {
+            spec_exp_dotted(used, edotted);
+            if let Some(tys) = tys_opt {
+                spec_types(used, tys)
+            }
+            for arg in args_ {
+                spec_exp(used, arg)
             }
         }
         E::Exp_::Call(ma, _, tys_opt, sp!(_, args_)) => {

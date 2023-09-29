@@ -8,7 +8,7 @@ use crate::{
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     naming::ast as N,
     parser::ast::{BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, *},
+    shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
     typing::ast as T,
     FullyCompiledProgram,
 };
@@ -92,7 +92,7 @@ impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
         pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
-        prog: &T::Program,
+        prog: &T::Program_,
     ) -> Self {
         fn add_struct_fields(
             structs: &mut UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
@@ -117,7 +117,7 @@ impl<'env> Context<'env> {
 
         let mut structs = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-            for (mident, mdef) in pre_compiled_lib.typing.modules.key_cloned_iter() {
+            for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
                 add_struct_fields(&mut structs, mident, &mdef.structs)
             }
         }
@@ -185,11 +185,11 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: T::Program,
 ) -> H::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
-    let T::Program {
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
+    let T::Program_ {
         modules: tmodules,
         scripts: tscripts,
-    } = prog;
+    } = prog.inner;
     let modules = modules(&mut context, tmodules);
     let scripts = scripts(&mut context, tscripts);
 
@@ -520,7 +520,7 @@ fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
             loc.end()
         ),
         NT::Apply(None, n, tys) => {
-            crate::shared::ast_debug::print_verbose(&NT::Apply(None, n, tys));
+            NT::Apply(None, n, tys).print_verbose();
             panic!("ICE kind not expanded: {:#?}", loc)
         }
         NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(context, n), base_types(context, nbs)),
@@ -573,7 +573,7 @@ fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
         NT::Apply(None, n, tys) => {
-            crate::shared::ast_debug::print_verbose(&NT::Apply(None, n, tys));
+            NT::Apply(None, n, tys).print_verbose();
             panic!("ICE kind not expanded: {:#?}", loc)
         }
         NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(context, ss)),
@@ -1433,7 +1433,7 @@ fn exp_impl(
                 | Some(bt @ sp!(_, BT::U32))
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => bt.clone(),
+                | Some(bt @ sp!(_, BT::U256)) => *bt,
                 _ => panic!("ICE typing failed for cast"),
             };
             HE::Cast(e, bt)

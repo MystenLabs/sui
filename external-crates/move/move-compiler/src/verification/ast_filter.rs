@@ -69,7 +69,8 @@ fn verification_attributes(
                 KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
                 KnownAttribute::Testing(_)
                 | KnownAttribute::Native(_)
-                | KnownAttribute::Diagnostic(_) => None,
+                | KnownAttribute::Diagnostic(_)
+                | KnownAttribute::DefinesPrimitive(_) => None,
             },
         )
         .collect()

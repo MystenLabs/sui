@@ -7,7 +7,7 @@ use crate::{
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
     naming::ast::{FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var},
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
-    shared::{ast_debug::*, unique_map::UniqueMap},
+    shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -22,6 +22,12 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Program {
+    pub info: TypingProgramInfo,
+    pub inner: Program_,
+}
+
+#[derive(Debug, Clone)]
+pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
     pub scripts: BTreeMap<Symbol, Script>,
 }
@@ -275,7 +281,13 @@ impl fmt::Display for BuiltinFunction_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program { modules, scripts } = self;
+        self.inner.ast_debug(w)
+    }
+}
+
+impl AstDebug for Program_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Program_ { modules, scripts } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(&format!("module {}", m));
@@ -425,7 +437,7 @@ impl AstDebug for (FunctionName, &Function) {
             w.write(" ");
         }
         match &body.value {
-            FunctionBody_::Defined(body) => w.block(|w| body.ast_debug(w)),
+            FunctionBody_::Defined(body) => body.ast_debug(w),
             FunctionBody_::Native => w.writeln(";"),
         }
     }
@@ -454,9 +466,9 @@ impl AstDebug for (ConstantName, &Constant) {
     }
 }
 
-impl AstDebug for VecDeque<SequenceItem> {
+impl AstDebug for Sequence {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.semicolon(self, |w, item| item.ast_debug(w))
+        w.block(|w| w.semicolon(self, |w, item| item.ast_debug(w)))
     }
 }
 
@@ -580,7 +592,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(" ");
                 body.ast_debug(w);
             }
-            E::Block(seq) => w.block(|w| seq.ast_debug(w)),
+            E::Block(seq) => seq.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
