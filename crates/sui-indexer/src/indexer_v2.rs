@@ -60,7 +60,7 @@ impl IndexerV2 {
         //     .get_latest_tx_checkpoint_sequence_number()
         //     .await
         //     .expect("Failed to get latest tx checkpoint sequence number from DB");
-        let last_seq_from_db= Some(9127065u64);
+        let last_seq_from_db= Some(7141961u64);
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
                 DOWNLOAD_QUEUE_SIZE,
