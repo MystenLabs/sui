@@ -112,7 +112,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {
         // dont expand the type for return, abort, break, or continue
-        E::Break | E::Continue | E::Return(_) | E::Abort(_) => {
+        E::Give(_, _) | E::Continue(_) | E::Return(_) | E::Abort(_) => {
             let t = e.ty.clone();
             match core::unfold_type(&context.subst, t) {
                 sp!(_, Type_::Anything) => (),
@@ -123,7 +123,6 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             }
             e.ty = sp(e.ty.loc, Type_::Anything)
         }
-        // Loop's default type is ()
         E::Loop {
             has_break: false, ..
         } => {
@@ -225,8 +224,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
-        | E::Break
-        | E::Continue
+        | E::Continue(_)
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => module_call(context, call),
@@ -244,7 +242,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             exp(context, et);
             exp(context, ef);
         }
-        E::While(eb, eloop) => {
+        E::While(_, eb, eloop) => {
             exp(context, eb);
             exp(context, eloop);
         }
@@ -258,6 +256,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
 
         E::Return(er)
         | E::Abort(er)
+        | E::Give(_, er)
         | E::Dereference(er)
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)

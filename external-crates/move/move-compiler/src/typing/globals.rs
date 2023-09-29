@@ -92,8 +92,7 @@ fn exp(
         | E::Move { .. }
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
-        | E::Break
-        | E::Continue
+        | E::Continue(_)
         | E::Spec(_, _)
         | E::UnresolvedError => (),
 
@@ -122,7 +121,7 @@ fn exp(
             exp(context, annotated_acquires, seen, et);
             exp(context, annotated_acquires, seen, ef);
         }
-        E::While(eb, eloop) => {
+        E::While(_, eb, eloop) => {
             exp(context, annotated_acquires, seen, eb);
             exp(context, annotated_acquires, seen, eloop);
         }
@@ -134,6 +133,7 @@ fn exp(
 
         E::Return(er)
         | E::Abort(er)
+        | E::Give(_, er)
         | E::Dereference(er)
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)

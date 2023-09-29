@@ -68,7 +68,7 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
         }
 
         C::Jump { .. } => false,
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     })
 }
 

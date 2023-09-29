@@ -20,10 +20,7 @@ use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, value::MoveValue};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    mem,
-};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 //**************************************************************************************************
 // Context
@@ -35,15 +32,9 @@ struct Context<'env> {
     env: &'env mut CompilationEnv,
     struct_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
     label_count: usize,
-    loop_env: Option<LoopEnv>,
+    named_blocks: UniqueMap<Var, (Label, Label)>,
     // Used for populating block_info
     loop_bounds: BTreeMap<Label, G::LoopInfo>,
-}
-
-struct LoopEnv {
-    start_label: Label,
-    end_label: Label,
-    previous_env: Box<Option<LoopEnv>>,
 }
 
 impl<'env> Context<'env> {
@@ -70,7 +61,7 @@ impl<'env> Context<'env> {
             env,
             struct_declared_abilities,
             label_count: 0,
-            loop_env: None,
+            named_blocks: UniqueMap::new(),
             loop_bounds: BTreeMap::new(),
         }
     }
@@ -81,7 +72,7 @@ impl<'env> Context<'env> {
         Label(count)
     }
 
-    fn start_loop(&mut self, is_loop_stmt: bool) -> (Label, Label) {
+    fn enter_named_block(&mut self, name: Var, is_loop_stmt: bool) -> (Label, Label) {
         let start_label = self.new_label();
         let end_label = self.new_label();
         self.loop_bounds.insert(
@@ -91,28 +82,32 @@ impl<'env> Context<'env> {
                 loop_end: G::LoopEnd::Target(end_label),
             },
         );
-        // push a new loop env
-        let old_env = mem::take(&mut self.loop_env);
-        self.loop_env = Some(LoopEnv {
-            start_label,
-            end_label,
-            previous_env: Box::new(old_env),
-        });
+        self.named_blocks
+            .add(name, (start_label, end_label))
+            .expect("ICE reused block name");
         (start_label, end_label)
     }
 
-    fn end_loop(&mut self) {
-        // pop the current loop env
-        assert!(
-            self.loop_env.is_some(),
-            "ICE called end_loop while not in a loop"
-        );
-        let old_env = mem::take(&mut self.loop_env);
-        self.loop_env = *old_env.unwrap().previous_env;
+    fn exit_named_block(&mut self, name: &Var) {
+        self.named_blocks.remove(name);
+    }
+
+    fn named_block_start_label(&mut self, name: &Var) -> Label {
+        self.named_blocks
+            .get(name)
+            .expect("ICE named block with no entry")
+            .0
+    }
+
+    fn named_block_end_label(&mut self, name: &Var) -> Label {
+        self.named_blocks
+            .get(name)
+            .expect("ICE named block with no entry")
+            .1
     }
 
     fn clear_block_state(&mut self) {
-        assert!(self.loop_env.is_none());
+        assert!(self.named_blocks.is_empty());
         self.label_count = 0;
         self.loop_bounds = BTreeMap::new();
     }
@@ -422,7 +417,7 @@ fn function_body(
     use G::FunctionBody_ as GB;
     use H::FunctionBody_ as HB;
     assert!(context.loop_bounds.is_empty());
-    assert!(context.loop_env.is_none());
+    assert!(context.named_blocks.is_empty());
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
@@ -601,10 +596,11 @@ fn statement(
         }
         // We could turn these into loops earlier and elide this case.
         S::While {
+            name,
             cond: (test_block, test),
             block: body,
         } => {
-            let (start_label, end_label) = context.start_loop(false);
+            let (start_label, end_label) = context.enter_named_block(name, false);
             let body_label = context.new_label();
 
             let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
@@ -626,7 +622,7 @@ fn statement(
                 with_last(body, make_jump(sloc, start_label, false)),
             );
 
-            context.end_loop();
+            context.exit_named_block(&name);
 
             let new_blocks = [(start_label, initial_test_block)]
                 .into_iter()
@@ -639,10 +635,11 @@ fn statement(
             (entry_block, new_blocks)
         }
         S::Loop {
+            name,
             block: body,
             has_break: _,
         } => {
-            let (start_label, end_label) = context.start_loop(true);
+            let (start_label, end_label) = context.enter_named_block(name, true);
 
             let entry_block = VecDeque::from([make_jump(sloc, start_label, false)]);
 
@@ -651,7 +648,7 @@ fn statement(
                 with_last(body, make_jump(sloc, start_label, false)),
             );
 
-            context.end_loop();
+            context.exit_named_block(&name);
 
             let new_blocks = [(start_label, body_entry_block)]
                 .into_iter()
@@ -661,14 +658,14 @@ fn statement(
 
             (entry_block, new_blocks)
         }
-        S::Command(sp!(cloc, C::Break)) => {
+        S::Command(sp!(cloc, C::Break(name))) => {
             // Discard the current block because it's dead code.
-            let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
+            let break_jump = make_jump(cloc, context.named_block_end_label(&name), true);
             (VecDeque::from([break_jump]), vec![])
         }
-        S::Command(sp!(cloc, C::Continue)) => {
+        S::Command(sp!(cloc, C::Continue(name))) => {
             // Discard the current block because it's dead code.
-            let jump = make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
+            let jump = make_jump(cloc, context.named_block_start_label(&name), true);
             (VecDeque::from([jump]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {

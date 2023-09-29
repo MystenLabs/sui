@@ -310,25 +310,25 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Copy(_)
         | N::Exp_::Use(_)
         | N::Exp_::Constant(_, _)
-        | N::Exp_::Break
-        | N::Exp_::Continue
+        | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
         | N::Exp_::Spec(_, _)
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
+        | N::Exp_::Give(_, e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
-        | N::Exp_::Loop(e)
+        | N::Exp_::Loop(_, e)
         | N::Exp_::Annotate(e, _) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, ebody) => {
+        N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
