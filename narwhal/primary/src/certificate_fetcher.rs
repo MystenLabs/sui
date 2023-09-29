@@ -51,7 +51,6 @@ const PARALLEL_FETCH_REQUEST_ADDITIONAL_TIMEOUT: Duration = Duration::from_secs(
 // Batch size is chosen so that verifying a batch takes non-trival
 // time (verifying a batch of 200 certificates should take > 100ms).
 const VERIFY_CERTIFICATES_BATCH_SIZE: usize = 200;
-const VERIFY_NON_PARENT_CERTIFICATES_BATCH_SIZE: usize = 10;
 
 #[derive(Clone, Debug)]
 pub enum CertificateFetcherCommand {
@@ -558,51 +557,15 @@ async fn process_certificates_v2_helper(
     // Classify non-parent certs and preemptively set the parent certificates
     // as verified indirectly. This is safe because any non-parent certs that
     // fail verification will cancel processing for all fetched certs.
-    let mut non_parent_certs = Vec::new();
-    for (idx, c) in all_certificates.iter_mut().enumerate() {
+    let mut non_parents_count: u64 = 0;
+    for c in all_certificates.iter_mut() {
         if !all_parents.contains(&c.digest()) {
-            non_parent_certs.push((idx, c.clone()));
+            non_parents_count += 1;
+            synchronizer.sanitize_certificate(c)?;
         } else {
             c.set_aggregate_signature_state(AggregateSignatureState::VerifiedIndirectly(
                 c.aggregated_signature().clone(),
             ))
-        }
-    }
-
-    let non_parents_count = non_parent_certs.len() as u64;
-
-    // Create verify tasks only for non-parent certs. Parent certs are then set
-    // as indirectly verified.
-    let non_parent_verify_tasks = non_parent_certs
-        .chunks(VERIFY_NON_PARENT_CERTIFICATES_BATCH_SIZE)
-        .map(|chunk| {
-            let mut certs = chunk.to_vec();
-            let sync = synchronizer.clone();
-            let metrics = metrics.clone();
-            spawn_blocking(move || {
-                let now = Instant::now();
-                for (_, c) in &mut certs {
-                    sync.sanitize_certificate(c)?;
-                }
-                metrics
-                    .certificate_fetcher_total_verification_us
-                    .inc_by(now.elapsed().as_micros() as u64);
-                Ok::<Vec<(usize, Certificate)>, DagError>(certs)
-            })
-        })
-        .collect_vec();
-
-    // We ensure sanitization of certificates completes for all non-parents
-    // fetched certificates before accepting any certficates.
-    for task in non_parent_verify_tasks.into_iter() {
-        // Any certificates that fail to be verified should cancel the entire
-        // batch of fetched certficates.
-        let idx_and_certs = task.await.map_err(|err| {
-            error!("Cancelling due to {err:?}");
-            DagError::Canceled
-        })??;
-        for (idx, cert) in idx_and_certs {
-            all_certificates[idx] = cert;
         }
     }
 
