@@ -359,7 +359,16 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                                     num_no_gas,
                                     num_in_flight,
                                     num_submitted,
-                                    bench_stats: BenchmarkStats {duration:stat_start_time.elapsed(),num_error_txes,num_success_txes,num_success_cmds,latency_ms:HistogramWrapper{histogram:latency_histogram.clone()}, total_gas_used },
+                                    bench_stats: BenchmarkStats {
+                                        duration:stat_start_time.elapsed(),
+                                        num_error_txes,
+                                        num_success_txes,
+                                        num_success_cmds,
+                                        latency_ms:HistogramWrapper{
+                                            histogram:latency_histogram.clone()
+                                        },
+                                        total_gas_used
+                                    },
                                 })
                                 .is_err()
                             {
