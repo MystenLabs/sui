@@ -18,7 +18,7 @@ interface VisitorCallback {
 	id: keyof JSONVisitor;
 	offset: number;
 	length: number;
-	// Not expecting any claim that is not a string or a boolean (boolean for email_verified)...
+	// Not expecting any claim that is not a string or a boolean (email_verified is sometimes a boolean).
 	arg?: string | boolean;
 }
 
@@ -37,7 +37,8 @@ export interface ClaimDetails {
 		colon: number; // index of the colon (within the ext_claim)
 		value: number; // index of the value (within the ext_claim)
 		value_length: number; // length of the value
-		length: number; // ext_claim.length
+		name_length: number; // length of the name
+		ext_length: number; // ext_claim.length
 	};
 }
 
@@ -90,7 +91,7 @@ export class JSONProcessor {
 			(e) => e.id === 'onObjectProperty' && e.arg === name,
 		);
 		if (name_event_idx === -1) {
-			throw new Error('Claim ' + name + ' not found in ' + this.decoded_payload);
+			throw new Error('Claim ' + name + ' not found');
 		}
 
 		const name_event = this.events[name_event_idx];
@@ -101,27 +102,23 @@ export class JSONProcessor {
 			this.events[colon_event_idx].id !== 'onSeparator' ||
 			this.events[colon_event_idx].arg !== ':'
 		) {
-			throw new Error(`Unexpected error: Colon not found. 
-                             Event: ${JSON.stringify(colon_event)}`);
+			throw new Error(`Unexpected error: Colon not found.`);
 		}
 
 		const value_event_idx = colon_event_idx + 1;
 		const value_event = this.events[value_event_idx];
 		if (value_event.id !== 'onLiteralValue') {
-			throw new Error(`Unexpected error: Unexpected value. 
-                             Event: ${JSON.stringify(value_event)}`);
+			throw new Error(`Unexpected error: Unexpected value.`);
 		}
 
 		const ext_claim_end_event_idx = value_event_idx + 1;
 		const ext_claim_end_event = this.events[ext_claim_end_event_idx];
 		if (ext_claim_end_event.id !== 'onSeparator' && ext_claim_end_event.id !== 'onObjectEnd') {
-			throw new Error(`Unexpected error: Unexpected ext_claim_end_event. 
-                             Event: ${JSON.stringify(ext_claim_end_event)}`);
+			throw new Error(`Unexpected error: Unexpected ext_claim_end_event.`);
 		}
 
 		if (value_event.arg === undefined) {
-			throw new Error(`Unexpected error: Undefined value_event.arg?. 
-                             Event: ${JSON.stringify(value_event)}`);
+			throw new Error(`Unexpected error: Undefined value_event.arg.`);
 		}
 		this.processed[name] = {
 			name: name,
@@ -132,22 +129,10 @@ export class JSONProcessor {
 				colon: colon_event.offset - name_event.offset,
 				value: value_event.offset - name_event.offset,
 				value_length: value_event.length,
-				length: ext_claim_end_event.offset - name_event.offset + 1,
+				name_length: name_event.length,
+				ext_length: ext_claim_end_event.offset - name_event.offset + 1,
 			},
 		};
-
-		// The number of whitespaces is equal to the length of extended claim
-		//  minus the length of the value minus the length of the name minus 2.
-		//  (2 for the colon and either comma or a close brace)
-		const num_whitespaces =
-			this.processed[name].offsets.length - value_event.length - name_event.length - 2;
-		if (num_whitespaces > 0) {
-            // TODO: This is an interesting event to note.
-            //       Note sure if the console.info is the right way to log it.
-			console.info(`[Rare event] Non-zero whitespace detected: 
-                          Claim ${name} has ${num_whitespaces} whitespaces`);
-		}
-
 		return this.processed[name];
 	}
 
@@ -172,31 +157,23 @@ export class JSONProcessor {
 		const value_index = details.offsets.value + details.offsets.start;
 		const value_length = details.offsets.value_length;
 		if (this.decoded_payload[value_index] !== '"') {
-			throw new Error(
-				`Claim ${name} does not have a string value. Details: ${JSON.stringify(details)}`,
-			);
+			throw new Error(`Claim ${name} does not have a string value.`);
 		}
 		if (this.decoded_payload[value_index + value_length - 1] !== '"') {
-			throw new Error(
-				`Claim ${name} does not have a string value. Details: ${JSON.stringify(details)}`,
-			);
+			throw new Error(`Claim ${name} does not have a string value.`);
 		}
 
 		const raw_value = this.decoded_payload.slice(value_index + 1, value_index + value_length - 1); // omit the quotes
-		if (raw_value !== details.value) {
-            // TODO: This is an interesting event to note.
-            //       Note sure if the console.info is the right way to log it.
-			console.info(
-				`Claim value ${raw_value} of length ${
-					raw_value.length
-				} has escapes. Details: ${JSON.stringify(details)}`,
-			);
-		}
 		return raw_value;
 	}
 }
 
-export function lengthChecks(header: string, payload: string, keyClaimName: string, processor: JSONProcessor) {
+export function lengthChecks(
+	header: string,
+	payload: string,
+	keyClaimName: string,
+	processor: JSONProcessor,
+) {
 	/// Is the header length small enough
 	const header_len = header.length;
 	if (header_len > MAX_HEADER_LEN_B64) {
@@ -225,7 +202,7 @@ export function lengthChecks(header: string, payload: string, keyClaimName: stri
 	if (keyClaimValueLen > MAX_KEY_CLAIM_VALUE_LENGTH) {
 		throw new Error('Key claim value is too long');
 	}
-    // Note: Key claim name length is being checked in genAddressSeed.
+	// Note: Key claim name length is being checked in genAddressSeed.
 
 	/// Are the extended claims small enough (key claim, email_verified)
 	const extendedKeyClaimLen = keyClaimDetails.ext_claim.length;
@@ -247,10 +224,10 @@ export function lengthChecks(header: string, payload: string, keyClaimName: stri
 
 	/// Check that nonce extended nonce length is as expected.
 	const nonce_claim_details = processor.process('nonce');
-    const nonce_value_len = nonce_claim_details.offsets.value_length;
-    if (nonce_value_len !== 27) {
-        throw new Error(`Nonce value length is not 27`);
-    }
+	const nonce_value_len = nonce_claim_details.offsets.value_length;
+	if (nonce_value_len !== 27) {
+		throw new Error(`Nonce value length is not 27`);
+	}
 	const extended_nonce_claim_len = nonce_claim_details.ext_claim.length;
 	if (extended_nonce_claim_len < 38) {
 		throw new Error(`Extended nonce claim is too short`);
@@ -275,7 +252,7 @@ export function lengthChecks(header: string, payload: string, keyClaimName: stri
 	/// 6. Check if iss is small enough
 	const iss_claim_details = processor.process('iss');
 	// A close upper bound of the length of the extended iss claim (in base64)
-	const iss_claim_len_b64 = 4 * (1 + Math.floor(iss_claim_details.offsets.length / 3));
+	const iss_claim_len_b64 = 4 * (1 + Math.floor(iss_claim_details.offsets.ext_length / 3));
 	if (iss_claim_len_b64 > MAX_EXTENDED_ISS_LEN_B64) {
 		throw new Error(`Extended iss is too long`);
 	}
