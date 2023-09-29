@@ -2,7 +2,7 @@ error[E03002]: unbound module
   ┌─ tests/move_check/expansion/unbound_named_address.move:3:9
   │
 3 │     use B::X;
-  │         ^^^^ Invalid 'use'. Unbound module: '(B=0x42)::X'
+  │         ^^^^ Invalid 'use'. Unbound module: 'B::X'
 
 error[E02011]: invalid 'friend' declaration
   ┌─ tests/move_check/expansion/unbound_named_address.move:5:5
