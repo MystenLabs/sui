@@ -16,7 +16,6 @@ module sui::zklogin_verified_id {
 
     /// Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
     struct VerifiedID has key {
-
         /// The ID of this VerifiedID
         id: UID,
 
