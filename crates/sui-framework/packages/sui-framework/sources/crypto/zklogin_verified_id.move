@@ -87,12 +87,14 @@ module sui::zklogin_verified_id {
         aud: &String,
         pin_hash: u256
     ): bool {
-        check_zklogin_id_internal(address,
+        check_zklogin_id_internal(
+            address,
             std::string::bytes(kc_name),
             std::string::bytes(kc_value),
             std::string::bytes(iss),
             std::string::bytes(aud),
-            pin_hash)
+            pin_hash
+        )
     }
 
     /// Returns true if `address` was created using zklogin and the given parameters.
