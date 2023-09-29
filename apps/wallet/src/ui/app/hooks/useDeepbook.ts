@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getDeepbookClient } from '_shared/deepbook-client';
+import { getActiveNetworkSuiClient } from '_shared/sui-client';
+import { DeepBookClient } from '@mysten/deepbook';
 import { useQuery } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -26,7 +27,7 @@ export enum Coins {
 	USDC = 'USDC',
 	USDT = 'USDT',
 	WETH = 'WETH',
-	tBTC = 'tBTC',
+	TBTC = 'TBTC',
 }
 
 export const coinsMap = {
@@ -34,7 +35,7 @@ export const coinsMap = {
 	[Coins.USDC]: '0x5d4b302506645c37ff133b98c4b50a5ae14841659738d6d733d59d0d217a93bf::coin::COIN',
 	[Coins.USDT]: '0xc060006111016b8a020ad5b33834984a437aaa7d3c74c18e09a95d48aceab08c::coin::COIN',
 	[Coins.WETH]: '0xaf8cd5edc19c4512f4259f0bee101a40d41ebed738ade5874359610ef8eeced5::coin::COIN',
-	[Coins.tBTC]: '0xbc3a676894871284b3ccfb2eec66f428612000e2a6e6d23f592ce8833c27c973::coin::COIN',
+	[Coins.TBTC]: '0xbc3a676894871284b3ccfb2eec66f428612000e2a6e6d23f592ce8833c27c973::coin::COIN',
 };
 
 export function getUSDCurrency(amount: number | null) {
@@ -48,6 +49,11 @@ export function getUSDCurrency(amount: number | null) {
 	});
 }
 
+async function getDeepbookClient(): Promise<DeepBookClient> {
+	const suiClient = await getActiveNetworkSuiClient();
+	return new DeepBookClient(suiClient);
+}
+
 export function useDeepbookPools() {
 	return useQuery({
 		queryKey: [DEEPBOOK_KEY, 'get-all-pools'],
@@ -55,235 +61,162 @@ export function useDeepbookPools() {
 			const deepbookClient = await getDeepbookClient();
 			return deepbookClient.getAllPools({});
 		},
-		select: ({ data }) => data,
 	});
 }
 
-export function useDeepbookPrices(
+async function getPriceForPool(
 	poolName: keyof typeof mainnetPools,
-	side: 'ask' | 'bid' = 'ask',
+	deepbookClient: DeepBookClient,
 ) {
+	const bid = deepbookClient.getLevel2BookStatus(
+		mainnetPools[poolName],
+		BigInt(0),
+		// TODO: need to switch back to 10n * DEFAULT_TICK_SIZE
+		// 10n * DEFAULT_TICK_SIZE,
+		10000n,
+		'bid',
+	);
+
+	const ask = deepbookClient.getLevel2BookStatus(
+		mainnetPools[poolName],
+		BigInt(0),
+		// TODO: need to switch back to 10n * DEFAULT_TICK_SIZE
+		// 10n * DEFAULT_TICK_SIZE,
+		10000n,
+		'ask',
+	);
+
+	return Promise.all([bid, ask]).then(([bid, ask]) => {
+		const totalBidPrice = bid.reduce((acc, { price }) => {
+			return acc + price;
+		}, 0n);
+
+		const averageBidPrice = bid.length ? totalBidPrice / BigInt(bid.length) : 0n;
+
+		const totalAskPrice = ask.reduce((acc, { price }) => {
+			return acc + price;
+		}, 0n);
+
+		const averageAskPrice = ask.length ? totalAskPrice / BigInt(ask.length) : 0n;
+
+		if (averageBidPrice > 0n && averageAskPrice > 0n) {
+			return (averageBidPrice + averageAskPrice) / 2n;
+		}
+
+		if (averageBidPrice > 0n) {
+			return averageBidPrice;
+		}
+
+		return averageAskPrice;
+	});
+}
+
+async function getDeepbookPriceForCoin(coin: Coins, deepbookClient: DeepBookClient) {
+	const poolName1 = `${coin}_USDC_1` as keyof typeof mainnetPools;
+	const poolName2 = coin === Coins.SUI ? 'SUI_USDC_2' : null;
+
+	const promises = [getPriceForPool(poolName1, deepbookClient)];
+	if (poolName2) {
+		promises.push(getPriceForPool(poolName2, deepbookClient));
+	}
+
+	return Promise.all(promises).then(([price1, price2]) => {
+		if (price1 && price2) {
+			return (price1 + price2) / 2n;
+		}
+
+		return price1 || price2;
+	});
+}
+
+function useDeepbookPricesInUSD(coins: Coins[]) {
 	return useQuery({
-		queryKey: [DEEPBOOK_KEY, 'get-prices', poolName, side],
+		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', ...coins],
 		queryFn: async () => {
 			const deepbookClient = await getDeepbookClient();
-			return deepbookClient.getLevel2BookStatus(
-				mainnetPools[poolName],
-				BigInt(0),
-				// TODO: need to switch back to 10n * DEFAULT_TICK_SIZE
-				// 10n * DEFAULT_TICK_SIZE,
-				10000n,
-				side,
-			);
+
+			const promises = [];
+
+			for (const coin of coins) {
+				promises.push(getDeepbookPriceForCoin(coin, deepbookClient));
+			}
+
+			return Promise.all(promises);
 		},
-		enabled: !!poolName && !!mainnetPools[poolName],
 	});
 }
 
-function getAveragePrice(coin: Coins, prices?: { price: bigint }[]) {
-	if (!prices || !prices.length) {
-		return 1;
-	}
+function useAveragePrice(base: Coins, quote: Coins) {
+	const { data, refetch, isRefetching } = useDeepbookPricesInUSD([
+		Coins.SUI,
+		Coins.WETH,
+		Coins.TBTC,
+		Coins.USDT,
+	]);
 
-	const totalPrice = prices.reduce((acc: bigint, { price }: { price: bigint }) => {
-		return acc + price;
-	}, 0n);
+	const priceSuiUsdc = new BigNumber((data?.[0] ?? 1n).toString());
+	const priceWEthUsdc = new BigNumber((data?.[1] ?? 1n).toString());
+	const priceTBtcUsdc = new BigNumber((data?.[2] ?? 1n).toString());
+	const priceUsdtUsdc = new BigNumber((data?.[3] ?? 1n).toString());
 
-	let divisor = OTHER_DIVISOR;
-	if (coin === Coins.SUI) {
-		divisor = SUI_DIVISOR;
-	} else if (coin === Coins.USDT) {
-		divisor = USDT_DIVISOR;
-	}
-
-	return new BigNumber(totalPrice.toString())
-		.dividedBy(prices.length)
-		.dividedBy(divisor)
-		.toNumber();
-}
-
-function useAvgPrice(base: Coins, quote: Coins) {
-	const { data: pricesSuiUsdc, ...restPricesSuiUsdc } = useDeepbookPrices('SUI_USDC_2');
-	const { data: pricesWEthUsdc, ...restPricesWEthUsdc } = useDeepbookPrices('WETH_USDC_1');
-	const { data: pricesTBtcUsdc, ...restPricesTBtcUsdc } = useDeepbookPrices('TBTC_USDC_1');
-	const { data: pricesUsdtUsdc, ...restPricesUsdtUsdc } = useDeepbookPrices('USDT_USDC_1');
-
-	const avgPriceSuiUsdc = useMemo(() => getAveragePrice(Coins.SUI, pricesSuiUsdc), [pricesSuiUsdc]);
-	const avgPriceWEthUsdc = useMemo(
-		() => getAveragePrice(Coins.WETH, pricesWEthUsdc),
-		[pricesWEthUsdc],
-	);
-	const avgPriceTBtcUsdc = useMemo(
-		() => getAveragePrice(Coins.tBTC, pricesTBtcUsdc),
-		[pricesTBtcUsdc],
-	);
-	const avgPriceUsdtUsdc = useMemo(
-		() => getAveragePrice(Coins.USDT, pricesUsdtUsdc),
-		[pricesUsdtUsdc],
-	);
-
-	const refetchSuiWethUsdc = () =>
-		Promise.all([restPricesSuiUsdc.refetch(), restPricesWEthUsdc.refetch()]);
-	const refetchSuiTBtcUsdc = () =>
-		Promise.all([restPricesSuiUsdc.refetch(), restPricesTBtcUsdc.refetch()]);
-	const refetchSuiUsdtUsdc = () =>
-		Promise.all([restPricesSuiUsdc.refetch(), restPricesUsdtUsdc.refetch()]);
-	const refetchWethTBtcUsdc = () =>
-		Promise.all([restPricesWEthUsdc.refetch(), restPricesTBtcUsdc.refetch()]);
-	const refetchWethUsdtUsdc = () =>
-		Promise.all([restPricesWEthUsdc.refetch(), restPricesUsdtUsdc.refetch()]);
-	const refetchTbtcUsdtUsdc = () =>
-		Promise.all([restPricesTBtcUsdc.refetch(), restPricesUsdtUsdc.refetch()]);
-
-	const isRefetchingSuiWethUsdc = restPricesSuiUsdc.isRefetching || restPricesWEthUsdc.isRefetching;
-	const isRefetchingSuiTBtcUsdc = restPricesSuiUsdc.isRefetching || restPricesTBtcUsdc.isRefetching;
-	const isRefetchingSuiUsdtUsdc = restPricesSuiUsdc.isRefetching || restPricesUsdtUsdc.isRefetching;
-	const isRefetchingWethTBtcUsdc =
-		restPricesWEthUsdc.isRefetching || restPricesTBtcUsdc.isRefetching;
-	const isRefetchingWethUsdtUsdc =
-		restPricesWEthUsdc.isRefetching || restPricesUsdtUsdc.isRefetching;
-	const isRefetchingTbtcUsdtUsdc =
-		restPricesTBtcUsdc.isRefetching || restPricesUsdtUsdc.isRefetching;
-
-	const defaultReturn = {
-		averagePrice: 1,
-		refetch: () => Promise.resolve(null),
-		isRefetching: false,
-	};
-
+	let averagePrice = new BigNumber(1n.toString());
 	if (quote === Coins.USDC) {
 		if (base === Coins.SUI) {
-			return {
-				averagePrice: avgPriceSuiUsdc,
-				refetch: restPricesSuiUsdc.refetch,
-				isRefetching: restPricesSuiUsdc.isRefetching,
-			};
+			averagePrice = priceSuiUsdc;
+		} else if (base === Coins.WETH) {
+			averagePrice = priceWEthUsdc;
+		} else if (base === Coins.TBTC) {
+			averagePrice = priceTBtcUsdc;
+		} else if (base === Coins.USDT) {
+			averagePrice = priceUsdtUsdc;
 		}
-		if (base === Coins.WETH) {
-			return {
-				averagePrice: avgPriceWEthUsdc,
-				refetch: restPricesWEthUsdc.refetch,
-				isRefetching: restPricesWEthUsdc.isRefetching,
-			};
-		}
-		if (base === Coins.tBTC) {
-			return {
-				averagePrice: avgPriceTBtcUsdc,
-				refetch: restPricesTBtcUsdc.refetch,
-				isRefetching: restPricesTBtcUsdc.isRefetching,
-			};
-		}
-		if (base === Coins.USDT) {
-			return {
-				averagePrice: avgPriceUsdtUsdc,
-				refetch: restPricesUsdtUsdc.refetch,
-				isRefetching: restPricesUsdtUsdc.isRefetching,
-			};
-		}
-		return defaultReturn;
 	}
 
 	if (base === Coins.SUI) {
 		if (quote === Coins.WETH) {
-			return {
-				averagePrice: avgPriceSuiUsdc / avgPriceWEthUsdc,
-				refetch: refetchSuiWethUsdc,
-				isRefetching: isRefetchingSuiWethUsdc,
-			};
+			averagePrice = priceSuiUsdc.dividedBy(priceWEthUsdc);
+		} else if (quote === Coins.TBTC) {
+			averagePrice = priceSuiUsdc.dividedBy(priceTBtcUsdc);
+		} else if (quote === Coins.USDT) {
+			averagePrice = priceSuiUsdc.dividedBy(priceUsdtUsdc);
 		}
-		if (quote === Coins.tBTC) {
-			return {
-				averagePrice: avgPriceSuiUsdc / avgPriceTBtcUsdc,
-				refetch: refetchSuiTBtcUsdc,
-				isRefetching: isRefetchingSuiTBtcUsdc,
-			};
-		}
-		if (quote === Coins.USDT) {
-			return {
-				averagePrice: avgPriceSuiUsdc / avgPriceUsdtUsdc,
-				refetch: refetchSuiUsdtUsdc,
-				isRefetching: isRefetchingSuiUsdtUsdc,
-			};
-		}
-		return defaultReturn;
 	}
 
 	if (base === Coins.WETH) {
 		if (quote === Coins.SUI) {
-			return {
-				averagePrice: avgPriceWEthUsdc / avgPriceSuiUsdc,
-				refetch: refetchSuiWethUsdc,
-				isRefetching: isRefetchingSuiWethUsdc,
-			};
+			averagePrice = priceWEthUsdc.dividedBy(priceSuiUsdc);
+		} else if (quote === Coins.TBTC) {
+			averagePrice = priceWEthUsdc.dividedBy(priceTBtcUsdc);
+		} else if (quote === Coins.USDT) {
+			averagePrice = priceWEthUsdc.dividedBy(priceUsdtUsdc);
 		}
-		if (quote === Coins.tBTC) {
-			return {
-				averagePrice: avgPriceWEthUsdc / avgPriceTBtcUsdc,
-				refetch: refetchWethTBtcUsdc,
-				isRefetching: isRefetchingWethTBtcUsdc,
-			};
-		}
-		if (quote === Coins.USDT) {
-			return {
-				averagePrice: avgPriceWEthUsdc / avgPriceUsdtUsdc,
-				refetch: refetchWethUsdtUsdc,
-				isRefetching: isRefetchingWethUsdtUsdc,
-			};
-		}
-		return defaultReturn;
 	}
 
-	if (base === Coins.tBTC) {
+	if (base === Coins.TBTC) {
 		if (quote === Coins.SUI) {
-			return {
-				averagePrice: avgPriceTBtcUsdc / avgPriceSuiUsdc,
-				refetch: refetchSuiTBtcUsdc,
-				isRefetching: isRefetchingSuiTBtcUsdc,
-			};
+			averagePrice = priceTBtcUsdc.dividedBy(priceSuiUsdc);
+		} else if (quote === Coins.WETH) {
+			averagePrice = priceTBtcUsdc.dividedBy(priceWEthUsdc);
+		} else if (quote === Coins.USDT) {
+			averagePrice = priceTBtcUsdc.dividedBy(priceUsdtUsdc);
 		}
-		if (quote === Coins.WETH) {
-			return {
-				averagePrice: avgPriceTBtcUsdc / avgPriceWEthUsdc,
-				refetch: refetchWethTBtcUsdc,
-				isRefetching: isRefetchingWethTBtcUsdc,
-			};
-		}
-		if (quote === Coins.USDT) {
-			return {
-				averagePrice: avgPriceTBtcUsdc / avgPriceUsdtUsdc,
-				refetch: refetchTbtcUsdtUsdc,
-				isRefetching: isRefetchingWethUsdtUsdc,
-			};
-		}
-		return defaultReturn;
 	}
 
 	if (base === Coins.USDT) {
 		if (quote === Coins.SUI) {
-			return {
-				averagePrice: avgPriceUsdtUsdc / avgPriceSuiUsdc,
-				refetch: refetchSuiUsdtUsdc,
-				isRefetching: isRefetchingSuiUsdtUsdc,
-			};
+			averagePrice = priceUsdtUsdc.dividedBy(priceSuiUsdc);
+		} else if (quote === Coins.WETH) {
+			averagePrice = priceUsdtUsdc.dividedBy(priceWEthUsdc);
+		} else if (quote === Coins.TBTC) {
+			averagePrice = priceUsdtUsdc.dividedBy(priceTBtcUsdc);
 		}
-		if (quote === Coins.WETH) {
-			return {
-				averagePrice: avgPriceUsdtUsdc / avgPriceWEthUsdc,
-				refetch: refetchWethUsdtUsdc,
-				isRefetching: isRefetchingWethUsdtUsdc,
-			};
-		}
-		if (quote === Coins.tBTC) {
-			return {
-				averagePrice: avgPriceUsdtUsdc / avgPriceTBtcUsdc,
-				refetch: refetchTbtcUsdtUsdc,
-				isRefetching: isRefetchingTbtcUsdtUsdc,
-			};
-		}
-		return defaultReturn;
 	}
 
-	return defaultReturn;
+	return {
+		averagePrice,
+		refetch,
+		isRefetching,
+	};
 }
 
 export function useBalanceConversion(
@@ -291,14 +224,12 @@ export function useBalanceConversion(
 	base: Coins,
 	quote: Coins,
 ) {
-	const { averagePrice, ...rest } = useAvgPrice(base, quote);
+	const { averagePrice, ...rest } = useAveragePrice(base, quote);
 
 	const rawValue = useMemo(() => {
 		if (!averagePrice || !balance) return null;
 
-		const walletBalanceInBase = new BigNumber(balance.toString()).toNumber();
-
-		const rawUsdValue = walletBalanceInBase * averagePrice;
+		const rawUsdValue = new BigNumber(balance.toString()).multipliedBy(averagePrice).toNumber();
 
 		if (isNaN(rawUsdValue)) {
 			return null;
