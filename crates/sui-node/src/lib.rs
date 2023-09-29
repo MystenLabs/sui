@@ -21,7 +21,6 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
-use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
@@ -245,15 +244,7 @@ impl SuiNode {
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        let node_one_cell = Arc::new(AsyncOnceCell::<Arc<SuiNode>>::new());
-        Self::start_async(
-            config,
-            registry_service,
-            node_one_cell.clone(),
-            custom_rpc_runtime,
-        )
-        .await?;
-        Ok(node_one_cell.get().await)
+        Self::start_async(config, registry_service, custom_rpc_runtime).await
     }
 
     fn start_jwk_updater(
@@ -390,9 +381,8 @@ impl SuiNode {
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
-        node_once_cell: Arc<AsyncOnceCell<Arc<SuiNode>>>,
         custom_rpc_runtime: Option<Handle>,
-    ) -> Result<()> {
+    ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -719,10 +709,7 @@ impl SuiNode {
         let node_copy = node.clone();
         spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
-        node_once_cell
-            .set(node)
-            .expect("Failed to set Arc<Node> in node_once_cell");
-        Ok(())
+        Ok(node)
     }
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
