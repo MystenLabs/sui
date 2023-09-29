@@ -11,6 +11,7 @@ use crate::{
     },
     editions::{check_feature as edition_check_feature, Edition, FeatureGate, Flavor},
     expansion::ast as E,
+    naming::ast as N,
     naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
@@ -29,6 +30,7 @@ use std::{
 };
 
 pub mod ast_debug;
+pub mod program_info;
 pub mod remembering_unique_map;
 pub mod unique_map;
 pub mod unique_set;
@@ -227,6 +229,8 @@ pub struct CompilationEnv {
     known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo>,
     /// Attribute names (including externally provided ones) identifying known warning filters.
     known_filter_attributes: BTreeSet<E::AttributeName_>,
+    prim_definers:
+        BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
 }
@@ -360,6 +364,7 @@ impl CompilationEnv {
             known_filters,
             known_filter_names,
             known_filter_attributes: filter_attributes,
+            prim_definers: BTreeMap::new(),
         }
     }
 
@@ -527,14 +532,14 @@ impl CompilationEnv {
     // supported, and `true` otherwise.
     pub fn check_feature(
         &mut self,
-        feature: &FeatureGate,
+        feature: FeatureGate,
         package: Option<Symbol>,
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
     }
 
-    pub fn supports_feature(&self, package: Option<Symbol>, feature: &FeatureGate) -> bool {
+    pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
         self.package_config(package).edition.supports(feature)
     }
 
@@ -542,6 +547,17 @@ impl CompilationEnv {
         package
             .and_then(|p| self.package_configs.get(&p))
             .unwrap_or(&self.default_config)
+    }
+
+    pub fn set_primitive_type_definers(
+        &mut self,
+        m: BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>,
+    ) {
+        self.prim_definers = m
+    }
+
+    pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
+        self.prim_definers.get(&t)
     }
 }
 
@@ -765,6 +781,7 @@ pub mod known_attributes {
         Verification(VerificationAttribute),
         Native(NativeAttribute),
         Diagnostic(DiagnosticAttribute),
+        DefinesPrimitive(DefinesPrimitive),
     }
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -793,6 +810,9 @@ pub mod known_attributes {
     pub enum DiagnosticAttribute {
         Allow,
     }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct DefinesPrimitive;
 
     impl fmt::Display for AttributePosition {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -825,6 +845,7 @@ pub mod known_attributes {
                     Self::Native(NativeAttribute::BytecodeInstruction)
                 }
                 DiagnosticAttribute::ALLOW => Self::Diagnostic(DiagnosticAttribute::Allow),
+                DefinesPrimitive::DEFINES_PRIM => Self::DefinesPrimitive(DefinesPrimitive),
                 _ => return None,
             })
         }
@@ -835,6 +856,7 @@ pub mod known_attributes {
                 Self::Verification(a) => a.name(),
                 Self::Native(a) => a.name(),
                 Self::Diagnostic(a) => a.name(),
+                Self::DefinesPrimitive(a) => a.name(),
             }
         }
 
@@ -844,6 +866,7 @@ pub mod known_attributes {
                 Self::Verification(a) => a.expected_positions(),
                 Self::Native(a) => a.expected_positions(),
                 Self::Diagnostic(a) => a.expected_positions(),
+                Self::DefinesPrimitive(a) => a.expected_positions(),
             }
         }
     }
@@ -969,6 +992,20 @@ pub mod known_attributes {
             match self {
                 DiagnosticAttribute::Allow => &ALLOW_WARNING_POSITIONS,
             }
+        }
+    }
+
+    impl DefinesPrimitive {
+        pub const DEFINES_PRIM: &'static str = "defines_primitive";
+
+        pub const fn name(&self) -> &str {
+            Self::DEFINES_PRIM
+        }
+
+        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
+            static DEFINES_PRIM_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
+                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Module]).collect());
+            &DEFINES_PRIM_POSITIONS
         }
     }
 }

@@ -1,0 +1,9 @@
+error[E02017]: invalid 'use fun' declaration
+  ┌─ tests/move_2024/naming/use_fun_no_args.move:6:5
+  │
+4 │     public fun no() { abort 0 }
+  │                -- But '(a=0x42)::m::no' takes no arguments
+5 │ 
+6 │     use fun no as Y.no;
+  │     ^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for '(a=0x42)::m::Y.no'. Expected a '(a=0x42)::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+

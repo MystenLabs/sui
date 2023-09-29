@@ -702,7 +702,7 @@ impl Symbolicator {
             }
         }
 
-        let modules = &typed_ast.unwrap().modules;
+        let modules = &typed_ast.unwrap().inner.modules;
 
         let mut mod_outer_defs = BTreeMap::new();
         let mut mod_use_defs = BTreeMap::new();

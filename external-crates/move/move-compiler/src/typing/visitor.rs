@@ -5,8 +5,8 @@ use crate::command_line::compiler::Visitor;
 use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
 use crate::parser::ast::FunctionName;
-use crate::shared::CompilationEnv;
-use crate::typing::{ast as T, core::TypingProgramInfo};
+use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
+use crate::typing::ast as T;
 use move_symbol_pool::Symbol;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
@@ -16,7 +16,7 @@ pub trait TypingVisitor {
         &mut self,
         env: &mut CompilationEnv,
         program_info: &TypingProgramInfo,
-        program: &mut T::Program,
+        program: &mut T::Program_,
     );
 
     fn visitor(self) -> Visitor
@@ -33,14 +33,14 @@ pub trait TypingVisitorConstructor {
     fn context<'a>(
         env: &'a mut CompilationEnv,
         program_info: &'a TypingProgramInfo,
-        program: &T::Program,
+        program: &T::Program_,
     ) -> Self::Context<'a>;
 
     fn visit(
         &mut self,
         env: &mut CompilationEnv,
         program_info: &TypingProgramInfo,
-        program: &mut T::Program,
+        program: &mut T::Program_,
     ) {
         let mut context = Self::context(env, program_info, program);
         context.visit(program);
@@ -65,7 +65,7 @@ pub trait TypingVisitorContext {
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
     /// required.
-    fn visit(&mut self, program: &mut T::Program) {
+    fn visit(&mut self, program: &mut T::Program_) {
         for (mident, mdef) in program.modules.key_cloned_iter_mut() {
             self.add_warning_filter_scope(mdef.warning_filter.clone());
             if self.visit_module_custom(mident, mdef) {
@@ -211,7 +211,7 @@ impl<V: TypingVisitorConstructor> TypingVisitor for V {
         &mut self,
         env: &mut CompilationEnv,
         program_info: &TypingProgramInfo,
-        program: &mut T::Program,
+        program: &mut T::Program_,
     ) {
         self.visit(env, program_info, program)
     }

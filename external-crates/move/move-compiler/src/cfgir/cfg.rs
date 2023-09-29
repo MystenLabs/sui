@@ -272,7 +272,7 @@ impl<T: Deref<Target = BasicBlocks>> CFG for ForwardCFG<T> {
     }
 
     fn debug(&self) {
-        crate::shared::ast_debug::print(self);
+        self.print();
     }
 }
 
@@ -733,7 +733,7 @@ impl<'forward, Blocks: Deref<Target = BasicBlocks>> CFG for ReverseCFG<'forward,
     }
 
     fn debug(&self) {
-        crate::shared::ast_debug::print(self);
+        self.print();
     }
 }
 

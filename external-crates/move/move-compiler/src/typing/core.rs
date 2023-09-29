@@ -3,16 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
+    debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
-        self as N, BuiltinTypeName_, FunctionSignature, StructDefinition, StructTypeParameter,
-        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, Var,
+        self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
+        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
     },
     parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, *},
-    typing::ast as T,
+    shared::{program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -22,6 +21,12 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
+
+struct UseFunsScope {
+    count: usize,
+    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind, /* depth */ usize)>,
+    use_funs: ResolvedUseFuns,
+}
 
 pub enum Constraint {
     AbilityConstraint {
@@ -39,32 +44,6 @@ pub enum Constraint {
 pub type Constraints = Vec<Constraint>;
 pub type TParamSubst = HashMap<TParamID, Type>;
 
-pub struct FunctionInfo {
-    pub defined_loc: Loc,
-    pub visibility: Visibility,
-    pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
-}
-
-pub struct ConstantInfo {
-    pub defined_loc: Loc,
-    pub signature: Type,
-}
-
-pub struct ModuleInfo {
-    pub package: Option<Symbol>,
-    pub friends: UniqueMap<ModuleIdent, Loc>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
-    pub functions: UniqueMap<FunctionName, FunctionInfo>,
-    pub constants: UniqueMap<ConstantName, ConstantInfo>,
-}
-
-pub struct ProgramInfo<const AFTER_TYPING: bool> {
-    pub modules: UniqueMap<ModuleIdent, ModuleInfo>,
-}
-pub type NamingProgramInfo = ProgramInfo<false>;
-pub type TypingProgramInfo = ProgramInfo<true>;
-
 pub struct LoopInfo(LoopInfo_);
 
 enum LoopInfo_ {
@@ -77,6 +56,7 @@ pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
 
+    use_funs: Vec<UseFunsScope>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
@@ -98,116 +78,53 @@ pub struct Context<'env> {
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
 }
 
-macro_rules! program_info {
-    ($pre_compiled_lib:ident, $prog:ident, $pass:ident) => {{
-        let all_modules = $prog
-            .modules
-            .key_cloned_iter()
-            .chain($pre_compiled_lib.iter().flat_map(|pre_compiled| {
-                pre_compiled
-                    .$pass
-                    .modules
-                    .key_cloned_iter()
-                    .filter(|(mident, _m)| !$prog.modules.contains_key(mident))
-            }));
-        let modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
-            let structs = mdef.structs.clone();
-            let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
-                defined_loc: fname.loc(),
-                visibility: fdef.visibility.clone(),
-                signature: fdef.signature.clone(),
-                acquires: fdef.acquires.clone(),
-            });
-            let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
-                defined_loc: cname.loc(),
-                signature: cdef.signature.clone(),
-            });
-            let minfo = ModuleInfo {
-                package: mdef.package_name,
-                friends: mdef.friends.ref_map(|_, friend| friend.loc),
-                structs,
-                functions,
-                constants,
-            };
-            (mident, minfo)
-        }))
-        .unwrap();
-        ProgramInfo { modules }
-    }};
-}
+impl UseFunsScope {
+    pub fn global(info: &NamingProgramInfo) -> Self {
+        let count = 1;
+        let unused = BTreeMap::new();
+        let mut use_funs = BTreeMap::new();
+        for (_, _, minfo) in &info.modules {
+            for (tn, methods) in &minfo.use_funs {
+                let public_methods = methods.ref_filter_map(|_, uf| {
+                    if uf.is_public.is_some() {
+                        Some(uf.clone())
+                    } else {
+                        None
+                    }
+                });
+                if public_methods.is_empty() {
+                    continue;
+                }
 
-impl TypingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &T::Program) -> Self {
-        program_info!(pre_compiled_lib, prog, typing)
-    }
-}
-
-impl NamingProgramInfo {
-    pub fn new(pre_compiled_lib: Option<&FullyCompiledProgram>, prog: &N::Program) -> Self {
-        program_info!(pre_compiled_lib, prog, naming)
-    }
-}
-
-impl<const AFTER_TYPING: bool> ProgramInfo<AFTER_TYPING> {
-    pub fn module(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.modules
-            .get(m)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
-        let minfo = self.module(m);
-        minfo
-            .structs
-            .get(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
-        &self.struct_definition(m, n).abilities
-    }
-
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
-        self.struct_declared_loc_(m, &n.0.value)
-    }
-
-    pub fn struct_declared_loc_(&self, m: &ModuleIdent, n: &Symbol) -> Loc {
-        let minfo = self.module(m);
-        *minfo
-            .structs
-            .get_loc_(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn struct_type_parameters(
-        &self,
-        m: &ModuleIdent,
-        n: &StructName,
-    ) -> &Vec<StructTypeParameter> {
-        &self.struct_definition(m, n).type_parameters
-    }
-
-    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.module(m)
-            .functions
-            .get(n)
-            .expect("ICE should have failed in naming")
-    }
-
-    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
-        let constants = &self.module(m).constants;
-        constants.get(n).expect("ICE should have failed in naming")
+                assert!(
+                    !use_funs.contains_key(tn),
+                    "ICE public methods should have been filtered to the defining module.
+                    tn: {tn}.
+                    prev: {}
+                    new: {}",
+                    debug_display!((tn, (use_funs.get(tn).unwrap()))),
+                    debug_display!((tn, &public_methods))
+                );
+                use_funs.insert(tn.clone(), public_methods);
+            }
+        }
+        UseFunsScope {
+            count,
+            unused,
+            use_funs,
+        }
     }
 }
 
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib: Option<&FullyCompiledProgram>,
-        prog: &N::Program,
+        _pre_compiled_lib: Option<&FullyCompiledProgram>,
+        info: NamingProgramInfo,
     ) -> Self {
-        let modules = NamingProgramInfo::new(pre_compiled_lib, prog);
+        let global_use_funs = UseFunsScope::global(&info);
         Context {
+            use_funs: vec![global_use_funs],
             subst: Subst::empty(),
             current_module: None,
             current_function: None,
@@ -216,11 +133,84 @@ impl<'env> Context<'env> {
             constraints: vec![],
             locals: UniqueMap::new(),
             loop_info: LoopInfo(LoopInfo_::NotInLoop),
-            modules,
+            modules: info,
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
         }
+    }
+
+    pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
+        let N::UseFuns {
+            resolved: new_scope,
+            implicit_candidates,
+        } = new_scope;
+        assert!(
+            implicit_candidates.is_empty(),
+            "ICE use fun candidates should have been resolved"
+        );
+        let depth = self.use_funs.len();
+        let cur = self.use_funs.last_mut().unwrap();
+        if new_scope.is_empty() {
+            cur.count += 1;
+            return;
+        }
+        let mut unused = cur.unused.clone();
+        let mut use_funs = cur.use_funs.clone();
+        for (tn, additional_methods) in new_scope {
+            for (method, nuf) in additional_methods {
+                match nuf.kind {
+                    UseFunKind::Explicit if nuf.is_public.is_none() => {
+                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
+                    }
+                    UseFunKind::UseAlias { used: false } => {
+                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
+                    }
+                    _ => (),
+                }
+                let cur_methods = use_funs.entry(tn.clone()).or_default();
+                cur_methods.remove(&method);
+                cur_methods.add(method, nuf).unwrap();
+            }
+        }
+        self.use_funs.push(UseFunsScope {
+            count: 1,
+            unused,
+            use_funs,
+        })
+    }
+
+    pub fn pop_use_funs_scope(&mut self) {
+        let cur = self.use_funs.last_mut().unwrap();
+        if cur.count > 1 {
+            cur.count -= 1;
+            return;
+        }
+        let UseFunsScope { unused, .. } = self.use_funs.pop().unwrap();
+        let cur_depth = self.use_funs.len();
+        let mut new_unused = BTreeMap::new();
+        for ((tn, method), (loc, kind, depth)) in unused {
+            if depth != cur_depth {
+                // the unused was added in a scope above
+                assert!(depth < cur_depth);
+                new_unused.insert((tn, method), (loc, kind, depth));
+                continue;
+            }
+            let msg = match kind {
+                UseFunKind::Explicit => {
+                    format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
+                }
+                UseFunKind::UseAlias { used } => {
+                    assert!(!used);
+                    format!("Unused 'use' of alias '{method}'. Consider removing it")
+                }
+                UseFunKind::FunctionDeclaration => {
+                    panic!("ICE function declaration use funs should never be added to use fun")
+                }
+            };
+            self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
+        }
+        self.use_funs.last_mut().unwrap().unused = new_unused;
     }
 
     pub fn reset_for_module_item(&mut self) {
@@ -798,6 +788,112 @@ pub fn make_constant_type(
 //**************************************************************************************************
 // Functions
 //**************************************************************************************************
+
+pub fn make_method_call_type(
+    context: &mut Context,
+    loc: Loc,
+    lhs_ty: &Type,
+    tn: &TypeName,
+    method: Name,
+    ty_args_opt: Option<Vec<Type>>,
+) -> Option<(
+    Loc,
+    ModuleIdent,
+    FunctionName,
+    Vec<Type>,
+    Vec<(Var, Type)>,
+    BTreeMap<StructName, Loc>,
+    Type,
+)> {
+    let target_function_opt = context
+        .use_funs
+        .last()
+        .unwrap()
+        .use_funs
+        .get(tn)
+        .and_then(|methods| Some(methods.get(&method)?.target_function));
+    // try to find a function in the defining module for errors
+    let Some((target_m, target_f)) = target_function_opt else {
+        let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
+        let defining_module = match &tn.value {
+            TypeName_::Multiple(_) => panic!("ICE method on tuple"),
+            TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
+            TypeName_::ModuleType(m, _) => Some(m),
+        };
+        let finfo_opt = defining_module.and_then(|m| {
+            let finfo = context
+                .modules
+                .module(m)
+                .functions
+                .get(&FunctionName(method))?;
+            Some((m, finfo))
+        });
+        // if we found a function with the method name, it must have the wrong type
+        if let Some((m, finfo)) = finfo_opt {
+            let (first_ty_loc, first_ty) =
+                match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+                    None => (finfo.defined_loc, None),
+                    Some(t) => (t.loc, Some(t)),
+                };
+            let arg_msg = match first_ty {
+                Some(ty) => {
+                    let tys_str = error_format(&ty, &Subst::empty());
+                    format!("but it has a different type for its first argument, {tys_str}")
+                }
+                None => "but it takes no arguments".to_owned(),
+            };
+            let msg = format!(
+                "Invalid method call. \
+                No known method '{method}' on type '{lhs_ty_str}'"
+            );
+            let fmsg = format!("The function '{m}::{method}' exists, {arg_msg}");
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidMethodCall,
+                (loc, msg),
+                (first_ty_loc, fmsg)
+            ));
+        } else {
+            let msg = format!(
+                "Invalid method call. \
+                No known method '{method}' on type '{lhs_ty_str}'"
+            );
+            let decl_msg = match defining_module {
+                Some(m) => {
+                    format!(", and no function '{method}' was found in the defining module '{m}'")
+                }
+                None => "".to_owned(),
+            };
+            let fmsg =
+                format!("No local 'use fun' alias was found for '{lhs_ty_str}.{method}'{decl_msg}");
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidMethodCall,
+                (loc, msg),
+                (method.loc, fmsg)
+            ));
+        }
+        return None;
+    };
+    // mark the method as used
+    context
+        .use_funs
+        .last_mut()
+        .unwrap()
+        .unused
+        .remove(&(tn.clone(), method));
+
+    let (defined_loc, ty_args, params, acquires, return_ty) =
+        make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+
+    Some((
+        defined_loc,
+        target_m,
+        target_f,
+        ty_args,
+        params,
+        acquires,
+        return_ty,
+    ))
+}
 
 pub fn make_function_type(
     context: &mut Context,
