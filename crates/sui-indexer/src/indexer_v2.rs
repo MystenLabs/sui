@@ -20,7 +20,7 @@ use crate::store::IndexerStoreV2;
 
 pub struct IndexerV2;
 
-const DOWNLOAD_QUEUE_SIZE: usize = 1000;
+const DOWNLOAD_QUEUE_SIZE: usize = 5000;
 
 impl IndexerV2 {
     pub async fn start<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
