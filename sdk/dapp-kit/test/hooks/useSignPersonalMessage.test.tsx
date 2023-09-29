@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useConnectWallet, useSignPersonalMessage } from 'dapp-kit/src';
+import type { Mock } from 'vitest';
+
 import {
 	WalletFeatureNotSupportedError,
 	WalletNotConnectedError,
-} from 'dapp-kit/src/errors/walletErrors.js';
-import type { Mock } from 'vitest';
-
+} from '../../src/errors/walletErrors.js';
+import { useConnectWallet, useSignPersonalMessage } from '../../src/index.js';
 import { suiFeatures } from '../mocks/mockFeatures.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 

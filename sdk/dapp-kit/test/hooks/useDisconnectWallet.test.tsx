@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
+
+import { WalletNotConnectedError } from '../../src/errors/walletErrors.js';
 import {
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
 	useDisconnectWallet,
-} from 'dapp-kit/src';
-import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
-
+} from '../../src/index.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('useDisconnectWallet', () => {
