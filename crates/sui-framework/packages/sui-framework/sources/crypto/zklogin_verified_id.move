@@ -18,7 +18,6 @@ module sui::zklogin_verified_id {
     struct VerifiedID has key {
         /// The ID of this VerifiedID
         id: UID,
-
         /// The address this VerifiedID is associated with
         address: address,
 
