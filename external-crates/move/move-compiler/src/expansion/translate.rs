@@ -126,27 +126,37 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 }
 
+/// We mark named addresses as having a conflict if there is not a bidirectional mapping between
+/// the name and its value
 fn compute_address_conflicts(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: &P::Program,
 ) -> BTreeSet<Symbol> {
-    let mut all_addrs: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
-    for map in prog.named_address_maps.all() {
+    let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
+    let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
+    let all_addrs = prog.named_address_maps.all().iter().chain(
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre| pre.parser.named_address_maps.all()),
+    );
+    for map in all_addrs {
         for (n, addr) in map {
-            all_addrs.entry(*n).or_default().insert(addr.into_inner());
+            let n = *n;
+            let addr = addr.into_inner();
+            name_to_addr.entry(n).or_default().insert(addr);
+            addr_to_name.entry(addr).or_default().insert(n);
         }
     }
-    if let Some(pre_compiled) = pre_compiled_lib {
-        for map in pre_compiled.parser.named_address_maps.all() {
-            for (n, addr) in map {
-                all_addrs.entry(*n).or_default().insert(addr.into_inner());
-            }
-        }
-    }
-    all_addrs
+    let name_to_addr_conflicts = name_to_addr
         .into_iter()
         .filter(|(_, addrs)| addrs.len() > 1)
-        .map(|(n, _)| n)
+        .map(|(n, _)| n);
+    let addr_to_name_conflicts = addr_to_name
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .flat_map(|(_, ns)| ns.into_iter());
+    name_to_addr_conflicts
+        .chain(addr_to_name_conflicts)
         .collect()
 }
 
