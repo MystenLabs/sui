@@ -10,7 +10,7 @@ use super::{
     base64::Base64,
     epoch::Epoch,
     gas::{GasEffects, GasInput},
-    sui_address::SuiAddress,
+    sui_address::SuiAddress, checkpoint::Checkpoint,
 };
 use async_graphql::*;
 
@@ -22,20 +22,19 @@ pub(crate) struct TransactionBlock {
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
     pub gas_input: Option<GasInput>,
+
+    #[graphql(skip)]
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[ComplexObject]
 impl TransactionBlock {
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        if self.effects.is_none() {
-            return Ok(None);
-        }
-        if let Some(gcs) = &self.effects.as_ref().unwrap().gas_effects {
-            let data_provider = ctx.data_provider();
-            let system_state = data_provider.get_latest_sui_system_state().await?;
-            let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-            let epoch = convert_to_epoch(gcs.gcs, &system_state, &protocol_configs)?;
-            Ok(Some(epoch))
+        let checkpoint = ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await?;
+        let epoch_id = checkpoint.map(|c| c.epoch.epoch_id);
+        if let Some(epoch_id) = epoch_id {
+            let epoch = ctx.data_provider().fetch_epoch(epoch_id).await?;
+            Ok(epoch)
         } else {
             Ok(None)
         }
@@ -54,19 +53,23 @@ pub(crate) struct TransactionBlockEffects {
     // pub object_reads: Vec<Object>,
     // pub object_changes: Vec<ObjectChange>,
     // pub balance_changes: Vec<BalanceChange>,
-    // pub epoch: Epoch
-    // pub checkpoint: Checkpoint
+
+    #[graphql(skip)]
+    pub checkpoint_sequence_number: Option<u64>,
 }
 
 #[ComplexObject]
 impl TransactionBlockEffects {
+    async fn checkpoint(&self, ctx: &Context<'_>) -> Result<Option<Checkpoint>> {
+        ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await
+    }
+
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        if let Some(gcs) = &self.gas_effects {
-            let data_provider = ctx.data_provider();
-            let system_state = data_provider.get_latest_sui_system_state().await?;
-            let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-            let epoch = convert_to_epoch(gcs.gcs, &system_state, &protocol_configs)?;
-            Ok(Some(epoch))
+        let checkpoint = ctx.data_provider().fetch_checkpoint(None, self.checkpoint_sequence_number).await?;
+        let epoch_id = checkpoint.map(|c| c.epoch.epoch_id);
+        if let Some(epoch_id) = epoch_id {
+            let epoch = ctx.data_provider().fetch_epoch(epoch_id).await?;
+            Ok(epoch)
         } else {
             Ok(None)
         }

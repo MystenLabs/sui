@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{{error::Error, types::{checkpoint::Checkpoint, digest::Digest, gas::{GasCostSummary, GasInput}, epoch::Epoch, big_int::BigInt, transaction_block::{TransactionBlock, TransactionBlockEffects}, address::Address, sui_address::SuiAddress, base64::Base64}}, types::digest::Digest};
+use crate::{{error::Error, types::{checkpoint::Checkpoint, digest::Digest, gas::{GasCostSummary, GasInput}, epoch::Epoch, big_int::BigInt, transaction_block::{TransactionBlock, TransactionBlockEffects}, address::Address, sui_address::SuiAddress, base64::Base64, date_time::DateTime}}, types::digest::Digest};
 use async_trait::async_trait;
 use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
@@ -334,7 +334,7 @@ impl From<StoredEpochInfo> for Epoch {
             validator_set: None,
             storage_fund: None,
             safe_mode: None,
-            start_timestamp: None,
+            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
         }
     }
 }
@@ -371,7 +371,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             ))
         })?;
         let effects = match SuiTransactionBlockEffects::try_from(effects) {
-            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects))),
+            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects, Some(tx.checkpoint_sequence_number as u64)))),
             Err(e) => Err(Error::Internal(format!(
                 "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
             ))),
@@ -383,6 +383,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             sender: Some(sender),
             bcs: Some(Base64::from(&tx.raw_transaction)),
             gas_input: Some(gas_input),
+            checkpoint_sequence_number: Some(tx.checkpoint_sequence_number as u64),
         })
     }
 }

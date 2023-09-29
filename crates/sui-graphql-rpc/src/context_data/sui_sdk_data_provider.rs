@@ -343,6 +343,12 @@ impl DataProvider for SuiClient {
     async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary> {
         Ok(self.governance_api().get_latest_sui_system_state().await?)
     }
+
+    async fn fetch_latest_epoch(&self) -> Result<Epoch> {
+        let system_state = self.get_latest_sui_system_state().await?;
+        let protocol_configs = self.fetch_protocol_config(None).await?;
+        convert_to_epoch(None, &system_state, &protocol_configs)
+    }
 }
 
 pub(crate) async fn sui_sdk_client_v0(rpc_url: impl AsRef<str>) -> SuiClient {
@@ -455,7 +461,7 @@ fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
 }
 
 pub(crate) fn convert_to_epoch(
-    gas_summary: GasCostSummary,
+    gas_summary: Option<GasCostSummary>,
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
@@ -526,7 +532,7 @@ pub(crate) fn convert_to_epoch(
         }),
         safe_mode: Some(SafeMode {
             enabled: Some(system_state.safe_mode),
-            gas_summary: Some(gas_summary),
+            gas_summary,
         }),
         protocol_configs: Some(protocol_configs.clone()),
         start_timestamp: Some(start_timestamp),
@@ -643,16 +649,19 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
 
         Self {
             digest: Digest::from_array(tx_block.digest.into_inner()).to_string(),
-            effects: tx_block.effects.as_ref().map(TransactionBlockEffects::from),
+            effects: tx_block.effects.map(
+                |effects| TransactionBlockEffects::from(&effects, tx_block.checkpoint),
+            ),
             sender,
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
+            checkpoint_sequence_number: tx_block.checkpoint
         }
     }
 }
 
-impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
-    fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+impl TransactionBlockEffects {
+    pub fn from(tx_effects: &SuiTransactionBlockEffects, checkpoint_sequence_number: Option<u64>) -> Self {
         let (status, errors) = match tx_effects.status() {
             SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
             SuiExecutionStatus::Failure { error } => {
@@ -664,6 +673,24 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
             gas_effects: Some(GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object()))),
             status,
             errors,
+            checkpoint_sequence_number
         }
     }
 }
+
+// impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
+//     fn from(tx_effects: &SuiTransactionBlockEffects) -> Self {
+//         let (status, errors) = match tx_effects.status() {
+//             SuiExecutionStatus::Success => (ExecutionStatus::Success, None),
+//             SuiExecutionStatus::Failure { error } => {
+//                 (ExecutionStatus::Failure, Some(error.clone()))
+//             }
+//         };
+
+//         Self {
+//             gas_effects: Some(GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object()))),
+//             status,
+//             errors,
+//         }
+//     }
+// }
