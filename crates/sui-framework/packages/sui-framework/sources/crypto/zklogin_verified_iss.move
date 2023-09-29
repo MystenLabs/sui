@@ -17,25 +17,22 @@ module sui::zklogin_verified_iss {
     /// Posession of a VerifiedIssuer proves that the user's address was created using zklogin and with the given issuer
     /// (identity provider).
     struct VerifiedIssuer has key {
-
         /// The ID of this VerifiedIssuer
         id: UID,
-
         /// The address this VerifiedID is associated with
         address: address,
-
         /// The issuer
         iss: String,
     }
 
     /// Returns the address associated with the given VerifiedIssuer
-    public fun get_address(verified_issuer: &VerifiedIssuer): address {
+    public fun address(verified_issuer: &VerifiedIssuer): address {
         verified_issuer.address
     }
 
     /// Returns the issuer associated with the given VerifiedIssuer
-    public fun get_iss(verified_issuer: &VerifiedIssuer): String {
-        verified_issuer.iss
+    public fun iss(verified_issuer: &VerifiedIssuer): &String {
+        &verified_issuer.iss
     }
 
     /// Verify that the caller's address was created using zklogin with the given issuer. If so, a VerifiedIssuer object
