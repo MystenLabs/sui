@@ -538,7 +538,7 @@ fn multisig_invalid_instance() {
     );
     let sig1 = Signature::new_secure(&msg, &keys[0]);
 
-    let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1.clone(), 0)];
+    let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1, 0)];
 
     let invalid_multisig_pk = MultiSigPublicKey::construct(public_keys_and_weights, u16::MIN);
 
@@ -565,7 +565,7 @@ fn multisig_invalid_bitmap_instance() {
     );
     let sig1 = Signature::new_secure(&msg, &keys[0]);
 
-    let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1.clone(), 1)];
+    let public_keys_and_weights: Vec<(PublicKey, WeightUnit)> = vec![(pk1, 1)];
 
     let invalid_multisig_pk = MultiSigPublicKey::construct(public_keys_and_weights, 1);
 
@@ -609,12 +609,9 @@ fn multisig_pass_same_publickey() {
     let pk1 = keys[0].public();
 
     // It should be impossible to create such instance.
-    assert!(MultiSigPublicKey::new(
-        vec![pk1.clone(), pk1.clone(), pk1.clone()],
-        vec![1, 2, 3],
-        4,
-    )
-    .is_err());
+    assert!(
+        MultiSigPublicKey::new(vec![pk1.clone(), pk1.clone(), pk1], vec![1, 2, 3], 4,).is_err()
+    );
 }
 
 #[test]
@@ -624,12 +621,7 @@ fn multisig_user_authenticator_epoch() {
     let pk2 = keys[1].public();
     let pk3 = keys[2].public();
 
-    let multisig_pk = MultiSigPublicKey::new(
-        vec![pk1.clone(), pk2.clone(), pk3.clone()],
-        vec![1, 1, 1],
-        2,
-    )
-    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 1, 1], 2).unwrap();
     let addr = SuiAddress::from(&multisig_pk);
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
@@ -640,8 +632,7 @@ fn multisig_user_authenticator_epoch() {
     let sig1 = Signature::new_secure(&msg, &keys[0]);
     let sig2 = Signature::new_secure(&msg, &keys[1]);
 
-    let multi_sig1 =
-        MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk.clone()).unwrap();
+    let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
 
     // EpochId is set to 'Some(1)' value.
     assert!(multi_sig1
@@ -674,11 +665,7 @@ fn multisig_combine_invalid_multisig_publickey() {
     let sig1 = Signature::new_secure(&msg, &keys[0]);
     let sig2 = Signature::new_secure(&msg, &keys[1]);
 
-    assert!(MultiSig::combine(
-        vec![sig1.clone(), sig2.clone()],
-        invalid_multisig_pk.clone()
-    )
-    .is_err());
+    assert!(MultiSig::combine(vec![sig1, sig2], invalid_multisig_pk).is_err());
 }
 
 #[test]
@@ -727,11 +714,7 @@ fn multisig_invalid_publickey_ed25519_signature() {
     let pk3_secp256r1 = keys[2].public();
 
     let multisig_pk = MultiSigPublicKey::new(
-        vec![
-            pk2_secp256k1.clone(),
-            pk1_ed25519.clone(),
-            pk3_secp256r1.clone(),
-        ],
+        vec![pk2_secp256k1, pk1_ed25519, pk3_secp256r1],
         vec![1, 1, 1],
         2,
     )
@@ -747,11 +730,7 @@ fn multisig_invalid_publickey_ed25519_signature() {
     let sig_secp256k1 = Signature::new_secure(&msg, &keys[1]);
 
     // Change position for signatures is not ok with plain bitmap
-    let multi_sig = MultiSig::combine(
-        vec![sig_ed25519.clone(), sig_secp256k1.clone()],
-        multisig_pk.clone(),
-    )
-    .unwrap();
+    let multi_sig = MultiSig::combine(vec![sig_ed25519, sig_secp256k1], multisig_pk).unwrap();
 
     // Since sig_ed25519 on the place of sig_secp256k1, should throw an error
     assert!(multi_sig
@@ -767,11 +746,7 @@ fn multisig_invalid_publickey_secp256r1_signature() {
     let pk3_secp256r1 = keys[2].public();
 
     let multisig_pk = MultiSigPublicKey::new(
-        vec![
-            pk2_secp256k1.clone(),
-            pk1_ed25519.clone(),
-            pk3_secp256r1.clone(),
-        ],
+        vec![pk2_secp256k1, pk1_ed25519, pk3_secp256r1],
         vec![1, 1, 1],
         2,
     )
@@ -787,11 +762,7 @@ fn multisig_invalid_publickey_secp256r1_signature() {
     let sig_secp256r1 = Signature::new_secure(&msg, &keys[2]);
 
     // Change position for signatures is not ok with plain bitmap
-    let multi_sig = MultiSig::combine(
-        vec![sig_secp256r1.clone(), sig_ed25519.clone()],
-        multisig_pk.clone(),
-    )
-    .unwrap();
+    let multi_sig = MultiSig::combine(vec![sig_secp256r1, sig_ed25519], multisig_pk).unwrap();
 
     // Since sig_secp256r1 on the place of sig_secp256k1, should throw an error
     assert!(multi_sig
@@ -805,8 +776,7 @@ fn multisig_get_pk() {
     let pk1 = keys[0].public();
     let pk2 = keys[1].public();
 
-    let multisig_pk =
-        MultiSigPublicKey::new(vec![pk1.clone(), pk2.clone()], vec![1, 1], 2).unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 2).unwrap();
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
         PersonalMessage {
@@ -816,8 +786,7 @@ fn multisig_get_pk() {
     let sig1 = Signature::new_secure(&msg, &keys[0]);
     let sig2 = Signature::new_secure(&msg, &keys[1]);
 
-    let multi_sig =
-        MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk.clone()).unwrap();
+    let multi_sig = MultiSig::combine(vec![sig1, sig2], multisig_pk.clone()).unwrap();
 
     assert!(multi_sig.get_pk().clone() == multisig_pk);
 }
@@ -828,8 +797,7 @@ fn multisig_get_sigs() {
     let pk1 = keys[0].public();
     let pk2 = keys[1].public();
 
-    let multisig_pk =
-        MultiSigPublicKey::new(vec![pk1.clone(), pk2.clone()], vec![1, 1], 2).unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2], vec![1, 1], 2).unwrap();
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
         PersonalMessage {
@@ -839,15 +807,10 @@ fn multisig_get_sigs() {
     let sig1 = Signature::new_secure(&msg, &keys[0]);
     let sig2 = Signature::new_secure(&msg, &keys[1]);
 
-    let multi_sig =
-        MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk.clone()).unwrap();
+    let multi_sig = MultiSig::combine(vec![sig1.clone(), sig2.clone()], multisig_pk).unwrap();
 
     assert!(
-        multi_sig.get_sigs().clone()
-            == vec![
-                sig1.clone().to_compressed().unwrap(),
-                sig2.to_compressed().unwrap()
-            ]
+        *multi_sig.get_sigs() == vec![sig1.to_compressed().unwrap(), sig2.to_compressed().unwrap()]
     );
 }
 
@@ -858,12 +821,7 @@ fn multisig_get_indices() {
     let pk2 = keys[1].public();
     let pk3 = keys[2].public();
 
-    let multisig_pk = MultiSigPublicKey::new(
-        vec![pk1.clone(), pk2.clone(), pk3.clone()],
-        vec![1, 1, 1],
-        2,
-    )
-    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 1, 1], 2).unwrap();
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
         PersonalMessage {
@@ -883,11 +841,7 @@ fn multisig_get_indices() {
     )
     .unwrap();
 
-    let invalid_multisig = MultiSig::combine(
-        vec![sig3.clone(), sig2.clone(), sig1.clone()],
-        multisig_pk.clone(),
-    )
-    .unwrap();
+    let invalid_multisig = MultiSig::combine(vec![sig3, sig2, sig1], multisig_pk).unwrap();
 
     // Indexes of public keys in multisig public key instance according to the combined sigs.
     assert!(multi_sig1.get_indices().unwrap() == vec![1, 2]);
@@ -902,12 +856,7 @@ fn multisig_new_hashed_signature() {
     let pk2 = keys[1].public();
     let pk3 = keys[2].public();
 
-    let multisig_pk = MultiSigPublicKey::new(
-        vec![pk1.clone(), pk2.clone(), pk3.clone()],
-        vec![1, 1, 1],
-        2,
-    )
-    .unwrap();
+    let multisig_pk = MultiSigPublicKey::new(vec![pk1, pk2, pk3], vec![1, 1, 1], 2).unwrap();
     let addr = SuiAddress::from(&multisig_pk);
     let msg = IntentMessage::new(
         Intent::sui_transaction(),
@@ -932,8 +881,7 @@ fn multisig_new_hashed_signature() {
     let sig2 = Signature::new_hashed(hashed_msg, &keys[1]);
     let sig3 = Signature::new_hashed(hashed_msg, &keys[2]);
 
-    let multi_sig =
-        MultiSig::combine(vec![sig2.clone(), sig3.clone()], multisig_pk.clone()).unwrap();
+    let multi_sig = MultiSig::combine(vec![sig2, sig3], multisig_pk).unwrap();
 
     assert!(multi_sig
         .verify_authenticator(&msg, addr, None, &VerifyParams::default())
