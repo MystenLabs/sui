@@ -12,7 +12,7 @@ import type { ExportedKeypair } from '../../cryptography/keypair.js';
 import { Keypair } from '../../cryptography/keypair.js';
 import { isValidBIP32Path, mnemonicToSeed } from '../../cryptography/mnemonics.js';
 import type { PublicKey } from '../../cryptography/publickey.js';
-import type { SignatureScheme } from '../../cryptography/signature.js';
+import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
 import { Secp256r1PublicKey } from './publickey.js';
 
 export const DEFAULT_SECP256R1_DERIVATION_PATH = "m/74'/784'/0'/0/0";

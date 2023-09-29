@@ -20,7 +20,8 @@
 		"src",
 		"transactions",
 		"utils",
-		"verify"
+		"verify",
+		"zklogin"
 	],
 	"engines": {
 		"node": ">=16"
@@ -81,6 +82,11 @@
 			"source": "./src/verify/index.ts",
 			"import": "./dist/esm/verify/index.js",
 			"require": "./dist/cjs/verify/index.js"
+		},
+		"./zklogin": {
+			"source": "./src/zklogin/index.ts",
+			"import": "./dist/esm/zklogin/index.js",
+			"require": "./dist/cjs/zklogin/index.js"
 		}
 	},
 	"scripts": {

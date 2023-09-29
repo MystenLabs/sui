@@ -11,7 +11,7 @@ import {
 	type PublicKey,
 	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
-import { computeZkAddress, genAddressSeed, getZkSignature } from '@mysten/zklogin';
+import { computeZkAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
@@ -242,7 +242,7 @@ export class ZkAccount
 		const { addressSeed: addressSeedObfuscated } = await this.getStoredData();
 		const addressSeed = await deobfuscate<string>(addressSeedObfuscated);
 
-		return getZkSignature({
+		return getZkLoginSignature({
 			inputs: { ...proofs, addressSeed },
 			maxEpoch,
 			userSignature,
