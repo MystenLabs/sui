@@ -99,7 +99,6 @@ function verifyExtendedClaim(claim: string) {
 	return [key, json[key]];
 }
 
-// The extract claims functionality to be implemented on-chain
 export function extractClaimValue<R>(claim: Claim, claimName: string): R {
 	const extendedClaim = decodeBase64URL(claim.value, claim.indexMod4);
 	const [name, value] = verifyExtendedClaim(extendedClaim);
