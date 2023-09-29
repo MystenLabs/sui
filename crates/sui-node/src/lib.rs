@@ -21,7 +21,6 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::TryFutureExt;
-use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use prometheus::Registry;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::LazyNarwhalClient;
@@ -120,7 +119,7 @@ use sui_types::sui_system_state::SuiSystemStateTrait;
 use typed_store::rocks::default_db_options;
 use typed_store::DBMetrics;
 
-use crate::metrics::GrpcMetrics;
+use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 
 pub mod admin;
 mod handle;
@@ -204,6 +203,7 @@ pub struct SuiNode {
     state: Arc<AuthorityState>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     registry_service: RegistryService,
+    metrics: Arc<SuiNodeMetrics>,
 
     _discovery: discovery::Handle,
     state_sync: state_sync::Handle,
@@ -244,19 +244,12 @@ impl SuiNode {
         registry_service: RegistryService,
         custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        let node_one_cell = Arc::new(AsyncOnceCell::<Arc<SuiNode>>::new());
-        Self::start_async(
-            config,
-            registry_service,
-            node_one_cell.clone(),
-            custom_rpc_runtime,
-        )
-        .await?;
-        Ok(node_one_cell.get().await)
+        Self::start_async(config, registry_service, custom_rpc_runtime).await
     }
 
     fn start_jwk_updater(
         config: &NodeConfig,
+        metrics: Arc<SuiNodeMetrics>,
         authority: AuthorityName,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
@@ -276,13 +269,19 @@ impl SuiNode {
             "Starting JWK updater tasks with supported providers: {:?}", supported_providers
         );
 
-        fn validate_jwk(provider: &OIDCProvider, id: &JwkId, jwk: &JWK) -> bool {
+        fn validate_jwk(
+            metrics: &Arc<SuiNodeMetrics>,
+            provider: &OIDCProvider,
+            id: &JwkId,
+            jwk: &JWK,
+        ) -> bool {
             let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
                 warn!(
                     "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
                     id.iss,
                     provider
                 );
+                metrics.invalid_jwks.with_label_values(&[&provider.to_string()]).inc();
                 return false;
             };
 
@@ -291,20 +290,38 @@ impl SuiNode {
                     "JWK iss {:?} (retrieved from {:?}) does not match provider {:?}",
                     id.iss, provider, iss_provider
                 );
+                metrics
+                    .invalid_jwks
+                    .with_label_values(&[&provider.to_string()])
+                    .inc();
                 return false;
             }
 
             if !check_total_jwk_size(id, jwk) {
                 warn!("JWK {:?} (retrieved from {:?}) is too large", id, provider);
+                metrics
+                    .invalid_jwks
+                    .with_label_values(&[&provider.to_string()])
+                    .inc();
                 return false;
             }
 
             true
         }
 
+        // metrics is:
+        //  pub struct SuiNodeMetrics {
+        //      pub jwk_requests: IntCounterVec,
+        //      pub jwk_request_errors: IntCounterVec,
+        //      pub total_jwks: IntCounterVec,
+        //      pub unique_jwks: IntCounterVec,
+        //  }
+
         for p in supported_providers.into_iter() {
+            let provider_str = p.to_string();
             let epoch_store = epoch_store.clone();
             let consensus_adapter = consensus_adapter.clone();
+            let metrics = metrics.clone();
             spawn_monitored_task!(epoch_store.clone().within_alive_epoch(
                 async move {
                     // note: restart-safe de-duplication happens after consensus, this is
@@ -312,19 +329,29 @@ impl SuiNode {
                     let mut seen = HashSet::new();
                     loop {
                         info!("fetching JWK for provider {:?}", p);
+                        metrics.jwk_requests.with_label_values(&[&provider_str]).inc();
                         match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
+                                metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
                                 warn!("Error when fetching JWK {:?}", e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
                                 continue;
                             }
                             Ok(mut keys) => {
+                                metrics.total_jwks
+                                    .with_label_values(&[&provider_str])
+                                    .inc_by(keys.len() as u64);
+
                                 keys.retain(|(id, jwk)| {
-                                    validate_jwk(&p, id, jwk) &&
+                                    validate_jwk(&metrics, &p, id, jwk) &&
                                     !epoch_store.jwk_active_in_current_epoch(id, jwk) &&
                                     seen.insert((id.clone(), jwk.clone()))
                                 });
+
+                                metrics.unique_jwks
+                                    .with_label_values(&[&provider_str])
+                                    .inc_by(keys.len() as u64);
 
                                 // prevent oauth providers from sending too many keys,
                                 // inadvertently or otherwise
@@ -354,9 +381,8 @@ impl SuiNode {
     pub async fn start_async(
         config: &NodeConfig,
         registry_service: RegistryService,
-        node_once_cell: Arc<AsyncOnceCell<Arc<SuiNode>>>,
         custom_rpc_runtime: Option<Handle>,
-    ) -> Result<()> {
+    ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
@@ -627,6 +653,7 @@ impl SuiNode {
         };
 
         let connection_monitor_status = Arc::new(connection_monitor_status);
+        let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         let validator_components = if state.is_validator(&epoch_store) {
             let components = Self::construct_validator_components(
@@ -639,6 +666,7 @@ impl SuiNode {
                 accumulator.clone(),
                 connection_monitor_status.clone(),
                 &registry_service,
+                sui_node_metrics.clone(),
             )
             .await?;
             // This is only needed during cold start.
@@ -656,6 +684,7 @@ impl SuiNode {
             state,
             transaction_orchestrator,
             registry_service,
+            metrics: sui_node_metrics,
 
             _discovery: discovery_handle,
             state_sync: state_sync_handle,
@@ -680,10 +709,7 @@ impl SuiNode {
         let node_copy = node.clone();
         spawn_monitored_task!(async move { Self::monitor_reconfiguration(node_copy).await });
 
-        node_once_cell
-            .set(node)
-            .expect("Failed to set Arc<Node> in node_once_cell");
-        Ok(())
+        Ok(node)
     }
 
     pub fn subscribe_to_epoch_change(&self) -> broadcast::Receiver<SuiSystemState> {
@@ -944,6 +970,7 @@ impl SuiNode {
         accumulator: Arc<StateAccumulator>,
         connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
+        sui_node_metrics: Arc<SuiNodeMetrics>,
     ) -> Result<ValidatorComponents> {
         let consensus_config = config
             .consensus_config()
@@ -989,6 +1016,7 @@ impl SuiNode {
             accumulator,
             validator_server_handle,
             checkpoint_metrics,
+            sui_node_metrics,
             sui_tx_validator_metrics,
         )
         .await
@@ -1006,6 +1034,7 @@ impl SuiNode {
         accumulator: Arc<StateAccumulator>,
         validator_server_handle: JoinHandle<Result<()>>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
+        sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
     ) -> Result<ValidatorComponents> {
         let (checkpoint_service, checkpoint_service_exit) = Self::start_checkpoint_service(
@@ -1066,6 +1095,7 @@ impl SuiNode {
         if epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
                 config,
+                sui_node_metrics,
                 state.name,
                 epoch_store.clone(),
                 consensus_adapter.clone(),
@@ -1402,6 +1432,7 @@ impl SuiNode {
                             self.accumulator.clone(),
                             validator_server_handle,
                             checkpoint_metrics,
+                            self.metrics.clone(),
                             sui_tx_validator_metrics,
                         )
                         .await?,
@@ -1435,6 +1466,7 @@ impl SuiNode {
                             self.accumulator.clone(),
                             self.connection_monitor_status.clone(),
                             &self.registry_service,
+                            self.metrics.clone(),
                         )
                         .await?,
                     )
