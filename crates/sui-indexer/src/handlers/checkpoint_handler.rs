@@ -38,7 +38,7 @@ use crate::store::{
 };
 use crate::IndexerConfig;
 
-const CHECKPOINT_QUEUE_SIZE: usize = 1000;
+const CHECKPOINT_QUEUE_SIZE: usize = 3000;
 const EPOCH_QUEUE_LIMIT: usize = 20;
 
 pub fn new_handlers<S>(

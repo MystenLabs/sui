@@ -204,10 +204,11 @@ impl Indexer {
             // let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
             // spawn_monitored_task!(processor_orchestrator.run_forever());
             // -1 will be returned when checkpoints table is empty.
-            let last_seq_from_db = store
-                .get_latest_tx_checkpoint_sequence_number()
-                .await
-                .expect("Failed to get latest tx checkpoint sequence number from DB").unwrap_or(0);
+            // let last_seq_from_db = store
+            //     .get_latest_tx_checkpoint_sequence_number()
+            //     .await
+            //     .expect("Failed to get latest tx checkpoint sequence number from DB").unwrap_or(0);
+            let last_seq_from_db= 9127065u64;
             let last_downloaded_checkpoint = if last_seq_from_db < 0 {
                 None
             } else {

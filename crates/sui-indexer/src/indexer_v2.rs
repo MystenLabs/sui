@@ -56,10 +56,11 @@ impl IndexerV2 {
 
         info!("Starting fullnode sync worker");
         // None will be returned when checkpoints table is empty.
-        let last_seq_from_db = store
-            .get_latest_tx_checkpoint_sequence_number()
-            .await
-            .expect("Failed to get latest tx checkpoint sequence number from DB");
+        // let last_seq_from_db = store
+        //     .get_latest_tx_checkpoint_sequence_number()
+        //     .await
+        //     .expect("Failed to get latest tx checkpoint sequence number from DB");
+        let last_seq_from_db= Some(9127065u64);
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
                 DOWNLOAD_QUEUE_SIZE,

@@ -31,4 +31,4 @@ CREATE TABLE tx_indices (
 -- CREATE INDEX tx_indices_package ON tx_indices USING GIN(packages);
 -- CREATE INDEX tx_indices_package_module ON tx_indices USING GIN(package_modules);
 -- CREATE INDEX tx_indices_package_module_function ON tx_indices USING GIN(package_module_functions);
-CREATE INDEX tx_indices_checkpoint_sequence_number ON tx_indices (checkpoint_sequence_number);
+-- CREATE INDEX tx_indices_checkpoint_sequence_number ON tx_indices (checkpoint_sequence_number);

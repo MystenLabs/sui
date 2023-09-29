@@ -60,13 +60,13 @@ macro_rules! chunk {
 // a few statements, this is the amount of rows to update in one statement
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
 // is now less relevant. We should do experiments and remove it if it's true.
-const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
+const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 4000;
 // The amount of rows to update in one DB transcation
-const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
+const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 4000;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 500;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 4000;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -156,7 +156,7 @@ impl PgIndexerStoreV2 {
             }
         }
 
-        transactional_blocking_v2!(
+        let _ = transactional_blocking_v2!(
             &self.blocking_cp,
             |mut conn| {
                 // Persist mutated objects

@@ -20,6 +20,6 @@ CREATE TABLE events
 );
 
 -- CREATE INDEX events_senders ON events USING GIN(senders);
-CREATE INDEX events_package_module ON events (package, module);
-CREATE INDEX events_event_type ON events (event_type);
-CREATE INDEX events_checkpoint_sequence_number ON events (checkpoint_sequence_number);
+-- CREATE INDEX events_package_module ON events (package, module);
+-- CREATE INDEX events_event_type ON events (event_type);
+-- CREATE INDEX events_checkpoint_sequence_number ON events (checkpoint_sequence_number);
