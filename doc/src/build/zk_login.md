@@ -245,9 +245,9 @@ const { bytes, signature: userSignature } = await txb.sign({
 
 Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
   ```typescript
-  import { getZkSignature } from "@mysten/zklogin";
+  import { getZkLoginSignature } from "@mysten/zklogin";
 
-const zkSignature = getZkSignature({
+const zkLoginSignature = getZkLoginSignature({
    inputs,
    maxEpoch,
    userSignature,
