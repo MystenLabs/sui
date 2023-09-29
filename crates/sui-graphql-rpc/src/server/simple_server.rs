@@ -3,7 +3,7 @@
 
 use crate::config::{RpcConnectionConfig, ServiceConfig};
 use crate::context_data::data_provider::DataProvider;
-use crate::context_data::sui_indexer_reader::PgManager;
+use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0};
 use crate::extensions::feature_gate::FeatureGate;
 use crate::extensions::limits_info::LimitsInfo;
@@ -30,7 +30,6 @@ pub async fn start_example_server(conn: RpcConnectionConfig, service_config: Ser
                 None
             } else {
                 println!("DB url provided, setting DB as data provider");
-                println!("DB url: {}", database_url);
                 Some(PgManager::new(database_url, None)?)
             }
         }
