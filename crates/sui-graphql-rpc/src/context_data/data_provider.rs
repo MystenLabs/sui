@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(unused_variables)]
 
 use async_graphql::connection::Connection;
 use async_graphql::*;

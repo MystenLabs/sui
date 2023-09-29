@@ -38,7 +38,8 @@ async fn main() {
             let service_config = service_config(config);
 
             println!("Starting server...");
-            start_example_server(conn, service_config).await;
+            let result = start_example_server(conn, service_config).await;
+            println!("Server stopped: {:?}", result);
         }
     }
 }

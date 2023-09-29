@@ -5,7 +5,6 @@ use std::collections::BTreeSet;
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
-use sui_indexer::PgConnectionPoolConfig;
 
 use crate::functional_group::FunctionalGroup;
 
@@ -17,11 +16,6 @@ pub struct RpcConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
     pub(crate) rpc_url: String,
-}
-
-pub struct DbConnectionConfig {
-    pub(crate) db_url: String,
-    pub(crate) config: PgConnectionPoolConfig
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -63,15 +57,6 @@ impl RpcConnectionConfig {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
-        }
-    }
-}
-
-impl DbConnectionConfig {
-    pub fn new(db_url: String, config: Option<PgConnectionPoolConfig>) -> Self {
-        Self {
-            db_url,
-            config: config.unwrap_or(PgConnectionPoolConfig::default())
         }
     }
 }

@@ -15,23 +15,32 @@ use crate::server::builder::ServerBuilder;
 use std::default::Default;
 use std::env;
 
-pub async fn start_example_server(conn: RpcConnectionConfig, service_config: ServiceConfig) {
+pub async fn start_example_server(conn: RpcConnectionConfig, service_config: ServiceConfig) -> Result<(), crate::error::Error> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
     let sui_sdk_client_v0 = sui_sdk_client_v0(&conn.rpc_url).await;
-    let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
-    // TODO (wlmyng): Allow users to choose which data sources to back graphql
-    let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-    let pg_conn_pool = PgManager::new(db_url, None)
-        .map_err(|e| {
-            println!("Failed to create pg connection pool: {}", e);
-            e
-        })
-        .unwrap();
+    let pg_conn_pool: Option<PgManager> = match env::var("PG_DB_URL") {
+        Ok(database_url) => {
+            if database_url.is_empty() {
+                println!("No DB URL provided, defaulting to SDK data provider");
+                None
+            } else {
+                println!("DB url provided, setting DB as data provider");
+                println!("DB url: {}", database_url);
+                Some(PgManager::new(database_url, None)?)
+            }
+        }
+        Err(_) => None
+    };
+
+    let data_provider: Box<dyn DataProvider> = match pg_conn_pool {
+        Some(pg_conn_pool) => Box::new(pg_conn_pool),
+        None => Box::new(sui_sdk_client_v0),
+    };
 
     let builder = ServerBuilder::new(conn.port, conn.host);
     println!("Launch GraphiQL IDE at: http://{}", builder.address());
@@ -42,7 +51,6 @@ pub async fn start_example_server(conn: RpcConnectionConfig, service_config: Ser
         .context_data(data_provider)
         .context_data(data_loader)
         .context_data(service_config)
-        .context_data(pg_conn_pool)
         .extension(QueryLimitsChecker)
         .extension(FeatureGate)
         .extension(LimitsInfo)
@@ -51,4 +59,5 @@ pub async fn start_example_server(conn: RpcConnectionConfig, service_config: Ser
         .build()
         .run()
         .await;
+    Ok(())
 }
