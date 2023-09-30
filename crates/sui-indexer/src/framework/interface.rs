@@ -12,7 +12,7 @@ pub trait Handler: Send {
 }
 
 pub trait BackfillHandler: Handler {
-    fn last_processed_checkpoints(&self) -> Option<CheckpointSequenceNumber>;
+    fn last_processed_checkpoint(&self) -> Option<CheckpointSequenceNumber>;
 }
 
 #[async_trait::async_trait]
