@@ -8,7 +8,7 @@ interface VisitorCallback {
 	offset: number;
 	length: number;
 	// Not expecting any claim that is not a string or a boolean (email_verified is sometimes a boolean).
-	arg?: string | boolean;
+	arg?: string | boolean | number;
 }
 
 interface VisitorError extends ParseError {
@@ -20,7 +20,7 @@ export interface ClaimDetails {
 	name: string; // e.g., "sub"
 
 	// Not expecting any claim that is not a string or a boolean (boolean for email_verified)...
-	value: string | boolean; // e.g., "1234567890"
+	value: string | boolean | number; // e.g., "1234567890"
 	ext_claim: string; // e.g., "sub": "1234567890",
 	offsets: {
 		start: number; // start index
@@ -113,7 +113,11 @@ export class JSONProcessor {
 		if (value_event.arg === undefined) {
 			throw new Error(`Undefined type for ${name}`);
 		}
-		if (typeof value_event.arg !== 'string' && typeof value_event.arg !== 'boolean') {
+		if (
+			typeof value_event.arg !== 'string' &&
+			typeof value_event.arg !== 'boolean' &&
+			typeof value_event.arg !== 'number'
+		) {
 			throw new Error(`Unexpected type for ${name}: ${typeof value_event.arg}`);
 		}
 		this.processed[name] = {
@@ -149,6 +153,9 @@ export class JSONProcessor {
 			throw new Error('Claim ' + name + ' not processed');
 		}
 		const details = this.processed[name];
+		if (typeof details.value !== 'string') {
+			throw new Error(`Claim ${name} does not have a string value.`);
+		}
 
 		const value_index = details.offsets.value + details.offsets.start;
 		const value_length = details.offsets.value_length;

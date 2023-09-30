@@ -5,9 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { JSONProcessor } from '../src/jsonprocessor';
 
 describe('JSONProcessor', () => {
-	const jwt =
-		'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-	const decoded_payload = Buffer.from(jwt.split('.')[1], 'base64url').toString();
+	const decoded_payload = '{"sub":"1234567890","name":"John Doe","iat":1516239022}';
 
 	describe('constructor', () => {
 		it('should initialize the events array', () => {
@@ -54,12 +52,6 @@ describe('JSONProcessor', () => {
 			);
 		});
 
-		it('should throw an error if the JSON is not expected (value is a number)', () => {
-			const invalidJwt = '{"sub":1234567890}';
-			const processor = new JSONProcessor(invalidJwt);
-			expect(() => processor.process('sub')).toThrowError('Unexpected type for sub');
-		});
-
 		it('should throw an error if the JSON is not expected (value is a object)', () => {
 			const invalidJwt = '{"sub":{"sub":1234567890}}';
 			const processor = new JSONProcessor(invalidJwt);
@@ -68,11 +60,11 @@ describe('JSONProcessor', () => {
 			);
 		});
 
-		it('should process a JWT with a single claim', () => {
+		it('should return the claim details for a claim with a string value', () => {
 			const input = '{"sub":"12345"}';
 			const processor = new JSONProcessor(input);
 			const claim_details = processor.process('sub');
-	
+
 			expect(claim_details.name).toEqual('sub');
 			expect(claim_details.value).toEqual('12345');
 			expect(claim_details.ext_claim).toEqual('"sub":"12345"}');
@@ -83,8 +75,38 @@ describe('JSONProcessor', () => {
 			expect(claim_details.offsets.value_length).toEqual(7);
 			expect(claim_details.offsets.ext_length).toEqual('"sub":"12345"}'.length);
 		});
-	
-		it('should return the claim details', () => {
+
+		it('should return the claim details for a claim with a boolean value', () => {
+			const input = '{"sub":true}';
+			const processor = new JSONProcessor(input);
+			const claim_details = processor.process('sub');
+
+			expect(claim_details.name).toEqual('sub');
+			expect(claim_details.value).toEqual(true);
+			expect(claim_details.ext_claim).toEqual('"sub":true}');
+			expect(claim_details.offsets.start).toEqual(1);
+			expect(claim_details.offsets.colon).toEqual(5);
+			expect(claim_details.offsets.value).toEqual(6);
+			expect(claim_details.offsets.value_length).toEqual('true'.length);
+			expect(claim_details.offsets.ext_length).toEqual('"sub":true}'.length);
+		});
+
+		it('should return the claim details for a claim with a number value', () => {
+			const input = '{"sub":123}';
+			const processor = new JSONProcessor(input);
+			const claim_details = processor.process('sub');
+
+			expect(claim_details.name).toEqual('sub');
+			expect(claim_details.value).toEqual(123);
+			expect(claim_details.ext_claim).toEqual('"sub":123}');
+			expect(claim_details.offsets.start).toEqual(1);
+			expect(claim_details.offsets.colon).toEqual(5);
+			expect(claim_details.offsets.value).toEqual(6);
+			expect(claim_details.offsets.value_length).toEqual('123'.length);
+			expect(claim_details.offsets.ext_length).toEqual('"sub":123}'.length);
+		});
+
+		it('should return the claim details for a JWT with multiple claims', () => {
 			const processor = new JSONProcessor(decoded_payload);
 			const claimDetails = processor.process('sub');
 			expect(claimDetails).toBeDefined();
@@ -103,7 +125,7 @@ describe('JSONProcessor', () => {
 			const input = '{ "sub" : "hello" }';
 			const processor = new JSONProcessor(input);
 			const claim_details = processor.process('sub');
-	
+
 			expect(claim_details.name).toEqual('sub');
 			expect(claim_details.value).toEqual('hello');
 			expect(claim_details.ext_claim).toEqual('"sub" : "hello" }');
@@ -113,7 +135,7 @@ describe('JSONProcessor', () => {
 			expect(claim_details.offsets.value_length).toEqual('"hello"'.length);
 			expect(claim_details.offsets.ext_length).toEqual('"sub" : "hello" }'.length);
 		});
-	
+
 		it('should cache the claim details', () => {
 			const processor = new JSONProcessor(decoded_payload);
 			const claimDetails1 = processor.process('sub');
@@ -130,11 +152,27 @@ describe('JSONProcessor', () => {
 			);
 		});
 
-		it('should return the raw claim value', () => {
+		it('should return the claim value', () => {
 			const processor = new JSONProcessor(decoded_payload);
 			processor.process('sub');
 			const rawValue = processor.getRawClaimValue('sub');
 			expect(rawValue).toBe('1234567890');
+		});
+
+		it('should return the raw value with escapes', () => {
+			const input = '{"sub":"hello\\n"}';
+			const processor = new JSONProcessor(input);
+			processor.process('sub');
+			const rawValue = processor.getRawClaimValue('sub');
+			expect(rawValue).toBe('hello\\n');
+		});
+
+		it('should throw an error if the claim type is not string', () => {
+			const processor = new JSONProcessor(decoded_payload);
+			processor.process('iat');
+			expect(() => processor.getRawClaimValue('iat')).toThrowError(
+				'Claim iat does not have a string value.',
+			);
 		});
 	});
 });
