@@ -116,7 +116,6 @@ where
     fn name(&self) -> &str {
         "checkpoint-handler"
     }
-
     async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
         if checkpoints.is_empty() {
             return Ok(());
