@@ -88,11 +88,7 @@ impl IndexingPackageCache {
         }
     }
 
-    pub fn insert_packages(
-        &mut self,
-        new_packages: &[IndexedPackage],
-        checkpoint_seq: CheckpointSequenceNumber,
-    ) {
+    pub fn insert_packages(&mut self, new_packages: &[IndexedPackage]) {
         let new_packages = new_packages
             .iter()
             .flat_map(|p| {
@@ -103,7 +99,7 @@ impl IndexingPackageCache {
                         let module = CompiledModule::deserialize_with_defaults(bytes).unwrap();
                         (
                             (p.package_id, module_name.clone()),
-                            (Arc::new(module), checkpoint_seq),
+                            (Arc::new(module), p.checkpoint_sequence_number),
                         )
                     })
             })
