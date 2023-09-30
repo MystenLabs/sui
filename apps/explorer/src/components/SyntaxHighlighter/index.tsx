@@ -31,23 +31,21 @@ export function SyntaxHighlighter({ code, language }: Props) {
 			<Highlight {...defaultProps} code={code} language={language} theme={undefined}>
 				{({ style, tokens, getLineProps, getTokenProps }) => (
 					<pre className="overflow-auto bg-transparent !p-0 font-medium" style={style}>
-						{tokens
-							.filter((_, i) => i < loadedLines)
-							.map((line, i) => (
-								<div {...getLineProps({ line, key: i })} key={i} className="table-row">
-									<div className="table-cell select-none pr-4 text-left opacity-50">{i + 1}</div>
+						{tokens.slice(0, loadedLines).map((line, i) => (
+							<div {...getLineProps({ line, key: i })} key={i} className="table-row">
+								<div className="table-cell select-none pr-4 text-left opacity-50">{i + 1}</div>
 
-									{line.map((token, key) => (
-										<span
-											{...getTokenProps({
-												token,
-												key,
-											})}
-											key={key}
-										/>
-									))}
-								</div>
-							))}
+								{line.map((token, key) => (
+									<span
+										{...getTokenProps({
+											token,
+											key,
+										})}
+										key={key}
+									/>
+								))}
+							</div>
+						))}
 					</pre>
 				)}
 			</Highlight>
