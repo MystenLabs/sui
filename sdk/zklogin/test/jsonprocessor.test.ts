@@ -68,6 +68,22 @@ describe('JSONProcessor', () => {
 			);
 		});
 
+		it('should process a JWT with a single claim', () => {
+			const input = '{"sub":"12345"}';
+			const processor = new JSONProcessor(input);
+			const claim_details = processor.process('sub');
+	
+			expect(claim_details.name).toEqual('sub');
+			expect(claim_details.value).toEqual('12345');
+			expect(claim_details.ext_claim).toEqual('"sub":"12345"}');
+			expect(claim_details.offsets.start).toEqual(1);
+			expect(claim_details.offsets.colon).toEqual(5);
+			expect(claim_details.offsets.value).toEqual(6);
+			expect(claim_details.offsets.name_length).toEqual(5);
+			expect(claim_details.offsets.value_length).toEqual(7);
+			expect(claim_details.offsets.ext_length).toEqual('"sub":"12345"}'.length);
+		});
+	
 		it('should return the claim details', () => {
 			const processor = new JSONProcessor(decoded_payload);
 			const claimDetails = processor.process('sub');
@@ -83,6 +99,21 @@ describe('JSONProcessor', () => {
 			expect(claimDetails.offsets.ext_length).toBe(19);
 		});
 
+		it('should process a JWT with whitespaces', () => {
+			const input = '{ "sub" : "hello" }';
+			const processor = new JSONProcessor(input);
+			const claim_details = processor.process('sub');
+	
+			expect(claim_details.name).toEqual('sub');
+			expect(claim_details.value).toEqual('hello');
+			expect(claim_details.ext_claim).toEqual('"sub" : "hello" }');
+			expect(claim_details.offsets.start).toEqual(2);
+			expect(claim_details.offsets.colon).toEqual(6);
+			expect(claim_details.offsets.value).toEqual(8);
+			expect(claim_details.offsets.value_length).toEqual('"hello"'.length);
+			expect(claim_details.offsets.ext_length).toEqual('"sub" : "hello" }'.length);
+		});
+	
 		it('should cache the claim details', () => {
 			const processor = new JSONProcessor(decoded_payload);
 			const claimDetails1 = processor.process('sub');
@@ -105,68 +136,5 @@ describe('JSONProcessor', () => {
 			const rawValue = processor.getRawClaimValue('sub');
 			expect(rawValue).toBe('1234567890');
 		});
-	});
-});
-
-describe('JSONProcessor', () => {
-	it('should process a JWT with a single claim', () => {
-		const input = '{"sub":"12345"}';
-		const processor = new JSONProcessor(input);
-		const claim_details = processor.process('sub');
-
-		expect(claim_details.name).toEqual('sub');
-		expect(claim_details.value).toEqual('12345');
-		expect(claim_details.ext_claim).toEqual('"sub":"12345"}');
-		expect(claim_details.offsets.start).toEqual(1);
-		expect(claim_details.offsets.colon).toEqual(5);
-		expect(claim_details.offsets.value).toEqual(6);
-		expect(claim_details.offsets.name_length).toEqual(5);
-		expect(claim_details.offsets.value_length).toEqual(7);
-		expect(claim_details.offsets.ext_length).toEqual('"sub":"12345"}'.length);
-	});
-
-	it('should process a JWT with multiple claims', () => {
-		const input = '{"sub":"12345","iss":"67890"}';
-		const processor = new JSONProcessor(input);
-		const claim_details = processor.process('sub');
-
-		expect(claim_details.name).toEqual('sub');
-		expect(claim_details.value).toEqual('12345');
-		expect(claim_details.ext_claim).toEqual('"sub":"12345",');
-		expect(claim_details.offsets.start).toEqual(1);
-		expect(claim_details.offsets.colon).toEqual(5);
-		expect(claim_details.offsets.value).toEqual(6);
-		expect(claim_details.offsets.value_length).toEqual(7);
-		expect(claim_details.offsets.ext_length).toEqual('"sub":"12345",'.length);
-	});
-
-	it('should process a JWT with a claim that has a string value', () => {
-		const input = '{"sub":"hello"}';
-		const processor = new JSONProcessor(input);
-		const claim_details = processor.process('sub');
-
-		expect(claim_details.name).toEqual('sub');
-		expect(claim_details.value).toEqual('hello');
-		expect(claim_details.ext_claim).toEqual('"sub":"hello"}');
-		expect(claim_details.offsets.start).toEqual(1);
-		expect(claim_details.offsets.colon).toEqual(5);
-		expect(claim_details.offsets.value).toEqual(6);
-		expect(claim_details.offsets.value_length).toEqual('"hello"'.length);
-		expect(claim_details.offsets.ext_length).toEqual('"sub":"hello"}'.length);
-	});
-
-	it('should process a JWT with whitespaces', () => {
-		const input = '{ "sub" : "hello" }';
-		const processor = new JSONProcessor(input);
-		const claim_details = processor.process('sub');
-
-		expect(claim_details.name).toEqual('sub');
-		expect(claim_details.value).toEqual('hello');
-		expect(claim_details.ext_claim).toEqual('"sub" : "hello" }');
-		expect(claim_details.offsets.start).toEqual(2);
-		expect(claim_details.offsets.colon).toEqual(6);
-		expect(claim_details.offsets.value).toEqual(8);
-		expect(claim_details.offsets.value_length).toEqual('"hello"'.length);
-		expect(claim_details.offsets.ext_length).toEqual('"sub" : "hello" }'.length);
 	});
 });
