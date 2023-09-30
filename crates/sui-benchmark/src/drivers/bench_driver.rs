@@ -29,6 +29,7 @@ use crate::workloads::payload::Payload;
 use crate::workloads::WorkloadInfo;
 use crate::ValidatorProxy;
 use std::collections::{BTreeMap, VecDeque};
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
@@ -36,7 +37,7 @@ use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
 use tokio::task::JoinSet;
 use tokio::{time, time::Instant};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use super::Interval;
 use super::{BenchmarkStats, StressStats};
@@ -284,7 +285,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
-        run_duration: Interval,
+        total_benchmark_run_interval: Interval,
     ) -> Result<(BenchmarkStats, StressStats), anyhow::Error> {
         info!("Running BenchDriver");
 
@@ -305,11 +306,10 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         if num_workers == 0 {
             return Err(anyhow!("No workers to run benchmark!"));
         }
+        info!("Setting up {:?} workers...", num_workers);
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
-        let barrier = Arc::new(Barrier::new(num_workers as usize));
-        info!("Setting up {:?} workers...", num_workers);
-        let total_benchmark_progress = Arc::new(create_progress_bar(run_duration));
+        let total_benchmark_progress = Arc::new(create_progress_bar(total_benchmark_run_interval));
 
         /*
 
@@ -322,28 +322,54 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         */
 
         // group the workload by the group id and order them in a list
-        let mut groupped_bench_workers: BTreeMap<u32, Vec<BenchWorker>> = BTreeMap::new();
-        for worker in bench_workers.into_iter() {
+        let mut groupped_bench_workers: BTreeMap<u32, Vec<(usize, BenchWorker)>> = BTreeMap::new();
+        for (id, worker) in bench_workers.into_iter().enumerate() {
             groupped_bench_workers
                 .entry(worker.group)
                 .or_default()
-                .push(worker);
+                .push((id, worker));
         }
 
         let cloned_token = self.token.clone();
         let total_benchmark_progress_cloned = total_benchmark_progress.clone();
-        let _tx_cloned = tx.clone();
-        let _cloned_barrier = barrier.clone();
-        let _metrics_cloned = metrics.clone();
+        let tx_cloned = tx.clone();
+        let metrics_cloned = metrics.clone();
 
-        // Now spin up a task that will cycle through the groupped bench workers
+        // Now spin up a task that will go through the groupped bench workers
         let scheduler = tokio::spawn(async move {
-            let _workers = groupped_bench_workers;
+            info!("Spawn up scheduler task...");
             let mut check_interval = time::interval(Duration::from_millis(500));
             check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
 
             //let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
             let mut running_workers: JoinSet<()> = JoinSet::new();
+            let mut groupped_bench_workers_iter = groupped_bench_workers.into_iter();
+
+            // Set the total benchmark start time
+            let total_benchmark_start_time = print_and_start_benchmark().await;
+
+            // Initially boostrap the tasks from group 0
+            if let Some((_, workers)) = groupped_bench_workers_iter.next() {
+                info!("Spawning workers {} for group 0", workers.len());
+                let futures = spawn_bench_workers(
+                    workers,
+                    metrics_cloned.clone(),
+                    tx_cloned.clone(),
+                    cloned_token.clone(),
+                    stat_delay_micros,
+                    total_benchmark_progress_cloned.clone(),
+                    total_benchmark_run_interval,
+                    *total_benchmark_start_time,
+                )
+                .await;
+
+                for f in futures {
+                    running_workers.spawn(f);
+                }
+            } else {
+                warn!("Not benchmark workers exist, exiting scheduler");
+                return;
+            }
 
             loop {
                 tokio::select! {
@@ -356,6 +382,32 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                             if total_benchmark_progress_cloned.is_finished() {
                                 info!("Benchmark finished, now exiting the scheduler loop");
                                 break;
+                            }
+
+                            // If workers have all finished, then we can progress to the next group run, if
+                            // any exists
+                            if running_workers.is_empty() {
+                                if let Some((_, workers)) = groupped_bench_workers_iter.next() {
+                                    info!("Spawning additional workers {} for group 0", workers.len());
+                                    let futures = spawn_bench_workers(
+                                        workers,
+                                        metrics_cloned.clone(),
+                                        tx_cloned.clone(),
+                                        cloned_token.clone(),
+                                        stat_delay_micros,
+                                        total_benchmark_progress_cloned.clone(),
+                                        total_benchmark_run_interval,
+                                        *total_benchmark_start_time,
+                                    )
+                                    .await;
+
+                                    for f in futures {
+                                        running_workers.spawn(f);
+                                    }
+                                } else {
+                                    warn!("Not benchmark workers exist any more, exiting scheduler");
+                                    break;
+                                }
                             }
                         },
                         // Check every now and then if the overall benchmark has been finished
@@ -370,244 +422,6 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         });
 
         tasks.push(scheduler);
-
-        /*
-        2. let the workers run until the next worker tasks have finished up (check by time and cancel them? or just wait for all tasks to finish)
-
-        3. pick then next workers from next group. Spin them up and let them run. If the interval is "unbounded" then do not attempt ever to terminate them
-
-        4. cycle through the workloads
-
-        5. listen also to termination signals
-
-        */
-
-        /*
-        for (i, worker) in bench_workers.into_iter().enumerate() {
-            let cloned_token = self.token.clone();
-            let request_delay_micros = 1_000_000 / worker.target_qps;
-            let mut free_pool: VecDeque<_> = worker.payload.into_iter().collect();
-            let progress_cloned = total_benchmark_progress.clone();
-            let tx_cloned = tx.clone();
-            let cloned_barrier = barrier.clone();
-            let metrics_cloned = metrics.clone();
-
-            let runner = tokio::spawn(async move {
-                cloned_barrier.wait().await;
-                let start_time = print_and_start_benchmark().await;
-                let mut num_success_txes = 0;
-                let mut num_error_txes = 0;
-                let mut num_success_cmds = 0;
-                let mut num_no_gas = 0;
-                let mut num_in_flight: u64 = 0;
-                let mut num_submitted = 0;
-                let mut total_gas_used = 0;
-                let mut latency_histogram =
-                    hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
-                let mut request_interval =
-                    time::interval(Duration::from_micros(request_delay_micros));
-                request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
-                let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
-                let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
-
-                let mut retry_queue: VecDeque<RetryType> = VecDeque::new();
-                let mut stat_start_time: Instant = Instant::now();
-                loop {
-                    tokio::select! {
-                        _ = cloned_token.cancelled() => {
-                            break;
-                        }
-                        _ = stat_interval.tick() => {
-                            if tx_cloned
-                                .try_send(Stats {
-                                    id: i,
-                                    num_no_gas,
-                                    num_in_flight,
-                                    num_submitted,
-                                    bench_stats: BenchmarkStats {
-                                        duration:stat_start_time.elapsed(),
-                                        num_error_txes,
-                                        num_success_txes,
-                                        num_success_cmds,
-                                        latency_ms:HistogramWrapper{
-                                            histogram:latency_histogram.clone()
-                                        },
-                                        total_gas_used
-                                    },
-                                })
-                                .is_err()
-                            {
-                                debug!("Failed to update stat!");
-                            }
-                            num_success_txes = 0;
-                            num_error_txes = 0;
-                            num_success_cmds = 0;
-                            num_no_gas = 0;
-                            num_submitted = 0;
-                            stat_start_time = Instant::now();
-                            latency_histogram.reset();
-                        }
-                        _ = request_interval.tick() => {
-                            BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 0, progress_cloned.clone());
-                            if progress_cloned.is_finished() {
-                                break;
-                            }
-
-                            // If a retry is available send that
-                            // (sending retries here subjects them to our rate limit)
-                            if let Some(mut b) = retry_queue.pop_front() {
-                                num_error_txes += 1;
-                                num_submitted += 1;
-                                metrics_cloned.num_submitted.with_label_values(&[&b.1.to_string()]).inc();
-                                let metrics_cloned = metrics_cloned.clone();
-                                // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
-                                let start = Arc::new(Instant::now());
-                                let res = worker.proxy
-                                    .execute_transaction_block(b.0.clone())
-                                    .then(|res| async move  {
-                                        match res {
-                                            Ok(effects) => {
-                                                let latency = start.elapsed();
-                                                let time_from_start = start_time.elapsed();
-
-                                                if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
-                                                    metrics_cloned.benchmark_duration.inc_by(delta);
-                                                }
-
-                                                let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                                                metrics_cloned.latency_s.with_label_values(&[&b.1.to_string()]).observe(latency.as_secs_f64());
-                                                metrics_cloned.latency_squared_s.with_label_values(&[&b.1.to_string()]).inc_by(square_latency_ms);
-
-                                                metrics_cloned.num_success.with_label_values(&[&b.1.to_string()]).inc();
-                                                metrics_cloned.num_in_flight.with_label_values(&[&b.1.to_string()]).dec();
-
-                                                let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
-                                                metrics_cloned.num_success_cmds.with_label_values(&[&b.1.to_string()]).inc_by(num_commands as u64);
-
-                                                // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
-                                                // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                                if let Some(sig_info) = effects.quorum_sig() {
-                                                    sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
-                                                }
-
-                                                b.1.make_new_payload(&effects);
-                                                NextOp::Response {latency,num_commands,payload:b.1, gas_used: effects.gas_used() }
-                                            }
-                                            Err(err) => {
-                                                error!("{}", err);
-                                                metrics_cloned.num_error.with_label_values(&[&b.1.to_string()]).inc();
-                                                NextOp::Retry(b)
-                                            }
-                                        }
-                                    });
-                                futures.push(Box::pin(res));
-                                continue
-                            }
-
-                            // Otherwise send a fresh request
-                            if free_pool.is_empty() {
-                                num_no_gas += 1;
-                            } else {
-                                let mut payload = free_pool.pop_front().unwrap();
-                                num_in_flight += 1;
-                                num_submitted += 1;
-                                metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
-                                metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
-                                let tx = payload.make_transaction();
-                                let start = Arc::new(Instant::now());
-                                let metrics_cloned = metrics_cloned.clone();
-                                // TODO: clone committee for each request is not ideal.
-                                let committee_cloned = Arc::new(worker.proxy.clone_committee());
-                                let res = worker.proxy
-                                    .execute_transaction_block(tx.clone())
-                                .then(|res| async move {
-                                    match res {
-                                        Ok(effects) => {
-                                            let latency = start.elapsed();
-                                            let time_from_start = start_time.elapsed();
-
-                                            if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
-                                                metrics_cloned.benchmark_duration.inc_by(delta);
-                                            }
-
-                                            let square_latency_ms = latency.as_secs_f64().powf(2.0);
-                                            metrics_cloned.latency_s.with_label_values(&[&payload.to_string()]).observe(latency.as_secs_f64());
-                                            metrics_cloned.latency_squared_s.with_label_values(&[&payload.to_string()]).inc_by(square_latency_ms);
-
-                                            metrics_cloned.num_success.with_label_values(&[&payload.to_string()]).inc();
-                                            metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).dec();
-
-                                             let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
-                                            metrics_cloned.num_success_cmds.with_label_values(&[&payload.to_string()]).inc_by(num_commands as u64);
-
-                                            // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
-                                            // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                            if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
-                                            payload.make_new_payload(&effects);
-
-                                            NextOp::Response {latency,num_commands,payload, gas_used: effects.gas_used() }
-                                        }
-                                        Err(err) => {
-                                            error!("Retry due to error: {}", err);
-                                            metrics_cloned.num_error.with_label_values(&[&payload.to_string()]).inc();
-                                            NextOp::Retry(Box::new((tx, payload)))
-                                        }
-                                    }
-                                });
-                                futures.push(Box::pin(res));
-                            }
-                        }
-                        Some(op) = futures.next() => {
-                            match op {
-                                NextOp::Retry(b) => {
-                                    retry_queue.push_back(b);
-                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 1, progress_cloned.clone());
-                                    if progress_cloned.is_finished() {
-                                        break;
-                                    }
-                                }
-                                NextOp::Response { latency, num_commands, payload, gas_used } => {
-                                    num_success_txes += 1;
-                                    num_success_cmds += num_commands as u64;
-                                    num_in_flight -= 1;
-                                    total_gas_used += gas_used;
-                                    free_pool.push_back(payload);
-                                    latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
-                                    BenchDriver::update_progress(*start_time, run_duration, total_gas_used, 1, progress_cloned.clone());
-                                    if progress_cloned.is_finished() {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // send stats one last time
-                if tx_cloned
-                    .try_send(Stats {
-                        id: i,
-                        num_no_gas,
-                        num_in_flight,
-                        num_submitted,
-                        bench_stats: BenchmarkStats {
-                            duration: stat_start_time.elapsed(),
-                            num_error_txes,
-                            num_success_txes,
-                            num_success_cmds,
-                            total_gas_used,
-                            latency_ms: HistogramWrapper {
-                                histogram: latency_histogram,
-                            },
-                        },
-                    })
-                    .is_err()
-                {
-                    debug!("Failed to update stat!");
-                }
-            });
-            tasks.push(runner);
-        }*/
 
         let benchmark_stat_task = tokio::spawn(async move {
             let mut benchmark_stat = BenchmarkStats {
@@ -748,6 +562,304 @@ fn create_progress_bar(duration: Interval) -> ProgressBar {
         Interval::Time(duration) => ProgressBar::new(duration.as_secs())
             .with_prefix("Running benchmark(duration):")
             .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
+    }
+}
+
+async fn spawn_bench_workers(
+    workers: Vec<(usize, BenchWorker)>,
+    metrics: Arc<BenchMetrics>,
+    tx: Sender<Stats>,
+    token: CancellationToken,
+    stat_delay_micros: u64,
+    total_benchmark_progress: Arc<ProgressBar>,
+    total_benchmark_run_interval: Interval,
+    total_benchmark_start_time: Instant,
+) -> Vec<impl Future<Output = ()>> {
+    // create a barrier to be used for all the spawned workers.
+    let barrier = Arc::new(Barrier::new(workers.len()));
+    let mut progress_bar = None;
+    let mut futures = vec![];
+    for (id, worker) in workers {
+        if progress_bar.as_ref().is_none() {
+            progress_bar = Some(Arc::new(create_progress_bar(worker.duration)));
+            info!("Created benchmark group for duration: {}", worker.duration);
+        }
+
+        let f = run_bench_worker(
+            id,
+            barrier.clone(),
+            metrics.clone(),
+            tx.clone(),
+            token.clone(),
+            stat_delay_micros,
+            worker,
+            progress_bar.as_ref().unwrap().clone(),
+            total_benchmark_progress.clone(),
+            total_benchmark_run_interval,
+            total_benchmark_start_time,
+        );
+
+        futures.push(f);
+    }
+
+    futures
+}
+
+async fn run_bench_worker(
+    worker_id: usize,
+    barrier: Arc<Barrier>,
+    metrics_cloned: Arc<BenchMetrics>,
+    tx_cloned: Sender<Stats>,
+    cloned_token: CancellationToken,
+    stat_delay_micros: u64,
+    worker: BenchWorker,
+    group_benchmark_progress: Arc<ProgressBar>,
+    total_benchmark_progress: Arc<ProgressBar>,
+    total_benchmark_run_interval: Interval,
+    total_benchmark_start_time: Instant,
+) {
+    // Waiting until all the tasks have been spawn , so we can coordinate the traffic and timing.
+    barrier.wait().await;
+    let group_benchmark_start_time = Instant::now();
+
+    let request_delay_micros = 1_000_000 / worker.target_qps;
+    let mut num_success_txes = 0;
+    let mut num_error_txes = 0;
+    let mut num_success_cmds = 0;
+    let mut num_no_gas = 0;
+    let mut num_in_flight: u64 = 0;
+    let mut num_submitted = 0;
+    let mut total_gas_used = 0;
+
+    let mut latency_histogram = hdrhistogram::Histogram::<u64>::new_with_max(120_000, 3).unwrap();
+    let mut request_interval = time::interval(Duration::from_micros(request_delay_micros));
+    request_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
+    let mut stat_interval = time::interval(Duration::from_micros(stat_delay_micros));
+
+    let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
+
+    let mut retry_queue: VecDeque<RetryType> = VecDeque::new();
+
+    let group_benchmark_run_interval = worker.duration;
+    let mut free_pool: VecDeque<_> = worker.payload.into_iter().collect();
+
+    let mut stat_start_time: Instant = Instant::now();
+    loop {
+        tokio::select! {
+            _ = cloned_token.cancelled() => {
+                break;
+            }
+            _ = stat_interval.tick() => {
+                if tx_cloned
+                    .try_send(Stats {
+                        id: worker_id,
+                        num_no_gas,
+                        num_in_flight,
+                        num_submitted,
+                        bench_stats: BenchmarkStats {
+                            duration:stat_start_time.elapsed(),
+                            num_error_txes,
+                            num_success_txes,
+                            num_success_cmds,
+                            latency_ms:HistogramWrapper{
+                                histogram:latency_histogram.clone()
+                            },
+                            total_gas_used
+                        },
+                    })
+                    .is_err()
+                {
+                    debug!("Failed to update stat!");
+                }
+                num_success_txes = 0;
+                num_error_txes = 0;
+                num_success_cmds = 0;
+                num_no_gas = 0;
+                num_submitted = 0;
+                stat_start_time = Instant::now();
+                latency_histogram.reset();
+            }
+            _ = request_interval.tick() => {
+
+                // Update progress for total benchmark
+                BenchDriver::update_progress(total_benchmark_start_time, total_benchmark_run_interval, total_gas_used, 0, total_benchmark_progress.clone());
+                if total_benchmark_progress.is_finished() {
+                    break;
+                }
+
+                // Update progress for group benchmark
+                BenchDriver::update_progress(group_benchmark_start_time, group_benchmark_run_interval, total_gas_used, 0, group_benchmark_progress.clone());
+                if group_benchmark_progress.is_finished() {
+                    break;
+                }
+
+                // If a retry is available send that
+                // (sending retries here subjects them to our rate limit)
+                if let Some(mut b) = retry_queue.pop_front() {
+                    num_error_txes += 1;
+                    num_submitted += 1;
+                    metrics_cloned.num_submitted.with_label_values(&[&b.1.to_string()]).inc();
+                    let metrics_cloned = metrics_cloned.clone();
+                    // TODO: clone committee for each request is not ideal.
+                    let committee_cloned = Arc::new(worker.proxy.clone_committee());
+                    let start = Arc::new(Instant::now());
+                    let res = worker.proxy
+                        .execute_transaction_block(b.0.clone())
+                        .then(|res| async move  {
+                            match res {
+                                Ok(effects) => {
+                                    let latency = start.elapsed();
+                                    let time_from_start = total_benchmark_start_time.elapsed();
+
+                                    if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
+                                        metrics_cloned.benchmark_duration.inc_by(delta);
+                                    }
+
+                                    let square_latency_ms = latency.as_secs_f64().powf(2.0);
+                                    metrics_cloned.latency_s.with_label_values(&[&b.1.to_string()]).observe(latency.as_secs_f64());
+                                    metrics_cloned.latency_squared_s.with_label_values(&[&b.1.to_string()]).inc_by(square_latency_ms);
+
+                                    metrics_cloned.num_success.with_label_values(&[&b.1.to_string()]).inc();
+                                    metrics_cloned.num_in_flight.with_label_values(&[&b.1.to_string()]).dec();
+
+                                    let num_commands = b.0.data().transaction_data().kind().num_commands() as u16;
+                                    metrics_cloned.num_success_cmds.with_label_values(&[&b.1.to_string()]).inc_by(num_commands as u64);
+
+                                    // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                    // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                    if let Some(sig_info) = effects.quorum_sig() {
+                                        sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
+                                    }
+
+                                    b.1.make_new_payload(&effects);
+                                    NextOp::Response {latency,num_commands,payload:b.1, gas_used: effects.gas_used() }
+                                }
+                                Err(err) => {
+                                    error!("{}", err);
+                                    metrics_cloned.num_error.with_label_values(&[&b.1.to_string()]).inc();
+                                    NextOp::Retry(b)
+                                }
+                            }
+                        });
+                    futures.push(Box::pin(res));
+                    continue
+                }
+
+                // Otherwise send a fresh request
+                if free_pool.is_empty() {
+                    num_no_gas += 1;
+                } else {
+                    let mut payload = free_pool.pop_front().unwrap();
+                    num_in_flight += 1;
+                    num_submitted += 1;
+                    metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).inc();
+                    metrics_cloned.num_submitted.with_label_values(&[&payload.to_string()]).inc();
+                    let tx = payload.make_transaction();
+                    let start = Arc::new(Instant::now());
+                    let metrics_cloned = metrics_cloned.clone();
+                    // TODO: clone committee for each request is not ideal.
+                    let committee_cloned = Arc::new(worker.proxy.clone_committee());
+                    let res = worker.proxy
+                        .execute_transaction_block(tx.clone())
+                    .then(|res| async move {
+                        match res {
+                            Ok(effects) => {
+                                let latency = start.elapsed();
+                                let time_from_start = total_benchmark_start_time.elapsed();
+
+                                if let Some(delta) = time_from_start.as_secs().checked_sub(metrics_cloned.benchmark_duration.get()) {
+                                    metrics_cloned.benchmark_duration.inc_by(delta);
+                                }
+
+                                let square_latency_ms = latency.as_secs_f64().powf(2.0);
+                                metrics_cloned.latency_s.with_label_values(&[&payload.to_string()]).observe(latency.as_secs_f64());
+                                metrics_cloned.latency_squared_s.with_label_values(&[&payload.to_string()]).inc_by(square_latency_ms);
+
+                                metrics_cloned.num_success.with_label_values(&[&payload.to_string()]).inc();
+                                metrics_cloned.num_in_flight.with_label_values(&[&payload.to_string()]).dec();
+
+                                 let num_commands = tx.data().transaction_data().kind().num_commands() as u16;
+                                metrics_cloned.num_success_cmds.with_label_values(&[&payload.to_string()]).inc_by(num_commands as u64);
+
+                                // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
+                                // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
+                                if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
+                                payload.make_new_payload(&effects);
+
+                                NextOp::Response {latency,num_commands,payload, gas_used: effects.gas_used() }
+                            }
+                            Err(err) => {
+                                error!("Retry due to error: {}", err);
+                                metrics_cloned.num_error.with_label_values(&[&payload.to_string()]).inc();
+                                NextOp::Retry(Box::new((tx, payload)))
+                            }
+                        }
+                    });
+                    futures.push(Box::pin(res));
+                }
+            }
+            Some(op) = futures.next() => {
+                match op {
+                    NextOp::Retry(b) => {
+                        retry_queue.push_back(b);
+
+                        // Update total benchmark progress
+                        BenchDriver::update_progress(total_benchmark_start_time, total_benchmark_run_interval, total_gas_used, 1, total_benchmark_progress.clone());
+                        if total_benchmark_progress.is_finished() {
+                            break;
+                        }
+
+                        // Update progress for group benchmark
+                        BenchDriver::update_progress(group_benchmark_start_time, group_benchmark_run_interval, total_gas_used, 0, group_benchmark_progress.clone());
+                        if group_benchmark_progress.is_finished() {
+                            break;
+                        }
+                    }
+                    NextOp::Response { latency, num_commands, payload, gas_used } => {
+                        num_success_txes += 1;
+                        num_success_cmds += num_commands as u64;
+                        num_in_flight -= 1;
+                        total_gas_used += gas_used;
+                        free_pool.push_back(payload);
+                        latency_histogram.saturating_record(latency.as_millis().try_into().unwrap());
+
+                        // Update total benchmark progress
+                        BenchDriver::update_progress(total_benchmark_start_time, total_benchmark_run_interval, total_gas_used, 1, total_benchmark_progress.clone());
+                        if total_benchmark_progress.is_finished() {
+                            break;
+                        }
+
+                        // Update progress for group benchmark
+                        BenchDriver::update_progress(group_benchmark_start_time, group_benchmark_run_interval, total_gas_used, 0, group_benchmark_progress.clone());
+                        if group_benchmark_progress.is_finished() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // send stats one last time
+    if tx_cloned
+        .try_send(Stats {
+            id: worker_id,
+            num_no_gas,
+            num_in_flight,
+            num_submitted,
+            bench_stats: BenchmarkStats {
+                duration: stat_start_time.elapsed(),
+                num_error_txes,
+                num_success_txes,
+                num_success_cmds,
+                total_gas_used,
+                latency_ms: HistogramWrapper {
+                    histogram: latency_histogram,
+                },
+            },
+        })
+        .is_err()
+    {
+        debug!("Failed to update stat!");
     }
 }
 
