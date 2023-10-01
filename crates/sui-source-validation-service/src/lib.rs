@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
@@ -361,7 +361,10 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     Ok(lookup)
 }
 
-pub async fn watch_for_upgrades(config: &Config) -> anyhow::Result<()> {
+pub async fn watch_for_upgrades(
+    config: &Config,
+    app_state: Arc<RwLock<AppState>>,
+) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
     for s in &config.packages {
         let packages = match s {
@@ -385,9 +388,12 @@ pub async fn watch_for_upgrades(config: &Config) -> anyhow::Result<()> {
         .await?;
 
     info!("Listening for upgrades...");
-    let result = subscription.next().await;
-    info!("Saw upgrade txn: {:?}", result);
-    Ok(())
+    loop {
+        let result = subscription.next().await;
+        info!("Saw upgrade txn: {:?}", result);
+        let mut state = app_state.write().unwrap();
+        state.sources = NetworkLookup::new() // FIXME: invalidates all.
+    }
 }
 
 pub struct AppState {
@@ -395,7 +401,7 @@ pub struct AppState {
 }
 
 pub fn serve(
-    app_state: Arc<AppState>,
+    app_state: Arc<RwLock<AppState>>,
 ) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
     let app = Router::new()
         .route("/api", get(api_route))
@@ -431,7 +437,7 @@ pub struct ErrorResponse {
 
 async fn api_route(
     headers: HeaderMap,
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<RwLock<AppState>>>,
     Query(Request {
         network,
         address,
@@ -477,7 +483,8 @@ async fn api_route(
 	)
     };
 
-    let source_result = app_state
+    let state = app_state.read().unwrap();
+    let source_result = state
         .sources
         .get(&network)
         .and_then(|l| l.get(&(address, symbol)));
