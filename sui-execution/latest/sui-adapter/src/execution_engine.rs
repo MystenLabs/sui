@@ -116,6 +116,7 @@ mod checked {
         );
 
         let status = if let Err(error) = &execution_result {
+            println!("VM ERROR: {:#?}", error);
             // Elaborate errors in logs if they are unexpected or their status is terse.
             use ExecutionErrorKind as K;
             match error.kind() {
