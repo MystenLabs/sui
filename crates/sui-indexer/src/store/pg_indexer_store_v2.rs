@@ -66,7 +66,7 @@ const PG_COMMIT_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 4000;
 // The amount of rows to update in one DB transcation, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
-const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 4000;
+const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX: usize = 40000;
 
 #[derive(Clone)]
 pub struct PgIndexerStoreV2 {
@@ -90,6 +90,14 @@ impl PgIndexerStoreV2 {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE_PER_DB_TX.to_string())
             .parse::<usize>()
             .unwrap();
+        info!(
+            parallel_chunk_size,
+            "Using parallel chunk size for commits"
+        );
+        info!(
+            parallel_objects_chunk_size,
+            "Using parallel chunk size for objects commits"
+        );
         Self {
             blocking_cp,
             module_cache,
