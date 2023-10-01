@@ -51,23 +51,32 @@ export class JSONProcessor {
 		const oneArgHolder =
 			(id: keyof JSONVisitor) => (arg: string | boolean, offset: number, length: number) =>
 				actuals.push({ id, offset, length, arg });
-		visit(this.decoded_payload, {
-			onObjectBegin: noArgHolder('onObjectBegin'),
-			onObjectProperty: oneArgHolder('onObjectProperty'),
-			onObjectEnd: noArgHolder('onObjectEnd'),
-			onLiteralValue: oneArgHolder('onLiteralValue'),
-			onSeparator: oneArgHolder('onSeparator'),
-			onArrayBegin: noArgHolder('onArrayBegin'),
-			onError: (
-				error: ParseErrorCode,
-				offset: number,
-				length: number,
-				startLine: number,
-				startCharacter: number,
-			) => {
-				errors.push({ error, offset, length, startLine, startCharacter });
+		visit(
+			this.decoded_payload,
+			{
+				onObjectBegin: noArgHolder('onObjectBegin'),
+				onObjectProperty: oneArgHolder('onObjectProperty'),
+				onObjectEnd: noArgHolder('onObjectEnd'),
+				onLiteralValue: oneArgHolder('onLiteralValue'),
+				onSeparator: oneArgHolder('onSeparator'), // triggers on both : and ,
+				onArrayBegin: noArgHolder('onArrayBegin'),
+				// Of all the events, the ones that we do not listen to are
+				//  onArrayEnd (as onArrayBegin allows us to throw errors if arrays are seen)
+				//  and onComment (as we disallow comments anyway)
+				onError: (
+					error: ParseErrorCode,
+					offset: number,
+					length: number,
+					startLine: number,
+					startCharacter: number,
+				) => {
+					errors.push({ error, offset, length, startLine, startCharacter });
+				},
 			},
-		});
+			{
+				disallowComments: true,
+			},
+		);
 		if (errors.length > 0) {
 			console.error(JSON.stringify(errors));
 			throw new Error(`Parse errors encountered`);
