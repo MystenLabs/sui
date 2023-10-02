@@ -11,57 +11,55 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use tokio::sync::{
-    Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock, TryLockError,
-};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
 
-#[async_trait]
+#[derive(Error)]
+pub struct TryLockError;
+
 pub trait Lock: Send + Sync + Default {
     type Guard;
     type ReadGuard;
-    async fn lock_owned(self: Arc<Self>) -> Self::Guard;
+    fn lock_owned(self: Arc<Self>) -> Self::Guard;
     fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError>;
-    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard;
+    fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard;
 }
 
-#[async_trait::async_trait]
 impl Lock for Mutex<()> {
-    type Guard = OwnedMutexGuard<()>;
+    type Guard = parking_lot::MutexGuard<()>;
     type ReadGuard = Self::Guard;
 
-    async fn lock_owned(self: Arc<Self>) -> Self::Guard {
-        self.lock_owned().await
+    fn lock_owned(self: Arc<Self>) -> Self::Guard {
+        self.lock_owned()
     }
 
     fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError> {
-        self.try_lock_owned()
+        self.try_lock().ok_or(TryLockError)
     }
 
-    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
-        self.lock_owned().await
+    fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
+        self.lock_owned()
     }
 }
 
-#[async_trait::async_trait]
 impl Lock for RwLock<()> {
-    type Guard = OwnedRwLockWriteGuard<()>;
-    type ReadGuard = OwnedRwLockReadGuard<()>;
+    type Guard = RwLockWriteGuard<()>;
+    type ReadGuard = RwLockReadGuard<()>;
 
-    async fn lock_owned(self: Arc<Self>) -> Self::Guard {
-        self.write_owned().await
+    fn lock_owned(self: Arc<Self>) -> Self::Guard {
+        self.write_owned()
     }
 
     fn try_lock_owned(self: Arc<Self>) -> Result<Self::Guard, TryLockError> {
-        self.try_write_owned()
+        self.try_write().ok_or(TryLockError)
     }
 
-    async fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
-        self.read_owned().await
+    fn read_lock_owned(self: Arc<Self>) -> Self::ReadGuard {
+        self.read_owned()
     }
 }
 
@@ -92,8 +90,8 @@ impl fmt::Display for TryAcquireLockError {
 }
 
 impl Error for TryAcquireLockError {}
-pub type MutexGuard = tokio::sync::OwnedMutexGuard<()>;
-pub type RwLockGuard = tokio::sync::OwnedRwLockReadGuard<()>;
+pub type MutexGuard = parking_lot::MutexGuard<()>;
+pub type RwLockGuard = parking_lot::RwLockReadGuard<()>;
 
 impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
     pub fn new_with_cleanup(
@@ -187,7 +185,7 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         hash % self.lock_table.len()
     }
 
-    pub async fn acquire_locks<I>(&self, object_iter: I) -> Vec<L::Guard>
+    pub fn acquire_locks<I>(&self, object_iter: I) -> Vec<L::Guard>
     where
         I: Iterator<Item = K>,
         K: Ord,
@@ -198,12 +196,12 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
 
         let mut guards = Vec::with_capacity(objects.len());
         for object in objects.into_iter() {
-            guards.push(self.acquire_lock(object).await);
+            guards.push(self.acquire_lock(object));
         }
         guards
     }
 
-    pub async fn acquire_read_locks(&self, mut objects: Vec<K>) -> Vec<L::ReadGuard>
+    pub fn acquire_read_locks(&self, mut objects: Vec<K>) -> Vec<L::ReadGuard>
     where
         K: Ord,
     {
@@ -211,15 +209,15 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         objects.dedup();
         let mut guards = Vec::with_capacity(objects.len());
         for object in objects.into_iter() {
-            guards.push(self.get_lock(object).await.read_lock_owned().await);
+            guards.push(self.get_lock(object).read_lock_owned());
         }
         guards
     }
 
-    pub async fn get_lock(&self, k: K) -> Arc<L> {
+    pub fn get_lock(&self, k: K) -> Arc<L> {
         let lock_idx = self.get_lock_idx(&k);
         let element = {
-            let map = self.lock_table[lock_idx].read().await;
+            let map = self.lock_table[lock_idx].read();
             map.get(&k).cloned()
         };
         if let Some(element) = element {
@@ -227,7 +225,7 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         } else {
             // element doesn't exist
             let element = {
-                let mut map = self.lock_table[lock_idx].write().await;
+                let mut map = self.lock_table[lock_idx].write();
                 map.entry(k)
                     .or_insert_with(|| {
                         self.size.fetch_add(1, Ordering::SeqCst);
@@ -239,8 +237,8 @@ impl<K: Hash + Eq + Send + Sync + 'static, L: Lock + 'static> LockTable<K, L> {
         }
     }
 
-    pub async fn acquire_lock(&self, k: K) -> L::Guard {
-        self.get_lock(k).await.lock_owned().await
+    pub fn acquire_lock(&self, k: K) -> L::Guard {
+        self.get_lock(k).lock_owned()
     }
 
     pub fn try_acquire_lock(&self, k: K) -> Result<L::Guard, TryAcquireLockError> {
