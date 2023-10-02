@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
 import { BackIcon } from '../icons/BackIcon.js';
 import { CloseIcon } from '../icons/CloseIcon.js';
+import { StyleMarker } from '../styling/StyleMarker.js';
 import * as styles from './ConnectModal.css.js';
 import { ConnectionStatus } from './views/ConnectionStatus.js';
 import { GettingStarted } from './views/GettingStarted.js';
@@ -68,54 +69,59 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 
 	return (
 		<Dialog.Root open={isConnectModalOpen} onOpenChange={onOpenChange}>
-			<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
+			<StyleMarker>
+				<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
+			</StyleMarker>
 			<Dialog.Portal>
-				<Dialog.Overlay className={styles.overlay} />
-				<Dialog.Content className={styles.content} aria-describedby={undefined}>
-					<div
-						className={clsx(styles.walletListContainer, {
-							[styles.walletListContainerWithViewSelected]: !!currentView,
-						})}
-					>
-						<div className={styles.walletListContent}>
-							<Dialog.Title className={styles.title}>Connect a Wallet</Dialog.Title>
-							<WalletList
-								selectedWalletName={selectedWallet?.name}
-								onPlaceholderClick={() => setCurrentView('getting-started')}
-								onSelect={(wallet) => {
-									setSelectedWallet(wallet);
-									connectWallet(wallet);
-								}}
-							/>
-						</div>
-						<button
-							className={styles.whatIsAWalletButton}
-							onClick={() => setCurrentView('what-is-a-wallet')}
-							type="button"
-						>
-							What is a Wallet?
-						</button>
-					</div>
+				<StyleMarker>
+					<Dialog.Overlay className={styles.overlay}>
+						<Dialog.Content className={styles.content} aria-describedby={undefined}>
+							<div
+								className={clsx(styles.walletListContainer, {
+									[styles.walletListContainerWithViewSelected]: !!currentView,
+								})}
+							>
+								<div className={styles.walletListContent}>
+									<Dialog.Title className={styles.title}>Connect a Wallet</Dialog.Title>
+									<WalletList
+										selectedWalletName={selectedWallet?.name}
+										onPlaceholderClick={() => setCurrentView('getting-started')}
+										onSelect={(wallet) => {
+											setSelectedWallet(wallet);
+											connectWallet(wallet);
+										}}
+									/>
+								</div>
+								<button
+									className={styles.whatIsAWalletButton}
+									onClick={() => setCurrentView('what-is-a-wallet')}
+									type="button"
+								>
+									What is a Wallet?
+								</button>
+							</div>
 
-					<div
-						className={clsx(styles.viewContainer, {
-							[styles.selectedViewContainer]: !!currentView,
-						})}
-					>
-						<button
-							className={styles.backButton}
-							onClick={() => resetSelection()}
-							type="button"
-							aria-label="Back"
-						>
-							<BackIcon />
-						</button>
-						{modalContent}
-					</div>
-					<Dialog.Close className={styles.closeButton} aria-label="Close">
-						<CloseIcon />
-					</Dialog.Close>
-				</Dialog.Content>
+							<div
+								className={clsx(styles.viewContainer, {
+									[styles.selectedViewContainer]: !!currentView,
+								})}
+							>
+								<button
+									className={styles.backButton}
+									onClick={() => resetSelection()}
+									type="button"
+									aria-label="Back"
+								>
+									<BackIcon />
+								</button>
+								{modalContent}
+							</div>
+							<Dialog.Close className={styles.closeButton} aria-label="Close">
+								<CloseIcon />
+							</Dialog.Close>
+						</Dialog.Content>
+					</Dialog.Overlay>
+				</StyleMarker>
 			</Dialog.Portal>
 		</Dialog.Root>
 	);
