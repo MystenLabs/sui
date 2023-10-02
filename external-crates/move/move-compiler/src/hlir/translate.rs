@@ -753,59 +753,6 @@ fn is_binop(e: &T::Exp) -> bool {
     matches!(e.exp.value, E::BinopExp(_, _, _, _))
 }
 
-// fn bind_for_short_circuit(e: &T::Exp) -> bool {
-//     use T::UnannotatedExp_ as TE;
-//     match &e.exp.value {
-//         TE::Use(_) => panic!("ICE should have been expanded"),
-//         TE::Value(_)
-//         | TE::Constant(_, _)
-//         | TE::Move { .. }
-//         | TE::Copy { .. }
-//         | TE::UnresolvedError => false,
-//
-//         // TODO might want to case ModuleCall for fake natives
-//         TE::ModuleCall(_) => true,
-//
-//         TE::Block(seq) => bind_for_short_circuit_sequence(seq),
-//         TE::Annotate(el, _) => bind_for_short_circuit(el),
-//
-//         TE::Break
-//         | TE::Continue
-//         | TE::IfElse(_, _, _)
-//         | TE::While(_, _)
-//         | TE::Loop { .. }
-//         | TE::Return(_)
-//         | TE::Abort(_)
-//         | TE::Builtin(_, _)
-//         | TE::Dereference(_)
-//         | TE::UnaryExp(_, _)
-//         | TE::Borrow(_, _, _)
-//         | TE::TempBorrow(_, _)
-//         | TE::BinopExp(_, _, _, _) => true,
-//
-//         TE::Unit { .. }
-//         | TE::Spec(_, _)
-//         | TE::Assign(_, _, _)
-//         | TE::Mutate(_, _)
-//         | TE::Pack(_, _, _, _)
-//         | TE::Vector(_, _, _, _)
-//         | TE::BorrowLocal(_, _)
-//         | TE::ExpList(_)
-//         | TE::Cast(_, _) => panic!("ICE unexpected exp in short circuit check: {:?}", e),
-//     }
-// }
-//
-// fn bind_for_short_circuit_sequence(seq: &T::Sequence) -> bool {
-//     use T::SequenceItem_ as TItem;
-//     seq.len() != 1
-//         || match &seq[0].value {
-//             TItem::Seq(e) => bind_for_short_circuit(e),
-//             item @ TItem::Declare(_) | item @ TItem::Bind(_, _, _) => {
-//                 panic!("ICE unexpected item in short circuit check: {:?}", item)
-//             }
-//         }
-// }
-
 fn emit_trailing_semicolon_error(context: &mut Context, terminal_loc: Loc, semi_loc: Loc) {
     let semi_msg = "Invalid trailing ';'";
     let unreachable_msg = "Any code after this expression will not be reached";
