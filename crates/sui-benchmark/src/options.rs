@@ -125,13 +125,39 @@ pub enum RunSpec {
     // and make progress in parallel. But this too
     // will likely change in future to support
     // more representative workloads.
+    //
+    // The Bench command allow us to define multiple benchmark groups in order to simulate different
+    // traffic characteristics across the whole benchmark duration. For that reason all arguments are
+    // expressed as vectors. Each benchmark group runs for the specified duration - as defined on the
+    // duration field - and for each group the parameters of the same vector position are considered.
+    // For example, for benchmark group 0, the vector arguments on position 0 refer to the properties
+    // of that benchmark group. The benchmark groups will run in a rotation fashion, unless the duration
+    // of the last group is set as "unbounded" which will run of the rest of the whole benchmark.
+    //
+    // Example: for Bench argument:
+    //
+    // Bench {
+    //      num_of_benchmarks: 2,
+    //      shared_counter: vec![100, 200],
+    //      transfer_object: vec![50, 50],
+    //      target_qps: vec![1000, 2000]
+    //      ...
+    //      duration: vec!["10s", "30s"]
+    // }
+    //
+    // It will run 2 "benchmarks" in a cycle . First the benchmark with parameters {shared_counter: 100, transfer_object: 50, target_qps: 1000, duration: "10s"...}
+    // will run for 10 seconds. Once finished, then a second benchmark will run immediately with parameters {shared_counter: 200, transfer_object: 50, target_qps: 2000, duration: "30s"...}
+    // for 30 seconds. Once finished, then again the fist benchmark will run. That will happen perpetually unless a `run_duration` is defined.
+    // If the second benchmark group had as duration "unbounded" then this benchmark would run forever and no cycling would occur.
+    // It has to be noted that all those benchmark groups are running under the same benchmark. The benchmark groups are essentially a way
+    // for someone to define for example different traffic loads to simulate things like peaks, lows etc.
     Bench {
         // ----- workloads ----
-        // the number of benchmarks that we are willing to run. For example, if `num_of_benchmarks = 2`,
-        // then we expect all the arguments under this subcommand to contain two values - one for each
+        // the number of benchmarks that we are willing to run. For example, if `num_of_benchmark_groups = 2`,
+        // then we expect all the arguments under this subcommand to contain two values on their vectors - one for each
         // benchmark set. If an argument doesn't contain the right number of values then it will panic.
         #[clap(long, default_value = "1")]
-        num_of_benchmarks: u32,
+        num_of_benchmark_groups: u32,
         // relative weight of shared counter
         // transaction in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]

@@ -38,7 +38,7 @@ use sui_types::committee::Committee;
 use sui_types::transaction::{Transaction, TransactionDataAPI};
 use sysinfo::{CpuExt, System, SystemExt};
 use tokio::sync::Barrier;
-use tokio::task::JoinSet;
+use tokio::task::{JoinHandle, JoinSet};
 use tokio::{time, time::Instant};
 use tracing::{debug, error, info, warn};
 
@@ -337,111 +337,20 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let total_benchmark_progress = Arc::new(create_progress_bar(total_benchmark_run_interval));
-
-        let cancellation_token = self.token.clone();
-        let total_benchmark_progress_cloned = total_benchmark_progress.clone();
         let total_benchmark_gas_used = Arc::new(AtomicU64::new(0));
-        let tx_cloned = tx.clone();
-        let metrics_cloned = metrics.clone();
 
         // Spin up the scheduler task to orchestrate running the workers for each benchmark group.
-        let scheduler = tokio::spawn(async move {
-            info!("Spawn up scheduler task...");
-
-            let mut running_workers: JoinSet<Option<BenchWorker>> = JoinSet::new();
-            let mut finished_workers = Vec::new();
-            let (tx_workers_to_run, mut rx_workers_to_run) = channel(1);
-
-            let mut check_interval = time::interval(Duration::from_millis(500));
-            check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
-
-            // group the workers by the group id, sort the groups by group id (using the BTreeMap) and
-            // finally collect them to a VecDeque.
-            let mut all_workers: VecDeque<Vec<BenchWorker>> = bench_workers
-                .into_iter()
-                .fold(BTreeMap::new(), |mut acc, val| {
-                    acc.entry(val.group).or_insert(Vec::new()).push(val);
-                    acc
-                })
-                .into_values()
-                .collect();
-
-            // Set the total benchmark start time
-            let total_benchmark_start_time = print_and_start_benchmark().await;
-
-            // Initially boostrap the first tasks
-            tx_workers_to_run
-                .send(all_workers.pop_front().unwrap())
-                .await
-                .expect("Should be able to send next workers to run");
-
-            loop {
-                tokio::select! {
-                        _ = cancellation_token.cancelled() => {
-                            break;
-                        },
-                        // Consume the next running worker that has been finished. When all finished
-                        // be ready to spin up the next workers - if not total benchmark already finished.
-                        Some(result) = running_workers.join_next() => {
-                            if total_benchmark_progress_cloned.is_finished() {
-                                info!("Benchmark finished, now exiting the scheduler loop");
-                                break;
-                            }
-
-                            let worker = if let Some(worker) = result.expect("Worker tasks should shutdown gracefully") {
-                                worker
-                            } else {
-                                warn!("No worker returned by task - that means it has been cancelled and we are exiting.");
-                                return;
-                            };
-                            finished_workers.push(worker);
-
-                            // If workers have all finished, then we can progress to the next group run, if
-                            // any exists
-                            if running_workers.is_empty() {
-                                all_workers.push_back(finished_workers);
-
-                                finished_workers = Vec::new();
-
-                                // cycle through the workers set
-                                tx_workers_to_run.send(all_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
-                            }
-                        },
-                        // Next workers to run
-                        Some(workers) = rx_workers_to_run.recv() => {
-                            // clear up previous stats map by sending a special stat with MAX id
-                            let _ = tx_cloned.send(Stats {
-                                    id: usize::MAX,
-                                    ..Stats::default()
-                                }).await;
-
-                            let futures = spawn_bench_workers(
-                                workers,
-                                metrics_cloned.clone(),
-                                tx_cloned.clone(),
-                                cancellation_token.clone(),
-                                stat_delay_micros,
-                                total_benchmark_progress_cloned.clone(),
-                                total_benchmark_run_interval,
-                                *total_benchmark_start_time,
-                                total_benchmark_gas_used.clone()
-                            )
-                            .await;
-
-                            for f in futures {
-                                running_workers.spawn(f);
-                            }
-                        },
-                        // Check every now and then if the overall benchmark has been finished
-                        _ = check_interval.tick() => {
-                            if total_benchmark_progress_cloned.is_finished() {
-                                info!("Benchmark finished, now exiting the scheduler loop");
-                                break;
-                            }
-                        }
-                }
-            }
-        });
+        let scheduler = spawn_workers_scheduler(
+            bench_workers,
+            self.token.clone(),
+            total_benchmark_progress.clone(),
+            total_benchmark_gas_used,
+            tx.clone(),
+            metrics.clone(),
+            total_benchmark_run_interval,
+            stat_delay_micros,
+        )
+        .await;
 
         tasks.push(scheduler);
 
@@ -585,20 +494,113 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     }
 }
 
-/// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
-/// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
-fn create_progress_bar(duration: Interval) -> ProgressBar {
-    match duration {
-        Interval::Count(count) => ProgressBar::new(count)
-            .with_prefix("Running benchmark(count):")
-            .with_style(
-                ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
-            ),
-        Interval::Time(Duration::MAX) => ProgressBar::hidden(),
-        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
-            .with_prefix("Running benchmark(duration):")
-            .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
-    }
+async fn spawn_workers_scheduler(
+    bench_workers: Vec<BenchWorker>,
+    cancellation_token: CancellationToken,
+    total_benchmark_progress_cloned: Arc<ProgressBar>,
+    total_benchmark_gas_used: Arc<AtomicU64>,
+    tx_cloned: Sender<Stats>,
+    metrics_cloned: Arc<BenchMetrics>,
+    total_benchmark_run_interval: Interval,
+    stat_delay_micros: u64,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        info!("Spawn up scheduler task...");
+
+        let mut running_workers: JoinSet<Option<BenchWorker>> = JoinSet::new();
+        let mut finished_workers = Vec::new();
+        let (tx_workers_to_run, mut rx_workers_to_run) = channel(1);
+
+        let mut check_interval = time::interval(Duration::from_millis(500));
+        check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
+
+        // group the workers by the group id, sort the groups by group id (using the BTreeMap) and
+        // finally collect them to a VecDeque.
+        let mut all_workers: VecDeque<Vec<BenchWorker>> = bench_workers
+            .into_iter()
+            .fold(BTreeMap::new(), |mut acc, val| {
+                acc.entry(val.group).or_insert(Vec::new()).push(val);
+                acc
+            })
+            .into_values()
+            .collect();
+
+        // Set the total benchmark start time
+        let total_benchmark_start_time = print_and_start_benchmark().await;
+
+        // Initially boostrap the first tasks
+        tx_workers_to_run
+            .send(all_workers.pop_front().unwrap())
+            .await
+            .expect("Should be able to send next workers to run");
+
+        loop {
+            tokio::select! {
+                    _ = cancellation_token.cancelled() => {
+                        break;
+                    },
+                    // Consume the next running worker that has been finished. When all finished
+                    // be ready to spin up the next workers - if not total benchmark already finished.
+                    Some(result) = running_workers.join_next() => {
+                        if total_benchmark_progress_cloned.is_finished() {
+                            info!("Benchmark finished, now exiting the scheduler loop");
+                            break;
+                        }
+
+                        let worker = if let Some(worker) = result.expect("Worker tasks should shutdown gracefully") {
+                            worker
+                        } else {
+                            warn!("No worker returned by task - that means it has been cancelled and we are exiting.");
+                            return;
+                        };
+                        finished_workers.push(worker);
+
+                        // If workers have all finished, then we can progress to the next group run, if
+                        // any exists
+                        if running_workers.is_empty() {
+                            all_workers.push_back(finished_workers);
+
+                            finished_workers = Vec::new();
+
+                            // cycle through the workers set
+                            tx_workers_to_run.send(all_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
+                        }
+                    },
+                    // Next workers to run
+                    Some(workers) = rx_workers_to_run.recv() => {
+                        // clear up previous stats map by sending a special stat with MAX id
+                        let _ = tx_cloned.send(Stats {
+                                id: usize::MAX,
+                                ..Stats::default()
+                            }).await;
+
+                        let futures = spawn_bench_workers(
+                            workers,
+                            metrics_cloned.clone(),
+                            tx_cloned.clone(),
+                            cancellation_token.clone(),
+                            stat_delay_micros,
+                            total_benchmark_progress_cloned.clone(),
+                            total_benchmark_run_interval,
+                            *total_benchmark_start_time,
+                            total_benchmark_gas_used.clone()
+                        )
+                        .await;
+
+                        for f in futures {
+                            running_workers.spawn(f);
+                        }
+                    },
+                    // Check every now and then if the overall benchmark has been finished
+                    _ = check_interval.tick() => {
+                        if total_benchmark_progress_cloned.is_finished() {
+                            info!("Benchmark finished, now exiting the scheduler loop");
+                            break;
+                        }
+                    }
+            }
+        }
+    })
 }
 
 async fn spawn_bench_workers(
@@ -956,6 +958,23 @@ async fn run_bench_worker(
 
     worker.payload = free_pool.into_iter().collect();
     Some(worker)
+}
+
+
+/// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
+/// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
+fn create_progress_bar(duration: Interval) -> ProgressBar {
+    match duration {
+        Interval::Count(count) => ProgressBar::new(count)
+            .with_prefix("Running benchmark(count):")
+            .with_style(
+                ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}: {msg}").unwrap(),
+            ),
+        Interval::Time(Duration::MAX) => ProgressBar::hidden(),
+        Interval::Time(duration) => ProgressBar::new(duration.as_secs())
+            .with_prefix("Running benchmark(duration):")
+            .with_style(ProgressStyle::with_template("{prefix}: {wide_bar} {pos}/{len}").unwrap()),
+    }
 }
 
 fn stress_stats_collector(
