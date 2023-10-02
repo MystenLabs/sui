@@ -613,15 +613,19 @@ impl From<&MultiSigPublicKey> for SuiAddress {
 /// Sui address for [struct ZkLoginAuthenticator] is defined as the black2b hash of
 /// [zklogin_flag || iss_bytes_length || iss_bytes || address_seed in bytes] where
 /// AddressParams contains iss and aud string.
-impl From<&ZkLoginAuthenticator> for SuiAddress {
-    fn from(authenticator: &ZkLoginAuthenticator) -> Self {
+impl TryFrom<&ZkLoginAuthenticator> for SuiAddress {
+    type Error = SuiError;
+    fn try_from(authenticator: &ZkLoginAuthenticator) -> SuiResult<Self> {
         let mut hasher = DefaultHash::default();
         hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
         let iss_bytes = authenticator.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-        hasher.update(big_int_str_to_bytes(authenticator.get_address_seed()).unwrap());
-        SuiAddress(hasher.finalize().digest)
+        hasher.update(
+            big_int_str_to_bytes(authenticator.get_address_seed())
+                .map_err(|_| SuiError::InvalidAddress)?,
+        );
+        Ok(SuiAddress(hasher.finalize().digest))
     }
 }
 
@@ -629,7 +633,7 @@ impl TryFrom<&GenericSignature> for SuiAddress {
     type Error = SuiError;
     /// Derive a SuiAddress from a serialized signature in Sui [GenericSignature].
     fn try_from(sig: &GenericSignature) -> SuiResult<Self> {
-        Ok(match sig {
+        match sig {
             GenericSignature::Signature(sig) => {
                 let scheme = sig.scheme();
                 let pub_key_bytes = sig.public_key_bytes();
@@ -638,12 +642,12 @@ impl TryFrom<&GenericSignature> for SuiAddress {
                         error: "Cannot parse pubkey".to_string(),
                     }
                 })?;
-                SuiAddress::from(&pub_key)
+                Ok(SuiAddress::from(&pub_key))
             }
-            GenericSignature::MultiSig(ms) => ms.get_pk().into(),
-            GenericSignature::MultiSigLegacy(ms) => ms.get_pk().into(),
-            GenericSignature::ZkLoginAuthenticator(zklogin) => zklogin.into(),
-        })
+            GenericSignature::MultiSig(ms) => Ok(ms.get_pk().into()),
+            GenericSignature::MultiSigLegacy(ms) => Ok(ms.get_pk().into()),
+            GenericSignature::ZkLoginAuthenticator(zklogin) => zklogin.try_into(),
+        }
     }
 }
 
