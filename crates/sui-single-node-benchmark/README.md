@@ -28,11 +28,18 @@ of the execution engine:
 - `--num--dynamic-fields`: this specifies number of dynamic fields read by each transaction. Default to 0.
 - `--computation`: this specifies computation intensity. An increase by 1 means 100 more loop iterations in Fibonacci computation. Default to 0.
 
+### Components
+By default, the benchmark will use the `AuthorityState::try_execute_immediately` entry function,
+which includes the execution layer as well as the interaction with the DB.
+When `--end-to-end` option is specified, the benchmark will use the `ValidatorService::execute_certificate_for_testing` entry function,
+which covers the full flow of a validator processing a certificate, including
+certificate verification as well as transaction manager. It will also submit the transactions
+to a dummy consensus layer, which does nothing.
+
 ### Profiling
 If you are interested in profiling Sui, you can start the benchmark, wait for it to print out "Started execution...", and then attach a profiler to the process.
-```
+
 
 ## Caveat / Future Work
-1. Currently, it only measures the AuthorityState core, and does not cover certificate verification, transaction manager or anything else.
-There is planned work to cover certificate verification and transaction manager.
-2. More knobs will be added to the benchmark to allow more fine-grained control over the workload. For example, number of objects written.
+1. More knobs will be added to the benchmark to allow more fine-grained control over the workload. For example, number of objects written.
+2. Plan to cover more components eventually, such as the checkpoint builder and checkpoint executor.

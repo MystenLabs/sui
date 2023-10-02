@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::TxGenerator;
+use crate::tx_generator::TxGenerator;
 use move_core_types::identifier::Identifier;
 use std::collections::HashMap;
+use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{ObjectArg, VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE};
+use sui_types::transaction::{ObjectArg, Transaction, DEFAULT_VALIDATOR_GAS_PRICE};
 
 pub struct MoveTxGenerator {
     move_package: ObjectID,
@@ -38,9 +38,9 @@ impl TxGenerator for MoveTxGenerator {
     fn generate_tx(
         &self,
         sender: SuiAddress,
-        keypair: &AccountKeyPair,
-        gas_objects: &[ObjectRef],
-    ) -> VerifiedExecutableTransaction {
+        keypair: Arc<AccountKeyPair>,
+        gas_objects: Arc<Vec<ObjectRef>>,
+    ) -> Transaction {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             // PT command 1: Merge a vector of coins to a single coin.
@@ -83,14 +83,9 @@ impl TxGenerator for MoveTxGenerator {
             );
             builder.finish()
         };
-        let transaction =
-            TestTransactionBuilder::new(sender, gas_objects[0], DEFAULT_VALIDATOR_GAS_PRICE)
-                .programmable(pt)
-                .build_and_sign(keypair);
-        VerifiedExecutableTransaction::new_from_quorum_execution(
-            VerifiedTransaction::new_unchecked(transaction),
-            0,
-        )
+        TestTransactionBuilder::new(sender, gas_objects[0], DEFAULT_VALIDATOR_GAS_PRICE)
+            .programmable(pt)
+            .build_and_sign(keypair.as_ref())
     }
 
     fn name(&self) -> &'static str {

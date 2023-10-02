@@ -16,15 +16,20 @@ async fn main() {
 
     let args = Command::parse();
     match args {
-        Command::NoMove { tx_count } => benchmark_simple_transfer(tx_count).await,
+        Command::NoMove {
+            tx_count,
+            end_to_end,
+        } => benchmark_simple_transfer(tx_count, end_to_end).await,
         Command::Move {
             tx_count,
+            end_to_end,
             num_input_objects,
             num_dynamic_fields,
             computation,
         } => {
             benchmark_move_transactions(
                 tx_count,
+                end_to_end,
                 num_input_objects,
                 num_dynamic_fields,
                 computation,

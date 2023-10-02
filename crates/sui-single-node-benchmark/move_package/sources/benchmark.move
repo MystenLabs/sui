@@ -29,6 +29,7 @@ module move_benchmark::benchmark {
     }
 
     public fun run_computation(num: u64) {
+        // Store all numbers in an array to exercise memory consumption.
         let results = vector<u64>[];
         vector::push_back(&mut results, 1);
         vector::push_back(&mut results, 1);

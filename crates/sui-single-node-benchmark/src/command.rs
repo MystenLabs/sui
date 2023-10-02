@@ -20,6 +20,12 @@ pub enum Command {
             help = "Number of transactions to submit"
         )]
         tx_count: u64,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Whether to include cert verification and tx manager in the benchmark"
+        )]
+        end_to_end: bool,
     },
     #[command(name = "move")]
     Move {
@@ -29,6 +35,12 @@ pub enum Command {
             help = "Number of transactions to submit"
         )]
         tx_count: u64,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Whether to include cert verification and tx manager in the benchmark"
+        )]
+        end_to_end: bool,
         #[arg(
             long,
             default_value_t = 2,

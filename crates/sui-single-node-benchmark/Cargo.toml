@@ -11,6 +11,7 @@ sui-core.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types.workspace = true
 
+async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true

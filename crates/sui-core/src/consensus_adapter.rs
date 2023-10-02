@@ -43,6 +43,7 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_simulator::anemo::PeerId;
@@ -1037,8 +1038,6 @@ impl LatencyObserver {
         }
     }
 }
-
-use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
