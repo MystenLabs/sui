@@ -20,12 +20,9 @@ export function SyntaxHighlighter({ code, language }: Props) {
 	const [loadedLines, setLoadedLines] = useState(MAX_LINES);
 	useEffect(() => {
 		if (isIntersecting) {
-			loadMoreLines();
+			setLoadedLines((prev) => prev + MAX_LINES);
 		}
 	}, [isIntersecting]);
-	const loadMoreLines = () => {
-		setLoadedLines((prev) => prev + MAX_LINES);
-	};
 	return (
 		<div className="overflow-auto whitespace-pre font-mono text-sm">
 			<Highlight {...defaultProps} code={code} language={language} theme={undefined}>
