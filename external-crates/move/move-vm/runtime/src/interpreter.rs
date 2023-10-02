@@ -6,7 +6,7 @@ use crate::{
     loader::{Function, Loader, Resolver},
     native_functions::NativeContext,
     paranoid_type_checker::ParanoidTypeChecker,
-    plugin::Plugin,
+    plugin::InterpreterHook,
     trace,
 };
 use fail::fail_point;
@@ -67,7 +67,7 @@ macro_rules! set_err_info {
     }};
 }
 
-pub enum InstrRet {
+pub(crate) enum InstrRet {
     Ok,
     ExitCode(ExitCode),
     Branch,
@@ -82,8 +82,6 @@ pub(crate) struct Interpreter {
     operand_stack: Stack,
     /// The stack of active functions.
     call_stack: CallStack,
-    /// Whether to perform a paranoid type safety checks at runtime.
-    paranoid_type_checks: bool,
     /// Limits imposed at runtime
     runtime_limits_config: VMRuntimeLimitsConfig,
 }
@@ -99,7 +97,7 @@ impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
     }
 }
 
-pub trait InterpreterInterface {
+pub(crate) trait InterpreterInterface {
     fn get_stack_len(&self) -> usize;
     fn get_internal_state(&self) -> ExecutionState;
     fn set_location(&self, err: PartialVMError) -> VMError;
@@ -144,10 +142,10 @@ impl Interpreter {
     }
 
     pub fn pre_entrypoint(
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         gas_meter: &mut impl GasMeter,
         resolver: &Resolver,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: &[Type],
     ) -> VMResult<()> {
         profile_open_frame!(gas_meter, function.pretty_string());
@@ -160,7 +158,7 @@ impl Interpreter {
         Ok(())
     }
 
-    pub fn post_entrypoint(plugins: &mut Vec<Box<dyn Plugin>>) -> VMResult<()> {
+    pub fn post_entrypoint(plugins: &mut Vec<Box<dyn InterpreterHook>>) -> VMResult<()> {
         for plugin in plugins.iter_mut() {
             let result = plugin.post_entrypoint();
             Self::handle_plugin_error(result, plugin.is_critical())?;
@@ -171,11 +169,11 @@ impl Interpreter {
 
     pub fn pre_fn(
         interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         current_frame: &mut Frame,
         resolver: &Resolver,
         gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: Option<&[Type]>,
     ) -> VMResult<()> {
         #[cfg(debug_assertions)]
@@ -191,9 +189,9 @@ impl Interpreter {
 
     pub fn post_fn(
         _interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
     ) -> VMResult<()> {
         profile_close_frame!(gas_meter, function.pretty_string());
         for plugin in plugins.iter_mut() {
@@ -206,9 +204,9 @@ impl Interpreter {
 
     pub fn pre_instr(
         interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         locals: &Locals,
         ty_args: &[Type],
@@ -234,9 +232,9 @@ impl Interpreter {
 
     pub fn post_instr(
         interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,
@@ -264,20 +262,19 @@ impl Interpreter {
         extensions: &mut NativeContextExtensions,
         loader: &Loader,
     ) -> VMResult<Vec<Value>> {
+        // TODO(wlmyng): better approach to instantiate plugins
+        let mut plugins: Vec<Box<dyn InterpreterHook>> = vec![];
+        if loader.vm_config().paranoid_type_checks {
+            plugins = vec![Box::new(ParanoidTypeChecker::new())];
+        }
+
         let mut interpreter = Interpreter {
             operand_stack: Stack::new(),
             call_stack: CallStack::new(),
-            paranoid_type_checks: loader.vm_config().paranoid_type_checks,
             runtime_limits_config: loader.vm_config().runtime_limits_config.clone(),
         };
         let link_context = data_store.link_context();
         let resolver = function.get_resolver(link_context, loader);
-
-        // TODO(wlmyng): better approach to instantiate plugins
-        let mut plugins: Vec<Box<dyn Plugin>> = vec![];
-        if interpreter.paranoid_type_checks {
-            plugins = vec![Box::new(ParanoidTypeChecker::new())];
-        }
 
         Self::pre_entrypoint(&mut plugins, gas_meter, &resolver, &function, &ty_args)?;
 
@@ -293,12 +290,7 @@ impl Interpreter {
 
             let return_values = interpreter
                 .call_native_return_values(
-                    &resolver,
-                    data_store,
-                    gas_meter,
-                    extensions,
-                    function.clone(),
-                    &ty_args,
+                    &resolver, data_store, gas_meter, extensions, &function, &ty_args,
                 )
                 .map_err(|e| match function.module_id() {
                     Some(id) => e
@@ -346,7 +338,7 @@ impl Interpreter {
         function: Arc<Function>,
         ty_args: Vec<Type>,
         args: Vec<Value>,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
     ) -> VMResult<Vec<Value>> {
         let mut locals = Locals::new(function.local_count());
         for (i, value) in args.into_iter().enumerate() {
@@ -395,19 +387,19 @@ impl Interpreter {
                     }
                 }
                 ExitCode::Call(fh_idx) => {
-                    let next_func = resolver.function_from_handle(fh_idx);
+                    let callee = resolver.function_from_handle(fh_idx);
                     Self::pre_fn(
                         &mut self,
                         plugins,
                         &mut current_frame,
                         &resolver,
                         gas_meter,
-                        &next_func,
+                        &callee,
                         None,
                     )?;
 
                     // Charge gas
-                    let module_id = next_func
+                    let module_id = callee
                         .module_id()
                         .ok_or_else(|| {
                             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -417,30 +409,30 @@ impl Interpreter {
                     gas_meter
                         .charge_call(
                             module_id,
-                            next_func.name(),
+                            callee.name(),
                             self.operand_stack
-                                .last_n(next_func.arg_count())
+                                .last_n(callee.arg_count())
                                 .map_err(|e| set_err_info!(current_frame, e))?,
-                            (next_func.local_count() as u64).into(),
+                            (callee.local_count() as u64).into(),
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
-                    if next_func.is_native() {
+                    if callee.is_native() {
                         self.call_native(
                             &resolver,
                             data_store,
                             gas_meter,
                             extensions,
-                            &next_func,
+                            &callee,
                             vec![],
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        Self::post_fn(&mut self, plugins, gas_meter, &next_func)?;
+                        Self::post_fn(&mut self, plugins, gas_meter, &callee)?;
                         continue;
                     }
                     let frame = self
-                        .make_call_frame(loader, next_func, vec![])
+                        .make_call_frame(loader, callee, vec![])
                         .map_err(|e| self.set_location(e))
                         .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
                     self.call_stack.push(current_frame).map_err(|frame| {
@@ -456,19 +448,19 @@ impl Interpreter {
                     let ty_args = resolver
                         .instantiate_generic_function(idx, current_frame.ty_args())
                         .map_err(|e| set_err_info!(current_frame, e))?;
-                    let next_func = resolver.function_from_instantiation(idx);
+                    let callee = resolver.function_from_instantiation(idx);
                     Self::pre_fn(
                         &mut self,
                         plugins,
                         &mut current_frame,
                         &resolver,
                         gas_meter,
-                        &next_func,
+                        &callee,
                         Some(&ty_args),
                     )?;
 
                     // Charge gas
-                    let module_id = next_func
+                    let module_id = callee
                         .module_id()
                         .ok_or_else(|| {
                             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -478,26 +470,26 @@ impl Interpreter {
                     gas_meter
                         .charge_call_generic(
                             module_id,
-                            next_func.name(),
+                            callee.name(),
                             ty_args.iter().map(|ty| TypeWithLoader { ty, loader }),
                             self.operand_stack
-                                .last_n(next_func.arg_count())
+                                .last_n(callee.arg_count())
                                 .map_err(|e| set_err_info!(current_frame, e))?,
-                            (next_func.local_count() as u64).into(),
+                            (callee.local_count() as u64).into(),
                         )
                         .map_err(|e| set_err_info!(current_frame, e))?;
 
-                    if next_func.is_native() {
+                    if callee.is_native() {
                         self.call_native(
-                            &resolver, data_store, gas_meter, extensions, &next_func, ty_args,
+                            &resolver, data_store, gas_meter, extensions, &callee, ty_args,
                         )?;
                         current_frame.pc += 1; // advance past the Call instruction in the caller
 
-                        Self::post_fn(&mut self, plugins, gas_meter, &next_func)?;
+                        Self::post_fn(&mut self, plugins, gas_meter, &callee)?;
                         continue;
                     }
                     let frame = self
-                        .make_call_frame(loader, next_func, ty_args)
+                        .make_call_frame(loader, callee, ty_args)
                         .map_err(|e| self.set_location(e))
                         .map_err(|err| self.maybe_core_dump(err, &current_frame))?;
                     self.call_stack.push(current_frame).map_err(|frame| {
@@ -560,17 +552,12 @@ impl Interpreter {
         data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: Vec<Type>,
     ) -> VMResult<()> {
         // Note: refactor if native functions push a frame on the stack
         self.call_native_impl(
-            resolver,
-            data_store,
-            gas_meter,
-            extensions,
-            function.clone(),
-            ty_args,
+            resolver, data_store, gas_meter, extensions, function, ty_args,
         )
         .map_err(|e| match function.module_id() {
             Some(id) => {
@@ -596,7 +583,7 @@ impl Interpreter {
         data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: Vec<Type>,
     ) -> PartialVMResult<()> {
         let return_values = self.call_native_return_values(
@@ -623,7 +610,7 @@ impl Interpreter {
         data_store: &mut dyn DataStore,
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
-        function: Arc<Function>,
+        function: &Function,
         ty_args: &[Type],
     ) -> PartialVMResult<SmallVec<[Value; 1]>> {
         let return_type_count = function.return_type_count();
@@ -1159,13 +1146,13 @@ impl CallStack {
 
 /// An `ExitCode` from `execute_code_unit`.
 #[derive(Debug)]
-pub enum ExitCode {
+pub(crate) enum ExitCode {
     Return,
     Call(FunctionHandleIndex),
     CallGeneric(FunctionInstantiationIndex),
 }
 
-pub fn check_ability(has_ability: bool) -> PartialVMResult<()> {
+pub(crate) fn check_ability(has_ability: bool) -> PartialVMResult<()> {
     if has_ability {
         Ok(())
     } else {
@@ -1179,7 +1166,7 @@ pub fn check_ability(has_ability: bool) -> PartialVMResult<()> {
 /// A `Frame` is the execution context for a function. It holds the locals of the function and
 /// the function itself.
 // #[derive(Debug)]
-pub struct Frame {
+pub(crate) struct Frame {
     pc: u16,
     locals: Locals,
     function: Arc<Function>,
@@ -1187,7 +1174,7 @@ pub struct Frame {
 }
 
 pub(crate) trait FrameInterface {
-    fn function(&self) -> &Arc<Function>;
+    fn function(&self) -> &Function;
 
     fn get_frame(&self) -> &Frame;
 
@@ -1195,7 +1182,7 @@ pub(crate) trait FrameInterface {
 }
 
 impl FrameInterface for Frame {
-    fn function(&self) -> &Arc<Function> {
+    fn function(&self) -> &Function {
         &self.function
     }
 
@@ -1214,7 +1201,7 @@ impl Frame {
         &mut self,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<ExitCode> {
@@ -1234,7 +1221,7 @@ impl Frame {
         pc: &mut u16,
         locals: &mut Locals,
         ty_args: &[Type],
-        function: &Arc<Function>,
+        function: &Function,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
         data_store: &mut impl DataStore,
@@ -1784,7 +1771,7 @@ impl Frame {
         &mut self,
         resolver: &Resolver,
         interpreter: &mut Interpreter,
-        plugins: &mut Vec<Box<dyn Plugin>>,
+        plugins: &mut Vec<Box<dyn InterpreterHook>>,
         data_store: &mut impl DataStore,
         gas_meter: &mut impl GasMeter,
     ) -> PartialVMResult<ExitCode> {

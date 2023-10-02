@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use move_binary_format::{
     errors::{PartialVMResult, VMResult},
     file_format::Bytecode,
@@ -14,12 +12,12 @@ use crate::{
     loader::{Function, Resolver},
 };
 
-pub(crate) trait Plugin {
+pub(crate) trait InterpreterHook {
     fn is_critical(&self) -> bool;
 
     fn pre_entrypoint(
         &mut self,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: &[Type],
         resolver: &Resolver,
     ) -> VMResult<()>;
@@ -30,7 +28,7 @@ pub(crate) trait Plugin {
         &mut self,
         interpreter: &dyn InterpreterInterface,
         current_frame: &dyn FrameInterface,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: Option<&[Type]>,
         resolver: &Resolver,
     ) -> VMResult<()>;
@@ -38,14 +36,14 @@ pub(crate) trait Plugin {
     fn post_fn(
         &mut self,
         // gas_meter: &mut impl GasMeter, TODO(wlmyng): GasMeter has a bunch of generic types that are incompatible with trait objects
-        function: &Arc<Function>,
+        function: &Function,
     ) -> VMResult<()>;
 
     fn pre_instr(
         &mut self,
         interpreter: &dyn InterpreterInterface,
         // gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         locals: &Locals,
         ty_args: &[Type],
@@ -56,7 +54,7 @@ pub(crate) trait Plugin {
         &mut self,
         interpreter: &dyn InterpreterInterface,
         // gas_meter: &mut impl GasMeter,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,

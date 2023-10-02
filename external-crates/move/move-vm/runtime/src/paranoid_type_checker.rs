@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::errors::{Location, PartialVMResult, VMResult};
-use std::sync::Arc;
 
 use move_binary_format::{
     errors::PartialVMError,
@@ -14,7 +13,7 @@ use move_vm_types::{loaded_data::runtime_types::Type, values::Locals};
 use crate::{
     interpreter::{check_ability, FrameInterface, InstrRet, InterpreterInterface},
     loader::{Function, Resolver},
-    plugin::Plugin,
+    plugin::InterpreterHook,
 };
 
 struct TypeStack {
@@ -66,14 +65,14 @@ pub struct ParanoidTypeChecker {
     type_stack: TypeStack,
 }
 
-impl Plugin for ParanoidTypeChecker {
+impl InterpreterHook for ParanoidTypeChecker {
     fn is_critical(&self) -> bool {
         true
     }
 
     fn pre_entrypoint(
         &mut self,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: &[Type],
         resolver: &Resolver,
     ) -> VMResult<()> {
@@ -103,7 +102,7 @@ impl Plugin for ParanoidTypeChecker {
         &mut self,
         interpreter: &dyn InterpreterInterface,
         current_frame: &dyn FrameInterface,
-        function: &Arc<Function>,
+        function: &Function,
         ty_args: Option<&[Type]>,
         resolver: &Resolver,
     ) -> VMResult<()> {
@@ -139,14 +138,14 @@ impl Plugin for ParanoidTypeChecker {
         Ok(())
     }
 
-    fn post_fn(&mut self, _function: &Arc<Function>) -> VMResult<()> {
+    fn post_fn(&mut self, _function: &Function) -> VMResult<()> {
         Ok(())
     }
 
     fn pre_instr(
         &mut self,
         interpreter: &dyn InterpreterInterface,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         locals: &Locals,
         ty_args: &[Type],
@@ -168,7 +167,7 @@ impl Plugin for ParanoidTypeChecker {
     fn post_instr(
         &mut self,
         interpreter: &dyn InterpreterInterface,
-        function: &Arc<Function>,
+        function: &Function,
         instruction: &Bytecode,
         ty_args: &[Type],
         resolver: &Resolver,
@@ -207,8 +206,8 @@ impl ParanoidTypeChecker {
 
     fn check_friend_or_private_call(
         &self,
-        caller: &Arc<Function>,
-        callee: &Arc<Function>,
+        caller: &Function,
+        callee: &Function,
     ) -> PartialVMResult<()> {
         if callee.is_friend_or_private() {
             match (caller.module_id(), callee.module_id()) {
