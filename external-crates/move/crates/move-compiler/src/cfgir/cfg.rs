@@ -8,7 +8,7 @@ use crate::{
         remove_no_ops,
     },
     diag,
-    diagnostics::Diagnostics,
+    diagnostics::{Diagnostic, Diagnostics},
     hlir::ast::{Command, Command_, Exp, Label, UnannotatedExp_, UnitCase},
     shared::ast_debug::*,
 };
@@ -283,14 +283,24 @@ const DEAD_ERR_EXP: &str = "Invalid use of a divergent expression. The code foll
                             evaluation of this expression will be dead and should be removed.";
 
 fn dead_code_error(diags: &mut Diagnostics, block: &BasicBlock) {
-    let first_command = block.front().unwrap();
-    match unreachable_loc(first_command) {
-        Some(loc) => diags.add(diag!(UnusedItem::DeadCode, (loc, DEAD_ERR_EXP))),
-        None if is_implicit_control_flow(block) => (),
-        None => diags.add(diag!(
-            UnusedItem::DeadCode,
-            (first_command.loc, DEAD_ERR_CMD)
-        )),
+    if let Some(diag) = build_dead_code_error(block) {
+        diags.add(diag);
+    }
+}
+
+pub fn build_dead_code_error(block: &BasicBlock) -> Option<Diagnostic> {
+    if block.is_empty() {
+        None
+    } else {
+        let first_command = block.front().unwrap();
+        match unreachable_loc(first_command) {
+            Some(loc) => Some(diag!(UnusedItem::DeadCode, (loc, DEAD_ERR_EXP))),
+            None if is_implicit_control_flow(block) => None,
+            None => Some(diag!(
+                UnusedItem::DeadCode,
+                (first_command.loc, DEAD_ERR_CMD)
+            )),
+        }
     }
 }
 
