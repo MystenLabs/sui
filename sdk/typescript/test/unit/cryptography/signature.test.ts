@@ -174,21 +174,10 @@ describe('Signature', () => {
 
 	it('`parseSerializedSignature()` should handle unsupported schemes', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
-
 		const sig1 = await k1.signPersonalMessage(data);
-		const sig2 = await k2.signPersonalMessage(data);
-
-		let bytes = fromB64(sig1.signature);
-		bytes[0] = 0x05;
-		let invalidSignature = toB64(bytes);
-
-		expect(() => parseSerializedSignature(invalidSignature)).toThrowError(
-			new Error('Unable to parse a zk signature. (not implemented yet)'),
-		);
-
-		bytes = fromB64(sig2.signature);
-		bytes[0] = 0x07;
-		invalidSignature = toB64(bytes);
+		const bytes = fromB64(sig1.signature);
+		bytes[0] = 0x06;
+		const invalidSignature = toB64(bytes);
 
 		expect(() => parseSerializedSignature(invalidSignature)).toThrowError(
 			new Error('Unsupported signature scheme'),

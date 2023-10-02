@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::join_all;
+use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
@@ -17,7 +17,9 @@ use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::{
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, TransactionFilter,
+};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -46,7 +48,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
@@ -402,6 +404,34 @@ impl TestCluster {
             })
             .await;
         }
+    }
+
+    pub async fn wait_for_authenticator_state_update(&self) {
+        timeout(
+            Duration::from_secs(60),
+            self.fullnode_handle.sui_node.with_async(|node| async move {
+                let mut txns = node.state().subscription_handler.subscribe_transactions(
+                    TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
+                );
+                let state = node.state();
+
+                while let Some(tx) = txns.next().await {
+                    let digest = *tx.transaction_digest();
+                    let tx = state
+                        .database
+                        .get_transaction_block(&digest)
+                        .unwrap()
+                        .unwrap();
+                    match &tx.data().intent_message().value.kind() {
+                        TransactionKind::EndOfEpochTransaction(_) => (),
+                        TransactionKind::AuthenticatorStateUpdate(_) => break,
+                        _ => panic!("{:?}", tx),
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("Timed out waiting for authenticator state update");
     }
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {

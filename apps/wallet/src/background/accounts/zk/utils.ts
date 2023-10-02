@@ -8,6 +8,7 @@ import { generateNonce, generateRandomness, type ZkSignatureInputs } from '@myst
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
+import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
 
 import { zkProviderDataMap, type ZkProvider } from './providers';
@@ -113,6 +114,7 @@ export async function fetchSalt(jwt: string): Promise<string> {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
+			'Request-Id': uuidV4(),
 		},
 		body: JSON.stringify({ token: jwt }),
 	});
@@ -144,6 +146,7 @@ export async function createPartialZKSignature({
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
+			'Request-Id': uuidV4(),
 		},
 		body: JSON.stringify({
 			jwt,

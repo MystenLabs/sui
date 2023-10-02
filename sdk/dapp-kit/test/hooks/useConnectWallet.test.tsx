@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useConnectWallet, useCurrentAccount, useCurrentWallet } from 'dapp-kit/src';
 import type { Mock } from 'vitest';
 
+import { useConnectWallet, useCurrentAccount, useCurrentWallet } from '../../src/index.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('useConnectWallet', () => {

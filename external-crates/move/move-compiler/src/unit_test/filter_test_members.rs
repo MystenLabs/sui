@@ -242,7 +242,8 @@ fn test_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::Testing
                 KnownAttribute::Testing(test_attr) => Some((attr.loc, test_attr)),
                 KnownAttribute::Verification(_)
                 | KnownAttribute::Native(_)
-                | KnownAttribute::Diagnostic(_) => None,
+                | KnownAttribute::Diagnostic(_)
+                | KnownAttribute::DefinesPrimitive(_) => None,
             },
         )
         .collect()

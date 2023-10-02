@@ -18,6 +18,7 @@ use crate::{
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
+        program_info::TypingProgramInfo,
         unique_map::UniqueMap,
         *,
     },
@@ -38,11 +39,16 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: N::Program,
 ) -> T::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
     let N::Program {
-        modules: nmodules,
-        scripts: nscripts,
+        info,
+        inner: N::Program_ {
+            modules: nmodules,
+            scripts: nscripts,
+        },
     } = prog;
+    let mut context = Context::new(compilation_env, pre_compiled_lib, info);
+
+    // we extract module use funs into the module info context
     let mut modules = modules(&mut context, nmodules);
     let mut scripts = scripts(&mut context, nscripts);
 
@@ -50,13 +56,22 @@ pub fn program(
     dependency_ordering::program(context.env, &mut modules, &mut scripts);
     recursive_structs::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let mut prog = T::Program { modules, scripts };
-    let module_info = core::TypingProgramInfo::new(pre_compiled_lib, &prog);
+    let mut prog = T::Program_ { modules, scripts };
+    let module_use_funs = context
+        .modules
+        .modules
+        .into_iter()
+        .map(|(mident, minfo)| (mident, minfo.use_funs))
+        .collect();
+    let module_info = TypingProgramInfo::new(pre_compiled_lib, &prog, module_use_funs);
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
         v.visit(compilation_env, &module_info, &mut prog);
     }
-    prog
+    T::Program {
+        info: module_info,
+        inner: prog,
+    }
 }
 
 fn modules(
@@ -67,16 +82,14 @@ fn modules(
     let mut typed_modules = modules.map(|ident, mdef| {
         let (typed_mdef, new_friends) = module(context, ident, mdef);
         for (pub_package_module, loc) in new_friends {
+            let friend = Friend {
+                attributes: UniqueMap::new(),
+                loc,
+            };
             all_new_friends
                 .entry(pub_package_module)
                 .or_insert_with(BTreeMap::new)
-                .insert(
-                    ident,
-                    Friend {
-                        attributes: UniqueMap::new(),
-                        loc,
-                    },
-                );
+                .insert(ident, friend);
         }
         typed_mdef
     });
@@ -111,6 +124,7 @@ fn module(
         package_name,
         attributes,
         is_source_module,
+        use_funs,
         friends,
         mut structs,
         functions: nfunctions,
@@ -118,6 +132,7 @@ fn module(
         spec_dependencies,
     } = mdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    context.add_use_funs_scope(use_funs);
     structs
         .iter_mut()
         .for_each(|(_, _, s)| struct_def(context, s));
@@ -125,6 +140,7 @@ fn module(
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
+    context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
         loc,
@@ -164,16 +180,19 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         package_name,
         attributes,
         loc,
+        use_funs,
         constants: nconstants,
         function_name,
         function: nfunction,
         spec_dependencies,
     } = nscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
+    context.add_use_funs_scope(use_funs);
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
+    context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     T::Script {
         warning_filter,
@@ -1020,10 +1039,11 @@ enum SeqCase {
     },
 }
 
-fn sequence(context: &mut Context, seq: N::Sequence) -> T::Sequence {
+fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence {
     use N::SequenceItem_ as NS;
     use T::SequenceItem_ as TS;
 
+    context.add_use_funs_scope(use_funs);
     let mut work_queue = VecDeque::new();
     let mut resulting_sequence = T::Sequence::new();
 
@@ -1073,7 +1093,7 @@ fn sequence(context: &mut Context, seq: N::Sequence) -> T::Sequence {
             }
         }
     }
-
+    context.pop_use_funs_scope();
     resulting_sequence
 }
 
@@ -1289,7 +1309,27 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let ty = context.get_local(&var);
             (ty, TE::Use(var))
         }
-
+        NE::MethodCall(ndotted, f, ty_args_opt, sp!(argloc, nargs_)) => {
+            let (edotted, last_ty) = exp_dotted(context, None, ndotted);
+            let args = exp_vec(context, nargs_);
+            let ty_call_opt = method_call(
+                context,
+                eloc,
+                edotted,
+                last_ty,
+                f,
+                ty_args_opt,
+                argloc,
+                args,
+            );
+            match ty_call_opt {
+                None => {
+                    assert!(context.env.has_errors());
+                    (context.error_type(eloc), TE::UnresolvedError)
+                }
+                Some(ty_call) => ty_call,
+            }
+        }
         NE::ModuleCall(m, f, ty_args_opt, sp!(argloc, nargs_)) => {
             let args = exp_vec(context, nargs_);
             module_call(context, eloc, m, f, ty_args_opt, argloc, args)
@@ -1364,7 +1404,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         NE::FieldMutate(ndotted, nr) => {
             let lhsloc = ndotted.loc;
             let er = exp(context, nr);
-            let (edotted, _) = exp_dotted(context, "mutation", ndotted);
+            let (edotted, _) = exp_dotted(context, Some("mutation"), ndotted);
             let eborrow = exp_dotted_to_borrow(context, lhsloc, true, edotted);
             check_mutation(context, eborrow.exp.loc, eborrow.ty.clone(), &er.ty);
             (sp(eloc, Type_::Unit), TE::Mutate(Box::new(eborrow), er))
@@ -1511,7 +1551,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         }
 
         NE::Borrow(mut_, ndotted) => {
-            let (edotted, _) = exp_dotted(context, "borrow", ndotted);
+            let (edotted, _) = exp_dotted(context, Some("borrow"), ndotted);
             let eborrow = exp_dotted_to_borrow(context, eloc, mut_, edotted);
             (eborrow.ty, eborrow.exp.value)
         }
@@ -1519,7 +1559,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         NE::DerefBorrow(ndotted) => {
             assert!(!matches!(ndotted, sp!(_, N::ExpDotted_::Exp(_))));
 
-            let (edotted, inner_ty) = exp_dotted(context, "dot access", ndotted);
+            let (edotted, inner_ty) = exp_dotted(context, Some("dot access"), ndotted);
             let ederefborrow = exp_dotted_to_owned_value(context, eloc, edotted, inner_ty);
             (ederefborrow.ty, ederefborrow.exp.value)
         }
@@ -1943,9 +1983,10 @@ enum ExpDotted_ {
 }
 type ExpDotted = Spanned<ExpDotted_>;
 
+// if constraint_verb is None, no single typeconstraint is applied
 fn exp_dotted(
     context: &mut Context,
-    verb: &str,
+    constraint_verb: Option<&str>,
     sp!(dloc, ndot_): N::ExpDotted,
 ) -> (ExpDotted, Type) {
     use N::ExpDotted_ as NE;
@@ -1960,7 +2001,13 @@ fn exp_dotted(
                 _ => (true, ety.clone()),
             };
             let edot_ = if borrow_needed {
-                context.add_single_type_constraint(dloc, format!("Invalid {}", verb), ty.clone());
+                if let Some(verb) = constraint_verb {
+                    context.add_single_type_constraint(
+                        dloc,
+                        format!("Invalid {}", verb),
+                        ty.clone(),
+                    );
+                }
                 ExpDotted_::TmpBorrow(e, Box::new(ty.clone()))
             } else {
                 ExpDotted_::Exp(e)
@@ -1968,7 +2015,7 @@ fn exp_dotted(
             (edot_, ty)
         }
         NE::Dot(nlhs, field) => {
-            let (lhs, inner) = exp_dotted(context, "dot access", *nlhs);
+            let (lhs, inner) = exp_dotted(context, Some("dot access"), *nlhs);
             let field_ty = resolve_field(context, dloc, inner, &field);
             (
                 ExpDotted_::Dot(Box::new(lhs), field, Box::new(field_ty.clone())),
@@ -2041,11 +2088,12 @@ fn exp_dotted_to_owned_value(
     use T::UnannotatedExp_ as TE;
     match edot {
         // TODO investigate this nonsense
-        sp!(_, ExpDotted_::Exp(lhs)) => *lhs,
+        sp!(_, ExpDotted_::Exp(lhs)) | sp!(_, ExpDotted_::TmpBorrow(lhs, _)) => *lhs,
         edot => {
             let name = match &edot {
-                sp!(_, ExpDotted_::Exp(_)) => panic!("ICE covered above"),
-                sp!(_, ExpDotted_::TmpBorrow(_, _)) => panic!("ICE why is this here?"),
+                sp!(_, ExpDotted_::Exp(_)) | sp!(_, ExpDotted_::TmpBorrow(_, _)) => {
+                    panic!("ICE covered above")
+                }
                 sp!(_, ExpDotted_::Dot(_, name, _)) => *name,
             };
             let eborrow = exp_dotted_to_borrow(context, eloc, false, edot);
@@ -2086,6 +2134,101 @@ impl crate::shared::ast_debug::AstDebug for ExpDotted_ {
 // Calls
 //**************************************************************************************************
 
+fn method_call(
+    context: &mut Context,
+    loc: Loc,
+    mut edotted: ExpDotted,
+    edotted_ty: Type,
+    method: Name,
+    ty_args_opt: Option<Vec<Type>>,
+    argloc: Loc,
+    mut args: Vec<T::Exp>,
+) -> Option<(Type, T::UnannotatedExp_)> {
+    use TypeName_ as TN;
+    use Type_ as Ty;
+    use T::UnannotatedExp_ as TE;
+    let edotted_ty_unfolded = core::unfold_type(&context.subst, edotted_ty.clone());
+    let edotted_bty = edotted_ty_base(&edotted_ty_unfolded);
+    let tn = match &edotted_bty.value {
+        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => tn,
+        t => {
+            let msg = match t {
+                Ty::Anything => {
+                    "Unable to infer type for method call. Try annotating this type".to_owned()
+                }
+                Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) => {
+                    let tsubst = core::error_format_(t, &context.subst);
+                    format!(
+                        "Method calls are only supported on single types. \
+                          Got an expression of type: {tsubst}",
+                    )
+                }
+                Ty::Param(_) => {
+                    let tsubst = core::error_format_(t, &context.subst);
+                    format!(
+                        "Method calls are not supported on type parameters. \
+                        Got an expression of type: {tsubst}",
+                    )
+                }
+                Ty::UnresolvedError => {
+                    assert!(context.env.has_errors());
+                    return None;
+                }
+                Ty::Ref(_, _) | Ty::Var(_) => panic!("ICE unfolding failed"),
+                Ty::Apply(_, _, _) => unreachable!(),
+            };
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidMethodCall,
+                (loc, "Invalid method call"),
+                (edotted_ty.loc, msg),
+            ));
+            return None;
+        }
+    };
+    let (_defined_loc, m, f, targs, parameters, acquires, ret_ty) =
+        core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
+
+    let first_arg = match &parameters[0].1.value {
+        Ty::Ref(mut_, _) => {
+            // add a borrow if needed
+            let mut cur = &mut edotted;
+            loop {
+                match cur {
+                    sp!(loc, ExpDotted_::Exp(e)) => {
+                        let e_ty = e.ty.clone();
+                        match core::unfold_type(&context.subst, e_ty.clone()).value {
+                            Ty::Ref(_, _) => (),
+                            _ => *cur = sp(*loc, ExpDotted_::TmpBorrow(e.clone(), Box::new(e_ty))),
+                        };
+                        break;
+                    }
+                    sp!(_, ExpDotted_::TmpBorrow(_, _)) => break,
+                    sp!(_, ExpDotted_::Dot(l, _, _)) => cur = l,
+                };
+            }
+            exp_dotted_to_borrow(context, loc, *mut_, edotted)
+        }
+        _ => exp_dotted_to_owned_value(context, loc, edotted, edotted_ty),
+    };
+    args.insert(0, first_arg);
+    let call = module_call_impl(
+        context, loc, m, f, targs, parameters, acquires, argloc, args,
+    );
+    Some((ret_ty, TE::ModuleCall(Box::new(call))))
+}
+
+fn edotted_ty_base(ty: &Type) -> &Type {
+    match &ty.value {
+        Type_::Unit
+        | Type_::Param(_)
+        | Type_::Anything
+        | Type_::UnresolvedError
+        | Type_::Apply(_, _, _) => ty,
+        Type_::Ref(_, inner) => inner,
+        Type_::Var(_) => panic!("ICE unfolding failed"),
+    }
+}
+
 fn module_call(
     context: &mut Context,
     loc: Loc,
@@ -2097,6 +2240,23 @@ fn module_call(
 ) -> (Type, T::UnannotatedExp_) {
     let (_, ty_args, parameters, acquires, ret_ty) =
         core::make_function_type(context, loc, &m, &f, ty_args_opt);
+    let call = module_call_impl(
+        context, loc, m, f, ty_args, parameters, acquires, argloc, args,
+    );
+    (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
+}
+
+fn module_call_impl(
+    context: &mut Context,
+    loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    ty_args: Vec<Type>,
+    parameters: Vec<(N::Var, Type)>,
+    acquires: BTreeMap<StructName, Loc>,
+    argloc: Loc,
+    args: Vec<T::Exp>,
+) -> T::ModuleCall {
     let (arguments, arg_tys) = call_args(
         context,
         loc,
@@ -2129,7 +2289,7 @@ fn module_call(
         .entry(m.value)
         .or_insert_with(BTreeSet::new)
         .insert(f.value());
-    (ret_ty, T::UnannotatedExp_::ModuleCall(Box::new(call)))
+    call
 }
 
 fn builtin_call(

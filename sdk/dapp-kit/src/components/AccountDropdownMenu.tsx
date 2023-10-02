@@ -11,6 +11,7 @@ import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 import * as styles from './AccountDropdownMenu.css.js';
 import { CheckIcon } from './icons/CheckIcon.js';
 import { ChevronIcon } from './icons/ChevronIcon.js';
+import { StyleMarker } from './styling/StyleMarker.js';
 
 type AccountDropdownMenuProps = {
 	currentAccount: WalletAccount;
@@ -23,35 +24,39 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 
 	return (
 		<DropdownMenu.Root modal={false}>
-			<DropdownMenu.Trigger className={styles.triggerButton}>
-				{formatAddress(currentAccount.address)}
-				<ChevronIcon />
-			</DropdownMenu.Trigger>
+			<StyleMarker>
+				<DropdownMenu.Trigger className={styles.triggerButton}>
+					{formatAddress(currentAccount.address)}
+					<ChevronIcon />
+				</DropdownMenu.Trigger>
+			</StyleMarker>
 			<DropdownMenu.Portal>
-				<DropdownMenu.Content className={styles.menuContent}>
-					{accounts.map((account) => (
-						<DropdownMenu.Item key={account.address} asChild>
+				<StyleMarker>
+					<DropdownMenu.Content className={styles.menuContent}>
+						{accounts.map((account) => (
+							<DropdownMenu.Item key={account.address} asChild>
+								<button
+									type="button"
+									className={styles.switchAccountButton}
+									onClick={() => switchAccount({ account })}
+								>
+									{formatAddress(account.address)}
+									{currentAccount.address === account.address ? <CheckIcon /> : null}
+								</button>
+							</DropdownMenu.Item>
+						))}
+						<DropdownMenu.Separator className={styles.separator} />
+						<DropdownMenu.Item asChild>
 							<button
+								className={styles.disconnectButton}
 								type="button"
-								className={styles.switchAccountButton}
-								onClick={() => switchAccount({ account })}
+								onClick={() => disconnectWallet()}
 							>
-								{formatAddress(account.address)}
-								{currentAccount.address === account.address ? <CheckIcon /> : null}
+								Disconnect
 							</button>
 						</DropdownMenu.Item>
-					))}
-					<DropdownMenu.Separator className={styles.separator} />
-					<DropdownMenu.Item asChild>
-						<button
-							className={styles.disconnectButton}
-							type="button"
-							onClick={() => disconnectWallet()}
-						>
-							Disconnect
-						</button>
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
+					</DropdownMenu.Content>
+				</StyleMarker>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
 	);
