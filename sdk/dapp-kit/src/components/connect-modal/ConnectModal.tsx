@@ -19,31 +19,57 @@ import { WalletList } from './wallet-list/WalletList.js';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
-type ConnectModalProps = {
-	trigger: ReactNode;
+type ControlledModalProps = {
+	/** The controlled open state of the dialog. */
+	open: boolean;
+
+	/** Event handler called when the open state of the dialog changes. */
+	onOpenChange: (open: boolean) => void;
+
+	defaultOpen?: never;
 };
 
-export function ConnectModal({ trigger }: ConnectModalProps) {
-	const [isConnectModalOpen, setConnectModalOpen] = useState(false);
+type UncontrolledModalProps = {
+	open?: never;
+
+	onOpenChange?: never;
+
+	/** The open state of the dialog when it is initially rendered. Use when you do not need to control its open state. */
+	defaultOpen?: boolean;
+};
+
+type ConnectModalProps = {
+	/** The trigger button that opens the dialog. */
+	trigger: NonNullable<ReactNode>;
+} & (ControlledModalProps | UncontrolledModalProps);
+
+export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: ConnectModalProps) {
+	const [isModalOpen, setModalOpen] = useState(open ?? defaultOpen);
 	const [currentView, setCurrentView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
 	const { mutate, isError } = useConnectWallet();
-
-	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
-		setCurrentView('connection-status');
-		mutate({ wallet }, { onSuccess: () => setConnectModalOpen(false) });
-	};
 
 	const resetSelection = () => {
 		setSelectedWallet(undefined);
 		setCurrentView(undefined);
 	};
 
-	const onOpenChange = (open: boolean) => {
+	const handleOpenChange = (open: boolean) => {
 		if (!open) {
 			resetSelection();
 		}
-		setConnectModalOpen(open);
+		setModalOpen(open);
+		onOpenChange?.(open);
+	};
+
+	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
+		setCurrentView('connection-status');
+		mutate(
+			{ wallet },
+			{
+				onSuccess: () => handleOpenChange(false),
+			},
+		);
 	};
 
 	let modalContent: ReactNode | undefined;
@@ -68,9 +94,9 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 	}
 
 	return (
-		<Dialog.Root open={isConnectModalOpen} onOpenChange={onOpenChange}>
+		<Dialog.Root open={open ?? isModalOpen} onOpenChange={handleOpenChange}>
 			<StyleMarker>
-				<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
+				<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 			</StyleMarker>
 			<Dialog.Portal>
 				<StyleMarker>
