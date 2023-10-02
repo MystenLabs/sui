@@ -60,6 +60,14 @@ pub struct HistogramWrapper {
     histogram: Histogram<u64>,
 }
 
+impl Default for HistogramWrapper {
+    fn default() -> Self {
+        Self {
+            histogram: Histogram::new(0).unwrap(),
+        }
+    }
+}
+
 impl serde::Serialize for HistogramWrapper {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut vec = Vec::new();
@@ -111,7 +119,7 @@ impl StressStats {
 }
 
 /// Stores the final statistics of the test run.
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Default)]
 pub struct BenchmarkStats {
     pub duration: Duration,
     /// Number of transactions that ended in an error
