@@ -525,6 +525,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequencedConsensusTransaction {
     pub certificate_author_index: AuthorityIndex,
     pub certificate_author: AuthorityName,
@@ -532,6 +533,7 @@ pub struct SequencedConsensusTransaction {
     pub transaction: SequencedConsensusTransactionKind,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SequencedConsensusTransactionKind {
     External(ConsensusTransaction),
     System(VerifiedExecutableTransaction),
@@ -623,6 +625,7 @@ impl SequencedConsensusTransaction {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerifiedSequencedConsensusTransaction(pub SequencedConsensusTransaction);
 
 #[cfg(test)]
