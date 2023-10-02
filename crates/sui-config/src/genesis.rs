@@ -420,7 +420,7 @@ impl GenesisCeremonyParameters {
 
     fn default_epoch_duration_ms() -> u64 {
         // 24 hrs
-        1 * 60 * 1000
+        8 * 60 * 1000
     }
 
     fn default_initial_stake_subsidy_distribution_amount() -> u64 {
