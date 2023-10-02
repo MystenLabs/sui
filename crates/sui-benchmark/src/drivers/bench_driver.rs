@@ -307,8 +307,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         info!("Running BenchDriver");
 
         let mut tasks = Vec::new();
-        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-        let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
+        let (tx, mut rx) = channel(100);
+        let (stress_stat_tx, mut stress_stat_rx) = channel(100);
         let mut bench_workers = vec![];
 
         let mut worker_id = 0;
@@ -326,31 +326,21 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 .await,
             );
         }
-        let num_workers = bench_workers.len() as u64;
-        if num_workers == 0 {
+
+        let num_workers = bench_workers.len();
+        if bench_workers.is_empty() {
             return Err(anyhow!("No workers to run benchmark!"));
         }
-        info!("Setting up {:?} workers...", num_workers);
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let total_benchmark_progress = Arc::new(create_progress_bar(total_benchmark_run_interval));
-
-        /*
-
-         0    1         0   1    0   1   0    1
-        100s 40s ---> 100s 40s 100s 40s 100s 40s
-        100s 40s unbounded
-
-
-        1. first spin up the workers of the groups starting from the lowest to highest 0 -> ...
-        */
 
         let cancellation_token = self.token.clone();
         let total_benchmark_progress_cloned = total_benchmark_progress.clone();
         let tx_cloned = tx.clone();
         let metrics_cloned = metrics.clone();
 
-        // Now spin up a task that will go through the groupped bench workers
+        // Spin up the scheduler task to orchestrate running the workers for each benchmark group.
         let scheduler = tokio::spawn(async move {
             info!("Spawn up scheduler task...");
 
@@ -361,17 +351,16 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             let mut check_interval = time::interval(Duration::from_millis(500));
             check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
 
-            // group the workload by the group id and order them in a list
-            let mut groupped_bench_workers: BTreeMap<u32, Vec<BenchWorker>> = BTreeMap::new();
-            for worker in bench_workers.into_iter() {
-                groupped_bench_workers
-                    .entry(worker.group)
-                    .or_default()
-                    .push(worker);
-            }
-            let mut all_workers = groupped_bench_workers
+            // group the workers by the group id, sort the groups by group id (using the BTreeMap) and
+            // finally collect them to a VecDeque.
+            let mut all_workers: VecDeque<Vec<BenchWorker>> = bench_workers
+                .into_iter()
+                .fold(BTreeMap::new(), |mut acc, val| {
+                    acc.entry(val.group).or_insert(Vec::new()).push(val);
+                    acc
+                })
                 .into_values()
-                .collect::<VecDeque<Vec<BenchWorker>>>();
+                .collect();
 
             // Set the total benchmark start time
             let total_benchmark_start_time = print_and_start_benchmark().await;
