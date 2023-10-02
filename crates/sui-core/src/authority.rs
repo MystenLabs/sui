@@ -670,7 +670,8 @@ impl AuthorityState {
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             epoch_store.epoch(),
-            &transaction.data().intent_message().value,
+            transaction.data().transaction_data(),
+            transaction.tx_signatures(),
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
         )?;
@@ -1297,6 +1298,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     epoch_store.epoch(),
                     &transaction,
+                    &[],
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
