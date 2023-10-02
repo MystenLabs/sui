@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { API_ENV } from '_src/shared/api-env';
-import { useAppSelector } from '_src/ui/app/hooks';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { useSigner } from '_src/ui/app/hooks/useSigner';
 import { useFeatureValue } from '@growthbook/growthbook-react';
@@ -13,8 +11,9 @@ import {
 	useGetKioskContents,
 	useGetObject,
 } from '@mysten/core';
+import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { KioskClient, KioskTransaction, Network } from '@mysten/kiosk';
+import { KioskTransaction } from '@mysten/kiosk';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { useMutation } from '@tanstack/react-query';
 
@@ -31,13 +30,10 @@ export function useTransferKioskItem({
 	const activeAccount = useActiveAccount();
 	const signer = useSigner(activeAccount);
 	const address = activeAccount?.address;
-	const network =
-		useAppSelector(({ app }) => app.apiEnv) === API_ENV.mainnet ? Network.MAINNET : Network.TESTNET;
-
 	const obPackageId = useFeatureValue('kiosk-originbyte-packageid', ORIGINBYTE_PACKAGE_ID);
-	const { data: kioskData } = useGetKioskContents(address, network); // show personal kiosks too
-
+	const { data: kioskData } = useGetKioskContents(address); // show personal kiosks too
 	const objectData = useGetObject(objectId);
+	const kioskClient = useKioskClient();
 
 	return useMutation({
 		mutationFn: async ({ to, clientIdentifier }: { to: string; clientIdentifier?: string }) => {
@@ -53,8 +49,6 @@ export function useTransferKioskItem({
 			}
 
 			if (kiosk.type === KioskTypes.SUI && objectData?.data?.data?.type && kiosk?.ownerCap) {
-				const kioskClient = new KioskClient({ client, network });
-
 				const txb = new TransactionBlock();
 
 				new KioskTransaction({ transactionBlock: txb, kioskClient, cap: kiosk.ownerCap })
