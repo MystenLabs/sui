@@ -5,6 +5,7 @@ import type { SerializedBcs } from '@mysten/bcs';
 import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import { is, mask } from 'superstruct';
 
+import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 import { SUI_TYPE_ARG } from '../framework/framework.js';
@@ -30,14 +31,14 @@ import { getPureSerializationType, isTxContext } from './serializer.js';
 import type { TransactionExpiration } from './TransactionBlockData.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { MoveCallTransaction, TransactionArgument, TransactionType } from './Transactions.js';
-import { getTransactionType, TransactionBlockInput, Transactions } from './Transactions.js';
-import type { WellKnownEncoding } from './utils.js';
-import { create, TRANSACTION_TYPE } from './utils.js';
+import { TransactionBlockInput, Transactions } from './Transactions.js';
+import { create } from './utils.js';
 
 export type TransactionObjectArgument = Exclude<
 	TransactionArgument,
 	{ kind: 'Input'; type: 'pure' }
 >;
+
 type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
 	Extract<TransactionArgument, { kind: 'NestedResult' }>[];
 
@@ -350,12 +351,12 @@ export class TransactionBlock {
 	// Method shorthands:
 
 	splitCoins(
-		coin: TransactionObjectArgument,
+		coin: TransactionObjectArgument | string,
 		amounts: (TransactionArgument | SerializedBcs<any> | number | string | bigint)[],
 	) {
 		return this.add(
 			Transactions.SplitCoins(
-				coin,
+				typeof coin === 'string' ? this.object(coin) : coin,
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
 						? this.pure.u64(amount)
@@ -364,8 +365,16 @@ export class TransactionBlock {
 			),
 		);
 	}
-	mergeCoins(destination: TransactionObjectArgument, sources: TransactionObjectArgument[]) {
-		return this.add(Transactions.MergeCoins(destination, sources));
+	mergeCoins(
+		destination: TransactionObjectArgument | string,
+		sources: (TransactionObjectArgument | string)[],
+	) {
+		return this.add(
+			Transactions.MergeCoins(
+				typeof destination === 'string' ? this.object(destination) : destination,
+				sources.map((src) => (typeof src === 'string' ? this.object(src) : src)),
+			),
+		);
 	}
 	publish({ modules, dependencies }: { modules: number[][] | string[]; dependencies: string[] }) {
 		return this.add(
@@ -384,14 +393,14 @@ export class TransactionBlock {
 		modules: number[][] | string[];
 		dependencies: string[];
 		packageId: string;
-		ticket: TransactionObjectArgument;
+		ticket: TransactionObjectArgument | string;
 	}) {
 		return this.add(
 			Transactions.Upgrade({
 				modules,
 				dependencies,
 				packageId,
-				ticket,
+				ticket: typeof ticket === 'string' ? this.object(ticket) : ticket,
 			}),
 		);
 	}
@@ -413,20 +422,31 @@ export class TransactionBlock {
 		);
 	}
 	transferObjects(
-		objects: TransactionObjectArgument[],
+		objects: (TransactionObjectArgument | string)[],
 		address: TransactionArgument | SerializedBcs<any> | string,
 	) {
 		return this.add(
 			Transactions.TransferObjects(
-				objects,
+				objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
 				typeof address === 'string'
 					? this.pure.address(address)
 					: this.#normalizeTransactionArgument(address),
 			),
 		);
 	}
-	makeMoveVec({ type, objects }: { objects: TransactionObjectArgument[]; type?: string }) {
-		return this.add(Transactions.MakeMoveVec({ type, objects }));
+	makeMoveVec({
+		type,
+		objects,
+	}: {
+		objects: (TransactionObjectArgument | string)[];
+		type?: string;
+	}) {
+		return this.add(
+			Transactions.MakeMoveVec({
+				type,
+				objects: objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
+			}),
+		);
 	}
 
 	/**
@@ -589,6 +609,14 @@ export class TransactionBlock {
 			normalizedType?: SuiMoveNormalizedType;
 		}[] = [];
 
+		inputs.forEach((input) => {
+			if (input.type === 'object' && typeof input.value === 'string') {
+				// The input is a string that we need to resolve to an object reference:
+				objectsToResolve.push({ id: input.value, input });
+				return;
+			}
+		});
+
 		transactions.forEach((transaction) => {
 			// Special case move call:
 			if (transaction.kind === 'MoveCall') {
@@ -602,55 +630,29 @@ export class TransactionBlock {
 				if (needsResolution) {
 					moveModulesToResolve.push(transaction);
 				}
-
-				return;
 			}
 
-			// Get the matching struct definition for the transaction, and use it to attempt to automatically
-			// encode the matching inputs.
-			const transactionType = getTransactionType(transaction);
-			if (!transactionType.schema) return;
-
-			Object.entries(transaction).forEach(([key, value]) => {
-				if (key === 'kind') return;
-				const keySchema = (transactionType.schema as any)[key];
-				const isArray = keySchema.type === 'array';
-				const wellKnownEncoding: WellKnownEncoding = isArray
-					? keySchema.schema[TRANSACTION_TYPE]
-					: keySchema[TRANSACTION_TYPE];
-
-				// This argument has unknown encoding, assume it must be fully-encoded:
-				if (!wellKnownEncoding) return;
-
-				const encodeInput = (index: number) => {
-					const input = inputs[index];
-					if (!input) {
-						throw new Error(`Missing input ${value.index}`);
+			// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
+			// This should only happen when transaction block data was hydrated from an old version of the SDK
+			if (transaction.kind === 'SplitCoins') {
+				transaction.amounts.forEach((amount) => {
+					if (amount.kind === 'Input') {
+						const input = inputs[amount.index];
+						if (typeof input.value !== 'object') {
+							input.value = Inputs.Pure(bcs.U64.serialize(input.value));
+						}
 					}
+				});
+			}
 
-					// Input is fully resolved:
-					if (is(input.value, BuilderCallArg)) return;
-					if (wellKnownEncoding.kind === 'object' && typeof input.value === 'string') {
-						// The input is a string that we need to resolve to an object reference:
-						objectsToResolve.push({ id: input.value, input });
-					} else if (wellKnownEncoding.kind === 'pure') {
-						// Pure encoding, so construct BCS bytes:
-						input.value = Inputs.Pure(input.value, wellKnownEncoding.type);
-					} else {
-						throw new Error('Unexpected input format.');
+			if (transaction.kind === 'TransferObjects') {
+				if (transaction.address.kind === 'Input') {
+					const input = inputs[transaction.address.index];
+					if (typeof input.value !== 'object') {
+						input.value = Inputs.Pure(bcs.Address.serialize(input.value));
 					}
-				};
-
-				if (isArray) {
-					value.forEach((arrayItem: TransactionArgument) => {
-						if (arrayItem.kind !== 'Input') return;
-						encodeInput(arrayItem.index);
-					});
-				} else {
-					if (value.kind !== 'Input') return;
-					encodeInput(value.index);
 				}
-			});
+			}
 		});
 
 		if (moveModulesToResolve.length) {

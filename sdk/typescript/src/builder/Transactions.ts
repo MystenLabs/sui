@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS, fromB64 } from '@mysten/bcs';
+import { fromB64 } from '@mysten/bcs';
 import type { Infer, Struct } from 'superstruct';
 import {
 	any,
@@ -20,10 +20,11 @@ import {
 } from 'superstruct';
 
 import type { TypeTag } from '../bcs/index.js';
+import { bcs } from '../bcs/index.js';
 import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { WellKnownEncoding } from './utils.js';
-import { create, TRANSACTION_TYPE } from './utils.js';
+import { Inputs } from './Inputs.js';
+import { create } from './utils.js';
 
 const option = <T extends Struct<any, any>>(some: T) =>
 	union([object({ None: union([literal(true), literal(null)]) }), object({ Some: some })]);
@@ -61,16 +62,9 @@ export type TransactionArgument = Infer<typeof TransactionArgument>;
 
 // Transaction argument referring to an object:
 export const ObjectTransactionArgument = union([...TransactionArgumentTypes]);
-(ObjectTransactionArgument as any)[TRANSACTION_TYPE] = {
-	kind: 'object',
-} as WellKnownEncoding;
 
-export const PureTransactionArgument = (type: string) => {
+export const PureTransactionArgument = () => {
 	const struct = union([...TransactionArgumentTypes]);
-	(struct as any)[TRANSACTION_TYPE] = {
-		kind: 'pure',
-		type,
-	} as WellKnownEncoding;
 	return struct;
 };
 
@@ -85,14 +79,14 @@ export type MoveCallTransaction = Infer<typeof MoveCallTransaction>;
 export const TransferObjectsTransaction = object({
 	kind: literal('TransferObjects'),
 	objects: array(ObjectTransactionArgument),
-	address: PureTransactionArgument(BCS.ADDRESS),
+	address: PureTransactionArgument(),
 });
 export type TransferObjectsTransaction = Infer<typeof TransferObjectsTransaction>;
 
 export const SplitCoinsTransaction = object({
 	kind: literal('SplitCoins'),
 	coin: ObjectTransactionArgument,
-	amounts: array(PureTransactionArgument('u64')),
+	amounts: array(PureTransactionArgument()),
 });
 export type SplitCoinsTransaction = Infer<typeof SplitCoinsTransaction>;
 
@@ -181,10 +175,28 @@ export const Transactions = {
 		objects: TransactionArgument[],
 		address: TransactionArgument,
 	): TransferObjectsTransaction {
+		if (address.kind === 'Input' && address.type === 'pure' && typeof address.value !== 'object') {
+			address.value = Inputs.Pure(bcs.Address.serialize(address.value));
+		}
+
 		return create({ kind: 'TransferObjects', objects, address }, TransferObjectsTransaction);
 	},
 	SplitCoins(coin: TransactionArgument, amounts: TransactionArgument[]): SplitCoinsTransaction {
-		return create({ kind: 'SplitCoins', coin, amounts }, SplitCoinsTransaction);
+		// Handle deprecated usage of `Input.Pure(100)`
+		amounts.forEach((input) => {
+			if (input.kind === 'Input' && input.type === 'pure' && typeof input.value !== 'object') {
+				input.value = Inputs.Pure(bcs.U64.serialize(input.value));
+			}
+		});
+
+		return create(
+			{
+				kind: 'SplitCoins',
+				coin,
+				amounts,
+			},
+			SplitCoinsTransaction,
+		);
 	},
 	MergeCoins(
 		destination: TransactionArgument,

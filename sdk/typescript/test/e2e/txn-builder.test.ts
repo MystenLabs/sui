@@ -66,7 +66,7 @@ describe('Transaction Builders', () => {
 		const coin_0 = coins[0].data as SuiObjectData;
 		const coin_1 = coins[1].data as SuiObjectData;
 		const tx = new TransactionBlock();
-		tx.mergeCoins(tx.object(coin_0.objectId), [tx.object(coin_1.objectId)]);
+		tx.mergeCoins(coin_0.objectId, [coin_1.objectId]);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
@@ -126,7 +126,7 @@ describe('Transaction Builders', () => {
 		const tx = new TransactionBlock();
 		const coin_0 = coins[2].data as SuiObjectData;
 
-		tx.transferObjects([tx.object(coin_0.objectId)], DEFAULT_RECIPIENT);
+		tx.transferObjects([coin_0.objectId], DEFAULT_RECIPIENT);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
