@@ -34,7 +34,7 @@ use self::{
     validator::ValidatorValidateMetadataBcsCostParams,
 };
 use crate::crypto::zklogin;
-use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssCostParams};
+use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -142,7 +142,7 @@ pub struct NativesCostTable {
 
     // zklogin
     pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
-    pub check_zklogin_iss_cost_params: CheckZkloginIssCostParams,
+    pub check_zklogin_issuer_cost_params: CheckZkloginIssuerCostParams,
 
     // Receive object
     pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
@@ -493,9 +493,9 @@ impl NativesCostTable {
                     .check_zklogin_id_cost_base_as_option()
                     .map(Into::into),
             },
-            check_zklogin_iss_cost_params: CheckZkloginIssCostParams {
-                check_zklogin_iss_cost_base: protocol_config
-                    .check_zklogin_iss_cost_base_as_option()
+            check_zklogin_issuer_cost_params: CheckZkloginIssuerCostParams {
+                check_zklogin_issuer_cost_base: protocol_config
+                    .check_zklogin_issuer_cost_base_as_option()
                     .map(Into::into),
             },
         }
@@ -701,9 +701,9 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(zklogin::check_zklogin_id_internal),
         ),
         (
-            "zklogin_verified_iss",
-            "check_zklogin_iss_internal",
-            make_native!(zklogin::check_zklogin_iss_internal),
+            "zklogin_verified_issuer",
+            "check_zklogin_issuer_internal",
+            make_native!(zklogin::check_zklogin_issuer_internal),
         ),
     ];
 

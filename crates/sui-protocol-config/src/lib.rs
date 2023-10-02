@@ -764,8 +764,8 @@ pub struct ProtocolConfig {
 
     // zklogin::check_zklogin_id
     check_zklogin_id_cost_base: Option<u64>,
-    // zklogin::check_zklogin_iss
-    check_zklogin_iss_cost_base: Option<u64>,
+    // zklogin::check_zklogin_issuer
+    check_zklogin_issuer_cost_base: Option<u64>,
 
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
@@ -1290,8 +1290,8 @@ impl ProtocolConfig {
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
-            // zklogin::check_zklogin_iss
-            check_zklogin_iss_cost_base: None,
+            // zklogin::check_zklogin_issuer
+            check_zklogin_issuer_cost_base: None,
 
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
@@ -1503,8 +1503,8 @@ impl ProtocolConfig {
 
                     // zklogin::check_zklogin_id
                     cfg.check_zklogin_id_cost_base = Some(200);
-                    // zklogin::check_zklogin_iss
-                    cfg.check_zklogin_iss_cost_base = Some(200);
+                    // zklogin::check_zklogin_issuer
+                    cfg.check_zklogin_issuer_cost_base = Some(200);
                 }
                 // Use this template when making changes:
                 //

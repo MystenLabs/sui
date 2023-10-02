@@ -29,10 +29,10 @@ pub struct CheckZkloginIdCostParams {
  *
  * Implementation of the Move native function `zklogin_verified_id::check_zklogin_id_internal(
  *      address: address,
- *      kc_name: &vector<u8>,
- *      kc_value: &vector<u8>,
- *      iss: &vector<u8>,
- *      aud: &vector<u8>,
+ *      key_claim_name: &vector<u8>,
+ *      key_claim_value: &vector<u8>,
+ *      issuer: &vector<u8>,
+ *      audience: &vector<u8>,
  *      pin_hash: u256
  *  ): bool;`
  *
@@ -69,26 +69,26 @@ pub fn check_zklogin_id_internal(
     let pin_hash = pop_arg!(args, U256);
 
     // The audience (wallet) id
-    let aud = pop_arg!(args, VectorRef);
+    let audience = pop_arg!(args, VectorRef);
 
     // The issuer (identity provider) id
-    let iss = pop_arg!(args, VectorRef);
+    let issuer = pop_arg!(args, VectorRef);
 
     // The claim value (sub, email, etc)
-    let kc_value = pop_arg!(args, VectorRef);
+    let key_claim_value = pop_arg!(args, VectorRef);
 
     // The claim name (sub, email, etc)
-    let kc_name = pop_arg!(args, VectorRef);
+    let key_claim_name = pop_arg!(args, VectorRef);
 
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
     let result = check_id_internal(
         &address,
-        &kc_name.as_bytes_ref(),
-        &kc_value.as_bytes_ref(),
-        &aud.as_bytes_ref(),
-        &iss.as_bytes_ref(),
+        &key_claim_name.as_bytes_ref(),
+        &key_claim_value.as_bytes_ref(),
+        &audience.as_bytes_ref(),
+        &issuer.as_bytes_ref(),
         &pin_hash,
     );
 
@@ -103,18 +103,18 @@ pub fn check_zklogin_id_internal(
 
 fn check_id_internal(
     address: &AccountAddress,
-    kc_name: &[u8],
-    kc_value: &[u8],
-    aud: &[u8],
-    iss: &[u8],
+    key_claim_name: &[u8],
+    key_claim_value: &[u8],
+    audience: &[u8],
+    issuer: &[u8],
     pin_hash: &U256,
 ) -> Result<bool, FastCryptoError> {
     match fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_id(
         &address.into_bytes(),
-        std::str::from_utf8(kc_name).map_err(|_| FastCryptoError::InvalidInput)?,
-        std::str::from_utf8(kc_value).map_err(|_| FastCryptoError::InvalidInput)?,
-        std::str::from_utf8(aud).map_err(|_| FastCryptoError::InvalidInput)?,
-        std::str::from_utf8(iss).map_err(|_| FastCryptoError::InvalidInput)?,
+        std::str::from_utf8(key_claim_name).map_err(|_| FastCryptoError::InvalidInput)?,
+        std::str::from_utf8(key_claim_value).map_err(|_| FastCryptoError::InvalidInput)?,
+        std::str::from_utf8(audience).map_err(|_| FastCryptoError::InvalidInput)?,
+        std::str::from_utf8(issuer).map_err(|_| FastCryptoError::InvalidInput)?,
         &pin_hash.to_string(),
     ) {
         Ok(_) => Ok(true),
@@ -124,43 +124,43 @@ fn check_id_internal(
 }
 
 #[derive(Clone)]
-pub struct CheckZkloginIssCostParams {
-    /// Base cost for invoking the `check_zklogin_iss` function
-    pub check_zklogin_iss_cost_base: Option<InternalGas>,
+pub struct CheckZkloginIssuerCostParams {
+    /// Base cost for invoking the `check_zklogin_issuer` function
+    pub check_zklogin_issuer_cost_base: Option<InternalGas>,
 }
 
 /***************************************************************************************************
- * native fun check_zklogin_iss_internal
+ * native fun check_zklogin_issuer_internal
  *
- * Implementation of the Move native function `zklogin_verified_iss::check_zklogin_iss_internal(
+ * Implementation of the Move native function `zklogin_verified_issuer::check_zklogin_issuer_internal(
  *      address: address,
  *      address_seed: u256,
- *      iss: &vector<u8>,
+ *      issuer: &vector<u8>,
  *  ): bool;`
  *
- * Gas cost: check_zklogin_iss_cost | The iss value is hashed as part of this function, but its size
+ * Gas cost: check_zklogin_issuer_cost | The iss value is hashed as part of this function, but its size
  * is bounded from above so we may assume that the cost is constant.
  **************************************************************************************************/
-pub fn check_zklogin_iss_internal(
+pub fn check_zklogin_issuer_internal(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     // Load the cost parameters from the protocol config
-    let check_zklogin_id_cost_params = &context
+    let check_zklogin_issuer_cost_params = &context
         .extensions()
         .get::<NativesCostTable>()
-        .check_zklogin_iss_cost_params
+        .check_zklogin_issuer_cost_params
         .clone();
 
     // Charge the base cost for this operation
     native_charge_gas_early_exit!(
         context,
-        check_zklogin_id_cost_params
-            .check_zklogin_iss_cost_base
+        check_zklogin_issuer_cost_params
+            .check_zklogin_issuer_cost_base
             .ok_or_else(
                 || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for check_zklogin_iss not available".to_string())
+                    .with_message("Gas cost for check_zklogin_issuer not available".to_string())
             )?
     );
 
@@ -168,7 +168,7 @@ pub fn check_zklogin_iss_internal(
     debug_assert!(args.len() == 3);
 
     // The issuer (identity provider) id
-    let iss = pop_arg!(args, VectorRef);
+    let issuer = pop_arg!(args, VectorRef);
 
     // The audience (wallet) id
     let address_seed = pop_arg!(args, U256);
@@ -176,7 +176,7 @@ pub fn check_zklogin_iss_internal(
     // The address to check
     let address = pop_arg!(args, AccountAddress);
 
-    let result = check_iss_internal(&address, &address_seed, &iss.as_bytes_ref());
+    let result = check_issuer_internal(&address, &address_seed, &issuer.as_bytes_ref());
 
     match result {
         Ok(result) => Ok(NativeResult::ok(
@@ -187,15 +187,15 @@ pub fn check_zklogin_iss_internal(
     }
 }
 
-fn check_iss_internal(
+fn check_issuer_internal(
     address: &AccountAddress,
     address_seed: &U256,
-    iss: &[u8],
+    issuer: &[u8],
 ) -> Result<bool, FastCryptoError> {
     match fastcrypto_zkp::bn254::zk_login_api::verify_zk_login_iss(
         &address.into_bytes(),
         &address_seed.to_string(),
-        std::str::from_utf8(iss).map_err(|_| FastCryptoError::InvalidInput)?,
+        std::str::from_utf8(issuer).map_err(|_| FastCryptoError::InvalidInput)?,
     ) {
         Ok(_) => Ok(true),
         Err(FastCryptoError::InvalidProof) => Ok(false),

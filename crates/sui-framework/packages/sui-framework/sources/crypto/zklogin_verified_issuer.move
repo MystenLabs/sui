@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module sui::zklogin_verified_iss {
+module sui::zklogin_verified_issuer {
     use std::string::String;
     use sui::object;
     use sui::object::UID;
@@ -22,7 +22,7 @@ module sui::zklogin_verified_iss {
         /// The address this VerifiedID is associated with
         owner: address,
         /// The issuer
-        iss: String,
+        issuer: String,
     }
 
     /// Returns the address associated with the given VerifiedIssuer
@@ -31,38 +31,38 @@ module sui::zklogin_verified_iss {
     }
 
     /// Returns the issuer associated with the given VerifiedIssuer
-    public fun iss(verified_issuer: &VerifiedIssuer): &String {
-        &verified_issuer.iss
+    public fun issuer(verified_issuer: &VerifiedIssuer): &String {
+        &verified_issuer.issuer
     }
 
     /// Verify that the caller's address was created using zklogin with the given issuer. If so, a VerifiedIssuer object
     /// with the issuers id returned.
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
-    public fun verify_zklogin_iss(
+    public fun verify_zklogin_issuer(
         address_seed: u256,
-        iss: String,
+        issuer: String,
         ctx: &mut TxContext,
     ): VerifiedIssuer {
-        assert!(check_zklogin_iss(tx_context::sender(ctx), address_seed, &iss), EInvalidProof);
-        VerifiedIssuer {id: object::new(ctx), owner: tx_context::sender(ctx), iss}
+        assert!(check_zklogin_issuer(tx_context::sender(ctx), address_seed, &issuer), EInvalidProof);
+        VerifiedIssuer {id: object::new(ctx), owner: tx_context::sender(ctx), issuer}
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.
-    public fun check_zklogin_iss(
+    public fun check_zklogin_issuer(
         address: address,
         address_seed: u256,
-        iss: &String,
+        issuer: &String,
     ): bool {
-        check_zklogin_iss_internal(address, address_seed, std::string::bytes(iss))
+        check_zklogin_issuer_internal(address, address_seed, std::string::bytes(issuer))
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.
     ///
     /// Aborts with `EInvalidInput` if the `iss` input is not a valid UTF-8 string.
-    native fun check_zklogin_iss_internal(
+    native fun check_zklogin_issuer_internal(
         address: address,
         address_seed: u256,
-        iss: &vector<u8>,
+        issuer: &vector<u8>,
     ): bool;
 }

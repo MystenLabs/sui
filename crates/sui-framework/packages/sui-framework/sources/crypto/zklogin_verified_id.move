@@ -21,13 +21,13 @@ module sui::zklogin_verified_id {
         /// The address this VerifiedID is associated with
         owner: address,
         /// The name of the key claim
-        kc_name: String,
+        key_claim_name: String,
         /// The value of the key claim
-        kc_value: String,
+        key_claim_value: String,
         /// The issuer
-        iss: String,
+        issuer: String,
         /// The audience (wallet)
-        aud: String,
+        audience: String,
     }
 
     /// Returns the address associated with the given VerifiedID
@@ -36,23 +36,23 @@ module sui::zklogin_verified_id {
     }
 
     /// Returns the name of the key claim associated with the given VerifiedID
-    public fun kc_name(verified_id: &VerifiedID): &String {
-        &verified_id.kc_name
+    public fun key_claim_name(verified_id: &VerifiedID): &String {
+        &verified_id.key_claim_name
     }
 
     /// Returns the value of the key claim associated with the given VerifiedID
-    public fun kc_value(verified_id: &VerifiedID): &String {
-        &verified_id.kc_value
+    public fun key_claim_value(verified_id: &VerifiedID): &String {
+        &verified_id.key_claim_value
     }
 
     /// Returns the issuer associated with the given VerifiedID
-    public fun iss(verified_id: &VerifiedID): &String {
-        &verified_id.iss
+    public fun issuer(verified_id: &VerifiedID): &String {
+        &verified_id.issuer
     }
 
     /// Returns the audience (wallet) associated with the given VerifiedID
-    public fun aud(verified_id: &VerifiedID): &String {
-        &verified_id.aud
+    public fun audience(verified_id: &VerifiedID): &String {
+        &verified_id.audience
     }
 
     /// Verify that the caller's address was created using zklogin and the given parametersand returns a `VerifiedID`
@@ -63,15 +63,15 @@ module sui::zklogin_verified_id {
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
     public fun verify_zklogin_id(
-        kc_name: String,
-        kc_value: String,
-        iss: String,
-        aud: String,
+        key_claim_name: String,
+        key_claim_value: String,
+        issuer: String,
+        audience: String,
         pin_hash: u256,
         ctx: &mut TxContext,
     ): VerifiedID {
-        assert!(check_zklogin_id(tx_context::sender(ctx), &kc_name, &kc_value, &iss, &aud, pin_hash), EInvalidProof);
-        VerifiedID { id: object::new(ctx), owner: tx_context::sender(ctx), kc_name, kc_value, iss, aud}
+        assert!(check_zklogin_id(tx_context::sender(ctx), &key_claim_name, &key_claim_value, &issuer, &audience, pin_hash), EInvalidProof);
+        VerifiedID { id: object::new(ctx), owner: tx_context::sender(ctx), key_claim_name, key_claim_value, issuer, audience}
     }
 
     /// Returns true if `address` was created using zklogin and the given parameters.
@@ -80,18 +80,18 @@ module sui::zklogin_verified_id {
     /// most 32 characters, `kc_value` must be at most 115 characters and `aud` must be at most 145 characters.
     public fun check_zklogin_id(
         address: address,
-        kc_name: &String,
-        kc_value: &String,
-        iss: &String,
-        aud: &String,
+        key_claim_name: &String,
+        key_claim_value: &String,
+        issuer: &String,
+        audience: &String,
         pin_hash: u256
     ): bool {
         check_zklogin_id_internal(
             address,
-            std::string::bytes(kc_name),
-            std::string::bytes(kc_value),
-            std::string::bytes(iss),
-            std::string::bytes(aud),
+            std::string::bytes(key_claim_name),
+            std::string::bytes(key_claim_value),
+            std::string::bytes(issuer),
+            std::string::bytes(audience),
             pin_hash
         )
     }
@@ -103,10 +103,10 @@ module sui::zklogin_verified_id {
     /// `kc_value` must be at most 115 characters and `aud` must be at most 145 characters.
     native fun check_zklogin_id_internal(
         address: address,
-        kc_name: &vector<u8>,
-        kc_value: &vector<u8>,
-        iss: &vector<u8>,
-        aud: &vector<u8>,
+        key_claim_name: &vector<u8>,
+        key_claim_value: &vector<u8>,
+        issuer: &vector<u8>,
+        audience: &vector<u8>,
         pin_hash: u256
     ): bool;
 }
