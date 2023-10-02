@@ -1041,6 +1041,7 @@ impl AuthorityStore {
             loaded_child_objects: _,
             no_extraneous_module_bytes: _,
             runtime_packages_loaded_from_db: _,
+            runtime_read_objects: _,
         } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");

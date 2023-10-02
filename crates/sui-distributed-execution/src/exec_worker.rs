@@ -1,5 +1,5 @@
 use core::panic;
-use std::collections::{HashSet, HashMap, VecDeque, BTreeMap};
+use std::collections::{HashSet, HashMap, BTreeMap};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
 use move_vm_runtime::move_vm::MoveVM;
@@ -21,10 +21,11 @@ use sui_types::object::Object;
 use sui_types::temporary_store::TemporaryStore;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::effects::TransactionEffects;
 use sui_move_natives;
 use move_bytecode_utils::module_cache::GetModule;
 use tokio::sync::mpsc;
+use sui_types::gas::{SuiGasStatus, GasCharger};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
 
@@ -348,7 +349,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 temporary_store,
                 kind,
                 signer,
-                &gas,
+                &mut gas_charger,
                 txid,
                 transaction_dependencies,
                 &move_vm,
@@ -499,7 +500,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     
                     let full_tx = &tx_with_results.full_tx;
                     if full_tx.checkpoint_seq % 10_000 == 0 {
-                        println!("EW executed {}", full_tx.checkpoint_seq);
+                        println!("EW {} executed {}", ew_id, full_tx.checkpoint_seq);
                     }
 
                     // 1. Critical check: are the effects the same?
@@ -692,10 +693,10 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
                     num_tx += 1;
                     if full_tx.checkpoint_seq % 10_000 == 0 {
-                        println!("EW executed {}", full_tx.checkpoint_seq);
+                        println!("EW {} executed {}", ew_id, full_tx.checkpoint_seq);
                     }
 
-                    println!("EW END OF EPOCH at checkpoint {}", full_tx.checkpoint_seq);
+                    println!("EW {} END OF EPOCH at checkpoint {}", ew_id, full_tx.checkpoint_seq);
                     (move_vm, protocol_config, epoch_data, reference_gas_price) = 
                         self.process_epoch_change(&sw_sender, &mut sw_receiver).await;
                 } else {

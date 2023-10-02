@@ -48,7 +48,17 @@ async fn main() {
     let args = Args::parse();
     let config = NodeConfig::load(&args.config_path).unwrap();
     let genesis = Arc::new(config.genesis().expect("Could not load genesis"));
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(&config).await;
+    let sw_attrs = HashMap::from([
+        (
+            "config".to_string(),
+            args.config_path.to_string_lossy().into_owned(),
+        ),
+        ("download".to_string(), args.download.to_string()),
+        ("execute".to_string(), args.download.to_string()),
+    ]);
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, sw_attrs).await;
+    println!("Download watermark: {:?}", sw_state.download);
+    println!("Execute watermark: {:?}", sw_state.execute);
 
     // Channels from SW to EWs
     let mut sw2ew_senders = Vec::with_capacity(NUM_EXECUTION_WORKERS);
@@ -65,33 +75,32 @@ async fn main() {
 
     // Run Execution Workers
     let mut ew_handlers = Vec::new();
-    if let Some(watermark) = args.execute {
-        for i in 0..NUM_EXECUTION_WORKERS {
-            let store = DashMemoryBackedStore::new();
-            let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
-            ew_state.init_store(&genesis);
-            let metrics = sw_state.metrics.clone();
 
-            let ew2sw_sender = ew2sw_sender.clone();
-            let ew2ew_receiver = ew2ew_receivers[i].take().unwrap();
-            let ew2ew_senders = ew2ew_senders.clone();
-            let (sender, receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
-            sw2ew_senders.push(sender);
+    for i in 0..NUM_EXECUTION_WORKERS {
+        let store = DashMemoryBackedStore::new();
+        let mut ew_state = exec_worker::ExecutionWorkerState::new(store);
+        ew_state.init_store(&genesis);
+        let metrics = sw_state.metrics.clone();
 
-            ew_handlers.push(tokio::spawn(async move {
-                ew_state
-                    .run(
-                        metrics,
-                        watermark,
-                        receiver,
-                        ew2sw_sender,
-                        ew2ew_receiver,
-                        ew2ew_senders,
-                        i as u8,
-                    )
-                    .await;
-            }));
-        }
+        let ew2sw_sender = ew2sw_sender.clone();
+        let ew2ew_receiver = ew2ew_receivers[i].take().unwrap();
+        let ew2ew_senders = ew2ew_senders.clone();
+        let (sender, receiver) = mpsc::channel(DEFAULT_CHANNEL_SIZE);
+        sw2ew_senders.push(sender);
+
+        ew_handlers.push(tokio::spawn(async move {
+            ew_state
+                .run(
+                    metrics,
+                    args.execute,
+                    receiver,
+                    ew2sw_sender,
+                    ew2ew_receiver,
+                    ew2ew_senders,
+                    i as u8,
+                )
+                .await;
+        }));
     }
 
     // Run Sequence Worker asynchronously

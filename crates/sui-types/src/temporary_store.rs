@@ -57,6 +57,7 @@ pub struct InnerTemporaryStore {
     pub events: TransactionEvents,
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
+    pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
     pub runtime_read_objects: HashSet<ObjectID>,
 }
 
@@ -187,6 +188,7 @@ pub struct TemporaryStore<'backing> {
     protocol_config: ProtocolConfig,
 
     // Every object that was read from store during exec
+    runtime_packages_loaded_from_db: RwLock<BTreeMap<ObjectID, Object>>,
     runtime_read_objects: RwLock<HashSet<ObjectID>>,
 }
 
@@ -214,6 +216,7 @@ impl<'backing> TemporaryStore<'backing> {
             events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
+            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             runtime_read_objects: RwLock::new(HashSet::new()),
         }
     }
@@ -245,6 +248,7 @@ impl<'backing> TemporaryStore<'backing> {
             events: Vec::new(),
             protocol_config: protocol_config.clone(),
             loaded_child_objects: BTreeMap::new(),
+            runtime_packages_loaded_from_db: RwLock::new(BTreeMap::new()),
             runtime_read_objects: RwLock::new(HashSet::new()),
         }
     }
@@ -325,6 +329,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .map(|(id, metadata)| (id, metadata.version))
                 .collect(),
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
+            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
             runtime_read_objects: self.runtime_read_objects.into_inner(),
         }
     }
@@ -1150,7 +1155,8 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
             Ok(Some(obj.clone()))
         } else {
             self.runtime_read_objects.write().insert(*child);
-            self.store.read_child_object(parent, child)
+            self.store
+                .read_child_object(parent, child, child_version_upper_bound)
         }
     }
 }
@@ -1184,8 +1190,21 @@ impl<'backing> Storage for TemporaryStore<'backing> {
 
 impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        self.runtime_read_objects.write().insert(*package_id);
-        self.store.get_package_object(package_id)
+        if let Some((obj, _)) = self.written.get(package_id) {
+            Ok(Some(obj.clone()))
+        } else {
+            self.store.get_package_object(package_id).map(|obj| {
+                // Track object but leave unchanged
+                if let Some(v) = obj.clone() {
+                    // TODO: Can this lock ever block execution?
+                    self.runtime_read_objects.write().insert(*package_id);
+                    self.runtime_packages_loaded_from_db
+                        .write()
+                        .insert(*package_id, v);
+                }
+                obj
+            })
+        }
     }
 }
 

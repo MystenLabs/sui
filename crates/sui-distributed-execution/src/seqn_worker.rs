@@ -2,13 +2,9 @@ use std::cmp;
 use std::sync::Arc;
 
 use prometheus::Registry;
-use std::cmp;
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::sync::Arc;
 use std::time::Instant;
 use sui_archival::reader::ArchiveReaderBalancer;
-use sui_config::NodeConfig;
 use sui_config::{Config, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -289,8 +285,8 @@ impl SequenceWorkerState {
     pub async fn run(
         &mut self,
         config: NodeConfig,
-        download: Option<u64>,
-        exeucte: Option<u64>,
+        download: u64,
+        execute: u64,
         sw_senders: Vec<mpsc::Sender<SailfishMessage>>,
         mut ew_receiver: mpsc::Receiver<SailfishMessage>,
     ) {
