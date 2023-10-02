@@ -122,7 +122,7 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>
             from_user: _,
         } => {
             if final_jumps.contains_key(target) {
-                *target = final_jumps[&target];
+                *target = final_jumps[target];
                 true
             } else {
                 false
@@ -135,11 +135,11 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>
         } => {
             let mut result = false;
             if final_jumps.contains_key(if_true) {
-                *if_true = final_jumps[&if_true];
+                *if_true = final_jumps[if_true];
                 result = true;
             }
             if final_jumps.contains_key(if_false) {
-                *if_false = final_jumps[&if_false];
+                *if_false = final_jumps[if_false];
                 result = true;
             }
             result

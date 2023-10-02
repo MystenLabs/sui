@@ -515,15 +515,15 @@ fn finalize_blocks(
 
     let mut block_info: Vec<(Label, BlockInfo)> = vec![];
     for (lbl, _) in &blocks {
-        let info = match context.loop_bounds.get(&lbl) {
+        let info = match context.loop_bounds.get(lbl) {
             None => BlockInfo::Other,
             Some(LoopInfo {
                 is_loop_stmt,
                 loop_end,
             }) => {
                 let loop_end = match loop_end {
-                    G::LoopEnd::Target(end) if label_map.contains_key(&end) => {
-                        G::LoopEnd::Target(label_map[&end])
+                    G::LoopEnd::Target(end) if label_map.contains_key(end) => {
+                        G::LoopEnd::Target(label_map[end])
                     }
                     G::LoopEnd::Target(_) => G::LoopEnd::Unused,
                     G::LoopEnd::Unused => G::LoopEnd::Unused,
@@ -534,7 +534,7 @@ fn finalize_blocks(
                 })
             }
         };
-        block_info.push((label_map[&lbl], info));
+        block_info.push((label_map[lbl], info));
     }
 
     let block_map: BasicBlocks = BTreeMap::from_iter(blocks.into_iter());
@@ -689,9 +689,8 @@ fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
 }
 
 fn dead_code_error(context: &mut Context, block: &BasicBlock) {
-    match build_dead_code_error(block) {
-        Some(diag) => context.env.add_diag(diag),
-        None => (),
+    if let Some(diag) = build_dead_code_error(block) {
+        context.env.add_diag(diag)
     }
 }
 

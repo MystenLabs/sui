@@ -289,7 +289,7 @@ fn dead_code_error(diags: &mut Diagnostics, block: &BasicBlock) {
 }
 
 pub fn build_dead_code_error(block: &BasicBlock) -> Option<Diagnostic> {
-    if block.len() < 1 {
+    if block.is_empty() {
         None
     } else {
         let first_command = block.front().unwrap();
