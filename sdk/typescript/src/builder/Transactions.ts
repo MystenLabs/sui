@@ -60,14 +60,6 @@ const TransactionArgumentTypes = [
 export const TransactionArgument = union([...TransactionArgumentTypes]);
 export type TransactionArgument = Infer<typeof TransactionArgument>;
 
-// Transaction argument referring to an object:
-export const ObjectTransactionArgument = union([...TransactionArgumentTypes]);
-
-export const PureTransactionArgument = () => {
-	const struct = union([...TransactionArgumentTypes]);
-	return struct;
-};
-
 export const MoveCallTransaction = object({
 	kind: literal('MoveCall'),
 	target: define<`${string}::${string}::${string}`>('target', string().validator),
@@ -78,22 +70,22 @@ export type MoveCallTransaction = Infer<typeof MoveCallTransaction>;
 
 export const TransferObjectsTransaction = object({
 	kind: literal('TransferObjects'),
-	objects: array(ObjectTransactionArgument),
-	address: PureTransactionArgument(),
+	objects: array(TransactionArgument),
+	address: TransactionArgument,
 });
 export type TransferObjectsTransaction = Infer<typeof TransferObjectsTransaction>;
 
 export const SplitCoinsTransaction = object({
 	kind: literal('SplitCoins'),
-	coin: ObjectTransactionArgument,
-	amounts: array(PureTransactionArgument()),
+	coin: TransactionArgument,
+	amounts: array(TransactionArgument),
 });
 export type SplitCoinsTransaction = Infer<typeof SplitCoinsTransaction>;
 
 export const MergeCoinsTransaction = object({
 	kind: literal('MergeCoins'),
-	destination: ObjectTransactionArgument,
-	sources: array(ObjectTransactionArgument),
+	destination: TransactionArgument,
+	sources: array(TransactionArgument),
 });
 export type MergeCoinsTransaction = Infer<typeof MergeCoinsTransaction>;
 
@@ -105,7 +97,7 @@ export const MakeMoveVecTransaction = object({
 	type: optional(option(record(string(), unknown()))) as never as Struct<
 		{ Some: TypeTag } | { None: true | null }
 	>,
-	objects: array(ObjectTransactionArgument),
+	objects: array(TransactionArgument),
 });
 export type MakeMoveVecTransaction = Infer<typeof MakeMoveVecTransaction>;
 
@@ -129,7 +121,7 @@ export const UpgradeTransaction = object({
 	modules: array(array(integer())),
 	dependencies: array(string()),
 	packageId: string(),
-	ticket: ObjectTransactionArgument,
+	ticket: TransactionArgument,
 });
 export type UpgradeTransaction = Infer<typeof UpgradeTransaction>;
 

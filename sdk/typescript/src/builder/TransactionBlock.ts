@@ -17,7 +17,7 @@ import {
 	getObjectReference,
 	SuiObjectRef,
 } from '../types/index.js';
-import { normalizeSuiObjectId } from '../utils/sui-types.js';
+import { normalizeSuiAddress, normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { ObjectCallArg } from './Inputs.js';
 import {
 	BuilderCallArg,
@@ -299,7 +299,10 @@ export class TransactionBlock {
 		const inserted = this.#blockData.inputs.find(
 			(i) => i.type === 'object' && id === getIdFromCallArg(i.value),
 		) as Extract<TransactionArgument, { type?: 'object' }> | undefined;
-		return inserted ?? this.#input('object', value);
+		return (
+			inserted ??
+			this.#input('object', typeof value === 'string' ? normalizeSuiAddress(value) : value)
+		);
 	}
 
 	/**
@@ -612,7 +615,7 @@ export class TransactionBlock {
 		inputs.forEach((input) => {
 			if (input.type === 'object' && typeof input.value === 'string') {
 				// The input is a string that we need to resolve to an object reference:
-				objectsToResolve.push({ id: input.value, input });
+				objectsToResolve.push({ id: normalizeSuiAddress(input.value), input });
 				return;
 			}
 		});
