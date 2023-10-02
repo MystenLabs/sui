@@ -391,7 +391,9 @@ pub async fn watch_for_upgrades(
     loop {
         let result = subscription.next().await;
         match result {
-            None => continue, // connection lost?
+            None => {
+                bail!("WebSocket connection lost while listening for upgrades. Killing server.")
+            }
             Some(result) => {
                 info!("Saw upgrade txn: {:?}", result);
                 let mut state = app_state.write().unwrap();
