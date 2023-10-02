@@ -104,6 +104,7 @@ diesel::table! {
         balance_changes -> Array<Nullable<Bytea>>,
         events -> Array<Nullable<Bytea>>,
         transaction_kind -> Int2,
+        transaction_success -> Nullable<Bool>,
     }
 }
 

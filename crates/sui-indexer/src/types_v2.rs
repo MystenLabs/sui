@@ -293,8 +293,8 @@ impl IndexedObject {
             let struct_tag_string = struct_tag.to_string();
             // if struct_tag_string.contains("game_8192::Game8192")
             //     || struct_tag_string.contains("game_8192::GameMove8192")
-            // Before fully synced, skip object json
-            if true {
+            // always parse json
+            if false {
                 (None, Some(struct_tag_string))
             } else {
                 let move_object = object.data.try_as_move().unwrap();

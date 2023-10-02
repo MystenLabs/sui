@@ -10,6 +10,7 @@ use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
@@ -33,6 +34,7 @@ pub struct StoredTransaction {
     pub balance_changes: Vec<Option<Vec<u8>>>,
     pub events: Vec<Option<Vec<u8>>>,
     pub transaction_kind: i16,
+    pub transaction_success: Option<bool>,
 }
 
 impl From<&IndexedTransaction> for StoredTransaction {
@@ -60,6 +62,8 @@ impl From<&IndexedTransaction> for StoredTransaction {
                 .collect(),
             transaction_kind: tx.transaction_kind.clone() as i16,
             timestamp_ms: tx.timestamp_ms as i64,
+            // Some() because we don't backfill old rows
+            transaction_success: Some(tx.effects.status().is_ok()),
         }
     }
 }
