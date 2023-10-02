@@ -58,7 +58,7 @@ warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:18:9
    │
 18 │         return { 1 } && false;
-   │         ^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │         ^^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -66,7 +66,7 @@ warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:18:9
    │
 18 │         return { 1 } && false;
-   │         ^^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │         ^^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -82,7 +82,7 @@ warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:23:9
    │
 23 │         abort { 1 } && false;
-   │         ^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
+   │         ^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
@@ -90,7 +90,7 @@ warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/parser/control_exp_associativity_unreachable_code.move:23:9
    │
 23 │         abort { 1 } && false;
-   │         ^^^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+   │         ^^^^^^^^^^^ Unreachable code. This statement (and any following statements) will not be executed.
    │
    = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
