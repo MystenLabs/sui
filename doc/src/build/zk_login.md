@@ -75,28 +75,15 @@ npm install @mysten/zklogin
 
 Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
 
-In Devnet and Testnet, a dev-use only client ID is provided below. These URLs can be used with the `redirect_uri` set to `https://zklogin-dev-redirect.vercel.app/api/auth`, which will use the `state` parameter to issue a redirect to your application.
-
-| Provider | Dev-Use Only Client ID |
-| ----------- | ----------- |
-| Google | 25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com |
-| Facebook | 233307156352917 |
-| Twitch | rs1bh065i9ya4ydvifixl4kss0uhpt |
-
-
-For example, the following TypeScript code can be used in Devnet and Testnet to construct a login URL for testing.
+For example, the following TypeScript code can be used to construct a login URL for testing.
 
 ```typescript
 const REDIRECT_URI = '<YOUR_SITE_URL>';
 
 const params = new URLSearchParams({
-   // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
-   state: new URLSearchParams({
-      redirect_uri: REDIRECT_URI
-   }).toString(),
-   // Test Client ID for devnet / testnet:
-   client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
-   redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
+   // See below for how to configure client ID and redirect URL
+   client_id: $CLIENT_ID,
+   redirect_uri: $REDIRECT_URL,
    response_type: 'id_token',
    scope: 'openid',
    // See below for details about generation of the nonce
@@ -106,7 +93,7 @@ const params = new URLSearchParams({
 const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 ```
 
-In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
+You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
 
 ### Google
 
@@ -183,13 +170,13 @@ The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce`
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
 1. Client Side:
-   - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
-   - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
+   - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
+   - Option 2: Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
 2. Backend service that exposes an endpoint that returns a unique salt for each user consistently.
-   - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
-   - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
+   - Option 3: Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
+   - Option 4: Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
+Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you wish to use the Mysten ran salt server, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 ```bash
 curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
@@ -215,9 +202,7 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service (the endpoint is currently experimental and only available in devnet).
-
-Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
+Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 ```bash
 curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
