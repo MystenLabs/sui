@@ -19,30 +19,31 @@ import { WalletList } from './wallet-list/WalletList.js';
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
 type ConnectModalProps = {
-	trigger: ReactNode;
+	trigger: NonNullable<ReactNode>;
 };
 
 export function ConnectModal({ trigger }: ConnectModalProps) {
-	const [isConnectModalOpen, setConnectModalOpen] = useState(false);
+	const [isModalOpen, setModalOpen] = useState(false);
 	const [currentView, setCurrentView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
 	const { mutate, isError } = useConnectWallet();
-
-	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
-		setCurrentView('connection-status');
-		mutate({ wallet }, { onSuccess: () => setConnectModalOpen(false) });
-	};
 
 	const resetSelection = () => {
 		setSelectedWallet(undefined);
 		setCurrentView(undefined);
 	};
 
-	const onOpenChange = (open: boolean) => {
-		if (!open) {
-			resetSelection();
-		}
-		setConnectModalOpen(open);
+	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
+		setCurrentView('connection-status');
+		mutate(
+			{ wallet },
+			{
+				onSuccess: () => {
+					resetSelection();
+					setModalOpen(false);
+				},
+			},
+		);
 	};
 
 	let modalContent: ReactNode | undefined;
@@ -67,8 +68,16 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 	}
 
 	return (
-		<Dialog.Root open={isConnectModalOpen} onOpenChange={onOpenChange}>
-			<Dialog.Trigger className={styles.triggerButton}>{trigger}</Dialog.Trigger>
+		<Dialog.Root
+			open={isModalOpen}
+			onOpenChange={(open: boolean) => {
+				if (!open) {
+					resetSelection();
+				}
+				setModalOpen(open);
+			}}
+		>
+			<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 			<Dialog.Portal>
 				<Dialog.Overlay className={styles.overlay} />
 				<Dialog.Content className={styles.content} aria-describedby={undefined}>

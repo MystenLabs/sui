@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ConnectButton, ConnectModal, WalletProvider } from '@mysten/dapp-kit';
 import clsx from 'clsx';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { AccountsCardGraph } from '~/components/AccountCardGraph';
 import { Activity } from '~/components/Activity';
@@ -25,6 +26,13 @@ const TRANSACTIONS_LIMIT = 25;
 function Home() {
 	const [network] = useNetwork();
 	const isSuiTokenCardEnabled = network === Network.MAINNET;
+
+	const [isModalOpen, setModalOpen] = useState(false);
+
+	useEffect(() => {
+		setModalOpen(true);
+	}, []);
+
 	return (
 		<PageLayout
 			gradient={{
@@ -34,7 +42,23 @@ function Home() {
 						className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
 					>
 						<div style={{ gridArea: 'network' }} className="overflow-hidden">
-							<OnTheNetwork />
+							<WalletProvider>
+								<ConnectModal trigger={<div>plz click</div>} />
+
+								{/* <ConnectModal
+									trigger={<div>plz click</div>}
+									open={isModalOpen}
+									onOpenChange={setModalOpen}
+								/> */}
+
+								{/* <ConnectModal trigger={<div>plz click</div>} defaultOpen /> */}
+
+								{/* <ConnectModal
+									trigger={<div>plz click</div>}
+									open={isModalOpen}
+									onOpenChange={setModalOpen}
+								/> */}
+							</WalletProvider>
 						</div>
 						<div style={{ gridArea: 'epoch' }}>
 							<CurrentEpoch />
