@@ -177,6 +177,7 @@ async fn print_and_start_benchmark() -> &'static Instant {
 }
 
 pub struct BenchWorker {
+    pub id: u64,
     pub target_qps: u64,
     pub payload: Vec<Box<dyn Payload>>,
     pub proxy: Arc<dyn ValidatorProxy + Send + Sync>,
@@ -230,6 +231,7 @@ impl BenchDriver {
     }
     pub async fn make_workers(
         &self,
+        id: &mut u64,
         workload_info: &WorkloadInfo,
         proxy: Arc<dyn ValidatorProxy + Sync + Send>,
         system_state_observer: Arc<SystemStateObserver>,
@@ -250,6 +252,7 @@ impl BenchDriver {
                 let chunk_size = payloads.len() / total_workers as usize;
                 let remaining = payloads.split_off(chunk_size);
                 workers.push(BenchWorker {
+                    id: *id,
                     target_qps,
                     payload: payloads,
                     proxy: proxy.clone(),
@@ -258,6 +261,7 @@ impl BenchDriver {
                 });
                 payloads = remaining;
                 qps -= target_qps;
+                *id += 1;
             }
             total_workers -= 1;
         }
@@ -293,13 +297,20 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         let (stress_stat_tx, mut stress_stat_rx) = tokio::sync::mpsc::channel(100);
         let mut bench_workers = vec![];
+
+        let mut worker_id = 0;
         for workload in workloads.iter() {
             let proxy = proxies
                 .choose(&mut rand::thread_rng())
                 .context("Failed to get proxy for bench driver")?;
             bench_workers.extend(
-                self.make_workers(workload, proxy.clone(), system_state_observer.clone())
-                    .await,
+                self.make_workers(
+                    &mut worker_id,
+                    workload,
+                    proxy.clone(),
+                    system_state_observer.clone(),
+                )
+                .await,
             );
         }
         let num_workers = bench_workers.len() as u64;
@@ -322,12 +333,12 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         */
 
         // group the workload by the group id and order them in a list
-        let mut groupped_bench_workers: BTreeMap<u32, Vec<(usize, BenchWorker)>> = BTreeMap::new();
-        for (id, worker) in bench_workers.into_iter().enumerate() {
+        let mut groupped_bench_workers: BTreeMap<u32, Vec<BenchWorker>> = BTreeMap::new();
+        for worker in bench_workers.into_iter() {
             groupped_bench_workers
                 .entry(worker.group)
                 .or_default()
-                .push((id, worker));
+                .push(worker);
         }
 
         let cloned_token = self.token.clone();
@@ -342,14 +353,18 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
             check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
 
             //let mut futures: FuturesUnordered<BoxFuture<NextOp>> = FuturesUnordered::new();
-            let mut running_workers: JoinSet<()> = JoinSet::new();
-            let mut groupped_bench_workers_iter = groupped_bench_workers.into_iter();
+            let mut running_workers: JoinSet<BenchWorker> = JoinSet::new();
 
             // Set the total benchmark start time
             let total_benchmark_start_time = print_and_start_benchmark().await;
 
+            let mut all_workers = VecDeque::new();
+            for workers in groupped_bench_workers {
+                all_workers.push_back(workers.1);
+            }
+
             // Initially boostrap the tasks from group 0
-            if let Some((_, workers)) = groupped_bench_workers_iter.next() {
+            if let Some(workers) = all_workers.pop_front() {
                 info!("Spawning workers {} for group 0", workers.len());
                 let futures = spawn_bench_workers(
                     workers,
@@ -371,6 +386,8 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 return;
             }
 
+            let mut finished_workers = Vec::new();
+
             loop {
                 tokio::select! {
                         _ = cloned_token.cancelled() => {
@@ -378,16 +395,25 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                         },
                         // Consume the next running worker that has been finished. When all finished
                         // be ready to spin up the next workers - if not total benchmark already finished.
-                        Some(_) = running_workers.join_next() => {
+                        Some(result) = running_workers.join_next() => {
                             if total_benchmark_progress_cloned.is_finished() {
                                 info!("Benchmark finished, now exiting the scheduler loop");
                                 break;
                             }
 
+                            let worker = result.expect("Worker tasks should shutdown gracefully");
+
+                            finished_workers.push(worker);
+
                             // If workers have all finished, then we can progress to the next group run, if
                             // any exists
                             if running_workers.is_empty() {
-                                if let Some((_, workers)) = groupped_bench_workers_iter.next() {
+                                all_workers.push_back(finished_workers);
+
+                                finished_workers = Vec::new();
+
+                                // cycle through the workers set
+                                if let Some(workers) = all_workers.pop_front() {
                                     info!("Spawning additional workers {} for group 0", workers.len());
                                     let futures = spawn_bench_workers(
                                         workers,
@@ -566,7 +592,7 @@ fn create_progress_bar(duration: Interval) -> ProgressBar {
 }
 
 async fn spawn_bench_workers(
-    workers: Vec<(usize, BenchWorker)>,
+    workers: Vec<BenchWorker>,
     metrics: Arc<BenchMetrics>,
     tx: Sender<Stats>,
     token: CancellationToken,
@@ -574,19 +600,18 @@ async fn spawn_bench_workers(
     total_benchmark_progress: Arc<ProgressBar>,
     total_benchmark_run_interval: Interval,
     total_benchmark_start_time: Instant,
-) -> Vec<impl Future<Output = ()>> {
+) -> Vec<impl Future<Output = BenchWorker>> {
     // create a barrier to be used for all the spawned workers.
     let barrier = Arc::new(Barrier::new(workers.len()));
     let mut progress_bar = None;
     let mut futures = vec![];
-    for (id, worker) in workers {
+    for worker in workers {
         if progress_bar.as_ref().is_none() {
             progress_bar = Some(Arc::new(create_progress_bar(worker.duration)));
             info!("Created benchmark group for duration: {}", worker.duration);
         }
 
         let f = run_bench_worker(
-            id,
             barrier.clone(),
             metrics.clone(),
             tx.clone(),
@@ -606,7 +631,6 @@ async fn spawn_bench_workers(
 }
 
 async fn run_bench_worker(
-    worker_id: usize,
     barrier: Arc<Barrier>,
     metrics_cloned: Arc<BenchMetrics>,
     tx_cloned: Sender<Stats>,
@@ -617,7 +641,7 @@ async fn run_bench_worker(
     total_benchmark_progress: Arc<ProgressBar>,
     total_benchmark_run_interval: Interval,
     total_benchmark_start_time: Instant,
-) {
+) -> BenchWorker {
     // Waiting until all the tasks have been spawn , so we can coordinate the traffic and timing.
     barrier.wait().await;
     let group_benchmark_start_time = Instant::now();
@@ -652,7 +676,7 @@ async fn run_bench_worker(
             _ = stat_interval.tick() => {
                 if tx_cloned
                     .try_send(Stats {
-                        id: worker_id,
+                        id: worker.id as usize,
                         num_no_gas,
                         num_in_flight,
                         num_submitted,
@@ -783,7 +807,11 @@ async fn run_bench_worker(
 
                                 // let auth_sign_info = AuthorityStrongQuorumSignInfo::try_from(&cert.auth_sign_info).unwrap();
                                 // auth_sign_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_tx_cert.with_label_values(&[&name.unwrap().to_string()]).inc());
-                                if let Some(sig_info) = effects.quorum_sig() { sig_info.authorities(&committee_cloned).for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc()) }
+                                if let Some(sig_info) = effects.quorum_sig() {
+                                    sig_info
+                                    .authorities(&committee_cloned)
+                                    .for_each(|name| metrics_cloned.validators_in_effects_cert.with_label_values(&[&name.unwrap().to_string()]).inc())
+                                }
                                 payload.make_new_payload(&effects);
 
                                 NextOp::Response {latency,num_commands,payload, gas_used: effects.gas_used() }
@@ -842,7 +870,7 @@ async fn run_bench_worker(
     // send stats one last time
     if tx_cloned
         .try_send(Stats {
-            id: worker_id,
+            id: worker.id as usize,
             num_no_gas,
             num_in_flight,
             num_submitted,
@@ -860,6 +888,37 @@ async fn run_bench_worker(
         .is_err()
     {
         debug!("Failed to update stat!");
+    }
+
+    // Wait for futures to complete so we can get the remaining payloads
+    while let Some(result) = futures.next().await {
+        info!(
+            "Worker id {} waiting for tx complete {}",
+            worker.id,
+            futures.len()
+        );
+        let p = match result {
+            NextOp::Response {
+                latency: _,
+                num_commands: _,
+                gas_used: _,
+                payload,
+            } => payload,
+            NextOp::Retry(b) => b.1,
+        };
+        free_pool.push_back(p);
+    }
+
+    // Explicitly drop futures so we can move the worker
+    drop(futures);
+
+    BenchWorker {
+        id: worker.id,
+        target_qps: worker.target_qps,
+        payload: free_pool.into_iter().collect(),
+        proxy: worker.proxy,
+        group: worker.group,
+        duration: worker.duration,
     }
 }
 
