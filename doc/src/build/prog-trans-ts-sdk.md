@@ -27,10 +27,10 @@ Using this, you can then add transactions to this transaction block.
 ```tsx
 // Create a new coin with balance 100, based on the coins used as gas payment.
 // You can define any balance here.
-const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
+const [coin] = txb.splitCoins(txb.gas, [100]);
 
 // Transfer the split coin to a specific address.
-txb.transferObjects([coin], txb.pure("0xSomeSuiAddress"));
+txb.transferObjects([coin], "0xSomeSuiAddress");
 ```
 
 Note that you can attach multiple transactions of the same type to a transaction block as well. For example, to get a list of transfers, and iterate over them to transfer coins to each of them:
@@ -49,12 +49,12 @@ const txb = new TransactionBlock();
 // First, split the gas coin into multiple coins:
 const coins = txb.splitCoins(
   txb.gas,
-  transfers.map((transfer) => txb.pure(transfer.amount))
+  transfers.map((transfer) => transfer.amount)
 );
 
 // Next, create a transfer transaction for each coin:
 transfers.forEach((transfer, index) => {
-  txb.transferObjects([coins[index]], txb.pure(transfer.to));
+  txb.transferObjects([coins[index]], transfer.to);
 });
 ```
 
@@ -84,13 +84,13 @@ Inputs are how you provide external values to transaction blocks. For example, d
 Sui supports following transactions:
 
 - `txb.splitCoins(coin, amounts)` - Creates new coins with the defined amounts, split from the provided coin. Returns the coins so that it can be used in subsequent transactions.
-  - Example: `txb.splitCoins(txb.gas, [txb.pure(100), txb.pure(200)])`
+  - Example: `txb.splitCoins(txb.gas, [100, 200])`
 - `txb.mergeCoins(destinationCoin, sourceCoins)` - Merges the sourceCoins into the destinationCoin.
   - Example: `txb.mergeCoins(txb.object(coin1), [txb.object(coin2), txb.object(coin3)])`
 - `txb.transferObjects(objects, address)` - Transfers a list of objects to the specified address.
-  - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], txb.pure(myAddress))`
+  - Example: `txb.transferObjects([txb.object(thing1), txb.object(thing2)], myAddress)`
 - `txb.moveCall({ target, arguments, typeArguments  })` - Executes a Move call. Returns whatever the Sui Move call returns.
-  - Example: `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure(name), txb.pure(description), txb.pure(image)] })`
+  - Example: `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure.string(name), txb.pure.string(description), txb.pure.string(image)] })`
 - `txb.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a `moveCall`. This is required as there’s no way to define a vector as an input.
   - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
 - `txb.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability object.
@@ -101,9 +101,9 @@ You can use the result of a transaction as an argument in a subsequent transacti
 
 ```tsx
 // Split a coin object off of the gas object:
-const [coin] = txb.splitCoins(txb.gas, [txb.pure(100)]);
+const [coin] = txb.splitCoins(txb.gas, [100]);
 // Transfer the resulting coin object:
-txb.transferObjects([coin], txb.pure(address));
+txb.transferObjects([coin], address);
 ```
 
 When a transaction returns multiple results, you can access the result at a specific index either using destructuring, or array indexes.
@@ -111,11 +111,11 @@ When a transaction returns multiple results, you can access the result at a spec
 ```tsx
 // Destructuring (preferred, as it gives you logical local names):
 const [nft1, nft2] = txb.moveCall({ target: "0x2::nft::mint_many" });
-txb.transferObjects([nft1, nft2], txb.pure(address));
+txb.transferObjects([nft1, nft2], address);
 
 // Array indexes:
 const mintMany = txb.moveCall({ target: "0x2::nft::mint_many" });
-txb.transferObjects([mintMany[0], mintMany[1]], txb.pure(address));
+txb.transferObjects([mintMany[0], mintMany[1]], address);
 ```
 
 ## Use the gas coin

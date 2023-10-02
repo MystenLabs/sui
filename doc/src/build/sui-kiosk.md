@@ -60,7 +60,7 @@ All of the above is effective immediately and globally.
 
 ## Sui Kiosk Guarantees
 
-Sui Kiosk provides a set of guarantees that Sui enforces through smart contracts. 
+Sui Kiosk provides a set of guarantees that Sui enforces through smart contracts.
 These guarantees include:
 * Every trade in Sui Kiosk requires a `TransferPolicy` resolution. This gives creators control over how their assets can be traded.
 * True Ownership, which means that only a kiosk owner can take, list, borrow, or modify the assets added to their kiosk. This is similar to how single-owner objects work on Sui.
@@ -96,7 +96,7 @@ import { createKioskAndShare } from '@mysten/kiosk';
 let tx = new TransactionBuilder();
 let kioskOwnerCap = createKioskAndShare(tx);
 
-tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
+tx.transferObjects([ kioskOwnerCap ], sender);
 ```
 
 ### Create a Kiosk using programmable transaction blocks
@@ -130,7 +130,7 @@ import { createKiosk } from '@mysten/kiosk';
 let tx = new TransactionBuilder();
 let [kiosk, kioskOwnerCap] = createKiosk(tx);
 
-tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
+tx.transferObjects([ kioskOwnerCap ], sender);
 tx.moveCall({
     target: '0x2::transfer::public_share_object',
     arguments: [ kiosk ],
@@ -146,7 +146,7 @@ let [kiosk, kioskOwnerCap] = tx.moveCall({
     target: '0x2::kiosk::new'
 });
 
-tx.transferObjects([ kioskOwnerCap ], tx.pure(sender, 'address'));
+tx.transferObjects([ kioskOwnerCap ], sender);
 tx.moveCall({
     target: '0x2::transfer::public_share_object',
     arguments: [ kiosk ],
@@ -158,7 +158,7 @@ tx.moveCall({
 
 Sui CLI does not support PTBs and transaction chaining yet. You can use the kiosk::default function instead.
 
-## Place items in and take items from your kiosk 
+## Place items in and take items from your kiosk
 
 As a Kiosk owner, you can place any assets into your Sui Kiosk. You can take any item from your kiosk that is not currently listed for sale.
 There's no limitations on which assets you can place in your kiosk. However, you can’t necessarily list and trade all of the items you place in your kiosk. The `TransferPolicy` associated with the type for the item determines whether you can trade it. To learn more, see the _Purchase items from a Kiosk_ section.
@@ -224,13 +224,13 @@ import { take } from '@mysten/kiosk';
 
 let tx = new TransactionBuilder();
 
-let itemId = tx.pure('<ITEM_ID>', 'address');
+let itemId = tx.pure.address('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let kioskOwnerCapArg = tx.object('<ID>');
 
 let item = take('<ITEM_TYPE>', kioskArg, kioskOwnerCapArg, itemId);
 
-tx.transferObjects([ item ], tx.pure(sender, 'address'));
+tx.transferObjects([ item ], sender);
 ```
 
 ### Take an item from a kiosk using programmable transaction blocks
@@ -238,7 +238,7 @@ tx.transferObjects([ item ], tx.pure(sender, 'address'));
 ```rust
 let tx = new TransactionBuilder();
 
-let itemId = tx.pure('<ITEM_ID>', 'address');
+let itemId = tx.pure.address('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let kioskOwnerCapArg = tx.object('<ID>');
 
@@ -261,7 +261,7 @@ To lock an asset in a kiosk, call the `sui::kiosk::lock` function. To ensure tha
 
 ### Lock an item in a kiosk
 
-When you use the lock `function`, similar to using the `place` function, you specify the `KioskOwnerCap` and the `Item` as arguments. But to lock the item you must also show the TransferPolicy. 
+When you use the lock `function`, similar to using the `place` function, you specify the `KioskOwnerCap` and the `Item` as arguments. But to lock the item you must also show the TransferPolicy.
 
 `<ITEM_TYPE>` in the following examples represents the full type of the asset.
 
@@ -331,7 +331,7 @@ import { list } from '@mysten/kiosk';
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure('<ID>', 'address');
+let itemId = tx.pure.address('<ID>');
 let itemType = 'ITEM_TYPE';
 let price = '<price>'; // in MIST (1 SUI = 10^9 MIST)
 
@@ -345,9 +345,9 @@ let tx = new TransactionBlock();
 
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure('<ID>', 'address');
+let itemId = tx.pure.address('<ID>');
 let itemType = 'ITEM_TYPE';
-let priceArg = tx.pure('<price>', 'u64'); // in MIST (1 SUI = 10^9 MIST)
+let priceArg = tx.pure.u64('<price>'); // in MIST (1 SUI = 10^9 MIST)
 
 tx.moveCall({
     target: '0x2::kiosk::list',
@@ -384,7 +384,7 @@ import { delist } from '@mysten/kiosk';
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure('<ID>', 'address');
+let itemId = tx.pure.address('<ID>');
 let itemType = 'ITEM_TYPE';
 
 delist(tx, itemType, kioskArg, capArg, itemId);
@@ -396,7 +396,7 @@ delist(tx, itemType, kioskArg, capArg, itemId);
 let tx = new TransactionBlock();
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
-let itemId = tx.pure('<ID>', 'address');
+let itemId = tx.pure.address('<ID>');
 let itemType = 'ITEM_TYPE';
 
 tx.moveCall({
@@ -422,7 +422,7 @@ sui client call \
 
 Anyone that has an address on the Sui network can purchase an item listed from a Sui Kiosk. To purchase an item, you can use the `kiosk::purchase` function. Specify the item to purchase and pay the list price set by the Kiosk Owner.
 
-You can discover the items listed on the network with the `kiosk::ItemListed` event. 
+You can discover the items listed on the network with the `kiosk::ItemListed` event.
 
 When you use the `kiosk::purchase` function, it returns the purchased asset and the `TransferRequest` for the type associated with the asset. To complete the purchase, you must meet the terms defined in the TransferPolicy applied to the asset. To learn more, see the TransferPolicy topic.
 
@@ -482,7 +482,7 @@ import { borrowValue, returnValue } from '@sui/kiosk-sdk';
 
 let tx = new TransactionBuilder();
 let itemType = 'ITEM_TYPE';
-let itemId = tx.pure('<ITEM_ID>', 'address');
+let itemId = tx.pure.address('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
 
@@ -501,7 +501,7 @@ returnValue(tx, itemType, kioskArg, item, promise);
 let tx = new TransactionBuilder();
 
 let itemType = 'ITEM_TYPE';
-let itemId = tx.pure('<ITEM_ID>', 'address');
+let itemId = tx.pure.address('<ITEM_ID>');
 let kioskArg = tx.object('<ID>');
 let capArg = tx.object('<ID>');
 
@@ -553,7 +553,7 @@ let capArg = tx.object('<ID>');
 // constructing is a bit more complex
 let amountArg = tx.moveCall({
     target: '0x1::option::some',
-    arguments: [ tx.pure('<amount>', 'u64') ],
+    arguments: [ tx.pure.u64('<amount>') ],
     typeArguments: [ 'u64' ],
 });
 
