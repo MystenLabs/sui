@@ -3,6 +3,7 @@
 
 mod constant_fold;
 mod eliminate_locals;
+mod forwarding_jumps;
 mod inline_blocks;
 mod simplify_jumps;
 
@@ -14,6 +15,7 @@ pub type Optimization =
 const OPTIMIZATIONS: &[Optimization] = &[
     eliminate_locals::optimize,
     constant_fold::optimize,
+    forwarding_jumps::optimize,
     simplify_jumps::optimize,
     inline_blocks::optimize,
 ];
