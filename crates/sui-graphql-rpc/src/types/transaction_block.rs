@@ -149,7 +149,7 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
         };
 
         Self {
-            // TODO: This is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
+            // TODO (wlmyng): To remove as this is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
             digest: Digest::from_array(tx_effects.transaction_digest().into_inner()),
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,
