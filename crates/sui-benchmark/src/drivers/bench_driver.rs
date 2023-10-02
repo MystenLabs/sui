@@ -494,6 +494,11 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     }
 }
 
+/// The workers scheduler is orchestrating the bench workers to run according to their group. Each
+/// group is running for a specific period/interval. Once finished then the next group of bench workers
+/// is picked up to run. The worker groups are cycled , so once the last group is run then we start
+/// again from the beginning. That allows running benchmarks with repeatable patterns across the whole
+/// benchmark duration.
 async fn spawn_workers_scheduler(
     bench_workers: Vec<BenchWorker>,
     cancellation_token: CancellationToken,
@@ -536,68 +541,68 @@ async fn spawn_workers_scheduler(
 
         loop {
             tokio::select! {
-                    _ = cancellation_token.cancelled() => {
+                _ = cancellation_token.cancelled() => {
+                    break;
+                },
+                // Consume the next running worker that has been finished. When all finished
+                // be ready to spin up the next workers - if not total benchmark already finished.
+                Some(result) = running_workers.join_next() => {
+                    if total_benchmark_progress_cloned.is_finished() {
+                        info!("Benchmark finished, now exiting the scheduler loop");
                         break;
-                    },
-                    // Consume the next running worker that has been finished. When all finished
-                    // be ready to spin up the next workers - if not total benchmark already finished.
-                    Some(result) = running_workers.join_next() => {
-                        if total_benchmark_progress_cloned.is_finished() {
-                            info!("Benchmark finished, now exiting the scheduler loop");
-                            break;
-                        }
-
-                        let worker = if let Some(worker) = result.expect("Worker tasks should shutdown gracefully") {
-                            worker
-                        } else {
-                            warn!("No worker returned by task - that means it has been cancelled and we are exiting.");
-                            return;
-                        };
-                        finished_workers.push(worker);
-
-                        // If workers have all finished, then we can progress to the next group run, if
-                        // any exists
-                        if running_workers.is_empty() {
-                            all_workers.push_back(finished_workers);
-
-                            finished_workers = Vec::new();
-
-                            // cycle through the workers set
-                            tx_workers_to_run.send(all_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
-                        }
-                    },
-                    // Next workers to run
-                    Some(workers) = rx_workers_to_run.recv() => {
-                        // clear up previous stats map by sending a special stat with MAX id
-                        let _ = tx_cloned.send(Stats {
-                                id: usize::MAX,
-                                ..Stats::default()
-                            }).await;
-
-                        let futures = spawn_bench_workers(
-                            workers,
-                            metrics_cloned.clone(),
-                            tx_cloned.clone(),
-                            cancellation_token.clone(),
-                            stat_delay_micros,
-                            total_benchmark_progress_cloned.clone(),
-                            total_benchmark_run_interval,
-                            *total_benchmark_start_time,
-                            total_benchmark_gas_used.clone()
-                        )
-                        .await;
-
-                        for f in futures {
-                            running_workers.spawn(f);
-                        }
-                    },
-                    // Check every now and then if the overall benchmark has been finished
-                    _ = check_interval.tick() => {
-                        if total_benchmark_progress_cloned.is_finished() {
-                            info!("Benchmark finished, now exiting the scheduler loop");
-                            break;
-                        }
                     }
+
+                    let worker = if let Some(worker) = result.expect("Worker tasks should shutdown gracefully") {
+                        worker
+                    } else {
+                        warn!("No worker returned by task - that means it has been cancelled and we are exiting.");
+                        return;
+                    };
+                    finished_workers.push(worker);
+
+                    // If workers have all finished, then we can progress to the next group run, if
+                    // any exists
+                    if running_workers.is_empty() {
+                        all_workers.push_back(finished_workers);
+
+                        finished_workers = Vec::new();
+
+                        // cycle through the workers set
+                        tx_workers_to_run.send(all_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
+                    }
+                },
+                // Next workers to run
+                Some(workers) = rx_workers_to_run.recv() => {
+                    // clear up previous stats map by sending a special stat with MAX id
+                    let _ = tx_cloned.send(Stats {
+                            id: usize::MAX,
+                            ..Stats::default()
+                        }).await;
+
+                    let futures = spawn_bench_workers(
+                        workers,
+                        metrics_cloned.clone(),
+                        tx_cloned.clone(),
+                        cancellation_token.clone(),
+                        stat_delay_micros,
+                        total_benchmark_progress_cloned.clone(),
+                        total_benchmark_run_interval,
+                        *total_benchmark_start_time,
+                        total_benchmark_gas_used.clone()
+                    )
+                    .await;
+
+                    for f in futures {
+                        running_workers.spawn(f);
+                    }
+                },
+                // Check every now and then if the overall benchmark has been finished
+                _ = check_interval.tick() => {
+                    if total_benchmark_progress_cloned.is_finished() {
+                        info!("Benchmark finished, now exiting the scheduler loop");
+                        break;
+                    }
+                }
             }
         }
     })
