@@ -30,7 +30,7 @@ impl WorkloadConfiguration {
         // Create the workload builders for each Run spec
         match opts.run_spec.clone() {
             RunSpec::Bench {
-                num_of_benchmarks,
+                num_of_benchmark_groups,
                 shared_counter,
                 transfer_object,
                 delegation,
@@ -45,9 +45,14 @@ impl WorkloadConfiguration {
                 in_flight_ratio,
                 duration,
             } => {
-                info!("Number of benchmarks to run: {}", num_of_benchmarks);
+                info!(
+                    "Number of benchmark groups to run: {}",
+                    num_of_benchmark_groups
+                );
 
-                for workload_group in 0..num_of_benchmarks {
+                // Creating the workload builders for each benchmark group. The workloads for each
+                // benchmark group will run in the same time for the same duration.
+                for workload_group in 0..num_of_benchmark_groups {
                     let i = workload_group as usize;
                     let builders = Self::create_workload_builders(
                         workload_group,
