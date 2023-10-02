@@ -390,9 +390,14 @@ pub async fn watch_for_upgrades(
     info!("Listening for upgrades...");
     loop {
         let result = subscription.next().await;
-        info!("Saw upgrade txn: {:?}", result);
-        let mut state = app_state.write().unwrap();
-        state.sources = NetworkLookup::new() // FIXME: invalidates all.
+        match result {
+            None => continue, // connection lost?
+            Some(result) => {
+                info!("Saw upgrade txn: {:?}", result);
+                let mut state = app_state.write().unwrap();
+                state.sources = NetworkLookup::new() // FIXME: invalidates all.
+            }
+        }
     }
 }
 
