@@ -74,7 +74,7 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
-        sui_protocol_config::ProtoqcolConfig::poison_get_for_min_version();
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 15).await;
     }
@@ -519,6 +519,14 @@ mod test {
             in_flight_ratio,
             duration,
             system_state_observer.clone(),
+        )
+        .await;
+
+        let workloads = WorkloadConfiguration::build(
+            workloads_builders,
+            bank,
+            system_state_observer.clone(),
+            gas_request_chunk_size,
         )
         .await
         .unwrap();
