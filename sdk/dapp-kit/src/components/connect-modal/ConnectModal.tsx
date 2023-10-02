@@ -18,12 +18,32 @@ import { WalletList } from './wallet-list/WalletList.js';
 
 type ConnectModalView = 'getting-started' | 'what-is-a-wallet' | 'connection-status';
 
-type ConnectModalProps = {
-	trigger: NonNullable<ReactNode>;
+type ControlledModalProps = {
+	/** The controlled open state of the dialog. */
+	open: boolean;
+
+	/** Event handler called when the open state of the dialog changes. */
+	onOpenChange: (open: boolean) => void;
+
+	defaultOpen?: never;
 };
 
-export function ConnectModal({ trigger }: ConnectModalProps) {
-	const [isModalOpen, setModalOpen] = useState(false);
+type UncontrolledModalProps = {
+	open?: never;
+
+	onOpenChange?: never;
+
+	/** The open state of the dialog when it is initially rendered. Use when you do not need to control its open state. */
+	defaultOpen?: boolean;
+};
+
+type ConnectModalProps = {
+	/** The trigger button that opens the dialog. */
+	trigger: NonNullable<ReactNode>;
+} & (ControlledModalProps | UncontrolledModalProps);
+
+export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: ConnectModalProps) {
+	const [isModalOpen, setModalOpen] = useState(open ?? defaultOpen);
 	const [currentView, setCurrentView] = useState<ConnectModalView>();
 	const [selectedWallet, setSelectedWallet] = useState<WalletWithRequiredFeatures>();
 	const { mutate, isError } = useConnectWallet();
@@ -33,15 +53,20 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 		setCurrentView(undefined);
 	};
 
+	const handleOpenChange = (open: boolean) => {
+		if (!open) {
+			resetSelection();
+		}
+		setModalOpen(open);
+		onOpenChange?.(open);
+	};
+
 	const connectWallet = (wallet: WalletWithRequiredFeatures) => {
 		setCurrentView('connection-status');
 		mutate(
 			{ wallet },
 			{
-				onSuccess: () => {
-					resetSelection();
-					setModalOpen(false);
-				},
+				onSuccess: () => handleOpenChange(false),
 			},
 		);
 	};
@@ -68,15 +93,7 @@ export function ConnectModal({ trigger }: ConnectModalProps) {
 	}
 
 	return (
-		<Dialog.Root
-			open={isModalOpen}
-			onOpenChange={(open: boolean) => {
-				if (!open) {
-					resetSelection();
-				}
-				setModalOpen(open);
-			}}
-		>
+		<Dialog.Root open={open ?? isModalOpen} onOpenChange={handleOpenChange}>
 			<Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
 			<Dialog.Portal>
 				<Dialog.Overlay className={styles.overlay} />
