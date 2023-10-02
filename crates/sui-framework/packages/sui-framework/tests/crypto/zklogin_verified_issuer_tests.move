@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::zklogin_verified_iss_tests {
+module sui::zklogin_verified_issuer_tests {
     use sui::zklogin_verified_issuer::check_zklogin_issuer;
     use sui::address;
     use std::string::utf8;

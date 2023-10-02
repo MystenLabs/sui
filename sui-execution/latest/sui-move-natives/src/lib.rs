@@ -706,7 +706,6 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(zklogin::check_zklogin_issuer_internal),
         ),
     ];
-
     let sui_framework_natives_iter =
         sui_framework_natives
             .iter()

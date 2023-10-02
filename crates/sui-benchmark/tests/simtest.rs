@@ -23,7 +23,9 @@ mod test {
     use sui_config::genesis::Genesis;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+    use sui_core::authority::framework_injection;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
+    use sui_framework::BuiltInFramework;
     use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::{configs::*, SimConfig};
@@ -346,34 +348,46 @@ mod test {
 
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
-
         let _handle = tokio::task::spawn(async move {
-            info!("Targeting protocol version: {}", starting_version);
-            test_cluster
-                .wait_for_all_nodes_upgrade_to(starting_version)
-                .await;
-            info!("All nodes are at protocol version: {}", starting_version);
-            // Let all nodes run for a few epochs at this version.
-            tokio::time::sleep(Duration::from_secs(50)).await;
-
-            let next_version = max_ver;
-
-            test_cluster
-                .update_validator_supported_versions(SupportedProtocolVersions::new_for_testing(
-                    starting_version,
-                    next_version,
-                ))
-                .await;
-
-            let stake_subsidy_start_epoch = test_cluster
-                .sui_client()
-                .governance_api()
-                .get_latest_sui_system_state()
-                .await
-                .unwrap()
-                .stake_subsidy_start_epoch;
-            assert_eq!(stake_subsidy_start_epoch, 20);
-
+            for version in starting_version..=max_ver {
+                info!("Targeting protocol version: {}", version);
+                test_cluster.wait_for_all_nodes_upgrade_to(version).await;
+                info!("All nodes are at protocol version: {}", version);
+                // Let all nodes run for a few epochs at this version.
+                tokio::time::sleep(Duration::from_secs(50)).await;
+                if version == max_ver {
+                    let stake_subsidy_start_epoch = test_cluster
+                        .sui_client()
+                        .governance_api()
+                        .get_latest_sui_system_state()
+                        .await
+                        .unwrap()
+                        .stake_subsidy_start_epoch;
+                    assert_eq!(stake_subsidy_start_epoch, 20);
+                    break;
+                }
+                let next_version = version + 1;
+                let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
+                let new_framework_ref: Vec<_> = match &new_framework {
+                    Ok(f) => f.iter().collect(),
+                    Err(_) => {
+                        // The only time where we could not load an existing snapshot is when
+                        // it's the next version to be pushed out, and hence we don't have a
+                        // snapshot yet. This must be the current max version.
+                        assert_eq!(next_version, max_ver);
+                        BuiltInFramework::iter_system_packages().collect()
+                    }
+                };
+                for package in new_framework_ref {
+                    framework_injection::set_override(*package.id(), package.modules().clone());
+                }
+                info!("Framework injected");
+                test_cluster
+                    .update_validator_supported_versions(
+                        SupportedProtocolVersions::new_for_testing(starting_version, next_version),
+                    )
+                    .await;
+            }
             finished_clone.store(true, Ordering::SeqCst);
         });
 
