@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS } from '@mysten/bcs';
+import type { InferBcsInput } from '@mysten/bcs';
+import { bcs } from '@mysten/bcs';
 
-import { bcsRegistry } from '../bcs/index.js';
-
-export const zkLoginBcs = new BCS(bcsRegistry);
-
-zkLoginBcs.registerStructType('ZkLoginSignature', {
-	inputs: {
-		proofPoints: {
-			a: [BCS.VECTOR, BCS.STRING],
-			b: [BCS.VECTOR, [BCS.VECTOR, BCS.STRING]],
-			c: [BCS.VECTOR, BCS.STRING],
-		},
-		issBase64Details: {
-			value: BCS.STRING,
-			indexMod4: BCS.U8,
-		},
-		headerBase64: BCS.STRING,
-		addressSeed: BCS.STRING,
-	},
-	maxEpoch: BCS.U64,
-	userSignature: [BCS.VECTOR, BCS.U8],
+export const zkLoginSignature = bcs.struct('ZkLoginSignature', {
+	inputs: bcs.struct('ZkLoginSignatureInputs', {
+		proofPoints: bcs.struct('ZkLoginSignatureInputsProofPoints', {
+			a: bcs.vector(bcs.string()),
+			b: bcs.vector(bcs.vector(bcs.string())),
+			c: bcs.vector(bcs.string()),
+		}),
+		issBase64Details: bcs.struct('ZkLoginSignatureInputsClaim', {
+			value: bcs.string(),
+			indexMod4: bcs.u8(),
+		}),
+		headerBase64: bcs.string(),
+		addressSeed: bcs.string(),
+	}),
+	maxEpoch: bcs.u64(),
+	userSignature: bcs.vector(bcs.u8()),
 });
+
+export type ZkLoginSignature = InferBcsInput<typeof zkLoginSignature>;
+export type ZkLoginSignatureInputs = ZkLoginSignature['inputs'];

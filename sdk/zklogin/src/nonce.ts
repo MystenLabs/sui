@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PublicKey } from '@mysten/sui.js/cryptography';
-import { toBufferBE } from '@mysten/sui.js/zklogin';
+import { toBigEndianBytes } from '@mysten/sui.js/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
@@ -21,7 +21,7 @@ export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness
 	const eph_public_key_0 = publicKeyBytes / 2n ** 128n;
 	const eph_public_key_1 = publicKeyBytes % 2n ** 128n;
 	const bigNum = poseidonHash([eph_public_key_0, eph_public_key_1, maxEpoch, randomness]);
-	const Z = toBufferBE(bigNum, 20);
+	const Z = toBigEndianBytes(bigNum, 20);
 	const nonce = base64url.encode(Z);
 	if (nonce.length !== NONCE_LENGTH) {
 		throw new Error(`Length of nonce ${nonce} (${nonce.length}) is not equal to ${NONCE_LENGTH}`);

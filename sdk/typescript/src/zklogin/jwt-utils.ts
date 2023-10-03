@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { Claim } from './types.js';
-
-export function base64UrlCharTo6Bits(base64UrlChar: string): number[] {
+function base64UrlCharTo6Bits(base64UrlChar: string): number[] {
 	if (base64UrlChar.length !== 1) {
 		throw new Error('Invalid base64Url character: ' + base64UrlChar);
 	}
@@ -27,7 +25,7 @@ export function base64UrlCharTo6Bits(base64UrlChar: string): number[] {
 	return bits;
 }
 
-export function base64UrlStringToBitVector(base64UrlString: string) {
+function base64UrlStringToBitVector(base64UrlString: string) {
 	let bitVector: number[] = [];
 	for (let i = 0; i < base64UrlString.length; i++) {
 		const base64UrlChar = base64UrlString.charAt(i);
@@ -37,7 +35,7 @@ export function base64UrlStringToBitVector(base64UrlString: string) {
 	return bitVector;
 }
 
-export function decodeBase64URL(s: string, i: number): string {
+function decodeBase64URL(s: string, i: number): string {
 	if (s.length < 2) {
 		throw new Error(`Input (s = ${s}) is not tightly packed because s.length < 2`);
 	}
@@ -73,15 +71,16 @@ export function decodeBase64URL(s: string, i: number): string {
 		throw new Error(`We should never reach here...`);
 	}
 
-	const bytes = [];
+	const bytes = new Uint8Array(Math.floor(bits.length / 8));
+	let currentByteIndex = 0;
 	for (let i = 0; i < bits.length; i += 8) {
 		const bitChunk = bits.slice(i, i + 8);
 
 		// Convert the 8-bit chunk to a byte and add it to the bytes array
 		const byte = parseInt(bitChunk.join(''), 2);
-		bytes.push(byte);
+		bytes[currentByteIndex++] = byte;
 	}
-	return new TextDecoder().decode(new Uint8Array(bytes));
+	return new TextDecoder().decode(bytes);
 }
 
 function verifyExtendedClaim(claim: string) {
@@ -98,6 +97,11 @@ function verifyExtendedClaim(claim: string) {
 	const key = Object.keys(json)[0];
 	return [key, json[key]];
 }
+
+export type Claim = {
+	value: string;
+	indexMod4: number;
+};
 
 export function extractClaimValue<R>(claim: Claim, claimName: string): R {
 	const extendedClaim = decodeBase64URL(claim.value, claim.indexMod4);

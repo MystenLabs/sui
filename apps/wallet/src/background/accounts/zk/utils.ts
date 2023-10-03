@@ -4,7 +4,7 @@
 import { fetchWithSentry } from '_src/shared/utils';
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce, generateRandomness, type ZkSignatureInputs } from '@mysten/zklogin';
+import { generateNonce, generateRandomness, type getZkLoginSignature } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
@@ -130,7 +130,10 @@ type WalletInputs = {
 	keyClaimName?: 'sub' | 'email';
 };
 
-export type PartialZkSignature = Omit<ZkSignatureInputs, 'addressSeed'>;
+export type PartialZkSignature = Omit<
+	Parameters<typeof getZkLoginSignature>['0']['inputs'],
+	'addressSeed'
+>;
 
 const zkProofsServerUrl = 'https://prover.mystenlabs.com/v1';
 
