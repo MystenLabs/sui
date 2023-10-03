@@ -494,7 +494,8 @@ fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut dead_code_error = None;
 
     for stmt in stmts.into_iter().rev() {
-        let (new_current, new_blocks, new_dead_code_error) = statement(context, stmt, current_block);
+        let (new_current, new_blocks, new_dead_code_error) =
+            statement(context, stmt, current_block);
         blocks = new_blocks.into_iter().chain(blocks.into_iter()).collect();
         current_block = new_current;
         if new_dead_code_error.is_some() {
@@ -668,17 +669,28 @@ fn statement(
         S::Command(sp!(cloc, C::Break)) => {
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
-            (VecDeque::from([break_jump]), vec![], build_dead_code_error(&current_block))
+            (
+                VecDeque::from([break_jump]),
+                vec![],
+                build_dead_code_error(&current_block),
+            )
         }
         S::Command(sp!(cloc, C::Continue)) => {
             // Discard the current block because it's dead code.
-            let jump = 
-                make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
-            (VecDeque::from([jump]), vec![], build_dead_code_error(&current_block))
+            let jump = make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
+            (
+                VecDeque::from([jump]),
+                vec![],
+                build_dead_code_error(&current_block),
+            )
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
-            (VecDeque::from([cmd]), vec![], build_dead_code_error(&current_block) )
+            (
+                VecDeque::from([cmd]),
+                vec![],
+                build_dead_code_error(&current_block),
+            )
         }
         S::Command(cmd) => {
             current_block.push_front(cmd);

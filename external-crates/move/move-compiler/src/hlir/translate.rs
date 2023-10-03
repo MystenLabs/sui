@@ -936,8 +936,8 @@ fn value(
     expected_type: Option<&H::Type>,
     e: T::Exp,
 ) -> Option<H::Exp> {
-    use T::UnannotatedExp_ as E;
     use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
+    use T::UnannotatedExp_ as E;
 
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
