@@ -253,6 +253,14 @@ ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
         TYPENAME: Digest
+EffectsObjectChange:
+  STRUCT:
+    - input_state:
+        TYPENAME: ObjectIn
+    - output_state:
+        TYPENAME: ObjectOut
+    - id_operation:
+        TYPENAME: IDOperation
 EmptySignInfo:
   STRUCT: []
 EndOfEpochData:
@@ -452,6 +460,14 @@ GenesisTransaction:
     - objects:
         SEQ:
           TYPENAME: GenesisObject
+IDOperation:
+  ENUM:
+    0:
+      None: UNIT
+    1:
+      Created: UNIT
+    2:
+      Deleted: UNIT
 Identifier:
   NEWTYPESTRUCT: STR
 Intent:
@@ -637,6 +653,18 @@ ObjectDigest:
 ObjectID:
   NEWTYPESTRUCT:
     TYPENAME: AccountAddress
+ObjectIn:
+  ENUM:
+    0:
+      NotExist: UNIT
+    1:
+      Exist:
+        NEWTYPE:
+          TUPLE:
+            - TUPLE:
+                - TYPENAME: SequenceNumber
+                - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
 ObjectInfoRequestKind:
   ENUM:
     0:
@@ -645,6 +673,22 @@ ObjectInfoRequestKind:
       PastObjectInfoDebug:
         NEWTYPE:
           TYPENAME: SequenceNumber
+ObjectOut:
+  ENUM:
+    0:
+      NotExist: UNIT
+    1:
+      ObjectWrite:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: ObjectDigest
+            - TYPENAME: Owner
+    2:
+      PackageWrite:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
 Owner:
   ENUM:
     0:
@@ -790,6 +834,10 @@ TransactionEffects:
       V1:
         NEWTYPE:
           TYPENAME: TransactionEffectsV1
+    1:
+      V2:
+        NEWTYPE:
+          TYPENAME: TransactionEffectsV2
 TransactionEffectsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -868,6 +916,38 @@ TransactionEffectsV1:
     - dependencies:
         SEQ:
           TYPENAME: TransactionDigest
+TransactionEffectsV2:
+  STRUCT:
+    - status:
+        TYPENAME: ExecutionStatus
+    - executed_epoch: U64
+    - gas_used:
+        TYPENAME: GasCostSummary
+    - transaction_digest:
+        TYPENAME: TransactionDigest
+    - gas_object_index:
+        OPTION: U32
+    - events_digest:
+        OPTION:
+          TYPENAME: TransactionEventsDigest
+    - dependencies:
+        SEQ:
+          TYPENAME: TransactionDigest
+    - lamport_version:
+        TYPENAME: SequenceNumber
+    - changed_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: EffectsObjectChange
+    - unchanged_shared_objects:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: UnchangedSharedKind
+    - aux_data_digest:
+        OPTION:
+          TYPENAME: Digest
 TransactionEventsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -962,6 +1042,14 @@ TypedStoreError:
       MetricsReporting: UNIT
     5:
       RetryableTransactionError: UNIT
+UnchangedSharedKind:
+  ENUM:
+    0:
+      ReadOnlyRoot:
+        NEWTYPE:
+          TUPLE:
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
 UpgradeInfo:
   STRUCT:
     - upgraded_id:
