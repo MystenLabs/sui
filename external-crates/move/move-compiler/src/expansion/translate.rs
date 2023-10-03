@@ -18,6 +18,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -36,6 +37,7 @@ type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 struct Context<'env, 'map> {
     module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     named_address_mapping: Option<&'map NamedAddressMap>,
+    address_conflicts: BTreeSet<Symbol>,
     address: Option<Address>,
     aliases: AliasMap,
     is_source_definition: bool,
@@ -52,6 +54,7 @@ impl<'env, 'map> Context<'env, 'map> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
+        address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut all_filter_alls = WarningFilters::new_for_dependency();
         for allow in compilation_env.filter_attributes() {
@@ -63,6 +66,7 @@ impl<'env, 'map> Context<'env, 'map> {
             module_members,
             env: compilation_env,
             named_address_mapping: None,
+            address_conflicts,
             address: None,
             aliases: AliasMap::new(),
             is_source_definition: false,
@@ -122,6 +126,40 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 }
 
+/// We mark named addresses as having a conflict if there is not a bidirectional mapping between
+/// the name and its value
+fn compute_address_conflicts(
+    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    prog: &P::Program,
+) -> BTreeSet<Symbol> {
+    let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
+    let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
+    let all_addrs = prog.named_address_maps.all().iter().chain(
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre| pre.parser.named_address_maps.all()),
+    );
+    for map in all_addrs {
+        for (n, addr) in map {
+            let n = *n;
+            let addr = addr.into_inner();
+            name_to_addr.entry(n).or_default().insert(addr);
+            addr_to_name.entry(addr).or_default().insert(n);
+        }
+    }
+    let name_to_addr_conflicts = name_to_addr
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .map(|(n, _)| n);
+    let addr_to_name_conflicts = addr_to_name
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .flat_map(|(_, ns)| ns.into_iter());
+    name_to_addr_conflicts
+        .chain(addr_to_name_conflicts)
+        .collect()
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -131,10 +169,12 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: P::Program,
 ) -> E::Program {
+    let address_conflicts = compute_address_conflicts(pre_compiled_lib, &prog);
     let module_members = {
         let mut members = UniqueMap::new();
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -142,6 +182,7 @@ pub fn program(
         );
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -151,6 +192,7 @@ pub fn program(
             assert!(pre_compiled.parser.lib_definitions.is_empty());
             all_module_members(
                 compilation_env,
+                &address_conflicts,
                 &pre_compiled.parser.named_address_maps,
                 &mut members,
                 false,
@@ -160,7 +202,7 @@ pub fn program(
         members
     };
 
-    let mut context = Context::new(compilation_env, module_members);
+    let mut context = Context::new(compilation_env, module_members, address_conflicts);
 
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
@@ -296,6 +338,7 @@ fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) ->
 fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameAccess) -> Address {
     address_(
         context.env,
+        &context.address_conflicts,
         context.named_address_mapping.as_ref().unwrap(),
         suggest_declaration,
         ln,
@@ -304,6 +347,7 @@ fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameA
 
 fn address_(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_address_mapping: &NamedAddressMap,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
@@ -312,11 +356,15 @@ fn address_(
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res.is_ok()); //
-            Address::Numerical(None, sp(loc, bytes))
+            debug_assert!(name_res.is_ok());
+            Address::anonymous(loc, bytes)
         }
         P::LeadingNameAccess_::Name(n) => match named_address_mapping.get(&n.value).copied() {
-            Some(addr) => Address::Numerical(Some(n), sp(loc, addr)),
+            Some(addr) => Address::Numerical {
+                name: Some(n),
+                value: sp(loc, addr),
+                name_conflict: address_conflicts.contains(&n.value),
+            },
             None => {
                 if name_res.is_ok() {
                     compilation_env.add_diag(address_without_value_error(
@@ -416,7 +464,7 @@ fn set_sender_address(
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidModule, (loc, msg)));
-            Address::Numerical(None, sp(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
+            Address::anonymous(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS)
         }
     })
 }
@@ -801,7 +849,7 @@ fn attribute_value(
         match avalue_ {
             PV::Value(v) => EV::Value(value(context, v)?),
             PV::ModuleAccess(sp!(ident_loc, PN::Two(sp!(aloc, LN::AnonymousAddress(a)), n))) => {
-                let addr = Address::Numerical(None, sp(aloc, a));
+                let addr = Address::anonymous(aloc, a);
                 let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n)));
                 if context.module_members.get(&mident).is_none() {
                     context.env.add_diag(diag!(
@@ -940,6 +988,7 @@ fn warning_filter(
 
 fn all_module_members<'a>(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
     always_add: bool,
@@ -958,21 +1007,21 @@ fn all_module_members<'a>(
                     Some(a) => {
                         address_(
                             compilation_env,
+                            address_conflicts,
                             named_addr_map,
                             /* suggest_declaration */ true,
                             *a,
                         )
                     }
                     // Error will be handled when the module is compiled
-                    None => {
-                        Address::Numerical(None, sp(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
-                    }
+                    None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
                 module_members(members, always_add, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = address_(
                     compilation_env,
+                    address_conflicts,
                     named_addr_map,
                     /* suggest_declaration */ false,
                     addr_def.addr,

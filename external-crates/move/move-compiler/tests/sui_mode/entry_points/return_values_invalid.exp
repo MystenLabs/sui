@@ -20,7 +20,7 @@ error[Sui E02002]: invalid 'entry' function signature
 13 │     struct Copyable has copy, store {}
    │            -------- To satisfy the constraint, the 'drop' ability would need to be added here
 14 │     public entry fun t3(): Copyable {
-   │            ^^^^^           -------- The type '(a=0x42)::m::Copyable' does not have the ability 'drop'
+   │            ^^^^^           -------- The type 'a::m::Copyable' does not have the ability 'drop'
    │            │                
    │            Invalid return type for entry function 't3'
 
@@ -30,7 +30,7 @@ error[Sui E02002]: invalid 'entry' function signature
 17 │     struct Obj has key, store { id: sui::object::UID }
    │            --- To satisfy the constraint, the 'drop' ability would need to be added here
 18 │     public entry fun t4(): Obj {
-   │            ^^^^^           --- The type '(a=0x42)::m::Obj' does not have the ability 'drop'
+   │            ^^^^^           --- The type 'a::m::Obj' does not have the ability 'drop'
    │            │                
    │            Invalid return type for entry function 't4'
 
@@ -40,7 +40,7 @@ error[Sui E02002]: invalid 'entry' function signature
 21 │     public entry fun t5(): vector<Obj> {
    │            ^^^^^           -----------
    │            │               │      │
-   │            │               │      The type 'vector<(a=0x42)::m::Obj>' can have the ability 'drop' but the type argument '(a=0x42)::m::Obj' does not have the required ability 'drop'
-   │            │               The type 'vector<(a=0x42)::m::Obj>' does not have the ability 'drop'
+   │            │               │      The type 'vector<a::m::Obj>' can have the ability 'drop' but the type argument 'a::m::Obj' does not have the required ability 'drop'
+   │            │               The type 'vector<a::m::Obj>' does not have the ability 'drop'
    │            Invalid return type for entry function 't5'
 

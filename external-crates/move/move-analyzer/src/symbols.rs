@@ -350,8 +350,14 @@ fn type_to_ide_string(sp!(_, t): &Type) -> String {
 
 fn addr_to_ide_string(addr: &Address) -> String {
     match addr {
-        Address::Numerical(None, sp!(_, bytes)) => format!("{}", bytes),
-        Address::Numerical(Some(name), _) => format!("{}", name),
+        Address::Numerical {
+            name: None,
+            value: sp!(_, bytes),
+            ..
+        } => format!("{}", bytes),
+        Address::Numerical {
+            name: Some(name), ..
+        } => format!("{}", name),
         Address::NamedUnassigned(name) => format!("{}", name),
     }
 }

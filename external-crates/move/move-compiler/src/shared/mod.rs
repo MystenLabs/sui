@@ -178,6 +178,10 @@ impl NamedAddressMaps {
     pub fn get(&self, idx: NamedAddressMapIndex) -> &NamedAddressMap {
         &self.0[idx.0]
     }
+
+    pub fn all(&self) -> &[NamedAddressMap] {
+        &self.0
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

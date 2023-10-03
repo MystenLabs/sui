@@ -199,8 +199,11 @@ fn module(
         .collect();
 
     let addr_name = match &ident.value.address {
-        Address::Numerical(None, _) => None,
-        Address::Numerical(Some(name), _) | Address::NamedUnassigned(name) => Some(*name),
+        Address::Numerical { name: None, .. } => None,
+        Address::Numerical {
+            name: Some(name), ..
+        }
+        | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
     let (imports, explicit_dependency_declarations) = context.materialize(
@@ -332,7 +335,12 @@ fn address_names<'a>(
         .filter_map(|sp!(_, mident)| {
             let ModuleIdent_ { address, module } = mident;
             let ModuleName(sp!(_, module)) = module;
-            if let Address::Numerical(Some(sp!(_, named)), sp!(_, numeric)) = address {
+            if let Address::Numerical {
+                name: Some(sp!(_, named)),
+                value: sp!(_, numeric),
+                ..
+            } = address
+            {
                 Some(((numeric.into_inner(), module.as_str()), *named))
             } else {
                 None

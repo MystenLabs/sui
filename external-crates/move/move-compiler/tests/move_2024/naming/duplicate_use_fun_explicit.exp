@@ -5,7 +5,7 @@ error[E02001]: duplicate declaration, item, or annotation
    │                                - Previously declared here
    ·
 10 │     public use fun foobaz as X.f;
-   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for '(a=0x42)::m::X.f'
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m::X.f'
 
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:25:5
@@ -14,7 +14,7 @@ error[E02001]: duplicate declaration, item, or annotation
    │                                - Previously declared here
    ·
 25 │     use fun foobaz as X.f;
-   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for '(a=0x42)::m2::X.f'
+   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m2::X.f'
 
 error[E02001]: duplicate declaration, item, or annotation
    ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:40:5
@@ -23,5 +23,5 @@ error[E02001]: duplicate declaration, item, or annotation
    │                         - Previously declared here
    ·
 40 │     use fun foobaz as X.f;
-   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for '(a=0x42)::m3::X.f'
+   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m3::X.f'
 
