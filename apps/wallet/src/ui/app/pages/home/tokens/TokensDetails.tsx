@@ -30,7 +30,7 @@ import { Coin } from '@mysten/sui.js/framework';
 import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'classnames';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
@@ -64,11 +64,11 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 
 function TokenRowButton({
 	coinBalance,
-	copy,
+	children,
 	to,
 }: {
 	coinBalance: CoinBalanceType;
-	copy: string;
+	children: ReactNode;
 	to: string;
 	onClick?: () => void;
 }) {
@@ -78,7 +78,7 @@ function TokenRowButton({
 			key={coinBalance.coinType}
 			className="no-underline text-subtitle font-medium text-steel hover:font-semibold hover:text-hero"
 		>
-			{copy}
+			{children}
 		</ButtonOrLink>
 	);
 }
@@ -121,7 +121,6 @@ export function TokenRow({
 						<div className="flex gap-2.5 items-center">
 							<TokenRowButton
 								coinBalance={coinBalance}
-								copy="Send"
 								to={`/send?${params.toString()}`}
 								onClick={() =>
 									ampli.selectedCoin({
@@ -129,13 +128,13 @@ export function TokenRow({
 										totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
 									})
 								}
-							/>
+							>
+								Send
+							</TokenRowButton>
 							{isRenderSwapButton && (
-								<TokenRowButton
-									coinBalance={coinBalance}
-									copy="Swap"
-									to={`/swap?${params.toString()}`}
-								/>
+								<TokenRowButton coinBalance={coinBalance} to={`/swap?${params.toString()}`}>
+									Swap
+								</TokenRowButton>
 							)}
 						</div>
 					) : (
