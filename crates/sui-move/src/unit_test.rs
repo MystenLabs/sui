@@ -14,6 +14,7 @@ use once_cell::sync::Lazy;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
 use sui_protocol_config::ProtocolConfig;
+use sui_types::object::OBJECT_START_VERSION;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     error::SuiResult,
@@ -139,6 +140,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         &ProtocolConfig::get_for_max_version_UNSAFE(),
         metrics,
         0, // epoch id
+        OBJECT_START_VERSION,
     ));
     ext.add(NativesCostTable::from_protocol_config(
         &ProtocolConfig::get_for_max_version_UNSAFE(),

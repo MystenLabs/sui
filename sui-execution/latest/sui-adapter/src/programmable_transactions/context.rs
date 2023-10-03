@@ -45,7 +45,6 @@ mod checked {
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
@@ -106,6 +105,7 @@ mod checked {
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
         borrowed: HashMap<Argument, /* mut */ bool>,
+        lamport_version: SequenceNumber,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -129,6 +129,7 @@ mod checked {
             tx_context: &'a mut TxContext,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
+            lamport_version: SequenceNumber,
         ) -> Result<Self, ExecutionError> {
             let mut linkage_view = LinkageView::new(Box::new(state_view.as_sui_resolver()));
             let mut input_object_map = BTreeMap::new();
@@ -189,6 +190,7 @@ mod checked {
                 protocol_config,
                 metrics.clone(),
                 tx_context.epoch(),
+                lamport_version,
             );
 
             // Set the profiler if in debug mode
@@ -223,6 +225,7 @@ mod checked {
                 new_packages: vec![],
                 user_events: vec![],
                 borrowed: HashMap::new(),
+                lamport_version,
             })
         }
 
@@ -562,7 +565,7 @@ mod checked {
         }
 
         /// Determine the object changes and collect all user events
-        pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResults, ExecutionError> {
+        pub fn finish<Mode: ExecutionMode>(self) -> Result<ExecutionResultsV2, ExecutionError> {
             let Self {
                 protocol_config,
                 vm,
@@ -576,6 +579,7 @@ mod checked {
                 inputs,
                 results,
                 user_events,
+                lamport_version,
                 ..
             } = self;
             let tx_digest = tx_context.digest();
@@ -707,7 +711,7 @@ mod checked {
                         vm,
                         &linkage_view,
                         protocol_config,
-                        &loaded_runtime_objects,
+                        lamport_version,
                         id,
                         type_,
                         has_public_transfer,
@@ -740,7 +744,7 @@ mod checked {
                         vm,
                         &linkage_view,
                         protocol_config,
-                        &loaded_runtime_objects,
+                        lamport_version,
                         id,
                         ty,
                         has_public_transfer,
@@ -764,7 +768,7 @@ mod checked {
                 })
                 .collect();
 
-            Ok(ExecutionResults::V2(ExecutionResultsV2 {
+            Ok(ExecutionResultsV2 {
                 written_objects,
                 modified_objects: loaded_runtime_objects
                     .into_iter()
@@ -773,7 +777,7 @@ mod checked {
                 created_object_ids: created_object_ids.into_iter().map(|(id, _)| id).collect(),
                 deleted_object_ids: deleted_object_ids.into_iter().map(|(id, _)| id).collect(),
                 user_events,
-            }))
+            })
         }
 
         /// Convert a VM Error to an execution one
@@ -1291,7 +1295,7 @@ mod checked {
         vm: &MoveVM,
         linkage_view: &LinkageView,
         protocol_config: &ProtocolConfig,
-        objects_modified_at: &BTreeMap<ObjectID, LoadedRuntimeObject>,
+        lamport_version: SequenceNumber,
         id: ObjectID,
         type_: Type,
         has_public_transfer: bool,
@@ -1301,9 +1305,6 @@ mod checked {
             id,
             MoveObject::id_opt(&contents).expect("object contents should start with an id")
         );
-        let old_obj_ver = objects_modified_at
-            .get(&id)
-            .map(|obj: &LoadedRuntimeObject| obj.version);
 
         let type_tag = vm
             .get_runtime()
@@ -1317,7 +1318,7 @@ mod checked {
         MoveObject::new_from_execution(
             struct_tag.into(),
             has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
+            lamport_version,
             contents,
             protocol_config,
         )

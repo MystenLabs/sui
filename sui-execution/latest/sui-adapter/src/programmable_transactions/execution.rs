@@ -39,9 +39,7 @@ mod checked {
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        execution::{
-            CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
-        },
+        execution::{CommandKind, ObjectContents, ObjectValue, RawValueType, Value},
         id::{RESOLVED_SUI_ID, UID},
         metrics::LimitsMetrics,
         move_package::{
@@ -64,12 +62,13 @@ mod checked {
 
     use crate::adapter::substitute_package_id;
     use crate::programmable_transactions::context::*;
+    use crate::temporary_store::TemporaryStore;
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
-        state_view: &mut dyn ExecutionState,
+        state_view: &mut TemporaryStore,
         tx_context: &mut TxContext,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
@@ -83,6 +82,7 @@ mod checked {
             tx_context,
             gas_charger,
             inputs,
+            state_view.lamport_version(),
         )?;
         // execute commands
         let mut mode_results = Mode::empty_results();

@@ -151,6 +151,7 @@ pub struct ObjectRuntime<'a> {
 
     pub(crate) local_config: LocalProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
+    lamport_version: SequenceNumber,
 }
 
 pub enum TransferResult {
@@ -179,6 +180,7 @@ impl<'a> ObjectRuntime<'a> {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         epoch_id: EpochId,
+        lamport_version: SequenceNumber,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
         let mut root_version = BTreeMap::new();
@@ -216,7 +218,12 @@ impl<'a> ObjectRuntime<'a> {
             is_metered,
             local_config: LocalProtocolConfig::new(protocol_config),
             metrics,
+            lamport_version,
         }
+    }
+
+    pub fn lamport_version(&self) -> SequenceNumber {
+        self.lamport_version
     }
 
     pub fn new_id(&mut self, id: ObjectID) -> PartialVMResult<()> {

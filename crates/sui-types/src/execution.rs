@@ -117,53 +117,6 @@ impl ExecutionResultsV2 {
             .extend(new_results.deleted_object_ids);
         self.user_events.extend(new_results.user_events);
     }
-
-    pub fn update_version_and_previous_tx(
-        &mut self,
-        lamport_version: SequenceNumber,
-        prev_tx: TransactionDigest,
-    ) {
-        for (id, mut obj) in self.written_objects.iter_mut() {
-            // TODO: We can now get rid of the following logic by passing in lamport version
-            // into the execution layer, and create new objects using the lamport version directly.
-
-            // Update the version for the written object.
-            match &mut obj.data {
-                Data::Move(obj) => {
-                    // Move objects all get the transaction's lamport timestamp
-                    obj.increment_version_to(lamport_version);
-                }
-
-                Data::Package(pkg) => {
-                    // Modified packages get their version incremented (this is a special case that
-                    // only applies to system packages).  All other packages can only be created,
-                    // and they are left alone.
-                    if self.modified_objects.contains(id) {
-                        pkg.increment_version();
-                    }
-                }
-            }
-
-            // Record the version that the shared object was created at in its owner field.  Note,
-            // this only works because shared objects must be created as shared (not created as
-            // owned in one transaction and later converted to shared in another).
-            if let Owner::Shared {
-                initial_shared_version,
-            } = &mut obj.owner
-            {
-                if self.created_object_ids.contains(id) {
-                    assert_eq!(
-                        *initial_shared_version,
-                        SequenceNumber::new(),
-                        "Initial version should be blank before this point for {id:?}",
-                    );
-                    *initial_shared_version = lamport_version;
-                }
-            }
-
-            obj.previous_transaction = prev_tx;
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

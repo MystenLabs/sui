@@ -118,6 +118,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
         current_epoch_id: EpochId,
+        lamport_version: SequenceNumber,
     ) -> NativeContextExtensions<'r> {
         let mut extensions = NativeContextExtensions::default();
         extensions.add(ObjectRuntime::new(
@@ -127,6 +128,7 @@ mod checked {
             protocol_config,
             metrics,
             current_epoch_id,
+            lamport_version,
         ));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
         extensions

@@ -90,14 +90,8 @@ impl<'backing> TemporaryStore<'backing> {
         &self.input_objects
     }
 
-    pub fn update_object_version_and_prev_tx(&mut self) {
-        self.execution_results
-            .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
-
-        #[cfg(debug_assertions)]
-        {
-            self.check_invariants();
-        }
+    pub fn lamport_version(&self) -> SequenceNumber {
+        self.lamport_timestamp
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
@@ -163,7 +157,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 
     pub fn into_effects(
-        mut self,
+        self,
         shared_object_refs: Vec<ObjectRef>,
         transaction_digest: &TransactionDigest,
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
@@ -172,7 +166,10 @@ impl<'backing> TemporaryStore<'backing> {
         gas_charger: &mut GasCharger,
         epoch: EpochId,
     ) -> (InnerTemporaryStore, TransactionEffects) {
-        self.update_object_version_and_prev_tx();
+        #[cfg(debug_assertions)]
+        {
+            self.check_invariants();
+        }
 
         // Regardless of execution status (including aborts), we insert the previous transaction
         // for any successfully received objects during the transaction.
@@ -358,6 +355,13 @@ impl<'backing> TemporaryStore<'backing> {
         // Merge the two maps because we may be calling the execution engine more than once
         // (e.g. in advance epoch transaction, where we may be publishing a new system package).
         self.loaded_runtime_objects.extend(loaded_runtime_objects);
+    }
+
+    /// Take execution results v2, and translate it back to be compatible with effects v1.
+    pub fn record_execution_results(&mut self, results: ExecutionResultsV2) {
+        // It's important to merge instead of override results because it's
+        // possible to execute PT more than once during tx execution.
+        self.execution_results.merge_results(results);
     }
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
@@ -943,9 +947,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
         let ExecutionResults::V2(results) = results else {
             panic!("ExecutionResults::V2 expected in sui-execution v1 and above");
         };
-        // It's important to merge instead of override results because it's
-        // possible to execute PT more than once during tx execution.
-        self.execution_results.merge_results(results);
+        TemporaryStore::record_execution_results(self, results)
     }
 
     fn save_loaded_runtime_objects(

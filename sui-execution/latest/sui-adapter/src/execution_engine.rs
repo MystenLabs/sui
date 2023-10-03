@@ -214,7 +214,6 @@ mod checked {
             &mut gas_charger,
             pt,
         )?;
-        temporary_store.update_object_version_and_prev_tx();
         Ok(temporary_store.into_inner())
     }
 
@@ -826,7 +825,7 @@ mod checked {
                 )
                 .expect("System Package Publish must succeed");
             } else {
-                let mut new_package = Object::new_system_package(
+                let new_package = Object::new_system_package(
                     &deserialized_modules,
                     version,
                     dependencies,
@@ -837,14 +836,6 @@ mod checked {
                     "upgraded system package {:?}",
                     new_package.compute_object_reference()
                 );
-
-                // Decrement the version before writing the package so that the store can record the
-                // version growing by one in the effects.
-                new_package
-                    .data
-                    .try_as_package_mut()
-                    .unwrap()
-                    .decrement_version();
 
                 // upgrade of a previously existing framework module
                 temporary_store.upgrade_system_package(new_package);
