@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '@mysten/sui.js/utils';
-import { blake2b } from '@noble/hashes/blake2b';
-import { bytesToHex } from '@noble/hashes/utils';
+import { computeZkLoginAddressFromSeed } from '@mysten/sui.js/zklogin';
 import { decodeJwt } from 'jose';
 
-import { genAddressSeed, toBufferBE } from './utils.js';
+import { genAddressSeed } from './utils.js';
 
 export function jwtToAddress(jwt: string, userSalt: bigint) {
 	const decodedJWT = decodeJwt(jwt);
@@ -43,18 +40,5 @@ export function computeZkAddress({
 	aud,
 	userSalt,
 }: ComputeZKAddressOptions) {
-	const addressSeedBytesBigEndian = toBufferBE(
-		genAddressSeed(userSalt, claimName, claimValue, aud),
-		32,
-	);
-	const addressParamBytes = Buffer.from(iss);
-	const tmp = new Uint8Array(2 + addressSeedBytesBigEndian.length + addressParamBytes.length);
-	tmp.set([SIGNATURE_SCHEME_TO_FLAG.Zk]);
-	tmp.set([addressParamBytes.length], 1);
-	tmp.set(addressParamBytes, 2);
-	tmp.set(addressSeedBytesBigEndian, 2 + addressParamBytes.length);
-
-	return normalizeSuiAddress(
-		bytesToHex(blake2b(tmp, { dkLen: 32 })).slice(0, SUI_ADDRESS_LENGTH * 2),
-	);
+	return computeZkLoginAddressFromSeed(genAddressSeed(userSalt, claimName, claimValue, aud), iss);
 }

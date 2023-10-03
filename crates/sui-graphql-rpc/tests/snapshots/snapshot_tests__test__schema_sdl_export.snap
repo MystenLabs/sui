@@ -68,8 +68,8 @@ type Checkpoint {
 	liveObjectSetDigest: String
 	networkTotalTransactions: Int
 	rollingGasSummary: GasCostSummary
-	epoch: Epoch
 	endOfEpoch: EndOfEpochData
+	epoch: Epoch
 }
 
 type CheckpointConnection {
@@ -99,6 +99,11 @@ type CheckpointEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+input CheckpointId {
+	digest: String
+	sequenceNumber: Int
 }
 
 type Coin {
@@ -394,6 +399,9 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
+	transactionBlock(digest: String!): TransactionBlock
+	epoch(id: Int): Epoch
+	checkpoint(id: CheckpointId): Checkpoint
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }

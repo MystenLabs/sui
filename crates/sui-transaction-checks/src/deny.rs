@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_types::{
     base_types::ObjectRef,
     error::{SuiError, SuiResult, UserInputError},
+    signature::GenericSignature,
     storage::BackingPackageStore,
     transaction::{Command, InputObjectKind, TransactionData, TransactionDataAPI},
 };
-
 macro_rules! deny_if_true {
     ($cond:expr, $msg:expr) => {
         if ($cond) {
@@ -25,12 +26,13 @@ macro_rules! deny_if_true {
 /// deny config.
 pub fn check_transaction_for_signing(
     tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
     input_objects: &[InputObjectKind],
     receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
     package_store: &impl BackingPackageStore,
 ) -> SuiResult {
-    check_disabled_features(filter_config, tx_data)?;
+    check_disabled_features(filter_config, tx_data, tx_signatures)?;
 
     check_signers(filter_config, tx_data)?;
 
@@ -63,15 +65,35 @@ fn check_receiving_objects(
 fn check_disabled_features(
     filter_config: &TransactionDenyConfig,
     tx_data: &TransactionData,
+    tx_signatures: &[GenericSignature],
 ) -> SuiResult {
     deny_if_true!(
         filter_config.user_transaction_disabled(),
         "Transaction signing is temporarily disabled"
     );
 
+    tx_signatures.iter().try_for_each(|s| {
+        if let GenericSignature::ZkLoginAuthenticator(z) = s {
+            deny_if_true!(
+                filter_config.zklogin_sig_disabled(),
+                "zkLogin authenticator is temporarily disabled"
+            );
+            deny_if_true!(
+                filter_config.zklogin_disabled_providers().contains(
+                    &OIDCProvider::from_iss(z.get_iss())
+                        .map_err(|_| SuiError::UnexpectedMessage)?
+                        .to_string()
+                ),
+                "zkLogin OAuth provider is temporarily disabled"
+            )
+        }
+        Ok(())
+    })?;
+
     if !filter_config.package_publish_disabled() && !filter_config.package_upgrade_disabled() {
         return Ok(());
     }
+
     for command in tx_data.kind().iter_commands() {
         deny_if_true!(
             filter_config.package_publish_disabled() && matches!(command, Command::Publish(..)),

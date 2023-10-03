@@ -41,7 +41,7 @@ pub struct TransactionEffectsV1 {
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
     unwrapped: Vec<(ObjectRef, Owner)>,
-    /// Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the new refs).
     deleted: Vec<ObjectRef>,
     /// Object refs of objects previously wrapped in other objects but now deleted.
     unwrapped_then_deleted: Vec<ObjectRef>,

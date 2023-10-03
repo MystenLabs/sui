@@ -12,7 +12,8 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_grpc::{
     HandleCertificateResponse, HandleCertificateResponseV2, HandleTransactionResponse,
@@ -35,14 +36,6 @@ use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
 };
-
-// Reject a transaction if transaction manager queue length is above this threshold.
-// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -221,6 +214,7 @@ impl ValidatorServiceMetrics {
     }
 }
 
+#[derive(Clone)]
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
@@ -240,66 +234,16 @@ impl ValidatorService {
         })
     }
 
-    pub(crate) fn check_execution_overload(
-        state: Arc<AuthorityState>,
-        msg: &SenderSignedData,
-    ) -> SuiResult<()> {
-        // Too many transactions are pending execution.
-        let inflight_queue_len = state.transaction_manager().inflight_queue_len();
-        if inflight_queue_len >= MAX_TM_QUEUE_LENGTH {
-            return Err(SuiError::TooManyTransactionsPendingExecution {
-                queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
-            });
-        }
-
-        for (object_id, queue_len) in state.transaction_manager().objects_queue_len(
-            msg.intent_message()
-                .value
-                .kind()
-                .input_objects()
-                .map_err(SuiError::from)?
-                .into_iter()
-                .map(|r| r.object_id())
-                .collect(),
-        ) {
-            // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
-                return Err(SuiError::TooManyTransactionsPendingOnObject {
-                    object_id,
-                    queue_len,
-                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
-                });
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_consensus_overload(
-        consensus_adapter: Arc<ConsensusAdapter>,
-    ) -> SuiResult<()> {
-        if !consensus_adapter.check_limits() {
-            return Err(SuiError::TooManyTransactionsPendingConsensus);
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_system_overload(
-        state: Arc<AuthorityState>,
-        consensus_adapter: Arc<ConsensusAdapter>,
-        msg: &SenderSignedData,
-    ) -> SuiResult<()> {
-        Self::check_execution_overload(state, msg)?;
-        Self::check_consensus_overload(consensus_adapter)?;
-        Ok(())
-    }
-
     async fn handle_transaction(
-        state: Arc<AuthorityState>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        self,
         request: tonic::Request<Transaction>,
-        metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
+        let Self {
+            state,
+            consensus_adapter,
+            metrics,
+        } = self;
+
         let transaction = request.into_inner();
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
@@ -338,11 +282,7 @@ impl ValidatorService {
             }
             .into()
         );
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            transaction.data(),
-        )?;
+        state.check_system_overload(&consensus_adapter, transaction.data())?;
         let _handle_tx_metrics_guard = metrics.handle_transaction_latency.start_timer();
 
         let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -371,14 +311,17 @@ impl ValidatorService {
 
     // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
-        state: Arc<AuthorityState>,
-        consensus_adapter: Arc<ConsensusAdapter>,
+        self,
         request: tonic::Request<CertifiedTransaction>,
-        metrics: Arc<ValidatorServiceMetrics>,
         wait_for_effects: bool,
     ) -> Result<Option<HandleCertificateResponseV2>, tonic::Status> {
-        let epoch_store = state.load_epoch_store_one_call_per_task();
+        let Self {
+            state,
+            consensus_adapter,
+            metrics,
+        } = self;
 
+        let epoch_store = state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
 
         let shared_object_tx = certificate.contains_shared_object();
@@ -427,11 +370,7 @@ impl ValidatorService {
         );
 
         // Check system overload
-        Self::check_system_overload(
-            Arc::clone(&state),
-            Arc::clone(&consensus_adapter),
-            certificate.data(),
-        )?;
+        state.check_system_overload(&consensus_adapter, certificate.data())?;
 
         // code block within reconfiguration lock
         let certificate = {
@@ -505,35 +444,25 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<HandleTransactionResponse>, tonic::Status> {
-        let state = self.state.clone();
-        let consensus_adapter = self.consensus_adapter.clone();
+        let validator_service = self.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        let metrics = self.metrics.clone();
-        spawn_monitored_task!(Self::handle_transaction(
-            state,
-            consensus_adapter,
-            request,
-            metrics
-        ))
-        .await
-        .unwrap()
+        spawn_monitored_task!(validator_service.handle_transaction(request))
+            .await
+            .unwrap()
     }
 
     async fn submit_certificate(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
-        let state = self.state.clone();
-        let consensus_adapter = self.consensus_adapter.clone();
-
+        let validator_service = self.clone();
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        let metrics = self.metrics.clone();
         spawn_monitored_task!(async move {
             let span = error_span!("submit_certificate", tx_digest = ?request.get_ref().digest());
-            Self::handle_certificate(state, consensus_adapter, request, metrics, false)
+            Self::handle_certificate(validator_service, request, false)
                 .instrument(span)
                 .await
         })
@@ -550,15 +479,12 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
-        let state = self.state.clone();
-        let consensus_adapter = self.consensus_adapter.clone();
-
+        let validator_service = self.clone();
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        let metrics = self.metrics.clone();
         spawn_monitored_task!(async move {
             let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
-            Self::handle_certificate(state, consensus_adapter, request, metrics, true)
+            Self::handle_certificate(validator_service, request, true)
                 .instrument(span)
                 .await
         })

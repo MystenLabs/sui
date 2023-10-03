@@ -3,6 +3,7 @@
 
 export * from './hooks/useSuiClient.js';
 export * from './components/ConnectButton.js';
+export * from './components/connect-modal/ConnectModal.js';
 export * from './components/SuiClientProvider.js';
 export * from './components/WalletProvider.js';
 export * from './hooks/wallet/useCurrentAccount.js';

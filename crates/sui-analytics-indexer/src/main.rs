@@ -4,10 +4,9 @@
 use clap::*;
 use prometheus::Registry;
 use sui_analytics_indexer::{
-    analytics_handler::AnalyticsProcessor,
     analytics_metrics::{start_prometheus_server, AnalyticsMetrics},
     errors::AnalyticsIndexerError,
-    AnalyticsIndexerConfig,
+    make_analytics_processor, AnalyticsIndexerConfig,
 };
 use sui_indexer::framework::IndexerBuilder;
 use tracing::info;
@@ -33,12 +32,11 @@ async fn main() -> Result<(), AnalyticsIndexerError> {
     let metrics = AnalyticsMetrics::new(&registry);
 
     let rest_url = config.rest_url.clone();
-    let processor = AnalyticsProcessor::new(config, metrics)
+    let processor = make_analytics_processor(config, metrics)
         .await
         .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
-    let last_committed_checkpoint = Some(processor.last_committed_checkpoint()).filter(|x| *x > 0);
     IndexerBuilder::new()
-        .last_downloaded_checkpoint(last_committed_checkpoint)
+        .last_downloaded_checkpoint(processor.last_committed_checkpoint())
         .rest_url(&rest_url)
         .handler(processor)
         .run()

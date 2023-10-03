@@ -1,9 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { allowedSwapCoinsList } from '_app/hooks/useDeepBook';
+import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
+import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
+import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
 import Alert from '_components/alert';
+import { CoinIcon } from '_components/coin-icon';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
@@ -14,17 +19,17 @@ import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
-import { useRecognizedPackages } from '_src/ui/app/hooks/useRecognizedPackages';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import PageTitle from '_src/ui/app/shared/PageTitle';
 import { useFeature } from '@growthbook/growthbook-react';
-import { useAppsBackend, useResolveSuiNSName } from '@mysten/core';
+import { useAppsBackend, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
 import { type CoinBalance as CoinBalanceType } from '@mysten/sui.js/client';
 import { Coin } from '@mysten/sui.js/framework';
-import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
+import clsx from 'classnames';
 import { useEffect, useMemo, useState } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';
@@ -57,7 +62,110 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 	);
 }
 
-function MyTokens({
+function TokenRowButton({
+	coinBalance,
+	page,
+	copy,
+}: {
+	coinBalance: CoinBalanceType;
+	page: 'send' | 'swap';
+	copy: string;
+}) {
+	const params = new URLSearchParams({
+		type: coinBalance.coinType,
+	});
+
+	return (
+		<ButtonOrLink
+			to={`/${page}?${params.toString()}`}
+			onClick={
+				page === 'send'
+					? () =>
+							ampli.selectedCoin({
+								coinType: coinBalance.coinType,
+								totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
+							})
+					: undefined
+			}
+			key={coinBalance.coinType}
+			className="no-underline text-subtitle font-medium text-steel hover:font-semibold hover:text-hero"
+		>
+			{copy}
+		</ButtonOrLink>
+	);
+}
+
+export function TokenRow({
+	coinBalance,
+	renderActions,
+	onClick,
+	as: Tag = 'div',
+	borderBottom,
+}: {
+	coinBalance: CoinBalanceType;
+	renderActions?: boolean;
+	as?: 'div' | 'button';
+	onClick?: () => void;
+	borderBottom?: boolean;
+}) {
+	const coinType = coinBalance.coinType;
+	const balance = BigInt(coinBalance.totalBalance);
+	const [formatted, symbol] = useFormatCoin(balance, coinType);
+	const isButton = Tag === 'button';
+
+	const isRenderSwapButton = useMemo(() => {
+		return allowedSwapCoinsList.includes(coinType);
+	}, [coinType]);
+
+	return (
+		<Tag
+			className={clsx(
+				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center border-solid border-t-transparent border-x-transparent bg-transparent',
+				isButton && 'hover:cursor-pointer',
+				borderBottom && 'border-b border-gray-45',
+				!borderBottom && 'border-b-transparent',
+			)}
+			onClick={onClick}
+		>
+			<div className="flex gap-2.5">
+				<CoinIcon coinType={coinType} size="md" />
+				<div className="flex flex-col gap-1 items-start">
+					<Text variant="body" color="gray-90" weight="semibold">
+						{symbol}
+					</Text>
+
+					{renderActions ? (
+						<div className="flex gap-2.5 items-center">
+							<TokenRowButton coinBalance={coinBalance} page="send" copy="Send" />
+							{isRenderSwapButton && (
+								<TokenRowButton coinBalance={coinBalance} page="swap" copy="Swap" />
+							)}
+						</div>
+					) : (
+						<div className="flex gap-1 items-center">
+							<Text variant="subtitleSmall" weight="semibold" color="gray-90">
+								{symbol}
+							</Text>
+							<Text variant="subtitleSmall" weight="medium" color="steel-dark">
+								{formatAddress(coinType)}
+							</Text>
+						</div>
+					)}
+				</div>
+			</div>
+
+			<div className="ml-auto flex flex-col items-end gap-1.5">
+				{formatted !== '0' && (
+					<Text variant="body" color="gray-90" weight="medium">
+						{formatted} {symbol}
+					</Text>
+				)}
+			</div>
+		</Tag>
+	);
+}
+
+export function MyTokens({
 	coinBalances,
 	isLoading,
 	isFetched,
@@ -66,32 +174,12 @@ function MyTokens({
 	isLoading: boolean;
 	isFetched: boolean;
 }) {
+	const isDefiWalletEnabled = useIsWalletDefiEnabled();
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
 
-	const recognizedPackages = useRecognizedPackages();
-	const [pinnedCoinTypes, { pinCoinType, unpinCoinType }] = usePinnedCoinTypes();
+	const [_, { pinCoinType, unpinCoinType }] = usePinnedCoinTypes();
 
-	const { recognized, pinned, unrecognized } = useMemo(
-		() =>
-			coinBalances?.reduce(
-				(acc, coinBalance) => {
-					if (recognizedPackages.includes(coinBalance.coinType.split('::')[0])) {
-						acc.recognized.push(coinBalance);
-					} else if (pinnedCoinTypes.includes(coinBalance.coinType)) {
-						acc.pinned.push(coinBalance);
-					} else {
-						acc.unrecognized.push(coinBalance);
-					}
-					return acc;
-				},
-				{
-					recognized: [] as CoinBalanceType[],
-					pinned: [] as CoinBalanceType[],
-					unrecognized: [] as CoinBalanceType[],
-				},
-			) ?? { recognized: [], pinned: [], unrecognized: [] },
-		[coinBalances, recognizedPackages, pinnedCoinTypes],
-	);
+	const { recognized, pinned, unrecognized } = useSortedCoinsByCategories(coinBalances);
 
 	// Avoid perpetual loading state when fetching and retry keeps failing; add isFetched check.
 	const isFirstTimeLoading = isLoading && !isFetched;
@@ -100,9 +188,13 @@ function MyTokens({
 		<Loading loading={isFirstTimeLoading}>
 			{recognized.length > 0 && (
 				<TokenList title="My Coins" defaultOpen>
-					{recognized.map((coinBalance) => (
-						<TokenLink key={coinBalance.coinType} coinBalance={coinBalance} />
-					))}
+					{recognized.map((coinBalance) =>
+						isDefiWalletEnabled ? (
+							<TokenRow renderActions key={coinBalance.coinType} coinBalance={coinBalance} />
+						) : (
+							<TokenLink key={coinBalance.coinType} coinBalance={coinBalance} />
+						),
+					)}
 				</TokenList>
 			)}
 
@@ -139,6 +231,7 @@ function MyTokens({
 						<TokenLink
 							key={coinBalance.coinType}
 							coinBalance={coinBalance}
+							subtitle="Send"
 							centerAction={
 								<PinButton
 									onClick={() => {
@@ -156,6 +249,7 @@ function MyTokens({
 }
 
 function TokenDetails({ coinType }: TokenDetailsProps) {
+	const isDefiWalletEnabled = useIsWalletDefiEnabled();
 	const [interstitialDismissed, setInterstitialDismissed] = useState<boolean>(false);
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
@@ -172,6 +266,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		{ coinType: activeCoinType, owner: activeAccountAddress! },
 		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
 	);
+
 	const { apiEnv } = useAppSelector((state) => state.app);
 	const { request } = useAppsBackend();
 	const { data } = useQuery({
@@ -231,6 +326,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		);
 	}
 	const accountHasSui = coinBalances?.some(({ coinType }) => coinType === SUI_TYPE_ARG);
+
 	if (!activeAccountAddress) {
 		return null;
 	}
@@ -264,10 +360,15 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 							<>
 								<div
 									data-testid="coin-balance"
-									className="bg-hero/5 rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4"
+									className={clsx(
+										'rounded-2xl py-5 px-4 flex flex-col w-full gap-3 items-center mt-4',
+										isDefiWalletEnabled ? 'bg-gradients-graph-cards' : 'bg-hero/5',
+									)}
 								>
 									{accountHasSui ? (
-										<CoinBalance amount={BigInt(tokenBalance)} type={activeCoinType} />
+										<div className="flex flex-col gap-1 items-center">
+											<CoinBalance amount={tokenBalance} type={activeCoinType} />
+										</div>
 									) : (
 										<div className="flex flex-col gap-5">
 											<div className="flex flex-col flex-nowrap justify-center items-center text-center px-2.5">
@@ -312,7 +413,17 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 											Send
 										</LargeButton>
 
-										<LargeButton center to="/" disabled>
+										<LargeButton
+											center
+											disabled={!isDefiWalletEnabled}
+											to={`/swap${
+												coinBalance?.coinType
+													? `?${new URLSearchParams({
+															type: coinBalance.coinType,
+													  }).toString()}`
+													: ''
+											}`}
+										>
 											Swap
 										</LargeButton>
 									</div>

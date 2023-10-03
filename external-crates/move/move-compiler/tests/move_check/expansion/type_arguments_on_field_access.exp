@@ -5,5 +5,5 @@ error[E01002]: unexpected token
   │                 ^
   │                 │
   │                 Unexpected ';'
-  │                 Expected an expression term
+  │                 Expected '('
 

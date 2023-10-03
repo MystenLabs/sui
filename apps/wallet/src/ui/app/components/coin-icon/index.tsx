@@ -28,7 +28,7 @@ const imageStyle = cva(['rounded-full flex'], {
 
 function SuiCoin() {
 	return (
-		<Sui className="flex items-center w-full h-full justify-center text-white p-1 text-body rounded-full" />
+		<Sui className="flex items-center w-full h-full justify-center text-white p-1.5 text-body rounded-full" />
 	);
 }
 

@@ -7,7 +7,8 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { bcs } from '../bcs/index.js';
 import { IntentScope, messageWithIntent } from './intent.js';
 import type { PublicKey } from './publickey.js';
-import type { SerializedSignature, SignatureScheme } from './signature.js';
+import type { SignatureScheme } from './signature-scheme.js';
+import type { SerializedSignature } from './signature.js';
 import { toSerializedSignature } from './signature.js';
 
 export const PRIVATE_KEY_SIZE = 32;

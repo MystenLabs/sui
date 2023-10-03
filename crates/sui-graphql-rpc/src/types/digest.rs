@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::Error;
 use async_graphql::*;
 use fastcrypto::encoding::{Base58, Encoding};
 use std::fmt;
 
-const BASE58_DIGEST_LENGTH: usize = 32;
+pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Copy)]
 pub(crate) struct Digest([u8; BASE58_DIGEST_LENGTH]);
@@ -15,19 +16,50 @@ impl Digest {
         self.0
     }
 
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+
     pub fn from_array(arr: [u8; BASE58_DIGEST_LENGTH]) -> Self {
         Digest(arr)
     }
 }
 
+impl TryFrom<Vec<u8>> for Digest {
+    type Error = Error;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, Self::Error> {
+        let bytes: [u8; BASE58_DIGEST_LENGTH] = <[u8; BASE58_DIGEST_LENGTH]>::try_from(&bytes[..])
+            .map_err(|_| Error::InvalidDigestLength {
+                expected: BASE58_DIGEST_LENGTH,
+                actual: bytes.len(),
+            })?;
+
+        Ok(Self::from_array(bytes))
+    }
+}
+
+impl TryFrom<&[u8]> for Digest {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        let bytes: [u8; BASE58_DIGEST_LENGTH] = <[u8; BASE58_DIGEST_LENGTH]>::try_from(bytes)
+            .map_err(|_| Error::InvalidDigestLength {
+                expected: BASE58_DIGEST_LENGTH,
+                actual: bytes.len(),
+            })?;
+
+        Ok(Self::from_array(bytes))
+    }
+}
+
 impl std::str::FromStr for Digest {
-    type Err = InputValueError<String>;
+    type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0u8; BASE58_DIGEST_LENGTH];
-        result.copy_from_slice(
-            &Base58::decode(s).map_err(|r| InputValueError::custom(format!("{r}")))?,
-        );
+        result
+            .copy_from_slice(&Base58::decode(s).map_err(|r| Error::InvalidBase58(format!("{r}")))?);
         Ok(Digest(result))
     }
 }

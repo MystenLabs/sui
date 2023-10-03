@@ -135,7 +135,6 @@ where
     fn name(&self) -> &str {
         "checkpoint-transaction-and-epoch-indexer"
     }
-
     async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
         info!(
             checkpoint_seq = checkpoint_data.checkpoint_summary.sequence_number(),
@@ -832,7 +831,6 @@ where
     fn name(&self) -> &str {
         "objects-indexer"
     }
-
     async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> anyhow::Result<()> {
         let checkpoint_seq = *checkpoint_data.checkpoint_summary.sequence_number();
         info!(checkpoint_seq, "Objects received by indexing processor");
@@ -853,7 +851,6 @@ where
                     e
                 )
             });
-
         Ok(())
     }
 }

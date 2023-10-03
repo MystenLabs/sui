@@ -30,6 +30,7 @@ pub enum FeatureGate {
     PublicPackage,
     PostFixAbilities,
     StructTypeVisibility,
+    DotCall,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -46,7 +47,7 @@ pub enum Flavor {
 pub fn check_feature(
     env: &mut CompilationEnv,
     edition: Edition,
-    feature: &FeatureGate,
+    feature: FeatureGate,
     loc: Loc,
 ) -> bool {
     let supports_feature = edition.supports(feature);
@@ -61,8 +62,9 @@ pub fn check_feature(
             (
                 loc,
                 format!(
-                    "{feature} not supported by current edition '{edition}', \
-                    only '{valid_editions}' support this feature"
+                    "{} not supported by current edition '{edition}', \
+                    only '{valid_editions}' support this feature",
+                    feature.error_prefix(),
                 )
             )
         );
@@ -75,7 +77,7 @@ pub fn check_feature(
     supports_feature
 }
 
-pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
+pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
     Edition::ALL
         .iter()
         .filter(|e| e.supports(feature))
@@ -94,6 +96,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PublicPackage,
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
+    FeatureGate::DotCall,
 ];
 
 impl Edition {
@@ -110,8 +113,8 @@ impl Edition {
 
     pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
-    pub fn supports(&self, feature: &FeatureGate) -> bool {
-        SUPPORTED_FEATURES.get(self).unwrap().contains(feature)
+    pub fn supports(&self, feature: FeatureGate) -> bool {
+        SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
     }
 
     // Intended only for implementing the lazy static (supported feature map) above
@@ -157,6 +160,17 @@ impl Flavor {
     pub const GLOBAL_STORAGE: &str = "global-storage";
     pub const SUI: &str = "sui";
     pub const ALL: &[Self] = &[Self::GlobalStorage, Self::Sui];
+}
+
+impl FeatureGate {
+    fn error_prefix(&self) -> &'static str {
+        match self {
+            FeatureGate::PublicPackage => "'public(package)' is",
+            FeatureGate::PostFixAbilities => "Postfix abilities are",
+            FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
+            FeatureGate::DotCall => "Method syntax is",
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -260,12 +274,6 @@ impl Serialize for Flavor {
         S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
-    }
-}
-
-impl Display for FeatureGate {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
     }
 }
 

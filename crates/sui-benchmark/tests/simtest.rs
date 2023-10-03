@@ -3,7 +3,6 @@
 
 #[cfg(msim)]
 mod test {
-    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::collections::HashSet;
     use std::path::PathBuf;

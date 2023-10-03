@@ -13,8 +13,8 @@ use crate::{
     command_line::compiler::Visitor,
     diagnostics::{Diagnostic, Diagnostics},
     hlir::ast::{
-        Command, Command_, Exp, ExpListItem, LValue, LValue_, Label, ModuleCall, Type, Type_,
-        UnannotatedExp_, Var,
+        Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, UnannotatedExp_,
+        Var,
     },
     shared::CompilationEnv,
 };
@@ -379,16 +379,24 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, e);
                 default_values(1)
             }
-            E::Builtin(_, e) => {
-                self.exp(context, state, e);
+            E::Builtin(_, args) => {
+                for arg in args {
+                    self.exp(context, state, arg);
+                }
                 default_values_for_ty(&parent_e.ty)
             }
-            E::Vector(_, n, _, e) => {
-                self.exp(context, state, e);
+            E::Vector(_, n, _, args) => {
+                for arg in args {
+                    self.exp(context, state, arg);
+                }
                 default_values(*n)
             }
             E::ModuleCall(mcall) => {
-                let evalues = self.exp(context, state, &mcall.arguments);
+                let evalues = mcall
+                    .arguments
+                    .iter()
+                    .flat_map(|arg| self.exp(context, state, arg))
+                    .collect();
                 if let Some(vs) =
                     self.call_custom(context, state, eloc, &parent_e.ty, mcall, evalues)
                 {
@@ -412,23 +420,11 @@ pub trait SimpleAbsInt: Sized {
                 }
                 default_values(1)
             }
-            E::ExpList(es) => es
+            E::Multiple(es) => es
                 .iter()
-                .flat_map(|item| self.exp_list_item(context, state, item))
+                .flat_map(|e| self.exp(context, state, e))
                 .collect(),
-
             E::Unreachable => panic!("ICE should not analyze dead code"),
-        }
-    }
-
-    fn exp_list_item(
-        &self,
-        context: &mut Self::ExecutionContext,
-        state: &mut Self::State,
-        item: &ExpListItem,
-    ) -> Vec<<Self::State as SimpleDomain>::Value> {
-        match item {
-            ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => self.exp(context, state, e),
         }
     }
 }

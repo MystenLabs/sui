@@ -50,7 +50,7 @@ export function PageLayout({ gradient, content, loading, isError }: PageLayoutPr
 
 	const networkDegradeBannerCopy =
 		network === Network.TESTNET
-			? 'Sui Testnet is currently under-going maintenance. Some data may be incorrect or missing.'
+			? 'Sui Explorer (Testnet) is currently under-going maintenance. Some data may be incorrect or missing.'
 			: "The explorer is running slower than usual. We're working to fix the issue and appreciate your patience.";
 
 	return (
