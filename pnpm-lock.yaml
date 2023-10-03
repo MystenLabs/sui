@@ -1186,6 +1186,9 @@ importers:
       '@vanilla-extract/css':
         specifier: ^1.13.0
         version: 1.13.0
+      '@vanilla-extract/dynamic':
+        specifier: ^2.0.3
+        version: 2.0.3
       clsx:
         specifier: ^2.0.0
         version: 2.0.0
@@ -9780,6 +9783,12 @@ packages:
       deepmerge: 4.3.1
       media-query-parser: 2.0.2
       outdent: 0.8.0
+
+  /@vanilla-extract/dynamic@2.0.3:
+    resolution: {integrity: sha512-Rglfw2gXAYiBzAQ4jgUG7rBgE2c88e/zcG27ZVoIqMHVq56wf2C1katGMm1yFMNBgzqM7oBNYzz4YOMzznydkg==}
+    dependencies:
+      '@vanilla-extract/private': 1.0.3
+    dev: false
 
   /@vanilla-extract/esbuild-plugin@2.3.0(@types/node@20.4.2):
     resolution: {integrity: sha512-YsBLRDWvbqj/Zep0UdbgI1FfHfXJhf4tHYbVr5oPbVIf53p736hx+V3Wggo9ScK8Eu0aWVavxg6OvPOUITxdqg==}
