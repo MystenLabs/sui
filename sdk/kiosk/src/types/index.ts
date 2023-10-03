@@ -3,7 +3,7 @@
 
 import { type SharedObjectRef } from '@mysten/sui.js/bcs';
 import { type SuiClient, type SuiObjectRef } from '@mysten/sui.js/client';
-import { type TransactionArgument } from '@mysten/sui.js/transactions';
+import { TransactionObjectArgument } from '@mysten/sui.js/transactions';
 
 import { BaseRulePackageIds } from '../constants';
 
@@ -13,7 +13,7 @@ export * from './transfer-policy';
 /**
  * A valid argument for any of the Kiosk functions.
  */
-export type ObjectArgument = string | TransactionArgument | SharedObjectRef | SuiObjectRef;
+export type ObjectArgument = string | TransactionObjectArgument | SharedObjectRef | SuiObjectRef;
 
 /**
  * A Network selector.

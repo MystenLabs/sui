@@ -317,8 +317,8 @@ function Account({ account }: { account: SerializedUIAccount }) {
 				throw new Error('Signer not found');
 			}
 			const transactionBlock = new TransactionBlock();
-			const [coin] = transactionBlock.splitCoins(transactionBlock.gas, [transactionBlock.pure(1)]);
-			transactionBlock.transferObjects([coin], transactionBlock.pure(account.address));
+			const [coin] = transactionBlock.splitCoins(transactionBlock.gas, [1]);
+			transactionBlock.transferObjects([coin], account.address);
 			return signer.signAndExecuteTransactionBlock({ transactionBlock }, clientIdentifier);
 		},
 		onSuccess: (result) => {
