@@ -301,7 +301,7 @@ impl GenesisConfig {
     /// Port offset for benchmarks' genesis configs.
     pub const BENCHMARKS_PORT_OFFSET: u16 = 2000;
     /// The gas amount for each genesis gas object.
-    const BENCHMARK_GAS_AMOUNT: u64 = 50_000_000_000_000_000;
+    const BENCHMARK_GAS_AMOUNT: u64 = 500_000_000_000_000_000;
     /// Trigger epoch change every hour minutes.
     const BENCHMARK_EPOCH_DURATION_MS: u64 = 60 * 60 * 1000;
 
