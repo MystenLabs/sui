@@ -166,6 +166,36 @@ The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce`
 | Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` |
 | Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` |
 
+
+## Decoding JWT
+
+Upon successful redirection the ID Provider will attach the JWT token as a URL parameter (Using the Google Flow as an example)
+
+```
+http://host/auth#state=redirect_url_______&id_token=tokenPartA.tokenPartB.tokenPartC_______&authuser=0&prompt=none
+```
+
+The `id_token` param is actually the JWT token in encoded format. You can validate the correctness of the encoded token
+and investigate its structure by pasting it in the [jwt.io](jwt.io) website.
+
+To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
+
+```typescript
+
+const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
+
+export interface JwtPayload {
+   iss?: string;  
+   sub?: string;  //Subject ID
+   aud?: string[] | string;
+   exp?: number;
+   nbf?: number;
+   iat?: number;
+   jti?: string;
+}
+```
+
+
 ## User Salt Management
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
@@ -193,7 +223,7 @@ Once the OAuth flow completes, the JWT token can be found in the redirect URL. A
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
 
-const address = jwtToAddress(jwt, userSalt)
+const zkUserAddress = jwtToAddress(jwt, userSalt)
 ```
 
 ## Get the Zero-Knowledge Proof
@@ -205,22 +235,55 @@ Because generating a ZK proof can be resource-intensive and potentially slow on 
 Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 ```bash
-curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
+"maxEpoch":"10", \
+"jwtRandomness":"100681567828351849884072155819400689117", \
+"salt":"248191903847969014646285995941615069143", \
+"keyClaimName":"sub" \
+}'
 
 Response:
 
-`{"proofPoints":{"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
+`{"proofPoints":{
+  "a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
+      "14650660244262428784196747165683760208919070184766586754097510948934669736103",
+      "1"],
+  "b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
+  "10547097602625638823059992458926868829066244356588080322181801706465994418281"],
+  ["12744153306027049365027606189549081708414309055722206371798414155740784907883",
+  "17883388059920040098415197241200663975335711492591606641576557652282627716838"],
+  ["1","0"]],
+  
+  "c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
+  "19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},
+  
+  "issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw", "indexMod4": 2 },
+  "headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
 ```
+
+To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
+
+The response can be mapped in the internal `ZkSignatureInputs` Type of zkLogin SDK. 
+
+ ```typescript
+ const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
+
+const partialZkSignature: ZkSignatureInputs = proofResponse as ZkSignatureInputs;
+````
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
   ```typescript
-  const ephemeralKeyPair = new Ed25519Keypair();
+ const ephemeralKeyPair = new Ed25519Keypair();
 
 const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
+
+txb.setSender(zkUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
    client,
@@ -228,12 +291,23 @@ const { bytes, signature: userSignature } = await txb.sign({
 });
   ```
 
-Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
-  ```typescript
-  import { getZkLoginSignature } from "@mysten/zklogin";
+Next, generate an Address Seed by combining `userSalt`, `sub` (subject ID) and `aud` (audience).
 
-const zkLoginSignature = getZkLoginSignature({
-   inputs,
+Set the address Seed and the partial ZK Signature to be the `inputs` param.
+
+You can now serialize the zkLogin signature by combining the ZK proof (`inputs`),
+the `maxEpoch` and the ephemeral signature (`userSignature`).
+
+  ```typescript
+import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
+
+const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
+
+const zkSignature : SerializedSignature = getZkLoginSignature({
+   inputs: {
+      ...partialZkSignature,
+      addressSeed
+   },
    maxEpoch,
    userSignature,
 });
