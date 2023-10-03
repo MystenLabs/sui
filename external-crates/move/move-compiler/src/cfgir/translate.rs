@@ -9,7 +9,7 @@ use crate::{
         cfg::{build_dead_code_error, ImmForwardCFG, MutForwardCFG},
     },
     diag,
-    diagnostics::Diagnostics,
+    diagnostics::{Diagnostic, Diagnostics},
     expansion::ast::{AbilitySet, ModuleIdent},
     hlir::ast::{self as H, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
@@ -491,13 +491,19 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut current_block: BasicBlock = VecDeque::new();
     let mut blocks = Vec::new();
+    let mut dead_code_error = None;
 
     for stmt in stmts.into_iter().rev() {
-        let (new_current, new_blocks) = statement(context, stmt, current_block);
+        let (new_current, new_blocks, new_dead_code_error) = statement(context, stmt, current_block);
         blocks = new_blocks.into_iter().chain(blocks.into_iter()).collect();
         current_block = new_current;
+        if new_dead_code_error.is_some() {
+            dead_code_error = new_dead_code_error;
+        }
     }
-
+    if let Some(diag) = dead_code_error {
+        context.env.add_diag(diag)
+    }
     (current_block, blocks)
 }
 
@@ -557,7 +563,7 @@ fn statement(
     context: &mut Context,
     sp!(sloc, stmt): H::Statement,
     mut current_block: BasicBlock,
-) -> (BasicBlock, BlockList) {
+) -> (BasicBlock, BlockList, Option<Diagnostic>) {
     use H::{Command_ as C, Statement_ as S};
     match stmt {
         S::IfElse {
@@ -595,7 +601,7 @@ fn statement(
                 .chain([(phi_label, current_block)])
                 .collect::<BlockList>();
 
-            (test_block, new_blocks)
+            (test_block, new_blocks, None)
         }
         // We could turn these into loops earlier and elide this case.
         S::While {
@@ -634,7 +640,7 @@ fn statement(
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
-            (entry_block, new_blocks)
+            (entry_block, new_blocks, None)
         }
         S::Loop {
             block: body,
@@ -657,34 +663,26 @@ fn statement(
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
-            (entry_block, new_blocks)
+            (entry_block, new_blocks, None)
         }
         S::Command(sp!(cloc, C::Break)) => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
             let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
-            (VecDeque::from([break_jump]), vec![])
+            (VecDeque::from([break_jump]), vec![], build_dead_code_error(&current_block))
         }
         S::Command(sp!(cloc, C::Continue)) => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
-            (
-                VecDeque::from([make_jump(
-                    cloc,
-                    context.loop_env.as_ref().unwrap().start_label,
-                    true,
-                )]),
-                vec![],
-            )
+            let jump = 
+                make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
+            (VecDeque::from([jump]), vec![], build_dead_code_error(&current_block))
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
-            (VecDeque::from([cmd]), vec![])
+            (VecDeque::from([cmd]), vec![], build_dead_code_error(&current_block) )
         }
         S::Command(cmd) => {
             current_block.push_front(cmd);
-            (current_block, vec![])
+            (current_block, vec![], None)
         }
     }
 }
@@ -697,12 +695,6 @@ fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
 
 fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
     sp(loc, H::Command_::Jump { target, from_user })
-}
-
-fn dead_code_error(context: &mut Context, block: &BasicBlock) {
-    if let Some(diag) = build_dead_code_error(block) {
-        context.env.add_diag(diag)
-    }
 }
 
 //**************************************************************************************************

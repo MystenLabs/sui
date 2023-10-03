@@ -12,14 +12,6 @@ error[E05001]: ability constraint not satisfied
   │                 │    The type '0x8675309::M::R' does not have the ability 'copy'
   │                 'copy' constraint not satisifed
 
-warning[W09005]: dead or unreachable code
-  ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_bind_type.move:6:27
-  │
-6 │         let _x: CupC<R> = abort 0;
-  │                           ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
-  │
-  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 warning[W09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/typing/constraints_not_satisfied_lvalues_bind_type.move:6:34
   │

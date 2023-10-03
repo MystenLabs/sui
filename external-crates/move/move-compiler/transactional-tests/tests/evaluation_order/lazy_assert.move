@@ -18,6 +18,6 @@ script {
 script {
     fun main() {
         // does abort, will be deprecated
-        assert(true, 1 / 0);
+        assert!(true, 1 / 0);
     }
 }

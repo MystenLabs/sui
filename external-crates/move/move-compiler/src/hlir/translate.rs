@@ -601,6 +601,9 @@ fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
 // phasing for you..
 
 fn divergent(stmt_: &H::Statement_) -> bool {
+    print!("stmt: ");
+    stmt_.print_verbose();
+    println!();
     // print!("Checking divergence for ");
     // crate::shared::ast_debug::print_verbose(stmt_);
     use H::{Command_ as C, Statement_ as S};
@@ -650,7 +653,7 @@ fn divergent(stmt_: &H::Statement_) -> bool {
 
         _ => false,
     };
-    // println!(" => {}", result);
+    println!("result: {}", result);
     result
 }
 
@@ -681,7 +684,7 @@ fn tunit(loc: Loc) -> H::Type {
     sp(loc, H::Type_::Unit)
 }
 
-fn unit_exp(loc: Loc) -> H::Exp {
+fn implicit_unit_exp(loc: Loc) -> H::Exp {
     H::exp(
         tunit(loc),
         sp(
@@ -766,7 +769,7 @@ fn emit_trailing_semicolon_error(context: &mut Context, terminal_loc: Loc, semi_
     ));
 }
 
-fn trailing_unit(seq: &T::Sequence) -> bool {
+fn has_trailing_unit(seq: &T::Sequence) -> bool {
     use T::SequenceItem_ as S;
     if let Some(sp!(_, S::Seq(exp))) = &seq.back() {
         matches!(exp.exp.value, T::UnannotatedExp_::Unit { trailing: true })
@@ -785,8 +788,8 @@ fn body(
     loc: Loc,
     seq: T::Sequence,
 ) -> (Block, Option<H::Exp>) {
-    if seq.len() == 0 {
-        return (make_block!(), Some(unit_exp(loc)));
+    if seq.is_empty() {
+        (make_block!(), Some(implicit_unit_exp(loc)))
     } else {
         let mut block = make_block!();
         let final_exp = tail_block(context, &mut block, expected_type, seq);
@@ -804,7 +807,7 @@ fn tail(
     // crate::shared::ast_debug::print_verbose(&e);
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
-            Some(unit_exp(e.exp.loc))
+            Some(implicit_unit_exp(e.exp.loc))
         } else {
             None
         };
@@ -906,11 +909,9 @@ fn tail_block(
     mut seq: T::Sequence,
 ) -> Option<H::Exp> {
     use T::SequenceItem_ as S;
-    let has_trailing_unit = trailing_unit(&seq);
+    let has_trailing_unit = has_trailing_unit(&seq);
     let last_exp = seq.pop_back();
     statement_block(context, block, seq, false);
-    // println!("Terminal: {:?}", terminal);
-    // println!("Last Exp: {:?}", last_exp);
     match last_exp {
         None => None,
         Some(sp!(_, S::Seq(last))) if has_trailing_unit => match block.iter().last() {
@@ -935,10 +936,16 @@ fn value(
     expected_type: Option<&H::Type>,
     e: T::Exp,
 ) -> Option<H::Exp> {
+    use T::UnannotatedExp_ as E;
+    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
+
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
-            Some(unit_exp(e.exp.loc))
+            Some(implicit_unit_exp(e.exp.loc))
+        } else if matches!(e.exp.value, E::Abort(_)) {
+            // `abort` is allowed in value positions, and do not produce unreachability errors.
+            None
         } else {
             emit_unreachable(context, e.exp.loc);
             None
@@ -950,8 +957,6 @@ fn value(
         return process_binops(context, block, out_type, e);
     }
 
-    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
-    use T::UnannotatedExp_ as E;
     let T::Exp {
         ty: ref in_type,
         exp: sp!(eloc, e_),
@@ -988,7 +993,7 @@ fn value(
                     },
                 ));
             }
-            Some(unit_exp(eloc))
+            Some(implicit_unit_exp(eloc))
         }
         E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(true))) => {
             use T::ExpListItem as TI;
@@ -1015,7 +1020,7 @@ fn value(
                     },
                 ));
             }
-            Some(unit_exp(eloc))
+            Some(implicit_unit_exp(eloc))
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1059,13 +1064,13 @@ fn value(
         // Whiles and loops Loops are currently moved to statement position
         e_ @ E::While(_, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(unit_exp(eloc))
+            Some(implicit_unit_exp(eloc))
         }
         e_ @ E::Loop {
             has_break: true, ..
         } => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(unit_exp(eloc))
+            Some(implicit_unit_exp(eloc))
         }
         e_ @ E::Loop { .. } => {
             emit_unreachable(context, eloc);
@@ -1102,14 +1107,14 @@ fn value(
                 None
             }
         }
-        E::Builtin(bt, args) => builtin(context, block, eloc, *bt, args).and_then(|e| make_exp(e)),
+        E::Builtin(bt, args) => builtin(context, block, eloc, *bt, args).and_then(make_exp),
 
         // -----------------------------------------------------------------------------------------
         // nested expressions
         // -----------------------------------------------------------------------------------------
         E::Vector(vec_loc, size, vty, args) => {
             let maybe_values = value_list(context, block, None, *args);
-            let vec_exp = if let Some(values) = maybe_values {
+            if let Some(values) = maybe_values {
                 make_exp(HE::Vector(
                     vec_loc,
                     size,
@@ -1118,8 +1123,7 @@ fn value(
                 ))
             } else {
                 None
-            };
-            vec_exp
+            }
         }
         E::Dereference(ev) => {
             let value = value(context, block, None, *ev);
@@ -1283,7 +1287,7 @@ fn value(
                 | Some(bt @ sp!(_, BT::U32))
                 | Some(bt @ sp!(_, BT::U64))
                 | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => bt.clone(),
+                | Some(bt @ sp!(_, BT::U256)) => *bt,
                 _ => panic!("ICE typing failed for cast"),
             };
             if let Some(base) = new_base {
@@ -1371,12 +1375,11 @@ fn value_block(
     use T::SequenceItem_ as S;
     let last_exp = seq.pop_back();
     statement_block(context, block, seq, false);
-    let last_exp = match last_exp {
+    match last_exp {
         None => None,
         Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
         Some(_) => panic!("ICE last sequence item should be an exp"),
-    };
-    last_exp
+    }
 }
 
 fn value_list(
@@ -1580,7 +1583,7 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: T::Sequence, s
     // println!("=> stmt block");
     use T::SequenceItem_ as S;
     // println!("statement block");
-    let has_trailing_unit = stmt_pos && trailing_unit(&seq);
+    let has_trailing_unit = stmt_pos && has_trailing_unit(&seq);
     let last_ndx = seq.iter().skip(1).len();
     for (ndx, sp!(sloc, seq_item)) in seq.into_iter().enumerate() {
         // println!("terminal: {:?}", terminal);
@@ -1828,7 +1831,7 @@ fn value_evaluation_order(
         if let Some(final_exp) = e {
             values.push(final_exp);
         } else {
-            values.push(unit_exp(te_loc));
+            values.push(implicit_unit_exp(te_loc));
         }
         let adds_to_result = !new_stmts.is_empty();
         needs_binding = needs_binding || adds_to_result;
@@ -1882,7 +1885,7 @@ fn bind_value_in_block(
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
     if let Some(real_exp) = rhs_exp {
-        let loc = *&real_exp.exp.loc;
+        let loc = real_exp.exp.loc;
         stmts.push_back(sp(loc, S::Command(sp(loc, C::Assign(binders, real_exp)))));
         true
     } else {
@@ -1928,10 +1931,7 @@ fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>
 
 fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::LValue, H::Exp) {
     let binder = context.new_temp(loc, sp(loc, ty.clone()));
-    let lvalue = sp(
-        loc,
-        H::LValue_::Var(binder.clone(), Box::new(sp(loc, ty.clone()))),
-    );
+    let lvalue = sp(loc, H::LValue_::Var(binder, Box::new(sp(loc, ty.clone()))));
     let uexp = sp(
         loc,
         H::UnannotatedExp_::Move {
@@ -1995,7 +1995,7 @@ fn builtin(
         }
         TB::Freeze(_bt) => {
             let args = value(context, block, None, *targ);
-            args.and_then(|arg| Some(E::Freeze(Box::new(arg))))
+            args.map(|arg| E::Freeze(Box::new(arg)))
         }
         TB::Assert(_) => unreachable!(),
     }
@@ -2171,19 +2171,17 @@ fn make_boolean_binop(
 
 fn simple_bool_binop_arg((block, exp): &(Block, Option<H::Exp>)) -> bool {
     use H::UnannotatedExp_ as HE;
-    if block.len() > 0 {
+    if !block.is_empty() || exp.is_none() {
         false
-    } else if let Some(exp) = exp {
-        match exp.exp.value {
-            HE::Value(_)
-            | HE::Constant(_)
-            | HE::Move { .. }
-            | HE::Copy { .. }
-            | HE::UnresolvedError => true,
-            _ => false,
-        }
     } else {
-        false
+        matches!(
+            exp.as_ref().unwrap().exp.value,
+            HE::Value(_)
+                | HE::Constant(_)
+                | HE::Move { .. }
+                | HE::Copy { .. }
+                | HE::UnresolvedError
+        )
     }
 }
 
