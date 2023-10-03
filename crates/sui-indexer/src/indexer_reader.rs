@@ -1,19 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, RwLock},
-};
-
+use crate::models_v2::checkpoints::StoredCheckpoint;
 use crate::{
     errors::IndexerError,
-    models_v2::objects::StoredObject,
-    models_v2::{
-        checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, packages::StoredPackage,
-        transactions::StoredTransaction,
-    },
+    models_v2::{epoch::StoredEpochInfo, objects::ObjectRefColumn, packages::StoredPackage},
+    models_v2::{objects::StoredObject, transactions::StoredTransaction, tx_indices::TxDigest},
     schema_v2::{checkpoints, epochs, objects, packages, transactions},
+    types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
@@ -21,15 +14,26 @@ use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
-use sui_json_rpc_types::{CheckpointId, EpochInfo};
+use fastcrypto::encoding::Encoding;
+use fastcrypto::encoding::Hex;
+use itertools::any;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::{Arc, RwLock},
+};
+use sui_json_rpc_types::{CheckpointId, EpochInfo, SuiTransactionBlockResponse, TransactionFilter};
 use sui_types::{
-    base_types::{ObjectID, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
-    digests::TransactionDigest,
+    digests::{ObjectDigest, TransactionDigest},
+    dynamic_field::DynamicFieldInfo,
     move_package::MovePackage,
-    object::Object,
+    object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
+
+pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
+pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
 
 #[derive(Clone)]
 pub struct IndexerReader {
@@ -226,7 +230,7 @@ impl IndexerReader {
         }
     }
 
-    pub async fn get_package_async(
+    pub async fn get_package_in_blocking_task(
         &self,
         package_id: ObjectID,
     ) -> Result<Option<MovePackage>, IndexerError> {
@@ -334,7 +338,7 @@ impl IndexerReader {
         sui_json_rpc_types::Checkpoint::try_from(stored_checkpoint)
     }
 
-    pub fn get_checkpoints_from_db(
+    fn get_checkpoints_from_db(
         &self,
         cursor: Option<u64>,
         limit: usize,
@@ -375,19 +379,7 @@ impl IndexerReader {
             .collect()
     }
 
-    pub fn get_transaction(
-        &self,
-        digest: TransactionDigest,
-    ) -> Result<Option<StoredTransaction>, IndexerError> {
-        self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                .first::<StoredTransaction>(conn)
-                .optional()
-        })
-    }
-
-    pub fn multi_get_transactions(
+    fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
@@ -402,29 +394,265 @@ impl IndexerReader {
         })
     }
 
-    pub fn multi_get_transaction_block_response(
+    fn stored_transaction_to_transaction_block(
         &self,
-        digests: &[TransactionDigest],
-        options: &sui_json_rpc_types::SuiTransactionBlockResponseOptions,
-    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        self.multi_get_transactions(digests)?
+        stored_txes: Vec<StoredTransaction>,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
+        stored_txes
             .into_iter()
-            .map(|transaction| transaction.try_into_sui_transaction_block_response(options, self))
+            .map(|stored_tx| stored_tx.try_into_sui_transaction_block_response(&options, self))
+            .collect::<IndexerResult<Vec<_>>>()
+    }
+
+    fn multi_get_transactions_with_digest_bytes(
+        &self,
+        digests: Vec<Vec<u8>>,
+    ) -> Result<Vec<StoredTransaction>, IndexerError> {
+        self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq_any(digests))
+                .load::<StoredTransaction>(conn)
+        })
+    }
+
+    pub async fn get_owned_objects_in_blocking_task(
+        &self,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, cursor, limit))
+            .await
+    }
+
+    fn get_owned_objects_impl(
+        &self,
+        address: SuiAddress,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<ObjectRead>, IndexerError> {
+        let objects: Vec<StoredObject> = self.run_query(|conn| {
+            let mut query = objects::dsl::objects
+                .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
+                .filter(objects::dsl::owner_id.eq(address.to_vec()))
+                .limit(limit as i64)
+                .into_boxed();
+            if let Some(object_cursor) = cursor {
+                query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
+            }
+            query.load::<StoredObject>(conn)
+        })?;
+        objects
+            .into_iter()
+            .map(|object| object.try_into_object_read(self))
             .collect::<Result<Vec<_>, _>>()
     }
 
-    pub async fn multi_get_transaction_block_response_async(
+    fn query_transaction_blocks_by_checkpoint_impl(
+        &self,
+        checkpoint_seq: u64,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+        cursor_tx_seq: Option<i64>,
+        limit: usize,
+        is_descending: bool,
+    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
+        let mut query = transactions::dsl::transactions
+            .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint_seq as i64))
+            .into_boxed();
+
+        // Translate transaction digest cursor to tx sequence number
+        if let Some(cursor_tx_seq) = cursor_tx_seq {
+            if is_descending {
+                query = query.filter(transactions::dsl::tx_sequence_number.le(cursor_tx_seq));
+            } else {
+                query = query.filter(transactions::dsl::tx_sequence_number.ge(cursor_tx_seq));
+            }
+        }
+        if is_descending {
+            query = query.order(transactions::dsl::tx_sequence_number.desc());
+        } else {
+            query = query.order(transactions::dsl::tx_sequence_number.asc());
+        }
+
+        let stored_txes =
+            self.run_query(|conn| query.limit((limit) as i64).load::<StoredTransaction>(conn))?;
+
+        self.stored_transaction_to_transaction_block(stored_txes, options)
+    }
+
+    pub async fn query_transaction_blocks_in_blocking_task(
+        &self,
+        filter: Option<TransactionFilter>,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+        cursor: Option<TransactionDigest>,
+        limit: usize,
+        is_descending: bool,
+    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
+        self.spawn_blocking(move |this| {
+            this.query_transaction_blocks_impl(filter, options, cursor, limit, is_descending)
+        })
+        .await
+    }
+
+    fn query_transaction_blocks_impl(
+        &self,
+        filter: Option<TransactionFilter>,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+        cursor: Option<TransactionDigest>,
+        limit: usize,
+        is_descending: bool,
+    ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
+        let cursor_tx_seq = if let Some(cursor) = cursor {
+            Some(self.run_query(|conn| {
+                transactions::dsl::transactions
+                    .select(transactions::tx_sequence_number)
+                    .filter(transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()))
+                    .first::<i64>(conn)
+            })?)
+        } else {
+            None
+        };
+
+        let main_where_clause = match filter {
+            // Processed above
+            Some(TransactionFilter::Checkpoint(seq)) => {
+                return self.query_transaction_blocks_by_checkpoint_impl(
+                    seq,
+                    options,
+                    cursor_tx_seq,
+                    limit,
+                    is_descending,
+                )
+            }
+            // FIXME: sanitize module & function
+            Some(TransactionFilter::MoveFunction {
+                package,
+                module,
+                function,
+            }) => match (module, function) {
+                (Some(module), Some(function)) => {
+                    let package_module_function = format!("{}::{}::{}", package, module, function);
+                    format!(
+                        "package_module_functions @> ARRAY['{}']",
+                        package_module_function
+                    )
+                }
+                (Some(module), None) => {
+                    let package_module = format!("{}::{}", package, module);
+                    format!("package_modules @> ARRAY['{}']", package_module)
+                }
+                (None, Some(_)) => {
+                    return Err(IndexerError::InvalidArgumentError(
+                        "Function can be present wihtout Module.".into(),
+                    ));
+                }
+                (None, None) => {
+                    let package = Hex::encode(package.to_vec());
+                    format!("packages @> ARRAY['\\x{}'::bytea]", package)
+                }
+            },
+            Some(TransactionFilter::InputObject(object_id)) => {
+                let object_id = Hex::encode(object_id.to_vec());
+                format!("input_objects @> ARRAY['\\x{}'::bytea]", object_id)
+            }
+            Some(TransactionFilter::ChangedObject(object_id)) => {
+                let object_id = Hex::encode(object_id.to_vec());
+                format!("changed_objects @> ARRAY['\\x{}'::bytea]", object_id)
+            }
+            Some(TransactionFilter::FromAddress(from_address)) => {
+                let from_address = Hex::encode(from_address.to_vec());
+                format!("senders @> ARRAY['\\x{}'::bytea]", from_address)
+            }
+            Some(TransactionFilter::ToAddress(to_address)) => {
+                let to_address = Hex::encode(to_address.to_vec());
+                format!("recipients @> ARRAY['\\x{}'::bytea]", to_address)
+            }
+            Some(TransactionFilter::FromAndToAddress { from, to }) => {
+                let from_address = Hex::encode(from.to_vec());
+                let to_address = Hex::encode(to.to_vec());
+                format!(
+                    "(senders @> ARRAY['\\x{}'::bytea] AND recipients @> ARRAY['\\x{}'::bytea])",
+                    from_address, to_address
+                )
+            }
+            Some(TransactionFilter::FromOrToAddress { addr }) => {
+                let address = Hex::encode(addr.to_vec());
+                format!(
+                    "(senders @> ARRAY['\\x{}'::bytea] OR recipients @> ARRAY['\\x{}'::bytea])",
+                    address, address
+                )
+            }
+            Some(
+                TransactionFilter::TransactionKind(_) | TransactionFilter::TransactionKindIn(_),
+            ) => {
+                return Err(IndexerError::NotSupportedError(
+                    "TransactionKind filter is not supported.".into(),
+                ));
+            }
+            None => {
+                // apply no filter
+                "1 = 1".into()
+            }
+        };
+        let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
+            if is_descending {
+                format!("AND {TX_SEQUENCE_NUMBER_STR} <= {}", cursor_tx_seq)
+            } else {
+                format!("AND {TX_SEQUENCE_NUMBER_STR} >= {}", cursor_tx_seq)
+            }
+        } else {
+            "".to_string()
+        };
+        let query = format!(
+            "SELECT {TRANSACTION_DIGEST_STR} FROM tx_indices WHERE {} {} ORDER BY {TX_SEQUENCE_NUMBER_STR} {} LIMIT {}",
+            main_where_clause,
+            cursor_clause,
+            if is_descending { "DESC" } else { "ASC" },
+            limit,
+        );
+
+        tracing::debug!("query_transaction_blocks: {}", query);
+
+        let tx_digests = self
+            .run_query(|conn| diesel::sql_query(query.clone()).load::<TxDigest>(conn))?
+            .into_iter()
+            .map(|td| td.transaction_digest)
+            .collect::<Vec<_>>();
+
+        self.multi_get_transaction_block_response_by_digest_bytes(tx_digests, options)
+    }
+
+    fn multi_get_transaction_block_response_impl(
+        &self,
+        digests: &[TransactionDigest],
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+        let stored_txes = self.multi_get_transactions(digests)?;
+        self.stored_transaction_to_transaction_block(stored_txes, options)
+    }
+
+    fn multi_get_transaction_block_response_by_digest_bytes(
+        &self,
+        digests: Vec<Vec<u8>>,
+        options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+    ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
+        let stored_txes = self.multi_get_transactions_with_digest_bytes(digests)?;
+        self.stored_transaction_to_transaction_block(stored_txes, options)
+    }
+
+    pub async fn multi_get_transaction_block_response_in_blocking_task(
         &self,
         digests: Vec<TransactionDigest>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
         self.spawn_blocking(move |this| {
-            this.multi_get_transaction_block_response(&digests, &options)
+            this.multi_get_transaction_block_response_impl(&digests, options)
         })
         .await
     }
 
-    pub fn get_transaction_events(
+    fn get_transaction_events_impl(
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
@@ -457,12 +685,116 @@ impl IndexerReader {
             .map_err(Into::into)
     }
 
-    pub async fn get_transaction_events_async(
+    pub async fn get_transaction_events_in_blocking_task(
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_transaction_events(digest))
+        self.spawn_blocking(move |this| this.get_transaction_events_impl(digest))
             .await
+    }
+
+    pub async fn get_dynamic_fields_in_blocking_task(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_dynamic_fields_impl(parent_object_id, cursor, limit)
+        })
+        .await
+    }
+
+    fn get_dynamic_fields_impl(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
+        let objects: Vec<StoredObject> = self.run_query(|conn| {
+            let mut query = objects::dsl::objects
+                .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
+                .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
+                .order(objects::dsl::object_id.asc())
+                .limit(limit as i64)
+                .into_boxed();
+            if let Some(object_cursor) = cursor {
+                query = query.filter(objects::dsl::object_id.ge(object_cursor.to_vec()));
+            }
+            query.load::<StoredObject>(conn)
+        })?;
+
+        if any(objects.iter(), |o| o.df_object_id.is_none()) {
+            return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Dynamic field has empty df_object_id column for parent object {}",
+                parent_object_id
+            )));
+        }
+        // for Dynamic field objects, df_object_id != object_id, we need another look up
+        // to get the version and digests.
+        // TODO: simply store df_object_version and df_object_digest as well?
+        let dfo_ids = objects
+            .iter()
+            .filter_map(|o| {
+                // Unwrap safe: checked nullity above
+                if o.df_object_id.as_ref().unwrap() == &o.object_id {
+                    None
+                } else {
+                    Some(o.df_object_id.clone().unwrap())
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let object_refs = self.get_object_refs(dfo_ids)?;
+        let mut dynamic_fields = objects
+            .into_iter()
+            .map(StoredObject::try_into_expectant_dynamic_field_info)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        for mut df in dynamic_fields.iter_mut() {
+            if let Some(obj_ref) = object_refs.get(&df.object_id) {
+                df.version = obj_ref.1;
+                df.digest = obj_ref.2;
+            }
+        }
+
+        Ok(dynamic_fields)
+    }
+
+    fn get_object_refs(
+        &self,
+        object_ids: Vec<Vec<u8>>,
+    ) -> IndexerResult<HashMap<ObjectID, ObjectRef>> {
+        self.run_query(|conn| {
+            let query = objects::dsl::objects
+                .select((
+                    objects::dsl::object_id,
+                    objects::dsl::object_version,
+                    objects::dsl::object_digest,
+                ))
+                .filter(objects::dsl::object_id.eq_any(object_ids))
+                .into_boxed();
+            query.load::<ObjectRefColumn>(conn)
+        })?
+        .into_iter()
+        .map(|object_ref: ObjectRefColumn| {
+            let object_id = ObjectID::from_bytes(object_ref.object_id.clone()).map_err(|_e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Can't convert {:?} to ObjectID",
+                    object_ref.object_id
+                ))
+            })?;
+            let seq = SequenceNumber::from_u64(object_ref.object_version as u64);
+            let object_digest = ObjectDigest::try_from(object_ref.object_digest.as_slice())
+                .map_err(|e| {
+                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "object {:?} has incompatible object digest. Error: {e}",
+                        object_ref.object_digest
+                    ))
+                })?;
+            Ok((object_id, (object_id, seq, object_digest)))
+        })
+        .collect::<IndexerResult<HashMap<_, _>>>()
     }
 }
 
