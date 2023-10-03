@@ -32,7 +32,10 @@ impl Query {
     /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
-        ctx.data_provider().fetch_chain_id().await
+        ctx.data_unchecked::<PgManager>()
+            .get_chain_identifier()
+            .await
+            .extend()
     }
 
     /// Configuration for this RPC service
@@ -53,10 +56,11 @@ impl Query {
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
-        // TODO (wlmyng): use postgres
-        let o = ctx.data_provider().fetch_obj(address, None).await?;
-        Ok(o.and_then(|q| q.owner)
-            .map(|o| ObjectOwner::Address(Address { address: o })))
+        let owner_address = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_owner(address)
+            .await?;
+        Ok(owner_address.map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
     async fn object(
@@ -65,8 +69,10 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        // TODO (wlmyng): use postgres
-        ctx.data_provider().fetch_obj(address, version).await
+        ctx.data_unchecked::<PgManager>()
+            .fetch_obj(address, version)
+            .await
+            .extend()
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
@@ -93,24 +99,24 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        let result = if let Some(id) = id {
+        if let Some(id) = id {
             match (&id.digest, &id.sequence_number) {
-                (Some(_), Some(_)) => return Err(Error::InvalidCheckpointQuery.extend()),
-                _ => {
-                    ctx.data_unchecked::<PgManager>()
-                        .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
-                        .await?
-                }
+                (Some(_), Some(_)) => Err(Error::InvalidCheckpointQuery.extend()),
+                _ => ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
+                    .await
+                    .extend(),
             }
         } else {
             Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_checkpoint()
-                    .await?,
+                    .await
+                    .extend(),
             )
-        };
-
-        result.map(Checkpoint::try_from).transpose().extend()
+            .transpose()
+        }
     }
 
     async fn transaction_block(
@@ -118,8 +124,10 @@ impl Query {
         ctx: &Context<'_>,
         digest: String,
     ) -> Result<Option<TransactionBlock>> {
-        let result = ctx.data_unchecked::<PgManager>().fetch_tx(&digest).await?;
-        result.map(TransactionBlock::try_from).transpose().extend()
+        ctx.data_unchecked::<PgManager>()
+            .fetch_tx(&digest)
+            .await
+            .extend()
     }
 
     // coinMetadata
@@ -131,11 +139,11 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Connection<String, Checkpoint>> {
-        // TODO (wlmyng): use postgres
-        ctx.data_provider()
-            .fetch_checkpoint_connection(first, after, last, before)
+    ) -> Result<Option<Connection<String, Checkpoint>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_checkpoints(first, after, last, before)
             .await
+            .extend()
     }
 
     async fn transaction_block_connection(

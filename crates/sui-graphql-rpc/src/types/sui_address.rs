@@ -29,6 +29,12 @@ pub(crate) enum FromStrError {
     BadHex(char, usize),
 }
 
+#[derive(Error, Debug, Eq, PartialEq)]
+pub(crate) enum FromVecError {
+    #[error("Expected SuiAddress with {} bytes, received {0}", SUI_ADDRESS_LENGTH)]
+    WrongLength(usize),
+}
+
 #[Scalar]
 impl ScalarType for SuiAddress {
     fn parse(value: Value) -> InputValueResult<Self> {
@@ -59,6 +65,20 @@ impl SuiAddress {
 
     pub fn as_slice(&self) -> &[u8] {
         &self.0
+    }
+
+    pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> Result<Self, FromVecError> {
+        <[u8; SUI_ADDRESS_LENGTH]>::try_from(bytes.as_ref())
+            .map_err(|_| FromVecError::WrongLength(bytes.as_ref().len()))
+            .map(SuiAddress)
+    }
+}
+
+impl TryFrom<Vec<u8>> for SuiAddress {
+    type Error = FromVecError;
+
+    fn try_from(bytes: Vec<u8>) -> Result<Self, FromVecError> {
+        Self::from_bytes(bytes)
     }
 }
 
