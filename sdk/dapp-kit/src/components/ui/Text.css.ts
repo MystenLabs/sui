@@ -9,11 +9,8 @@ import { themeVars } from '../../themes/themeContract.js';
 export const textVariants = recipe({
 	variants: {
 		size: {
-			'1': {
-				fontSize: 14,
-			},
-			'2': {
-				fontSize: 20,
+			sm: {
+				fontSize: themeVars.fontSizes.small,
 			},
 		},
 		weight: {
@@ -33,7 +30,7 @@ export const textVariants = recipe({
 		},
 	},
 	defaultVariants: {
-		size: '1',
+		size: 'sm',
 		weight: 'normal',
 	},
 });

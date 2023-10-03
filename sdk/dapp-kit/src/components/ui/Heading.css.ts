@@ -9,17 +9,17 @@ import { themeVars } from '../../themes/themeContract.js';
 export const headingVariants = recipe({
 	variants: {
 		size: {
-			'1': {
-				fontSize: 14,
+			sm: {
+				fontSize: themeVars.fontSizes.small,
 			},
-			'2': {
-				fontSize: 16,
+			md: {
+				fontSize: themeVars.fontSizes.medium,
 			},
-			'3': {
-				fontSize: 18,
+			lg: {
+				fontSize: themeVars.fontSizes.large,
 			},
-			'4': {
-				fontSize: 20,
+			xl: {
+				fontSize: themeVars.fontSizes.xlarge,
 			},
 		},
 		weight: {
@@ -35,7 +35,7 @@ export const headingVariants = recipe({
 		},
 	},
 	defaultVariants: {
-		size: '3',
+		size: 'lg',
 		weight: 'bold',
 	},
 });

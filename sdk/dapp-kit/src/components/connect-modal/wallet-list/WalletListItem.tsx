@@ -27,7 +27,7 @@ export function WalletListItem({ name, icon, onClick, isSelected = false }: Wall
 				) : (
 					icon
 				)}
-				<Heading size="2" truncate asChild>
+				<Heading size="md" truncate asChild>
 					<div>{name}</div>
 				</Heading>
 			</button>

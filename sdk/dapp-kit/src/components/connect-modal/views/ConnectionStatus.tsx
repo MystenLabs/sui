@@ -27,7 +27,7 @@ export function ConnectionStatus({
 				alt={`${selectedWallet.name} logo`}
 			/>
 			<div className={styles.title}>
-				<Heading as="h2" size="4">
+				<Heading as="h2" size="xl">
 					Opening {selectedWallet.name}
 				</Heading>
 			</div>

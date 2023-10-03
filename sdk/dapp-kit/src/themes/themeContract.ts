@@ -47,6 +47,12 @@ const themeContractValues = {
 		medium: '',
 		bold: '',
 	},
+	fontSizes: {
+		small: '',
+		medium: '',
+		large: '',
+		xlarge: '',
+	},
 	typography: {
 		fontFamily: '',
 		fontSize: '',

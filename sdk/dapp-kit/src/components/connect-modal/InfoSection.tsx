@@ -13,7 +13,7 @@ type InfoSectionProps = {
 export function InfoSection({ title, children }: InfoSectionProps) {
 	return (
 		<section className={styles.container}>
-			<Heading as="h3" size="1" weight="normal">
+			<Heading as="h3" size="sm" weight="normal">
 				{title}
 			</Heading>
 			<Text weight="medium" color="muted">
