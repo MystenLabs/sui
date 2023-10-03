@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use tracing::info;
 
 use clap::Parser;
@@ -25,7 +26,6 @@ pub async fn main() -> anyhow::Result<()> {
     let sources = initialize(&package_config, tmp_dir.path()).await?;
     info!("verification complete in {:?}", start.elapsed());
     info!("serving on {}", host_port());
-    serve(AppState { sources })?
-        .await
-        .map_err(anyhow::Error::from)
+    let app_state = Arc::new(AppState { sources });
+    serve(app_state)?.await.map_err(anyhow::Error::from)
 }
