@@ -89,6 +89,7 @@ const MAX_PROTOCOL_VERSION: u64 = 31;
 //             In execution, has_public_transfer is recomputed when loading the object.
 //             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
 // Version 31: Add support for shared object deletion in devnet only.
+//             Enable auxiliary data for effects v2 (devnet and testnet).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -335,6 +336,9 @@ struct FeatureFlags {
     // If true, recompute has_public_transfer from the type instead of what is stored in the object
     #[serde(skip_serializing_if = "is_false")]
     recompute_has_public_transfer_in_execution: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_effects_aux_data: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1032,6 +1036,10 @@ impl ProtocolConfig {
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
+
+    pub fn enable_effects_aux_data(&self) -> bool {
+        self.feature_flags.enable_effects_aux_data
+    }
 }
 
 #[cfg(not(msim))]
@@ -1640,6 +1648,9 @@ impl ProtocolConfig {
                     // Only enable shared object deletion on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
+                    }
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_effects_aux_data = true;
                     }
                 }
                 // Use this template when making changes:

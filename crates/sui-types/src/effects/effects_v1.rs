@@ -4,7 +4,7 @@
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use crate::digests::{ObjectDigest, TransactionEventsDigest};
+use crate::digests::{EffectsAuxDataDigest, ObjectDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
@@ -148,7 +148,9 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
     }
-
+    fn aux_data_digest(&self) -> Option<&EffectsAuxDataDigest> {
+        None
+    }
     fn dependencies(&self) -> &[TransactionDigest] {
         &self.dependencies
     }

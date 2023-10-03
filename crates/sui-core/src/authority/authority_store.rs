@@ -1053,6 +1053,7 @@ impl AuthorityStore {
             mutable_inputs,
             written,
             events,
+            aux_data,
             max_binary_format_version: _,
             loaded_runtime_objects: _,
             no_extraneous_module_bytes: _,
@@ -1210,6 +1211,13 @@ impl AuthorityStore {
             .map(|(i, e)| ((event_digest, i), e));
 
         write_batch.insert_batch(&self.perpetual_tables.events, events)?;
+
+        if let (Some(aux_data), Some(aux_data_digest)) = (aux_data, effects.aux_data_digest()) {
+            write_batch.insert_batch(
+                &self.perpetual_tables.aux_data,
+                [(aux_data_digest, aux_data)],
+            )?;
+        }
 
         let new_locks_to_init: Vec<_> = written
             .values()

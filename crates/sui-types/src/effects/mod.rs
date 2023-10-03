@@ -1,15 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use self::effects_v2::TransactionEffectsV2;
 use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
 use crate::digests::{
-    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
+    EffectsAuxDataDigest, ObjectDigest, TransactionDigest, TransactionEffectsDigest,
+    TransactionEventsDigest,
 };
+use crate::effects::effects_v2::TransactionEffectsV2;
 use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
 use crate::execution::SharedInput;
@@ -21,6 +22,7 @@ use crate::message_envelope::{
 use crate::object::Owner;
 use crate::storage::WriteKind;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
+pub use effects_aux_data::{EffectsAuxDataEntry, EffectsAuxDataInMemory, EffectsAuxDataInStorage};
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
@@ -30,6 +32,7 @@ use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 
+mod effects_aux_data;
 mod effects_v1;
 mod effects_v2;
 mod object_change;
@@ -166,6 +169,7 @@ impl TransactionEffects {
         changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
         gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
+        aux_data_digest: Option<EffectsAuxDataDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
         Self::V2(TransactionEffectsV2::new(
@@ -178,6 +182,7 @@ impl TransactionEffects {
             changed_objects,
             gas_object,
             events_digest,
+            aux_data_digest,
             dependencies,
         ))
     }
@@ -372,6 +377,7 @@ pub trait TransactionEffectsAPI {
     fn gas_object(&self) -> (ObjectRef, Owner);
 
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
+    fn aux_data_digest(&self) -> Option<&EffectsAuxDataDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
 
     fn transaction_digest(&self) -> &TransactionDigest;
