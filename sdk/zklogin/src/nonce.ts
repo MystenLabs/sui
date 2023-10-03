@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { PublicKey } from '@mysten/sui.js/cryptography';
+import { toBufferBE } from '@mysten/sui.js/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 
 import { poseidonHash } from './poseidon.js';
-import { toBufferBE } from './utils.js';
 
 const NONCE_LENGTH = 27;
 

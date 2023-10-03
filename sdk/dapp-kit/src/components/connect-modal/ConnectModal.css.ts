@@ -20,7 +20,6 @@ export const content = style({
 	bottom: 16,
 	left: 16,
 	right: 16,
-	zIndex: 999999999,
 	display: 'flex',
 	flexDirection: 'column',
 	justifyContent: 'space-between',

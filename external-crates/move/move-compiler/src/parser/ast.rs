@@ -104,10 +104,17 @@ pub struct Script {
 pub enum Use {
     Module(ModuleIdent, Option<ModuleName>),
     Members(ModuleIdent, Vec<(Name, Option<Name>)>),
+    Fun {
+        visibility: Visibility,
+        function: Box<NameAccessChain>,
+        ty: Box<NameAccessChain>,
+        method: Name,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UseDecl {
+    pub loc: Loc,
     pub attributes: Vec<Attributes>,
     pub use_: Use,
 }
@@ -442,7 +449,7 @@ pub enum Ability_ {
 }
 pub type Ability = Spanned<Ability_>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
@@ -639,6 +646,8 @@ pub enum Exp_ {
 
     // e.f
     Dot(Box<Exp>, Name),
+    // e.f(earg,*)
+    DotCall(Box<Exp>, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
     // e[e']
     Index(Box<Exp>, Box<Exp>), // spec only
 
@@ -1180,7 +1189,11 @@ impl AstDebug for ModuleMember {
 
 impl AstDebug for UseDecl {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let UseDecl { attributes, use_ } = self;
+        let UseDecl {
+            attributes,
+            loc: _,
+            use_,
+        } = self;
         attributes.ast_debug(w);
         use_.ast_debug(w);
     }
@@ -1205,6 +1218,19 @@ impl AstDebug for Use {
                         }
                     })
                 })
+            }
+            Use::Fun {
+                visibility,
+                function,
+                ty,
+                method,
+            } => {
+                visibility.ast_debug(w);
+                w.write(" use fun ");
+                function.ast_debug(w);
+                w.write(" as ");
+                ty.ast_debug(w);
+                w.write(format!(".{method}"));
             }
         }
         w.write(";")
@@ -1841,6 +1867,18 @@ impl AstDebug for Exp_ {
             E::Dot(e, n) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n));
+            }
+            E::DotCall(e, n, tys_opt, sp!(_, rhs)) => {
+                e.ast_debug(w);
+                w.write(&format!(".{}", n));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
             }
             E::Cast(e, ty) => {
                 w.write("(");

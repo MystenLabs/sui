@@ -936,20 +936,20 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             lvalues(context, code, ls);
         }
         C::Mutate(eref, ervalue) => {
-            exp(context, code, ervalue);
-            exp(context, code, eref);
+            exp(context, code, *ervalue);
+            exp(context, code, *eref);
             code.push(sp(loc, B::WriteRef));
         }
         C::Abort(ecode) => {
-            exp_(context, code, ecode);
+            exp(context, code, ecode);
             code.push(sp(loc, B::Abort));
         }
         C::Return { exp: e, .. } => {
-            exp_(context, code, e);
+            exp(context, code, e);
             code.push(sp(loc, B::Ret));
         }
         C::IgnoreAndPop { pop_num, exp: e } => {
-            exp_(context, code, e);
+            exp(context, code, e);
             for _ in 0..pop_num {
                 code.push(sp(loc, B::Pop));
             }
@@ -960,7 +960,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             if_true,
             if_false,
         } => {
-            exp_(context, code, cond);
+            exp(context, code, cond);
             code.push(sp(loc, B::BrFalse(label(if_false))));
             code.push(sp(loc, B::Branch(label(if_true))));
         }
@@ -1012,11 +1012,7 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
 // Expressions
 //**************************************************************************************************
 
-fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: Box<H::Exp>) {
-    exp_(context, code, *e)
-}
-
-fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
+fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use Value_ as V;
     use H::UnannotatedExp_ as E;
     use IR::Bytecode_ as B;
@@ -1059,7 +1055,9 @@ fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
 
         E::ModuleCall(mcall) => {
-            exp(context, code, mcall.arguments);
+            for arg in mcall.arguments {
+                exp(context, code, arg);
+            }
             module_call(
                 context,
                 loc,
@@ -1070,29 +1068,31 @@ fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             );
         }
 
-        E::Builtin(b, arg) => {
-            exp(context, code, arg);
+        E::Builtin(b, args) => {
+            for arg in args {
+                exp(context, code, arg);
+            }
             builtin(context, code, *b);
         }
 
         E::Freeze(er) => {
-            exp(context, code, er);
+            exp(context, code, *er);
             code.push(sp(loc, B::FreezeRef));
         }
 
         E::Dereference(er) => {
-            exp(context, code, er);
+            exp(context, code, *er);
             code.push(sp(loc, B::ReadRef));
         }
 
         E::UnaryExp(op, er) => {
-            exp(context, code, er);
+            exp(context, code, *er);
             unary_op(code, op);
         }
 
         E::BinopExp(el, op, er) => {
-            exp(context, code, el);
-            exp(context, code, er);
+            exp(context, code, *el);
+            exp(context, code, *er);
             binary_op(code, op);
         }
 
@@ -1109,7 +1109,7 @@ fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Pack(s, tys, field_args) => {
             for (_, _, earg) in field_args {
-                exp_(context, code, earg);
+                exp(context, code, earg);
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
             code.push(sp(loc, B::Pack(n, base_types(context, tys))))
@@ -1117,22 +1117,21 @@ fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Vector(_, n, bt, args) => {
             let ty = base_type(context, *bt);
-            exp(context, code, args);
+            for arg in args {
+                exp(context, code, arg);
+            }
             code.push(sp(loc, B::VecPack(ty, n.try_into().unwrap())))
         }
 
-        E::ExpList(items) => {
-            for item in items {
-                let ei = match item {
-                    H::ExpListItem::Single(ei, _) | H::ExpListItem::Splat(_, ei, _) => ei,
-                };
-                exp_(context, code, ei);
+        E::Multiple(es) => {
+            for e in es {
+                exp(context, code, e);
             }
         }
 
         E::Borrow(mut_, el, f) => {
             let (n, tys) = struct_definition_name(context, el.ty.clone());
-            exp(context, code, el);
+            exp(context, code, *el);
             let instr = if mut_ {
                 B::MutBorrowField(n, tys, field(f))
             } else {
@@ -1152,7 +1151,7 @@ fn exp_(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Cast(el, sp!(_, bt_)) => {
             use BuiltinTypeName_ as BT;
-            exp(context, code, el);
+            exp(context, code, *el);
             let instr = match bt_ {
                 BT::U8 => B::CastU8,
                 BT::U16 => B::CastU16,

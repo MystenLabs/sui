@@ -11,11 +11,12 @@ use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::{base_types::TransactionDigest, error::SuiResult};
+use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
     digests::TransactionEffectsDigest,
+    error::SuiError,
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use tokio::sync::mpsc::UnboundedSender;
@@ -26,6 +27,7 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
+use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
 #[cfg(test)]
@@ -34,6 +36,14 @@ mod transaction_manager_tests;
 
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
+
+// Reject a transaction if transaction manager queue length is above this threshold.
+// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
+pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
+
+// Reject a transaction if the number of pending transactions depending on the object
+// is above the threshold.
+pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
@@ -513,7 +523,7 @@ impl TransactionManager {
         // Checking object availability without holding TM lock to reduce contention.
         // But input objects can become available before TM lock is acquired.
         // So missing objects' availability are checked again after releasing the TM lock.
-        let cache_miss_availibility = self
+        let cache_miss_availability = self
             .authority_store
             .multi_input_objects_available(
                 input_object_cache_misses.iter().cloned(),
@@ -532,7 +542,7 @@ impl TransactionManager {
         let mut inner = self.inner.write();
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
-        for (available, key) in cache_miss_availibility {
+        for (available, key) in cache_miss_availability {
             if available && key.version().is_none() {
                 // Mutable objects obtained from cache_miss_availability usually will not be read
                 // again, so we do not want to evict other objects in order to insert them into the
@@ -546,7 +556,7 @@ impl TransactionManager {
         }
 
         // Now recheck the cache for anything that became available (via notify_commit) since we
-        // read cache_miss_availibility - because the cache is unbounded mode it is guaranteed to
+        // read cache_miss_availability - because the cache is unbounded mode it is guaranteed to
         // contain all notifications that arrived since we released the lock on self.inner.
         for (key, value) in object_availability.iter_mut() {
             if !value.expect("all objects must have been checked by now") {
@@ -867,6 +877,38 @@ impl TransactionManager {
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
         let mut inner = self.inner.write();
         *inner = Inner::new(new_epoch, self.metrics.clone());
+    }
+
+    pub(crate) fn check_execution_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
+        // Too many transactions are pending execution.
+        let inflight_queue_len = self.inflight_queue_len();
+        fp_ensure!(
+            inflight_queue_len < MAX_TM_QUEUE_LENGTH,
+            SuiError::TooManyTransactionsPendingExecution {
+                queue_len: inflight_queue_len,
+                threshold: MAX_TM_QUEUE_LENGTH,
+            }
+        );
+
+        for (object_id, queue_len) in self.objects_queue_len(
+            tx_data
+                .transaction_data()
+                .input_objects()?
+                .into_iter()
+                .map(|r| r.object_id())
+                .collect(),
+        ) {
+            // When this occurs, most likely transactions piled up on a shared object.
+            fp_ensure!(
+                queue_len < MAX_PER_OBJECT_QUEUE_LENGTH,
+                SuiError::TooManyTransactionsPendingOnObject {
+                    object_id,
+                    queue_len,
+                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
+                }
+            );
+        }
+        Ok(())
     }
 
     // Verify TM has no pending item for tests.
