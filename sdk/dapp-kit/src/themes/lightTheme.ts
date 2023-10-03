@@ -56,7 +56,6 @@ export const lightTheme: ThemeVars = {
 	typography: {
 		fontFamily:
 			'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
-		fontSize: '14px',
 		fontStyle: 'normal',
 		lineHeight: '1.3',
 		letterSpacing: '1',

@@ -55,7 +55,6 @@ const themeContractValues = {
 	},
 	typography: {
 		fontFamily: '',
-		fontSize: '',
 		fontStyle: '',
 		lineHeight: '',
 		letterSpacing: '',
