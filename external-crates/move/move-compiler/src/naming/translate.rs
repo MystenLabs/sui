@@ -5,6 +5,7 @@
 use crate::{
     diag,
     diagnostics::codes::*,
+    editions::FeatureGate,
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, Visibility},
         translate::is_valid_struct_constant_or_schema_name as is_constant_name,
@@ -44,6 +45,7 @@ struct ResolvedModuleType {
     decl_loc: Loc,
     declared_abilities: AbilitySet,
     arity: usize,
+    is_positional: bool,
 }
 
 enum ResolvedFunction {
@@ -62,7 +64,8 @@ struct ResolvedModuleFunction {
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
-    scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, (Loc, ModuleIdent, AbilitySet, usize)>>,
+    scoped_types:
+        BTreeMap<ModuleIdent, BTreeMap<Symbol, (Loc, ModuleIdent, AbilitySet, usize, bool)>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     unscoped_constants: BTreeMap<Symbol, Loc>,
@@ -75,6 +78,7 @@ struct Context<'env> {
     /// Indicates if the compiler is currently translating a function (set to true before starting
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
+    current_package: Option<Symbol>,
 }
 
 impl<'env> Context<'env> {
@@ -104,7 +108,8 @@ impl<'env> Context<'env> {
                         let abilities = sdef.abilities.clone();
                         let arity = sdef.type_parameters.len();
                         let sname = s.value();
-                        (sname, (s.loc(), mident, abilities, arity))
+                        let is_positional = matches!(sdef.fields, E::StructFields::Positional(_));
+                        (sname, (s.loc(), mident, abilities, arity, is_positional))
                     })
                     .collect();
                 (mident, mems)
@@ -150,6 +155,7 @@ impl<'env> Context<'env> {
             used_locals: BTreeSet::new(),
             used_fun_tparams: BTreeSet::new(),
             translating_fun: false,
+            current_package: None,
         }
     }
 
@@ -172,7 +178,7 @@ impl<'env> Context<'env> {
         loc: Loc,
         m: &ModuleIdent,
         n: &Name,
-    ) -> Option<(Loc, AbilitySet, usize)> {
+    ) -> Option<(Loc, AbilitySet, usize, bool)> {
         let types = match self.scoped_types.get(m) {
             None => {
                 self.env.add_diag(diag!(
@@ -193,7 +199,9 @@ impl<'env> Context<'env> {
                     .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
                 None
             }
-            Some((decl_loc, _, abilities, arity)) => Some((*decl_loc, abilities.clone(), *arity)),
+            Some((decl_loc, _, abilities, arity, is_positional)) => {
+                Some((*decl_loc, abilities.clone(), *arity, *is_positional))
+            }
         }
     }
 
@@ -262,7 +270,7 @@ impl<'env> Context<'env> {
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) => {
-                let Some((decl_loc, abilities, arity)) = self.resolve_module_type(nloc, &m, &n)
+                let Some((decl_loc, abilities, arity, is_positional)) = self.resolve_module_type(nloc, &m, &n)
                 else {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
@@ -274,6 +282,7 @@ impl<'env> Context<'env> {
                     decl_loc,
                     declared_abilities: abilities,
                     arity,
+                    is_positional,
                 };
                 ResolvedType::Module(Box::new(mt))
             }
@@ -292,13 +301,27 @@ impl<'env> Context<'env> {
         }
     }
 
+    fn is_struct_reference(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+        use E::ModuleAccess_ as EA;
+        match ma_ {
+            EA::Name(n) => self.unscoped_types.get(&n.value).is_some_and(|rt| {
+                matches!(rt, ResolvedType::Module(_) | ResolvedType::BuiltinType(_))
+            }),
+            EA::ModuleAccess(m, n) => self
+                .scoped_types
+                .get(m)
+                .and_then(|types| types.get(&n.value))
+                .is_some(),
+        }
+    }
+
     fn resolve_struct_name(
         &mut self,
         loc: Loc,
         verb: &str,
         ma: E::ModuleAccess,
         etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(ModuleIdent, StructName, Option<Vec<N::Type>>)> {
+    ) -> Option<(ModuleIdent, StructName, Option<Vec<N::Type>>, bool)> {
         match self.resolve_type(ma) {
             ResolvedType::Unbound => {
                 assert!(self.env.has_errors());
@@ -330,6 +353,7 @@ impl<'env> Context<'env> {
                     original_mident: m,
                     original_type_name: n,
                     arity,
+                    is_positional,
                     ..
                 } = *mt;
                 let tys_opt = etys_opt.map(|etys| {
@@ -337,7 +361,7 @@ impl<'env> Context<'env> {
                     let name_f = || format!("{}::{}", &m, &n);
                     check_type_argument_arity(self, loc, name_f, tys, arity)
                 });
-                Some((m, StructName(n), tys_opt))
+                Some((m, StructName(n), tys_opt, is_positional))
             }
         }
     }
@@ -479,6 +503,7 @@ fn module(
         constants: econstants,
         specs,
     } = mdef;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let unscoped = context.save_unscoped();
     let mut spec_dependencies = BTreeSet::new();
@@ -499,6 +524,7 @@ fn module(
     });
     context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
+    context.current_package = None;
     N::ModuleDefinition {
         loc,
         warning_filter,
@@ -536,6 +562,7 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
         function: efunction,
         specs,
     } = escript;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let outer_unscoped = context.save_unscoped();
     let mut spec_dependencies = BTreeSet::new();
@@ -559,6 +586,7 @@ fn script(context: &mut Context, escript: E::Script) -> N::Script {
     );
     context.restore_unscoped(outer_unscoped);
     context.env.pop_warning_filter_scope();
+    context.current_package = None;
     N::Script {
         warning_filter,
         package_name,
@@ -721,7 +749,7 @@ fn use_fun_module_defines(
             if specified.as_ref().is_some_and(|s| s == m) {
                 Ok(())
             } else {
-                let (decl_loc, _, _, _) = context
+                let (decl_loc, _, _, _, _) = context
                     .scoped_types
                     .get(m)
                     .unwrap()
@@ -928,6 +956,7 @@ fn acquires_type(context: &mut Context, ma: E::ModuleAccess) -> Option<StructNam
                 decl_loc,
                 declared_abilities: abilities,
                 arity: _,
+                is_positional: _,
             } = *mt;
             acquires_type_struct(context, loc, decl_loc, m, StructName(n), &abilities)
         }
@@ -1019,8 +1048,19 @@ fn struct_def(
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
-        E::StructFields::Defined(em) => {
+        E::StructFields::Named(em) => {
             N::StructFields::Defined(em.map(|_f, (idx, t)| (idx, type_(context, t))))
+        }
+        E::StructFields::Positional(tys) => {
+            let fields = tys
+                .into_iter()
+                .map(|ty| type_(context, ty))
+                .enumerate()
+                .map(|(idx, ty)| {
+                    let field_name = Field::add_loc(ty.loc, format!("{idx}").into());
+                    (field_name, (idx, ty))
+                });
+            N::StructFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
         }
     }
 }
@@ -1355,12 +1395,22 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, sn, tys_opt)) => NE::Pack(
-                    m,
-                    sn,
-                    tys_opt,
-                    efields.map(|_, (idx, e)| (idx, exp_(context, e))),
-                ),
+                Some((m, sn, tys_opt, is_positional)) => {
+                    if is_positional {
+                        let msg =
+                            "Invalid struct constructor call. Positional struct declarations \
+                                   require positional constructor calls.";
+                        context
+                            .env
+                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
+                    }
+                    NE::Pack(
+                        m,
+                        sn,
+                        tys_opt,
+                        efields.map(|_, (idx, e)| (idx, exp_(context, e))),
+                    )
+                }
             }
         }
         EE::ExpList(es) => {
@@ -1408,6 +1458,39 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                         (mloc, format!("Unbound macro '{}'", ma_)),
                     ));
                     NE::UnresolvedError
+                }
+            }
+        }
+        EE::Call(ma, false, tys_opt, rhs) if context.is_struct_reference(&ma) => {
+            context
+                .env
+                .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
+            let nes = call_args(context, rhs);
+            match context.resolve_struct_name(eloc, "construction", ma, tys_opt) {
+                None => {
+                    assert!(context.env.has_errors());
+                    NE::UnresolvedError
+                }
+                Some((m, sn, tys_opt, is_positional)) => {
+                    if !is_positional {
+                        let msg = "Invalid struct constructor call. Named struct declarations \
+                                                             require named constructor calls.";
+                        context
+                            .env
+                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
+                    }
+                    NE::Pack(
+                        m,
+                        sn,
+                        tys_opt,
+                        UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(
+                            |(idx, e)| {
+                                let field = Field::add_loc(e.loc, format!("{idx}").into());
+                                (field, (idx, e))
+                            },
+                        ))
+                        .unwrap(),
+                    )
                 }
             }
         }
@@ -1574,7 +1657,33 @@ fn lvalue(
                 C::Bind => "deconstructing binding",
                 C::Assign => "deconstructing assignment",
             };
-            let (m, sn, tys_opt) = context.resolve_struct_name(loc, msg, tn, etys_opt)?;
+            let (m, sn, tys_opt, is_positional) =
+                context.resolve_struct_name(loc, msg, tn, etys_opt)?;
+            if is_positional && !matches!(efields, E::FieldBindings::Positional(_)) {
+                let msg = "Invalid deconstruction. Positional struct field declarations require \
+                           positional deconstruction";
+                context
+                    .env
+                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
+            }
+
+            if !is_positional && matches!(efields, E::FieldBindings::Positional(_)) {
+                let msg = "Invalid deconstruction. Named struct field declarations require \
+                           named deconstruction";
+                context
+                    .env
+                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
+            }
+            let efields = match efields {
+                E::FieldBindings::Named(efields) => efields,
+                E::FieldBindings::Positional(lvals) => {
+                    let lvals = lvals.into_iter().enumerate().map(|(idx, l)| {
+                        let field_name = Field::add_loc(l.loc, format!("{idx}").into());
+                        (field_name, (idx, l))
+                    });
+                    UniqueMap::maybe_from_iter(lvals).unwrap()
+                }
+            };
             let nfields =
                 UniqueMap::maybe_from_opt_iter(efields.into_iter().map(|(k, (idx, inner))| {
                     Some((k, (idx, lvalue(context, seen_locals, case, inner)?)))
@@ -2065,8 +2174,17 @@ fn spec_lvalue(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, lv_): &E::LV
             if let Some(tys) = tys_opt {
                 spec_types(used, tys)
             }
-            for (_, _, (_, field_lv)) in fields {
-                spec_lvalue(used, field_lv)
+            match fields {
+                E::FieldBindings::Named(fields) => {
+                    for (_, _, (_, field_lv)) in fields {
+                        spec_lvalue(used, field_lv)
+                    }
+                }
+                E::FieldBindings::Positional(lvals) => {
+                    for lval in lvals {
+                        spec_lvalue(used, lval)
+                    }
+                }
             }
         }
     }

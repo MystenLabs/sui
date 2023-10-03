@@ -12,7 +12,8 @@ use crate::{
         byte_string, hex_string,
     },
     parser::ast::{
-        self as P, Ability, ConstantName, Field, FunctionName, ModuleName, StructName, Var,
+        self as P, Ability, ConstantName, Field, FieldBindings, FunctionName, ModuleName,
+        StructName, Var,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -1461,6 +1462,10 @@ fn struct_fields(
 ) -> E::StructFields {
     let pfields_vec = match pfields {
         P::StructFields::Native(loc) => return E::StructFields::Native(loc),
+        P::StructFields::Positional(tys) => {
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
+            return E::StructFields::Positional(field_tys);
+        }
         P::StructFields::Defined(v) => v,
     };
     let mut field_map = UniqueMap::new();
@@ -1480,7 +1485,7 @@ fn struct_fields(
             ));
         }
     }
-    E::StructFields::Defined(field_map)
+    E::StructFields::Named(field_map)
 }
 
 //**************************************************************************************************
@@ -2278,7 +2283,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 .into_iter()
                 .map(|(f, pe)| (f, exp_(context, pe)))
                 .collect();
-            let efields = fields(context, loc, "construction", "argument", efields_vec);
+            let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             match en_opt {
                 Some(en) => EE::Pack(en, tys_opt, efields),
                 None => {
@@ -2562,7 +2567,7 @@ fn num_too_big_error(loc: Loc, type_description: &'static str) -> Diagnostic {
 // Fields
 //**************************************************************************************************
 
-fn fields<T>(
+fn named_fields<T>(
     context: &mut Context,
     loc: Loc,
     case: &str,
@@ -2621,11 +2626,24 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         PB::Unpack(ptn, ptys_opt, pfields) => {
             let tn = name_access_chain(context, Access::ApplyNamed, *ptn)?;
             let tys_opt = optional_types(context, ptys_opt);
-            let vfields: Option<Vec<(Field, E::LValue)>> = pfields
-                .into_iter()
-                .map(|(f, pb)| Some((f, bind(context, pb)?)))
-                .collect();
-            let fields = fields(context, loc, "deconstruction binding", "binding", vfields?);
+            let fields = match pfields {
+                FieldBindings::Named(named_bindings) => {
+                    let vfields: Option<Vec<(Field, E::LValue)>> = named_bindings
+                        .into_iter()
+                        .map(|(f, pb)| Some((f, bind(context, pb)?)))
+                        .collect();
+                    let fields =
+                        named_fields(context, loc, "deconstruction binding", "binding", vfields?);
+                    E::FieldBindings::Named(fields)
+                }
+                FieldBindings::Positional(positional_bindings) => {
+                    let fields: Option<Vec<E::LValue>> = positional_bindings
+                        .into_iter()
+                        .map(|b| bind(context, b))
+                        .collect();
+                    E::FieldBindings::Positional(fields?)
+                }
+            };
             EL::Unpack(tn, tys_opt, fields)
         }
     };
@@ -2723,7 +2741,16 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let en = name_access_chain(context, Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
             let efields = assign_unpack_fields(context, loc, pfields)?;
-            EL::Unpack(en, tys_opt, efields)
+            EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields))
+        }
+        PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
+            context
+                .env
+                .check_feature(FeatureGate::PositionalFields, context.current_package, loc);
+            let en = name_access_chain(context, Access::ApplyNamed, pn)?;
+            let tys_opt = optional_types(context, ptys_opt);
+            let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();
+            EL::Unpack(en, tys_opt, E::FieldBindings::Positional(pfields?))
         }
         _ => {
             context.env.add_diag(diag!(
@@ -2749,7 +2776,7 @@ fn assign_unpack_fields(
         .into_iter()
         .map(|(f, e)| Some((f, assign(context, e)?)))
         .collect::<Option<_>>()?;
-    Some(fields(
+    Some(named_fields(
         context,
         loc,
         "deconstructing assignment",
@@ -2924,9 +2951,14 @@ fn unbound_names_bind(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
         EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_bind(unbound, l))
+            }
+        },
     }
 }
 
@@ -2945,9 +2977,14 @@ fn unbound_names_assign(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
         EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_assign(unbound, l))
+            }
+        },
     }
 }
 

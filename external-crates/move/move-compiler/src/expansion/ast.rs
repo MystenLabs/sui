@@ -210,7 +210,8 @@ pub struct StructDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructFields {
-    Defined(Fields<Type>),
+    Positional(Vec<Type>),
+    Named(Fields<Type>),
     Native(Loc),
 }
 
@@ -404,9 +405,15 @@ pub type Type = Spanned<Type_>;
 //**************************************************************************************************
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FieldBindings {
+    Named(Fields<LValue>),
+    Positional(Vec<LValue>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
     Var(ModuleAccess, Option<Vec<Type>>),
-    Unpack(ModuleAccess, Option<Vec<Type>>, Fields<LValue>),
+    Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -1188,15 +1195,23 @@ impl AstDebug for (StructName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
-            w.block(|w| {
+        match fields {
+            StructFields::Named(fields) => w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
                     w.write(&format!("{}#{}: ", idx, f));
                     st.ast_debug(w);
                     true
                 });
-            })
+            }),
+            StructFields::Positional(fields) => w.block(|w| {
+                w.list(fields.iter().enumerate(), ",", |w, (idx, ty)| {
+                    w.write(&format!("{idx}#pos{idx}: "));
+                    ty.ast_debug(w);
+                    true
+                });
+            }),
+            StructFields::Native(_) => (),
         }
     }
 }
@@ -1863,20 +1878,14 @@ impl AstDebug for LValue_ {
                     w.write(">");
                 }
             }
-            L::Unpack(ma, tys_opt, fields) => {
+            L::Unpack(ma, tys_opt, field_binds) => {
                 ma.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
                     w.write(">");
                 }
-                w.write("{");
-                w.comma(fields, |w, (_, f, idx_b)| {
-                    let (idx, b) = idx_b;
-                    w.write(&format!("{}#{}: ", idx, f));
-                    b.ast_debug(w);
-                });
-                w.write("}");
+                field_binds.ast_debug(w);
             }
         }
     }
@@ -1909,6 +1918,30 @@ impl AstDebug for Vec<Vec<Exp>> {
             w.write("{");
             w.comma(trigger, |w, b| b.ast_debug(w));
             w.write("}");
+        }
+    }
+}
+
+impl AstDebug for FieldBindings {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            FieldBindings::Named(fields) => {
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_b)| {
+                    let (idx, b) = idx_b;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    b.ast_debug(w);
+                });
+                w.write("}");
+            }
+            FieldBindings::Positional(vals) => {
+                w.write("(");
+                w.comma(vals.iter().enumerate(), |w, (idx, lval)| {
+                    w.write(&format!("{idx}: "));
+                    lval.ast_debug(w);
+                });
+                w.write(")");
+            }
         }
     }
 }
