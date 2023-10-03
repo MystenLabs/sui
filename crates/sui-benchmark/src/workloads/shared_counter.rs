@@ -156,6 +156,7 @@ impl WorkloadBuilder<dyn Payload> for SharedCounterWorkloadBuilder {
         let amount = MAX_GAS_IN_UNIT * (self.rgp + self.max_tip_amount)
             + ESTIMATED_COMPUTATION_COST
             + STORAGE_COST_PER_COUNTER * self.num_counters;
+        info!("Payload coin config amount: {amount} , num of payloads: {}, num of counters: {}", self.num_payloads, self.num_counters);
         // Gas coins for running workload
         for _i in 0..self.num_payloads {
             let (address, keypair) = get_key_pair();
