@@ -1150,9 +1150,6 @@ importers:
         specifier: ^20.4.2
         version: 20.4.2
     devDependencies:
-      '@types/postcss-prefix-selector':
-        specifier: ^1.16.1
-        version: 1.16.1
       '@vanilla-extract/esbuild-plugin':
         specifier: ^2.3.0
         version: 2.3.0(@types/node@20.4.2)
@@ -1165,9 +1162,6 @@ importers:
       postcss:
         specifier: ^8.4.29
         version: 8.4.30
-      postcss-prefix-selector:
-        specifier: ^1.16.0
-        version: 1.16.0(postcss@8.4.30)
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -9214,12 +9208,6 @@ packages:
 
   /@types/parse-json@4.0.0:
     resolution: {integrity: sha512-//oorEZjL6sbPcKUaCdIGlIUeH26mgzimjBB77G6XRgnDl/L5wOnpyBGRe/Mmf5CVW3PwEBE1NjiMZ/ssFh4wA==}
-    dev: true
-
-  /@types/postcss-prefix-selector@1.16.1:
-    resolution: {integrity: sha512-B6fwQs8N6TqvqeyLdeLTBBbxP/cYtSKJAybKlpaton6J4yJ+adBacy/Uo2YMGqMd7lEInuKNNy7JIwa8MdahJg==}
-    dependencies:
-      postcss: 8.4.30
     dev: true
 
   /@types/pretty-hrtime@1.0.1:
@@ -19673,14 +19661,6 @@ packages:
     dependencies:
       postcss: 8.4.26
       postcss-value-parser: 4.2.0
-    dev: true
-
-  /postcss-prefix-selector@1.16.0(postcss@8.4.30):
-    resolution: {integrity: sha512-rdVMIi7Q4B0XbXqNUEI+Z4E+pueiu/CS5E6vRCQommzdQ/sgsS4dK42U7GX8oJR+TJOtT+Qv3GkNo6iijUMp3Q==}
-    peerDependencies:
-      postcss: '>4 <9'
-    dependencies:
-      postcss: 8.4.30
     dev: true
 
   /postcss-preset-env@9.0.0(postcss@8.4.26):
