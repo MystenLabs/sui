@@ -35,6 +35,7 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
+  enable_effects_v2: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

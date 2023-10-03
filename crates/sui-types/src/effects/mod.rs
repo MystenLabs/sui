@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use self::effects_v2::TransactionEffectsV2;
 use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
 };
-use crate::digests::{
-    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
-};
+use crate::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use crate::error::{SuiError, SuiResult};
 use crate::event::Event;
 use crate::execution_status::ExecutionStatus;
@@ -21,13 +20,11 @@ use crate::storage::WriteKind;
 use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
 use effects_v1::TransactionEffectsV1;
 use enum_dispatch::enum_dispatch;
-pub use object_change::EffectsObjectChange;
+pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
-
-use self::object_change::{IDOperation, ObjectIn, ObjectOut};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 mod effects_v1;
 mod effects_v2;
@@ -53,34 +50,35 @@ pub const APPROX_SIZE_OF_OWNER: usize = 48;
 /// The response from processing a transaction or a certified transaction
 #[enum_dispatch(TransactionEffectsAPI)]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum TransactionEffects {
     V1(TransactionEffectsV1),
+    V2(TransactionEffectsV2),
 }
 
 impl VersionedProtocolMessage for TransactionEffects {
     fn message_version(&self) -> Option<u64> {
         Some(match self {
             Self::V1(_) => 1,
+            Self::V2(_) => 2,
         })
     }
 
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        let (message_version, supported) = match self {
-            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
-        };
-
-        if supported.is_version_supported(protocol_config.version) {
-            Ok(())
-        } else {
-            Err(SuiError::WrongMessageVersion {
-                error: format!(
-                    "TransactionEffectsV{} is not supported at {:?}. (Supported range is {:?}",
-                    message_version, protocol_config.version, supported
-                ),
-            })
+        match self {
+            Self::V1(_) => Ok(()),
+            Self::V2(_) => {
+                if protocol_config.enable_effects_v2() {
+                    Ok(())
+                } else {
+                    Err(SuiError::WrongMessageVersion {
+                        error: format!(
+                            "TransactionEffectsV2 is not supported at protocol {:?}.",
+                            protocol_config.version
+                        ),
+                    })
+                }
+            }
         }
     }
 }
@@ -156,107 +154,25 @@ impl TransactionEffects {
     /// Creates a TransactionEffects message from the results of execution, choosing the correct
     /// format for the current protocol version.
     pub fn new_from_execution_v2(
-        _protocol_version: ProtocolVersion,
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,
         shared_objects: Vec<ObjectRef>,
         transaction_digest: TransactionDigest,
         lamport_version: SequenceNumber,
-        object_changes: BTreeMap<ObjectID, EffectsObjectChange>,
-        gas_object: (ObjectRef, Owner),
+        changed_objects: BTreeMap<ObjectID, EffectsObjectChange>,
+        gas_object: Option<ObjectID>,
         events_digest: Option<TransactionEventsDigest>,
         dependencies: Vec<TransactionDigest>,
     ) -> Self {
-        let mut created = vec![];
-        let mut mutated = vec![];
-        let mut unwrapped = vec![];
-        let mut deleted = vec![];
-        let mut unwrapped_then_deleted = vec![];
-        let mut wrapped = vec![];
-        // It is important that we constructs `modified_at_versions` and `deleted_at_versions`
-        // separately, and merge them latter to achieve the exact same order as in v1.
-        let mut modified_at_versions = vec![];
-        let mut deleted_at_versions = vec![];
-        for (id, change) in object_changes {
-            match change.input_state {
-                ObjectIn::Exist(((old_version, _), _)) => {
-                    match (change.output_state, change.id_operation) {
-                        (ObjectOut::ObjectWrite((new_digest, new_owner)), IDOperation::None) => {
-                            mutated.push(((id, lamport_version, new_digest), new_owner));
-                            modified_at_versions.push((id, old_version));
-                        }
-                        (ObjectOut::PackageWrite((new_version, new_digest)), IDOperation::None) => {
-                            mutated.push(((id, new_version, new_digest), Owner::Immutable));
-                            modified_at_versions.push((id, old_version));
-                        }
-                        (ObjectOut::NotExist, IDOperation::Deleted) => {
-                            deleted.push((
-                                id,
-                                lamport_version,
-                                ObjectDigest::OBJECT_DIGEST_DELETED,
-                            ));
-                            deleted_at_versions.push((id, old_version));
-                        }
-                        (ObjectOut::NotExist, IDOperation::None) => {
-                            wrapped.push((
-                                id,
-                                lamport_version,
-                                ObjectDigest::OBJECT_DIGEST_WRAPPED,
-                            ));
-                            deleted_at_versions.push((id, old_version));
-                        }
-                        _ => {
-                            unreachable!("Impossible combination of output state and id operation");
-                        }
-                    }
-                }
-                ObjectIn::NotExist => {
-                    match (change.output_state, change.id_operation) {
-                        (ObjectOut::ObjectWrite((new_digest, new_owner)), IDOperation::Created) => {
-                            created.push(((id, lamport_version, new_digest), new_owner));
-                        }
-                        (
-                            ObjectOut::PackageWrite((new_version, new_digest)),
-                            IDOperation::Created,
-                        ) => {
-                            created.push(((id, new_version, new_digest), Owner::Immutable));
-                        }
-                        (ObjectOut::ObjectWrite((new_digest, new_owner)), IDOperation::None) => {
-                            unwrapped.push(((id, lamport_version, new_digest), new_owner));
-                        }
-                        (ObjectOut::NotExist, IDOperation::Deleted) => {
-                            unwrapped_then_deleted.push((
-                                id,
-                                lamport_version,
-                                ObjectDigest::OBJECT_DIGEST_DELETED,
-                            ));
-                        }
-                        (ObjectOut::NotExist, IDOperation::Created) => {
-                            // Created then wrapped.
-                        }
-                        _ => {
-                            unreachable!("Impossible combination of output state and id operation");
-                        }
-                    }
-                }
-            }
-        }
-        modified_at_versions.extend(deleted_at_versions);
-
-        Self::V1(TransactionEffectsV1::new(
+        Self::V2(TransactionEffectsV2::new(
             status,
             executed_epoch,
             gas_used,
-            modified_at_versions,
             shared_objects,
             transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
+            lamport_version,
+            changed_objects,
             gas_object,
             events_digest,
             dependencies,
@@ -270,7 +186,7 @@ impl TransactionEffects {
         }
     }
 
-    pub fn estimate_effects_size_upperbound(
+    pub fn estimate_effects_size_upperbound_v1(
         num_writes: usize,
         num_mutables: usize,
         num_deletes: usize,
@@ -288,6 +204,26 @@ impl TransactionEffects {
             + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_writes
             + (APPROX_SIZE_OF_OBJECT_REF * num_mutables)
             + (APPROX_SIZE_OF_OBJECT_REF * num_deletes);
+
+        let deps_size = 1_000 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
+
+        fixed_sizes + approx_change_entry_size + deps_size
+    }
+
+    pub fn estimate_effects_size_upperbound_v2(
+        num_writes: usize,
+        num_modifies: usize,
+        num_deps: usize,
+    ) -> usize {
+        let fixed_sizes = APPROX_SIZE_OF_EXECUTION_STATUS
+            + APPROX_SIZE_OF_EPOCH_ID
+            + APPROX_SIZE_OF_GAS_COST_SUMMARY
+            + APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST;
+
+        // We store object ref and owner for both old objects and new objects.
+        let approx_change_entry_size = 1_000
+            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_writes
+            + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_modifies;
 
         let deps_size = 1_000 + APPROX_SIZE_OF_TX_DIGEST * num_deps;
 
@@ -369,11 +305,11 @@ impl TransactionEffects {
     pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
         // TODO: Figure out who is calling this and why.
         // This creates an inconsistent effects where gas object is not mutated.
-        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_gas(tx, gas_object))
+        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_gas(tx, gas_object))
     }
 
     pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        TransactionEffects::V1(TransactionEffectsV1::new_with_tx_and_status(tx, status))
+        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_status(tx, status))
     }
 }
 
@@ -388,6 +324,12 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
+
+    /// Metadata of objects prior to modification. This includes any object that exists in the
+    /// store prior to this transaction and is modified in this transaction.
+    /// It includes objects that are mutated, wrapped and deleted.
+    /// This API is only available on effects v2 and above.
+    fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)>;
     /// Returns the list of shared objects used in the input, with full object reference
     /// and use kind. This is needed in effects because in transaction we only have object ID
     /// for shared objects. Their version and digest can only be figured out after sequencing.
@@ -400,7 +342,12 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+
+    // TODO: We should consider having this function to return Option.
+    // When the gas object is not available (i.e. system transaction), we currently return
+    // dummy object ref and owner. This is not ideal.
     fn gas_object(&self) -> (ObjectRef, Owner);
+
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
 
