@@ -1,14 +1,4 @@
 warning[W09005]: dead or unreachable code
-   ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:12:9
-   │  
-12 │ ╭         loop {
-13 │ │             if (return) break;
-14 │ │         }
-   │ ╰─────────^ Unreachable code. This statement (and any following statements) will not be executed.
-   │  
-   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W09005]: dead or unreachable code
    ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:17
    │
 13 │             if (return) break;
@@ -20,11 +10,11 @@ warning[W09004]: unnecessary trailing semicolon
    ┌─ tests/move_check/control_flow/infinite_loop_with_dead_exits.move:13:30
    │
 13 │             if (return) break;
-   │                 ------       ^
-   │                 │            │
-   │                 │            Invalid trailing ';'
-   │                 │            A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
-   │                 Any code after this expression will not be reached
+   │             -----------------^
+   │             │                │
+   │             │                Invalid trailing ';'
+   │             │                A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │             Any code after this expression will not be reached
    │
    = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

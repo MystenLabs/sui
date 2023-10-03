@@ -465,6 +465,15 @@ impl Command_ {
         }
         successors
     }
+
+    pub fn is_hlir_terminal(&self) -> bool {
+        use Command_::*;
+        match self {
+            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Break | Continue | Abort(_) | Return { .. } => true,
+            Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
+        }
+    }
 }
 
 impl Exp {

@@ -1,3 +1,15 @@
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/liveness/move_in_infinite_loop_branched.move:4:9
+  │  
+4 │ ╭         if (cond) {
+5 │ │             loop { let y = move x; y / y; }
+6 │ │         } else {
+7 │ │             loop { let y = move x; y % y; }
+8 │ │         }
+  │ ╰─────────^ Unreachable code. This statement (and any following statements) will not be executed.
+  │  
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error[E06002]: use of unassigned variable
   ┌─ tests/move_check/liveness/move_in_infinite_loop_branched.move:5:28
   │

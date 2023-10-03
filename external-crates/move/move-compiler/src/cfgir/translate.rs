@@ -6,10 +6,10 @@ use crate::{
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
-        cfg::{build_dead_code_error, ImmForwardCFG, MutForwardCFG},
+        cfg::{ImmForwardCFG, MutForwardCFG},
     },
     diag,
-    diagnostics::{Diagnostic, Diagnostics},
+    diagnostics::Diagnostics,
     expansion::ast::{AbilitySet, ModuleIdent},
     hlir::ast::{self as H, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
@@ -443,6 +443,9 @@ fn function_body(
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
+            if DEBUG_PRINT {
+                println!("-- cfg built ------------------");
+            }
 
             let function_context = super::CFGContext {
                 module,
@@ -491,19 +494,11 @@ fn block(context: &mut Context, stmts: H::Block) -> BlockList {
 fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
     let mut current_block: BasicBlock = VecDeque::new();
     let mut blocks = Vec::new();
-    let mut dead_code_error = None;
 
     for stmt in stmts.into_iter().rev() {
-        let (new_current, new_blocks, new_dead_code_error) =
-            statement(context, stmt, current_block);
+        let (new_current, new_blocks) = statement(context, stmt, current_block);
         blocks = new_blocks.into_iter().chain(blocks.into_iter()).collect();
         current_block = new_current;
-        if new_dead_code_error.is_some() {
-            dead_code_error = new_dead_code_error;
-        }
-    }
-    if let Some(diag) = dead_code_error {
-        context.env.add_diag(diag)
     }
     (current_block, blocks)
 }
@@ -564,7 +559,7 @@ fn statement(
     context: &mut Context,
     sp!(sloc, stmt): H::Statement,
     mut current_block: BasicBlock,
-) -> (BasicBlock, BlockList, Option<Diagnostic>) {
+) -> (BasicBlock, BlockList) {
     use H::{Command_ as C, Statement_ as S};
     match stmt {
         S::IfElse {
@@ -602,7 +597,7 @@ fn statement(
                 .chain([(phi_label, current_block)])
                 .collect::<BlockList>();
 
-            (test_block, new_blocks, None)
+            (test_block, new_blocks)
         }
         // We could turn these into loops earlier and elide this case.
         S::While {
@@ -641,7 +636,7 @@ fn statement(
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
-            (entry_block, new_blocks, None)
+            (entry_block, new_blocks)
         }
         S::Loop {
             block: body,
@@ -664,45 +659,38 @@ fn statement(
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
-            (entry_block, new_blocks, None)
+            (entry_block, new_blocks)
         }
         S::Command(sp!(cloc, C::Break)) => {
             // Discard the current block because it's dead code.
             let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
-            (
-                VecDeque::from([break_jump]),
-                vec![],
-                build_dead_code_error(&current_block),
-            )
+            (VecDeque::from([break_jump]), vec![])
         }
         S::Command(sp!(cloc, C::Continue)) => {
             // Discard the current block because it's dead code.
             let jump = make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
-            (
-                VecDeque::from([jump]),
-                vec![],
-                build_dead_code_error(&current_block),
-            )
+            (VecDeque::from([jump]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
-            (
-                VecDeque::from([cmd]),
-                vec![],
-                build_dead_code_error(&current_block),
-            )
+            (VecDeque::from([cmd]), vec![])
         }
         S::Command(cmd) => {
             current_block.push_front(cmd);
-            (current_block, vec![], None)
+            (current_block, vec![])
         }
     }
 }
 
 fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
-    let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
-    block.push_back(stmt);
-    block
+    match block.iter().last() {
+        Some(sp!(_, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
+        _ => {
+            let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
+            block.push_back(stmt);
+            block
+        }
+    }
 }
 
 fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {

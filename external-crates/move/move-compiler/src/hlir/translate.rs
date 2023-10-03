@@ -1,4 +1,4 @@
-// Copyright (c) The Diem Core Contributors
+// Copyright (c), has_trailing_unie The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -77,6 +77,24 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
+
+#[derive(Debug, Copy, Clone)]
+enum HlirErrorType {
+    AbortDiverge,
+    Unreachable,
+    DivergentExp,
+    Empty,
+    Unused,
+}
+
+#[derive(Debug, Copy, Clone)]
+enum HlirError {
+    Error {
+        error_type: HlirErrorType,
+        site: Loc,
+    },
+    AlreadyReported,
+}
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -173,6 +191,136 @@ impl<'env> Context<'env> {
     fn counter_next(&mut self) -> usize {
         self.tmp_counter += 1;
         self.tmp_counter
+    }
+
+    fn report_value_error(&mut self, error: HlirError) {
+        match error {
+            HlirError::Error { error_type, site } => {
+                match error_type {
+                    HlirErrorType::DivergentExp | HlirErrorType::AbortDiverge => {
+                        self.env
+                            .add_diag(diag!(UnusedItem::DeadCode, (site, DIVERGENT_EXP)));
+                    }
+                    HlirErrorType::Unreachable => {
+                        self.env
+                            .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    }
+                    _ => (),
+                };
+            }
+            HlirError::AlreadyReported => (),
+        }
+    }
+
+    fn report_tail_error(&mut self, error: HlirError) {
+        match error {
+            HlirError::Error { error_type, site } => {
+                if let HlirErrorType::Unreachable = error_type {
+                    self.env
+                        .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                }
+            }
+            HlirError::AlreadyReported => (),
+        }
+    }
+
+    fn report_statement_tail_error(&mut self, error: HlirError, tail_exp: &T::Exp) {
+        match error {
+            HlirError::Error { error_type, site } => {
+                match error_type {
+                    HlirErrorType::DivergentExp
+                        if matches!(tail_exp.exp.value, T::UnannotatedExp_::Unit { .. }) =>
+                    {
+                        self.env.add_diag(diag!(
+                            UnusedItem::TrailingSemi,
+                            (tail_exp.exp.loc, SEMI_MSG),
+                            (site, UNREACHABLE_MSG),
+                            (tail_exp.exp.loc, INFO_MSG),
+                        ));
+                    }
+                    HlirErrorType::DivergentExp => {
+                        self.env.add_diag(diag!(
+                            UnusedItem::DeadCode,
+                            (tail_exp.exp.loc, DEAD_ERR_CMD)
+                        ));
+                    }
+                    HlirErrorType::Unreachable => {
+                        self.env
+                            .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    }
+                    _ => (),
+                };
+            }
+            HlirError::AlreadyReported => (),
+        }
+    }
+}
+
+const DIVERGENT_EXP: &str = "Invalid use of a divergent expression. \
+     The code following the evaluation of this expression will be dead and should be removed.";
+
+const DEAD_ERR_CMD: &str =
+    "Unreachable code. This statement (and any following statements) will not be executed.";
+
+const SEMI_MSG: &str = "Invalid trailing ';'";
+const UNREACHABLE_MSG: &str = "Any code after this expression will not be reached";
+const INFO_MSG: &str =
+    "A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. \
+     That '()' value will not be reachable";
+
+impl HlirError {
+    fn is_divergent_statement_error(&self) -> bool {
+        match self {
+            HlirError::Error { error_type, .. } => matches!(
+                error_type,
+                HlirErrorType::Unreachable
+                    | HlirErrorType::AbortDiverge
+                    | HlirErrorType::DivergentExp
+            ),
+            _ => false,
+        }
+    }
+
+    fn abort(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::AbortDiverge,
+            site: loc,
+        }
+    }
+
+    fn empty(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::Empty,
+            site: loc,
+        }
+    }
+
+    fn nonlocal_control_flow(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::DivergentExp,
+            site: loc,
+        }
+    }
+
+    fn infinite_loop(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::DivergentExp,
+            site: loc,
+        }
+    }
+
+    fn unreachable(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::Unreachable,
+            site: loc,
+        }
+    }
+
+    fn unused(loc: Loc) -> HlirError {
+        HlirError::Error {
+            error_type: HlirErrorType::Unused,
+            site: loc,
+        }
     }
 }
 
@@ -379,7 +527,7 @@ fn function_body_defined(
         seq.print_verbose();
     }
     let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
-    if let Some(ret_exp) = final_value {
+    if let Ok(ret_exp) = final_value {
         let ret_loc = ret_exp.exp.loc;
         let ret_command = H::Command_::Return {
             from_user: false,
@@ -594,188 +742,54 @@ fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
 // Expression Processing
 //**************************************************************************************************
 
-// -------------------------------------------------------------------------------------------------
-// HHelpers
-// -------------------------------------------------------------------------------------------------
-// These are defined first because the macro must before its usage because Rust won't figure out
-// phasing for you..
-
-fn divergent(stmt_: &H::Statement_) -> bool {
-    print!("stmt: ");
-    stmt_.print_verbose();
-    println!();
-    // print!("Checking divergence for ");
-    // crate::shared::ast_debug::print_verbose(stmt_);
-    use H::{Command_ as C, Statement_ as S};
-
-    macro_rules! h_stmt_cmd {
-        ($cmd:pat) => {
-            sp!(_, S::Command(sp!(_, $cmd)))
-        };
-    }
-
-    macro_rules! hcmd {
-        ($cmd:pat) => {
-            S::Command(sp!(_, $cmd))
-        };
-    }
-
-    fn divergent_while_block(block: &Block) -> bool {
-        matches!(
-            block.back(),
-            Some(h_stmt_cmd!(C::Abort(_))) | Some(h_stmt_cmd!(C::Return { .. }))
-        )
-    }
-
-    fn divergent_block(block: &Block) -> bool {
-        matches!(
-            block.back(),
-            Some(h_stmt_cmd!(C::Break))
-                | Some(h_stmt_cmd!(C::Continue))
-                | Some(h_stmt_cmd!(C::Abort(_)))
-                | Some(h_stmt_cmd!(C::Return { .. }))
-        )
-    }
-
-    let result = match stmt_ {
-        S::IfElse {
-            if_block,
-            else_block,
-            ..
-        } => divergent_block(if_block) && divergent_block(else_block),
-
-        // this is wholly unsatisfactory, and really we should nuke while during expansion.
-        S::While { block, .. } => divergent_while_block(block),
-
-        S::Loop { has_break, .. } => !has_break,
-
-        hcmd!(C::Break) | hcmd!(C::Continue) | hcmd!(C::Abort(_)) | hcmd!(C::Return { .. }) => true,
-
-        _ => false,
-    };
-    println!("result: {}", result);
-    result
-}
-
 macro_rules! make_block {
     () => { VecDeque::new() };
     ($($elems:expr),+) => { VecDeque::from([$($elems),*]) };
 }
 
-fn make_command(loc: Loc, command: H::Command_) -> H::Statement {
-    sp(loc, H::Statement_::Command(sp(loc, command)))
-}
-
-fn tbool(loc: Loc) -> H::Type {
-    H::Type_::bool(loc)
-}
-
-fn bool_exp(loc: Loc, value: bool) -> H::Exp {
-    H::exp(
-        tbool(loc),
-        sp(
-            loc,
-            H::UnannotatedExp_::Value(sp(loc, H::Value_::Bool(value))),
-        ),
-    )
-}
-
-fn tunit(loc: Loc) -> H::Type {
-    sp(loc, H::Type_::Unit)
-}
-
-fn implicit_unit_exp(loc: Loc) -> H::Exp {
-    H::exp(
-        tunit(loc),
-        sp(
-            loc,
-            H::UnannotatedExp_::Unit {
-                case: H::UnitCase::Implicit,
-            },
-        ),
-    )
-}
-
-fn trailing_unit_exp(loc: Loc) -> H::Exp {
-    H::exp(
-        tunit(loc),
-        sp(
-            loc,
-            H::UnannotatedExp_::Unit {
-                case: H::UnitCase::Trailing,
-            },
-        ),
-    )
-}
-
-fn maybe_freeze(
-    context: &mut Context,
-    block: &mut Block,
-    expected_type_opt: Option<H::Type>,
-    e: Option<H::Exp>,
-) -> Option<H::Exp> {
-    if let Some(exp) = e {
-        if exp.is_unreachable() {
-            Some(exp)
-        } else if let Some(expected_type) = expected_type_opt {
-            let (mut stmts, frozen_exp) = freeze(context, &expected_type, exp);
-            block.append(&mut stmts);
-            Some(frozen_exp)
-        } else {
-            Some(exp)
+macro_rules! ok_pair {
+    ($e: expr, $lhs:pat, $rhs:pat, $block:expr) => {
+        match $e {
+            (Ok($lhs), Ok($rhs)) => $block,
+            (Err(lhs_err), _) => Err(lhs_err),
+            (_, Err(rhs_err)) => Err(rhs_err),
         }
-    } else {
-        e
-    }
+    };
 }
 
-const DEAD_ERR_EXP: &str = "Invalid use of a divergent expression. The code following the \
-                            evaluation of this expression will be dead and should be removed.";
-
-fn emit_unreachable(context: &mut Context, loc: Loc) {
-    context
-        .env
-        .add_diag(diag!(UnusedItem::DeadCode, (loc, DEAD_ERR_EXP)));
+macro_rules! ok_pair_or_report_value_error {
+    ($context: expr, $e: expr, $loc:expr, $lhs:pat, $rhs:pat, $block:expr) => {
+        match $e {
+            (Ok($lhs), Ok($rhs)) => $block,
+            (lhs, rhs) => {
+                lhs.err().map(|err| $context.report_value_error(err));
+                rhs.err().map(|err| $context.report_value_error(err));
+                Err(HlirError::AlreadyReported)
+            }
+        }
+    };
 }
 
-fn is_statement(e: &T::Exp) -> bool {
-    use T::UnannotatedExp_ as E;
-    matches!(
-        e.exp.value,
-        E::Return(_) | E::Abort(_) | E::Break | E::Continue | E::Assign(_, _, _) | E::Mutate(_, _)
-    )
+macro_rules! maybe_report_tail_error {
+    ($context:expr, $e: expr) => {
+        if let Err(e) = $e {
+            $context.report_tail_error(e);
+        }
+    };
 }
 
-fn is_unit_statement(e: &T::Exp) -> bool {
-    use T::UnannotatedExp_ as E;
-    matches!(e.exp.value, E::Assign(_, _, _) | E::Mutate(_, _))
+macro_rules! maybe_report_value_error {
+    ($context:expr, $e: expr) => {
+        if let Err(e) = $e {
+            $context.report_value_error(e);
+        }
+    };
 }
 
-fn is_binop(e: &T::Exp) -> bool {
-    use T::UnannotatedExp_ as E;
-    matches!(e.exp.value, E::BinopExp(_, _, _, _))
-}
-
-fn emit_trailing_semicolon_error(context: &mut Context, terminal_loc: Loc, semi_loc: Loc) {
-    let semi_msg = "Invalid trailing ';'";
-    let unreachable_msg = "Any code after this expression will not be reached";
-    let info_msg = "A trailing ';' in an expression block implicitly adds a '()' value \
-                after the semicolon. That '()' value will not be reachable";
-    context.env.add_diag(diag!(
-        UnusedItem::TrailingSemi,
-        (semi_loc, semi_msg),
-        (terminal_loc, unreachable_msg),
-        (semi_loc, info_msg),
-    ));
-}
-
-fn has_trailing_unit(seq: &T::Sequence) -> bool {
-    use T::SequenceItem_ as S;
-    if let Some(sp!(_, S::Seq(exp))) = &seq.back() {
-        matches!(exp.exp.value, T::UnannotatedExp_::Unit { trailing: true })
-    } else {
-        false
-    }
+macro_rules! h_stmt_cmd {
+    ($cmd:pat) => {
+        sp!(_, S::Command(sp!(_, $cmd)))
+    };
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -787,9 +801,9 @@ fn body(
     expected_type: Option<&H::Type>,
     loc: Loc,
     seq: T::Sequence,
-) -> (Block, Option<H::Exp>) {
+) -> (Block, ExpResult) {
     if seq.is_empty() {
-        (make_block!(), Some(implicit_unit_exp(loc)))
+        (make_block!(), Ok(implicit_unit_exp(loc)))
     } else {
         let mut block = make_block!();
         let final_exp = tail_block(context, &mut block, expected_type, seq);
@@ -802,14 +816,14 @@ fn tail(
     block: &mut Block,
     expected_type: Option<&H::Type>,
     e: T::Exp,
-) -> Option<H::Exp> {
-    // print!("stmt");
-    // crate::shared::ast_debug::print_verbose(&e);
-    if is_statement(&e) {
-        let result = if is_unit_statement(&e) {
-            Some(implicit_unit_exp(e.exp.loc))
+) -> ExpResult {
+    // we pull out these cases because it's easier to process them without destructuring `e` first.
+    if is_command(&e) {
+        let eloc = e.exp.loc;
+        let result = if is_unit_command(&e) {
+            Ok(implicit_unit_exp(eloc))
         } else {
-            None
+            Err(HlirError::nonlocal_control_flow(eloc))
         };
         statement(context, block, e);
         return result;
@@ -836,46 +850,71 @@ fn tail(
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
-            let if_binds = bind_value_in_block(
-                context,
-                binders.clone(),
-                Some(out_type.clone()),
-                &mut if_block,
-                conseq_exp,
-            );
-            let else_binds =
-                bind_value_in_block(context, binders, Some(out_type), &mut else_block, alt_exp);
-
-            if let Some(cond) = cond {
+            if let Ok(cond) = cond {
+                let result = if conseq_exp.is_ok() || alt_exp.is_ok() {
+                    bind_value_in_block(
+                        context,
+                        binders.clone(),
+                        Some(out_type.clone()),
+                        &mut if_block,
+                        conseq_exp,
+                    );
+                    bind_value_in_block(context, binders, Some(out_type), &mut else_block, alt_exp);
+                    Ok(bound_exp)
+                } else if matches!(out_type, sp!(_, H::Type_::Unit)) {
+                    Ok(trailing_unit_exp(eloc))
+                } else {
+                    Err(HlirError::nonlocal_control_flow(eloc))
+                };
                 let if_else = S::IfElse {
                     cond: Box::new(cond),
                     if_block,
                     else_block,
                 };
                 block.push_back(sp(eloc, if_else));
-                if if_binds || else_binds {
-                    Some(bound_exp)
-                } else {
-                    None
-                }
+                result
             } else {
-                None
+                maybe_report_tail_error!(context, cond);
+                Err(HlirError::AlreadyReported)
             }
         }
         // Whiles and loops Loops are currently moved to statement position
         e_ @ E::While(_, _) => {
-            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(trailing_unit_exp(eloc))
+            if statement(context, block, T::exp(in_type.clone(), sp(eloc, e_))) {
+                Err(HlirError::nonlocal_control_flow(eloc))
+            } else {
+                Ok(trailing_unit_exp(eloc))
+            }
         }
-        e_ @ E::Loop {
-            has_break: true, ..
+        E::Loop {
+            body,
+            has_break: true,
         } => {
-            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(trailing_unit_exp(eloc))
+            let mut loop_block = make_block!();
+            statement(context, &mut loop_block, *body);
+            let body_diverged = {
+                use H::Command_ as C;
+                matches!(
+                    loop_block.back(),
+                    Some(h_stmt_cmd!(C::Abort(_))) | Some(h_stmt_cmd!(C::Return { .. }))
+                )
+            };
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    block: loop_block,
+                    has_break: true,
+                },
+            ));
+            if body_diverged {
+                Err(HlirError::nonlocal_control_flow(eloc))
+            } else {
+                Ok(trailing_unit_exp(eloc))
+            }
         }
         e_ @ E::Loop { .. } => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            None
+            Err(HlirError::infinite_loop(eloc))
         }
         E::Block(seq) => tail_block(context, block, Some(&out_type), seq),
 
@@ -907,22 +946,26 @@ fn tail_block(
     block: &mut Block,
     expected_type: Option<&H::Type>,
     mut seq: T::Sequence,
-) -> Option<H::Exp> {
+) -> ExpResult {
     use T::SequenceItem_ as S;
-    let has_trailing_unit = has_trailing_unit(&seq);
+
     let last_exp = seq.pop_back();
-    statement_block(context, block, seq, false);
-    match last_exp {
-        None => None,
-        Some(sp!(_, S::Seq(last))) if has_trailing_unit => match block.iter().last() {
-            Some(sp!(sloc, stmt)) if divergent(stmt) => {
-                emit_trailing_semicolon_error(context, *sloc, last.exp.loc);
-                None
+    let stmt_error = statement_block(context, block, seq, false);
+
+    if let Some(error) = stmt_error {
+        if let Some(sp!(_, S::Seq(last))) = last_exp {
+            context.report_statement_tail_error(error, &last);
+            if let Some(error) = tail(context, block, expected_type, *last).err() {
+                context.report_tail_error(error);
             }
-            _ => tail(context, block, expected_type, *last),
-        },
-        Some(sp!(_, S::Seq(last))) => tail(context, block, expected_type, *last),
-        Some(_) => panic!("ICE last sequence item should be an exp"),
+        }
+        Err(HlirError::AlreadyReported)
+    } else {
+        match last_exp {
+            None => panic!("ICE tail block with no expressions"),
+            Some(sp!(_, S::Seq(last))) => tail(context, block, expected_type, *last),
+            Some(_) => panic!("ICE last sequence item should be an exp"),
+        }
     }
 }
 
@@ -930,22 +973,28 @@ fn tail_block(
 // Value Position
 // -------------------------------------------------------------------------------------------------
 
+type ExpResult = Result<H::Exp, HlirError>;
+type UnannotatedExpResult = Result<H::UnannotatedExp_, HlirError>;
+
 fn value(
     context: &mut Context,
     block: &mut Block,
     expected_type: Option<&H::Type>,
     e: T::Exp,
-) -> Option<H::Exp> {
+) -> ExpResult {
     use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
     use T::UnannotatedExp_ as E;
 
-    // we pull outthese cases because it's easier to process them without destructuring `e` first.
-    if is_statement(&e) {
-        let result = if is_unit_statement(&e) {
-            Some(implicit_unit_exp(e.exp.loc))
+    // we pull out these cases because it's easier to process them without destructuring `e` first.
+    if is_command(&e) {
+        let eloc = e.exp.loc;
+        let result = if is_unit_command(&e) {
+            Ok(implicit_unit_exp(eloc))
+            // `abort` is allowed in value positions, and do not produce unreachability errors.
+        } else if matches!(e.exp.value, E::Abort(_)) {
+            Err(HlirError::abort(eloc))
         } else {
-            emit_unreachable(context, e.exp.loc);
-            None
+            Err(HlirError::nonlocal_control_flow(eloc))
         };
         statement(context, block, e);
         return result;
@@ -959,9 +1008,21 @@ fn value(
         exp: sp!(eloc, e_),
     } = e;
     let out_type = type_(context, in_type.clone());
-    let make_exp = |exp| Some(H::exp(out_type.clone(), sp(eloc, exp)));
+    let make_exp = |exp| Ok(H::exp(out_type.clone(), sp(eloc, exp)));
 
-    let preresult: Option<H::Exp> = match e_ {
+    macro_rules! ok_or_report {
+        ($result:expr, $name:ident => $rhs:expr) => {
+            match $result {
+                Ok($name) => $rhs,
+                Err(error) => {
+                    context.report_value_error(error);
+                    Err(HlirError::AlreadyReported)
+                }
+            }
+        };
+    }
+
+    let preresult: ExpResult = match e_ {
         // ---------------------------------------------------------------------------------------
         // Expansion-y things
         // These could likely be discharged during expansion instead.
@@ -978,7 +1039,7 @@ fn value(
             };
             let cond_value = value(context, block, Some(&tbool(eloc)), econd);
             let code_value = value(context, block, None, ecode);
-            if let (Some(cond), Some(code)) = (cond_value, code_value) {
+            ok_pair_or_report_value_error!(context, (cond_value, code_value), eloc, cond, code, {
                 let if_block = make_block!();
                 let else_block = make_block!(make_command(eloc, C::Abort(code)));
                 block.push_back(sp(
@@ -989,8 +1050,8 @@ fn value(
                         else_block,
                     },
                 ));
-            }
-            Some(implicit_unit_exp(eloc))
+                Ok(implicit_unit_exp(eloc))
+            })
         }
         E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(true))) => {
             use T::ExpListItem as TI;
@@ -1005,7 +1066,7 @@ fn value(
             let cond_value = value(context, block, Some(&tbool(eloc)), econd);
             let mut else_block = make_block!();
             let code_value = value(context, &mut else_block, None, ecode);
-            if let (Some(cond), Some(code)) = (cond_value, code_value) {
+            ok_pair_or_report_value_error!(context, (cond_value, code_value), eloc, cond, code, {
                 let if_block = make_block!();
                 else_block.push_back(make_command(eloc, C::Abort(code)));
                 block.push_back(sp(
@@ -1016,8 +1077,8 @@ fn value(
                         else_block,
                     },
                 ));
-            }
-            Some(implicit_unit_exp(eloc))
+                Ok(implicit_unit_exp(eloc))
+            })
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1032,49 +1093,52 @@ fn value(
 
             let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
-            let if_binds = bind_value_in_block(
-                context,
-                binders.clone(),
-                Some(out_type.clone()),
-                &mut if_block,
-                conseq_exp,
-            );
-            let else_binds =
-                bind_value_in_block(context, binders, Some(out_type), &mut else_block, alt_exp);
-
-            if let Some(cond) = cond {
+            if let Ok(cond) = cond {
+                let result = if conseq_exp.is_ok() || alt_exp.is_ok() {
+                    bind_value_in_block(
+                        context,
+                        binders.clone(),
+                        Some(out_type.clone()),
+                        &mut if_block,
+                        conseq_exp,
+                    );
+                    bind_value_in_block(context, binders, Some(out_type), &mut else_block, alt_exp);
+                    Ok(bound_exp)
+                } else if matches!(out_type, sp!(_, H::Type_::Unit)) {
+                    Ok(trailing_unit_exp(eloc))
+                } else {
+                    let error = HlirError::nonlocal_control_flow(eloc);
+                    context.report_value_error(error);
+                    Err(HlirError::AlreadyReported)
+                };
                 let if_else = S::IfElse {
                     cond: Box::new(cond),
                     if_block,
                     else_block,
                 };
                 block.push_back(sp(eloc, if_else));
-                if if_binds || else_binds {
-                    Some(bound_exp)
-                } else {
-                    None
-                }
+                result
             } else {
-                None
+                maybe_report_value_error!(context, cond);
+                Err(HlirError::AlreadyReported)
             }
         }
         // Whiles and loops Loops are currently moved to statement position
         e_ @ E::While(_, _) => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(implicit_unit_exp(eloc))
+            Ok(implicit_unit_exp(eloc))
         }
         e_ @ E::Loop {
             has_break: true, ..
         } => {
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            Some(implicit_unit_exp(eloc))
+            Ok(implicit_unit_exp(eloc))
         }
         e_ @ E::Loop { .. } => {
-            emit_unreachable(context, eloc);
             statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
-            None
+            Err(HlirError::infinite_loop(eloc))
         }
-        E::Block(seq) => value_block(context, block, Some(&out_type), seq),
+        E::Block(seq) => value_block(context, block, Some(&out_type), eloc, seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1091,7 +1155,10 @@ fn value(
             let htys = base_types(context, type_arguments);
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
             let maybe_arguments = value_list(context, block, Some(&expected_type), *arguments);
-            if let Some(arguments) = maybe_arguments {
+
+            let (arguments, errors): (Vec<H::Exp>, Vec<HlirError>) =
+                partition_value_list(maybe_arguments);
+            if errors.is_empty() {
                 let call = H::ModuleCall {
                     module,
                     name,
@@ -1101,42 +1168,39 @@ fn value(
                 };
                 make_exp(HE::ModuleCall(Box::new(call)))
             } else {
-                None
+                for error in errors {
+                    context.report_value_error(error);
+                }
+                Err(HlirError::AlreadyReported)
             }
         }
-        E::Builtin(bt, args) => builtin(context, block, eloc, *bt, args).and_then(make_exp),
+        E::Builtin(bt, args) => builtin(context, block, *bt, args).and_then(make_exp),
 
         // -----------------------------------------------------------------------------------------
         // nested expressions
         // -----------------------------------------------------------------------------------------
         E::Vector(vec_loc, size, vty, args) => {
             let maybe_values = value_list(context, block, None, *args);
-            if let Some(values) = maybe_values {
+            let (arguments, errors) = partition_value_list(maybe_values);
+            if errors.is_empty() {
                 make_exp(HE::Vector(
                     vec_loc,
                     size,
                     Box::new(base_type(context, *vty)),
-                    values,
+                    arguments,
                 ))
             } else {
-                None
+                for error in errors {
+                    context.report_value_error(error);
+                }
+                Err(HlirError::AlreadyReported)
             }
         }
         E::Dereference(ev) => {
-            let value = value(context, block, None, *ev);
-            if let Some(value) = value {
-                make_exp(HE::Dereference(Box::new(value)))
-            } else {
-                None
-            }
+            ok_or_report!(value(context, block, None, *ev), exp => make_exp(HE::Dereference(Box::new(exp))))
         }
         E::UnaryExp(op, operand) => {
-            let op_value = value(context, block, None, *operand);
-            if let Some(operand) = op_value {
-                make_exp(HE::UnaryExp(op, Box::new(operand)))
-            } else {
-                None
-            }
+            ok_or_report!(value(context, block, None, *operand), exp => make_exp(HE::UnaryExp(op, Box::new(exp))))
         }
 
         E::Pack(module_ident, struct_name, arg_types, fields) => {
@@ -1173,7 +1237,7 @@ fn value(
                 .iter()
                 .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
 
-            let fields = if !reorder_fields {
+            let (fields, errors) = if !reorder_fields {
                 let mut fields = vec![];
                 let field_exps = texp_fields
                     .into_iter()
@@ -1189,14 +1253,17 @@ fn value(
                     fields.len() == field_exps.len(),
                     "ICE exp_evaluation_order changed arity"
                 );
-                field_exps
+                let (field_exps, errors) = partition_value_list(field_exps);
+                let field_exps = field_exps
                     .into_iter()
                     .zip(fields)
                     .map(|(e, (f, bt))| (f, bt, e))
-                    .collect()
+                    .collect();
+                (field_exps, errors)
             } else {
                 let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
                 let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
+                let mut errors = vec![];
                 for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
                     // Might have too many arguments, there will be an error from typing
                     if decl_idx >= fields.len() {
@@ -1207,21 +1274,33 @@ fn value(
                     let t = H::Type_::base(base_ty.clone());
                     let field_expr = value(context, block, Some(&t), tf);
                     assert!(fields.get(decl_idx).unwrap().is_none());
-                    assert!(field_expr.is_some());
-                    let move_tmp = bind_exp(context, block, field_expr.unwrap());
-                    fields[decl_idx] = Some((field, base_ty, move_tmp))
+                    match field_expr {
+                        Ok(field_expr) => {
+                            let move_tmp = bind_exp(context, block, field_expr);
+                            fields[decl_idx] = Some((field, base_ty, move_tmp))
+                        }
+                        Err(error) => errors.push(error),
+                    }
                 }
                 // Might have too few arguments, there will be an error from typing if so
-                fields
+                let final_fields = fields
                     .into_iter()
                     .filter_map(|o| {
                         // if o is None, context should have errors
                         debug_assert!(o.is_some() || context.env.has_errors());
                         o
                     })
-                    .collect()
+                    .collect();
+                (final_fields, errors)
             };
-            make_exp(HE::Pack(struct_name, base_types, fields))
+            if errors.is_empty() {
+                make_exp(HE::Pack(struct_name, base_types, fields))
+            } else {
+                for error in errors {
+                    context.report_value_error(error);
+                }
+                Err(HlirError::AlreadyReported)
+            }
         }
 
         E::ExpList(items) => {
@@ -1243,24 +1322,24 @@ fn value(
         }
 
         E::Borrow(mut_, base_exp, field) => {
-            let exp = value(context, block, None, *base_exp);
-            if let Some(exp) = exp {
-                if let Some(struct_name) = struct_name(&exp.ty) {
-                    context
-                        .used_fields
-                        .entry(struct_name.value())
-                        .or_insert_with(BTreeSet::new)
-                        .insert(field.value());
+            ok_or_report!(
+                    value(context, block, None, *base_exp),
+                    exp => {
+                    if let Some(struct_name) = struct_name(&exp.ty) {
+                        context
+                            .used_fields
+                            .entry(struct_name.value())
+                            .or_insert_with(BTreeSet::new)
+                            .insert(field.value());
+                    }
+                    make_exp(HE::Borrow(mut_, Box::new(exp), field))
                 }
-                make_exp(HE::Borrow(mut_, Box::new(exp), field))
-            } else {
-                exp
-            }
+            )
         }
         E::TempBorrow(mut_, base_exp) => {
-            let exp = value(context, block, None, *base_exp);
-            match exp {
-                Some(exp) => {
+            ok_or_report!(
+                value(context, block, None, *base_exp),
+                exp => {
                     let bound_exp = bind_exp(context, block, exp);
                     let tmp = match bound_exp.exp.value {
                         HE::Move {
@@ -1271,8 +1350,7 @@ fn value(
                     };
                     make_exp(HE::BorrowLocal(mut_, tmp))
                 }
-                None => None,
-            }
+            )
         }
         E::BorrowLocal(mut_, var) => make_exp(HE::BorrowLocal(mut_, translate_var(var))),
         E::Cast(base, rhs_ty) => {
@@ -1287,11 +1365,7 @@ fn value(
                 | Some(bt @ sp!(_, BT::U256)) => *bt,
                 _ => panic!("ICE typing failed for cast"),
             };
-            if let Some(base) = new_base {
-                make_exp(HE::Cast(Box::new(base), bt))
-            } else {
-                None
-            }
+            ok_or_report!(new_base, base => make_exp(HE::Cast(Box::new(base), bt)))
         }
         E::Annotate(base, rhs_ty) => {
             let annotated_type = type_(context, *rhs_ty);
@@ -1367,16 +1441,39 @@ fn value_block(
     context: &mut Context,
     block: &mut Block,
     expected_type: Option<&H::Type>,
+    loc: Loc,
     mut seq: T::Sequence,
-) -> Option<H::Exp> {
+) -> ExpResult {
     use T::SequenceItem_ as S;
     let last_exp = seq.pop_back();
-    statement_block(context, block, seq, false);
-    match last_exp {
-        None => None,
-        Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
-        Some(_) => panic!("ICE last sequence item should be an exp"),
+    let maybe_error = statement_block(context, block, seq, false);
+    if let Some(error) = maybe_error {
+        if let Some(sp!(_, S::Seq(last))) = last_exp {
+            context.report_statement_tail_error(error, &last);
+            value(context, block, expected_type, *last)
+        } else {
+            context.report_value_error(error);
+            Err(HlirError::AlreadyReported)
+        }
+    } else {
+        match last_exp {
+            None => Err(HlirError::empty(loc)),
+            Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
+            Some(_) => panic!("ICE last sequence item should be an exp"),
+        }
     }
+}
+
+fn partition_value_list(input: Vec<ExpResult>) -> (Vec<H::Exp>, Vec<HlirError>) {
+    let mut lefts = vec![];
+    let mut rights = vec![];
+    for entry in input.into_iter() {
+        match entry {
+            Ok(left) => lefts.push(left),
+            Err(right) => rights.push(right),
+        }
+    }
+    (lefts, rights)
 }
 
 fn value_list(
@@ -1384,7 +1481,7 @@ fn value_list(
     block: &mut Block,
     ty: Option<&H::Type>,
     e: T::Exp,
-) -> Option<Vec<H::Exp>> {
+) -> Vec<ExpResult> {
     use H::Type_ as HT;
     use T::UnannotatedExp_ as TE;
     if let TE::ExpList(items) = e.exp.value {
@@ -1413,13 +1510,11 @@ fn value_list(
             exprs.len() == tys.len(),
             "ICE value_evaluation_order changed arity"
         );
-        Some(exprs)
+        exprs
     } else if let TE::Unit { .. } = e.exp.value {
-        Some(vec![])
+        vec![]
     } else {
-        let exp = value(context, block, ty, e);
-        // FIXME(cgswords): check expr is defined; error otherwise.
-        exp.map(|e| vec![e])
+        vec![value(context, block, ty, e)]
     }
 }
 
@@ -1427,9 +1522,9 @@ fn value_list(
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
-fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
-    // print!("stmt");
-    // crate::shared::ast_debug::print_verbose(&e);
+// Boolean indicates if the expression was divergent and non-erroring, as that may indicate a
+// misplaced semicolon.
+fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
     use H::{Command_ as C, Statement_ as S};
     use T::UnannotatedExp_ as E;
 
@@ -1442,6 +1537,20 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         ty,
         exp: sp(eloc, e_),
     };
+
+    macro_rules! value_ok_or_report {
+        ($result:expr, $name:ident => $rhs:expr) => {
+            match $result {
+                Ok($name) => $rhs,
+                Err(error) => {
+                    let result = error.is_divergent_statement_error();
+                    context.report_value_error(error);
+                    result
+                }
+            }
+        };
+    }
+
     match e_ {
         // -----------------------------------------------------------------------------------------
         // control flow statements
@@ -1449,41 +1558,53 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         E::IfElse(test, conseq, alt) => {
             let cond = value(context, block, Some(&tbool(eloc)), *test);
             let mut if_block = make_block!();
-            statement(context, &mut if_block, *conseq);
+            let if_diverges = statement(context, &mut if_block, *conseq);
             let mut else_block = make_block!();
-            statement(context, &mut else_block, *alt);
-            if let Some(cond) = cond {
-                block.push_back(sp(
-                    eloc,
-                    S::IfElse {
-                        cond: Box::new(cond),
-                        if_block,
-                        else_block,
-                    },
-                ));
-            }
+            let else_diverges = statement(context, &mut else_block, *alt);
+            value_ok_or_report!(
+                cond,
+                cond => {
+                    let if_stmt = S::IfElse { cond: Box::new(cond), if_block, else_block };
+                    block.push_back(sp(eloc, if_stmt));
+                    if_diverges && else_diverges
+                }
+            )
         }
         E::While(test, body) => {
             let mut cond_block = make_block!();
             let cond_exp = value(context, &mut cond_block, Some(&tbool(eloc)), *test);
             let mut body_block = make_block!();
             statement(context, &mut body_block, *body);
-            if let Some(cond_exp) = cond_exp {
-                let cond = (cond_block, Box::new(cond_exp));
-                block.push_back(sp(
-                    eloc,
-                    S::While {
-                        cond,
-                        block: body_block,
-                    },
-                ));
-            } else {
-                block.append(&mut cond_block);
+
+            match cond_exp {
+                Ok(cond_exp) => {
+                    let cond = (cond_block, Box::new(cond_exp));
+                    block.push_back(sp(
+                        eloc,
+                        S::While {
+                            cond,
+                            block: body_block,
+                        },
+                    ));
+                    false
+                }
+                Err(error) => {
+                    context.report_value_error(error);
+                    // Should we actually retain these?
+                    block.append(&mut cond_block);
+                    false
+                }
             }
         }
         E::Loop { body, has_break } => {
             let mut loop_block = make_block!();
             statement(context, &mut loop_block, *body);
+            let body_diverged = {
+                matches!(
+                    loop_block.back(),
+                    Some(h_stmt_cmd!(C::Abort(_))) | Some(h_stmt_cmd!(C::Return { .. }))
+                )
+            };
             block.push_back(sp(
                 eloc,
                 S::Loop {
@@ -1491,30 +1612,39 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                     has_break,
                 },
             ));
+            !has_break || body_diverged
         }
-        E::Block(seq) => statement_block(context, block, seq, true),
+        E::Block(seq) => statement_block(context, block, seq, true).is_some(),
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
-            let rhs = value(context, block, expected_type.as_ref(), *rhs);
-            if let Some(exp) = rhs {
-                let ret_command = C::Return {
-                    from_user: true,
-                    exp,
-                };
-                block.push_back(make_command(eloc, ret_command));
-            }
+            value_ok_or_report!(
+                value(context, block, expected_type.as_ref(), *rhs),
+                exp => {
+                    let ret_command = C::Return {
+                        from_user: true,
+                        exp,
+                    };
+                    block.push_back(make_command(eloc, ret_command));
+                    true
+                }
+            )
         }
         E::Abort(rhs) => {
-            let rhs = value(context, block, None, *rhs);
-            if let Some(rhs_exp) = rhs {
-                block.push_back(make_command(eloc, C::Abort(rhs_exp)));
-            }
+            value_ok_or_report!(
+                value(context, block, None, *rhs),
+                rhs => {
+                    block.push_back(make_command(eloc, C::Abort(rhs)));
+                    true
+                }
+            )
         }
         E::Break => {
             block.push_back(make_command(eloc, C::Break));
+            true
         }
         E::Continue => {
             block.push_back(make_command(eloc, C::Continue));
+            true
         }
 
         // -----------------------------------------------------------------------------------------
@@ -1522,19 +1652,29 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         // -----------------------------------------------------------------------------------------
         E::Assign(assigns, lvalue_ty, rhs) => {
             let expected_type = expected_types(context, eloc, lvalue_ty);
-            let rhs = value(context, block, Some(&expected_type), *rhs);
-            if let Some(exp) = rhs {
-                make_assignments(context, block, eloc, assigns, exp);
-            }
+            value_ok_or_report!(
+                value(context, block, Some(&expected_type), *rhs),
+                rhs => {
+                    make_assignments(context, block, eloc, assigns, rhs);
+                    false
+                }
+            )
         }
 
         E::Mutate(lhs_in, rhs_in) => {
             // evaluate RHS first
             let rhs = value(context, block, None, *rhs_in);
             let lhs = value(context, block, None, *lhs_in);
-            if let (Some(lhs), Some(rhs)) = (lhs, rhs) {
-                block.push_back(make_command(eloc, C::Mutate(Box::new(lhs), Box::new(rhs))));
-            }
+            match (lhs, rhs) {
+                (Ok(lhs), Ok(rhs)) => {
+                    block.push_back(make_command(eloc, C::Mutate(Box::new(lhs), Box::new(rhs))))
+                }
+                (lhs, rhs) => {
+                    maybe_report_value_error!(context, lhs);
+                    maybe_report_value_error!(context, rhs);
+                }
+            };
+            false
         }
 
         // calls might be for effect
@@ -1567,7 +1707,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | e_ @ E::Spec(..)
         | e_ @ E::UnresolvedError => value_statement(context, block, make_exp(e_)),
 
-        E::Value(_) | E::Unit { .. } => (),
+        E::Value(_) | E::Unit { .. } => false,
 
         // -----------------------------------------------------------------------------------------
         // odds and ends -- things we need to deal with but that don't do much
@@ -1576,42 +1716,230 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
     }
 }
 
-fn statement_block(context: &mut Context, block: &mut Block, seq: T::Sequence, stmt_pos: bool) {
-    // println!("=> stmt block");
+fn statement_block(
+    context: &mut Context,
+    block: &mut Block,
+    mut seq: T::Sequence,
+    stmt_pos: bool,
+) -> Option<HlirError> {
     use T::SequenceItem_ as S;
-    // println!("statement block");
-    let has_trailing_unit = stmt_pos && has_trailing_unit(&seq);
+
+    if stmt_pos && has_trailing_unit(&seq) {
+        let last = seq.pop_back();
+        let result = statement_block(context, block, seq, false);
+        if let (Some(error), Some(sp!(_, S::Seq(entry)))) = (result, last) {
+            context.report_statement_tail_error(error, &entry);
+            return Some(HlirError::AlreadyReported);
+        } else {
+            return result;
+        }
+    }
+
+    let mut result_error = None;
     let last_ndx = seq.iter().skip(1).len();
+    let locs: Vec<_> = seq.iter().map(|s| s.loc).collect();
+
     for (ndx, sp!(sloc, seq_item)) in seq.into_iter().enumerate() {
-        // println!("terminal: {:?}", terminal);
-        // println!("item: {:?}", seq_item);
         match seq_item {
-            S::Seq(last) if ndx == last_ndx && has_trailing_unit => match block.iter().last() {
-                Some(sp!(sloc, stmt)) if divergent(stmt) => {
-                    emit_trailing_semicolon_error(context, *sloc, last.exp.loc);
+            S::Seq(entry) if result_error.is_some() => {
+                // if we are in an error mode, we process it for errors but omit it from then
+                // context-normalized output
+                let mut block = make_block!();
+                statement(context, &mut block, *entry);
+            }
+            S::Seq(entry) if ndx == last_ndx => {
+                if statement(context, block, *entry) {
+                    assert!(result_error.is_none());
+                    result_error = Some(HlirError::nonlocal_control_flow(sloc));
                 }
-                _ => statement(context, block, *last),
-            },
-            S::Seq(te) => statement(context, block, *te),
+            }
+            S::Seq(entry) => {
+                if statement(context, block, *entry) {
+                    assert!(result_error.is_none());
+                    result_error = Some(HlirError::unreachable(locs[ndx + 1]));
+                }
+            }
             S::Declare(bindings) => {
                 declare_bind_list(context, &bindings);
             }
             S::Bind(bindings, ty, expr) => {
                 let expected_tys = expected_types(context, sloc, ty);
                 let rhs_exp = value(context, block, Some(&expected_tys), *expr);
-                if let Some(rhs_exp) = rhs_exp {
-                    declare_bind_list(context, &bindings);
-                    make_assignments(context, block, sloc, bindings, rhs_exp);
+                match rhs_exp {
+                    Ok(rhs_exp) => {
+                        declare_bind_list(context, &bindings);
+                        make_assignments(context, block, sloc, bindings, rhs_exp);
+                    }
+                    Err(error) => {
+                        context.report_value_error(error);
+                    }
                 }
             }
         }
     }
+
+    result_error
 }
 
 // Treat something like a value, and add a final `ignore_and_pop` at the end to consume that value.
-fn value_statement(context: &mut Context, block: &mut Block, e: T::Exp) {
+// Indicate if the statement diverges, to our best guess.
+fn value_statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
     let exp = value(context, block, None, e);
-    make_ignore_and_pop(block, exp)
+    let result = match &exp {
+        Err(_) if block.iter().last().is_some() => divergent(&block.iter().last().unwrap().value),
+        Err(error) => error.is_divergent_statement_error(),
+        _ => false,
+    };
+    make_ignore_and_pop(context, block, exp);
+    result
+}
+
+// -------------------------------------------------------------------------------------------------
+// HHelpers
+// -------------------------------------------------------------------------------------------------
+
+fn divergent(stmt_: &H::Statement_) -> bool {
+    use H::{Command_ as C, Statement_ as S};
+
+    macro_rules! h_stmt_cmd {
+        ($cmd:pat) => {
+            sp!(_, S::Command(sp!(_, $cmd)))
+        };
+    }
+
+    macro_rules! hcmd {
+        ($cmd:pat) => {
+            S::Command(sp!(_, $cmd))
+        };
+    }
+
+    fn divergent_while(block: &Block) -> bool {
+        matches!(
+            block.back(),
+            Some(h_stmt_cmd!(C::Abort(_))) | Some(h_stmt_cmd!(C::Return { .. }))
+        )
+    }
+
+    fn divergent_block(block: &Block) -> bool {
+        matches!(
+            block.back(),
+            Some(h_stmt_cmd!(C::Break))
+                | Some(h_stmt_cmd!(C::Continue))
+                | Some(h_stmt_cmd!(C::Abort(_)))
+                | Some(h_stmt_cmd!(C::Return { .. }))
+        )
+    }
+
+    match stmt_ {
+        S::IfElse {
+            if_block,
+            else_block,
+            ..
+        } => divergent_block(if_block) && divergent_block(else_block),
+
+        // this is wholly unsatisfactory, and really we should nuke while during expansion.
+        S::While { block, .. } => divergent_while(block),
+
+        S::Loop { has_break, .. } => !has_break,
+
+        hcmd!(C::Break) | hcmd!(C::Continue) | hcmd!(C::Abort(_)) | hcmd!(C::Return { .. }) => true,
+
+        _ => false,
+    }
+}
+
+fn make_command(loc: Loc, command: H::Command_) -> H::Statement {
+    sp(loc, H::Statement_::Command(sp(loc, command)))
+}
+
+fn tbool(loc: Loc) -> H::Type {
+    H::Type_::bool(loc)
+}
+
+fn bool_exp(loc: Loc, value: bool) -> H::Exp {
+    H::exp(
+        tbool(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Value(sp(loc, H::Value_::Bool(value))),
+        ),
+    )
+}
+
+fn tunit(loc: Loc) -> H::Type {
+    sp(loc, H::Type_::Unit)
+}
+
+fn implicit_unit_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        tunit(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Unit {
+                case: H::UnitCase::Implicit,
+            },
+        ),
+    )
+}
+
+fn trailing_unit_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        tunit(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Unit {
+                case: H::UnitCase::Trailing,
+            },
+        ),
+    )
+}
+
+fn maybe_freeze(
+    context: &mut Context,
+    block: &mut Block,
+    expected_type_opt: Option<H::Type>,
+    e: ExpResult,
+) -> ExpResult {
+    if let Ok(exp) = e {
+        if exp.is_unreachable() {
+            Ok(exp)
+        } else if let Some(expected_type) = expected_type_opt {
+            let (mut stmts, frozen_exp) = freeze(context, &expected_type, exp);
+            block.append(&mut stmts);
+            Ok(frozen_exp)
+        } else {
+            Ok(exp)
+        }
+    } else {
+        e
+    }
+}
+
+fn is_command(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(
+        e.exp.value,
+        E::Return(_) | E::Abort(_) | E::Break | E::Continue | E::Assign(_, _, _) | E::Mutate(_, _)
+    )
+}
+
+fn is_unit_command(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::Assign(_, _, _) | E::Mutate(_, _))
+}
+
+fn is_binop(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::BinopExp(_, _, _, _))
+}
+
+fn has_trailing_unit(seq: &T::Sequence) -> bool {
+    use T::SequenceItem_ as S;
+    if let Some(sp!(_, S::Seq(exp))) = &seq.back() {
+        matches!(exp.exp.value, T::UnannotatedExp_::Unit { trailing: true })
+    } else {
+        false
+    }
 }
 
 //**************************************************************************************************
@@ -1754,34 +2082,39 @@ fn assign_fields(
 // Commands
 //**************************************************************************************************
 
-fn make_ignore_and_pop(block: &mut Block, e: Option<H::Exp>) {
+fn make_ignore_and_pop(context: &mut Context, block: &mut Block, e: ExpResult) {
     use H::UnannotatedExp_ as E;
-    if let Some(exp) = e {
-        let loc = exp.exp.loc;
-        match &exp.ty.value {
-            H::Type_::Unit => match exp.exp.value {
-                E::Unit { .. } => (),
-                E::Value(_) => (),
-                _ => {
-                    let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 0, exp });
+    match e {
+        Ok(exp) => {
+            let loc = exp.exp.loc;
+            match &exp.ty.value {
+                H::Type_::Unit => match exp.exp.value {
+                    E::Unit { .. } => (),
+                    E::Value(_) => (),
+                    _ => {
+                        let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 0, exp });
+                        block.push_back(sp(loc, H::Statement_::Command(c)));
+                    }
+                },
+                H::Type_::Single(_) => {
+                    let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 1, exp });
                     block.push_back(sp(loc, H::Statement_::Command(c)));
                 }
-            },
-            H::Type_::Single(_) => {
-                let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 1, exp });
-                block.push_back(sp(loc, H::Statement_::Command(c)));
-            }
-            H::Type_::Multiple(tys) => {
-                let c = sp(
-                    loc,
-                    H::Command_::IgnoreAndPop {
-                        pop_num: tys.len(),
-                        exp,
-                    },
-                );
-                block.push_back(sp(loc, H::Statement_::Command(c)));
-            }
-        };
+                H::Type_::Multiple(tys) => {
+                    let c = sp(
+                        loc,
+                        H::Command_::IgnoreAndPop {
+                            pop_num: tys.len(),
+                            exp,
+                        },
+                    );
+                    block.push_back(sp(loc, H::Statement_::Command(c)));
+                }
+            };
+        }
+        Err(error) => {
+            context.report_value_error(error);
+        }
     }
 }
 
@@ -1810,12 +2143,11 @@ fn value_evaluation_order(
     context: &mut Context,
     block: &mut Block,
     input_exps: Vec<(T::Exp, Option<H::Type>)>,
-) -> Vec<H::Exp> {
+) -> Vec<ExpResult> {
     let mut needs_binding = false;
     let mut statements = vec![];
     let mut values = vec![];
     for (exp, expected_type) in input_exps.into_iter().rev() {
-        let te_loc = exp.exp.loc;
         let mut new_stmts = make_block!();
         let exp = value(context, &mut new_stmts, expected_type.as_ref(), exp);
         // If evaluating this expression introduces statements, all previous exps need to be bound
@@ -1825,11 +2157,7 @@ fn value_evaluation_order(
         } else {
             exp
         };
-        if let Some(final_exp) = e {
-            values.push(final_exp);
-        } else {
-            values.push(implicit_unit_exp(te_loc));
-        }
+        values.push(e);
         let adds_to_result = !new_stmts.is_empty();
         needs_binding = needs_binding || adds_to_result;
         statements.push(new_stmts);
@@ -1838,17 +2166,17 @@ fn value_evaluation_order(
     values.into_iter().rev().collect()
 }
 
-fn maybe_bind_exp(context: &mut Context, stmts: &mut Block, e: Option<H::Exp>) -> Option<H::Exp> {
-    if let Some(e) = e {
-        let loc = e.exp.loc;
-        let ty = e.ty.clone();
+fn maybe_bind_exp(context: &mut Context, stmts: &mut Block, e: ExpResult) -> ExpResult {
+    if let Ok(ref exp) = e {
+        let loc = exp.exp.loc;
+        let ty = exp.ty.clone();
         let (binders, var_exp) = make_binders(context, loc, ty.clone());
         if binders.is_empty() {
-            make_ignore_and_pop(stmts, Some(e));
-            None
+            make_ignore_and_pop(context, stmts, e);
+            Err(HlirError::unused(loc))
         } else {
-            bind_value_in_block(context, binders, Some(ty), stmts, Some(e));
-            Some(var_exp)
+            bind_value_in_block(context, binders, Some(ty), stmts, e);
+            Ok(var_exp)
         }
     } else {
         e
@@ -1859,20 +2187,19 @@ fn bind_exp(context: &mut Context, stmts: &mut Block, e: H::Exp) -> H::Exp {
     let loc = e.exp.loc;
     let ty = e.ty.clone();
     let (binders, var_exp) = make_binders(context, loc, ty.clone());
-    bind_value_in_block(context, binders, Some(ty), stmts, Some(e));
+    bind_value_in_block(context, binders, Some(ty), stmts, Ok(e));
     var_exp
 }
 
 // Takes binder(s), a block, and a value. If the value is defined, adds an assignment to the end
 // of the block to assign the binders to that value.
-// Returns the block and a flag indicating if that operation happened.
 fn bind_value_in_block(
     context: &mut Context,
     binders: Vec<H::LValue>,
     binders_type: Option<H::Type>,
     stmts: &mut Block,
-    value_exp: Option<H::Exp>,
-) -> bool {
+    value_exp: ExpResult,
+) {
     use H::{Command_ as C, Statement_ as S};
     for sp!(_, lvalue) in &binders {
         match lvalue {
@@ -1881,12 +2208,9 @@ fn bind_value_in_block(
         }
     }
     let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
-    if let Some(real_exp) = rhs_exp {
+    if let Ok(real_exp) = rhs_exp {
         let loc = real_exp.exp.loc;
         stmts.push_back(sp(loc, S::Command(sp(loc, C::Assign(binders, real_exp)))));
-        true
-    } else {
-        false
     }
 }
 
@@ -1942,21 +2266,24 @@ fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::
 fn builtin(
     context: &mut Context,
     block: &mut Block,
-    _eloc: Loc,
     sp!(loc, tb_): T::BuiltinFunction,
     targ: Box<T::Exp>,
-) -> Option<H::UnannotatedExp_> {
+) -> UnannotatedExpResult {
     use H::{BuiltinFunction_ as HB, UnannotatedExp_ as E};
     use T::BuiltinFunction_ as TB;
 
     macro_rules! maybe_output {
-        ($arg0: expr, $args:expr) => {
-            if let Some(args) = $args {
-                Some(E::Builtin(Box::new(sp(loc, $arg0)), args))
+        ($arg0: expr, $args:expr) => {{
+            let (arguments, errors): (Vec<H::Exp>, Vec<HlirError>) = partition_value_list($args);
+            if errors.is_empty() {
+                Ok(E::Builtin(Box::new(sp(loc, $arg0)), arguments))
             } else {
-                None
+                for error in errors {
+                    context.report_value_error(error);
+                }
+                Err(HlirError::AlreadyReported)
             }
-        };
+        }};
     }
 
     match tb_ {
@@ -2024,12 +2351,12 @@ fn process_binops(
     input_block: &mut Block,
     result_type: H::Type,
     e: T::Exp,
-) -> Option<H::Exp> {
+) -> ExpResult {
     use T::UnannotatedExp_ as E;
 
     enum Pn {
         Op(BinOp, H::Type, Loc),
-        Val(Block, Option<H::Exp>),
+        Val(Block, ExpResult),
     }
 
     // ----------------------------------------
@@ -2060,48 +2387,47 @@ fn process_binops(
     // ----------------------------------------
     // Now process as an RPN stack
 
-    let mut value_stack: Vec<(Block, Option<H::Exp>)> = vec![];
+    let mut value_stack: Vec<(Block, ExpResult)> = vec![];
 
     for entry in pn_stack.into_iter().rev() {
         match entry {
-            Pn::Op(sp!(loc, op @ BinOp_::And), ty, eloc) => {
+            Pn::Op(op @ sp!(_, BinOp_::And), ty, eloc) => {
                 let test = value_stack.pop().expect("ICE binop hlir issue");
                 let if_ = value_stack.pop().expect("ICE binop hlir issue");
-                if test.1.is_some() && simple_bool_binop_arg(&if_) {
+                if test.1.is_ok() && simple_bool_binop_arg(&if_) {
                     let (mut test_block, test_exp) = test;
                     let (mut if_block, if_exp) = if_;
                     test_block.append(&mut if_block);
-                    let exp = maybe_make_binop(test_exp, sp(loc, op), if_exp)
-                        .map(|e| H::exp(ty, sp(eloc, e)));
+                    let exp = maybe_make_binop(op, ty, eloc, test_exp, if_exp);
                     value_stack.push((test_block, exp));
                 } else {
-                    let else_ = (make_block!(), Some(bool_exp(loc, false)));
-                    value_stack.push(make_boolean_binop(context, sp(loc, op), test, if_, else_));
+                    let else_ = (make_block!(), Ok(bool_exp(eloc, false)));
+                    value_stack.push(make_boolean_binop(context, op, test, if_, else_));
                 }
             }
-            Pn::Op(sp!(loc, op @ BinOp_::Or), ty, eloc) => {
+            Pn::Op(op @ sp!(_, BinOp_::Or), ty, eloc) => {
                 let test = value_stack.pop().expect("ICE binop hlir issue");
                 let else_ = value_stack.pop().expect("ICE binop hlir issue");
-                if test.1.is_some() && simple_bool_binop_arg(&else_) {
+                if test.1.is_ok() && simple_bool_binop_arg(&else_) {
                     let (mut test_block, test_exp) = test;
                     let (mut else_block, else_exp) = else_;
                     test_block.append(&mut else_block);
-                    let exp = maybe_make_binop(test_exp, sp(loc, op), else_exp)
-                        .map(|e| H::exp(ty, sp(eloc, e)));
+                    let exp = maybe_make_binop(op, ty, eloc, test_exp, else_exp);
                     value_stack.push((test_block, exp));
                 } else {
-                    let if_ = (make_block!(), Some(bool_exp(loc, true)));
-                    value_stack.push(make_boolean_binop(context, sp(loc, op), test, if_, else_));
+                    let if_ = (make_block!(), Ok(bool_exp(eloc, true)));
+                    value_stack.push(make_boolean_binop(context, op, test, if_, else_));
                 }
             }
             Pn::Op(op, ty, loc) => {
                 let (mut lhs_block, lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
                 let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                // We promise to fully evaluate the RHS for effects for non-lazy binops, even if
+                // the LHS was divergent.
                 lhs_block.append(&mut rhs_block);
                 // nb: here we could check if the LHS and RHS are "large" terms and let-bind them
                 // if they are getting too big.
-                let exp = maybe_make_binop(lhs_exp, op, rhs_exp).map(|e| H::exp(ty, sp(loc, e)));
-                value_stack.push((lhs_block, exp));
+                value_stack.push((lhs_block, maybe_make_binop(op, ty, loc, lhs_exp, rhs_exp)));
             }
             Pn::Val(block, exp) => value_stack.push((block, exp)),
         }
@@ -2113,28 +2439,25 @@ fn process_binops(
 }
 
 fn maybe_make_binop(
-    lhs: Option<H::Exp>,
     op: BinOp,
-    rhs: Option<H::Exp>,
-) -> Option<H::UnannotatedExp_> {
-    if let (Some(lhs), Some(rhs)) = (lhs, rhs) {
-        Some(H::UnannotatedExp_::BinopExp(
-            Box::new(lhs),
-            op,
-            Box::new(rhs),
-        ))
-    } else {
-        None
-    }
+    op_result_type: H::Type,
+    exp_loc: Loc,
+    lhs: ExpResult,
+    rhs: ExpResult,
+) -> ExpResult {
+    ok_pair!((lhs, rhs), lhs, rhs, {
+        let binop = H::UnannotatedExp_::BinopExp(Box::new(lhs), op, Box::new(rhs));
+        Ok(H::exp(op_result_type, sp(exp_loc, binop)))
+    })
 }
 
 fn make_boolean_binop(
     context: &mut Context,
     op: BinOp,
-    (mut test_block, test_exp): (Block, Option<H::Exp>),
-    (mut if_block, if_exp): (Block, Option<H::Exp>),
-    (mut else_block, else_exp): (Block, Option<H::Exp>),
-) -> (Block, Option<H::Exp>) {
+    (mut test_block, test_exp): (Block, ExpResult),
+    (mut if_block, if_exp): (Block, ExpResult),
+    (mut else_block, else_exp): (Block, ExpResult),
+) -> (Block, ExpResult) {
     let loc = op.loc;
 
     let bool_ty = tbool(loc);
@@ -2142,43 +2465,44 @@ fn make_boolean_binop(
     let opty = Some(bool_ty);
 
     // one of these _must_ case always binds by construction.
-    let if_bind = bind_value_in_block(
+    bind_value_in_block(
         context,
         binders.clone(),
         opty.clone(),
         &mut if_block,
         if_exp,
     );
-    let else_bind = bind_value_in_block(context, binders, opty, &mut else_block, else_exp);
-    assert!(if_bind || else_bind, "ICE boolean binop processing failure");
+    bind_value_in_block(context, binders, opty, &mut else_block, else_exp);
 
-    if let Some(cond) = test_exp {
-        let if_else = H::Statement_::IfElse {
-            cond: Box::new(cond),
-            if_block,
-            else_block,
-        };
-        test_block.push_back(sp(loc, if_else));
-        let final_exp = Some(bound_exp);
-        (test_block, final_exp)
-    } else {
-        (test_block, None)
+    match test_exp {
+        Ok(cond) => {
+            let if_else = H::Statement_::IfElse {
+                cond: Box::new(cond),
+                if_block,
+                else_block,
+            };
+            test_block.push_back(sp(loc, if_else));
+            (test_block, Ok(bound_exp))
+        }
+        Err(cond_err) => (test_block, Err(cond_err)),
     }
 }
 
-fn simple_bool_binop_arg((block, exp): &(Block, Option<H::Exp>)) -> bool {
+fn simple_bool_binop_arg((block, exp): &(Block, ExpResult)) -> bool {
     use H::UnannotatedExp_ as HE;
-    if !block.is_empty() || exp.is_none() {
+    if !block.is_empty() {
         false
-    } else {
+    } else if let Ok(exp) = exp.as_ref() {
         matches!(
-            exp.as_ref().unwrap().exp.value,
+            exp.exp.value,
             HE::Value(_)
                 | HE::Constant(_)
                 | HE::Move { .. }
                 | HE::Copy { .. }
                 | HE::UnresolvedError
         )
+    } else {
+        false
     }
 }
 
