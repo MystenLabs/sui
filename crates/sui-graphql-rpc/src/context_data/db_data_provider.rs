@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
-use crate::{error::Error, types::digest::Digest};
-use diesel::{ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use crate::{
+    error::Error,
+    types::{digest::Digest, object::ObjectFilter, transaction_block::TransactionBlockFilter},
+};
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
+    QueryDsl, RunQueryDsl,
+};
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -206,12 +212,14 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(10) as i64;
         query = query.limit(limit + 1);
 
-        let result: Option<Vec<StoredTransaction>> = read_only_blocking!(&self.pool, |conn| {
-            query
-                .select(transactions::all_columns)
-                .load(conn)
-                .optional()
-        })?;
+        let result: Option<Vec<StoredTransaction>> = self
+            .run_query_async(|conn| {
+                query
+                    .select(transactions::all_columns)
+                    .load(conn)
+                    .optional()
+            })
+            .await?;
 
         result
             .map(|mut stored_txs| {
@@ -279,8 +287,9 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(10) as i64;
         query = query.limit(limit + 1);
 
-        let result: Option<Vec<StoredObject>> =
-            read_only_blocking!(&self.pool, |conn| { query.load(conn).optional() })?;
+        let result: Option<Vec<StoredObject>> = self
+            .run_query_async(|conn| query.load(conn).optional())
+            .await?;
 
         result
             .map(|mut stored_objs| {
