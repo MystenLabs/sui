@@ -36,7 +36,7 @@ function TestnetOutageBanner() {
 		<div className="flex flex-wrap gap-4">
 			Sui Explorer&apos;s Testnet backend is undergoing maintenance. The following explorers may
 			provide more accurate data at this time:
-			<div className="flex gap-4">
+			<div className="flex gap-4 max-md:py-3">
 				<Link href={suiVisionTestnetUrl} after={<ArrowUpRight12 className="h-3 w-3 text-steel" />}>
 					<Text variant="bodySmall/medium" color="hero-darkest">
 						SuiVision
