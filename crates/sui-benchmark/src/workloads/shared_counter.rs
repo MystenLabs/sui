@@ -26,7 +26,7 @@ use sui_types::{
 use tracing::{debug, error, info};
 
 /// The max amount of gas units needed for a payload.
-pub const MAX_GAS_IN_UNIT: u64 = 1_000_000;
+pub const MAX_GAS_IN_UNIT: u64 = 100_000;
 
 #[derive(Debug)]
 pub struct SharedCounterTestPayload {
