@@ -86,7 +86,9 @@ async fn test_end_to_end() -> anyhow::Result<()> {
         })],
     };
     // Start watching for upgrades.
-    let t = tokio::spawn(async move { watch_for_upgrades(&config).await });
+    let sources = NetworkLookup::new();
+    let dummy_app_state = Arc::new(RwLock::new(AppState { sources }));
+    let t = tokio::spawn(async move { watch_for_upgrades(&config, dummy_app_state).await });
 
     // Set up to upgrade package.
     let package = effects
