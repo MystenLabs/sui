@@ -13,6 +13,8 @@ use crate::gas::GasCostSummary;
 use crate::object::{Owner, OBJECT_START_VERSION};
 use crate::{ObjectID, SequenceNumber};
 use serde::{Deserialize, Serialize};
+
+#[cfg(debug_assertions)]
 use std::collections::HashSet;
 
 /// The response from processing a transaction or a certified transaction
