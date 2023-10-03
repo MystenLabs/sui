@@ -131,6 +131,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
+use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
@@ -757,6 +758,16 @@ impl AuthorityState {
                     .1,
             }),
         }
+    }
+
+    pub(crate) fn check_system_overload(
+        &self,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
+        self.transaction_manager.check_execution_overload(tx_data)?;
+        consensus_adapter.check_consensus_overload()?;
+        Ok(())
     }
 
     /// Executes a transaction that's known to have correct effects.

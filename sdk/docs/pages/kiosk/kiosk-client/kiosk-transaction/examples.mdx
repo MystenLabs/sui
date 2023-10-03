@@ -37,7 +37,7 @@ const mint = async () => {
     const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap: await getCap() }});
 
     // Assume it costs one SUI
-    let coin = txb.splitCoins(txb.gas, [txb.pure(1_000_000_000)]);
+    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
 
     // A function that mints directly into the kiosk.
      txb.moveCall({
@@ -71,7 +71,7 @@ const mint = async () => {
     kioskTx.create();
 
     // We'll assume it costs 1 SUI
-    let coin = txb.splitCoins(txb.gas, [txb.pure(1_000_000_000)]);
+    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
 
     // A function that mints directly into the kiosk.
      txb.moveCall({

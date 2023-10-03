@@ -20,6 +20,7 @@ pub struct StoredCheckpoint {
     pub epoch: i64,
     pub network_total_transactions: i64,
     pub previous_checkpoint_digest: Option<Vec<u8>>,
+    pub end_of_epoch: bool,
     pub tx_digests: Vec<Option<Vec<u8>>>,
     pub timestamp_ms: i64,
     pub total_gas_cost: i64,
@@ -30,7 +31,6 @@ pub struct StoredCheckpoint {
     pub checkpoint_commitments: Vec<u8>,
     pub validator_signature: Vec<u8>,
     pub end_of_epoch_data: Option<Vec<u8>>,
-    pub end_of_epoch: bool,
 }
 
 impl From<&IndexedCheckpoint> for StoredCheckpoint {

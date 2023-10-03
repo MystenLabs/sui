@@ -263,7 +263,7 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
 }
 
 pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
-    let pool_config = PgConectionPoolConfig::default();
+    let pool_config = PgConnectionPoolConfig::default();
     let manager = ConnectionManager::<PgConnection>::new(db_url);
 
     diesel::r2d2::Pool::builder()
@@ -280,13 +280,13 @@ pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerE
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PgConectionPoolConfig {
+pub struct PgConnectionPoolConfig {
     pool_size: u32,
     connection_timeout: Duration,
     statement_timeout: Duration,
 }
 
-impl PgConectionPoolConfig {
+impl PgConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
     const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
     const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
@@ -297,9 +297,21 @@ impl PgConectionPoolConfig {
             read_only: false,
         }
     }
+
+    pub fn set_pool_size(&mut self, size: u32) {
+        self.pool_size = size;
+    }
+
+    pub fn set_connection_timeout(&mut self, timeout: Duration) {
+        self.connection_timeout = timeout;
+    }
+
+    pub fn set_statement_timeout(&mut self, timeout: Duration) {
+        self.statement_timeout = timeout;
+    }
 }
 
-impl Default for PgConectionPoolConfig {
+impl Default for PgConnectionPoolConfig {
     fn default() -> Self {
         let db_pool_size = std::env::var("DB_POOL_SIZE")
             .ok()
