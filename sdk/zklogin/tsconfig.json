@@ -1,6 +1,6 @@
 {
 	"extends": "../build-scripts/tsconfig.shared.json",
-	"include": ["src", "test"],
+	"include": ["src", "test/checks.test.ts"],
 	"compilerOptions": {
 		"module": "CommonJS",
 		"outDir": "dist/cjs",

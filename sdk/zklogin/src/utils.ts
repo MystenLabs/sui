@@ -27,6 +27,9 @@ export function chunkArray<T>(array: T[], chunk_size: number): T[][] {
 
 function bytesBEToBigInt(bytes: number[]): bigint {
 	const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
 	return BigInt('0x' + hex);
 }
 

@@ -8,6 +8,7 @@ interface VisitorCallback {
 	offset: number;
 	length: number;
 	// Not expecting any claim that is not a string or a boolean (email_verified is sometimes a boolean).
+	// Ensuring that key claim and aud are strings is done in getRawClaimValue
 	arg?: string | boolean | number;
 }
 
@@ -18,7 +19,6 @@ interface VisitorError extends ParseError {
 
 export interface ClaimDetails {
 	name: string; // e.g., "sub"
-
 	// Not expecting any claim that is not a string or a boolean (boolean for email_verified)...
 	value: string | boolean | number; // e.g., "1234567890"
 	ext_claim: string; // e.g., "sub": "1234567890",
