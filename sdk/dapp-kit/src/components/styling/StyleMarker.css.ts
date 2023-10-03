@@ -10,7 +10,7 @@ globalStyle(createScopedSelector('*'), {
 	boxSizing: 'border-box',
 	color: themeVars.colors.body,
 	fontFamily: themeVars.typography.fontFamily,
-	fontSize: themeVars.typography.fontSize,
+	fontSize: themeVars.fontWeights.normal,
 	fontStyle: themeVars.typography.fontStyle,
 	fontWeight: themeVars.fontWeights.normal,
 	lineHeight: themeVars.typography.lineHeight,

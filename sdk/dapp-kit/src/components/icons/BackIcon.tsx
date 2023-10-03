@@ -3,6 +3,8 @@
 
 import type { ComponentProps } from 'react';
 
+// FIXME: Replace this with a 10x10 icon to match the CheckIcon, or alternatively make the CheckIcon bigger
+// Right now, the icons don't align on mobile :(
 export function BackIcon(props: ComponentProps<'svg'>) {
 	return (
 		<svg width={24} height={24} fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>

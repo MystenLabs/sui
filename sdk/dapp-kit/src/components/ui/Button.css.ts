@@ -35,15 +35,6 @@ export const buttonVariants = recipe({
 					backgroundColor: themeVars.backgroundColors.outlineButtonHover,
 				},
 			},
-			icon: {
-				borderRadius: 9999,
-				color: themeVars.colors.iconButton,
-				backgroundColor: themeVars.backgroundColors.iconButton,
-				':hover': {
-					backgroundColor: themeVars.backgroundColors.iconButtonHover,
-				},
-			},
-			ghost: {},
 		},
 		size: {
 			md: { borderRadius: themeVars.radii.medium, padding: '8px 16px' },

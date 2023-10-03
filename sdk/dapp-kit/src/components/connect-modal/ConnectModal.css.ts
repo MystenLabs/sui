@@ -67,16 +67,10 @@ export const selectedViewContainer = style({
 	display: 'flex',
 });
 
-export const backButton = style({
+export const backButtonContainer = style({
 	position: 'absolute',
 	top: 20,
 	left: 20,
-	borderRadius: 9999,
-	color: themeVars.colors.iconButton,
-	backgroundColor: themeVars.backgroundColors.iconButton,
-	':hover': {
-		backgroundColor: themeVars.backgroundColors.iconButtonHover,
-	},
 	'@media': {
 		'screen and (min-width: 768px)': {
 			display: 'none',
@@ -84,18 +78,10 @@ export const backButton = style({
 	},
 });
 
-export const closeButton = style({
+export const closeButtonContainer = style({
 	position: 'absolute',
-	display: 'flex',
-	padding: 8,
 	top: 16,
 	right: 16,
-	borderRadius: 9999,
-	color: themeVars.colors.iconButton,
-	backgroundColor: themeVars.backgroundColors.iconButton,
-	':hover': {
-		backgroundColor: themeVars.backgroundColors.iconButtonHover,
-	},
 });
 
 export const walletListContent = style({
