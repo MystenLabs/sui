@@ -11,7 +11,7 @@ use serde::Serialize;
 //
 
 // Checkpoint information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct CheckpointEntry {
     // indexes
     pub(crate) checkpoint_digest: String,
@@ -38,7 +38,7 @@ pub(crate) struct CheckpointEntry {
 }
 
 // Transaction information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct TransactionEntry {
     // main indexes
     pub(crate) transaction_digest: String,
@@ -85,7 +85,7 @@ pub(crate) struct TransactionEntry {
 
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct EventEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -107,7 +107,7 @@ pub(crate) struct EventEntry {
 }
 
 // Used in the transaction object table to identify the type of input object.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum InputObjectKind {
     Input,
     SharedInput,
@@ -116,7 +116,7 @@ pub enum InputObjectKind {
 
 // Used in the object table to identify the status of object, its result in the last transaction
 // effect.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -124,7 +124,7 @@ pub enum ObjectStatus {
 }
 
 // Object owner information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,
@@ -134,7 +134,7 @@ pub enum OwnerType {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct ObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -165,7 +165,7 @@ pub(crate) struct ObjectEntry {
 // input kind (for input objects) and status (for objets in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct TransactionObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -180,7 +180,7 @@ pub(crate) struct TransactionObjectEntry {
 }
 
 // A Move call expressed as a package, module and function.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct MoveCallEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -194,7 +194,7 @@ pub(crate) struct MoveCallEntry {
 }
 
 // A Move package. Pacakge id and MovePackage object bytes
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct MovePackageEntry {
     pub(crate) object_id: String,
     pub(crate) checkpoint: u64,

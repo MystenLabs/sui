@@ -1,40 +1,51 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use bytes::Bytes;
+use std::ops::Range;
+use std::path::PathBuf;
+
+use anyhow::Result;
 use clap::*;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
-use std::io::{BufWriter, Cursor, Read, Seek, SeekFrom, Write};
-use strum_macros::EnumIter;
-pub mod analytics_handler;
-
-pub mod analytics_metrics;
-pub mod csv_writer;
-pub mod errors;
-pub mod tables;
-pub mod writer;
-use anyhow::anyhow;
-use anyhow::Result;
-use fastcrypto::hash::{HashFunction, Sha3_256};
-use object_store::DynObjectStore;
-use serde::{Deserialize, Serialize};
-use std::ops::Range;
-use std::path::PathBuf;
-use std::sync::Arc;
-use sui_storage::blob::{Blob, BlobEncoding};
-use sui_storage::object_store::util::{get, put};
-use sui_storage::SHA3_BYTES;
-
 use object_store::path::Path;
-use strum::IntoEnumIterator;
+use serde::{Deserialize, Serialize};
+use strum_macros::EnumIter;
+use tracing::info;
+
+use sui_indexer::framework::Handler;
+use sui_rest_api::CheckpointData;
+use sui_storage::object_store::util::{
+    find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
+};
 use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::base_types::EpochId;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
-const MAGIC_BYTES: usize = 4;
-const MANIFEST_FILE_MAGIC: u32 = 0x0050FFEE;
-const MANIFEST_FILENAME: &str = "MANIFEST";
+use crate::analytics_metrics::AnalyticsMetrics;
+use crate::analytics_processor::AnalyticsProcessor;
+use crate::handlers::checkpoint_handler::CheckpointHandler;
+use crate::handlers::event_handler::EventHandler;
+use crate::handlers::move_call_handler::MoveCallHandler;
+use crate::handlers::object_handler::ObjectHandler;
+use crate::handlers::package_handler::PackageHandler;
+use crate::handlers::transaction_handler::TransactionHandler;
+use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
+use crate::handlers::AnalyticsHandler;
+use crate::tables::{
+    CheckpointEntry, EventEntry, MoveCallEntry, MovePackageEntry, ObjectEntry, TransactionEntry,
+    TransactionObjectEntry,
+};
+use crate::writers::csv_writer::CSVWriter;
+use crate::writers::AnalyticsWriter;
+
+pub mod analytics_metrics;
+pub mod analytics_processor;
+pub mod errors;
+mod handlers;
+pub mod tables;
+mod writers;
+
 const EPOCH_DIR_PREFIX: &str = "epoch_";
 const CHECKPOINT_DIR_PREFIX: &str = "checkpoints";
 const OBJECT_DIR_PREFIX: &str = "objects";
@@ -69,18 +80,15 @@ pub struct AnalyticsIndexerConfig {
     /// Time to process in seconds before uploading to the datastore.
     #[clap(long, default_value = "600", global = true)]
     pub time_interval_s: u64,
-    // File format to use when writing files
-    #[arg(
-        value_enum,
-        long = "file-format",
-        default_value = "csv",
-        ignore_case = true,
-        global = true
-    )]
-    pub file_format: FileFormat,
     // Remote object store where data gets written to
     #[command(flatten)]
     pub remote_store_config: ObjectStoreConfig,
+    // File format to store data in i.e. csv, parquet, etc
+    #[clap(long, value_enum, default_value = "csv", global = true)]
+    pub file_format: FileFormat,
+    // Type of data to write i.e. checkpoint, object, transaction, etc
+    #[clap(long, value_enum, long, global = true)]
+    pub file_type: FileType,
 }
 
 #[derive(
@@ -122,6 +130,7 @@ impl FileFormat {
     TryFromPrimitive,
     IntoPrimitive,
     EnumIter,
+    ValueEnum,
 )]
 #[repr(u8)]
 pub enum FileType {
@@ -151,15 +160,14 @@ impl FileType {
         &self,
         file_format: FileFormat,
         epoch_num: EpochId,
-        checkpoint_sequence_num: u64,
-        filename_suffix: u128,
+        checkpoint_range: Range<u64>,
     ) -> Path {
         self.dir_prefix()
             .child(format!("{}{}", EPOCH_DIR_PREFIX, epoch_num))
             .child(format!(
                 "{}_{}.{}",
-                checkpoint_sequence_num,
-                filename_suffix,
+                checkpoint_range.start,
+                checkpoint_range.end,
                 file_format.file_suffix()
             ))
     }
@@ -171,7 +179,6 @@ pub struct FileMetadata {
     pub file_format: FileFormat,
     pub epoch_num: u64,
     pub checkpoint_seq_range: Range<u64>,
-    pub filename_suffix: u128,
 }
 
 impl FileMetadata {
@@ -180,14 +187,12 @@ impl FileMetadata {
         file_format: FileFormat,
         epoch_num: u64,
         checkpoint_seq_range: Range<u64>,
-        filename_suffix: u128,
     ) -> FileMetadata {
         FileMetadata {
             file_type,
             file_format,
             epoch_num,
             checkpoint_seq_range,
-            filename_suffix,
         }
     }
 
@@ -195,158 +200,301 @@ impl FileMetadata {
         self.file_type.file_path(
             self.file_format,
             self.epoch_num,
-            self.checkpoint_seq_range.start,
-            self.filename_suffix,
+            self.checkpoint_seq_range.clone(),
         )
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub struct CheckpointUpdates {
-    files: Vec<FileMetadata>,
-    pub(crate) manifest: Manifest,
+pub struct Processor {
+    pub handler: Box<dyn Handler>,
+    pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
-impl CheckpointUpdates {
+#[async_trait::async_trait]
+impl Handler for Processor {
+    #[inline]
+    fn name(&self) -> &str {
+        self.handler.name()
+    }
+
+    #[inline]
+    async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
+        self.handler.process_checkpoint(checkpoint_data).await
+    }
+}
+
+impl Processor {
     pub fn new(
-        epoch_num: u64,
-        checkpoint_sequence_number: u64,
-        files: Vec<FileMetadata>,
-        manifest: &mut Manifest,
+        handler: Box<dyn Handler>,
+        starting_checkpoint_seq_num: CheckpointSequenceNumber,
     ) -> Self {
-        manifest.update(epoch_num, checkpoint_sequence_number, files.clone());
-        CheckpointUpdates {
-            files,
-            manifest: manifest.clone(),
+        Processor {
+            handler,
+            starting_checkpoint_seq_num,
         }
     }
 
-    pub fn new_for_epoch(
-        file_format: FileFormat,
-        epoch_num: u64,
-        checkpoint_range: Range<u64>,
-        filename_suffix: u128,
-        manifest: &mut Manifest,
-    ) -> Self {
-        let files: Vec<_> = FileType::iter()
-            .map(|f| {
-                FileMetadata::new(
-                    f,
-                    file_format,
-                    epoch_num,
-                    checkpoint_range.clone(),
-                    filename_suffix,
-                )
-            })
-            .collect();
-        CheckpointUpdates::new(epoch_num, checkpoint_range.end, files, manifest)
-    }
-
-    pub fn files(&self) -> Vec<FileMetadata> {
-        self.files.clone()
+    pub fn last_committed_checkpoint(&self) -> Option<u64> {
+        Some(self.starting_checkpoint_seq_num.saturating_sub(1)).filter(|x| *x > 0)
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub struct ManifestV1 {
-    pub version: u8,
-    pub next_checkpoint_seq_num: u64,
-    pub file_metadata: Vec<FileMetadata>,
-    pub epoch: u64,
+pub async fn read_store_for_epoch_and_checkpoint(
+    remote_store_config: ObjectStoreConfig,
+    file_type: FileType,
+) -> Result<(EpochId, CheckpointSequenceNumber)> {
+    let remote_object_store = remote_store_config.make()?;
+    let remote_store_is_empty = remote_object_store
+        .list_with_delimiter(None)
+        .await
+        .expect("Failed to read remote analytics store")
+        .common_prefixes
+        .is_empty();
+    info!("Remote store is empty: {remote_store_is_empty}");
+    let prefix = file_type.dir_prefix();
+    let epoch_dirs = find_all_dirs_with_epoch_prefix(&remote_object_store, Some(&prefix)).await?;
+    let epoch = epoch_dirs.last_key_value().map(|(k, _v)| *k).unwrap_or(0);
+    let epoch_prefix = prefix.child(format!("epoch_{}", epoch));
+    let checkpoints =
+        find_all_files_with_epoch_prefix(&remote_object_store, Some(&epoch_prefix)).await?;
+    let next_checkpoint_seq_num = checkpoints
+        .iter()
+        .max_by(|x, y| x.end.cmp(&y.end))
+        .map(|r| r.end)
+        .unwrap_or(0);
+    Ok((epoch, next_checkpoint_seq_num))
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub enum Manifest {
-    V1(ManifestV1),
-}
-
-impl Manifest {
-    pub fn new(epoch: u64, next_checkpoint_seq_num: u64) -> Self {
-        Manifest::V1(ManifestV1 {
-            version: 1,
-            next_checkpoint_seq_num,
-            file_metadata: vec![],
+pub async fn make_checkpoint_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<CheckpointEntry>> = Box::new(CheckpointHandler::new());
+    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
+        config.remote_store_config.clone(),
+        FileType::Checkpoint,
+    )
+    .await?;
+    let writer: Box<dyn AnalyticsWriter<CheckpointEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
             epoch,
-        })
-    }
-
-    pub fn files(&self) -> Vec<FileMetadata> {
-        match self {
-            Manifest::V1(manifest) => manifest.file_metadata.clone(),
-        }
-    }
-
-    pub fn epoch_num(&self) -> u64 {
-        match self {
-            Manifest::V1(manifest) => manifest.epoch,
-        }
-    }
-
-    pub fn next_checkpoint_seq_num(&self) -> u64 {
-        match self {
-            Manifest::V1(manifest) => manifest.next_checkpoint_seq_num,
-        }
-    }
-
-    pub fn update(
-        &mut self,
-        epoch_num: u64,
-        checkpoint_sequence_number: u64,
-        files: Vec<FileMetadata>,
-    ) {
-        match self {
-            Manifest::V1(manifest) => {
-                manifest.file_metadata.extend(files);
-                manifest.epoch = epoch_num;
-                manifest.next_checkpoint_seq_num = checkpoint_sequence_number;
-            }
-        }
-    }
+            FileType::Checkpoint,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
 }
 
-pub async fn read_manifest(remote_store: Arc<DynObjectStore>) -> Result<Manifest> {
-    let manifest_file_path = Path::from(MANIFEST_FILENAME);
-    let vec = get(&manifest_file_path, remote_store).await?.to_vec();
-    let manifest_file_size = vec.len();
-    let mut manifest_reader = Cursor::new(vec);
-    manifest_reader.rewind()?;
-    let magic = manifest_reader.read_u32::<BigEndian>()?;
-    if magic != MANIFEST_FILE_MAGIC {
-        return Err(anyhow!("Unexpected magic byte in manifest: {}", magic));
-    }
-    manifest_reader.seek(SeekFrom::End(-(SHA3_BYTES as i64)))?;
-    let mut sha3_digest = [0u8; SHA3_BYTES];
-    manifest_reader.read_exact(&mut sha3_digest)?;
-    manifest_reader.rewind()?;
-    let mut content_buf = vec![0u8; manifest_file_size - SHA3_BYTES];
-    manifest_reader.read_exact(&mut content_buf)?;
-    let mut hasher = Sha3_256::default();
-    hasher.update(&content_buf);
-    let computed_digest = hasher.finalize().digest;
-    if computed_digest != sha3_digest {
-        return Err(anyhow!(
-            "Manifest corrupted, computed checksum: {:?}, stored checksum: {:?}",
-            computed_digest,
-            sha3_digest
-        ));
-    }
-    manifest_reader.rewind()?;
-    manifest_reader.seek(SeekFrom::Start(MAGIC_BYTES as u64))?;
-    Blob::read(&mut manifest_reader)?.decode()
+pub async fn make_transaction_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<TransactionEntry>> = Box::new(TransactionHandler::new());
+    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
+        config.remote_store_config.clone(),
+        FileType::Transaction,
+    )
+    .await?;
+    let writer: Box<dyn AnalyticsWriter<TransactionEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::Transaction,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
 }
 
-pub async fn write_manifest(manifest: Manifest, remote_store: Arc<DynObjectStore>) -> Result<()> {
-    let path = Path::from(MANIFEST_FILENAME);
-    let mut buf = BufWriter::new(vec![]);
-    buf.write_u32::<BigEndian>(MANIFEST_FILE_MAGIC)?;
-    let blob = Blob::encode(&manifest, BlobEncoding::Bcs)?;
-    blob.write(&mut buf)?;
-    buf.flush()?;
-    let mut hasher = Sha3_256::default();
-    hasher.update(buf.get_ref());
-    let computed_digest = hasher.finalize().digest;
-    buf.write_all(&computed_digest)?;
-    let bytes = Bytes::from(buf.into_inner()?);
-    put(&path, bytes, remote_store).await?;
-    Ok(())
+pub async fn make_object_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new());
+    let (epoch, starting_checkpoint_seq_num) =
+        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::Object)
+            .await?;
+    let writer: Box<dyn AnalyticsWriter<ObjectEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::Object,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+}
+
+pub async fn make_event_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new());
+    let (epoch, starting_checkpoint_seq_num) =
+        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::Event)
+            .await?;
+    let writer: Box<dyn AnalyticsWriter<EventEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::Event,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+}
+
+pub async fn make_transaction_objects_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<TransactionObjectEntry>> =
+        Box::new(TransactionObjectsHandler::new());
+    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
+        config.remote_store_config.clone(),
+        FileType::TransactionObjects,
+    )
+    .await?;
+    let writer: Box<dyn AnalyticsWriter<TransactionObjectEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::TransactionObjects,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+}
+
+pub async fn make_move_package_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<MovePackageEntry>> = Box::new(PackageHandler::new());
+    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
+        config.remote_store_config.clone(),
+        FileType::MovePackage,
+    )
+    .await?;
+    let writer: Box<dyn AnalyticsWriter<MovePackageEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::MovePackage,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+}
+
+pub async fn make_move_call_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    let handler: Box<dyn AnalyticsHandler<MoveCallEntry>> = Box::new(MoveCallHandler::new());
+    let (epoch, starting_checkpoint_seq_num) =
+        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::MoveCall)
+            .await?;
+    let writer: Box<dyn AnalyticsWriter<MoveCallEntry>> = match config.file_format {
+        FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            epoch,
+            FileType::MoveCall,
+            starting_checkpoint_seq_num,
+        )?),
+    };
+    let handler = Box::new(
+        AnalyticsProcessor::new(
+            handler,
+            writer,
+            epoch,
+            starting_checkpoint_seq_num,
+            metrics,
+            config,
+        )
+        .await?,
+    );
+    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+}
+
+pub async fn make_analytics_processor(
+    config: AnalyticsIndexerConfig,
+    metrics: AnalyticsMetrics,
+) -> Result<Processor> {
+    match config.file_type {
+        FileType::Checkpoint => make_checkpoint_processor(config, metrics).await,
+        FileType::Object => make_object_processor(config, metrics).await,
+        FileType::Transaction => make_transaction_processor(config, metrics).await,
+        FileType::Event => make_event_processor(config, metrics).await,
+        FileType::TransactionObjects => make_transaction_objects_processor(config, metrics).await,
+        FileType::MoveCall => make_move_call_processor(config, metrics).await,
+        FileType::MovePackage => make_move_package_processor(config, metrics).await,
+    }
 }
