@@ -32,7 +32,7 @@ pub struct TransactionEffectsV2 {
     /// The updated gas object reference, as an index into the `changed_objects` vector.
     /// Having a dedicated field for convenient access.
     /// System transaction that don't require gas will leave this as None.
-    gas_object_index: Option<u16>,
+    gas_object_index: Option<u32>,
     /// The digest of the events emitted during execution,
     /// can be None if the transaction does not emit any event.
     events_digest: Option<TransactionEventsDigest>,
@@ -67,7 +67,6 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
         self.executed_epoch
     }
 
-    // TODO: Add a new API to return modified object refs.
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
         self.changed_objects
             .iter()
@@ -81,7 +80,7 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
-    fn modified_at_v2(&self) -> Vec<(ObjectRef, Owner)> {
+    fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)> {
         self.changed_objects
             .iter()
             .filter_map(|(id, change)| {
@@ -245,7 +244,6 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 _ => panic!("Gas object must be an ObjectWrite in changed_objects"),
             }
         } else {
-            // TODO: We should consider having this function to return Option.
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
                 Owner::AddressOwner(SuiAddress::default()),
@@ -360,7 +358,7 @@ impl TransactionEffectsV2 {
             changed_objects
                 .iter()
                 .position(|(id, _)| id == &gas_id)
-                .unwrap() as u16
+                .unwrap() as u32
         });
 
         let result = Self {
@@ -412,7 +410,6 @@ impl TransactionEffectsV2 {
 
     /// This function demonstrates what's the invariant of the effects.
     /// It also documents the semantics of different combinations in object changes.
-    /// TODO: Make this debug assertion only.
     #[cfg(debug_assertions)]
     fn check_invariant(&self) {
         let mut unique_ids = HashSet::new();

@@ -926,7 +926,7 @@ TransactionEffectsV2:
     - transaction_digest:
         TYPENAME: TransactionDigest
     - gas_object_index:
-        OPTION: U16
+        OPTION: U32
     - events_digest:
         OPTION:
           TYPENAME: TransactionEventsDigest

@@ -24,7 +24,7 @@ pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 
 mod effects_v1;
 mod effects_v2;
@@ -65,23 +65,20 @@ impl VersionedProtocolMessage for TransactionEffects {
     }
 
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult {
-        let (message_version, supported) = match self {
-            Self::V1(_) => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            Self::V2(_) => (2, SupportedProtocolVersions::new_for_message(23, u64::MAX)),
-            // Suppose we add V2 at protocol version 7, then we must change this to:
-            // Self::V1 => (1, SupportedProtocolVersions::new_for_message(1, u64::MAX)),
-            // Self::V2 => (2, SupportedProtocolVersions::new_for_message(7, u64::MAX)),
-        };
-
-        if supported.is_version_supported(protocol_config.version) {
-            Ok(())
-        } else {
-            Err(SuiError::WrongMessageVersion {
-                error: format!(
-                    "TransactionEffectsV{} is not supported at {:?}. (Supported range is {:?}",
-                    message_version, protocol_config.version, supported
-                ),
-            })
+        match self {
+            Self::V1(_) => Ok(()),
+            Self::V2(_) => {
+                if protocol_config.enable_effects_v2() {
+                    Ok(())
+                } else {
+                    Err(SuiError::WrongMessageVersion {
+                        error: format!(
+                            "TransactionEffectsV2 is not supported at protocol {:?}.",
+                            protocol_config.version
+                        ),
+                    })
+                }
+            }
         }
     }
 }
@@ -223,9 +220,7 @@ impl TransactionEffects {
             + APPROX_SIZE_OF_GAS_COST_SUMMARY
             + APPROX_SIZE_OF_OPT_TX_EVENTS_DIGEST;
 
-        // Each write or delete contributes at roughly this amount because:
-        // Each write can be a mutation which can show up in `mutated` and `modified_at_versions`
-        // `num_delete` is added for padding
+        // We store object ref and owner for both old objects and new objects.
         let approx_change_entry_size = 1_000
             + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_writes
             + (APPROX_SIZE_OF_OWNER + APPROX_SIZE_OF_OBJECT_REF) * num_modifies;
@@ -329,7 +324,12 @@ pub trait TransactionEffectsAPI {
     fn into_status(self) -> ExecutionStatus;
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
-    fn modified_at_v2(&self) -> Vec<(ObjectRef, Owner)>;
+
+    /// Metadata of objects prior to modification. This includes any object that exists in the
+    /// store prior to this transaction and is modified in this transaction.
+    /// It includes objects that are mutated, wrapped and deleted.
+    /// This API is only available on effects v2 and above.
+    fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)>;
     /// Returns the list of shared objects used in the input, with full object reference
     /// and use kind. This is needed in effects because in transaction we only have object ID
     /// for shared objects. Their version and digest can only be figured out after sequencing.
@@ -342,7 +342,12 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+
+    // TODO: We should consider having this function to return Option.
+    // When the gas object is not available (i.e. system transaction), we currently return
+    // dummy object ref and owner. This is not ideal.
     fn gas_object(&self) -> (ObjectRef, Owner);
+
     fn events_digest(&self) -> Option<&TransactionEventsDigest>;
     fn dependencies(&self) -> &[TransactionDigest];
 
