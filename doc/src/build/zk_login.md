@@ -265,12 +265,16 @@ Response:
 
 To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
 
-The response can be mapped in the internal `ZkSignatureInputs` Type of zkLogin SDK. 
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
 
  ```typescript
  const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
 
-const partialZkSignature: ZkSignatureInputs = proofResponse as ZkSignatureInputs;
+export type PartialZkSignature = Omit<
+	Parameters<typeof getZkLoginSignature>['0']['inputs'],
+	'addressSeed'
+>;
+const partialZkSignature: PartialZkSignature = proofResponse as PartialZkSignature;
 ````
 
 ## Assemble the zkLogin signature and submit the transaction
