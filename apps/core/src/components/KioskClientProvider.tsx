@@ -5,7 +5,7 @@ import { useSuiClientContext } from '@mysten/dapp-kit';
 import { KioskClient, Network } from '@mysten/kiosk';
 import { createContext, useMemo, type ReactNode } from 'react';
 
-export const kioskClientContext = createContext<KioskClient | null>(null);
+export const KioskClientContext = createContext<KioskClient | null>(null);
 
 const suiToKioskNetwork: Record<string, Network> = {
 	mainnet: Network.MAINNET,
@@ -23,5 +23,5 @@ export function KioskClientProvider({ children }: KioskClientProviderProps) {
 		() => new KioskClient({ client, network: kioskNetwork }),
 		[client, kioskNetwork],
 	);
-	return <kioskClientContext.Provider value={kioskClient}>{children}</kioskClientContext.Provider>;
+	return <KioskClientContext.Provider value={kioskClient}>{children}</KioskClientContext.Provider>;
 }
