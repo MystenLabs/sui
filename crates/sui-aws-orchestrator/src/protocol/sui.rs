@@ -11,11 +11,7 @@ use serde::{Deserialize, Serialize};
 use sui_swarm_config::genesis_config::GenesisConfig;
 use sui_types::{base_types::SuiAddress, multiaddr::Multiaddr};
 
-use crate::{
-    benchmark::{BenchmarkParameters, BenchmarkType},
-    client::Instance,
-    settings::Settings,
-};
+use crate::{benchmark::{BenchmarkParameters, BenchmarkType}, client::Instance, display, settings::Settings};
 
 use super::{ProtocolCommands, ProtocolMetrics};
 
@@ -170,11 +166,12 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
 
         let committee_size = parameters.nodes;
         let clients: Vec<_> = instances.into_iter().collect();
-        let load_share = parameters.load / clients.len();
+        //let load_share = parameters.load / clients.len();
         let shared_counter = parameters.benchmark_type.shared_objects_ratio;
         let transfer_objects = 100 - shared_counter;
         let metrics_port = Self::CLIENT_METRICS_PORT;
         let gas_keys = GenesisConfig::benchmark_gas_keys(committee_size);
+        let num_of_clients = clients.len();
 
         clients
             .into_iter()
@@ -185,22 +182,34 @@ impl ProtocolCommands<SuiBenchmarkType> for SuiProtocol {
                 let gas_key = &gas_keys[i % committee_size];
                 let gas_address = SuiAddress::from(&gas_key.public());
 
+                let target_qps_1 = 1500 / num_of_clients;
+                let target_qps_2 = 2400 / num_of_clients;
+                let target_qps_3 = 1910 / num_of_clients;
+
                 let run = [
                     "cargo run --release --bin stress --",
                     "--num-client-threads 24 --num-server-threads 1",
                     "--local false --num-transfer-accounts 2",
                     &format!("--genesis-blob-path {genesis} --keystore-path {keystore}",),
                     &format!("--primary-gas-owner-id {gas_address}"),
+                    "--run-duration 2000s",
                     "bench",
-                    &format!("--in-flight-ratio 30 --num-workers 24 --target-qps {load_share}"),
+                    &format!("--num-of-benchmark-groups 3"),
+                    &format!("--in-flight-ratio 30,30,30 --num-workers 24,32,32 --target-qps {target_qps_1},{target_qps_2},{target_qps_3}"),
                     &format!(
-                        "--shared-counter {shared_counter} --transfer-object {transfer_objects}"
+                        "--shared-counter 100,100,100 --transfer-object 0,0,0"
                     ),
-                    "--shared-counter-hotness-factor 50",
-                    &format!("--client-metric-host 0.0.0.0 --client-metric-port {metrics_port}"),
+                    "--delegation 0,0,0",
+                    "--shared-counter-hotness-factor 50,50,50",
+                    "--batch-payment 0,0,0 --batch-payment-size 100,100,100 --adversarial 0,0,0",
+                    "--adversarial-cfg 0-1.0,0-1.0,0-1.0",
+                    "--shared-counter-max-tip 0,0,0",
+                    &format!("--client-metric-host 0.0.0.0 --duration 320s,200s,200s --client-metric-port {metrics_port}"),
                 ]
                 .join(" ");
                 let command = ["source $HOME/.cargo/env", &run].join(" && ");
+
+                display::status(command.clone());
 
                 (instance, command)
             })
