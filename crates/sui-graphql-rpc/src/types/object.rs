@@ -3,8 +3,6 @@
 
 use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_sdk::types::object::{Data, Object as SuiObject};
 
 use super::big_int::BigInt;
 use super::digest::Digest;
@@ -15,7 +13,6 @@ use super::{
 };
 use crate::context_data::context_ext::DataProviderContextExt;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
-use crate::error::Error;
 use crate::types::base64::Base64;
 
 #[derive(Clone, Eq, PartialEq, Debug)]

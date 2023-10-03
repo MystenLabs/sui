@@ -34,10 +34,12 @@ pub(crate) struct Checkpoint {
 #[ComplexObject]
 impl Checkpoint {
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let result = ctx
+        let epoch = ctx
             .data_unchecked::<PgManager>()
             .fetch_epoch_strict(self.epoch_id)
-            .await?;
-        Ok(Some(Epoch::from(result)))
+            .await
+            .extend()?;
+
+        Ok(Some(epoch))
     }
 }

@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{
-    connection::{Connection, Edge},
-    *,
-};
+use async_graphql::{connection::Connection, *};
 
 use super::{
     address::Address,
@@ -33,7 +30,7 @@ impl Query {
     /// network).
     async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String> {
         ctx.data_unchecked::<PgManager>()
-            .get_chain_identifier()
+            .fetch_chain_identifier()
             .await
             .extend()
     }
@@ -50,9 +47,12 @@ impl Query {
             })
             .cloned()?)
     }
-    // availableRange
 
+    // availableRange - pending impl. on IndexerV2
     // dryRunTransactionBlock
+    // coinMetadata
+    // resolveNameServiceAddress
+    // event_connection -> TODO: need to define typings
 
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
@@ -60,6 +60,7 @@ impl Query {
             .data_unchecked::<PgManager>()
             .fetch_owner(address)
             .await?;
+
         Ok(owner_address.map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
@@ -80,18 +81,20 @@ impl Query {
     }
 
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        let result = if let Some(epoch_id) = id {
+        if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
                 .fetch_epoch(epoch_id)
-                .await?
+                .await
+                .extend()
         } else {
             Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_epoch()
-                    .await?,
+                    .await
+                    .extend(),
             )
-        };
-        Ok(result.map(Epoch::from))
+            .transpose()
+        }
     }
 
     async fn checkpoint(
@@ -130,8 +133,6 @@ impl Query {
             .extend()
     }
 
-    // coinMetadata
-
     async fn checkpoint_connection(
         &self,
         ctx: &Context<'_>,
@@ -163,28 +164,11 @@ impl Query {
             )?;
         }
 
-        let result = ctx
-            .data_unchecked::<PgManager>()
+        ctx.data_unchecked::<PgManager>()
             .fetch_txs(first, after, last, before, filter)
-            .await?;
-
-        if let Some((transactions, has_next_page)) = result {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(transactions.into_iter().filter_map(|(cursor, tx)| {
-                    TransactionBlock::try_from(tx)
-                        .map_err(|e| eprintln!("Error converting transaction: {:?}", e))
-                        .ok()
-                        .map(|tx| Edge::new(cursor, tx))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
+            .await
+            .extend()
     }
-
-    // event_connection -> TODO: need to define typings
 
     async fn object_connection(
         &self,
@@ -203,30 +187,11 @@ impl Query {
             )?;
         }
 
-        let result = ctx
-            .data_unchecked::<PgManager>()
+        ctx.data_unchecked::<PgManager>()
             .fetch_objs(first, after, last, before, filter)
-            .await?;
-
-        if let Some((stored_objs, has_next_page)) = result {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_objs.into_iter().filter_map(|(cursor, stored_obj)| {
-                    Object::try_from(stored_obj)
-                        .map_err(|e| eprintln!("Error converting object: {:?}", e))
-                        .ok()
-                        .map(|obj| Edge::new(cursor, obj))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
+            .await
+            .extend()
     }
-
-    // resolveNameServiceAddress
-
-    // allEpochAddressMetricsConnection
 
     async fn protocol_config(
         &self,

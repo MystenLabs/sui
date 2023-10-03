@@ -1,0 +1,13 @@
+# Latest epoch
+{
+  epoch {
+    epochId, referenceGasPrice
+  }
+}
+
+# Data for a particular epoch
+{
+  epoch(id:124) {
+    epochId, referenceGasPrice
+  }
+}
