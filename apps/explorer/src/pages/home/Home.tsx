@@ -17,7 +17,6 @@ import { useNetwork } from '~/context';
 import { Card } from '~/ui/Card';
 import { TabHeader } from '~/ui/Tabs';
 import { Network } from '~/utils/api/DefaultRpcClient';
-import { ConnectButton, WalletProvider } from '../../../../../sdk/dapp-kit/src';
 
 const ValidatorMap = lazy(() => import('../../components/validator-map'));
 
@@ -35,9 +34,7 @@ function Home() {
 						className={clsx('home-page-grid-container-top', isSuiTokenCardEnabled && 'with-token')}
 					>
 						<div style={{ gridArea: 'network' }} className="overflow-hidden">
-							<WalletProvider>
-								<ConnectButton />
-							</WalletProvider>
+							<OnTheNetwork />
 						</div>
 						<div style={{ gridArea: 'epoch' }}>
 							<CurrentEpoch />

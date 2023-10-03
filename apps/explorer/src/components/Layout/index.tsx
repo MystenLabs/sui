@@ -40,7 +40,7 @@ export function Layout() {
 			<ScrollRestoration />
 			<WalletKitProvider
 				/*autoConnect={false}*/
-				enableUnsafeBurner={false}
+				enableUnsafeBurner={import.meta.env.DEV}
 			>
 				<SuiClientProvider
 					networks={NetworkConfigs}
