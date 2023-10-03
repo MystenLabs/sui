@@ -19,7 +19,8 @@ export type Serializable =
 	| boolean
 	| null
 	| { [index: string]: Serializable | undefined }
-	| Serializable[];
+	| Serializable[]
+	| (Iterable<Serializable> & { length: number });
 
 export async function encrypt(password: string, secrets: Serializable): Promise<string> {
 	return metamaskEncrypt(password, secrets);

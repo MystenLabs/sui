@@ -4,13 +4,16 @@
 import { fromB64, toB64 } from '@mysten/bcs';
 
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
-import { zkLoginBcs } from './bcs.js';
-import type { ZkLoginDeserializedSignature, ZkLoginSignature } from './types.js';
+import type { ZkLoginSignature } from './bcs.js';
+import { zkLoginSignature } from './bcs.js';
 
-function getZkLoginSignatureBytes({ inputs, maxEpoch, userSignature }: ZkLoginSignature) {
-	return zkLoginBcs
-		.ser(
-			'ZkLoginSignature',
+interface ZkLoginSignatureExtended extends Omit<ZkLoginSignature, 'userSignature'> {
+	userSignature: string | ZkLoginSignature['userSignature'];
+}
+
+function getZkLoginSignatureBytes({ inputs, maxEpoch, userSignature }: ZkLoginSignatureExtended) {
+	return zkLoginSignature
+		.serialize(
 			{
 				inputs,
 				maxEpoch,
@@ -21,7 +24,7 @@ function getZkLoginSignatureBytes({ inputs, maxEpoch, userSignature }: ZkLoginSi
 		.toBytes();
 }
 
-export function getZkLoginSignature({ inputs, maxEpoch, userSignature }: ZkLoginSignature) {
+export function getZkLoginSignature({ inputs, maxEpoch, userSignature }: ZkLoginSignatureExtended) {
 	const bytes = getZkLoginSignatureBytes({ inputs, maxEpoch, userSignature });
 	const signatureBytes = new Uint8Array(bytes.length + 1);
 	signatureBytes.set([SIGNATURE_SCHEME_TO_FLAG.ZkLogin]);
@@ -29,8 +32,6 @@ export function getZkLoginSignature({ inputs, maxEpoch, userSignature }: ZkLogin
 	return toB64(signatureBytes);
 }
 
-export function parseZkLoginSignature(
-	signature: string | Uint8Array,
-): ZkLoginDeserializedSignature {
-	return zkLoginBcs.de('ZkLoginSignature', signature);
+export function parseZkLoginSignature(signature: string | Uint8Array) {
+	return zkLoginSignature.parse(typeof signature === 'string' ? fromB64(signature) : signature);
 }
