@@ -1,3 +1,11 @@
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/abort_any_type.move:5:13
+  │
+5 │         0 + (abort 0);
+  │             ^^^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 warning[W09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/typing/abort_any_type.move:5:22
   │
@@ -9,6 +17,14 @@ warning[W09004]: unnecessary trailing semicolon
   │             Any code after this expression will not be reached
   │
   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/abort_any_type.move:9:13
+  │
+9 │         foo(abort 0);
+  │             ^^^^^^^ Invalid use of a divergent expression. The code following the evaluation of this expression will be dead and should be removed.
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/typing/abort_any_type.move:9:21

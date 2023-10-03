@@ -943,9 +943,6 @@ fn value(
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
             Some(implicit_unit_exp(e.exp.loc))
-        } else if matches!(e.exp.value, E::Abort(_)) {
-            // `abort` is allowed in value positions, and do not produce unreachability errors.
-            None
         } else {
             emit_unreachable(context, e.exp.loc);
             None
