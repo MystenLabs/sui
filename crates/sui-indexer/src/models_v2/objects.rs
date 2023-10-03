@@ -14,6 +14,24 @@ use crate::errors::IndexerError;
 use crate::schema_v2::objects;
 use crate::types_v2::IndexedObject;
 
+#[derive(Queryable)]
+pub struct DynamicFieldColumn {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_digest: Vec<u8>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
+#[derive(Queryable)]
+pub struct ObjectRefColumn {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_digest: Vec<u8>,
+}
+
 // NOTE: please add updating statement like below in pg_indexer_store_v2.rs,
 // if new columns are added here:
 // objects::epoch.eq(excluded(objects::epoch))
@@ -87,6 +105,16 @@ impl StoredObject {
         let object: sui_types::object::Object = self.try_into()?;
         let layout = object.get_layout(ObjectFormatOptions::default(), module_cache)?;
         Ok(ObjectRead::Exists(oref, object, layout))
+    }
+
+    pub fn try_into_expectant_dynamic_field_info(self) -> Result<DynamicFieldInfo, IndexerError> {
+        match self.try_into_dynamic_field_info().transpose() {
+            Some(Ok(info)) => Ok(info),
+            Some(Err(e)) => Err(e),
+            None => Err(IndexerError::PersistentStorageDataCorruptionError(
+                "Dynamic field object has incompatible dynamic field type: empty df_kind".into(),
+            )),
+        }
     }
 
     pub fn try_into_dynamic_field_info(self) -> Result<Option<DynamicFieldInfo>, IndexerError> {

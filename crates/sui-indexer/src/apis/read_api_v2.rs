@@ -117,7 +117,7 @@ impl ReadApiServer for ReadApiV2 {
         let options = options.unwrap_or_default();
         let txns = self
             .inner
-            .multi_get_transaction_block_response_async(digests, options)
+            .multi_get_transaction_block_response_in_blocking_task(digests, options)
             .await?;
 
         Ok(txns)
@@ -195,7 +195,7 @@ impl ReadApiServer for ReadApiV2 {
 
     async fn get_events(&self, transaction_digest: TransactionDigest) -> RpcResult<Vec<SuiEvent>> {
         self.inner
-            .get_transaction_events_async(transaction_digest)
+            .get_transaction_events_in_blocking_task(transaction_digest)
             .await
             .map_err(Into::into)
     }
