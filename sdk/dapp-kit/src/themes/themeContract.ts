@@ -40,7 +40,10 @@ const themeContractValues = {
 	},
 	shadows: {
 		primaryButton: '',
+<<<<<<< HEAD
 		walletItemSelected: '',
+=======
+>>>>>>> 51223de94e (work)
 	},
 	fontWeights: {
 		normal: '',

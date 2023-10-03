@@ -3,12 +3,14 @@
 
 import { style } from '@vanilla-extract/css';
 
+import { themeVars } from '../../themes/themeContract.js';
+
 export const container = style({
 	display: 'flex',
 	flexDirection: 'column',
 	gap: 4,
 });
 
-export const heading = style({});
-
-export const description = style({});
+export const description = style({
+	color: themeVars.colors.bodyMuted,
+});

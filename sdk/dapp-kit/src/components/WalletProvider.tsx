@@ -15,7 +15,11 @@ import { lightTheme } from '../themes/lightTheme.js';
 import type { Theme } from '../themes/themeContract.js';
 import { getRegisteredWallets } from '../utils/walletUtils.js';
 import { createWalletStore } from '../walletStore.js';
+<<<<<<< HEAD
 import { InjectedThemeStyles } from './styling/InjectedThemeStyles.js';
+=======
+import { InjectedThemeStyle } from './styling/InjectedThemeStyle.js';
+>>>>>>> 51223de94e (work)
 
 type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
