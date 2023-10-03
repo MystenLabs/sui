@@ -82,6 +82,8 @@ impl IndexerReader {
         F: FnOnce(&mut PgConnection) -> Result<T, E>,
         E: From<diesel::result::Error> + std::error::Error,
     {
+        blocking_call_is_ok_or_panic();
+
         let mut connection = self.get_connection()?;
         connection
             .build_transaction()
@@ -98,6 +100,8 @@ impl IndexerReader {
         let this = self.clone();
         let current_span = tracing::Span::current();
         tokio::task::spawn_blocking(move || {
+            CALLED_FROM_BLOCKING_POOL
+                .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
             let _guard = current_span.enter();
             f(this)
         })
@@ -113,6 +117,29 @@ impl IndexerReader {
         T: Send + 'static,
     {
         self.spawn_blocking(move |this| this.run_query(query)).await
+    }
+}
+
+thread_local! {
+    static CALLED_FROM_BLOCKING_POOL: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+}
+
+/// Check that we are in a context conducive to making blocking calls.
+/// This is done by either:
+/// - Checking that we are not inside a tokio runtime context
+/// Or:
+/// - If we are inside a tokio runtime context, ensure that the call went through
+/// `IndexerReader::spawn_blocking` which properly moves the blocking call to a blocking thread
+/// pool.
+fn blocking_call_is_ok_or_panic() {
+    if tokio::runtime::Handle::try_current().is_ok()
+        && !CALLED_FROM_BLOCKING_POOL.with(|in_blocking_pool| *in_blocking_pool.borrow())
+    {
+        panic!(
+            "You are calling a blocking DB operation directly on an async thread. \
+                Please use IndexerReader::spawn_blocking instead to move the \
+                operation to a blocking thread"
+        );
     }
 }
 
