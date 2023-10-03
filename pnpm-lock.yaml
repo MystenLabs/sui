@@ -1155,13 +1155,13 @@ importers:
         version: 2.3.0(@types/node@20.4.2)
       autoprefixer:
         specifier: ^10.4.14
-        version: 10.4.14(postcss@8.4.26)
+        version: 10.4.14(postcss@8.4.31)
       esbuild:
         specifier: ^0.17.6
         version: 0.17.6
       postcss:
-        specifier: ^8.4.26
-        version: 8.4.26
+        specifier: ^8.4.31
+        version: 8.4.31
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
@@ -10923,6 +10923,22 @@ packages:
       normalize-range: 0.1.2
       picocolors: 1.0.0
       postcss: 8.4.26
+      postcss-value-parser: 4.2.0
+    dev: true
+
+  /autoprefixer@10.4.14(postcss@8.4.31):
+    resolution: {integrity: sha512-FQzyfOsTlwVzjHxKEqRIAdJx9niO6VCBCoEwax/VLSoQF29ggECcPuBqUMZ+u8jCZOPSy8b8/8KnuFbp0SaFZQ==}
+    engines: {node: ^10 || ^12 || >=14}
+    hasBin: true
+    peerDependencies:
+      postcss: ^8.1.0
+    dependencies:
+      browserslist: 4.21.9
+      caniuse-lite: 1.0.30001520
+      fraction.js: 4.2.0
+      normalize-range: 0.1.2
+      picocolors: 1.0.0
+      postcss: 8.4.31
       postcss-value-parser: 4.2.0
     dev: true
 
