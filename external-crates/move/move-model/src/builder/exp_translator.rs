@@ -966,7 +966,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     pub fn translate_seq(
         &mut self,
         loc: &Loc,
-        seq: &EA::Sequence,
+        (_, seq): &EA::Sequence,
         expected_type: &Type,
     ) -> ExpData {
         let n = seq.len();

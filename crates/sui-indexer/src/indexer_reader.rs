@@ -11,7 +11,7 @@ use crate::{
     models_v2::objects::StoredObject,
     models_v2::{epoch::StoredEpochInfo, packages::StoredPackage},
     schema_v2::{epochs, objects, packages},
-    PgConectionPoolConfig, PgConnectionConfig, PgPoolConnection,
+    PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
 use diesel::{
@@ -36,13 +36,13 @@ pub struct IndexerReader {
 // Impl for common initialization and utilities
 impl IndexerReader {
     pub fn new<T: Into<String>>(db_url: T) -> Result<Self> {
-        let config = PgConectionPoolConfig::default();
+        let config = PgConnectionPoolConfig::default();
         Self::new_with_config(db_url, config)
     }
 
     pub fn new_with_config<T: Into<String>>(
         db_url: T,
-        config: PgConectionPoolConfig,
+        config: PgConnectionPoolConfig,
     ) -> Result<Self> {
         let manager = ConnectionManager::<PgConnection>::new(db_url);
 
@@ -56,7 +56,7 @@ impl IndexerReader {
             .connection_timeout(config.connection_timeout)
             .connection_customizer(Box::new(connection_config))
             .build(manager)
-            .map_err(|e| anyhow!("Failed to initialize connection pool with error: {e:?}"))?;
+            .map_err(|e| anyhow!("Failed to initialize connection pool. Error: {:?}. If Error is None, please check whether the configured pool size (currently {}) exceeds the maximum number of connections allowed by the database.", e, config.pool_size))?;
 
         Ok(Self {
             pool,
@@ -100,6 +100,15 @@ impl IndexerReader {
         .await
         .map_err(Into::into)
         .and_then(std::convert::identity)
+    }
+
+    pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
+    where
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static,
+    {
+        self.spawn_blocking(move |this| this.run_query(query)).await
     }
 }
 

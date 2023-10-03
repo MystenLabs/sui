@@ -8,12 +8,6 @@ const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
 const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
-// TODO: We need to rewrite this to not depend on Buffer.
-export function toBufferBE(num: bigint, width: number) {
-	const hex = num.toString(16);
-	return Buffer.from(hex.padStart(width * 2, '0').slice(-width * 2), 'hex');
-}
-
 /**
  * Splits an array into chunks of size chunk_size. If the array is not evenly
  * divisible by chunk_size, the first chunk will be smaller than chunk_size.

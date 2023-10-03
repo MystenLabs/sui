@@ -13,10 +13,9 @@ use move_compiler::{
     expansion::ast as E,
     naming::ast as N,
     parser::ast::{self as P, Ability_},
-    shared::{CompilationEnv, Identifier},
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     typing::{
         ast as T,
-        core::TypingProgramInfo,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -83,7 +82,7 @@ impl TypingVisitorConstructor for FreezeWrappedVisitor {
     fn context<'a>(
         env: &'a mut CompilationEnv,
         program_info: &'a TypingProgramInfo,
-        _program: &T::Program,
+        _program: &T::Program_,
     ) -> Self::Context<'a> {
         Context {
             env,

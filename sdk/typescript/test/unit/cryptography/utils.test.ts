@@ -109,7 +109,7 @@ describe('Utils', () => {
 		let invalidSignature = toB64(bytes);
 
 		expect(() => toParsedSignaturePubkeyPair(invalidSignature)).toThrowError(
-			new Error('Unable to parse a zk signature. (not implemented yet)'),
+			new Error('ZkLogin signature not supported'),
 		);
 	});
 

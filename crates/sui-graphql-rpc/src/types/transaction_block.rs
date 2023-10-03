@@ -13,10 +13,16 @@ use super::{
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
 };
+use crate::error::Error;
 use async_graphql::*;
+use sui_indexer::models_v2::transactions::StoredTransaction;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionBlockDataAPI, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+};
+use sui_sdk::types::{
+    effects::TransactionEffects,
+    transaction::{SenderSignedData, TransactionDataAPI},
 };
 
 #[derive(SimpleObject, Clone, Eq, PartialEq)]
@@ -31,7 +37,7 @@ pub(crate) struct TransactionBlock {
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {
-    fn from(tx_block: sui_json_rpc_types::SuiTransactionBlockResponse) -> Self {
+    fn from(tx_block: SuiTransactionBlockResponse) -> Self {
         let transaction = tx_block.transaction.as_ref();
         let sender = transaction.map(|tx| Address {
             address: SuiAddress::from_array(tx.data.sender().to_inner()),
@@ -45,6 +51,53 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
         }
+    }
+}
+
+impl TryFrom<StoredTransaction> for TransactionBlock {
+    type Error = Error;
+
+    fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
+        // TODO (wlmyng): Split the below into resolver methods
+        let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
+
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&tx.raw_transaction).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert raw_transaction into SenderSignedData. Error: {e}",
+                ))
+            })?;
+
+        let sender = Address {
+            address: SuiAddress::from_array(
+                sender_signed_data
+                    .intent_message()
+                    .value
+                    .sender()
+                    .to_inner(),
+            ),
+        };
+
+        let gas_input = GasInput::from(sender_signed_data.intent_message().value.gas_data());
+        let effects: TransactionEffects = bcs::from_bytes(&tx.raw_effects).map_err(|e| {
+            Error::Internal(format!(
+                "Can't convert raw_effects into TransactionEffects. Error: {e}",
+            ))
+        })?;
+        let effects = match SuiTransactionBlockEffects::try_from(effects) {
+            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects))),
+            Err(e) => Err(Error::Internal(format!(
+                "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
+            ))),
+        }?;
+
+        Ok(Self {
+            digest,
+            effects,
+            sender: Some(sender),
+            bcs: Some(Base64::from(&tx.raw_transaction)),
+            gas_input: Some(gas_input),
+        })
     }
 }
 
@@ -96,7 +149,7 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
         };
 
         Self {
-            // TODO: This is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
+            // TODO (wlmyng): To remove as this is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
             digest: Digest::from_array(tx_effects.transaction_digest().into_inner()),
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,

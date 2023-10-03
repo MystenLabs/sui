@@ -173,6 +173,7 @@ pub fn run_test(
         named_address_map,
     }];
 
+    let flags = flags.set_sources_shadow_deps(true);
     let (files, comments_and_compiler_res) = Compiler::from_package_paths(targets, deps)
         .unwrap()
         .set_flags(flags)

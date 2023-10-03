@@ -14,8 +14,9 @@ import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
 import { decodeMultiSig } from './multisig.js';
 import type { PublicKey } from './publickey.js';
-import type { SerializedSignature, SignatureScheme } from './signature.js';
-import { SIGNATURE_FLAG_TO_SCHEME } from './signature.js';
+import { SIGNATURE_FLAG_TO_SCHEME } from './signature-scheme.js';
+import type { SignatureScheme } from './signature-scheme.js';
+import type { SerializedSignature } from './signature.js';
 
 /**
  * Pair of signature and corresponding public key
@@ -47,8 +48,8 @@ export function toParsedSignaturePubkeyPair(
 		}
 	}
 
-	if (signatureScheme === 'Zk') {
-		throw new Error('Unable to parse a zk signature. (not implemented yet)');
+	if (signatureScheme === 'ZkLogin') {
+		throw new Error('ZkLogin signature not supported');
 	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {
