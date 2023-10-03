@@ -262,10 +262,11 @@ fn exp(context: &mut Context, parent_e: &Exp) {
             )
         }
 
-        E::ModuleCall(mcall) => exp(context, &mcall.arguments),
-        E::Builtin(_, e)
-        | E::Vector(_, _, _, e)
-        | E::Freeze(e)
+        E::ModuleCall(mcall) => mcall.arguments.iter().map(|e| exp(context, e)).collect(),
+        E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+            args.iter().map(|e| exp(context, e)).collect()
+        }
+        E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)
         | E::Borrow(_, e, _)
@@ -278,15 +279,9 @@ fn exp(context: &mut Context, parent_e: &Exp) {
 
         E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
 
-        E::ExpList(es) => es.iter().for_each(|item| exp_list_item(context, item)),
+        E::Multiple(es) => es.iter().for_each(|e| exp(context, e)),
 
         E::Unreachable => panic!("ICE should not analyze dead code"),
-    }
-}
-
-fn exp_list_item(context: &mut Context, item: &ExpListItem) {
-    match item {
-        ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(context, e),
     }
 }
 

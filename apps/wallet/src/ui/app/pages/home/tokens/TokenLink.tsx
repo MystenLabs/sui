@@ -11,9 +11,10 @@ import { Link } from 'react-router-dom';
 type Props = {
 	coinBalance: CoinBalance;
 	centerAction?: ReactNode;
+	subtitle?: string;
 };
 
-export function TokenLink({ coinBalance, centerAction }: Props) {
+export function TokenLink({ coinBalance, centerAction, subtitle }: Props) {
 	return (
 		<Link
 			to={`/send?type=${encodeURIComponent(coinBalance.coinType)}`}
@@ -30,6 +31,7 @@ export function TokenLink({ coinBalance, centerAction }: Props) {
 				coinType={coinBalance.coinType}
 				balance={BigInt(coinBalance.totalBalance)}
 				centerAction={centerAction}
+				subtitle={subtitle}
 			/>
 		</Link>
 	);

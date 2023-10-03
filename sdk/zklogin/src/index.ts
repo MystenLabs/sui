@@ -4,8 +4,7 @@
 export { computeZkAddress, jwtToAddress } from './address.js';
 export type { ComputeZKAddressOptions } from './address.js';
 
-export { getZkSignature } from './bcs.js';
-export type { ZkSignatureInputs } from './bcs.js';
+export { getZkLoginSignature, type ZkSignatureInputs } from '@mysten/sui.js/zklogin';
 
 export { poseidonHash } from './poseidon.js';
 

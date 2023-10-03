@@ -209,8 +209,8 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             vec![value]
         }
 
-        E::Builtin(b, e) => {
-            let evalues = exp(context, e);
+        E::Builtin(b, args) => {
+            let evalues: Values = args.iter().flat_map(|arg| exp(context, arg)).collect();
             let b: &BuiltinFunction = b;
             match b {
                 sp!(_, BuiltinFunction_::BorrowGlobal(mut_, t)) => {
@@ -238,15 +238,19 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             }
         }
 
-        E::Vector(_, n, _, e) => {
-            let evalues = exp(context, e);
+        E::Vector(_, n, _, args) => {
+            let evalues: Values = args.iter().flat_map(|arg| exp(context, arg)).collect();
             debug_assert_eq!(*n, evalues.len());
             evalues.into_iter().for_each(|v| assert!(!v.is_ref()));
             svalue()
         }
 
         E::ModuleCall(mcall) => {
-            let evalues = exp(context, &mcall.arguments);
+            let evalues: Values = mcall
+                .arguments
+                .iter()
+                .flat_map(|arg| exp(context, arg))
+                .collect();
             let ret_ty = &parent_e.ty;
             let (diags, values) =
                 context
@@ -293,17 +297,8 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             svalue()
         }
 
-        E::ExpList(es) => es
-            .iter()
-            .flat_map(|item| exp_list_item(context, item))
-            .collect(),
+        E::Multiple(es) => es.iter().flat_map(|e| exp(context, e)).collect(),
 
         E::Unreachable => panic!("ICE should not analyze dead code"),
-    }
-}
-
-fn exp_list_item(context: &mut Context, item: &ExpListItem) -> Values {
-    match item {
-        ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(context, e),
     }
 }

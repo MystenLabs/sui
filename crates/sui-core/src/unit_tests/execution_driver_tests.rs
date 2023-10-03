@@ -6,10 +6,10 @@ use crate::authority::{AuthorityState, EffectsNotifyRead};
 use crate::authority_aggregator::authority_aggregator_tests::{
     create_object_move_transaction, do_cert, do_transaction, extract_cert, get_latest_ref,
 };
-use crate::authority_server::{ValidatorService, MAX_PER_OBJECT_QUEUE_LENGTH};
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{init_local_authorities, make_transfer_object_move_transaction};
+use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -557,7 +557,9 @@ async fn test_per_object_overload() {
             shared_counter_initial_version,
         )
         .build_and_sign(&key);
-    let res = ValidatorService::check_execution_overload(authorities[3].clone(), shared_txn.data());
+    let res = authorities[3]
+        .transaction_manager()
+        .check_execution_overload(shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),

@@ -231,19 +231,23 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     // Extract the module/script closure
     let mut visited_modules = BTreeSet::new();
-    for (_, mident, mdef) in &typing_ast.modules {
+    for (_, mident, mdef) in &typing_ast.inner.modules {
         let src_file_hash = mdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
-            collect_related_modules_recursive(mident, &typing_ast.modules, &mut visited_modules);
+            collect_related_modules_recursive(
+                mident,
+                &typing_ast.inner.modules,
+                &mut visited_modules,
+            );
         }
     }
-    for sdef in typing_ast.scripts.values() {
+    for sdef in typing_ast.inner.scripts.values() {
         let src_file_hash = sdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
             for (_, mident, _neighbor) in &sdef.immediate_neighbors {
                 collect_related_modules_recursive(
                     mident,
-                    &typing_ast.modules,
+                    &typing_ast.inner.modules,
                     &mut visited_modules,
                 );
             }
@@ -262,14 +266,16 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         E::Program { modules, scripts }
     };
     let typing_ast = {
-        let T::Program { modules, scripts } = typing_ast;
+        let T::Program { info, inner } = typing_ast;
+        let T::Program_ { modules, scripts } = inner;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
                 mdef.is_source_module = true;
                 mdef
             })
         });
-        T::Program { modules, scripts }
+        let inner = T::Program_ { modules, scripts };
+        T::Program { info, inner }
     };
 
     // Run the compiler fully to the compiled units
@@ -543,6 +549,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         attributes,
                         loc,
                         function_name,
+                        use_funs,
                         constants,
                         function,
                         specs,
@@ -574,6 +581,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         attributes,
                         loc,
                         is_source_module: true,
+                        use_funs,
                         friends: UniqueMap::new(),
                         structs: UniqueMap::new(),
                         constants,

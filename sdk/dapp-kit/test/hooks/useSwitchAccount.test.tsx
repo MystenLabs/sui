@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { useConnectWallet, useCurrentAccount } from 'dapp-kit/src';
+
 import {
 	WalletAccountNotFoundError,
 	WalletNotConnectedError,
-} from 'dapp-kit/src/errors/walletErrors.js';
-import { useSwitchAccount } from 'dapp-kit/src/hooks/wallet/useSwitchAccount.js';
-
+} from '../../src/errors/walletErrors.js';
+import { useSwitchAccount } from '../../src/hooks/wallet/useSwitchAccount.js';
+import { useConnectWallet, useCurrentAccount } from '../../src/index.js';
 import { createMockAccount } from '../mocks/mockAccount.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 

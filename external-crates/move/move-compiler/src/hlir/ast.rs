@@ -223,7 +223,7 @@ pub struct Label(pub usize);
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command_ {
-    Assign(Vec<LValue>, Box<Exp>),
+    Assign(Vec<LValue>, Exp),
     Mutate(Box<Exp>, Box<Exp>),
     Abort(Exp),
     Return {
@@ -272,7 +272,7 @@ pub struct ModuleCall {
     pub module: ModuleIdent,
     pub name: FunctionName,
     pub type_arguments: Vec<BaseType>,
-    pub arguments: Box<Exp>,
+    pub arguments: Vec<Exp>,
     pub acquires: BTreeMap<StructName, Loc>,
 }
 
@@ -336,16 +336,16 @@ pub enum UnannotatedExp_ {
     Constant(ConstantName),
 
     ModuleCall(Box<ModuleCall>),
-    Builtin(Box<BuiltinFunction>, Box<Exp>),
+    Builtin(Box<BuiltinFunction>, Vec<Exp>),
     Freeze(Box<Exp>),
-    Vector(Loc, usize, Box<BaseType>, Box<Exp>),
+    Vector(Loc, usize, Box<BaseType>, Vec<Exp>),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
     BinopExp(Box<Exp>, BinOp, Box<Exp>),
 
     Pack(StructName, Vec<BaseType>, Vec<(Field, BaseType, Exp)>),
-    ExpList(Vec<ExpListItem>),
+    Multiple(Vec<Exp>),
 
     Borrow(bool, Box<Exp>, Field),
     BorrowLocal(bool, Var),
@@ -366,12 +366,6 @@ pub struct Exp {
 }
 pub fn exp(ty: Type, exp: UnannotatedExp) -> Exp {
     Exp { ty, exp }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ExpListItem {
-    Single(Exp, Box<SingleType>),
-    Splat(Loc, Exp, Vec<SingleType>),
 }
 
 //**************************************************************************************************
@@ -1236,6 +1230,12 @@ impl AstDebug for Exp {
     }
 }
 
+impl AstDebug for Vec<Exp> {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.comma(self, |w, e| e.ast_debug(w));
+    }
+}
+
 impl AstDebug for UnannotatedExp_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use UnannotatedExp_ as E;
@@ -1311,7 +1311,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write("}");
             }
 
-            E::ExpList(es) => {
+            E::Multiple(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
                 w.write(")");
@@ -1408,18 +1408,6 @@ impl AstDebug for BuiltinFunction_ {
         w.write("<");
         bt.ast_debug(w);
         w.write(">");
-    }
-}
-
-impl AstDebug for ExpListItem {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            ExpListItem::Single(e, st) => w.annotate(|w| e.ast_debug(w), st),
-            ExpListItem::Splat(_, e, ss) => {
-                w.write("~");
-                w.annotate(|w| e.ast_debug(w), ss)
-            }
-        }
     }
 }
 
