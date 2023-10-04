@@ -96,10 +96,11 @@ impl IndexerReader {
             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
-    pub async fn spawn_blocking<F, R>(&self, f: F) -> Result<R, IndexerError>
+    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
     where
-        F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
+        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
         R: Send + 'static,
+        E: Send + 'static,
     {
         let this = self.clone();
         let current_span = tracing::Span::current();
@@ -110,8 +111,7 @@ impl IndexerReader {
             f(this)
         })
         .await
-        .map_err(Into::into)
-        .and_then(std::convert::identity)
+        .expect("propagate any panics")
     }
 
     pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
