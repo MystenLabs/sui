@@ -8,6 +8,7 @@ import MultiSigAddressGenerator from './multisig-address';
 import OfflineSigner from './offline-signer';
 import { Root } from './root';
 import SignatureAnalyzer from './signature-analyzer';
+import BroadcastTransaction from './broadcast-transaction';
 
 export const router = createBrowserRouter([
 	{
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
 			{
 				path: 'combine-signatures',
 				element: <MultiSigCombinedSignatureGenerator />,
+			},
+			{
+				path: 'broadcast-transaction',
+				element: <BroadcastTransaction />,
 			},
 		],
 	},
