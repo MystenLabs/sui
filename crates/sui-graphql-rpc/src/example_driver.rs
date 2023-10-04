@@ -10,8 +10,9 @@ use std::{fs, io::Read, path::PathBuf};
 const QUERY_EXT: &str = "graphql";
 const EXPECTED_RESULT_EXT: &str = "exp";
 
-/// Loop through all files in the examples directory which end in .graphql
+/// Loop through all files in the examples directory which end in .graphql and .exp
 /// and load the contents into strings.
+/// Then, run the queries and compare the results to the expected results.
 pub async fn verify_examples_impl() {
     let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     buf.push("examples");
@@ -77,8 +78,7 @@ pub async fn verify_examples_impl() {
                 let actual_result: serde_json::Value =
                     client.execute(query.to_string()).await.unwrap();
                 assert!(
-                    serde_json::to_string_pretty(&actual_result).unwrap()
-                        == serde_json::to_string_pretty(&expected_result).unwrap(),
+                    actual_result == expected_result,
                     "Query {} failed. Actual esult: {}",
                     query_name,
                     actual_result
@@ -99,6 +99,7 @@ pub async fn verify_examples_impl() {
         );
     }
 
+    // Make sure we don't have any expected results without queries
     assert!(
         expected_results.is_empty(),
         "Cannot have expected results without queries: {:?}",
