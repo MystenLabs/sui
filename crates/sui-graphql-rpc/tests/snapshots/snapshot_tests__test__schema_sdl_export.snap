@@ -403,8 +403,6 @@ type Query {
 	checkpoint(id: CheckpointId): Checkpoint
 	transactionBlock(digest: String!): TransactionBlock
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
-	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
