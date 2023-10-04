@@ -6,6 +6,10 @@ hakari-package = "workspace-hack"
 # Format for `workspace-hack = ...` lines in other Cargo.tomls.
 dep-format-version = "4"
 
+# Output lines as `omicron-workspace-hack.workspace = true`. Requires
+# cargo-hakari 0.9.28 or above.
+workspace-hack-line-style = "workspace-dotted"
+
 # Setting workspace.resolver = "2" in the root Cargo.toml is HIGHLY recommended.
 # Hakari works much better with the new feature resolver.
 # For more about the new feature resolver, see:

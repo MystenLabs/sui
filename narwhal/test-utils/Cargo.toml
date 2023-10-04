@@ -33,6 +33,6 @@ store = { path = "../../crates/typed-store", package = "typed-store" }
 telemetry-subscribers.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
+workspace-hack.workspace = true
