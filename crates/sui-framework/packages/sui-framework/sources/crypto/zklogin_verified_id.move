@@ -63,7 +63,7 @@ module sui::zklogin_verified_id {
     /// most 32 characters, `kc_value` must be at most 115 characters and `aud` must be at most 145 characters.
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
-    public fun verify_zklogin_id(
+    public entry fun verify_zklogin_id(
         key_claim_name: String,
         key_claim_value: String,
         issuer: String,
