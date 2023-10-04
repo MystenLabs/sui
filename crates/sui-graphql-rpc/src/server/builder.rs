@@ -128,7 +128,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout() {
-        // pg_integration
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -192,7 +191,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_depth_limit() {
-        // pg_integration
         async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
@@ -238,7 +236,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_query_node_limit() {
-        // pg_integration
         async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
