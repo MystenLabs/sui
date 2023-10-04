@@ -2,7 +2,7 @@ error[E03010]: unbound field
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9
    │
 12 │         c.uncup <u64> ();
-   │         ^^^^^^^ Unbound field 'uncup' in '(a=0x42)::m::Cup'
+   │         ^^^^^^^ Unbound field 'uncup' in 'a::m::Cup'
 
 error[E04003]: built-in operation not supported
    ┌─ tests/move_2024/parser/dot_call_type_arguments_invalid.move:12:9

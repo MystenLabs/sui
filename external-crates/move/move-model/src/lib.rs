@@ -564,8 +564,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         }
                     };
                     // Convert the script into a module.
-                    let address =
-                        Address::Numerical(None, sp(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS));
+                    let address = Address::anonymous(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS);
                     let ident = sp(
                         loc,
                         ModuleIdent_::new(address, ParserModuleName(function_name.0)),

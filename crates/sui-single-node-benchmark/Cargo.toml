@@ -1,0 +1,29 @@
+[package]
+name = "sui-single-node-benchmark"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+
+[dependencies]
+move-core-types.workspace = true
+sui-core.workspace = true
+sui-test-transaction-builder.workspace = true
+sui-types.workspace = true
+
+async-trait.workspace = true
+bcs.workspace = true
+clap.workspace = true
+futures.workspace = true
+telemetry-subscribers.workspace = true
+tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
+tracing.workspace = true
+
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+move-package.workspace = true
+prometheus.workspace = true
+sui-macros.workspace = true
+sui-protocol-config.workspace = true
+sui-simulator.workspace = true

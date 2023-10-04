@@ -142,7 +142,12 @@ pub struct Script {
 
 #[derive(Clone, Copy)]
 pub enum Address {
-    Numerical(Option<Name>, Spanned<NumericalAddress>),
+    Numerical {
+        name: Option<Name>,
+        value: Spanned<NumericalAddress>,
+        // set to true when the same name is used across multiple packages
+        name_conflict: bool,
+    },
     NamedUnassigned(Name),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -565,7 +570,7 @@ impl fmt::Debug for Address {
 impl PartialEq for Address {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Numerical(_, l), Self::Numerical(_, r)) => l == r,
+            (Self::Numerical { value: l, .. }, Self::Numerical { value: r, .. }) => l == r,
             (Self::NamedUnassigned(l), Self::NamedUnassigned(r)) => l == r,
             _ => false,
         }
@@ -585,10 +590,10 @@ impl Ord for Address {
         use std::cmp::Ordering;
 
         match (self, other) {
-            (Self::Numerical(_, _), Self::NamedUnassigned(_)) => Ordering::Less,
-            (Self::NamedUnassigned(_), Self::Numerical(_, _)) => Ordering::Greater,
+            (Self::Numerical { .. }, Self::NamedUnassigned(_)) => Ordering::Less,
+            (Self::NamedUnassigned(_), Self::Numerical { .. }) => Ordering::Greater,
 
-            (Self::Numerical(_, l), Self::Numerical(_, r)) => l.cmp(r),
+            (Self::Numerical { value: l, .. }, Self::Numerical { value: r, .. }) => l.cmp(r),
             (Self::NamedUnassigned(l), Self::NamedUnassigned(r)) => l.cmp(r),
         }
     }
@@ -597,7 +602,10 @@ impl Ord for Address {
 impl Hash for Address {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            Self::Numerical(_, sp!(_, bytes)) => bytes.hash(state),
+            Self::Numerical {
+                value: sp!(_, bytes),
+                ..
+            } => bytes.hash(state),
             Self::NamedUnassigned(name) => name.hash(state),
         }
     }
@@ -623,22 +631,29 @@ impl UseFuns {
 
 impl Address {
     pub const fn anonymous(loc: Loc, address: NumericalAddress) -> Self {
-        Self::Numerical(None, sp(loc, address))
+        Self::Numerical {
+            name: None,
+            value: sp(loc, address),
+            name_conflict: false,
+        }
     }
 
     pub fn into_addr_bytes(self) -> NumericalAddress {
         match self {
-            Self::Numerical(_, sp!(_, bytes)) => bytes,
+            Self::Numerical {
+                value: sp!(_, bytes),
+                ..
+            } => bytes,
             Self::NamedUnassigned(_) => NumericalAddress::DEFAULT_ERROR_ADDRESS,
         }
     }
 
     pub fn is(&self, address: impl AsRef<str>) -> bool {
         match self {
-            Self::Numerical(Some(n), _) | Self::NamedUnassigned(n) => {
+            Self::Numerical { name: Some(n), .. } | Self::NamedUnassigned(n) => {
                 n.value.as_str() == address.as_ref()
             }
-            Self::Numerical(None, _) => false,
+            Self::Numerical { name: None, .. } => false,
         }
     }
 }
@@ -843,9 +858,22 @@ impl IntoIterator for AbilitySet {
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Numerical(None, sp!(_, bytes)) => write!(f, "{}", bytes),
-            Self::Numerical(Some(name), sp!(_, bytes)) => write!(f, "({}={})", name, bytes),
-            Self::NamedUnassigned(name) => write!(f, "{}", name),
+            Self::Numerical {
+                name: None,
+                value: sp!(_, bytes),
+                ..
+            } => write!(f, "{}", bytes),
+            Self::Numerical {
+                name: Some(name),
+                value: sp!(_, bytes),
+                name_conflict: true,
+            } => write!(f, "({}={})", name, bytes),
+            Self::Numerical {
+                name: Some(name),
+                value: _,
+                name_conflict: false,
+            }
+            | Self::NamedUnassigned(name) => write!(f, "{}", name),
         }
     }
 }

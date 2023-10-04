@@ -3,8 +3,11 @@
 
 import { style } from '@vanilla-extract/css';
 
+import { themeVars } from '../../themes/themeContract.js';
+
 export const overlay = style({
-	backgroundColor: 'rgba(24 36 53 / 20%)',
+	backgroundColor: themeVars.backgroundColors.modalOverlay,
+	backdropFilter: themeVars.blurs.modalOverlay,
 	position: 'fixed',
 	inset: 0,
 	zIndex: 999999999,
@@ -15,7 +18,8 @@ export const title = style({
 });
 
 export const content = style({
-	backgroundColor: 'white',
+	backgroundColor: themeVars.backgroundColors.modalPrimary,
+	borderRadius: themeVars.radii.xlarge,
 	position: 'fixed',
 	bottom: 16,
 	left: 16,
@@ -24,7 +28,6 @@ export const content = style({
 	flexDirection: 'column',
 	justifyContent: 'space-between',
 	overflow: 'hidden',
-	borderRadius: 16,
 	minHeight: '50vh',
 	maxHeight: '85vh',
 	maxWidth: 700,
@@ -40,7 +43,7 @@ export const content = style({
 });
 
 export const whatIsAWalletButton = style({
-	backgroundColor: '#F7F8F8',
+	backgroundColor: themeVars.backgroundColors.modalSecondary,
 	padding: 16,
 	'@media': {
 		'screen and (min-width: 768px)': {
@@ -64,21 +67,7 @@ export const selectedViewContainer = style({
 	display: 'flex',
 });
 
-export const triggerButton = style({
-	backgroundColor: '#0284AD',
-	boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-	color: 'white',
-	borderRadius: 12,
-	paddingLeft: 24,
-	paddingRight: 24,
-	paddingTop: 16,
-	paddingBottom: 16,
-	':hover': {
-		backgroundColor: '#007194',
-	},
-});
-
-export const backButton = style({
+export const backButtonContainer = style({
 	position: 'absolute',
 	top: 20,
 	left: 20,
@@ -89,24 +78,22 @@ export const backButton = style({
 	},
 });
 
-export const closeButton = style({
+export const closeButtonContainer = style({
 	position: 'absolute',
-	padding: 7,
 	top: 16,
 	right: 16,
-	borderRadius: 9999,
-	backgroundColor: '#F0F1F2',
 });
 
 export const walletListContent = style({
-	padding: 20,
-	minWidth: 240,
 	display: 'flex',
 	flexDirection: 'column',
+	flexGrow: 1,
 	gap: 24,
+	padding: 20,
+	backgroundColor: themeVars.backgroundColors.modalPrimary,
 	'@media': {
 		'screen and (min-width: 768px)': {
-			backgroundColor: '#F7F8F8',
+			backgroundColor: themeVars.backgroundColors.modalSecondary,
 		},
 	},
 });
@@ -119,7 +106,9 @@ export const walletListContainer = style({
 	'@media': {
 		'screen and (min-width: 768px)': {
 			flexDirection: 'row',
+			flexBasis: 240,
 			flexGrow: 0,
+			flexShrink: 0,
 		},
 	},
 });

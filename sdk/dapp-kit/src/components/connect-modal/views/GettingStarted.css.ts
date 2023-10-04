@@ -9,8 +9,6 @@ export const container = style({
 	alignItems: 'center',
 });
 
-export const title = style({});
-
 export const content = style({
 	display: 'flex',
 	flexDirection: 'column',
@@ -20,4 +18,8 @@ export const content = style({
 	padding: 40,
 });
 
-export const installLink = style({});
+export const installButtonContainer = style({
+	position: 'absolute',
+	bottom: 20,
+	right: 20,
+});

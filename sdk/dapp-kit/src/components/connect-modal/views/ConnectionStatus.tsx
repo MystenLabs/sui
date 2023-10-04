@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WalletWithRequiredFeatures } from '@mysten/wallet-standard';
-import clsx from 'clsx';
 
+import { Button } from '../../ui/Button.js';
+import { Heading } from '../../ui/Heading.js';
+import { Text } from '../../ui/Text.js';
 import * as styles from './ConnectionStatus.css.js';
 
 type ConnectionStatusProps = {
@@ -24,18 +26,24 @@ export function ConnectionStatus({
 				src={selectedWallet.icon}
 				alt={`${selectedWallet.name} logo`}
 			/>
-			<div className={styles.walletName}>Opening {selectedWallet.name}</div>
-			<div
-				className={clsx(styles.connectionStatus, {
-					[styles.connectionStatusWithError]: hadConnectionError,
-				})}
-			>
-				{hadConnectionError ? 'Connection failed' : 'Confirm connection in the wallet...'}
+			<div className={styles.title}>
+				<Heading as="h2" size="xl">
+					Opening {selectedWallet.name}
+				</Heading>
+			</div>
+			<div className={styles.connectionStatus}>
+				{hadConnectionError ? (
+					<Text color="danger">Connection failed</Text>
+				) : (
+					<Text color="muted">Confirm connection in the wallet...</Text>
+				)}
 			</div>
 			{hadConnectionError ? (
-				<button type="button" onClick={() => onRetryConnection(selectedWallet)}>
-					Retry Connection
-				</button>
+				<div className={styles.retryButtonContainer}>
+					<Button type="button" variant="outline" onClick={() => onRetryConnection(selectedWallet)}>
+						Retry Connection
+					</Button>
+				</div>
 			) : null}
 		</div>
 	);
