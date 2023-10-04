@@ -57,7 +57,7 @@ pub struct ConsensusHandler<T, C> {
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
-    /// Using the throughput calculator to identify the traffic profile
+    /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 }
 
@@ -648,13 +648,7 @@ mod tests {
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
-        let throughput_calculator = ConsensusThroughputCalculator::new(
-            None,
-            None,
-            None,
-            metrics.clone(),
-            TrafficProfileRanges::default(),
-        );
+        let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
 
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,

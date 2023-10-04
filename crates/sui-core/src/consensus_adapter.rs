@@ -44,6 +44,7 @@ use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
+use crate::consensus_throughput_calculator::ConsensusThroughputProfiler;
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_simulator::anemo::PeerId;
@@ -304,6 +305,8 @@ pub struct ConsensusAdapter {
     connection_monitor_status: Box<Arc<dyn CheckConnection>>,
     /// A structure to check the reputation scores populated by Consensus
     low_scoring_authorities: ArcSwap<Arc<ArcSwap<HashMap<AuthorityName, u64>>>>,
+    /// The throughput profiler to be used when making decisions to submit to consensus
+    consensus_throughput_profiler: ArcSwapOption<ConsensusThroughputProfiler>,
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to narwhal
@@ -356,6 +359,7 @@ impl ConsensusAdapter {
             metrics,
             submit_semaphore: Semaphore::new(max_pending_local_submissions),
             latency_observer: LatencyObserver::new(),
+            consensus_throughput_profiler: ArcSwapOption::empty(),
         }
     }
 
@@ -364,6 +368,10 @@ impl ConsensusAdapter {
         new_low_scoring: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     ) {
         self.low_scoring_authorities.swap(Arc::new(new_low_scoring));
+    }
+
+    pub fn swap_throughput_profiler(&self, profiler: Arc<ConsensusThroughputProfiler>) {
+        self.consensus_throughput_profiler.store(Some(profiler))
     }
 
     // todo - this probably need to hold some kind of lock to make sure epoch does not change while we are recovering
@@ -428,6 +436,13 @@ impl ConsensusAdapter {
     ) -> (Duration, usize, usize, usize) {
         let (mut position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
+
+        // TODO: not connected at the moment to any submission decision - adding just to trigger and
+        // monitor the throughput profile updates.
+        let p = self.consensus_throughput_profiler.load();
+        if let Some(profiler) = p.as_ref() {
+            let _ = profiler.throughput_level();
+        }
 
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
         const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
