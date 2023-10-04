@@ -64,7 +64,7 @@ impl PackageHandler {
     fn process_package(&mut self, epoch: u64, checkpoint: u64, timestamp_ms: u64, object: &Object) {
         if let sui_types::object::Data::Package(p) = &object.data {
             let package = MovePackageEntry {
-                object_id: p.id().to_string(),
+                package_id: p.id().to_string(),
                 checkpoint,
                 epoch,
                 timestamp_ms,
