@@ -10,5 +10,5 @@ error[E01002]: unexpected token
 6 │         y.0_u8
   │           ^^^^ Invalid field access. Expected a number less than or equal to 255
   │
-  = Positional fields must be in the range [0 .. 255] and not be typed, e.g. `0_u8`
+  = Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`
 

@@ -661,11 +661,10 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     if context.tokens.peek() == Tok::Identifier {
         let next_tok = context.tokens.lookahead()?;
-        if next_tok != Tok::LBrace
-            && next_tok != Tok::Less
-            && next_tok != Tok::ColonColon
-            && next_tok != Tok::LParen
-        {
+        if !matches!(
+            next_tok,
+            Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
+        ) {
             let v = Bind_::Var(parse_var(context)?);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
@@ -1526,18 +1525,34 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                         ) =>
                     {
                         let contents = context.tokens.content();
-                        if parse_u8(contents).is_err() {
-                            let msg = format!(
-                                "Invalid field access. Expected a number less than or equal to {}",
-                                u8::MAX
-                            );
-                            let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
-                            diag.add_note("Positional fields must be in the range [0 .. 255] and not be typed, e.g. `0_u8`");
-                            context.env.add_diag(diag);
-                        };
                         context.tokens.advance()?;
-                        let field_access = Name::new(loc, contents.into());
-                        Exp_::Dot(Box::new(lhs), field_access)
+                        match parse_u8(contents) {
+                            Ok((parsed, NumberFormat::Decimal)) => {
+                                let field_access = Name::new(loc, format!("{parsed}").into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                            Ok((_, NumberFormat::Hex)) => {
+                                let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
+                                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                                diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
+                                context.env.add_diag(diag);
+                                // Continue on with the parsing
+                                let field_access = Name::new(loc, contents.into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                            Err(_) => {
+                                let msg = format!(
+                                    "Invalid field access. Expected a number less than or equal to {}",
+                                    u8::MAX
+                                );
+                                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                                diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
+                                context.env.add_diag(diag);
+                                // Continue on with the parsing
+                                let field_access = Name::new(loc, contents.into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                        }
                     }
                     _ => {
                         let n = parse_identifier(context)?;

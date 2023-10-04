@@ -40,8 +40,13 @@ enum ResolvedType {
 struct ResolvedModuleType {
     // original names/locs are provided to preserve loc information if needed
     original_loc: Loc,
-    original_mident: ModuleIdent,
     original_type_name: Name,
+    module_type: ModuleType,
+}
+
+#[derive(Debug, Clone)]
+struct ModuleType {
+    original_mident: ModuleIdent,
     decl_loc: Loc,
     declared_abilities: AbilitySet,
     arity: usize,
@@ -64,8 +69,7 @@ struct ResolvedModuleFunction {
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
-    scoped_types:
-        BTreeMap<ModuleIdent, BTreeMap<Symbol, (Loc, ModuleIdent, AbilitySet, usize, bool)>>,
+    scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
     unscoped_types: BTreeMap<Symbol, ResolvedType>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     unscoped_constants: BTreeMap<Symbol, Loc>,
@@ -109,7 +113,14 @@ impl<'env> Context<'env> {
                         let arity = sdef.type_parameters.len();
                         let sname = s.value();
                         let is_positional = matches!(sdef.fields, E::StructFields::Positional(_));
-                        (sname, (s.loc(), mident, abilities, arity, is_positional))
+                        let type_info = ModuleType {
+                            original_mident: mident,
+                            decl_loc: s.loc(),
+                            declared_abilities: abilities,
+                            arity,
+                            is_positional,
+                        };
+                        (sname, type_info)
                     })
                     .collect();
                 (mident, mems)
@@ -173,12 +184,7 @@ impl<'env> Context<'env> {
         resolved
     }
 
-    fn resolve_module_type(
-        &mut self,
-        loc: Loc,
-        m: &ModuleIdent,
-        n: &Name,
-    ) -> Option<(Loc, AbilitySet, usize, bool)> {
+    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
         let types = match self.scoped_types.get(m) {
             None => {
                 self.env.add_diag(diag!(
@@ -199,9 +205,7 @@ impl<'env> Context<'env> {
                     .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
                 None
             }
-            Some((decl_loc, _, abilities, arity, is_positional)) => {
-                Some((*decl_loc, abilities.clone(), *arity, *is_positional))
-            }
+            Some(module_type) => Some(module_type.clone()),
         }
     }
 
@@ -270,19 +274,18 @@ impl<'env> Context<'env> {
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) => {
-                let Some((decl_loc, abilities, arity, is_positional)) = self.resolve_module_type(nloc, &m, &n)
+                let Some(module_type) = self.resolve_module_type(nloc, &m, &n)
                 else {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
                 };
                 let mt = ResolvedModuleType {
                     original_loc: nloc,
-                    original_mident: m,
                     original_type_name: n,
-                    decl_loc,
-                    declared_abilities: abilities,
-                    arity,
-                    is_positional,
+                    module_type: ModuleType {
+                        original_mident: m,
+                        ..module_type
+                    },
                 };
                 ResolvedType::Module(Box::new(mt))
             }
@@ -301,7 +304,7 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn is_struct_reference(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+    fn resolves_to_struct(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
         use E::ModuleAccess_ as EA;
         match ma_ {
             EA::Name(n) => self.unscoped_types.get(&n.value).is_some_and(|rt| {
@@ -350,10 +353,14 @@ impl<'env> Context<'env> {
             }
             ResolvedType::Module(mt) => {
                 let ResolvedModuleType {
-                    original_mident: m,
+                    module_type:
+                        ModuleType {
+                            original_mident: m,
+                            arity,
+                            is_positional,
+                            ..
+                        },
                     original_type_name: n,
-                    arity,
-                    is_positional,
                     ..
                 } = *mt;
                 let tys_opt = etys_opt.map(|etys| {
@@ -687,13 +694,10 @@ fn explicit_use_fun(
             None
         }
         ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
-        ResolvedType::Module(mt) => {
-            let mt = *mt;
-            Some(N::TypeName_::ModuleType(
-                mt.original_mident,
-                StructName(mt.original_type_name),
-            ))
-        }
+        ResolvedType::Module(mt) => Some(N::TypeName_::ModuleType(
+            mt.module_type.original_mident,
+            StructName(mt.original_type_name),
+        )),
     };
     let tn_ = tn_opt?;
     let tn = sp(ty.loc, tn_);
@@ -749,7 +753,7 @@ fn use_fun_module_defines(
             if specified.as_ref().is_some_and(|s| s == m) {
                 Ok(())
             } else {
-                let (decl_loc, _, _, _, _) = context
+                let ModuleType { decl_loc, .. } = context
                     .scoped_types
                     .get(m)
                     .unwrap()
@@ -951,12 +955,15 @@ fn acquires_type(context: &mut Context, ma: E::ModuleAccess) -> Option<StructNam
         RT::Module(mt) => {
             let ResolvedModuleType {
                 original_loc: loc,
-                original_mident: m,
                 original_type_name: n,
-                decl_loc,
-                declared_abilities: abilities,
-                arity: _,
-                is_positional: _,
+                module_type:
+                    ModuleType {
+                        original_mident: m,
+                        decl_loc,
+                        declared_abilities: abilities,
+                        arity: _,
+                        is_positional: _,
+                    },
             } = *mt;
             acquires_type_struct(context, loc, decl_loc, m, StructName(n), &abilities)
         }
@@ -1045,6 +1052,10 @@ fn struct_def(
     }
 }
 
+fn positional_field_name(loc: Loc, idx: usize) -> Field {
+    Field::add_loc(loc, format!("{idx}").into())
+}
+
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
@@ -1057,7 +1068,7 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
                 .map(|ty| type_(context, ty))
                 .enumerate()
                 .map(|(idx, ty)| {
-                    let field_name = Field::add_loc(ty.loc, format!("{idx}").into());
+                    let field_name = positional_field_name(ty.loc, idx);
                     (field_name, (idx, ty))
                 });
             N::StructFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
@@ -1202,10 +1213,13 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
             RT::Module(mt) => {
                 let ResolvedModuleType {
                     original_loc: nloc,
-                    original_mident: m,
                     original_type_name: n,
-                    arity,
-                    ..
+                    module_type:
+                        ModuleType {
+                            original_mident: m,
+                            arity,
+                            ..
+                        },
                 } = *mt;
                 let tn = sp(nloc, NN::ModuleType(m, StructName(n)));
                 let tys = types(context, tys);
@@ -1397,9 +1411,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
                 Some((m, sn, tys_opt, is_positional)) => {
                     if is_positional {
-                        let msg =
-                            "Invalid struct constructor call. Positional struct declarations \
-                                   require positional constructor calls.";
+                        let msg = "Invalid struct instantiation. Positional struct declarations \
+                             require positional instantiations.";
                         context
                             .env
                             .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
@@ -1461,7 +1474,7 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
             }
         }
-        EE::Call(ma, false, tys_opt, rhs) if context.is_struct_reference(&ma) => {
+        EE::Call(ma, false, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
             context
                 .env
                 .check_feature(FeatureGate::PositionalFields, context.current_package, eloc);
@@ -1473,8 +1486,8 @@ fn exp_(context: &mut Context, e: E::Exp) -> N::Exp {
                 }
                 Some((m, sn, tys_opt, is_positional)) => {
                     if !is_positional {
-                        let msg = "Invalid struct constructor call. Named struct declarations \
-                                                             require named constructor calls.";
+                        let msg = "Invalid struct instantiation. Named struct declarations \
+                                   require named instantiations.";
                         context
                             .env
                             .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));

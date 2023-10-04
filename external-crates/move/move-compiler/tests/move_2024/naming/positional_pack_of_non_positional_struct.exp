@@ -2,7 +2,7 @@ error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/positional_pack_of_non_positional_struct.move:7:18
   │
 7 │         let _x = Foo(0);
-  │                  ^^^^^^ Invalid struct constructor call. Named struct declarations require named constructor calls.
+  │                  ^^^^^^ Invalid struct instantiation. Named struct declarations require named instantiations.
 
 error[E04016]: too few arguments
   ┌─ tests/move_2024/naming/positional_pack_of_non_positional_struct.move:7:18

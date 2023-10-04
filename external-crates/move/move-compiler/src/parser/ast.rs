@@ -1294,7 +1294,7 @@ impl AstDebug for StructDefinition {
                     st.ast_debug(w);
                 });
             }),
-            StructFields::Native(_) => unreachable!(),
+            StructFields::Native(_) => (),
         }
     }
 }
