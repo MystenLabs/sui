@@ -621,7 +621,9 @@ fn convert_module_id(context: &mut Context, vloc: Loc, module: &ModuleIdent) -> 
     }
     let sp!(mloc, ModuleIdent_ { address, module }) = module;
     let addr = match address {
-        Address::Numerical(_, sp!(_, a)) => a.into_inner(),
+        Address::Numerical {
+            value: sp!(_, a), ..
+        } => a.into_inner(),
         Address::NamedUnassigned(addr) => {
             context.env.add_diag(diag!(
                 Attributes::InvalidValue,

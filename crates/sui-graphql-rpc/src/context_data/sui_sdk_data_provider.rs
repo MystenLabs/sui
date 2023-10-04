@@ -285,14 +285,7 @@ impl DataProvider for SuiClient {
             .map(SerdeBigInt::from);
 
         let pg = self.read_api().get_checkpoints(after, count, false).await?;
-        let system_state = self.governance_api().get_latest_sui_system_state().await?;
-        let protocol_configs = self.fetch_protocol_config(None).await?;
-
-        let data: Result<Vec<_>, _> = pg
-            .data
-            .iter()
-            .map(|c| convert_json_rpc_checkpoint(c, &system_state, &protocol_configs))
-            .collect();
+        let data: Result<Vec<_>, _> = pg.data.iter().map(convert_json_rpc_checkpoint).collect();
 
         let checkpoints = data.map_err(|e| {
             Error::Internal(format!(
@@ -377,8 +370,6 @@ pub(crate) async fn lru_cache_data_loader(
 
 pub(crate) fn convert_json_rpc_checkpoint(
     c: &sui_json_rpc_types::Checkpoint,
-    system_state: &SuiSystemStateSummary,
-    protocol_configs: &ProtocolConfigs,
 ) -> Result<Checkpoint> {
     let digest = c.digest.to_string();
     let sequence_number = c.sequence_number;
@@ -389,7 +380,6 @@ pub(crate) fn convert_json_rpc_checkpoint(
     let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
     let network_total_transactions = Some(c.network_total_transactions);
     let rolling_gas_summary = GasCostSummary::from(&c.epoch_rolling_gas_cost_summary);
-    let epoch = convert_to_epoch(rolling_gas_summary, system_state, protocol_configs).ok();
 
     let end_of_epoch_data = &c.end_of_epoch_data;
     let end_of_epoch = end_of_epoch_data.clone().map(|e| {
@@ -422,7 +412,7 @@ pub(crate) fn convert_json_rpc_checkpoint(
         live_object_set_digest: None, // TODO fix this
         network_total_transactions,
         rolling_gas_summary: Some(rolling_gas_summary),
-        epoch,
+        epoch_id: c.epoch,
         end_of_epoch,
     })
 }

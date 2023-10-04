@@ -18,6 +18,7 @@ use crate::{
     FullyCompiledProgram,
 };
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -25,16 +26,18 @@ use std::{
     iter::IntoIterator,
 };
 
-use super::aliases::{AliasMapBuilder, OldAliasMap};
+use super::aliases::{AliasMapBuilder, OldAliasMap, ParserExplicitUseFun, UseFunsBuilder};
 
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
 type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
+
 struct Context<'env, 'map> {
     module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     named_address_mapping: Option<&'map NamedAddressMap>,
+    address_conflicts: BTreeSet<Symbol>,
     address: Option<Address>,
     aliases: AliasMap,
     is_source_definition: bool,
@@ -46,10 +49,12 @@ struct Context<'env, 'map> {
     all_filter_alls: WarningFilters,
     env: &'env mut CompilationEnv,
 }
+
 impl<'env, 'map> Context<'env, 'map> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
+        address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut all_filter_alls = WarningFilters::new_for_dependency();
         for allow in compilation_env.filter_attributes() {
@@ -61,6 +66,7 @@ impl<'env, 'map> Context<'env, 'map> {
             module_members,
             env: compilation_env,
             named_address_mapping: None,
+            address_conflicts,
             address: None,
             aliases: AliasMap::new(),
             is_source_definition: false,
@@ -76,13 +82,31 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 
     /// Resets the alias map and reports errors for aliases that were unused
-    pub fn set_to_outer_scope(&mut self, outer_scope: OldAliasMap) {
+    /// Marks implicit use funs as unused
+    pub fn set_to_outer_scope(
+        &mut self,
+        mut use_funs: Option<&mut E::UseFuns>,
+        outer_scope: OldAliasMap,
+    ) {
         let AliasSet { modules, members } = self.aliases.set_to_outer_scope(outer_scope);
         for alias in modules {
             unused_alias(self, alias)
         }
         for alias in members {
-            unused_alias(self, alias)
+            let use_fun_used_opt = use_funs
+                .as_mut()
+                .and_then(|use_funs| use_funs.implicit.get_mut(&alias))
+                .and_then(|use_fun| match &mut use_fun.kind {
+                    E::ImplicitUseFunKind::FunctionDeclaration => None,
+                    E::ImplicitUseFunKind::UseAlias { used } => Some(used),
+                });
+            if let Some(used) = use_fun_used_opt {
+                // We do not report the use error if it is a function alias, since these will be
+                // reported after method calls are fully resolved
+                *used = false;
+            } else {
+                unused_alias(self, alias)
+            }
         }
     }
 
@@ -102,6 +126,40 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 }
 
+/// We mark named addresses as having a conflict if there is not a bidirectional mapping between
+/// the name and its value
+fn compute_address_conflicts(
+    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    prog: &P::Program,
+) -> BTreeSet<Symbol> {
+    let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
+    let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
+    let all_addrs = prog.named_address_maps.all().iter().chain(
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre| pre.parser.named_address_maps.all()),
+    );
+    for map in all_addrs {
+        for (n, addr) in map {
+            let n = *n;
+            let addr = addr.into_inner();
+            name_to_addr.entry(n).or_default().insert(addr);
+            addr_to_name.entry(addr).or_default().insert(n);
+        }
+    }
+    let name_to_addr_conflicts = name_to_addr
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .map(|(n, _)| n);
+    let addr_to_name_conflicts = addr_to_name
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .flat_map(|(_, ns)| ns.into_iter());
+    name_to_addr_conflicts
+        .chain(addr_to_name_conflicts)
+        .collect()
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -111,10 +169,12 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: P::Program,
 ) -> E::Program {
+    let address_conflicts = compute_address_conflicts(pre_compiled_lib, &prog);
     let module_members = {
         let mut members = UniqueMap::new();
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -122,6 +182,7 @@ pub fn program(
         );
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -131,6 +192,7 @@ pub fn program(
             assert!(pre_compiled.parser.lib_definitions.is_empty());
             all_module_members(
                 compilation_env,
+                &address_conflicts,
                 &pre_compiled.parser.named_address_maps,
                 &mut members,
                 false,
@@ -140,7 +202,7 @@ pub fn program(
         members
     };
 
-    let mut context = Context::new(compilation_env, module_members);
+    let mut context = Context::new(compilation_env, module_members, address_conflicts);
 
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
@@ -227,6 +289,7 @@ pub fn program(
         keyed
     };
 
+    super::primitive_definers::modules(context.env, pre_compiled_lib, &module_map);
     E::Program {
         modules: module_map,
         scripts,
@@ -275,6 +338,7 @@ fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) ->
 fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameAccess) -> Address {
     address_(
         context.env,
+        &context.address_conflicts,
         context.named_address_mapping.as_ref().unwrap(),
         suggest_declaration,
         ln,
@@ -283,6 +347,7 @@ fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameA
 
 fn address_(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_address_mapping: &NamedAddressMap,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
@@ -291,11 +356,15 @@ fn address_(
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res.is_ok()); //
-            Address::Numerical(None, sp(loc, bytes))
+            debug_assert!(name_res.is_ok());
+            Address::anonymous(loc, bytes)
         }
         P::LeadingNameAccess_::Name(n) => match named_address_mapping.get(&n.value).copied() {
-            Some(addr) => Address::Numerical(Some(n), sp(loc, addr)),
+            Some(addr) => Address::Numerical {
+                name: Some(n),
+                value: sp(loc, addr),
+                name_conflict: address_conflicts.contains(&n.value),
+            },
             None => {
                 if name_res.is_ok() {
                     compilation_env.add_diag(address_without_value_error(
@@ -395,7 +464,7 @@ fn set_sender_address(
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidModule, (loc, msg)));
-            Address::Numerical(None, sp(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
+            Address::anonymous(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS)
         }
     })
 }
@@ -439,10 +508,19 @@ fn module_(
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 
     let mut new_scope = AliasMapBuilder::new();
+    let mut use_funs_builder = UseFunsBuilder::new();
     module_self_aliases(&mut new_scope, &current_module);
     let members = members
         .into_iter()
-        .filter_map(|member| aliases_from_member(context, &mut new_scope, &current_module, member))
+        .filter_map(|member| {
+            aliases_from_member(
+                context,
+                &mut new_scope,
+                &mut use_funs_builder,
+                &current_module,
+                member,
+            )
+        })
         .collect::<Vec<_>>();
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);
     assert!(
@@ -463,22 +541,28 @@ fn module_(
                 if !context.is_source_definition {
                     f.body.value = P::FunctionBody_::Native
                 }
-                function(context, &mut functions, f)
+                function(
+                    context,
+                    Some((current_module, &mut use_funs_builder)),
+                    &mut functions,
+                    f,
+                )
             }
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
             P::ModuleMember::Spec(s) => specs.push(spec(context, s)),
         }
     }
-
+    let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
 
-    context.set_to_outer_scope(old_aliases);
+    context.set_to_outer_scope(Some(&mut use_funs), old_aliases);
 
     let def = E::ModuleDefinition {
         package_name,
         attributes,
         loc,
+        use_funs,
         is_source_module: context.is_source_definition,
         friends,
         structs,
@@ -507,7 +591,7 @@ fn check_visibility_modifiers(
             E::Visibility::Package(loc) => {
                 context
                     .env
-                    .check_feature(&FeatureGate::PublicPackage, package_name, loc);
+                    .check_feature(FeatureGate::PublicPackage, package_name, loc);
                 public_package_usage = Some(loc);
             }
             _ => (),
@@ -596,12 +680,13 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
     warning_filter.union(&config.warning_filter);
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let new_scope = uses(context, puses);
+    let (new_scope, use_funs_builder) = uses(context, puses);
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);
     assert!(
         old_aliases.is_empty(),
         "ICE there should be no aliases entering a script"
     );
+    let mut use_funs = use_funs(context, use_funs_builder);
 
     let mut constants = UniqueMap::new();
     for c in pconstants {
@@ -612,7 +697,7 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
 
     // TODO remove after Self rework
     check_valid_module_member_name(context, ModuleMemberKind::Function, pfunction.name.0);
-    let (function_name, function) = function_(context, 0, pfunction);
+    let (function_name, function) = function_(context, None, 0, pfunction);
     match &function.visibility {
         E::Visibility::Friend(loc) | E::Visibility::Package(loc) | E::Visibility::Public(loc) => {
             let msg = format!(
@@ -639,13 +724,14 @@ fn script_(context: &mut Context, package_name: Option<Symbol>, pscript: P::Scri
         }
     }
     let specs = specs(context, pspecs);
-    context.set_to_outer_scope(old_aliases);
+    context.set_to_outer_scope(Some(&mut use_funs), old_aliases);
     context.env.pop_warning_filter_scope();
     E::Script {
         warning_filter,
         package_name,
         attributes,
         loc,
+        use_funs,
         constants,
         function_name,
         function,
@@ -763,7 +849,7 @@ fn attribute_value(
         match avalue_ {
             PV::Value(v) => EV::Value(value(context, v)?),
             PV::ModuleAccess(sp!(ident_loc, PN::Two(sp!(aloc, LN::AnonymousAddress(a)), n))) => {
-                let addr = Address::Numerical(None, sp(aloc, a));
+                let addr = Address::anonymous(aloc, a);
                 let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n)));
                 if context.module_members.get(&mident).is_none() {
                     context.env.add_diag(diag!(
@@ -902,6 +988,7 @@ fn warning_filter(
 
 fn all_module_members<'a>(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
     always_add: bool,
@@ -920,21 +1007,21 @@ fn all_module_members<'a>(
                     Some(a) => {
                         address_(
                             compilation_env,
+                            address_conflicts,
                             named_addr_map,
                             /* suggest_declaration */ true,
                             *a,
                         )
                     }
                     // Error will be handled when the module is compiled
-                    None => {
-                        Address::Numerical(None, sp(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
-                    }
+                    None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
                 module_members(members, always_add, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = address_(
                     compilation_env,
+                    address_conflicts,
                     named_addr_map,
                     /* suggest_declaration */ false,
                     addr_def.addr,
@@ -1008,6 +1095,7 @@ fn module_self_aliases(acc: &mut AliasMapBuilder, current_module: &ModuleIdent) 
 fn aliases_from_member(
     context: &mut Context,
     acc: &mut AliasMapBuilder,
+    use_funs: &mut UseFunsBuilder,
     current_module: &ModuleIdent,
     member: P::ModuleMember,
 ) -> Option<P::ModuleMember> {
@@ -1026,7 +1114,7 @@ fn aliases_from_member(
 
     match member {
         P::ModuleMember::Use(u) => {
-            use_(context, acc, u);
+            use_(context, acc, use_funs, u);
             None
         }
         f @ P::ModuleMember::Friend(_) => {
@@ -1076,20 +1164,27 @@ fn aliases_from_member(
     }
 }
 
-fn uses(context: &mut Context, uses: Vec<P::UseDecl>) -> AliasMapBuilder {
+fn uses(context: &mut Context, uses: Vec<P::UseDecl>) -> (AliasMapBuilder, UseFunsBuilder) {
     let mut new_scope = AliasMapBuilder::new();
+    let mut use_funs = UseFunsBuilder::new();
     for u in uses {
-        use_(context, &mut new_scope, u);
+        use_(context, &mut new_scope, &mut use_funs, u);
     }
-    new_scope
+    (new_scope, use_funs)
 }
 
-fn use_(context: &mut Context, acc: &mut AliasMapBuilder, u: P::UseDecl) {
+fn use_(
+    context: &mut Context,
+    acc: &mut AliasMapBuilder,
+    use_funs: &mut UseFunsBuilder,
+    u: P::UseDecl,
+) {
     let P::UseDecl {
         use_: u,
+        loc,
         attributes,
     } = u;
-    flatten_attributes(context, AttributePosition::Use, attributes);
+    let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
     let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
         diag!(
             NameResolution::UnboundModule,
@@ -1172,9 +1267,102 @@ fn use_(context: &mut Context, acc: &mut AliasMapBuilder, u: P::UseDecl) {
                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member) {
                     duplicate_module_member(context, old_loc, alias)
                 }
+                if matches!(member_kind, ModuleMemberKind::Function) {
+                    // remove any previously declared alias to keep in sync with the member alias
+                    // map
+                    use_funs.implicit.remove(&alias);
+                    // not a function declaration
+                    let is_public = None;
+                    // assume used. We will set it to false if needed when exiting this alias scope
+                    let kind = E::ImplicitUseFunKind::UseAlias { used: true };
+                    let implicit = E::ImplicitUseFunCandidate {
+                        loc: alias.loc,
+                        attributes: attributes.clone(),
+                        is_public,
+                        function: (mident, member),
+                        kind,
+                    };
+                    use_funs.implicit.add(alias, implicit).unwrap();
+                }
             }
         }
+        P::Use::Fun {
+            visibility,
+            function,
+            ty,
+            method,
+        } => {
+            context
+                .env
+                .check_feature(FeatureGate::DotCall, context.current_package, loc);
+            let is_public = match visibility {
+                P::Visibility::Public(vis_loc) => Some(vis_loc),
+                P::Visibility::Internal => None,
+                P::Visibility::Script(vis_loc)
+                | P::Visibility::Friend(vis_loc)
+                | P::Visibility::Package(vis_loc) => {
+                    let msg = "Invalid visibility for 'use fun' declaration";
+                    let vis_msg = format!(
+                        "Module level 'use fun' declarations can be '{}' for the module's types, \
+                        otherwise they must internal to declared scope.",
+                        P::Visibility::PUBLIC
+                    );
+                    context.env.add_diag(diag!(
+                        Declarations::InvalidUseFun,
+                        (loc, msg),
+                        (vis_loc, vis_msg)
+                    ));
+                    None
+                }
+            };
+            let explicit = ParserExplicitUseFun {
+                loc,
+                attributes,
+                is_public,
+                function,
+                ty,
+                method,
+            };
+            use_funs.explicit.push(explicit);
+        }
     }
+}
+
+fn use_funs(context: &mut Context, builder: UseFunsBuilder) -> E::UseFuns {
+    let UseFunsBuilder {
+        explicit: pexplicit,
+        implicit,
+    } = builder;
+    // If None, there was an error and we can skip it
+    let explicit = pexplicit
+        .into_iter()
+        .filter_map(|e| explicit_use_fun(context, e))
+        .collect();
+    E::UseFuns { explicit, implicit }
+}
+
+fn explicit_use_fun(
+    context: &mut Context,
+    pexplicit: ParserExplicitUseFun,
+) -> Option<E::ExplicitUseFun> {
+    let ParserExplicitUseFun {
+        loc,
+        attributes,
+        is_public,
+        function,
+        ty,
+        method,
+    } = pexplicit;
+    let function = name_access_chain(context, Access::ApplyPositional, *function)?;
+    let ty = name_access_chain(context, Access::Type, *ty)?;
+    Some(E::ExplicitUseFun {
+        loc,
+        attributes,
+        is_public,
+        function,
+        ty,
+        method,
+    })
 }
 
 fn duplicate_module_alias(context: &mut Context, old_loc: Loc, alias: Name) {
@@ -1261,7 +1449,7 @@ fn struct_def_(
         type_parameters,
         fields,
     };
-    context.set_to_outer_scope(old_aliases);
+    context.set_to_outer_scope(None, old_aliases);
     context.env.pop_warning_filter_scope();
     (name, sdef)
 }
@@ -1388,10 +1576,11 @@ fn constant_(
 
 fn function(
     context: &mut Context,
+    module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
     functions: &mut UniqueMap<FunctionName, E::Function>,
     pfunction: P::Function,
 ) {
-    let (fname, fdef) = function_(context, functions.len(), pfunction);
+    let (fname, fdef) = function_(context, module_and_use_funs, functions.len(), pfunction);
     if let Err(_old_loc) = functions.add(fname, fdef) {
         assert!(context.env.has_errors())
     }
@@ -1399,6 +1588,7 @@ fn function(
 
 fn function_(
     context: &mut Context,
+    module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
     index: usize,
     pfunction: P::Function,
 ) -> (FunctionName, E::Function) {
@@ -1424,6 +1614,18 @@ fn function_(
         .collect();
     let body = function_body(context, pbody);
     let specs = context.extract_exp_specs();
+    if let Some((m, use_funs_builder)) = module_and_use_funs {
+        let implicit = E::ImplicitUseFunCandidate {
+            loc: name.loc(),
+            attributes: attributes.clone(),
+            is_public: Some(visibility.loc().unwrap_or_else(|| name.loc())),
+            function: (m, name.0),
+            // disregard used/unused information tracking
+            kind: E::ImplicitUseFunKind::FunctionDeclaration,
+        };
+        // we can ignore any error, since the alias map will catch conflicting names
+        let _ = use_funs_builder.implicit.add(name.0, implicit);
+    }
     let fdef = E::Function {
         warning_filter,
         index,
@@ -1436,7 +1638,7 @@ fn function_(
         body,
         specs,
     };
-    context.set_to_outer_scope(old_aliases);
+    context.set_to_outer_scope(None, old_aliases);
     context.env.pop_warning_filter_scope();
     (name, fdef)
 }
@@ -1511,7 +1713,14 @@ fn spec(context: &mut Context, sp!(loc, pspec): P::SpecBlock) -> E::SpecBlock {
 
     let attributes = flatten_attributes(context, AttributePosition::Spec, pattributes);
     context.in_spec_context = true;
-    let new_scope = uses(context, puses);
+    let (new_scope, use_funs_builder) = uses(context, puses);
+    // Use funs not supported in specs
+    for use_fun in use_funs_builder.explicit {
+        let msg = "'use fun' declarations are not supported in spec blocks";
+        context
+            .env
+            .add_diag(diag!(Declarations::InvalidUseFun, (use_fun.loc, msg)))
+    }
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);
 
     let members = pmembers
@@ -1519,7 +1728,7 @@ fn spec(context: &mut Context, sp!(loc, pspec): P::SpecBlock) -> E::SpecBlock {
         .map(|m| spec_member(context, m))
         .collect();
 
-    context.set_to_outer_scope(old_aliases);
+    context.set_to_outer_scope(None, old_aliases);
     context.in_spec_context = false;
 
     sp(
@@ -1543,7 +1752,7 @@ fn spec_target(context: &mut Context, sp!(loc, pt): P::SpecBlockTarget) -> E::Sp
             name,
             signature_opt.map(|s| {
                 let (old_aliases, signature) = function_signature(context, *s);
-                context.set_to_outer_scope(old_aliases);
+                context.set_to_outer_scope(None, old_aliases);
                 Box::new(signature)
             }),
         ),
@@ -1619,7 +1828,7 @@ fn spec_member(context: &mut Context, sp!(loc, pm): P::SpecBlockMember) -> E::Sp
                 .collect();
             match old_aliases_opt {
                 None => (),
-                Some(old_aliases) => context.set_to_outer_scope(old_aliases),
+                Some(old_aliases) => context.set_to_outer_scope(None, old_aliases),
             }
             EM::Condition {
                 kind,
@@ -1636,7 +1845,7 @@ fn spec_member(context: &mut Context, sp!(loc, pm): P::SpecBlockMember) -> E::Sp
         } => {
             let (old_aliases, signature) = function_signature(context, signature);
             let body = function_body(context, body);
-            context.set_to_outer_scope(old_aliases);
+            context.set_to_outer_scope(None, old_aliases);
             EM::Function {
                 uninterpreted,
                 name,
@@ -1657,7 +1866,7 @@ fn spec_member(context: &mut Context, sp!(loc, pm): P::SpecBlockMember) -> E::Sp
                 .shadow_for_type_parameters(type_parameters.iter().map(|(name, _)| name));
             let t = type_(context, t);
             let i = init.map(|e| exp_(context, e));
-            context.set_to_outer_scope(old_aliases);
+            context.set_to_outer_scope(None, old_aliases);
             EM::Variable {
                 is_global,
                 name,
@@ -1946,8 +2155,9 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
 fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
-    let new_scope = uses(context, puses);
+    let (new_scope, use_funs_builder) = uses(context, puses);
     let old_aliases = context.aliases.add_and_shadow_all(new_scope);
+    let mut use_funs = use_funs(context, use_funs_builder);
     let mut items: VecDeque<E::SequenceItem> = pitems
         .into_iter()
         .map(|item| sequence_item(context, item))
@@ -1965,8 +2175,8 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     };
     let final_item = sp(final_e.loc, E::SequenceItem_::Seq(final_e));
     items.push_back(final_item);
-    context.set_to_outer_scope(old_aliases);
-    items
+    context.set_to_outer_scope(Some(&mut use_funs), old_aliases);
+    (use_funs, items)
 }
 
 fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E::SequenceItem {
@@ -2189,6 +2399,28 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 EE::UnresolvedError
             }
         },
+        PE::DotCall(pdotted, n, ptys_opt, sp!(rloc, prs)) => match exp_dotted(context, *pdotted) {
+            Some(edotted) => {
+                context
+                    .env
+                    .check_feature(FeatureGate::DotCall, context.current_package, loc);
+                if context.in_spec_context {
+                    let msg = "method syntax is not supported in specifications";
+                    context
+                        .env
+                        .add_diag(diag!(Syntax::SpecContextRestricted, (loc, msg)));
+                    EE::UnresolvedError
+                } else {
+                    let tys_opt = optional_types(context, ptys_opt);
+                    let ers = sp(rloc, exps(context, prs));
+                    EE::MethodCall(Box::new(edotted), n, tys_opt, ers)
+                }
+            }
+            None => {
+                assert!(context.env.has_errors());
+                EE::UnresolvedError
+            }
+        },
         PE::Cast(e, ty) => EE::Cast(exp(context, *e), type_(context, ty)),
         PE::Index(e, i) => {
             if context.in_spec_context {
@@ -2226,7 +2458,7 @@ fn exp_dotted(context: &mut Context, sp!(loc, pdotted_): P::Exp) -> Option<E::Ex
             let lhs = exp_dotted(context, *plhs)?;
             EE::Dot(Box::new(lhs), field)
         }
-        pe_ => EE::Exp(exp_(context, sp(loc, pe_))),
+        pe_ => EE::Exp(Box::new(exp_(context, sp(loc, pe_)))),
     };
     Some(sp(loc, edotted_))
 }
@@ -2579,6 +2811,10 @@ fn unbound_names_exp(unbound: &mut BTreeSet<Name>, sp!(_, e_): &E::Exp) {
         EE::Call(_, _, _, sp!(_, es_)) | EE::Vector(_, _, sp!(_, es_)) => {
             unbound_names_exps(unbound, es_)
         }
+        EE::MethodCall(ed, _, _, sp!(_, es_)) => {
+            unbound_names_dotted(unbound, ed);
+            unbound_names_exps(unbound, es_)
+        }
         EE::Pack(_, _, es) => unbound_names_exps(unbound, es.iter().map(|(_, _, (_, e))| e)),
         EE::IfElse(econd, et, ef) => {
             unbound_names_exp(unbound, ef);
@@ -2644,7 +2880,8 @@ fn unbound_names_exps<'a>(unbound: &mut BTreeSet<Name>, es: impl IntoIterator<It
 }
 
 fn unbound_names_sequence(unbound: &mut BTreeSet<Name>, seq: &E::Sequence) {
-    seq.iter()
+    seq.1
+        .iter()
         .rev()
         .for_each(|s| unbound_names_sequence_item(unbound, s))
 }

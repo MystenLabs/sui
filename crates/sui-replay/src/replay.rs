@@ -1,64 +1,67 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::ReplayableNetworkConfigSet;
-use crate::data_fetcher::extract_epoch_and_version;
-use crate::data_fetcher::DataFetcher;
-use crate::data_fetcher::Fetchers;
-use crate::data_fetcher::NodeStateDumpFetcher;
-use crate::data_fetcher::RemoteFetcher;
-use crate::types::*;
+use crate::{
+    config::ReplayableNetworkConfigSet,
+    data_fetcher::{
+        extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
+    },
+    types::*,
+};
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag},
+    resolver::{ModuleResolver, ResourceResolver},
+};
 use prometheus::Registry;
 use similar::{ChangeTag, TextDiff};
-use std::collections::{BTreeMap, HashSet};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+    sync::Mutex,
+};
 use sui_config::node::ExpensiveSafetyCheckConfig;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_core::authority::AuthorityState;
-use sui_core::authority::NodeStateDump;
-use sui_core::epoch::epoch_metrics::EpochMetrics;
-use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::signature_verifier::SignatureVerifierMetrics;
+use sui_core::{
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        epoch_start_configuration::EpochStartConfiguration,
+        test_authority_builder::TestAuthorityBuilder, AuthorityState, NodeStateDump,
+    },
+    epoch::epoch_metrics::EpochMetrics,
+    module_cache_metrics::ResolverMetrics,
+    signature_verifier::SignatureVerifierMetrics,
+};
 use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
-use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_protocol_config::Chain;
-use sui_protocol_config::ProtocolConfig;
+use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
-use sui_types::committee::EpochId;
-use sui_types::digests::ChainIdentifier;
-use sui_types::digests::CheckpointDigest;
-use sui_types::digests::TransactionDigest;
-use sui_types::error::ExecutionError;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::SuiGasStatus;
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::metrics::LimitsMetrics;
-use sui_types::object::{Data, Object, Owner};
-use sui_types::storage::get_module_by_id;
-use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::{
-    CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
+use sui_types::{
+    authenticator_state::get_authenticator_state_obj_initial_shared_version,
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    committee::EpochId,
+    digests::{ChainIdentifier, CheckpointDigest, TransactionDigest},
+    error::{ExecutionError, SuiError, SuiResult},
+    executable_transaction::VerifiedExecutableTransaction,
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
+    metrics::LimitsMetrics,
+    object::{Data, Object, Owner},
+    storage::get_module_by_id,
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
+    transaction::{
+        CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
+        TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+        VerifiedTransaction,
+    },
+    DEEPBOOK_PACKAGE_ID,
 };
-use sui_types::DEEPBOOK_PACKAGE_ID;
-use tracing::info;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 

@@ -43,11 +43,13 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
 use sui_simulator::anemo::PeerId;
 use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
+use sui_types::fp_ensure;
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use tokio::time::Duration;
@@ -424,7 +426,7 @@ impl ConsensusAdapter {
         committee: &Committee,
         tx_digest: &TransactionDigest,
     ) -> (Duration, usize, usize, usize) {
-        let (mut position, positions_moved, preceding_disconected) =
+        let (mut position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
@@ -450,7 +452,7 @@ impl ConsensusAdapter {
             delay_step * position as u32,
             position,
             positions_moved,
-            preceding_disconected,
+            preceding_disconnected,
         )
     }
 
@@ -565,6 +567,14 @@ impl ConsensusAdapter {
         }
         // Then check if submit_semaphore has permits
         self.submit_semaphore.available_permits() > 0
+    }
+
+    pub(crate) fn check_consensus_overload(&self) -> SuiResult {
+        fp_ensure!(
+            self.check_limits(),
+            SuiError::TooManyTransactionsPendingConsensus
+        );
+        Ok(())
     }
 
     fn submit_unchecked(
@@ -1028,8 +1038,6 @@ impl LatencyObserver {
         }
     }
 }
-
-use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
 
 #[async_trait::async_trait]
 impl SubmitToConsensus for Arc<ConsensusAdapter> {

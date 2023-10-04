@@ -136,11 +136,11 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
         store,
         BTreeMap::new(),
         false,
-        &ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
         metrics,
         0, // epoch id
     ));
     ext.add(NativesCostTable::from_protocol_config(
-        &ProtocolConfig::get_for_min_version(),
+        &ProtocolConfig::get_for_max_version_UNSAFE(),
     ));
 }

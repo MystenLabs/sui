@@ -4,6 +4,7 @@
 import { formatAddress } from '@mysten/sui.js/utils';
 import type { WalletAccount } from '@mysten/wallet-standard';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import clsx from 'clsx';
 
 import { useAccounts } from '../hooks/wallet/useAccounts.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
@@ -11,6 +12,9 @@ import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
 import * as styles from './AccountDropdownMenu.css.js';
 import { CheckIcon } from './icons/CheckIcon.js';
 import { ChevronIcon } from './icons/ChevronIcon.js';
+import { StyleMarker } from './styling/StyleMarker.js';
+import { Button } from './ui/Button.js';
+import { Text } from './ui/Text.js';
 
 type AccountDropdownMenuProps = {
 	currentAccount: WalletAccount;
@@ -23,35 +27,38 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 
 	return (
 		<DropdownMenu.Root modal={false}>
-			<DropdownMenu.Trigger className={styles.triggerButton}>
-				{formatAddress(currentAccount.address)}
-				<ChevronIcon />
-			</DropdownMenu.Trigger>
+			<StyleMarker>
+				<DropdownMenu.Trigger asChild>
+					<Button size="lg" className={styles.connectedAccount}>
+						<Text mono weight="bold">
+							{formatAddress(currentAccount.address)}
+						</Text>
+						<ChevronIcon />
+					</Button>
+				</DropdownMenu.Trigger>
+			</StyleMarker>
 			<DropdownMenu.Portal>
-				<DropdownMenu.Content className={styles.menuContent}>
-					{accounts.map((account) => (
-						<DropdownMenu.Item key={account.address} asChild>
-							<button
-								type="button"
-								className={styles.switchAccountButton}
-								onClick={() => switchAccount({ account })}
+				<StyleMarker>
+					<DropdownMenu.Content className={styles.menuContent}>
+						{accounts.map((account) => (
+							<DropdownMenu.Item
+								key={account.address}
+								className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
+								onSelect={() => switchAccount({ account })}
 							>
-								{formatAddress(account.address)}
+								<Text mono>{formatAddress(account.address)}</Text>
 								{currentAccount.address === account.address ? <CheckIcon /> : null}
-							</button>
-						</DropdownMenu.Item>
-					))}
-					<DropdownMenu.Separator className={styles.separator} />
-					<DropdownMenu.Item asChild>
-						<button
-							className={styles.disconnectButton}
-							type="button"
-							onClick={() => disconnectWallet()}
+							</DropdownMenu.Item>
+						))}
+						<DropdownMenu.Separator className={styles.separator} />
+						<DropdownMenu.Item
+							className={clsx(styles.menuItem)}
+							onSelect={() => disconnectWallet()}
 						>
 							Disconnect
-						</button>
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
+						</DropdownMenu.Item>
+					</DropdownMenu.Content>
+				</StyleMarker>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
 	);

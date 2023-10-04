@@ -9,8 +9,6 @@ export const container = style({
 	alignItems: 'center',
 });
 
-export const title = style({});
-
 export const content = style({
 	display: 'flex',
 	flexDirection: 'column',

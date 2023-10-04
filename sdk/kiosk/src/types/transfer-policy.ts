@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type ObjectOwner } from '@mysten/sui.js/client';
-import { TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
 
 import { ObjectArgument } from '.';
 
@@ -60,8 +60,8 @@ export type RuleResolvingParams = {
 	sellerKiosk: ObjectArgument;
 	kiosk: ObjectArgument;
 	kioskCap: ObjectArgument;
-	transferRequest: TransactionArgument;
-	purchasedItem: TransactionArgument;
+	transferRequest: TransactionObjectArgument;
+	purchasedItem: TransactionObjectArgument;
 	packageId: string;
 	extraArgs: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
 };

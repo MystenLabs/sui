@@ -1,10 +1,4 @@
 warning[W01004]: invalid documentation comment
-  ┌─ tests/move_check/parser/doc_comments_placement.move:6:5
-  │
-6 │     /** There can be no doc comment on uses. */
-  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Documentation comment cannot be matched to a language item
-
-warning[W01004]: invalid documentation comment
    ┌─ tests/move_check/parser/doc_comments_placement.move:16:9
    │
 16 │         /// There can be no doc comment after last field.

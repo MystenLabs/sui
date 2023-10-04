@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use tokio::time::{sleep, Duration};
 
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::error::{SuiError, SuiResult};
@@ -86,16 +85,13 @@ async fn zklogin_end_to_end_test_with_auth_state_creation() {
     // Now wait until the next epoch, when the auth state object is created.
     test_cluster.wait_for_epoch(None).await;
 
-    // Wait for JWKs to be fetched and sequenced.
-    sleep(Duration::from_secs(10)).await;
-
     // run zklogin end to end test
     run_zklogin_end_to_end_test(test_cluster).await;
 }
 
 async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
     // wait for JWKs to be fetched and sequenced.
-    sleep(Duration::from_secs(15)).await;
+    test_cluster.wait_for_authenticator_state_update().await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
     let sender = test_cluster.get_address_0();
@@ -191,6 +187,7 @@ async fn test_conflicting_jwks() {
     use sui_json_rpc_types::TransactionFilter;
     use sui_types::base_types::ObjectID;
     use sui_types::transaction::{TransactionDataAPI, TransactionKind};
+    use tokio::time::Duration;
 
     let test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(45000)

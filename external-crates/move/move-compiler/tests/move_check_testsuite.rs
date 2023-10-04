@@ -30,12 +30,12 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
     let mut mapping = vec![
         ("std", "0x1"),
         ("sui", "0x2"),
-        ("M", "0x1"),
-        ("A", "0x42"),
+        ("M", "0x40"),
+        ("A", "0x41"),
         ("B", "0x42"),
         ("K", "0x19"),
-        ("a", "0x42"),
-        ("b", "0x42"),
+        ("a", "0x44"),
+        ("b", "0x45"),
         ("k", "0x19"),
     ];
     if flavor == Flavor::Sui {
@@ -173,6 +173,7 @@ pub fn run_test(
         named_address_map,
     }];
 
+    let flags = flags.set_sources_shadow_deps(true);
     let (files, comments_and_compiler_res) = Compiler::from_package_paths(targets, deps)
         .unwrap()
         .set_flags(flags)

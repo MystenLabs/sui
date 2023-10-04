@@ -9,8 +9,8 @@ import ReactDOM from 'react-dom/client';
 
 function getDemoTransaction(address: string) {
 	const txb = new TransactionBlock();
-	const [coin] = txb.splitCoins(txb.gas, [txb.pure(1)]);
-	txb.transferObjects([coin], txb.pure(address));
+	const [coin] = txb.splitCoins(txb.gas, [1]);
+	txb.transferObjects([coin], address);
 	return txb;
 }
 

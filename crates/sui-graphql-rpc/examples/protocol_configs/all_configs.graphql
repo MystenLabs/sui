@@ -1,0 +1,55 @@
+# Select the key and value of the protocol configuration
+{
+  protocolConfig {
+    configs {
+      key
+	  value
+    }
+  }
+}
+
+# Select only the key of the protocol configuration
+{
+  protocolConfig {
+    configs {
+      key
+    }
+  }
+}
+
+# Select only the value of the protocol configuration
+{
+  protocolConfig {
+    configs {
+      value
+    }
+  }
+}
+
+# Select the key and value of the feature flag
+{
+  protocolConfig {
+    featureFlags {
+      key
+	  value
+    }
+  }
+}
+
+# Select only the key of the feature flag
+{
+  protocolConfig {
+    featureFlags {
+      key
+    }
+  }
+}
+
+# Select only the value of the feature flag
+{
+  protocolConfig {
+    featureFlags {
+      value
+    }
+  }
+}

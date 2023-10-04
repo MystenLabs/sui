@@ -12,8 +12,9 @@ import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import { MAX_SIGNER_IN_MULTISIG, MIN_SIGNER_IN_MULTISIG } from '../multisig/publickey.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { PublicKey } from './publickey.js';
-import type { SerializedSignature, SignatureScheme } from './signature.js';
-import { SIGNATURE_SCHEME_TO_FLAG } from './signature.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from './signature-scheme.js';
+import type { SignatureScheme } from './signature-scheme.js';
+import type { SerializedSignature } from './signature.js';
 import type { SignaturePubkeyPair } from './utils.js';
 // eslint-disable-next-line import/no-cycle
 import { toSingleSignaturePubkeyPair } from './utils.js';
@@ -163,6 +164,10 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 
 		if (scheme === 'MultiSig') {
 			throw new Error('MultiSig is not supported inside MultiSig');
+		}
+
+		if (scheme === 'ZkLogin') {
+			throw new Error('ZkLogin is not supported inside MultiSig');
 		}
 
 		const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {

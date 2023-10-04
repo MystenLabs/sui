@@ -7,16 +7,13 @@ import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
 import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
-import type {
-	SerializedSignature,
-	SignatureFlag,
-	SignatureScheme,
-} from '../cryptography/signature.js';
 import {
-	parseSerializedSignature,
 	SIGNATURE_FLAG_TO_SCHEME,
 	SIGNATURE_SCHEME_TO_FLAG,
-} from '../cryptography/signature.js';
+} from '../cryptography/signature-scheme.js';
+import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
+import { parseSerializedSignature } from '../cryptography/signature.js';
+import type { SerializedSignature } from '../cryptography/signature.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
@@ -246,15 +243,13 @@ export class MultiSigPublicKey extends PublicKey {
 				throw new Error('MultiSig is not supported inside MultiSig');
 			}
 
-			let bytes = Array.from(parsed.signature.map((x) => Number(x)));
-
-			if (parsed.signatureScheme === 'ED25519') {
-				compressedSignatures[i] = { ED25519: bytes };
-			} else if (parsed.signatureScheme === 'Secp256k1') {
-				compressedSignatures[i] = { Secp256k1: bytes };
-			} else if (parsed.signatureScheme === 'Secp256r1') {
-				compressedSignatures[i] = { Secp256r1: bytes };
+			if (parsed.signatureScheme === 'ZkLogin') {
+				throw new Error('ZkLogin is not supported inside MultiSig');
 			}
+
+			compressedSignatures[i] = {
+				[parsed.signatureScheme]: Array.from(parsed.signature.map((x: number) => Number(x))),
+			} as CompressedSignature;
 
 			let publicKeyIndex;
 			for (let j = 0; j < this.publicKeys.length; j++) {

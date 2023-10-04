@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type TransactionArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	TransactionObjectArgument,
+	type TransactionArgument,
+	type TransactionBlock,
+} from '@mysten/sui.js/transactions';
 
 import * as kioskTx from '../tx/kiosk';
 import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
@@ -39,8 +43,8 @@ export type KioskTransactionParams = {
 export class KioskTransaction {
 	transactionBlock: TransactionBlock;
 	kioskClient: KioskClient;
-	kiosk?: TransactionArgument;
-	kioskCap?: TransactionArgument;
+	kiosk?: TransactionObjectArgument;
+	kioskCap?: TransactionObjectArgument;
 	// If we're pending `share` of a new kiosk, `finalize()` will share it.
 	#pendingShare?: boolean;
 	// If we're pending transferring of the cap, `finalize()` will either error or transfer the cap if it's a new personal.
@@ -48,7 +52,7 @@ export class KioskTransaction {
 	// The promise that the personalCap will be returned on `finalize()`.
 	#promise?: TransactionArgument | undefined;
 	// The personal kiosk argument.
-	#personalCap?: TransactionArgument;
+	#personalCap?: TransactionObjectArgument;
 	// A flag that checks whether kiosk TX is finalized.
 	#finalized: boolean = false;
 
@@ -114,7 +118,7 @@ export class KioskTransaction {
 	createAndShare(address: string) {
 		this.#validateFinalizedStatus();
 		const cap = kioskTx.createKioskAndShare(this.transactionBlock);
-		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure(address, 'address'));
+		this.transactionBlock.transferObjects([cap], this.transactionBlock.pure.address(address));
 	}
 
 	/**
@@ -137,7 +141,7 @@ export class KioskTransaction {
 		this.share();
 		this.transactionBlock.transferObjects(
 			[this.kioskCap!],
-			this.transactionBlock.pure(address, 'address'),
+			this.transactionBlock.pure.address(address),
 		);
 	}
 
@@ -202,7 +206,7 @@ export class KioskTransaction {
 			this.kioskCap!,
 			amount,
 		);
-		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure(address, 'address'));
+		this.transactionBlock.transferObjects([coin], this.transactionBlock.pure.address(address));
 		return this;
 	}
 
@@ -258,7 +262,7 @@ export class KioskTransaction {
 	 * @param itemType The type `T` of the item
 	 * @param itemId The ID of the item
 	 */
-	take({ itemType, itemId }: ItemId): TransactionArgument {
+	take({ itemType, itemId }: ItemId): TransactionObjectArgument {
 		this.#validateKioskIsSet();
 		return kioskTx.take(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, itemId);
 	}
@@ -273,7 +277,7 @@ export class KioskTransaction {
 	transfer({ itemType, itemId, address }: ItemId & { address: string }) {
 		this.#validateKioskIsSet();
 		const item = this.take({ itemType, itemId });
-		this.transactionBlock.transferObjects([item], this.transactionBlock.pure(address, 'address'));
+		this.transactionBlock.transferObjects([item], this.transactionBlock.pure.address(address));
 		return this;
 	}
 
@@ -304,10 +308,13 @@ export class KioskTransaction {
 		itemId,
 		price,
 		sellerKiosk,
-	}: ItemId & Price & { sellerKiosk: ObjectArgument }): [TransactionArgument, TransactionArgument] {
+	}: ItemId & Price & { sellerKiosk: ObjectArgument }): [
+		TransactionObjectArgument,
+		TransactionObjectArgument,
+	] {
 		// Split the coin for the amount of the listing.
 		const coin = this.transactionBlock.splitCoins(this.transactionBlock.gas, [
-			this.transactionBlock.pure(price, 'u64'),
+			this.transactionBlock.pure.u64(price),
 		]);
 		return kioskTx.purchase(this.transactionBlock, itemType, sellerKiosk, itemId, coin);
 	}
@@ -441,13 +448,13 @@ export class KioskTransaction {
 	}
 
 	// Some setters in case we want custom behavior.
-	setKioskCap(cap: TransactionArgument) {
+	setKioskCap(cap: TransactionObjectArgument) {
 		this.#validateFinalizedStatus();
 		this.kioskCap = cap;
 		return this;
 	}
 
-	setKiosk(kiosk: TransactionArgument) {
+	setKiosk(kiosk: TransactionObjectArgument) {
 		this.#validateFinalizedStatus();
 		this.kiosk = kiosk;
 		return this;

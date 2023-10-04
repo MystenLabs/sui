@@ -27,7 +27,7 @@ const item = kioskTx.take({
 });
 
 // Do something with `item`, like transfer it to someone else.
-txb.transferObjects([item], txb.pure('address_to_transfer_the_object'));
+txb.transferObjects([item], 'address_to_transfer_the_object');
 
 // Finalize the kiosk Tx.
 kioskTx.finalize();
