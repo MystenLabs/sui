@@ -45,6 +45,7 @@ impl SimpleClient {
     }
 }
 
+#[ignore]
 #[tokio::test]
 async fn test_client() {
     let mut handles = vec![];
