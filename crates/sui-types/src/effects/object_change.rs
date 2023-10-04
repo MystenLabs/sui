@@ -55,7 +55,7 @@ impl EffectsObjectChange {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum IDOperation {
+pub(crate) enum IDOperation {
     None,
     Created,
     Deleted,
@@ -65,14 +65,14 @@ pub enum IDOperation {
 /// it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be
 /// NonExist.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum ObjectIn {
+pub(crate) enum ObjectIn {
     NotExist,
     /// The old version, digest and owner.
     Exist((VersionDigest, Owner)),
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum ObjectOut {
+pub(crate) enum ObjectOut {
     /// Same definition as in ObjectIn.
     NotExist,
     /// Any written object, including all of mutated, created, unwrapped today.

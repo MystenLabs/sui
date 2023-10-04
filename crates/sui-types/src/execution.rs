@@ -124,8 +124,7 @@ impl ExecutionResultsV2 {
         prev_tx: TransactionDigest,
     ) {
         for (id, mut obj) in self.written_objects.iter_mut() {
-            // TODO: We can now get rid of the following logic by passing in lamport version
-            // into the execution layer, and create new objects using the lamport version directly.
+            // TODO: All of the following is no longer necessary and can be simplified.
 
             // Update the version for the written object.
             match &mut obj.data {
