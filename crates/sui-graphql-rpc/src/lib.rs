@@ -7,6 +7,7 @@ pub mod server;
 
 pub(crate) mod functional_group;
 
+mod client;
 mod context_data;
 mod error;
 mod extensions;
