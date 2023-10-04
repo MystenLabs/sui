@@ -7,7 +7,7 @@ use crate::base_types::{
     EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
     VersionDigest,
 };
-use crate::digests::{Digest, TransactionEventsDigest};
+use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
@@ -51,7 +51,7 @@ pub struct TransactionEffectsV2 {
     /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
     /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
     /// It also provides more flexibility on the format and type of the data.
-    aux_data_digest: Option<Digest>,
+    aux_data_digest: Option<EffectsAuxDataDigest>,
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV2 {

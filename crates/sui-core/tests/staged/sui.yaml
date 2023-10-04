@@ -253,6 +253,9 @@ ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
         TYPENAME: Digest
+EffectsAuxDataDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 EffectsObjectChange:
   STRUCT:
     - input_state:
@@ -947,7 +950,7 @@ TransactionEffectsV2:
             - TYPENAME: UnchangedSharedKind
     - aux_data_digest:
         OPTION:
-          TYPENAME: Digest
+          TYPENAME: EffectsAuxDataDigest
 TransactionEventsDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
