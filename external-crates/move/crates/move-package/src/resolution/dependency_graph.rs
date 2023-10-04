@@ -117,7 +117,6 @@ impl DependencyGraphInfo {
 #[derive(Debug, Clone, Eq, Ord, PartialOrd)]
 pub struct Package {
     pub kind: PM::DependencyKind,
-    pub version: Option<PM::Version>,
     /// Optional field set if the package was externally resolved.
     resolver: Option<Symbol>,
 }
@@ -128,7 +127,7 @@ impl PartialEq for Package {
         // comparing packages during insertion of externally resolved ones - an internally resolved
         // existing package in the graph would not be recognized as a potential different version of
         // the externally resolved one)
-        self.kind == other.kind && self.version == other.version
+        self.kind == other.kind
     }
 }
 
@@ -765,7 +764,6 @@ impl DependencyGraph {
         match dep {
             PM::Dependency::Internal(PM::InternalDependency {
                 kind,
-                version,
                 subst,
                 digest,
                 dep_override,
@@ -773,7 +771,6 @@ impl DependencyGraph {
                 if let Entry::Vacant(entry) = self.package_table.entry(dep_pkg_name) {
                     let mut pkg = Package {
                         kind: kind.clone(),
-                        version: *version,
                         resolver: None,
                     };
                     pkg.kind.reroot(parent)?;
@@ -960,7 +957,6 @@ impl DependencyGraph {
 
             let pkg = Package {
                 kind: source.kind,
-                version: source.version,
                 resolver,
             };
 
@@ -1310,9 +1306,6 @@ impl fmt::Display for Package {
             }
         }
 
-        if let Some((major, minor, bugfix)) = self.version {
-            write!(f, ", version = \"{}.{}.{}\"", major, minor, bugfix)?;
-        }
         Ok(())
     }
 }
@@ -1522,7 +1515,6 @@ fn collect_overrides(
             if internal.dep_override {
                 let mut dep_pkg = Package {
                     kind: internal.kind.clone(),
-                    version: internal.version,
                     resolver: None,
                 };
                 dep_pkg.kind.reroot(parent)?;
