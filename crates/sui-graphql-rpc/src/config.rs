@@ -16,6 +16,7 @@ pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
     pub(crate) rpc_url: String,
+    pub(crate) db_url: String,
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -51,12 +52,18 @@ pub struct Experiments {
 }
 
 impl ConnectionConfig {
-    pub fn new(port: Option<u16>, host: Option<String>, rpc_url: Option<String>) -> Self {
+    pub fn new(
+        port: Option<u16>,
+        host: Option<String>,
+        rpc_url: Option<String>,
+        db_url: Option<String>,
+    ) -> Self {
         let default = Self::default();
         Self {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
+            db_url: db_url.unwrap_or(default.db_url),
         }
     }
 }
@@ -100,6 +107,7 @@ impl Default for ConnectionConfig {
             port: 8000,
             host: "127.0.0.1".to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
         }
     }
 }

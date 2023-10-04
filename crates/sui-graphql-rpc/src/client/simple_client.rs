@@ -11,6 +11,7 @@ use reqwest::RequestBuilder;
 use crate::{
     config::{ConnectionConfig, ServiceConfig},
     server::simple_server::start_example_server,
+    utils::reset_db,
 };
 
 #[derive(Clone)]
@@ -45,13 +46,16 @@ impl SimpleClient {
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_client() {
     let mut handles = vec![];
+    let connection_config = ConnectionConfig::default();
+    reset_db(&connection_config.db_url, true, true).unwrap();
+
     handles.push(tokio::spawn(async move {
-        start_example_server(ConnectionConfig::default(), ServiceConfig::default()).await;
+        start_example_server(connection_config, ServiceConfig::default()).await;
     }));
+
     // Wait for server to start
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     let client = SimpleClient::new("http://127.0.0.1:8000/");

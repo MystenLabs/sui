@@ -12,6 +12,7 @@ mod context_data;
 mod error;
 mod extensions;
 mod types;
+mod utils;
 
 use async_graphql::*;
 use types::owner::ObjectOwner;
