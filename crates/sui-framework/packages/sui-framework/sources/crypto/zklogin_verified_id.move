@@ -63,7 +63,7 @@ module sui::zklogin_verified_id {
     /// most 32 characters, `kc_value` must be at most 115 characters and `aud` must be at most 145 characters.
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
-    public entry fun verify_zklogin_id(
+    public fun verify_zklogin_id(
         key_claim_name: String,
         key_claim_value: String,
         issuer: String,
@@ -71,16 +71,18 @@ module sui::zklogin_verified_id {
         pin_hash: u256,
         ctx: &mut TxContext,
     ) {
-        assert!(check_zklogin_id(tx_context::sender(ctx), &key_claim_name, &key_claim_value, &issuer, &audience, pin_hash), EInvalidProof);
+        let sender = tx_context::sender(ctx);
+        assert!(check_zklogin_id(sender, &key_claim_name, &key_claim_value, &issuer, &audience, pin_hash), EInvalidProof);
         transfer::transfer(
             VerifiedID {
                 id: object::new(ctx),
-                owner: tx_context::sender(ctx),
+                owner: sender,
                 key_claim_name,
                 key_claim_value,
                 issuer,
-                audience},
-            tx_context::sender(ctx)
+                audience
+            },
+            sender
         );
     }
 

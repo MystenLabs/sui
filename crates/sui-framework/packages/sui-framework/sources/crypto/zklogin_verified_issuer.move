@@ -40,18 +40,20 @@ module sui::zklogin_verified_issuer {
     /// with the issuers id returned.
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
-    public entry fun verify_zklogin_issuer(
+    public fun verify_zklogin_issuer(
         address_seed: u256,
         issuer: String,
         ctx: &mut TxContext,
     ) {
-        assert!(check_zklogin_issuer(tx_context::sender(ctx), address_seed, &issuer), EInvalidProof);
+        let sender = tx_context::sender(ctx);
+        assert!(check_zklogin_issuer(sender, address_seed, &issuer), EInvalidProof);
         transfer::transfer(
             VerifiedIssuer {
                 id: object::new(ctx),
-                owner: tx_context::sender(ctx),
-                issuer},
-            tx_context::sender(ctx)
+                owner: sender,
+                issuer
+            },
+            sender
         )
     }
 
