@@ -288,13 +288,6 @@ impl ConsensusThroughputCalculator {
         let mut inner = self.inner.lock();
         let timestamp_secs: TimestampSecs = timestamp_ms / 1_000; // lowest bucket we care is seconds
 
-        // If it's the very first observation we just use it as timestamp and don't count any transactions.
-        let num_of_transactions = if !inner.observations.is_empty() {
-            num_of_transactions
-        } else {
-            0
-        };
-
         if let Some((front_ts, transactions)) = inner.observations.pop_front() {
             // First check that the timestamp is monotonically incremented - ignore any observation that is not
             // later from previous one (it shouldn't really happen).
@@ -498,23 +491,23 @@ mod tests {
         calculator.add_transactions(1000 as TimestampMs, 1_000);
         calculator.add_transactions(2000 as TimestampMs, 1_000);
         calculator.add_transactions(3000 as TimestampMs, 1_000);
-        calculator.add_transactions(4000 as TimestampMs, 1_000);
 
         // We expect to have a rate of 1K tx/sec, that's < 2K limit , so throughput profile remains to "low" - nothing gets updated
         assert_eq!(profiler.throughput_level(), (Low, 0));
 
         // We are adding more transactions to get over 2K tx/sec, so throughput profile should now be categorised
         // as "high"
-        calculator.add_transactions(5_000 as TimestampMs, 2_500);
-        calculator.add_transactions(7_000 as TimestampMs, 2_800);
+        calculator.add_transactions(4000 as TimestampMs, 2_500);
+        calculator.add_transactions(5000 as TimestampMs, 2_800);
         assert_eq!(profiler.throughput_level(), (High, 2100));
 
-        // Let's now add 0 transactions after 5 seconds. Since the update should happen every 5 seconds
+        // Let's now add 0 transactions after at least 5 seconds. Since the update should happen every 5 seconds
         // now the transactions are 0 we expect the throughput to be calculate as:
-        // 2800 + 2500 + 0 = 5300 / 15 - 4sec = 5300 / 11sec = 302 tx/sec
+        // 2800 + 2800 + 0 = 5300 / 15 - 4sec = 5600 / 11sec = 509 tx/sec
+        calculator.add_transactions(7_000 as TimestampMs, 2_800);
         calculator.add_transactions(15_000 as TimestampMs, 0);
 
-        assert_eq!(profiler.throughput_level(), (Low, 481));
+        assert_eq!(profiler.throughput_level(), (Low, 509));
 
         // Adding zero transactions for the next 5 seconds will make throughput zero
         // throughput profile will remain as Low as it won't get updated.
@@ -522,7 +515,7 @@ mod tests {
         calculator.add_transactions(19_000 as TimestampMs, 0);
         calculator.add_transactions(20_000 as TimestampMs, 0);
 
-        assert_eq!(profiler.throughput_level(), (Low, 481));
+        assert_eq!(profiler.throughput_level(), (Low, 509));
 
         // By adding now a few entries with lots of transactions will trigger a throughput profile update
         // since the last one happened on timestamp 15_000ms.
