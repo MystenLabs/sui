@@ -92,7 +92,6 @@ impl ServerBuilder {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    //usage: Option<TypedHeader<ShowUsage>>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
