@@ -11,16 +11,12 @@ use crate::{
         digest::Digest,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
-        object::{Object, ObjectFilter, ObjectKind},
+        object::{Object, ObjectKind},
         sui_address::SuiAddress,
-        transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
+        transaction_block::{TransactionBlock, TransactionBlockEffects},
     },
 };
-use async_graphql::connection::{Connection, Edge};
-use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
-    QueryDsl, RunQueryDsl,
-};
+use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -28,7 +24,7 @@ use sui_indexer::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
         transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, objects, transactions, tx_indices},
+    schema_v2::{checkpoints, epochs, objects, transactions},
     PgConnectionPoolConfig,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffects;
@@ -148,224 +144,10 @@ impl PgManager {
         self.run_query_async(|conn| query.get_result::<StoredObject>(conn).optional())
             .await
     }
-
-    async fn multi_get_txs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
-        let mut query =
-            transactions::dsl::transactions
-                .inner_join(tx_indices::dsl::tx_indices.on(
-                    transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
-                ))
-                .into_boxed();
-        if let Some(after) = after {
-            let after = self.parse_tx_cursor(&after)?;
-            query = query
-                .filter(transactions::dsl::tx_sequence_number.gt(after))
-                .order(transactions::dsl::tx_sequence_number.asc());
-        } else if let Some(before) = before {
-            let before = self.parse_tx_cursor(&before)?;
-            query = query
-                .filter(transactions::dsl::tx_sequence_number.lt(before))
-                .order(transactions::dsl::tx_sequence_number.desc());
-        }
-
-        if let Some(filter) = filter {
-            // Filters for transaction table
-            if let Some(kind) = filter.kind {
-                query = query.filter(transactions::dsl::transaction_kind.eq(kind as i16));
-            }
-            if let Some(checkpoint) = filter.checkpoint {
-                query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
-            }
-
-            // Filters for tx_indices table
-            match (filter.package, filter.module, filter.function) {
-                (Some(p), None, None) => {
-                    query = query.filter(
-                        tx_indices::dsl::packages.contains(vec![Some(p.into_array().to_vec())]),
-                    );
-                }
-                (Some(p), Some(m), None) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_modules
-                            .contains(vec![Some(format!("{}::{}", p, m))]),
-                    );
-                }
-                (Some(p), Some(m), Some(f)) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_module_functions
-                            .contains(vec![Some(format!("{}::{}::{}", p, m, f))]),
-                    );
-                }
-                _ => {}
-            }
-            if let Some(sender) = filter.sent_address {
-                query = query.filter(tx_indices::dsl::senders.contains(vec![sender.into_vec()]));
-            }
-            if let Some(receiver) = filter.recv_address {
-                query =
-                    query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
-            }
-            // TODO: sign_, paid_address, input_, changed_object
-        };
-
-        let limit = first.or(last).unwrap_or(10) as i64;
-        query = query.limit(limit + 1);
-
-        let result: Option<Vec<StoredTransaction>> = self
-            .run_query_async(|conn| {
-                query
-                    .select(transactions::all_columns)
-                    .load(conn)
-                    .optional()
-            })
-            .await?;
-
-        result
-            .map(|mut stored_txs| {
-                let has_next_page = stored_txs.len() as i64 > limit;
-                if has_next_page {
-                    stored_txs.pop();
-                }
-
-                Ok((stored_txs, has_next_page))
-            })
-            .transpose()
-    }
-
-    async fn multi_get_checkpoints(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
-        let mut query = checkpoints::dsl::checkpoints.into_boxed();
-
-        if let Some(after) = after {
-            let after = self.parse_checkpoint_cursor(&after)?;
-            query = query
-                .filter(checkpoints::dsl::sequence_number.gt(after))
-                .order(checkpoints::dsl::sequence_number.asc());
-        } else if let Some(before) = before {
-            let before = self.parse_obj_cursor(&before)?;
-            query = query
-                .filter(checkpoints::dsl::sequence_number.lt(before))
-                .order(checkpoints::dsl::sequence_number.desc());
-        }
-
-        let limit = first.or(last).unwrap_or(10) as i64;
-        query = query.limit(limit + 1);
-
-        let result: Option<Vec<StoredCheckpoint>> = self
-            .run_query_async(|conn| query.load(conn).optional())
-            .await?;
-
-        result
-            .map(|mut stored_checkpoints| {
-                let has_next_page = stored_checkpoints.len() as i64 > limit;
-                if has_next_page {
-                    stored_checkpoints.pop();
-                }
-
-                Ok((stored_checkpoints, has_next_page))
-            })
-            .transpose()
-    }
-
-    async fn multi_get_objs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<ObjectFilter>,
-    ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
-        let mut query = objects::dsl::objects.into_boxed();
-
-        if let Some(filter) = filter {
-            if let Some(object_ids) = filter.object_ids {
-                query = query.filter(
-                    objects::dsl::object_id.eq_any(
-                        object_ids
-                            .into_iter()
-                            .map(|id| id.into_vec())
-                            .collect::<Vec<_>>(),
-                    ),
-                );
-            }
-
-            if let Some(_object_keys) = filter.object_keys {
-                // TODO: Temporary table? Probably better than a long list of ORs
-            }
-
-            if let Some(owner) = filter.owner {
-                query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
-            }
-        }
-
-        if let Some(after) = after {
-            let after = self.parse_obj_cursor(&after)?;
-            query = query
-                .filter(objects::dsl::checkpoint_sequence_number.gt(after))
-                .order(objects::dsl::checkpoint_sequence_number.asc());
-        } else if let Some(before) = before {
-            let before = self.parse_obj_cursor(&before)?;
-            query = query
-                .filter(objects::dsl::checkpoint_sequence_number.lt(before))
-                .order(objects::dsl::checkpoint_sequence_number.desc());
-        }
-
-        let limit = first.or(last).unwrap_or(10) as i64;
-        query = query.limit(limit + 1);
-
-        let result: Option<Vec<StoredObject>> = self
-            .run_query_async(|conn| query.load(conn).optional())
-            .await?;
-        result
-            .map(|mut stored_objs| {
-                let has_next_page = stored_objs.len() as i64 > limit;
-                if has_next_page {
-                    stored_objs.pop();
-                }
-
-                Ok((stored_objs, has_next_page))
-            })
-            .transpose()
-    }
 }
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor
-            .parse()
-            .map_err(|_| Error::InvalidCursor(format!("Failed to parse tx cursor: {cursor}")))
-    }
-
-    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor
-            .parse()
-            .map_err(|_| Error::InvalidCursor(format!("Failed to parse obj cursor: {cursor}")))
-    }
-
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor.parse().map_err(|_| {
-            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {cursor}"))
-        })
-    }
-
-    // methods for graphql resolvers
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
         let digest = Digest::from_str(digest)?.into_vec();
 
@@ -444,35 +226,6 @@ impl PgManager {
         Ok(ChainIdentifier::from(digest).to_string())
     }
 
-    pub(crate) async fn fetch_txs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<TransactionBlockFilter>,
-    ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
-        let transactions = self
-            .multi_get_txs(first, after, last, before, filter)
-            .await?;
-
-        if let Some((stored_txs, has_next_page)) = transactions {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_txs.into_iter().filter_map(|stored_tx| {
-                    let cursor = stored_tx.tx_sequence_number.to_string();
-                    TransactionBlock::try_from(stored_tx)
-                        .map_err(|e| eprintln!("Error converting transaction: {:?}", e))
-                        .ok()
-                        .map(|tx| Edge::new(cursor, tx))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
-    }
-
     pub(crate) async fn fetch_owner(
         &self,
         address: SuiAddress,
@@ -497,67 +250,6 @@ impl PgManager {
         let stored_obj = self.get_obj(address, version).await?;
 
         stored_obj.map(Object::try_from).transpose()
-    }
-
-    pub(crate) async fn fetch_objs(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-        filter: Option<ObjectFilter>,
-    ) -> Result<Option<Connection<String, Object>>, Error> {
-        let objects = self
-            .multi_get_objs(first, after, last, before, filter)
-            .await?;
-
-        if let Some((stored_objs, has_next_page)) = objects {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(stored_objs.into_iter().filter_map(|stored_obj| {
-                    let cursor = stored_obj.checkpoint_sequence_number.to_string();
-                    Object::try_from(stored_obj)
-                        .map_err(|e| eprintln!("Error converting object: {:?}", e))
-                        .ok()
-                        .map(|obj| Edge::new(cursor, obj))
-                }));
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
-    }
-
-    pub(crate) async fn fetch_checkpoints(
-        &self,
-        first: Option<u64>,
-        after: Option<String>,
-        last: Option<u64>,
-        before: Option<String>,
-    ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        let checkpoints = self
-            .multi_get_checkpoints(first, after, last, before)
-            .await?;
-
-        if let Some((stored_checkpoints, has_next_page)) = checkpoints {
-            let mut connection = Connection::new(false, has_next_page);
-            connection
-                .edges
-                .extend(
-                    stored_checkpoints
-                        .into_iter()
-                        .filter_map(|stored_checkpoint| {
-                            let cursor = stored_checkpoint.sequence_number.to_string();
-                            Checkpoint::try_from(stored_checkpoint)
-                                .map_err(|e| eprintln!("Error converting checkpoint: {:?}", e))
-                                .ok()
-                                .map(|checkpoint| Edge::new(cursor, checkpoint))
-                        }),
-                );
-            Ok(Some(connection))
-        } else {
-            Ok(None)
-        }
     }
 }
 

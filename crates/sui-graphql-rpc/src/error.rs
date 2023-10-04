@@ -61,10 +61,6 @@ pub enum Error {
     CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
-    #[error("If 'type' or 'function' is provided, then 'package' and 'module' are required.")]
-    RequiresModuleAndPackage,
-    #[error("if 'module' is provided, then 'package' is required.")]
-    RequiresPackage,
     #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
@@ -80,9 +76,7 @@ impl ErrorExtensions for Error {
             | Error::CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
-            | Error::InvalidDigestLength { .. }
-            | Error::RequiresModuleAndPackage
-            | Error::RequiresPackage => {
+            | Error::InvalidDigestLength { .. } => {
                 e.set("code", code::BAD_USER_INPUT);
             }
             Error::Internal(_) => {
