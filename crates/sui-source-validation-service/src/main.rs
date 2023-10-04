@@ -27,9 +27,18 @@ pub async fn main() -> anyhow::Result<()> {
     let start = tokio::time::Instant::now();
     let sources = initialize(&package_config, tmp_dir.path()).await?;
     info!("verification complete in {:?}", start.elapsed());
-    info!("serving on {}", host_port());
+
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let app_state_copy = app_state.clone();
-    tokio::spawn(async move { watch_for_upgrades(&package_config, app_state).await });
-    serve(app_state_copy)?.await.map_err(anyhow::Error::from)
+    let mut threads = vec![];
+    let watcher = tokio::spawn(async move { watch_for_upgrades(&package_config, app_state).await });
+    threads.push(watcher);
+    let server = tokio::spawn(async { serve(app_state_copy)?.await.map_err(anyhow::Error::from) });
+    threads.push(server);
+
+    info!("serving on {}", host_port());
+    for t in threads {
+        t.await.unwrap()?;
+    }
+    Ok(())
 }
