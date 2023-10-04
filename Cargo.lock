@@ -10349,6 +10349,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "once_cell",
+ "reqwest",
  "serde",
  "serde_json",
  "serde_with",
