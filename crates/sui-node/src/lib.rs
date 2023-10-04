@@ -1089,7 +1089,7 @@ impl SuiNode {
                 low_scoring_authorities.clone(),
                 committee.clone(),
                 state.metrics.clone(),
-                throughput_calculator,
+                throughput_calculator.clone(),
             )
         };
 

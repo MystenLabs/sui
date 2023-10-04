@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tracing::{debug, warn};
 
 const DEFAULT_OBSERVATIONS_WINDOW: u64 = 120; // number of observations to use to calculate the past throughput
-const DEFAULT_THROUGHPUT_PROFILE_UPDATE_WINDOW_SECS: u64 = 60; // seconds that need to pass between two consecutive throughput profile updates
+const DEFAULT_THROUGHPUT_PROFILE_UPDATE_INTERVAL_SECS: u64 = 60; // seconds that need to pass between two consecutive throughput profile updates
 const DEFAULT_THROUGHPUT_PROFILE_COOL_DOWN_THRESHOLD: u64 = 10; // 10% of throughput
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
@@ -128,10 +128,12 @@ struct ConsensusThroughputCalculatorInner {
 /// The ConsensusThroughputProfiler is responsible for assigning the right throughput profile by polling
 /// the measured consensus throughput.
 pub struct ConsensusThroughputProfiler {
-    /// The time that should be passed between two consecutive throughput profile updates. For example, if
-    /// we switch at point T to profile "Low", there will need to be passed at least `throughput_profile_update_window`
-    /// seconds until the throughput profile gets updated to a different value.
-    throughput_profile_update_window: TimestampSecs,
+    /// The throughput profile will be eligible for update every `throughput_profile_update_interval` seconds.
+    /// A bucketing approach is followed where the throughput timestamp is used in order to calculate on which
+    /// seconds bucket is assigned to. When we detect a change on that bucket then an update is triggered (if a different
+    /// profile is calculated). That allows validators to align on the update timing and ensure they will eventually
+    /// converge as the consensus timestamps are used.
+    throughput_profile_update_interval: TimestampSecs,
     /// When current calculated throughput (A) is lower than previous, and the assessed profile is now a lower than previous,
     /// we'll change to the lower profile only when (A) <= (previous_profile.throughput) * (100 - throughput_profile_cool_down_threshold) / 100.
     /// Otherwise we'll stick to the previous profile. We want to do that to avoid any jittery behaviour that alternates between two profiles.
@@ -148,19 +150,19 @@ pub struct ConsensusThroughputProfiler {
 impl ConsensusThroughputProfiler {
     pub fn new(
         calculator: Arc<ConsensusThroughputCalculator>,
-        throughput_profile_update_window: Option<TimestampSecs>,
+        throughput_profile_update_interval: Option<TimestampSecs>,
         throughput_profile_cool_down_threshold: Option<u64>,
         metrics: Arc<AuthorityMetrics>,
         profile_ranges: ThroughputProfileRanges,
     ) -> Self {
-        let throughput_profile_update_window = throughput_profile_update_window
-            .unwrap_or(DEFAULT_THROUGHPUT_PROFILE_UPDATE_WINDOW_SECS);
+        let throughput_profile_update_interval = throughput_profile_update_interval
+            .unwrap_or(DEFAULT_THROUGHPUT_PROFILE_UPDATE_INTERVAL_SECS);
         let throughput_profile_cool_down_threshold = throughput_profile_cool_down_threshold
             .unwrap_or(DEFAULT_THROUGHPUT_PROFILE_COOL_DOWN_THRESHOLD);
 
         assert!(
-            throughput_profile_update_window > 0,
-            "throughput_profile_update_window should be >= 0"
+            throughput_profile_update_interval > 0,
+            "throughput_profile_update_interval should be >= 0"
         );
 
         assert!(
@@ -169,7 +171,7 @@ impl ConsensusThroughputProfiler {
         );
 
         Self {
-            throughput_profile_update_window,
+            throughput_profile_update_interval,
             throughput_profile_cool_down_threshold,
             profile_ranges: Default::default(),
             last_throughput_profile: ArcSwap::from_pointee(ThroughputProfileEntry {
@@ -196,8 +198,8 @@ impl ConsensusThroughputProfiler {
     // will only get updated when a different value has been calculated. For example, if the
     // `last_throughput_profile` is `Low` , and again we calculate it as `Low` based on input, then we'll
     // not update the profile or the timestamp. We do care to perform updates only when profiles differ.
-    // To ensure that we are protected against throughput profile change fluctuations, we only change a
-    // throughput profile when `throughput_profile_update_window` seconds have passed since last update.
+    // To ensure that we are protected against throughput profile change fluctuations, we update a
+    // throughput profile every `throughput_profile_update_interval` seconds based on the provided unix timestamps.
     // The last throughput profile entry is returned.
     fn update_and_fetch_throughput_profile(
         &self,
@@ -207,9 +209,13 @@ impl ConsensusThroughputProfiler {
         let last_profile = self.last_throughput_profile.load();
         let profile = self.profile_ranges.resolve(throughput);
 
+        let current_seconds_bucket = timestamp / self.throughput_profile_update_interval;
+        let last_profile_seconds_bucket =
+            last_profile.timestamp / self.throughput_profile_update_interval;
+
         // update only when we have a new profile & minimum time has been passed since last update
         let should_update_profile = if profile != last_profile.profile
-            && timestamp - last_profile.timestamp >= self.throughput_profile_update_window
+            && current_seconds_bucket > last_profile_seconds_bucket
         {
             if profile < last_profile.profile {
                 // If new profile is smaller than previous one, then make sure the cool down threshold is respected.
@@ -467,7 +473,7 @@ mod tests {
     #[test]
     pub fn test_consensus_throughput_profiler() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
-        let throughput_profile_update_window: TimestampSecs = 5;
+        let throughput_profile_update_interval: TimestampSecs = 5;
         let max_observation_points: NonZeroU64 = NonZeroU64::new(3).unwrap();
         let throughput_profile_cool_down_threshold: u64 = 10;
 
@@ -479,7 +485,7 @@ mod tests {
         ));
         let profiler = ConsensusThroughputProfiler::new(
             calculator.clone(),
-            Some(throughput_profile_update_window),
+            Some(throughput_profile_update_interval),
             Some(throughput_profile_cool_down_threshold),
             metrics,
             ranges,
@@ -500,11 +506,11 @@ mod tests {
         // We are adding more transactions to get over 2K tx/sec, so throughput profile should now be categorised
         // as "high"
         calculator.add_transactions(5_000 as TimestampMs, 2_500);
-        calculator.add_transactions(6_000 as TimestampMs, 2_800);
+        calculator.add_transactions(7_000 as TimestampMs, 2_800);
         assert_eq!(profiler.throughput_level(), (High, 2100));
 
-        // Let's now add 0 transactions after 5 seconds. Since 5 seconds have passed since the last
-        // update and now the transactions are 0 we expect the throughput to be calculate as:
+        // Let's now add 0 transactions after 5 seconds. Since the update should happen every 5 seconds
+        // now the transactions are 0 we expect the throughput to be calculate as:
         // 2800 + 2500 + 0 = 5300 / 15 - 4sec = 5300 / 11sec = 302 tx/sec
         calculator.add_transactions(15_000 as TimestampMs, 0);
 
@@ -524,6 +530,58 @@ mod tests {
         calculator.add_transactions(22_000 as TimestampMs, 2_000);
         calculator.add_transactions(23_000 as TimestampMs, 3_100);
         assert_eq!(profiler.throughput_level(), (High, 2033));
+    }
+
+    #[test]
+    pub fn test_consensus_throughput_profiler_update_interval() {
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+        let throughput_profile_update_interval: TimestampSecs = 5;
+        let max_observation_points: NonZeroU64 = NonZeroU64::new(2).unwrap();
+
+        let ranges = ThroughputProfileRanges::default();
+
+        let calculator = Arc::new(ConsensusThroughputCalculator::new(
+            Some(max_observation_points),
+            metrics.clone(),
+        ));
+        let profiler = ConsensusThroughputProfiler::new(
+            calculator.clone(),
+            Some(throughput_profile_update_interval),
+            None,
+            metrics,
+            ranges,
+        );
+
+        // Current setup is `throughput_profile_update_interval` = 5sec, which means that throughput profile
+        // should get updated every 5 seconds (based on the provided unix timestamp).
+
+        calculator.add_transactions(3_000 as TimestampMs, 2_200);
+        calculator.add_transactions(4_000 as TimestampMs, 4_200);
+        calculator.add_transactions(7_000 as TimestampMs, 4_200);
+
+        assert_eq!(profiler.throughput_level(), (High, 2_100));
+
+        // When adding transactions at timestamp 10s the bucket changes and the profile should get updated
+        calculator.add_transactions(10_000 as TimestampMs, 1_000);
+
+        assert_eq!(profiler.throughput_level(), (Low, 866));
+
+        // Now adding transactions at timestamp 16s the bucket changes and profile should get updated
+        calculator.add_transactions(16_000 as TimestampMs, 20_000);
+
+        assert_eq!(profiler.throughput_level(), (High, 2333));
+
+        // Keep adding transactions that fall under the same timestamp as the previous one, even though
+        // traffic should be marked as low it doesn't until the bucket of 20s is updated.
+        calculator.add_transactions(17_000 as TimestampMs, 0);
+        calculator.add_transactions(18_000 as TimestampMs, 0);
+        calculator.add_transactions(19_000 as TimestampMs, 0);
+
+        assert_eq!(profiler.throughput_level(), (High, 2333));
+
+        calculator.add_transactions(20_000 as TimestampMs, 0);
+
+        assert_eq!(profiler.throughput_level(), (Low, 0));
     }
 
     #[test]
