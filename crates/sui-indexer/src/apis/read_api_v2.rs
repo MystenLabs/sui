@@ -129,7 +129,10 @@ impl ReadApiServer for ReadApiV2 {
         version: SequenceNumber,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
-        unimplemented!()
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn try_multi_get_past_objects(
@@ -137,7 +140,10 @@ impl ReadApiServer for ReadApiV2 {
         past_objects: Vec<SuiGetPastObjectRequest>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
-        unimplemented!()
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> RpcResult<BigInt<u64>> {
@@ -204,7 +210,10 @@ impl ReadApiServer for ReadApiV2 {
         &self,
         digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
-        unimplemented!()
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn get_protocol_config(
