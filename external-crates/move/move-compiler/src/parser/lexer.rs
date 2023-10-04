@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag, diagnostics::Diagnostic, parser::syntax::make_loc, shared::CompilationEnv,
-    FileCommentMap, MatchedFileCommentMap,
+    diag, diagnostics::Diagnostic, editions::SyntaxEdition, parser::syntax::make_loc,
+    shared::CompilationEnv, FileCommentMap, MatchedFileCommentMap,
 };
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::Loc;
@@ -80,6 +80,8 @@ pub enum Tok {
     Friend,
     NumSign,
     AtSign,
+    Mut,
+    RestrictedIdentifier,
 }
 
 impl fmt::Display for Tok {
@@ -154,6 +156,8 @@ impl fmt::Display for Tok {
             Friend => "friend",
             NumSign => "#",
             AtSign => "@",
+            Mut => "mut",
+            RestrictedIdentifier => "r#[Identifier]",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -162,6 +166,7 @@ impl fmt::Display for Tok {
 pub struct Lexer<'input> {
     text: &'input str,
     file_hash: FileHash,
+    syntax_edition: SyntaxEdition,
     doc_comments: FileCommentMap,
     matched_doc_comments: MatchedFileCommentMap,
     prev_end: usize,
@@ -171,10 +176,15 @@ pub struct Lexer<'input> {
 }
 
 impl<'input> Lexer<'input> {
-    pub fn new(text: &'input str, file_hash: FileHash) -> Lexer<'input> {
+    pub fn new(
+        text: &'input str,
+        file_hash: FileHash,
+        syntax_edition: SyntaxEdition,
+    ) -> Lexer<'input> {
         Lexer {
             text,
             file_hash,
+            syntax_edition,
             doc_comments: FileCommentMap::new(),
             matched_doc_comments: MatchedFileCommentMap::new(),
             prev_end: 0,
@@ -316,17 +326,11 @@ impl<'input> Lexer<'input> {
 
     // Look ahead to the next token after the current one and return it, and its starting offset,
     // without advancing the state of the lexer.
-    pub fn lookahead_with_start_loc(&mut self) -> Result<(Tok, usize), Box<Diagnostic>> {
+    pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let next_start = self.text.len() - text.len();
-        let (tok, _) = find_token(self.file_hash, text, next_start)?;
-        Ok((tok, next_start))
-    }
-
-    // Look ahead to the next token after the current one and return it without advancing
-    // the state of the lexer.
-    pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
-        Ok(self.lookahead_with_start_loc()?.0)
+        let (tok, _) = find_token(self.file_hash, self.syntax_edition, text, next_start)?;
+        Ok(tok)
     }
 
     // Look ahead to the next two tokens after the current one and return them without advancing
@@ -334,10 +338,10 @@ impl<'input> Lexer<'input> {
     pub fn lookahead2(&mut self) -> Result<(Tok, Tok), Box<Diagnostic>> {
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         let offset = self.text.len() - text.len();
-        let (first, length) = find_token(self.file_hash, text, offset)?;
+        let (first, length) = find_token(self.file_hash, self.syntax_edition, text, offset)?;
         let text2 = self.trim_whitespace_and_comments(offset + length)?;
         let offset2 = self.text.len() - text2.len();
-        let (second, _) = find_token(self.file_hash, text2, offset2)?;
+        let (second, _) = find_token(self.file_hash, self.syntax_edition, text2, offset2)?;
         Ok((first, second))
     }
 
@@ -392,7 +396,7 @@ impl<'input> Lexer<'input> {
         self.prev_end = self.cur_end;
         let text = self.trim_whitespace_and_comments(self.cur_end)?;
         self.cur_start = self.text.len() - text.len();
-        let (token, len) = find_token(self.file_hash, text, self.cur_start)?;
+        let (token, len) = find_token(self.file_hash, self.syntax_edition, text, self.cur_start)?;
         self.cur_end = self.cur_start + len;
         self.token = token;
         Ok(())
@@ -410,6 +414,7 @@ impl<'input> Lexer<'input> {
 // Find the next token and its length without changing the state of the lexer.
 fn find_token(
     file_hash: FileHash,
+    syntax_edition: SyntaxEdition,
     text: &str,
     start_offset: usize,
 ) -> Result<(Tok, usize), Box<Diagnostic>> {
@@ -451,9 +456,17 @@ fn find_token(
                         )));
                     }
                 }
+            } else if text.starts_with("r#")
+                && text.len() > 2
+                && matches!(text[2..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
+            {
+                // r#identifier
+                let sub = &text[2..];
+                let len = get_name_len(sub);
+                (Tok::RestrictedIdentifier, 2 + len)
             } else {
                 let len = get_name_len(text);
-                (get_name_token(&text[..len]), len)
+                (get_name_token(syntax_edition, &text[..len]), len)
             }
         }
         '&' => {
@@ -610,7 +623,7 @@ fn get_string_len(text: &str) -> Option<usize> {
     None
 }
 
-fn get_name_token(name: &str) -> Tok {
+fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
     match name {
         "abort" => Tok::Abort,
         "acquires" => Tok::Acquires,
@@ -638,7 +651,14 @@ fn get_name_token(name: &str) -> Tok {
         "true" => Tok::True,
         "use" => Tok::Use,
         "while" => Tok::While,
-        _ => Tok::Identifier,
+        _ => match syntax_edition {
+            SyntaxEdition::Legacy => Tok::Identifier,
+            // New keywords in the 2024 edition
+            SyntaxEdition::E2024 => match name {
+                "mut" => Tok::Mut,
+                _ => Tok::Identifier,
+            },
+        },
     }
 }
 

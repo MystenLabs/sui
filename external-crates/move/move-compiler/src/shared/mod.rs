@@ -9,7 +9,9 @@ use crate::{
         codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
         Diagnostic, Diagnostics, WarningFilters,
     },
-    editions::{check_feature as edition_check_feature, Edition, FeatureGate, Flavor},
+    editions::{
+        check_feature as edition_check_feature, Edition, FeatureGate, Flavor, SyntaxEdition,
+    },
     expansion::ast as E,
     naming::ast as N,
     naming::ast::ModuleDefinition,
@@ -545,6 +547,10 @@ impl CompilationEnv {
 
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
         self.package_config(package).edition.supports(feature)
+    }
+
+    pub fn syntax_edition(&self, package: Option<Symbol>) -> SyntaxEdition {
+        self.package_config(package).edition.syntax()
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
