@@ -69,29 +69,10 @@ impl PgManager {
             .await
             .map_err(|e| Error::Internal(e.to_string()))
     }
+}
 
-    pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor
-            .parse()
-            .map_err(|_| Error::InvalidCursor(format!("Failed to parse tx cursor: {cursor}")))
-    }
-
-    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor
-            .parse()
-            .map_err(|_| Error::InvalidCursor(format!("Failed to parse obj cursor: {cursor}")))
-    }
-
-    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        // TODO (wlmyng): beef up cursor
-        cursor.parse().map_err(|_| {
-            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {cursor}"))
-        })
-    }
-
-    // methods to query db and return StoredData
+/// Implement methods to query db and return StoredData
+impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
         self.run_query_async(|conn| {
             transactions::dsl::transactions
@@ -358,6 +339,30 @@ impl PgManager {
                 Ok((stored_objs, has_next_page))
             })
             .transpose()
+    }
+}
+
+/// Implement methods to be used by graphql resolvers
+impl PgManager {
+    pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        // TODO (wlmyng): beef up cursor
+        cursor
+            .parse()
+            .map_err(|_| Error::InvalidCursor(format!("Failed to parse tx cursor: {cursor}")))
+    }
+
+    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        // TODO (wlmyng): beef up cursor
+        cursor
+            .parse()
+            .map_err(|_| Error::InvalidCursor(format!("Failed to parse obj cursor: {cursor}")))
+    }
+
+    pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
+        // TODO (wlmyng): beef up cursor
+        cursor.parse().map_err(|_| {
+            Error::InvalidCursor(format!("Failed to parse checkpoint cursor: {cursor}"))
+        })
     }
 
     // methods for graphql resolvers
