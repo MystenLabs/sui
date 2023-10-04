@@ -21,7 +21,6 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/other_dep",
                 ),
-                version: None,
                 resolver: None,
             },
         },
@@ -29,7 +28,7 @@ ResolvedGraph {
             "OtherDep",
             "Root",
         },
-        manifest_digest: "54BEFE786504E00C25811696A09F9CB02DD4490BC4DC1B4908A02966B087656E",
+        manifest_digest: "A4DB860CC2BC78C04706A7383CA52121876F87057538DF814C66F7EE6025E644",
         deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
@@ -58,11 +57,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "OtherDep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -90,11 +84,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -123,9 +112,8 @@ ResolvedGraph {
                                     ),
                                 },
                             ),
-                            version: None,
                             digest: Some(
-                                "6A88B7888D6049EB0121900E22B6FA2C0E702F042C8C8D4FD62AD5C990B9F9A8",
+                                "A666AE1AFDBA7E287476E851C0011503D19EE73E89CBDB307D4E0067E8BBA22C",
                             ),
                             dep_override: false,
                         },

@@ -9,7 +9,7 @@ ResolvedGraph {
         always_deps: {
             "®´∑œ",
         },
-        manifest_digest: "F85E4EDBC095AC28132481BE5C69A6D293D2B9FAA23DA828A6B6F6AF0F204E65",
+        manifest_digest: "D107C27F4F0CCCEA32AAA8A2CBCA3041764F6920DA7EEF69C4B0D55E4D80D5D6",
         deps_digest: "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
     },
     build_options: BuildConfig {
@@ -38,11 +38,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "®´∑œ",
-                    version: (
-                        0,
-                        1,
-                        2,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,

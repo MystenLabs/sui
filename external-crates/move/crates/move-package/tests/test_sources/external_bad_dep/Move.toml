@@ -1,6 +1,5 @@
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies.A]
 # The resolver will introduce Root -> A -> ADep into the dependency

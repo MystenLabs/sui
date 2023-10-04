@@ -11,8 +11,7 @@
 #
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
-A = { local = "./deps_only/A", version = "1.0.0" }
+A = { local = "./deps_only/A-v1" }
 B = { local = "./deps_only/B" }

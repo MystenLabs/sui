@@ -1,6 +1,5 @@
 [package]
 name = "Root"
-version = "0.0.0"
 
 [dependencies]
 # This should fail because the external resolver will also return
