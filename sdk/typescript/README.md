@@ -185,7 +185,7 @@ const client = new SuiClient({
 
 const tx = new TransactionBlock();
 tx.transferObjects(
-	[tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2')],
+	['0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'],
 	'0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a',
 );
 const result = await client.signAndExecuteTransactionBlock({
@@ -234,8 +234,8 @@ const client = new SuiClient({
 });
 
 const tx = new TransactionBlock();
-tx.mergeCoins(tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'), [
-	tx.object('0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b'),
+tx.mergeCoins('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2', [
+	'0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b',
 ]);
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
