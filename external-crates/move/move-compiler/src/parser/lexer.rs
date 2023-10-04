@@ -80,8 +80,9 @@ pub enum Tok {
     Friend,
     NumSign,
     AtSign,
-    Mut,
     RestrictedIdentifier,
+    Mut,
+    Enum,
 }
 
 impl fmt::Display for Tok {
@@ -156,8 +157,9 @@ impl fmt::Display for Tok {
             Friend => "friend",
             NumSign => "#",
             AtSign => "@",
-            Mut => "mut",
             RestrictedIdentifier => "r#[Identifier]",
+            Mut => "mut",
+            Enum => "enum",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -656,6 +658,7 @@ fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
             // New keywords in the 2024 edition
             SyntaxEdition::E2024 => match name {
                 "mut" => Tok::Mut,
+                "enum" => Tok::Enum,
                 _ => Tok::Identifier,
             },
         },
