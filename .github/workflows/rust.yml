@@ -404,6 +404,12 @@ jobs:
          - 5432:5432
    steps:
      - uses: actions/checkout@v3
+     - name: Setup db
+       run: |
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;'
+       env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespw
      - name: tests-requiring-postgres
        run: |
          cargo test --package sui-graphql-rpc --features pg_integration
