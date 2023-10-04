@@ -1,5 +1,11 @@
 # @mysten/kiosk
 
+## 0.7.2
+
+### Patch Changes
+
+- 68fea9e97: Fixes resolve royalty rule from breaking.
+
 ## 0.7.1
 
 ### Patch Changes

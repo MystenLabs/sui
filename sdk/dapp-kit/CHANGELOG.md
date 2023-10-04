@@ -1,5 +1,13 @@
 # @mysten/dapp-kit
 
+## 0.2.0
+
+### Minor Changes
+
+- b29f66f18: Add theme definitions for our UI components
+- 1227ee1ce: Theme UI components based on provided theme and add design polish
+- 8e9590a8c: Exclude non-Sui accounts from the accounts state when someone connects a multi-chain wallet
+
 ## 0.1.0
 
 ### Minor Changes
