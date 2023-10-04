@@ -3,6 +3,7 @@
 
 module sui::zklogin_verified_issuer {
     use std::string::String;
+    use sui::transfer;
     use sui::object;
     use sui::object::UID;
     use sui::tx_context::TxContext;
@@ -39,13 +40,19 @@ module sui::zklogin_verified_issuer {
     /// with the issuers id returned.
     ///
     /// Aborts with `EInvalidProof` if the verification fails.
-    public fun verify_zklogin_issuer(
+    public entry fun verify_zklogin_issuer(
         address_seed: u256,
         issuer: String,
         ctx: &mut TxContext,
-    ): VerifiedIssuer {
+    ) {
         assert!(check_zklogin_issuer(tx_context::sender(ctx), address_seed, &issuer), EInvalidProof);
-        VerifiedIssuer {id: object::new(ctx), owner: tx_context::sender(ctx), issuer}
+        transfer::transfer(
+            VerifiedIssuer {
+                id: object::new(ctx),
+                owner: tx_context::sender(ctx),
+                issuer},
+            tx_context::sender(ctx)
+        )
     }
 
     /// Returns true if `address` was created using zklogin with the given issuer and address seed.
