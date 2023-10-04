@@ -1,5 +1,12 @@
 # @mysten/sui.js
 
+## 0.43.1
+
+### Patch Changes
+
+- faa13ded9: Ensure that TransactionBlocks can be copied via structuredClone to workaround bug in sui wallet
+- c5684bb52: rename zk to zkLogin
+
 ## 0.43.0
 
 ### Minor Changes

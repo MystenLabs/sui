@@ -1,5 +1,14 @@
 # @mysten/zklogin
 
+## 0.1.6
+
+### Patch Changes
+
+- c5684bb52: rename zk to zkLogin
+- Updated dependencies [faa13ded9]
+- Updated dependencies [c5684bb52]
+  - @mysten/sui.js@0.43.1
+
 ## 0.1.5
 
 ### Patch Changes
