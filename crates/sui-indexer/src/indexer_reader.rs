@@ -16,7 +16,7 @@ use diesel::{
 };
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use itertools::any;
+use itertools::{any, Itertools};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
@@ -485,6 +485,27 @@ impl IndexerReader {
             .into_iter()
             .map(|object| object.try_into_object_read(self))
             .collect::<Result<Vec<_>, _>>()
+    }
+
+    pub async fn multi_get_objects_in_blocking_task(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.spawn_blocking(move |this| this.multi_get_objects_impl(object_ids))
+            .await
+    }
+
+    fn multi_get_objects_impl(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
+
+        self.run_query(|conn| {
+            objects::dsl::objects
+                .filter(objects::object_id.eq_any(object_ids))
+                .load::<StoredObject>(conn)
+        })
     }
 
     fn query_transaction_blocks_by_checkpoint_impl(

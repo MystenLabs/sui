@@ -5,6 +5,8 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use std::collections::BTreeMap;
+
 use crate::{errors::IndexerError, indexer_reader::IndexerReader};
 use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
@@ -13,11 +15,12 @@ use cached::{proc_macro::cached, SizedCache};
 use sui_json_rpc::{
     api::GovernanceReadApiServer, governance_api::ValidatorExchangeRates, SuiRpcModule,
 };
-use sui_json_rpc_types::{DelegatedStake, EpochInfo, SuiCommittee, ValidatorApys};
+use sui_json_rpc_types::{DelegatedStake, EpochInfo, StakeStatus, SuiCommittee, ValidatorApys};
 use sui_open_rpc::Module;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     committee::EpochId,
+    governance::StakedSui,
     sui_serde::BigInt,
     sui_system_state::sui_system_state_summary::SuiSystemStateSummary,
 };
@@ -50,6 +53,100 @@ impl GovernanceReadApiV2 {
         self.inner
             .spawn_blocking(|this| this.get_latest_sui_system_state())
             .await
+    }
+
+    async fn get_stakes_by_ids(
+        &self,
+        ids: Vec<ObjectID>,
+    ) -> Result<Vec<DelegatedStake>, IndexerError> {
+        let mut stakes = vec![];
+        for stored_object in self.inner.multi_get_objects_in_blocking_task(ids).await? {
+            let object = sui_types::object::Object::try_from(stored_object)?;
+            let stake_object = StakedSui::try_from(&object)?;
+            stakes.push(stake_object);
+        }
+
+        self.get_delegated_stakes(stakes).await
+    }
+
+    async fn get_staked_by_owner(
+        &self,
+        owner: SuiAddress,
+    ) -> Result<Vec<DelegatedStake>, IndexerError> {
+        todo!()
+    }
+
+    async fn get_delegated_stakes(
+        &self,
+        stakes: Vec<StakedSui>,
+    ) -> Result<Vec<DelegatedStake>, IndexerError> {
+        let pools = stakes
+            .into_iter()
+            .fold(BTreeMap::<_, Vec<_>>::new(), |mut pools, stake| {
+                pools.entry(stake.pool_id()).or_default().push(stake);
+                pools
+            });
+
+        let system_state_summary = self.get_latest_sui_system_state().await?;
+        let epoch = system_state_summary.epoch;
+
+        let rates = exchange_rates(self, system_state_summary)
+            .await?
+            .into_iter()
+            .map(|rates| (rates.pool_id, rates))
+            .collect::<BTreeMap<_, _>>();
+
+        let mut delegated_stakes = vec![];
+        for (pool_id, stakes) in pools {
+            // Rate table and rate can be null when the pool is not active
+            let rate_table = rates.get(&pool_id).ok_or_else(|| {
+                IndexerError::InvalidArgumentError(
+                    "Cannot find rates for staking pool {pool_id}".to_string(),
+                )
+            })?;
+            let current_rate = rate_table.rates.first().map(|(_, rate)| rate);
+
+            let mut delegations = vec![];
+            for stake in stakes {
+                let status = if epoch >= stake.activation_epoch() {
+                    let estimated_reward = if let Some(current_rate) = current_rate {
+                        let stake_rate = rate_table
+                            .rates
+                            .iter()
+                            .find_map(|(epoch, rate)| {
+                                if *epoch == stake.activation_epoch() {
+                                    Some(rate.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_default();
+                        let estimated_reward = ((stake_rate.rate() / current_rate.rate()) - 1.0)
+                            * stake.principal() as f64;
+                        std::cmp::max(0, estimated_reward.round() as u64)
+                    } else {
+                        0
+                    };
+                    StakeStatus::Active { estimated_reward }
+                } else {
+                    StakeStatus::Pending
+                };
+                delegations.push(sui_json_rpc_types::Stake {
+                    staked_sui_id: stake.id(),
+                    // TODO: this might change when we implement warm up period.
+                    stake_request_epoch: stake.activation_epoch() - 1,
+                    stake_active_epoch: stake.activation_epoch(),
+                    principal: stake.principal(),
+                    status,
+                })
+            }
+            delegated_stakes.push(DelegatedStake {
+                validator_address: rate_table.address,
+                staking_pool: pool_id,
+                stakes: delegations,
+            })
+        }
+        Ok(delegated_stakes)
     }
 }
 
@@ -164,12 +261,13 @@ impl GovernanceReadApiServer for GovernanceReadApiV2 {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        // Need Dynamic field queries
-        unimplemented!()
+        self.get_stakes_by_ids(staked_sui_ids)
+            .await
+            .map_err(Into::into)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        // Need Dynamic field queries
+        // Need object_type column in objects table
         unimplemented!()
     }
 
