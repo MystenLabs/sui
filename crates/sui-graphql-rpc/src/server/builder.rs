@@ -117,15 +117,18 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 mod tests {
     use super::*;
     use crate::{
-        context_data::{data_provider::DataProvider, sui_sdk_data_provider::sui_sdk_client_v0},
+        context_data::{
+            data_provider::DataProvider, db_data_provider::PgManager,
+            sui_sdk_data_provider::sui_sdk_client_v0,
+        },
         extensions::timeout::{Timeout, TimeoutConfig},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
-    use std::sync::Arc;
     use std::time::Duration;
+    use std::{env, sync::Arc};
 
     #[tokio::test]
     async fn test_timeout() {
@@ -157,8 +160,16 @@ mod tests {
         async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
@@ -195,8 +206,16 @@ mod tests {
         async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .max_query_depth(depth)
                 .build_schema();
             schema.execute(query).await
@@ -240,8 +259,16 @@ mod tests {
         async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .max_query_nodes(nodes)
                 .build_schema();
             schema.execute(query).await
