@@ -14,11 +14,14 @@ use crate::server::builder::ServerBuilder;
 
 use prometheus::Registry;
 use std::default::Default;
+<<<<<<< HEAD
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
+=======
+>>>>>>> 44750d6f94 (wrap up)
 
 pub async fn start_example_server(conn: ConnectionConfig, service_config: ServiceConfig) {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -30,8 +33,12 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
     // TODO (wlmyng): Allow users to choose which data sources to back graphql
+<<<<<<< HEAD
     let db_url = conn.db_url;
     let pg_conn_pool = PgManager::new(db_url, None)
+=======
+    let pg_conn_pool = PgManager::new(conn.db_url, None)
+>>>>>>> 44750d6f94 (wrap up)
         .map_err(|e| {
             println!("Failed to create pg connection pool: {}", e);
             e

@@ -2,10 +2,31 @@
 
 ## Spinning up locally
 
+### Setting up local db
+
+Rpc 1.5 backs the graphql schema with a db based on IndexerV2 schema. To spin up a local db, follow the instructions at [sui-indexer](../sui-indexer/README.md) until "Running standalone indexer".
+
+If you have not created a db yet, you can do so as follows:
+```sh
+PSQL -U POSTGRES
+CREATE DATABASE sui_indexer_v2;
+```
+
+You should be able to refer to the db url now:
+`psql postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2`
+
+With the new db, run the following commands (also under `sui/crates/sui-indexer`):
+
+```sh
+diesel setup --database-url="<DATABASE_URL>" --migration-dir=migrations_v2
+diesel migration run --database-url="<DATABASE_URL>" --migration-dir=migrations_v2
+```
+
+### Launching the server
 See [src/commands.rs](src/commands.rs) for all CLI options.
 
 ```
-cargo run --bin sui-graphql-rpc start-server [--rpc-url] [--port] [--host] [--config]
+cargo run --bin sui-graphql-rpc start-server [--rpc-url] [--db-url] [--port] [--host] [--config]
 ```
 
 This will build sui-graphql-rpc and start an IDE:

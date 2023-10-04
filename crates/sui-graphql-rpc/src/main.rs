@@ -26,6 +26,7 @@ async fn main() {
         }
         Command::StartServer {
             rpc_url,
+            db_url,
             port,
             host,
             config,
@@ -33,7 +34,11 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
+<<<<<<< HEAD
             let conn = ConnectionConfig::new(port, host, rpc_url, db_url, prom_host, prom_port);
+=======
+            let conn = ConnectionConfig::new(port, host, rpc_url, db_url);
+>>>>>>> 44750d6f94 (wrap up)
             let service_config = service_config(config);
 
             println!("Starting server...");

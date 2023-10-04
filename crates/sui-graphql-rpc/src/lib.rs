@@ -14,6 +14,7 @@ mod error;
 mod extensions;
 mod metrics;
 mod types;
+mod utils;
 
 use async_graphql::*;
 use types::owner::ObjectOwner;
