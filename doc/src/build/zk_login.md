@@ -223,7 +223,7 @@ Once the OAuth flow completes, the JWT token can be found in the redirect URL. A
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
 
-const zkUserAddress = jwtToAddress(jwt, userSalt)
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt)
 ```
 
 ## Get the Zero-Knowledge Proof
@@ -270,11 +270,11 @@ The response can be mapped to the inputs parameter type of `getZkLoginSignature`
  ```typescript
  const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
 
-export type PartialZkSignature = Omit<
+export type PartialZkLoginSignature = Omit<
 	Parameters<typeof getZkLoginSignature>['0']['inputs'],
 	'addressSeed'
 >;
-const partialZkSignature: PartialZkSignature = proofResponse as PartialZkSignature;
+const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ````
 
 ## Assemble the zkLogin signature and submit the transaction
@@ -287,7 +287,7 @@ const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
 
-txb.setSender(zkUserAddress);
+txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
    client,
@@ -297,31 +297,31 @@ const { bytes, signature: userSignature } = await txb.sign({
 
 Next, generate an Address Seed by combining `userSalt`, `sub` (subject ID) and `aud` (audience).
 
-Set the address Seed and the partial ZK Signature to be the `inputs` param.
+Set the address Seed and the partial ZkLogin Signature to be the `inputs` param.
 
 You can now serialize the zkLogin signature by combining the ZK proof (`inputs`),
 the `maxEpoch` and the ephemeral signature (`userSignature`).
 
-  ```typescript
+```typescript
 import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
 
 const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
 
-const zkSignature : SerializedSignature = getZkLoginSignature({
+const zkLoginSignature : SerializedSignature = getZkLoginSignature({
    inputs: {
-      ...partialZkSignature,
+      ...partialZkLoginSignature,
       addressSeed
    },
    maxEpoch,
    userSignature,
 });
-  ```
+```
 
 Finally, execute the transaction.
   ```typescript
   client.executeTransactionBlock({
    transactionBlock: bytes,
-   signature: zkSignature,
+   signature: zkLoginSignature,
 });
   ```
 

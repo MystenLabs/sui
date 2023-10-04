@@ -4,16 +4,20 @@
 import { fetchWithSentry } from '_src/shared/utils';
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { generateNonce, generateRandomness, type getZkLoginSignature } from '@mysten/zklogin';
+import {
+	generateNonce,
+	generateRandomness,
+	toBigIntBE,
+	type getZkLoginSignature,
+} from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
-import { toBigIntBE } from 'bigint-buffer';
 import { base64url } from 'jose';
 import { v4 as uuidV4 } from 'uuid';
 import Browser from 'webextension-polyfill';
 
-import { zkProviderDataMap, type ZkProvider } from './providers';
+import { zkLoginProviderDataMap, type ZkLoginProvider } from './providers';
 
-export function prepareZKLogin(currentEpoch: number) {
+export function prepareZkLogin(currentEpoch: number) {
 	const maxEpoch = currentEpoch + 2;
 	const ephemeralKeyPair = new Ed25519Keypair();
 	const randomness = generateRandomness();
@@ -26,7 +30,7 @@ export function prepareZKLogin(currentEpoch: number) {
 	};
 }
 
-const forceSilentGetProviders: ZkProvider[] = ['twitch'];
+const forceSilentGetProviders: ZkLoginProvider[] = ['twitch'];
 
 /**
  * This method does a get request to the authorize url and is used as a workarround
@@ -36,7 +40,7 @@ const forceSilentGetProviders: ZkProvider[] = ['twitch'];
  *
  * @param authUrl
  */
-async function tryGetRedirectURLSilently(provider: ZkProvider, authUrl: string) {
+async function tryGetRedirectURLSilently(provider: ZkLoginProvider, authUrl: string) {
 	if (!forceSilentGetProviders.includes(provider)) {
 		return null;
 	}
@@ -61,13 +65,13 @@ async function tryGetRedirectURLSilently(provider: ZkProvider, authUrl: string) 
 	return null;
 }
 
-export async function zkLogin({
+export async function zkLoginAuthenticate({
 	provider,
 	nonce,
 	loginHint,
 	prompt,
 }: {
-	provider: ZkProvider;
+	provider: ZkLoginProvider;
 	nonce?: string;
 	// This can be used for logins after the user has already connected an account
 	// and we need to make sure that the user logged in with the correct account
@@ -78,7 +82,7 @@ export async function zkLogin({
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
 	}
-	const { clientID, url, extraParams, buildExtraParams } = zkProviderDataMap[provider];
+	const { clientID, url, extraParams, buildExtraParams } = zkLoginProviderDataMap[provider];
 	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
 	params.append('redirect_uri', Browser.identity.getRedirectURL());
@@ -130,22 +134,22 @@ type WalletInputs = {
 	keyClaimName?: 'sub' | 'email';
 };
 
-export type PartialZkSignature = Omit<
+export type PartialZkLoginSignature = Omit<
 	Parameters<typeof getZkLoginSignature>['0']['inputs'],
 	'addressSeed'
 >;
 
-const zkProofsServerUrl = 'https://prover.mystenlabs.com/v1';
+const zkLoginProofsServerUrl = 'https://prover.mystenlabs.com/v1';
 
-export async function createPartialZKSignature({
+export async function createPartialZkLoginSignature({
 	jwt,
 	ephemeralPublicKey,
 	jwtRandomness,
 	maxEpoch,
 	userSalt,
 	keyClaimName = 'sub',
-}: WalletInputs): Promise<PartialZkSignature> {
-	const response = await fetchWithSentry('createZKProofs', zkProofsServerUrl, {
+}: WalletInputs): Promise<PartialZkLoginSignature> {
+	const response = await fetchWithSentry('createZkLoginProofs', zkLoginProofsServerUrl, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',

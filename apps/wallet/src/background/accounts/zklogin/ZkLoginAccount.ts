@@ -11,7 +11,7 @@ import {
 	type PublicKey,
 	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
-import { computeZkAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import { computeZkLoginAddress, genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
 import { blake2b } from '@noble/hashes/blake2b';
 import { decodeJwt } from 'jose';
 
@@ -22,13 +22,13 @@ import {
 	type SigningAccount,
 } from '../Account';
 import { getCurrentEpoch } from './current-epoch';
-import { type ZkProvider } from './providers';
+import { type ZkLoginProvider } from './providers';
 import {
-	createPartialZKSignature,
+	createPartialZkLoginSignature,
 	fetchSalt,
-	prepareZKLogin,
-	zkLogin,
-	type PartialZkSignature,
+	prepareZkLogin,
+	zkLoginAuthenticate,
+	type PartialZkLoginSignature,
 } from './utils';
 
 type SerializedNetwork = `${NetworkEnvType['env']}_${NetworkEnvType['customRpcUrl']}`;
@@ -39,7 +39,7 @@ function serializeNetwork(network: NetworkEnvType): SerializedNetwork {
 
 type CredentialData = {
 	ephemeralKeyPair: ExportedKeypair;
-	proofs?: PartialZkSignature;
+	proofs?: PartialZkLoginSignature;
 	minEpoch: number;
 	maxEpoch: number;
 	network: NetworkEnvType;
@@ -60,9 +60,9 @@ type JwtSerializedClaims = {
 	sub: string;
 };
 
-export interface ZkAccountSerialized extends SerializedAccount {
-	type: 'zk';
-	provider: ZkProvider;
+export interface ZkLoginAccountSerialized extends SerializedAccount {
+	type: 'zkLogin';
+	provider: ZkLoginProvider;
 	/**
 	 * the salt used to create the account obfuscated
 	 */
@@ -82,22 +82,22 @@ export interface ZkAccountSerialized extends SerializedAccount {
 	warningAcknowledged?: boolean;
 }
 
-export interface ZkAccountSerializedUI extends SerializedUIAccount {
-	type: 'zk';
+export interface ZkLoginAccountSerializedUI extends SerializedUIAccount {
+	type: 'zkLogin';
 	email: string | null;
 	picture: string | null;
-	provider: ZkProvider;
+	provider: ZkLoginProvider;
 	warningAcknowledged: boolean;
 }
 
-export function isZkAccountSerializedUI(
+export function isZkLoginAccountSerializedUI(
 	account: SerializedUIAccount,
-): account is ZkAccountSerializedUI {
-	return account.type === 'zk';
+): account is ZkLoginAccountSerializedUI {
+	return account.type === 'zkLogin';
 }
 
-export class ZkAccount
-	extends Account<ZkAccountSerialized, SessionStorageData>
+export class ZkLoginAccount
+	extends Account<ZkLoginAccountSerialized, SessionStorageData>
 	implements SigningAccount
 {
 	readonly canSign = true;
@@ -106,9 +106,9 @@ export class ZkAccount
 	static async createNew({
 		provider,
 	}: {
-		provider: ZkProvider;
-	}): Promise<Omit<ZkAccountSerialized, 'id'>> {
-		const jwt = await zkLogin({ provider, prompt: true });
+		provider: ZkLoginProvider;
+	}): Promise<Omit<ZkLoginAccountSerialized, 'id'>> {
+		const jwt = await zkLoginAuthenticate({ provider, prompt: true });
 		const salt = await fetchSalt(jwt);
 		const decodedJWT = decodeJwt(jwt);
 		if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
@@ -131,8 +131,8 @@ export class ZkAccount
 		const claimName = 'sub';
 		const claimValue = decodedJWT.sub;
 		return {
-			type: 'zk',
-			address: computeZkAddress({
+			type: 'zkLogin',
+			address: computeZkLoginAddress({
 				claimName,
 				claimValue,
 				iss: decodedJWT.iss,
@@ -154,12 +154,12 @@ export class ZkAccount
 		};
 	}
 
-	static isOfType(serialized: SerializedAccount): serialized is ZkAccountSerialized {
-		return serialized.type === 'zk';
+	static isOfType(serialized: SerializedAccount): serialized is ZkLoginAccountSerialized {
+		return serialized.type === 'zkLogin';
 	}
 
-	constructor({ id, cachedData }: { id: string; cachedData?: ZkAccountSerialized }) {
-		super({ type: 'zk', id, cachedData });
+	constructor({ id, cachedData }: { id: string; cachedData?: ZkLoginAccountSerialized }) {
+		super({ type: 'zkLogin', id, cachedData });
 	}
 
 	async lock(allowRead = false): Promise<void> {
@@ -175,7 +175,7 @@ export class ZkAccount
 		await this.#doLogin();
 	}
 
-	async toUISerialized(): Promise<ZkAccountSerializedUI> {
+	async toUISerialized(): Promise<ZkLoginAccountSerializedUI> {
 		const { address, publicKey, type, claims, selected, provider, nickname, warningAcknowledged } =
 			await this.getStoredData();
 		const { email, picture } = await deobfuscate<JwtSerializedClaims>(claims);
@@ -269,8 +269,8 @@ export class ZkAccount
 		const { provider, claims } = await this.getStoredData();
 		const { sub, aud, iss } = await deobfuscate<JwtSerializedClaims>(claims);
 		const epoch = await getCurrentEpoch();
-		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZKLogin(Number(epoch));
-		const jwt = await zkLogin({ provider, nonce, loginHint: sub });
+		const { ephemeralKeyPair, nonce, randomness, maxEpoch } = prepareZkLogin(Number(epoch));
+		const jwt = await zkLoginAuthenticate({ provider, nonce, loginHint: sub });
 		const decodedJWT = decodeJwt(jwt);
 		if (decodedJWT.aud !== aud || decodedJWT.sub !== sub || decodedJWT.iss !== iss) {
 			throw new Error("Logged in account doesn't match with saved account");
@@ -299,7 +299,7 @@ export class ZkAccount
 	) {
 		const { salt: obfuscatedSalt, claimName } = await this.getStoredData();
 		const salt = await deobfuscate<string>(obfuscatedSalt);
-		return await createPartialZKSignature({
+		return await createPartialZkLoginSignature({
 			jwt,
 			ephemeralPublicKey,
 			userSalt: BigInt(salt),
