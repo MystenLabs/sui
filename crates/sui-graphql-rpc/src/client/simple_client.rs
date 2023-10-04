@@ -46,6 +46,7 @@ impl SimpleClient {
     }
 }
 
+#[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_client() {
     let mut handles = vec![];
