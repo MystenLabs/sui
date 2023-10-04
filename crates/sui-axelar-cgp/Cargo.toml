@@ -12,6 +12,14 @@ async-trait.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 serde.workspace = true
+axum.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+tracing.workspace = true
+
+clap = { workspace = true, features = ["env"] }
 
 rxrust = "1.0.0-beta.4"
 ethcontract = "0.25.1"
@@ -21,6 +29,9 @@ futures = "0.3.28"
 bcs = "0.1.5"
 
 sui-sdk = { path = "../sui-sdk" }
+sui-keys = { path = "../sui-keys" }
+shared-crypto = { path = "../shared-crypto" }
+
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 log = { version = "0.4.17", features = [] }
 

@@ -2,63 +2,54 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Debug;
-use std::time::Duration;
 
 use futures::stream::StreamExt;
-use log::info;
 use rxrust::observer::Observer;
 use serde::Deserialize;
+use tracing::{error, info};
 
 use sui_sdk::rpc_types::{EventFilter, SuiEvent};
-use sui_sdk::types::base_types::SuiAddress;
+use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::types::parse_sui_struct_tag;
-use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_sdk::SuiClient;
 
 use crate::listeners::Subject;
 
 pub struct SuiListener {
     client: SuiClient,
-    axelar_gateway: SuiAddress,
+    gateway: ObjectID,
 }
 
 impl SuiListener {
-    pub async fn new(config: SuiNetworkConfig) -> Result<Self, anyhow::Error> {
-        Ok(SuiListener {
-            client: SuiClientBuilder::default()
-                .ws_url(config.ws_url)
-                .ws_ping_interval(Duration::from_secs(20))
-                .build(config.rpc_url)
-                .await?,
-            axelar_gateway: config.axelar_gateway,
-        })
+    pub fn new(sui_client: SuiClient, gateway: ObjectID) -> Self {
+        SuiListener {
+            client: sui_client,
+            gateway,
+        }
     }
     pub async fn listen<T: Clone + SuiAxelarEvent>(self, mut subject: Subject<T>) {
+        // todo: use event query api instead of ws subscription for replay support.
+        let event_type = format!("{}::{}::{}", self.gateway, T::EVENT_MODULE, T::EVENT_TYPE);
         let mut events = self
             .client
             .event_api()
             .subscribe_event(EventFilter::All(vec![EventFilter::MoveEventType(
-                parse_sui_struct_tag(&format!(
-                    "{}::{}::{}",
-                    self.axelar_gateway,
-                    T::EVENT_MODULE,
-                    T::EVENT_TYPE
-                ))
-                .unwrap(),
+                parse_sui_struct_tag(&event_type).unwrap(),
             )]))
             .await
             .expect("Cannot subscribe to Sui events.");
 
-        info!(
-            "Start listening to Sui events: [{}]",
-            std::any::type_name::<T>()
-        );
+        info!("Start listening to Sui events: {event_type}");
 
-        while let Some(Ok(ev)) = events.next().await {
-            match T::parse_event(ev) {
+        while let Some(ev) = events.next().await {
+            match T::parse_event(ev.expect("Subscription erred.")) {
                 Ok(ev) => subject.next(ev),
-                Err(e) => println!("Error: {e}"),
+                Err(e) => error!("Error: {e}"),
             }
         }
+
+        // todo: reconnect
+        panic!("Subscription to event '{event_type}' stopped.")
     }
 }
 
@@ -99,23 +90,5 @@ impl SuiAxelarEvent for OperatorshipTransferred {
     fn parse_event(event: SuiEvent) -> Result<OperatorshipTransferred, anyhow::Error> {
         // TODO: extra check for event type
         Ok(bcs::from_bytes(&event.bcs)?)
-    }
-}
-
-pub struct SuiNetworkConfig {
-    rpc_url: String,
-    ws_url: String,
-    private_key: String,
-    axelar_gateway: SuiAddress,
-}
-
-impl Default for SuiNetworkConfig {
-    fn default() -> Self {
-        SuiNetworkConfig {
-            rpc_url: "https://rpc.testnet.sui.io:443".to_string(),
-            ws_url: "wss://rpc.testnet.sui.io:443".to_string(),
-            private_key: "".to_string(),
-            axelar_gateway: Default::default(),
-        }
     }
 }
