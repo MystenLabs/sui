@@ -599,6 +599,13 @@ impl PackageHooks for SuiPackageHooks {
     ) -> anyhow::Result<()> {
         Ok(())
     }
+
+    fn custom_resolve_pkg_name(
+        &self,
+        manifest: &move_package::source_package::parsed_manifest::SourceManifest,
+    ) -> anyhow::Result<Symbol> {
+        Ok(manifest.package.name.clone())
+    }
 }
 
 #[derive(Debug)]

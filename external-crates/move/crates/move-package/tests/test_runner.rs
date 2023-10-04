@@ -13,7 +13,7 @@ use move_package::{
     package_hooks,
     package_hooks::PackageHooks,
     resolution::resolution_graph::Package,
-    source_package::parsed_manifest::{CustomDepInfo, PackageDigest},
+    source_package::parsed_manifest::{CustomDepInfo, PackageDigest, SourceManifest},
     BuildConfig, ModelConfig,
 };
 use move_symbol_pool::Symbol;
@@ -218,6 +218,10 @@ impl PackageHooks for TestHooks {
             info.package_address,
             info.subdir.to_string_lossy(),
         )
+    }
+
+    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+        Ok(manifest.package.name)
     }
 }
 
