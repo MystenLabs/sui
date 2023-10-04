@@ -48,6 +48,8 @@ pub(crate) struct TransactionEntry {
     // transaction info
     pub(crate) sender: String,
     pub(crate) transaction_kind: String,
+    pub(crate) is_system_txn: bool,
+    pub(crate) is_sponsored_tx: bool,
     pub(crate) transaction_count: u64,
     pub(crate) execution_success: bool,
     // object info
@@ -60,12 +62,20 @@ pub(crate) struct TransactionEntry {
     pub(crate) mutated: u64,
     pub(crate) deleted: u64,
     // PTB info
+    pub(crate) transfers: u64,
+    pub(crate) split_coins: u64,
+    pub(crate) merge_coins: u64,
+    pub(crate) publish: u64,
+    pub(crate) upgrade: u64,
+    // move_vec or default for future commands
+    pub(crate) others: u64,
     pub(crate) move_calls: u64,
     // pub(crate) packages: BTreeSet<String>,
     // commas separated list of packages used by the transaction.
     // Use as a simple way to query for transactions that use a specific package.
     pub(crate) packages: String,
     // gas info
+    pub(crate) gas_owner: String,
     pub(crate) gas_object_id: String,
     pub(crate) gas_object_sequence: u64,
     pub(crate) gas_object_digest: String,
@@ -196,7 +206,8 @@ pub(crate) struct MoveCallEntry {
 // A Move package. Pacakge id and MovePackage object bytes
 #[derive(Serialize, Clone)]
 pub(crate) struct MovePackageEntry {
-    pub(crate) object_id: String,
+    // indexes
+    pub(crate) package_id: String,
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
     pub(crate) timestamp_ms: u64,
