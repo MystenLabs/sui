@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::command::Component;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::TxGenerator;
 use futures::stream::FuturesUnordered;
@@ -23,13 +24,14 @@ pub struct BenchmarkContext {
     gas_object_refs: Vec<Arc<Vec<ObjectRef>>>,
     admin_account: Account,
     admin_gas: ObjectID,
+    benchmark_component: Component,
 }
 
 impl BenchmarkContext {
     pub(crate) async fn new(
         num_accounts: u64,
         gas_object_num_per_account: u64,
-        end_to_end: bool,
+        benchmark_component: Component,
     ) -> Self {
         // Increase by 1 so that we could generate one extra sample transaction before benchmarking.
         let num_accounts = num_accounts + 1;
@@ -66,7 +68,7 @@ impl BenchmarkContext {
         genesis_gas_objects.push(admin_gas_object);
 
         info!("Initializing validator");
-        let validator = SingleValidator::new(&genesis_gas_objects, end_to_end).await;
+        let validator = SingleValidator::new(&genesis_gas_objects).await;
 
         Self {
             validator,
@@ -74,6 +76,7 @@ impl BenchmarkContext {
             gas_object_refs,
             admin_account,
             admin_gas,
+            benchmark_component,
         }
     }
 
@@ -182,7 +185,8 @@ impl BenchmarkContext {
             .into_iter()
             .map(|tx| {
                 let validator = self.validator();
-                tokio::spawn(async move { validator.execute_transaction(tx).await })
+                let component = self.benchmark_component;
+                tokio::spawn(async move { validator.execute_transaction(tx, component).await })
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
