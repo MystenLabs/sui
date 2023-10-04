@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.2.2
+
+### Patch Changes
+
+- 87ef14c70: Fix side effects
+
 ## 0.2.1
 
 ### Patch Changes
