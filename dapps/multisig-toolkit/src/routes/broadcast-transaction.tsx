@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { parseSerializedSignature, PublicKey, SignatureScheme } from '@mysten/sui.js/cryptography';
-import { parsePartialSignatures } from '@mysten/sui.js/multisig';
 import { toB64 } from '@mysten/sui.js/utils';
 //import { JsonRpcProvider, mainnetConnection } from '@mysten/sui.js';
-import {
-  JsonRpcProvider
-} from "@mysten/sui.js";
+
 import { publicKeyFromRawBytes } from '@mysten/sui.js/verify';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -16,13 +13,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { mainnetConnection } from '@mysten/sui.js/src/rpc/connection';
+import { JsonRpcProvider } from '@mysten/sui.js/src/providers/json-rpc-provider';
+import { Label } from '@/components/ui/label';
 
 interface SignaturePubkeyPair {
 	signatureScheme: SignatureScheme;
 	publicKey: PublicKey;
 	signature: Uint8Array;
 }
-
 
 /*
 MultiSig (v1)
@@ -102,8 +101,7 @@ export default function BroadcastTransaction() {
 
 					try {
 						const parsedSignature = parseSerializedSignature(signature);
-						const parsedTransaction = (transaction);
-
+						const parsedTransaction = transaction;
 					} catch (e) {
 						setError(e as Error);
 					}
@@ -131,7 +129,6 @@ export default function BroadcastTransaction() {
 					<Button type="submit">Analyze Signature</Button>
 				</div>
 			</form>
-
 		</div>
 	);
 }
