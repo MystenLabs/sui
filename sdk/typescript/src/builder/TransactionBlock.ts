@@ -254,6 +254,32 @@ export class TransactionBlock {
 		return true;
 	}
 
+	// Temporary workaround for the wallet interface accidentally serializing transaction blocks via postMessage
+	get pure(): ReturnType<typeof createPure> {
+		Object.defineProperty(this, 'pure', {
+			enumerable: false,
+			value: createPure((value, type) => {
+				if (isSerializedBcs(value)) {
+					return this.#input('pure', {
+						Pure: Array.from(value.toBytes()),
+					});
+				}
+
+				// TODO: we can also do some deduplication here
+				return this.#input(
+					'pure',
+					value instanceof Uint8Array
+						? Inputs.Pure(value)
+						: type
+						? Inputs.Pure(value, type)
+						: value,
+				);
+			}),
+		});
+
+		return this.pure;
+	}
+
 	constructor(transaction?: TransactionBlock) {
 		this.#blockData = new TransactionBlockDataBuilder(
 			transaction ? transaction.blockData : undefined,
@@ -320,20 +346,6 @@ export class TransactionBlock {
 	sharedObjectRef(...args: Parameters<(typeof Inputs)['SharedObjectRef']>) {
 		return this.object(Inputs.SharedObjectRef(...args));
 	}
-
-	pure = createPure((value, type) => {
-		if (isSerializedBcs(value)) {
-			return this.#input('pure', {
-				Pure: Array.from(value.toBytes()),
-			});
-		}
-
-		// TODO: we can also do some deduplication here
-		return this.#input(
-			'pure',
-			value instanceof Uint8Array ? Inputs.Pure(value) : type ? Inputs.Pure(value, type) : value,
-		);
-	});
 
 	/** Add a transaction to the transaction block. */
 	add(transaction: TransactionType) {
