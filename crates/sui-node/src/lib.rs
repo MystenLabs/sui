@@ -68,7 +68,8 @@ use sui_core::consensus_adapter::{
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_throughput_calculator::Level::{High, Low};
 use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, TrafficProfile, TrafficProfileRanges,
+    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfile,
+    ThroughputProfileRanges,
 };
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
@@ -1062,26 +1063,20 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
-        // TODO: move configuration to protocol-config and potentially differentiate for each environment.
-        let p = vec![
-            TrafficProfile {
-                level: Low,
-                throughput: 0,
-            },
-            TrafficProfile {
-                level: High,
-                throughput: 2_000,
-            },
-        ];
-        let ranges = TrafficProfileRanges::new(&p);
-
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
             None,
+            state.metrics.clone(),
+        ));
+
+        let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
+            throughput_calculator.clone(),
             None,
             None,
             state.metrics.clone(),
-            ranges,
+            ThroughputProfileRanges::default(), // TODO: move configuration to protocol-config and potentially differentiate for each environment.
         ));
+
+        consensus_adapter.swap_throughput_profiler(throughput_profiler);
 
         let consensus_handler_initializer = || {
             ConsensusHandler::new(
@@ -1092,7 +1087,7 @@ impl SuiNode {
                 low_scoring_authorities.clone(),
                 committee.clone(),
                 state.metrics.clone(),
-                throughput_calculator.clone(),
+                throughput_calculator,
             )
         };
 

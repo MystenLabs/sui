@@ -59,7 +59,7 @@ pub struct ConsensusHandler<T, C> {
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
-    /// Using the throughput calculator to identify the traffic profile
+    /// Using the throughput calculator to record the current consensus throughput
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
 }
 
@@ -683,7 +683,6 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointServiceNoop;
     use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
-    use crate::consensus_throughput_calculator::TrafficProfileRanges;
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -727,13 +726,7 @@ mod tests {
 
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
-        let throughput_calculator = ConsensusThroughputCalculator::new(
-            None,
-            None,
-            None,
-            metrics.clone(),
-            TrafficProfileRanges::default(),
-        );
+        let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
 
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
