@@ -284,6 +284,44 @@ impl IndexerReader {
         Ok(Some(epoch_info))
     }
 
+    fn get_epochs_from_db(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<StoredEpochInfo>, IndexerError> {
+        self.run_query(|conn| {
+            let mut boxed_query = epochs::table.into_boxed();
+            if let Some(cursor) = cursor {
+                if descending_order {
+                    boxed_query = boxed_query.filter(epochs::epoch.lt(cursor as i64));
+                } else {
+                    boxed_query = boxed_query.filter(epochs::epoch.gt(cursor as i64));
+                }
+            }
+            if descending_order {
+                boxed_query = boxed_query.order_by(epochs::epoch.desc());
+            } else {
+                boxed_query = boxed_query.order_by(epochs::epoch.asc());
+            }
+
+            boxed_query.limit(limit as i64).load(conn)
+        })
+    }
+
+    pub fn get_epochs(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<EpochInfo>, IndexerError> {
+        self.get_epochs_from_db(cursor, limit, descending_order)?
+            .into_iter()
+            .map(EpochInfo::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
     pub fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
         let system_state: SuiSystemStateSummary =
             sui_types::sui_system_state::get_sui_system_state(self)?
