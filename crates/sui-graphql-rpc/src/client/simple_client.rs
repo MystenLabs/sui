@@ -60,7 +60,6 @@ async fn test_client() {
         }
     "#;
     let res = client.execute(query.to_string(), vec![]).await.unwrap();
-    let exp =
-        r#"{"data":{"chainIdentifier":"4c78adac"}}"#;
+    let exp = r#"{"data":{"chainIdentifier":"4c78adac"}}"#;
     assert_eq!(&format!("{}", res), exp);
 }
