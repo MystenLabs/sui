@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { coinsMap } from '_app/hooks/useDeepBook';
 import Overlay from '_components/overlay';
 import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
-
-const recognizedCoins = Object.values(coinsMap);
 
 function QuoteAsset({
 	coinType,
@@ -45,16 +42,18 @@ function QuoteAsset({
 }
 
 export function QuoteAssets({
-	setOpen,
+	onClose,
 	isOpen,
 	onRowClick,
+	recognizedCoins,
 }: {
-	setOpen: (isOpen: boolean) => void;
+	onClose: () => void;
 	isOpen: boolean;
 	onRowClick: (coinType: string) => void;
+	recognizedCoins: string[];
 }) {
 	return (
-		<Overlay showModal={isOpen} title="Select a Coin" closeOverlay={() => setOpen(false)}>
+		<Overlay showModal={isOpen} title="Select a Coin" closeOverlay={onClose}>
 			<div className="flex flex-shrink-0 justify-start flex-col w-full">
 				{recognizedCoins.map((coinType, index) => (
 					<Fragment key={coinType}>
