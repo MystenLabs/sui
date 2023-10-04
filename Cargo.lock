@@ -1294,7 +1294,7 @@ dependencies = [
  "sha1",
  "sync_wrapper",
  "tokio",
- "tokio-tungstenite 0.18.0",
+ "tokio-tungstenite",
  "tower",
  "tower-http",
  "tower-layer",
@@ -12251,19 +12251,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite 0.18.0",
-]
-
-[[package]]
-name = "tokio-tungstenite"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "212d5dcb2a1ce06d81107c3d0ffa3121fe974b73f068c8282cb1c32328113b6c"
-dependencies = [
- "futures-util",
- "log",
- "tokio",
- "tungstenite 0.20.1",
+ "tungstenite",
 ]
 
 [[package]]
@@ -12688,25 +12676,6 @@ dependencies = [
  "base64 0.13.1",
  "byteorder",
  "bytes",
- "http",
- "httparse",
- "log",
- "rand 0.8.5",
- "sha1",
- "thiserror",
- "url",
- "utf-8",
-]
-
-[[package]]
-name = "tungstenite"
-version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e3dac10fd62eaf6617d3a904ae222845979aec67c615d1c842b4002c7666fb9"
-dependencies = [
- "byteorder",
- "bytes",
- "data-encoding",
  "http",
  "httparse",
  "log",
@@ -14286,7 +14255,7 @@ dependencies = [
  "tokio-rustls 0.23.4",
  "tokio-rustls 0.24.0",
  "tokio-stream",
- "tokio-tungstenite 0.20.1",
+ "tokio-tungstenite",
  "tokio-util 0.7.4",
  "toml 0.5.10",
  "toml 0.7.4",
@@ -14316,7 +14285,7 @@ dependencies = [
  "try-lock",
  "ttl_cache",
  "tui",
- "tungstenite 0.20.1",
+ "tungstenite",
  "twox-hash",
  "typed-arena",
  "typenum",
