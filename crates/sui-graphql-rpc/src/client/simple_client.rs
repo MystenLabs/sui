@@ -5,6 +5,9 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+use hyper::header;
+use reqwest::RequestBuilder;
+
 use crate::{
     config::{ConnectionConfig, ServiceConfig},
     server::simple_server::start_example_server,
@@ -24,12 +27,20 @@ impl SimpleClient {
         }
     }
 
-    pub async fn execute(&self, query: String) -> Result<serde_json::Value, reqwest::Error> {
+    pub async fn execute(
+        &self,
+        query: String,
+        headers: Vec<(header::HeaderName, header::HeaderValue)>,
+    ) -> Result<serde_json::Value, reqwest::Error> {
         let body = serde_json::json!({
             "query": query,
         });
 
-        let res = self.inner.post(&self.url).json(&body).send().await?;
+        let mut builder = self.inner.post(&self.url).json(&body);
+        for (key, value) in headers {
+            builder = builder.header(key, value);
+        }
+        let res = builder.send().await?;
         res.json().await
     }
 }
@@ -48,7 +59,7 @@ async fn test_client() {
             chainIdentifier
         }
     "#;
-    let res = client.execute(query.to_string()).await.unwrap();
+    let res = client.execute(query.to_string(), vec![]).await.unwrap();
     let exp =
         r#"{"data":{"chainIdentifier":"4c78adac"},"extensions":{"usage":{"nodes":1,"depth":1}}}"#;
     assert_eq!(&format!("{}", res), exp);
