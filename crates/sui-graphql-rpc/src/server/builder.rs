@@ -9,11 +9,12 @@ use crate::{
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::Router;
+use axum::http::HeaderMap;
 use axum::{
     extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
-    middleware, TypedHeader,
+    middleware,
 };
+use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr};
@@ -91,12 +92,12 @@ impl ServerBuilder {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    usage: Option<TypedHeader<ShowUsage>>,
+    headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut req = req.into_inner();
-    if let Some(TypedHeader(usage)) = usage {
-        req.data.insert(usage)
+    if headers.contains_key(ShowUsage::name()) {
+        req.data.insert(ShowUsage)
     }
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
