@@ -24,7 +24,7 @@ pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 
 mod effects_v1;
 mod effects_v2;
@@ -115,7 +115,6 @@ impl TransactionEffects {
     /// Creates a TransactionEffects message from the results of execution, choosing the correct
     /// format for the current protocol version.
     pub fn new_from_execution_v1(
-        _protocol_version: ProtocolVersion,
         status: ExecutionStatus,
         executed_epoch: EpochId,
         gas_used: GasCostSummary,

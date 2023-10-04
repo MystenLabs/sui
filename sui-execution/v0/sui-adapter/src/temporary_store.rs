@@ -256,11 +256,9 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v1(
-            protocol_version,
             status,
             epoch,
             gas_cost_summary,
