@@ -1,53 +1,42 @@
-# Select the key and value of the protocol configuration
 {
-  protocolConfig {
+  # Select the key and value of the protocol configuration
+  prot_cfg_key_value: protocolConfig {
     configs {
       key
-	  value
+	  	value
     }
   }
-}
-
-# Select only the key of the protocol configuration
-{
-  protocolConfig {
+  # Select only the key of the protocol configuration
+  prot_cfg_key_only: protocolConfig {
     configs {
       key
     }
   }
-}
 
-# Select only the value of the protocol configuration
-{
-  protocolConfig {
+  # Select only the value of the protocol configuration
+  prot_cfg_value_only: protocolConfig {
     configs {
       value
     }
   }
-}
-
-# Select the key and value of the feature flag
-{
-  protocolConfig {
+  
+  # Select the key and value of the feature flag
+  feat_flag_key_value: protocolConfig {
     featureFlags {
       key
-	  value
+	  	value
     }
   }
-}
-
-# Select only the key of the feature flag
-{
-  protocolConfig {
+  
+  # Select only the key of the feature flag
+  feat_flag_key_only: protocolConfig {
     featureFlags {
       key
     }
   }
-}
 
-# Select only the value of the feature flag
-{
-  protocolConfig {
+  # Select only the value of the feature flag
+  feat_flag_value_only: protocolConfig {
     featureFlags {
       value
     }

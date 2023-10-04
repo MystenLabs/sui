@@ -59,6 +59,10 @@ impl ConnectionConfig {
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
         }
     }
+
+    pub fn server_url(&self) -> String {
+        format!("http://{}:{}", self.host, self.port)
+    }
 }
 
 impl ServiceConfig {

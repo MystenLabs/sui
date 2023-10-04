@@ -1,0 +1,1974 @@
+{
+  "data": {
+    "prot_cfg_key_value": {
+      "configs": [
+        {
+          "key": "address_from_bytes_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "address_from_u256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "address_to_u256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "base_tx_cost_fixed",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "base_tx_cost_per_byte",
+          "value": "U64(0)"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "buffer_stake_for_protocol_upgrade_bps",
+          "value": "U64(5000)"
+        },
+        {
+          "key": "consensus_bad_nodes_stake_threshold",
+          "value": "U64(20)"
+        },
+        {
+          "key": "crypto_invalid_arguments_cost",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_add_child_object_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_add_child_object_struct_tag_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "dynamic_field_add_child_object_type_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "dynamic_field_add_child_object_value_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_child_ref_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_type_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "dynamic_field_has_child_object_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_tag_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_value_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_child_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_cost_base",
+          "value": "U64(100)"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_type_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_decompress_pubkey_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ed25519_ed25519_verify_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "event_emit_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "event_emit_output_cost_per_byte",
+          "value": "U64(10)"
+        },
+        {
+          "key": "event_emit_tag_size_derivation_cost_per_byte",
+          "value": "U64(5)"
+        },
+        {
+          "key": "event_emit_value_size_derivation_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "execution_version",
+          "value": "U64(1)"
+        },
+        {
+          "key": "gas_model_version",
+          "value": "U64(6)"
+        },
+        {
+          "key": "gas_rounding_step",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bls12381_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bn254_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input",
+          "value": "U64(2)"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_per_public_input",
+          "value": "U64(2)"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_public_input_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hash_blake2b256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hash_keccak256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_block",
+          "value": "U64(2)"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "max_age_of_jwk_in_epochs",
+          "value": "U64(1)"
+        },
+        {
+          "key": "max_arguments",
+          "value": "U32(512)"
+        },
+        {
+          "key": "max_back_edges_per_function",
+          "value": "U64(10000)"
+        },
+        {
+          "key": "max_back_edges_per_module",
+          "value": "U64(10000)"
+        },
+        {
+          "key": "max_basic_blocks",
+          "value": "U64(1024)"
+        },
+        {
+          "key": "max_checkpoint_size_bytes",
+          "value": "U64(31457280)"
+        },
+        {
+          "key": "max_dependency_depth",
+          "value": "U64(100)"
+        },
+        {
+          "key": "max_event_emit_size",
+          "value": "U64(256000)"
+        },
+        {
+          "key": "max_event_emit_size_total",
+          "value": "U64(65536000)"
+        },
+        {
+          "key": "max_fields_in_struct",
+          "value": "U64(32)"
+        },
+        {
+          "key": "max_function_definitions",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "max_function_parameters",
+          "value": "U64(128)"
+        },
+        {
+          "key": "max_gas_computation_bucket",
+          "value": "U64(5000000)"
+        },
+        {
+          "key": "max_gas_payment_objects",
+          "value": "U32(256)"
+        },
+        {
+          "key": "max_gas_price",
+          "value": "U64(100000)"
+        },
+        {
+          "key": "max_generic_instantiation_length",
+          "value": "U64(32)"
+        },
+        {
+          "key": "max_input_objects",
+          "value": "U64(2048)"
+        },
+        {
+          "key": "max_jwk_votes_per_validator_per_epoch",
+          "value": "U64(240)"
+        },
+        {
+          "key": "max_loop_depth",
+          "value": "U64(5)"
+        },
+        {
+          "key": "max_meter_ticks_per_module",
+          "value": "U64(16000000)"
+        },
+        {
+          "key": "max_modules_in_publish",
+          "value": "U32(128)"
+        },
+        {
+          "key": "max_move_identifier_len",
+          "value": "U64(128)"
+        },
+        {
+          "key": "max_move_object_size",
+          "value": "U64(256000)"
+        },
+        {
+          "key": "max_move_package_size",
+          "value": "U64(102400)"
+        },
+        {
+          "key": "max_move_value_depth",
+          "value": "U64(128)"
+        },
+        {
+          "key": "max_move_vector_len",
+          "value": "U64(262144)"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids",
+          "value": "U64(2048)"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids_system_tx",
+          "value": "U64(32768)"
+        },
+        {
+          "key": "max_num_event_emit",
+          "value": "U64(1024)"
+        },
+        {
+          "key": "max_num_new_move_object_ids",
+          "value": "U64(2048)"
+        },
+        {
+          "key": "max_num_new_move_object_ids_system_tx",
+          "value": "U64(32768)"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids",
+          "value": "U64(2048)"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids_system_tx",
+          "value": "U64(32768)"
+        },
+        {
+          "key": "max_programmable_tx_commands",
+          "value": "U32(1024)"
+        },
+        {
+          "key": "max_publish_or_upgrade_per_ptb",
+          "value": "U64(5)"
+        },
+        {
+          "key": "max_pure_argument_size",
+          "value": "U32(16384)"
+        },
+        {
+          "key": "max_push_size",
+          "value": "U64(10000)"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes",
+          "value": "U64(524288)"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes_system_tx",
+          "value": "U64(8388608)"
+        },
+        {
+          "key": "max_size_written_objects",
+          "value": "U64(5000000)"
+        },
+        {
+          "key": "max_size_written_objects_system_tx",
+          "value": "U64(50000000)"
+        },
+        {
+          "key": "max_struct_definitions",
+          "value": "U64(200)"
+        },
+        {
+          "key": "max_transactions_per_checkpoint",
+          "value": "U64(10000)"
+        },
+        {
+          "key": "max_tx_gas",
+          "value": "U64(50000000000)"
+        },
+        {
+          "key": "max_tx_size_bytes",
+          "value": "U64(131072)"
+        },
+        {
+          "key": "max_type_argument_depth",
+          "value": "U32(16)"
+        },
+        {
+          "key": "max_type_arguments",
+          "value": "U32(16)"
+        },
+        {
+          "key": "max_type_nodes",
+          "value": "U64(256)"
+        },
+        {
+          "key": "max_value_stack_size",
+          "value": "U64(1024)"
+        },
+        {
+          "key": "max_verifier_meter_ticks_per_function",
+          "value": "U64(16000000)"
+        },
+        {
+          "key": "move_binary_format_version",
+          "value": "U32(6)"
+        },
+        {
+          "key": "obj_access_cost_delete_per_byte",
+          "value": "U64(40)"
+        },
+        {
+          "key": "obj_access_cost_mutate_per_byte",
+          "value": "U64(40)"
+        },
+        {
+          "key": "obj_access_cost_read_per_byte",
+          "value": "U64(15)"
+        },
+        {
+          "key": "obj_access_cost_verify_per_byte",
+          "value": "U64(200)"
+        },
+        {
+          "key": "obj_data_cost_refundable",
+          "value": "U64(100)"
+        },
+        {
+          "key": "obj_metadata_cost_non_refundable",
+          "value": "U64(50)"
+        },
+        {
+          "key": "object_borrow_uid_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "object_delete_impl_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "object_record_new_uid_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects_system_tx",
+          "value": "U64(16000)"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries_system_tx",
+          "value": "U64(16000)"
+        },
+        {
+          "key": "package_publish_cost_fixed",
+          "value": "U64(1000)"
+        },
+        {
+          "key": "package_publish_cost_per_byte",
+          "value": "U64(80)"
+        },
+        {
+          "key": "reward_slashing_rate",
+          "value": "U64(10000)"
+        },
+        {
+          "key": "scoring_decision_cutoff_value",
+          "value": "F64(2.5)"
+        },
+        {
+          "key": "scoring_decision_mad_divisor",
+          "value": "F64(2.3)"
+        },
+        {
+          "key": "storage_fund_reinvest_rate",
+          "value": "U64(500)"
+        },
+        {
+          "key": "storage_gas_price",
+          "value": "U64(76)"
+        },
+        {
+          "key": "storage_rebate_rate",
+          "value": "U64(9900)"
+        },
+        {
+          "key": "transfer_freeze_object_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "transfer_receive_object_cost_base",
+          "value": ""
+        },
+        {
+          "key": "transfer_share_object_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "transfer_transfer_internal_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "tx_context_derive_id_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "types_is_one_time_witness_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "types_is_one_time_witness_type_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "types_is_one_time_witness_type_tag_cost_per_byte",
+          "value": "U64(2)"
+        },
+        {
+          "key": "validator_validate_metadata_cost_base",
+          "value": "U64(52)"
+        },
+        {
+          "key": "validator_validate_metadata_data_cost_per_byte",
+          "value": "U64(2)"
+        }
+      ]
+    },
+    "prot_cfg_key_only": {
+      "configs": [
+        {
+          "key": "address_from_bytes_cost_base"
+        },
+        {
+          "key": "address_from_u256_cost_base"
+        },
+        {
+          "key": "address_to_u256_cost_base"
+        },
+        {
+          "key": "base_tx_cost_fixed"
+        },
+        {
+          "key": "base_tx_cost_per_byte"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_cost_base"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_block"
+        },
+        {
+          "key": "bls12381_bls12381_min_pk_verify_msg_cost_per_byte"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_cost_base"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_block"
+        },
+        {
+          "key": "bls12381_bls12381_min_sig_verify_msg_cost_per_byte"
+        },
+        {
+          "key": "buffer_stake_for_protocol_upgrade_bps"
+        },
+        {
+          "key": "consensus_bad_nodes_stake_threshold"
+        },
+        {
+          "key": "crypto_invalid_arguments_cost"
+        },
+        {
+          "key": "dynamic_field_add_child_object_cost_base"
+        },
+        {
+          "key": "dynamic_field_add_child_object_struct_tag_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_add_child_object_type_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_add_child_object_value_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_child_ref_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_cost_base"
+        },
+        {
+          "key": "dynamic_field_borrow_child_object_type_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_has_child_object_cost_base"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_cost_base"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_cost_base"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_type_tag_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_hash_type_and_key_value_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_child_cost_per_byte"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_cost_base"
+        },
+        {
+          "key": "dynamic_field_remove_child_object_type_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_k1_decompress_pubkey_cost_base"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_cost_base"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_keccak256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_cost_base"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_k1_ecrecover_sha256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_cost_base"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_keccak256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_cost_base"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_k1_secp256k1_verify_sha256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_cost_base"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_keccak256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_cost_base"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_r1_ecrecover_sha256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_cost_base"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_keccak256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_cost_base"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_block"
+        },
+        {
+          "key": "ecdsa_r1_secp256r1_verify_sha256_msg_cost_per_byte"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_block"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_alpha_string_cost_per_byte"
+        },
+        {
+          "key": "ecvrf_ecvrf_verify_cost_base"
+        },
+        {
+          "key": "ed25519_ed25519_verify_cost_base"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_block"
+        },
+        {
+          "key": "ed25519_ed25519_verify_msg_cost_per_byte"
+        },
+        {
+          "key": "event_emit_cost_base"
+        },
+        {
+          "key": "event_emit_output_cost_per_byte"
+        },
+        {
+          "key": "event_emit_tag_size_derivation_cost_per_byte"
+        },
+        {
+          "key": "event_emit_value_size_derivation_cost_per_byte"
+        },
+        {
+          "key": "execution_version"
+        },
+        {
+          "key": "gas_model_version"
+        },
+        {
+          "key": "gas_rounding_step"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bls12381_cost_base"
+        },
+        {
+          "key": "groth16_prepare_verifying_key_bn254_cost_base"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_base"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_base"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_bn254_cost_per_public_input"
+        },
+        {
+          "key": "groth16_verify_groth16_proof_internal_public_input_cost_per_byte"
+        },
+        {
+          "key": "hash_blake2b256_cost_base"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_block"
+        },
+        {
+          "key": "hash_blake2b256_data_cost_per_byte"
+        },
+        {
+          "key": "hash_keccak256_cost_base"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_block"
+        },
+        {
+          "key": "hash_keccak256_data_cost_per_byte"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_cost_base"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_block"
+        },
+        {
+          "key": "hmac_hmac_sha3_256_input_cost_per_byte"
+        },
+        {
+          "key": "max_age_of_jwk_in_epochs"
+        },
+        {
+          "key": "max_arguments"
+        },
+        {
+          "key": "max_back_edges_per_function"
+        },
+        {
+          "key": "max_back_edges_per_module"
+        },
+        {
+          "key": "max_basic_blocks"
+        },
+        {
+          "key": "max_checkpoint_size_bytes"
+        },
+        {
+          "key": "max_dependency_depth"
+        },
+        {
+          "key": "max_event_emit_size"
+        },
+        {
+          "key": "max_event_emit_size_total"
+        },
+        {
+          "key": "max_fields_in_struct"
+        },
+        {
+          "key": "max_function_definitions"
+        },
+        {
+          "key": "max_function_parameters"
+        },
+        {
+          "key": "max_gas_computation_bucket"
+        },
+        {
+          "key": "max_gas_payment_objects"
+        },
+        {
+          "key": "max_gas_price"
+        },
+        {
+          "key": "max_generic_instantiation_length"
+        },
+        {
+          "key": "max_input_objects"
+        },
+        {
+          "key": "max_jwk_votes_per_validator_per_epoch"
+        },
+        {
+          "key": "max_loop_depth"
+        },
+        {
+          "key": "max_meter_ticks_per_module"
+        },
+        {
+          "key": "max_modules_in_publish"
+        },
+        {
+          "key": "max_move_identifier_len"
+        },
+        {
+          "key": "max_move_object_size"
+        },
+        {
+          "key": "max_move_package_size"
+        },
+        {
+          "key": "max_move_value_depth"
+        },
+        {
+          "key": "max_move_vector_len"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids"
+        },
+        {
+          "key": "max_num_deleted_move_object_ids_system_tx"
+        },
+        {
+          "key": "max_num_event_emit"
+        },
+        {
+          "key": "max_num_new_move_object_ids"
+        },
+        {
+          "key": "max_num_new_move_object_ids_system_tx"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids"
+        },
+        {
+          "key": "max_num_transferred_move_object_ids_system_tx"
+        },
+        {
+          "key": "max_programmable_tx_commands"
+        },
+        {
+          "key": "max_publish_or_upgrade_per_ptb"
+        },
+        {
+          "key": "max_pure_argument_size"
+        },
+        {
+          "key": "max_push_size"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes"
+        },
+        {
+          "key": "max_serialized_tx_effects_size_bytes_system_tx"
+        },
+        {
+          "key": "max_size_written_objects"
+        },
+        {
+          "key": "max_size_written_objects_system_tx"
+        },
+        {
+          "key": "max_struct_definitions"
+        },
+        {
+          "key": "max_transactions_per_checkpoint"
+        },
+        {
+          "key": "max_tx_gas"
+        },
+        {
+          "key": "max_tx_size_bytes"
+        },
+        {
+          "key": "max_type_argument_depth"
+        },
+        {
+          "key": "max_type_arguments"
+        },
+        {
+          "key": "max_type_nodes"
+        },
+        {
+          "key": "max_value_stack_size"
+        },
+        {
+          "key": "max_verifier_meter_ticks_per_function"
+        },
+        {
+          "key": "move_binary_format_version"
+        },
+        {
+          "key": "obj_access_cost_delete_per_byte"
+        },
+        {
+          "key": "obj_access_cost_mutate_per_byte"
+        },
+        {
+          "key": "obj_access_cost_read_per_byte"
+        },
+        {
+          "key": "obj_access_cost_verify_per_byte"
+        },
+        {
+          "key": "obj_data_cost_refundable"
+        },
+        {
+          "key": "obj_metadata_cost_non_refundable"
+        },
+        {
+          "key": "object_borrow_uid_cost_base"
+        },
+        {
+          "key": "object_delete_impl_cost_base"
+        },
+        {
+          "key": "object_record_new_uid_cost_base"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects"
+        },
+        {
+          "key": "object_runtime_max_num_cached_objects_system_tx"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries"
+        },
+        {
+          "key": "object_runtime_max_num_store_entries_system_tx"
+        },
+        {
+          "key": "package_publish_cost_fixed"
+        },
+        {
+          "key": "package_publish_cost_per_byte"
+        },
+        {
+          "key": "reward_slashing_rate"
+        },
+        {
+          "key": "scoring_decision_cutoff_value"
+        },
+        {
+          "key": "scoring_decision_mad_divisor"
+        },
+        {
+          "key": "storage_fund_reinvest_rate"
+        },
+        {
+          "key": "storage_gas_price"
+        },
+        {
+          "key": "storage_rebate_rate"
+        },
+        {
+          "key": "transfer_freeze_object_cost_base"
+        },
+        {
+          "key": "transfer_receive_object_cost_base"
+        },
+        {
+          "key": "transfer_share_object_cost_base"
+        },
+        {
+          "key": "transfer_transfer_internal_cost_base"
+        },
+        {
+          "key": "tx_context_derive_id_cost_base"
+        },
+        {
+          "key": "types_is_one_time_witness_cost_base"
+        },
+        {
+          "key": "types_is_one_time_witness_type_cost_per_byte"
+        },
+        {
+          "key": "types_is_one_time_witness_type_tag_cost_per_byte"
+        },
+        {
+          "key": "validator_validate_metadata_cost_base"
+        },
+        {
+          "key": "validator_validate_metadata_data_cost_per_byte"
+        }
+      ]
+    },
+    "prot_cfg_value_only": {
+      "configs": [
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(0)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(5000)"
+        },
+        {
+          "value": "U64(20)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(10)"
+        },
+        {
+          "value": "U64(5)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(1)"
+        },
+        {
+          "value": "U64(6)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(1)"
+        },
+        {
+          "value": "U32(512)"
+        },
+        {
+          "value": "U64(10000)"
+        },
+        {
+          "value": "U64(10000)"
+        },
+        {
+          "value": "U64(1024)"
+        },
+        {
+          "value": "U64(31457280)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(256000)"
+        },
+        {
+          "value": "U64(65536000)"
+        },
+        {
+          "value": "U64(32)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(128)"
+        },
+        {
+          "value": "U64(5000000)"
+        },
+        {
+          "value": "U32(256)"
+        },
+        {
+          "value": "U64(100000)"
+        },
+        {
+          "value": "U64(32)"
+        },
+        {
+          "value": "U64(2048)"
+        },
+        {
+          "value": "U64(240)"
+        },
+        {
+          "value": "U64(5)"
+        },
+        {
+          "value": "U64(16000000)"
+        },
+        {
+          "value": "U32(128)"
+        },
+        {
+          "value": "U64(128)"
+        },
+        {
+          "value": "U64(256000)"
+        },
+        {
+          "value": "U64(102400)"
+        },
+        {
+          "value": "U64(128)"
+        },
+        {
+          "value": "U64(262144)"
+        },
+        {
+          "value": "U64(2048)"
+        },
+        {
+          "value": "U64(32768)"
+        },
+        {
+          "value": "U64(1024)"
+        },
+        {
+          "value": "U64(2048)"
+        },
+        {
+          "value": "U64(32768)"
+        },
+        {
+          "value": "U64(2048)"
+        },
+        {
+          "value": "U64(32768)"
+        },
+        {
+          "value": "U32(1024)"
+        },
+        {
+          "value": "U64(5)"
+        },
+        {
+          "value": "U32(16384)"
+        },
+        {
+          "value": "U64(10000)"
+        },
+        {
+          "value": "U64(524288)"
+        },
+        {
+          "value": "U64(8388608)"
+        },
+        {
+          "value": "U64(5000000)"
+        },
+        {
+          "value": "U64(50000000)"
+        },
+        {
+          "value": "U64(200)"
+        },
+        {
+          "value": "U64(10000)"
+        },
+        {
+          "value": "U64(50000000000)"
+        },
+        {
+          "value": "U64(131072)"
+        },
+        {
+          "value": "U32(16)"
+        },
+        {
+          "value": "U32(16)"
+        },
+        {
+          "value": "U64(256)"
+        },
+        {
+          "value": "U64(1024)"
+        },
+        {
+          "value": "U64(16000000)"
+        },
+        {
+          "value": "U32(6)"
+        },
+        {
+          "value": "U64(40)"
+        },
+        {
+          "value": "U64(40)"
+        },
+        {
+          "value": "U64(15)"
+        },
+        {
+          "value": "U64(200)"
+        },
+        {
+          "value": "U64(100)"
+        },
+        {
+          "value": "U64(50)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(16000)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(16000)"
+        },
+        {
+          "value": "U64(1000)"
+        },
+        {
+          "value": "U64(80)"
+        },
+        {
+          "value": "U64(10000)"
+        },
+        {
+          "value": "F64(2.5)"
+        },
+        {
+          "value": "F64(2.3)"
+        },
+        {
+          "value": "U64(500)"
+        },
+        {
+          "value": "U64(76)"
+        },
+        {
+          "value": "U64(9900)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": ""
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(2)"
+        },
+        {
+          "value": "U64(52)"
+        },
+        {
+          "value": "U64(2)"
+        }
+      ]
+    },
+    "feat_flag_key_value": {
+      "featureFlags": [
+        {
+          "key": "advance_epoch_start_time_in_safe_mode",
+          "value": true
+        },
+        {
+          "key": "advance_to_highest_supported_protocol_version",
+          "value": true
+        },
+        {
+          "key": "ban_entry_init",
+          "value": true
+        },
+        {
+          "key": "commit_root_state_digest",
+          "value": true
+        },
+        {
+          "key": "consensus_order_end_of_epoch_last",
+          "value": true
+        },
+        {
+          "key": "disable_invariant_violation_check_in_swap_loc",
+          "value": true
+        },
+        {
+          "key": "disallow_adding_abilities_on_upgrade",
+          "value": true
+        },
+        {
+          "key": "disallow_change_struct_type_params_on_upgrade",
+          "value": true
+        },
+        {
+          "key": "enable_jwk_consensus_updates",
+          "value": true
+        },
+        {
+          "key": "end_of_epoch_transaction_supported",
+          "value": true
+        },
+        {
+          "key": "loaded_child_object_format",
+          "value": true
+        },
+        {
+          "key": "loaded_child_object_format_type",
+          "value": true
+        },
+        {
+          "key": "loaded_child_objects_fixed",
+          "value": true
+        },
+        {
+          "key": "missing_type_is_compatibility_error",
+          "value": true
+        },
+        {
+          "key": "narwhal_new_leader_election_schedule",
+          "value": true
+        },
+        {
+          "key": "narwhal_versioned_metadata",
+          "value": true
+        },
+        {
+          "key": "no_extraneous_module_bytes",
+          "value": true
+        },
+        {
+          "key": "package_digest_hash_module",
+          "value": true
+        },
+        {
+          "key": "package_upgrades",
+          "value": true
+        },
+        {
+          "key": "receive_objects",
+          "value": false
+        },
+        {
+          "key": "scoring_decision_with_validity_cutoff",
+          "value": true
+        },
+        {
+          "key": "simple_conservation_checks",
+          "value": true
+        },
+        {
+          "key": "simplified_unwrap_then_delete",
+          "value": true
+        },
+        {
+          "key": "txn_base_cost_as_multiplier",
+          "value": true
+        },
+        {
+          "key": "upgraded_multisig_supported",
+          "value": true
+        },
+        {
+          "key": "zklogin_auth",
+          "value": true
+        }
+      ]
+    },
+    "feat_flag_key_only": {
+      "featureFlags": [
+        {
+          "key": "advance_epoch_start_time_in_safe_mode"
+        },
+        {
+          "key": "advance_to_highest_supported_protocol_version"
+        },
+        {
+          "key": "ban_entry_init"
+        },
+        {
+          "key": "commit_root_state_digest"
+        },
+        {
+          "key": "consensus_order_end_of_epoch_last"
+        },
+        {
+          "key": "disable_invariant_violation_check_in_swap_loc"
+        },
+        {
+          "key": "disallow_adding_abilities_on_upgrade"
+        },
+        {
+          "key": "disallow_change_struct_type_params_on_upgrade"
+        },
+        {
+          "key": "enable_jwk_consensus_updates"
+        },
+        {
+          "key": "end_of_epoch_transaction_supported"
+        },
+        {
+          "key": "loaded_child_object_format"
+        },
+        {
+          "key": "loaded_child_object_format_type"
+        },
+        {
+          "key": "loaded_child_objects_fixed"
+        },
+        {
+          "key": "missing_type_is_compatibility_error"
+        },
+        {
+          "key": "narwhal_new_leader_election_schedule"
+        },
+        {
+          "key": "narwhal_versioned_metadata"
+        },
+        {
+          "key": "no_extraneous_module_bytes"
+        },
+        {
+          "key": "package_digest_hash_module"
+        },
+        {
+          "key": "package_upgrades"
+        },
+        {
+          "key": "receive_objects"
+        },
+        {
+          "key": "scoring_decision_with_validity_cutoff"
+        },
+        {
+          "key": "simple_conservation_checks"
+        },
+        {
+          "key": "simplified_unwrap_then_delete"
+        },
+        {
+          "key": "txn_base_cost_as_multiplier"
+        },
+        {
+          "key": "upgraded_multisig_supported"
+        },
+        {
+          "key": "zklogin_auth"
+        }
+      ]
+    },
+    "feat_flag_value_only": {
+      "featureFlags": [
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": false
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        },
+        {
+          "value": true
+        }
+      ]
+    }
+  },
+  "extensions": {
+    "usage": {
+      "nodes": 20,
+      "depth": 3
+    }
+  }
+}

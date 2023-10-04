@@ -10,6 +10,7 @@ pub(crate) mod functional_group;
 mod client;
 mod context_data;
 mod error;
+pub mod example_driver;
 mod extensions;
 mod types;
 
