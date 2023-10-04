@@ -8,16 +8,19 @@
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
+use move_core_types::value::MoveStructLayout;
 use sui_json_rpc::error::SuiRpcInputError;
+use sui_types::error::SuiObjectResponseError;
+use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
-use sui_json_rpc::api::ReadApiServer;
+use sui_json_rpc::api::{ReadApiServer, QUERY_MAX_RESULT_LIMIT};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    Checkpoint, CheckpointId, CheckpointPage, ProtocolConfigResponse, SuiEvent,
-    SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    Checkpoint, CheckpointId, CheckpointPage, DisplayFieldsResponse, ProtocolConfigResponse,
+    SuiEvent, SuiGetPastObjectRequest, SuiObjectDataOptions, SuiObjectResponse,
+    SuiPastObjectResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -61,6 +64,33 @@ impl ReadApiV2 {
         let genesis_checkpoint = self.get_checkpoint(CheckpointId::SequenceNumber(0)).await?;
         Ok(ChainIdentifier::from(genesis_checkpoint.digest))
     }
+
+    async fn get_display_fields(
+        &self,
+        original_object: &sui_types::object::Object,
+        original_layout: &Option<MoveStructLayout>,
+    ) -> Result<DisplayFieldsResponse, IndexerError> {
+        let (object_type, layout) = if let Some((object_type, layout)) =
+            sui_json_rpc::read_api::get_object_type_and_struct(original_object, original_layout)
+                .map_err(|e| IndexerError::GenericError(e.to_string()))?
+        {
+            (object_type, layout)
+        } else {
+            return Ok(DisplayFieldsResponse {
+                data: None,
+                error: None,
+            });
+        };
+
+        if let Some(display_object) = self.inner.get_display_object_by_type(&object_type).await? {
+            return sui_json_rpc::read_api::get_rendered_fields(display_object.fields, &layout)
+                .map_err(|e| IndexerError::GenericError(e.to_string()));
+        }
+        Ok(DisplayFieldsResponse {
+            data: None,
+            error: None,
+        })
+    }
 }
 
 #[async_trait]
@@ -70,15 +100,68 @@ impl ReadApiServer for ReadApiV2 {
         object_id: ObjectID,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiObjectResponse> {
-        unimplemented!()
+        let options = options.unwrap_or_default();
+        let object_read = self
+            .inner
+            .get_object_read_in_blocking_task(object_id)
+            .await?;
+
+        match object_read {
+            ObjectRead::NotExists(id) => Ok(SuiObjectResponse::new_with_error(
+                SuiObjectResponseError::NotExists { object_id: id },
+            )),
+            ObjectRead::Exists(object_ref, o, layout) => {
+                let mut display_fields = None;
+                if options.show_display {
+                    match self.get_display_fields(&o, &layout).await {
+                        Ok(rendered_fields) => display_fields = Some(rendered_fields),
+                        Err(e) => {
+                            return Ok(SuiObjectResponse::new(
+                                Some((object_ref, o, layout, options, None).try_into()?),
+                                Some(SuiObjectResponseError::DisplayError {
+                                    error: e.to_string(),
+                                }),
+                            ));
+                        }
+                    }
+                }
+                Ok(SuiObjectResponse::new_with_data(
+                    (object_ref, o, layout, options, display_fields).try_into()?,
+                ))
+            }
+            ObjectRead::Deleted((object_id, version, digest)) => Ok(
+                SuiObjectResponse::new_with_error(SuiObjectResponseError::Deleted {
+                    object_id,
+                    version,
+                    digest,
+                }),
+            ),
+        }
     }
 
+    // For ease of implementation we just forward to the single object query, although in the
+    // future we may want to improve the performance by having a more naitive multi_get
+    // functionality
     async fn multi_get_objects(
         &self,
         object_ids: Vec<ObjectID>,
         options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiObjectResponse>> {
-        unimplemented!()
+        if object_ids.len() > *QUERY_MAX_RESULT_LIMIT {
+            return Err(
+                SuiRpcInputError::SizeLimitExceeded(QUERY_MAX_RESULT_LIMIT.to_string()).into(),
+            );
+        }
+
+        let mut futures = vec![];
+        for object_id in object_ids {
+            futures.push(self.get_object(object_id, options.clone()));
+        }
+
+        futures::future::join_all(futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
     }
 
     async fn get_total_transaction_blocks(&self) -> RpcResult<BigInt<u64>> {

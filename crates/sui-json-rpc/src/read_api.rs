@@ -1137,7 +1137,7 @@ async fn get_display_object_by_type(
     }
 }
 
-fn get_object_type_and_struct(
+pub fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
 ) -> Result<Option<(StructTag, MoveStruct)>, ObjectDisplayError> {

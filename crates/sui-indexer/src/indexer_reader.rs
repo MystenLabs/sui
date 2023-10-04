@@ -1,13 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::models_v2::checkpoints::StoredCheckpoint;
-use crate::models_v2::display::StoredDisplay;
-use crate::schema_v2::display;
+
 use crate::{
     errors::IndexerError,
-    models_v2::{epoch::StoredEpochInfo, objects::ObjectRefColumn, packages::StoredPackage},
-    models_v2::{objects::StoredObject, transactions::StoredTransaction, tx_indices::TxDigest},
-    schema_v2::{checkpoints, epochs, objects, packages, transactions},
+    models_v2::{
+        checkpoints::StoredCheckpoint,
+        display::StoredDisplay,
+        epoch::StoredEpochInfo,
+        objects::{ObjectRefColumn, StoredObject},
+        packages::StoredPackage,
+        transactions::StoredTransaction,
+        tx_indices::TxDigest,
+    },
+    schema_v2::{checkpoints, display, epochs, objects, packages, transactions},
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
@@ -30,7 +35,7 @@ use sui_types::{
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     move_package::MovePackage,
-    object::Object,
+    object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 
@@ -187,6 +192,31 @@ impl IndexerReader {
 
         let object = stored_package.try_into()?;
         Ok(Some(object))
+    }
+
+    pub async fn get_object_read_in_blocking_task(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<ObjectRead, IndexerError> {
+        self.spawn_blocking(move |this| this.get_object_read(&object_id))
+            .await
+    }
+
+    fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, IndexerError> {
+        let id = object_id.to_vec();
+
+        let stored_object = self.run_query(|conn| {
+            objects::dsl::objects
+                .filter(objects::dsl::object_id.eq(id))
+                .first::<StoredObject>(conn)
+                .optional()
+        })?;
+
+        if let Some(object) = stored_object {
+            object.try_into_object_read(self)
+        } else {
+            Ok(ObjectRead::NotExists(*object_id))
+        }
     }
 
     fn get_package_from_db(
@@ -860,6 +890,15 @@ impl IndexerReader {
             Ok((object_id, (object_id, seq, object_digest)))
         })
         .collect::<IndexerResult<HashMap<_, _>>>()
+    }
+
+    pub async fn get_display_object_by_type(
+        &self,
+        object_type: &move_core_types::language_storage::StructTag,
+    ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
+        let object_type = object_type.to_canonical_string();
+        self.spawn_blocking(move |this| this.get_display_update_event(object_type))
+            .await
     }
 
     fn get_display_update_event(
