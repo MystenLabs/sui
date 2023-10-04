@@ -224,6 +224,25 @@ impl<'env> Context<'env> {
         }
     }
 
+    fn report_statement_error(&mut self, error: HlirError) {
+        match error {
+            HlirError::Error { error_type, site } => {
+                match error_type {
+                    HlirErrorType::DivergentExp => {
+                        self.env
+                            .add_diag(diag!(UnusedItem::DeadCode, (site, DIVERGENT_EXP)));
+                    }
+                    HlirErrorType::Unreachable => {
+                        self.env
+                            .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    }
+                    _ => (),
+                };
+            }
+            HlirError::AlreadyReported => (),
+        }
+    }
+
     fn report_statement_tail_error(&mut self, error: HlirError, tail_exp: &T::Exp) {
         match error {
             HlirError::Error { error_type, site } => {
@@ -1756,7 +1775,8 @@ fn statement_block(
             S::Seq(entry) => {
                 if statement(context, block, *entry) {
                     assert!(result_error.is_none());
-                    result_error = Some(HlirError::unreachable(locs[ndx + 1]));
+                    context.report_statement_error(HlirError::unreachable(locs[ndx + 1]));
+                    result_error = Some(HlirError::AlreadyReported);
                 }
             }
             S::Declare(bindings) => {
