@@ -95,5 +95,8 @@
 		"@tanstack/react-query": "^4.0.0",
 		"react": "*"
 	},
-	"sideEffects": false
+	"sideEffects": [
+		"*.css.ts",
+		"*.css"
+	]
 }
