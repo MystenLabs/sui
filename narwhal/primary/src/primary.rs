@@ -129,6 +129,11 @@ impl Primary {
             &primary_channel_metrics.tx_our_digests,
             &primary_channel_metrics.tx_our_digests_total,
         );
+        let (tx_system_messages, rx_system_messages) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_system_messages,
+            &primary_channel_metrics.tx_system_messages_total,
+        );
         let (tx_parents, rx_parents) = channel_with_total(
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_parents,
@@ -452,7 +457,7 @@ impl Primary {
         // a new header with new batch digests from our workers and sends it to the `Certifier`.
         let proposer_handle = Proposer::spawn(
             authority.id(),
-            committee,
+            committee.clone(),
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
@@ -462,11 +467,13 @@ impl Primary {
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
+            rx_system_messages,
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,
             node_metrics,
             leader_schedule,
+            false, // TODO-DNS decide header version based on protocol config
         );
 
         let mut handles = vec![
@@ -480,9 +487,12 @@ impl Primary {
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
             authority.id(),
+            committee,
             rx_committed_certificates,
             tx_shutdown.subscribe(),
             Some(tx_committed_own_headers),
+            tx_system_messages,
+            None, // TODO-DNS enable/disable random beacon based on protocol config
             network,
         );
         handles.push(state_handler_handle);

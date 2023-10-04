@@ -780,6 +780,8 @@ pub struct ProtocolConfig {
     // Applied at the end of an epoch as a delta from the new epoch value, so setting this to 1
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
+    // === Random Beacon ===
+    // TODO-DNS add random beacon configs, for now thresholds and reduction are hard-coded.
 }
 
 // feature flags

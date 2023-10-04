@@ -3515,8 +3515,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.6"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+version = "0.1.7"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6e8215bc3c055546e8efbfb10a442cee99fdc18f#6e8215bc3c055546e8efbfb10a442cee99fdc18f"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3572,7 +3572,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6e8215bc3c055546e8efbfb10a442cee99fdc18f#6e8215bc3c055546e8efbfb10a442cee99fdc18f"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3581,9 +3581,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6e8215bc3c055546e8efbfb10a442cee99fdc18f#6e8215bc3c055546e8efbfb10a442cee99fdc18f"
+dependencies = [
+ "bcs",
+ "bincode",
+ "digest 0.10.6",
+ "fastcrypto",
+ "fastcrypto-derive",
+ "itertools",
+ "rand 0.8.5",
+ "serde",
+ "sha3 0.10.6",
+ "typenum",
+ "zeroize",
+]
+
+[[package]]
 name = "fastcrypto-zkp"
-version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+version = "0.1.2"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=6e8215bc3c055546e8efbfb10a442cee99fdc18f#6e8215bc3c055546e8efbfb10a442cee99fdc18f"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -6217,6 +6235,7 @@ dependencies = [
  "cfg-if",
  "ed25519-consensus",
  "fastcrypto",
+ "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
  "indexmap 1.9.3",
@@ -6263,6 +6282,7 @@ name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
+ "fastcrypto-tbls",
  "insta",
  "match_opt",
  "mysten-network",
@@ -6316,6 +6336,7 @@ dependencies = [
  "bincode",
  "criterion",
  "fastcrypto",
+ "fastcrypto-tbls",
  "hex-literal 0.3.4",
  "proptest",
  "proptest-derive",
@@ -6451,6 +6472,7 @@ dependencies = [
  "bytes",
  "dashmap",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "governor",
  "indexmap 1.9.3",
@@ -6557,6 +6579,7 @@ dependencies = [
  "derive_builder",
  "enum_dispatch",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "indexmap 1.9.3",
  "mockall",
@@ -13707,6 +13730,7 @@ dependencies = [
  "fast_chemail",
  "fastcrypto",
  "fastcrypto-derive",
+ "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand 1.8.0",
  "fastrand 2.0.0",
