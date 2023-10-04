@@ -40,7 +40,6 @@ sui-open-rpc.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
 sui-protocol-config.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
 
@@ -50,6 +49,7 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
+workspace-hack.workspace = true
 
 [features]
 pg_integration = []

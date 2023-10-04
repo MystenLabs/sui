@@ -45,9 +45,9 @@ fastcrypto-zkp.workspace = true
 move-core-types.workspace = true
 mysten-metrics.workspace = true
 narwhal-node.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-cluster.workspace = true
 sysinfo.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-framework.workspace = true

@@ -65,8 +65,8 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 move-package.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 csv.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true

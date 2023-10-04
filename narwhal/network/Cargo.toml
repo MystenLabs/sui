@@ -24,14 +24,13 @@ crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-
 anemo.workspace = true
 anemo-tower.workspace = true
 anyhow.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 tower.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true
