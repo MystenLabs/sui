@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 28;
+const MAX_PROTOCOL_VERSION: u64 = 27;
 
 // Record history of protocol version allocations here:
 //
@@ -77,6 +77,7 @@ const MAX_PROTOCOL_VERSION: u64 = 28;
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
 // Version 27: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+// Version 28: Enabling the throughput aware consensus submission
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
