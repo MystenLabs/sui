@@ -66,10 +66,8 @@ use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::consensus_handler::ConsensusHandler;
-use sui_core::consensus_throughput_calculator::Level::{High, Low};
 use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfile,
-    ThroughputProfileRanges,
+    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
