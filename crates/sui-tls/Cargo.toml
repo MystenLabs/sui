@@ -17,7 +17,6 @@ webpki.workspace = true
 x509-parser.workspace = true
 
 fastcrypto.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 # reqwest support
 reqwest.workspace = true
@@ -28,6 +27,7 @@ axum-server.workspace = true
 tokio-rustls.workspace = true
 tower-layer.workspace = true
 tokio.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

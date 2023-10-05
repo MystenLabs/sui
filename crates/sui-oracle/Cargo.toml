@@ -28,4 +28,4 @@ sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
 mysten-metrics = { path = "../mysten-metrics" }
 telemetry-subscribers.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true

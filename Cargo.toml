@@ -598,7 +598,7 @@ test-cluster = { path = "crates/test-cluster" }
 transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }
-workspace-hack = { path = "crates/workspace-hack" }
+workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
 narwhal-config = { path = "narwhal/config" }
@@ -620,3 +620,11 @@ sui-execution = { path = "sui-execution" }
 # move-stdlib = { path = "external-crates/move/move-stdlib" }
 # move-vm-runtime = { path = "external-crates/move/move-vm/runtime" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
+
+
+# Using the workspace-hack via this patch directive means that it only applies
+# while building within this workspace. If another workspace imports a crate
+# from here via a git dependency, it will not have the workspace-hack applied
+# to it.
+[patch.crates-io.workspace-hack]
+path = "crates/workspace-hack"

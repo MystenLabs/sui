@@ -26,7 +26,7 @@ move-core-types.workspace = true
 move-ir-types.workspace = true
 move-package.workspace = true
 move-symbol-pool.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

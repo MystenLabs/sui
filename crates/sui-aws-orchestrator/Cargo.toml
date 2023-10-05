@@ -31,7 +31,7 @@ mysten-metrics.workspace = true
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-swarm-config =  { path = "../sui-swarm-config" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile = "3.6.0"

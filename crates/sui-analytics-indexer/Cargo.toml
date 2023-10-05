@@ -34,10 +34,10 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 sui-indexer.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
 sui-storage.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 
