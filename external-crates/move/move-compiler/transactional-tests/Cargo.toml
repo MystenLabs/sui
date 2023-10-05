@@ -13,3 +13,5 @@ move-transactional-test-runner = { path = "../../testing-infra/transactional-tes
 [[test]]
 name = "tests"
 harness = false
+
+[dependencies]

@@ -16,3 +16,5 @@ move-binary-format = { path = "../", features = ["fuzzing"] }
 
 [features]
 fuzzing = ["move-binary-format/fuzzing"]
+
+[dependencies]

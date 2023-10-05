@@ -495,9 +495,7 @@ move-binary-format = { path = "external-crates/move/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/tools/move-bytecode-utils" }
 move-cli = { path = "external-crates/move/tools/move-cli" }
 move-compiler = { path = "external-crates/move/move-compiler" }
-move-core-types = { path = "external-crates/move/move-core/types", features = [
-  "address32",
-] }
+move-core-types = { path = "external-crates/move/move-core/types" }
 move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
 move-package = { path = "external-crates/move/tools/move-package" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }

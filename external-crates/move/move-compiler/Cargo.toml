@@ -37,7 +37,3 @@ datatest-stable = "0.1.1"
 [[test]]
 name = "move_check_testsuite"
 harness = false
-
-[features]
-address20 = ["move-core-types/address20"]
-address32 = ["move-core-types/address32"]

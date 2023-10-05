@@ -21,14 +21,7 @@ impl AccountAddress {
     }
 
     /// The number of bytes in an address.
-    /// Default to 16 bytes, can be set to 20 bytes with address20 feature.
-    pub const LENGTH: usize = if cfg!(feature = "address20") {
-        20
-    } else if cfg!(feature = "address32") {
-        32
-    } else {
-        16
-    };
+    pub const LENGTH: usize = 32;
 
     /// Hex address: 0x0
     pub const ZERO: Self = Self([0u8; Self::LENGTH]);
