@@ -76,6 +76,7 @@ impl SingleValidator {
                 None,
                 None,
                 ConsensusAdapterMetrics::new_test(),
+                epoch_store.protocol_config().clone(),
             ));
             ValidatorState::EndToEnd(Arc::new(ValidatorService::new(
                 validator,
