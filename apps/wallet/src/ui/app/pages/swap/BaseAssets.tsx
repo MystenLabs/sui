@@ -34,17 +34,19 @@ export function BaseAssets() {
 				<div className="flex flex-shrink-0 justify-start flex-col w-full">
 					{recognized?.map((coinBalance, index) => {
 						return (
-							<TokenRow
-								borderBottom={index !== recognized.length - 1}
-								key={coinBalance.coinType}
-								as="button"
-								coinBalance={coinBalance}
-								onClick={() => {
-									navigate(
-										`/swap?${new URLSearchParams({ type: coinBalance.coinType }).toString()}`,
-									);
-								}}
-							/>
+							<>
+								<TokenRow
+									key={coinBalance.coinType}
+									coinBalance={coinBalance}
+									onClick={() => {
+										navigate(
+											`/swap?${new URLSearchParams({ type: coinBalance.coinType }).toString()}`,
+										);
+									}}
+								/>
+
+								{index !== recognized.length - 1 && <div className="bg-gray-45 h-px w-full" />}
+							</>
 						);
 					})}
 				</div>
