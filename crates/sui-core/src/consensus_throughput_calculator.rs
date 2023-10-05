@@ -36,6 +36,16 @@ impl Level {
     }
 }
 
+impl From<usize> for Level {
+    fn from(value: usize) -> Self {
+        if value == 0 {
+            Level::Low
+        } else {
+            Level::High
+        }
+    }
+}
+
 pub struct ThroughputProfileRanges {
     /// Holds the throughput profiles by the throughput range (upper_throughput, cool_down_threshold)
     profiles: BTreeMap<u64, ThroughputProfile>,
