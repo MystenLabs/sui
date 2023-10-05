@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     coin::Coin,
     digests::{ObjectDigest, TransactionDigest},
     error::{ExecutionError, ExecutionErrorKind, SuiError},
@@ -23,7 +23,14 @@ pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore 
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
-pub type DeletedSharedObjects = Vec<(ObjectID, SequenceNumber, TransactionDigest)>;
+pub type DeletedSharedObjectInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
+pub type DeletedSharedObjects = Vec<DeletedSharedObjectInfo>;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SharedInput {
+    Existing(ObjectRef),
+    Deleted(DeletedSharedObjectInfo),
+}
 
 impl<T> SuiResolver for T
 where

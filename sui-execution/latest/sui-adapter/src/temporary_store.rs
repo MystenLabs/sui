@@ -12,7 +12,9 @@ use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
 use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2};
+use sui_types::execution::{
+    DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2, SharedInput,
+};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
 use sui_types::storage::BackingStore;
@@ -40,7 +42,6 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
-    deleted_shared_object_keys: Vec<(ObjectID, SequenceNumber)>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -70,13 +71,11 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
-        let (objects, deleted_shared_object_keys) = input_objects.into_object_map();
-
+        let objects = input_objects.into_object_map();
         Self {
             store,
             tx_digest,
             input_objects: objects,
-            deleted_shared_object_keys,
             lamport_timestamp,
             mutable_input_refs,
             execution_results: ExecutionResultsV2::default(),
@@ -107,7 +106,6 @@ impl<'backing> TemporaryStore<'backing> {
         let results = self.execution_results;
         InnerTemporaryStore {
             input_objects: self.input_objects,
-            deleted_shared_object_keys: self.deleted_shared_object_keys,
             mutable_inputs: self.mutable_input_refs,
             written: results.written_objects,
             events: TransactionEvents {
@@ -117,6 +115,7 @@ impl<'backing> TemporaryStore<'backing> {
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
             runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
+            lamport_version: self.lamport_timestamp,
         }
     }
 
@@ -167,7 +166,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn into_effects(
         mut self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         mut transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,
@@ -207,6 +206,15 @@ impl<'backing> TemporaryStore<'backing> {
                 epoch,
             )
         } else {
+            let shared_object_refs = shared_object_refs
+                .into_iter()
+                .map(|shared_input| match shared_input {
+                    SharedInput::Existing(oref) => oref,
+                    SharedInput::Deleted(_) => {
+                        unreachable!("Shared object deletion not supported in effects v1")
+                    }
+                })
+                .collect();
             self.into_effects_v1(
                 shared_object_refs,
                 transaction_digest,
@@ -318,7 +326,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     fn into_effects_v2(
         self,
-        shared_object_refs: Vec<ObjectRef>,
+        shared_object_refs: Vec<SharedInput>,
         transaction_digest: &TransactionDigest,
         transaction_dependencies: BTreeSet<TransactionDigest>,
         gas_cost_summary: GasCostSummary,

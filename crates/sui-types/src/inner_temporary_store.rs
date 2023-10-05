@@ -22,7 +22,6 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
-    pub deleted_shared_object_keys: Vec<(ObjectID, SequenceNumber)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
     pub loaded_runtime_objects: BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
@@ -30,6 +29,7 @@ pub struct InnerTemporaryStore {
     pub max_binary_format_version: u32,
     pub no_extraneous_module_bytes: bool,
     pub runtime_packages_loaded_from_db: BTreeMap<ObjectID, Object>,
+    pub lamport_version: SequenceNumber,
 }
 
 pub struct TemporaryModuleResolver<'a, R> {

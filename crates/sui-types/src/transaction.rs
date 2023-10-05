@@ -11,7 +11,7 @@ use crate::crypto::{
     ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::execution::DeletedSharedObjects;
+use crate::execution::{DeletedSharedObjects, SharedInput};
 use crate::message_envelope::{
     AuthenticatedMessage, Envelope, Message, TrustedEnvelope, VerifiedEnvelope,
 };
@@ -2459,11 +2459,12 @@ impl InputObjects {
         owned_objects
     }
 
-    pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
+    pub fn filter_shared_objects(&self) -> Vec<SharedInput> {
         self.objects
             .iter()
             .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject { .. }))
-            .map(|(_, obj)| obj.compute_object_reference())
+            .map(|(_, obj)| SharedInput::Existing(obj.compute_object_reference()))
+            .chain(self.deleted.iter().map(|info| SharedInput::Deleted(*info)))
             .collect()
     }
 
@@ -2474,7 +2475,7 @@ impl InputObjects {
             .map(|(_, obj)| obj.previous_transaction)
             .collect();
 
-        for (_, _, digest) in &self.deleted {
+        for (_, _, _, digest) in &self.deleted {
             dependencies.insert(*digest);
         }
 
@@ -2514,7 +2515,7 @@ impl InputObjects {
             .iter()
             .filter_map(|(_, object)| object.data.try_as_move().map(MoveObject::version))
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1))
-            .chain(self.deleted.iter().map(|(_, version, _)| *version));
+            .chain(self.deleted.iter().map(|(_, version, _, _)| *version));
 
         SequenceNumber::lamport_increment(input_versions)
     }
@@ -2527,17 +2528,11 @@ impl InputObjects {
         self.objects.iter().map(|(kind, _)| kind)
     }
 
-    pub fn into_object_map(self) -> (BTreeMap<ObjectID, Object>, Vec<(ObjectID, SequenceNumber)>) {
-        (
-            self.objects
-                .into_iter()
-                .map(|(_, object)| (object.id(), object))
-                .collect(),
-            self.deleted
-                .into_iter()
-                .map(|(id, version, _)| (id, version))
-                .collect(),
-        )
+    pub fn into_object_map(self) -> BTreeMap<ObjectID, Object> {
+        self.objects
+            .into_iter()
+            .map(|(_, object)| (object.id(), object))
+            .collect()
     }
 }
 

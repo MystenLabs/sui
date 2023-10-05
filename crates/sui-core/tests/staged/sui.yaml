@@ -1059,6 +1059,14 @@ UnchangedSharedKind:
           TUPLE:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
+    1:
+      MutateDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    2:
+      ReadDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 UpgradeInfo:
   STRUCT:
     - upgraded_id:

@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::{
     publish_basics_package, publish_basics_package_and_make_counter, TestTransactionBuilder,
 };
@@ -46,10 +49,7 @@ async fn shared_object_transaction() {
 /// Delete a shared object as the object owner
 #[sim_test]
 async fn shared_object_deletion() {
-    let test_cluster = TestClusterBuilder::new()
-        //.with_protocol_version(21.into())
-        .build()
-        .await;
+    let test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
@@ -76,6 +76,68 @@ async fn shared_object_deletion() {
     assert_eq!(deleted_obj_id, counter_id);
 }
 
+#[sim_test]
+async fn shared_object_deletion_multiple_times() {
+    let num_deletions = 300;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
+        }])
+        .build()
+        .await;
+
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let gas_coins = accounts_and_gas[0].1.clone();
+
+    // Make a bunch transactions that all want to delete the counter object.
+    let mut txs = vec![];
+    for coin_ref in gas_coins.into_iter() {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(sender, coin_ref)
+            .await
+            .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        test_cluster
+            .create_certificate(signed.clone())
+            .await
+            .unwrap();
+        txs.push(signed);
+    }
+
+    // Submit all the deletion transactions to the validators.
+    let validators = test_cluster.get_validator_pubkeys();
+    let submissions = txs.iter().map(|tx| async {
+        test_cluster
+            .submit_transaction_to_validators(tx.clone(), &validators)
+            .await
+            .unwrap();
+        *tx.digest()
+    });
+    let digests = join_all(submissions).await;
+
+    // Start a new fullnode and let it sync from genesis and wait for us to see all the deletion
+    // transactions.
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(digests)
+        .await
+        .unwrap();
+}
+
 /// Test for execution of shared object certs that are sequenced after a shared object is deleted.
 /// The test strategy is:
 /// 0. Inject a random delay just before execution of a transaction.
@@ -100,7 +162,7 @@ async fn shared_object_deletion_multi_certs() {
         sleep(Duration::from_millis(delay)).await;
     });
 
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new().build().await;
 
     let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
     let package_id = package.0;
@@ -187,8 +249,6 @@ async fn shared_object_deletion_multi_certs() {
         .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
         .await
         .unwrap();
-
-    wait_for_t
 }
 
 /// End-to-end shared transaction test for a Sui validator. It does not test the client or wallet,

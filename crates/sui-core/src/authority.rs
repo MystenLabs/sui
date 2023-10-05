@@ -27,7 +27,6 @@ use prometheus::{
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::cmp::max;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Write;
@@ -83,8 +82,8 @@ use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
 use sui_types::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
-    VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
+    InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
+    TransactionEvents, VerifiedCertifiedTransactionEffects, VerifiedSignedTransactionEffects,
 };
 use sui_types::error::{ExecutionError, UserInputError};
 use sui_types::event::{Event, EventID};
@@ -1152,15 +1151,6 @@ impl AuthorityState {
         Ok((effects, execution_error_opt))
     }
 
-    /// new function to generate next version of deleted shared object
-    fn get_next_version(
-        &self,
-        effects: &TransactionEffects,
-        smeared_version: SequenceNumber,
-    ) -> SequenceNumber {
-        max(effects.lamport_version(), smeared_version.next())
-    }
-
     async fn commit_cert_and_notify(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -1215,12 +1205,14 @@ impl AuthorityState {
             });
         output_keys.extend(deleted_output_keys);
 
-        // add transactions that operate on deleted shared objects to the outputkeys that then get sent to notify_commit
-        for (id, seq) in inner_temporary_store.deleted_shared_object_keys.iter() {
-            let next_version = self.get_next_version(effects, *seq);
+        // For any previously deleted shared objects that appeared mutably in the transaction,
+        // synthesize a notification for the next version of the object.
+        let smeared_version = inner_temporary_store.lamport_version;
+        let deleted_accessed_objects = effects.deleted_mutably_accessed_shared_objects();
+        for object_id in deleted_accessed_objects.into_iter() {
             let key = InputKey::VersionedObject {
-                id: *id,
-                version: next_version,
+                id: object_id,
+                version: smeared_version,
             };
             output_keys.push(key);
         }
@@ -1307,10 +1299,8 @@ impl AuthorityState {
         self.check_owned_locks(&owned_object_refs).await?;
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
-
         let transaction_data = &certificate.data().intent_message().value;
         let (kind, signer, gas) = transaction_data.execution_parts();
-
         let (inner_temp_store, effects, execution_error_opt) =
             epoch_store.executor().execute_transaction_to_effects(
                 &self.database,
@@ -4548,9 +4538,14 @@ impl NodeStateDump {
 
         // Record all the shared objects
         let mut shared_objects = Vec::new();
-        for (obj_ref, _kind) in effects.input_shared_objects() {
-            if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
-                shared_objects.push(w)
+        for kind in effects.input_shared_objects() {
+            match kind {
+                InputSharedObject::Mutate(obj_ref) | InputSharedObject::ReadOnly(obj_ref) => {
+                    if let Some(w) = authority_store.get_object_by_key(&obj_ref.0, obj_ref.1)? {
+                        shared_objects.push(w)
+                    }
+                }
+                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
             }
         }
 

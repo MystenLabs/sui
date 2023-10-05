@@ -240,13 +240,72 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
+<<<<<<< HEAD
             id: "0xa85ba3c3ffbe2c3d872d3a855a8fe83a07cf0f8ffa2a79aa6c46664d5d5565e9"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+            id: "0x7f2921e33815276557f7dfb8a0e683ed7387d246cb28ce17aadebbe56b7948ab"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+            id: "0x658b0c687e422f01d00436d848ba37cc924a99615bdd0b1f7983eee908aa4d60"
+=======
+<<<<<<< HEAD
+            id: "0x67273cd3ed5bfbc6dcfc5cc292b67f56e5a1dc2d1ee415a7d355ad5c956ac226"
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
           size: 0
       voting_power: 10000
       operation_cap_id: "0x44afc74fb1ca970d685ba392d94e06d76a124ad39c5e84715a4f987a494a793f"
       gas_price: 1000
       staking_pool:
+<<<<<<< HEAD
         id: "0x141495e32a38ebcb1b5f8c3eff2127ebb92333ac264e523db9e749df41471faa"
+=======
+<<<<<<< HEAD
+        id: "0xec8d45e2235012a16d4fddc55d97717fb46e925fc7da9fb09bbe8e99e271738c"
+=======
+<<<<<<< HEAD
+        id: "0x38634ba6165019652230383c70f698a54606e8971c9f40a978e00dabea2b4b19"
+=======
+        id: "0x9541ca79d01eaa7fd999e6379c948a9078d3e28b63c6c0c0c94783e9ebe6a18f"
+=======
+            id: "0x1985b965ed8a4bb98b32b79b0250e5e4fc9edabd075a1329c38e5132de78f56a"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0xb6bd8d4abf21f572e8bca5c07d96db804da8e40265aa758f0e607074eed01ede"
+      gas_price: 1000
+      staking_pool:
+        id: "0x4fdb7a5fb29a7815f9ed7e3e6a2874ef74dc00dabb6dc76a695cf7a3ebe6ad64"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+            id: "0x5c420f556d9dbaaab17ccc30e0df7796306d5045f8070ad93a31ea804067ade2"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0x365fb0835cb3f6f3db6f702703098280d54a0154bf7022fd3299303b3a5a8148"
+      gas_price: 1000
+      staking_pool:
+        id: "0xb098d84bda23ccf9adb1ccfbf9fc7133e06707ed2f99f91dad1540d610b0b247"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+            id: "0xae1c25f4e17a3b21435ef2d388bb0cd1d28fea30eacddcad414690d8f4df6ba2"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0xc5e1d7d8fff2e6c8b989f828674ee96374bb313ae040b537c15c4602d4940254"
+      gas_price: 1000
+      staking_pool:
+        id: "0x1fbc67b24adbf7ff287f5033f6db3829596d22e8b96b81381ea98b9113428962"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +313,72 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
+<<<<<<< HEAD
           id: "0xe59b16b0cd50f8a36888629b5ffcb81c7178001ea5d2d94bc3350610291ec576"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+          id: "0x743aa78783e30f0c8eedf8458c0d7b6341dfaddc91f9a47a1f719e66c4d1deb7"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+          id: "0x3fa6f4d12a4876549548026a274b95d485107d2ceb0cddeaff4e09a160a27673"
+=======
+<<<<<<< HEAD
+          id: "0x83f8c396cce12c9d3dc8f616838a1fdc1783239dfd1d4e97dc3778a9adb64f0d"
+=======
+          id: "0x62fd19d24515e67c7c3aa3acf3145051d783f9d6baaf2b6378acfec2ea64847c"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+          id: "0x62205ba58b833c970f7efee0c7121672ad144d6500f0f317ab9765877eff05ae"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+          id: "0x81e1fc988a1f6074f340d042c05713f0cf75321330a642b5ee1cd646f58bc41b"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
+<<<<<<< HEAD
             id: "0xea0a6589011e9b92d2e9c8b1dd04bee4ff44a9efad30f5fb76e85a31d45304f8"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+            id: "0x42a7c8ec76d7c36eb7559f0bc43f8cea0bc6497f9737c3828a6989ef57d15a07"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+            id: "0x0f73f6796f9f89ec37e041003917975423c2de610b5352e85c4678f197cfa3a2"
+=======
+<<<<<<< HEAD
+            id: "0x2439ac858660e5dafc11062dc8108ce1b6f92e52bd682b24b94fc193edc8ea77"
+=======
+            id: "0xcb55abbf7253d586aaf788ec0773b89609be68b602452375584705c8bfb20fbe"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+            id: "0xff9cd3881146b864f0163f01c86503d2039844db9a5b08d30305e31e0180070a"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+            id: "0xc6b879e4f355eb5f7a96ef63b6b4d2ede3106828ce9e0e1d619bd3a4ac52a111"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -269,7 +386,24 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
+<<<<<<< HEAD
           id: "0x0825ab4ad0d58f93fcfb37617aad744abda466c86d351c71699f27bc634ce6a3"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+          id: "0x8df66c956a1c88a9326c9159953aa7c0801c940ff574fa89ddee3ac4e3c3d3f7"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+          id: "0x0ba371cca84a3712f4582f0dcc375f5f5cc49786676db04e9b336226ceea9b4d"
+=======
+<<<<<<< HEAD
+          id: "0x1843ae4b9b86dd6d86c2ef1f6b62aa96ed9e5f5c94baa7c5e99ad33cb0219962"
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
         size: 0
   pending_active_validators:
     contents:
@@ -283,13 +417,108 @@ validators:
     id: "0xbcd7fb5824307029b2738efd0832b642712a49d26d7365a0fdf9c5188fe38c94"
     size: 0
   validator_candidates:
+<<<<<<< HEAD
     id: "0x73a63dfdd35d13853b017557a63f265ea98d67c93840638af8a46aec7ebb0256"
+=======
+<<<<<<< HEAD
+    id: "0xbfba2893593ec2f9842f235d01bf39d8f9bc7ed5da49689059508f57fab9d039"
+=======
+<<<<<<< HEAD
+    id: "0xed32965d7b51806a16b326226df9038cd18ec1f70d22ddbf47f73aa259f937b5"
+=======
+    id: "0x57efea43a86b1996dfd92a3dad4c087c0d777f845ff8d79430d7b7a3bd097a65"
+=======
+          id: "0x8c1d4833db6e174b4ed287e8f57411a11b1d028ce0fbab27e68a46631784dec8"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0x0ea3c021c91ff89c51f53c27067995978c24a11851eccba6cd1250889eec0411"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x847fc8040a954dc3f87db090a4888697c6b8d30ef1a5625624e93123250c508f"
+    size: 1
+  inactive_validators:
+    id: "0x0ccfb346cb35aeaaf8c763a901079af9fd90283f474acfb4c8909f966fc0030b"
+    size: 0
+  validator_candidates:
+    id: "0x3e56eb42e2327c4a1d7e3197be69b8c39bea06197e4fed6de99ebfa616ad8a74"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+          id: "0x5a50ab76dc369af4ec85b5fbaee94cc8b077587da5f083932b7e1f450c7bbe0b"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0x0d111b654a0e26851dfed566b584945aabafb93c5b2957032e2bf38d22111e43"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x842886acd2f1851021d4480135f2a1063fd7071c493ecfde2b2c2599116b1d90"
+    size: 1
+  inactive_validators:
+    id: "0xab25d25799051e1b28758205491c5bcbd86019f8aaf5fae45a1f2fe9fd3af524"
+    size: 0
+  validator_candidates:
+    id: "0xf3a56236e3b2b51e007599d83c4a20e4ff8e4f962a1929b2a9cc8933b1477774"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+          id: "0x18474ad1c955d1aaf8cd312c66453366cdc8e79b210e4ddd9c87510988438603"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0xe09f8c34a0440e98b6d9192e7d15c9d6003df9c260962ba214246331de654aa9"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x2b17713fc91eb3e9ed595c4cb05e26c344b2fdae1aeb1d08f608b27b00e48b15"
+    size: 1
+  inactive_validators:
+    id: "0x0d3b85fd35e87cd7307a09a92a45dc31b58241a7d2dec041062fb1fe7c8d8f1f"
+    size: 0
+  validator_candidates:
+    id: "0x59ce2eae3927716a73705307ff5a0bb2012bb34efdab4dac05f5a425cfca3a89"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0x5bdbf9a2c33cc20d59f365cce2f1eb28f4c1b1e0531719667c54772b576f4c4e"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+      id: "0xf6cee91ff8c6a95411c207d3d56a3d8f7b122b29dd70ddaaa80567cb8a78da64"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+      id: "0xbccae2d0ff54175b1708b580d0e68c93fc65383015cd6d5202212d5bf00e0aa9"
+=======
+<<<<<<< HEAD
+      id: "0xab499b6882efc22c3c1d4ddce9a4346989f7212c1457fd7d63a371b872ed31de"
+=======
+      id: "0x0361e81ee57c4217bc914e094d66d1a54a3bda20bdeaa28fafaa49692d11a037"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+      id: "0x09a96cd50922d947522012edd889ecf2d9d9fe07e39aa52ffe2f4e69b9018c60"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+      id: "0x3e6aaba2f1ef0bb3cc5aec271752ce7ccd1e8003741dbba2fa98371c2d94ba1a"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -306,7 +535,36 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0x980bf06d7cb399fb76a1ad0b5ff39cba4707320702c6a281d24304be8e19db21"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+      id: "0xb55c540000e0aca2e36e73328709bbcda6dddf287417c0bb81063e392f971063"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+      id: "0x9de9189bc53dffffae1a4cef3ddee392646b04c2440ea71a31dd4329d4b8800e"
+=======
+<<<<<<< HEAD
+      id: "0x8adedb62f0b3cf690bedf888023d769862b3139c9234adfc213f55e3daa60873"
+=======
+      id: "0xb1e00cad5b3d57a2ca5702fd30d5f98613b875506b8fabdb20128751b7354e90"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+      id: "0x0c7b0566a9751b2d8a428e4e3e2abbd68310a8d31efd5f7abaa3ee47b8fba2d1"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+      id: "0xf8682846474adf297beebf1696e3b80e00ae307ff1f1d895fc504a8db1d6d997"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -320,7 +578,36 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
+<<<<<<< HEAD
       id: "0xe59b0572fca0b78a26dd1a79a73c3db70310760c8ed21fb733880dad2f6c4b5d"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+      id: "0xfdbc8f735c9ecca61a5ff20899d5e39a8a8562a7cc6631db6c97dfb3837ca5eb"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+      id: "0xd3ee91352a7e23913409c81d4dc5af944dc7e57dd806dcfb9fb363add9d22faf"
+=======
+<<<<<<< HEAD
+      id: "0x2bc37dd30b3f053ff47ef0ef4886ca167ebe5cf791574c57b0587b87b3151d69"
+=======
+      id: "0xa4eb8926147c5feb0a044e74bf73aa6cb5d289b74b3cfbc04f2ef2ad61027349"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+      id: "0xf7faea64817e51227f05ec65ce4e89377f90096282eaf56b700e464f5af95185"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+      id: "0x82932189ead932198febbae0a3d61b27900c2cbcd5a398aaead7e54be7633fdd"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -332,6 +619,35 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
+<<<<<<< HEAD
     id: "0x5badcd0d4b6df51113dea993e6a40f979ac934e1bbabb550f7d67b445a010402"
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+    id: "0x14688c8e3d4965264c683b9024f36e90b9d0f6e6a6f972c5389cca2bd6e428ca"
+=======
+=======
+>>>>>>> 22284a3384 (Rebase onto main)
+<<<<<<< HEAD
+    id: "0x6821c028816fb3f7538f92559635bcc419985d3bf1ad408b2abb66e686ecabbf"
+=======
+<<<<<<< HEAD
+    id: "0x8405dcf86babbc037bec669a16b4451444cb68a71494c7104a566ea56b6cf85a"
+=======
+    id: "0x104cb3d94f4dd960bfa8f331bbf79d68e589f8d8581f8a1d0485aa86a730c386"
+>>>>>>> aa6cef2e22 (Add read/write tests and stress test)
+>>>>>>> 5c00514a4f (Add read/write tests and stress test)
+<<<<<<< HEAD
+>>>>>>> 8c192f9b7b (Add read/write tests and stress test)
+=======
+=======
+    id: "0xfeef722d660c5200db104f6c6f133c9dfba23fd9bb33a8ae1f18613bad816cf8"
+>>>>>>> 93cbe06237 (Rebase onto main)
+>>>>>>> 22284a3384 (Rebase onto main)
+=======
+    id: "0x860ac1a9b97877498364dbc192a2e4063c395ef2b3fbf3eebae451f3193e0721"
+>>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
+>>>>>>> 5a25924b33 (Add shared object smearing to marker table)
   size: 0
 

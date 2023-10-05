@@ -33,8 +33,6 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tap::Pipe;
 
-pub const SHARED_OBJECT_MARKER_VERSION: VersionNumber = VersionNumber::from_u64(0);
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum WriteKind {
     /// The object was in storage already but has been modified

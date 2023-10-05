@@ -100,4 +100,8 @@ module shared_object_deletion::o2 {
         vector::destroy_empty(v);
     }
 
+    public entry fun read_o2(_o2:  &Obj2) { }
+    public entry fun read_and_read(_o1: &Obj2, _o2:  &Obj2) { }
+    public entry fun read_and_write(_o1: &Obj2, _o2:  &mut Obj2) { }
+    public entry fun mutate_and_mutate(_o1: &mut Obj2, _o2:  &mut Obj2) { }
 }

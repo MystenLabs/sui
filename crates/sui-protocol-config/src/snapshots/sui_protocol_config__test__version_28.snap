@@ -24,7 +24,6 @@ feature_flags:
   simplified_unwrap_then_delete: true
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
-  shared_object_deletion: true
   narwhal_new_leader_election_schedule: true
   zklogin_supported_providers:
     - Facebook

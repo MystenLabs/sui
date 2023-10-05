@@ -38,7 +38,9 @@ async fn test_upgraded_multisig_feature_deny() {
         config.set_upgraded_multisig_for_testing(false);
         config
     });
+
     let err = do_upgraded_multisig_test().await.unwrap_err();
+
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
 }
 

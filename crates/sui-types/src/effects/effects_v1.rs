@@ -4,8 +4,8 @@
 use crate::base_types::{
     random_object_ref, EpochId, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
-use crate::digests::TransactionEventsDigest;
-use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
+use crate::digests::{ObjectDigest, TransactionEventsDigest};
+use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
@@ -111,17 +111,16 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         unimplemented!("Only supposed by v2 and above");
     }
 
-    fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {
+    fn input_shared_objects(&self) -> Vec<InputSharedObject> {
         let modified: HashSet<_> = self.modified_at_versions.iter().map(|(r, _)| r).collect();
         self.shared_objects
             .iter()
             .map(|r| {
-                let kind = if modified.contains(&r.0) {
-                    InputSharedObjectKind::Mutate
+                if modified.contains(&r.0) {
+                    InputSharedObject::Mutate(*r)
                 } else {
-                    InputSharedObjectKind::ReadOnly
-                };
-                (*r, kind)
+                    InputSharedObject::ReadOnly(*r)
+                }
             })
             .collect()
     }
@@ -162,10 +161,6 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         &self.gas_used
     }
 
-    fn lamport_version(&self) -> SequenceNumber {
-        self.gas_object().0 .1
-    }
-
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {
         &mut self.status
     }
@@ -179,17 +174,20 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         &mut self.dependencies
     }
 
-    fn unsafe_add_input_shared_object_for_testing(
-        &mut self,
-        obj_ref: ObjectRef,
-        kind: InputSharedObjectKind,
-    ) {
-        self.shared_objects.push(obj_ref);
+    fn unsafe_add_input_shared_object_for_testing(&mut self, kind: InputSharedObject) {
         match kind {
-            InputSharedObjectKind::Mutate => {
+            InputSharedObject::Mutate(obj_ref) => {
+                self.shared_objects.push(obj_ref);
                 self.modified_at_versions.push((obj_ref.0, obj_ref.1));
             }
-            InputSharedObjectKind::ReadOnly => (),
+            InputSharedObject::ReadOnly(obj_ref) => {
+                self.shared_objects.push(obj_ref);
+            }
+            InputSharedObject::ReadDeleted(id, version)
+            | InputSharedObject::MutateDeleted(id, version) => {
+                self.shared_objects
+                    .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
+            }
         }
     }
 
