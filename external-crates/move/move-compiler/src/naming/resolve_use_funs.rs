@@ -278,7 +278,12 @@ fn first_arg_type(
     f: &FunctionName,
 ) -> (Loc, Option<N::Type>) {
     let finfo = context.info.function_info(m, f);
-    match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+    match finfo
+        .signature
+        .parameters
+        .first()
+        .map(|(_, _, t)| t.clone())
+    {
         None => (finfo.defined_loc, None),
         Some(t) => (t.loc, Some(t)),
     }

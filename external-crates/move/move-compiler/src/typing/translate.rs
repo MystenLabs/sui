@@ -12,7 +12,7 @@ use crate::{
     editions::Flavor,
     expansion::ast::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Value_, Visibility,
+        ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
@@ -272,14 +272,14 @@ fn function(
 fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
     assert!(context.constraints.is_empty());
 
-    for (param, param_ty) in &sig.parameters {
+    for (mut_, param, param_ty) in &sig.parameters {
         let param_ty = core::instantiate(context, param_ty.clone());
         context.add_single_type_constraint(
             param_ty.loc,
             "Invalid parameter type",
             param_ty.clone(),
         );
-        context.declare_local(*param, param_ty);
+        context.declare_local(*mut_, *param, param_ty);
     }
     context.return_type = Some(core::instantiate(context, sig.return_type.clone()));
     core::solve_constraints(context);
@@ -1287,12 +1287,12 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         }
 
         NE::Move(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             let from_user = true;
             (ty, TE::Move { var, from_user })
         }
         NE::Copy(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             context.add_ability_constraint(
                 eloc,
                 Some(format!(
@@ -1306,7 +1306,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (ty, TE::Copy { var, from_user })
         }
         NE::Use(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
         NE::MethodCall(ndotted, f, ty_args_opt, sp!(argloc, nargs_)) => {
@@ -1544,7 +1544,10 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             context.add_base_type_constraint(eloc, "Invalid borrow", er.ty.clone());
             let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
             let eborrow = match er.exp {
-                sp!(_, TE::Use(v)) => TE::BorrowLocal(mut_, v),
+                sp!(_, TE::Use(v)) => {
+                    check_mutability(context, eloc, "mutable borrow", &v);
+                    TE::BorrowLocal(mut_, v)
+                }
                 erexp => TE::TempBorrow(mut_, Box::new(T::exp(er.ty, erexp))),
             };
             (ty, eborrow)
@@ -1590,7 +1593,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let used_local_types = used_locals
                 .into_iter()
                 .map(|v| {
-                    let ty = context.get_local(&v);
+                    let ty = context.get_local_type(&v);
                     (v, ty)
                 })
                 .collect();
@@ -1759,20 +1762,22 @@ fn lvalue(
             TL::Ignore
         }
         NL::Var {
+            mut_,
             var,
             unused_binding,
         } => {
             let var_ty = match case {
                 C::Bind => {
-                    context.declare_local(var, ty.clone());
+                    context.declare_local(mut_, var, ty.clone());
                     ty
                 }
                 C::Assign => {
-                    let var_ty = context.get_local(&var);
+                    check_mutability(context, loc, "assignment", &var);
+                    let var_ty = context.get_local_type(&var);
                     subtype(
                         context,
                         loc,
-                        || format!("Invalid assignment to local '{}'", &var.value.name),
+                        || format!("Invalid assignment to variable '{}'", &var.value.name),
                         ty,
                         var_ty.clone(),
                     );
@@ -1869,6 +1874,24 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
         Ability_::Drop,
     );
     res_ty
+}
+
+fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
+    let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
+    match mut_ {
+        Mutability::Mut(_) | Mutability::NotApplicable => (),
+        Mutability::Imm => {
+            let v = &v.value.name;
+            let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
+            let decl_msg =
+                format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
+            context.env.add_diag(diag!(
+                TypeSafety::InvalidImmVariableUsage,
+                (eloc, usage_msg),
+                (decl_loc, decl_msg),
+            ))
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -2040,7 +2063,10 @@ fn exp_dotted_to_borrow(
             let eb_ty = eb.ty;
             let sp!(ebloc, eb_) = eb.exp;
             let e_ = match eb_ {
-                TE::Use(v) => TE::BorrowLocal(mut_, v),
+                TE::Use(v) => {
+                    check_mutability(context, loc, "mutable borrow", &v);
+                    TE::BorrowLocal(mut_, v)
+                }
                 eb_ => {
                     match &eb_ {
                         TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {

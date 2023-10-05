@@ -5,6 +5,7 @@
 use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
+    expansion::ast::Mutability,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
@@ -52,6 +53,12 @@ enum LoopInfo_ {
     BreakType(Box<Type>),
 }
 
+struct Local {
+    mut_: Mutability,
+    ty: Type,
+    used_mut: Option<Loc>,
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
@@ -61,7 +68,7 @@ pub struct Context<'env> {
     pub current_function: Option<FunctionName>,
     pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
     pub return_type: Option<Type>,
-    locals: UniqueMap<Var, Type>,
+    locals: UniqueMap<Var, Local>,
 
     pub subst: Subst,
     pub constraints: Constraints,
@@ -292,13 +299,26 @@ impl<'env> Context<'env> {
             .push(Constraint::OrderedConstraint(loc, op, t))
     }
 
-    pub fn declare_local(&mut self, var: Var, ty: Type) {
-        self.locals.add(var, ty).unwrap()
+    pub fn declare_local(&mut self, mut_: Mutability, var: Var, ty: Type) {
+        let local = Local {
+            mut_,
+            ty,
+            used_mut: None,
+        };
+        self.locals.add(var, local).unwrap()
     }
 
-    pub fn get_local(&mut self, var: &Var) -> Type {
+    pub fn get_local_type(&mut self, var: &Var) -> Type {
         // should not fail, already checked in naming
-        self.locals.get(var).unwrap().clone()
+        self.locals.get(var).unwrap().ty.clone()
+    }
+
+    pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
+        // should not fail, already checked in naming
+        let decl_loc = *self.locals.get_loc(&var).unwrap();
+        let local = self.locals.get_mut(var).unwrap();
+        local.used_mut = Some(loc);
+        (decl_loc, local.mut_)
     }
 
     pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
@@ -831,7 +851,7 @@ pub fn make_method_call_type(
         // if we found a function with the method name, it must have the wrong type
         if let Some((m, finfo)) = finfo_opt {
             let (first_ty_loc, first_ty) =
-                match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+                match finfo.signature.parameters.first().map(|(_, _, t)| t.clone()) {
                     None => (finfo.defined_loc, None),
                     Some(t) => (t.loc, Some(t)),
                 };
@@ -943,7 +963,7 @@ pub fn make_function_type(
         .signature
         .parameters
         .iter()
-        .map(|(n, t)| (*n, subst_tparams(tparam_subst, t.clone())))
+        .map(|(_, n, t)| (*n, subst_tparams(tparam_subst, t.clone())))
         .collect();
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
     let acquires = if in_current_module {

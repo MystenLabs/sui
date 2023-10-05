@@ -230,7 +230,7 @@ pub enum Visibility {
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<(Name, AbilitySet)>,
-    pub parameters: Vec<(Var, Type)>,
+    pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
@@ -404,6 +404,16 @@ pub type Type = Spanned<Type_>;
 // Expressions
 //**************************************************************************************************
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mutability {
+    // mut x
+    Mut(Loc),
+    // x
+    Imm,
+    // Used for assignments or for legacy code without explicit mutability
+    NotApplicable,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldBindings {
     Named(Fields<LValue>),
@@ -412,7 +422,7 @@ pub enum FieldBindings {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
-    Var(ModuleAccess, Option<Vec<Type>>),
+    Var(Mutability, ModuleAccess, Option<Vec<Type>>),
     Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
@@ -1457,7 +1467,8 @@ impl AstDebug for FunctionSignature {
         } = self;
         type_parameters.ast_debug(w);
         w.write("(");
-        w.comma(parameters, |w, (v, st)| {
+        w.comma(parameters, |w, (mutability, v, st)| {
+            mutability.ast_debug(w);
             w.write(&format!("{}: ", v));
             st.ast_debug(w);
         });
@@ -1866,11 +1877,23 @@ impl AstDebug for Vec<LValue> {
     }
 }
 
+impl AstDebug for Mutability {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let case = match self {
+            Mutability::Mut(_) => "mut ",
+            Mutability::Imm => "imm ",
+            Mutability::NotApplicable => "",
+        };
+        w.write(case)
+    }
+}
+
 impl AstDebug for LValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use LValue_ as L;
         match self {
-            L::Var(v, tys_opt) => {
+            L::Var(mutability, v, tys_opt) => {
+                mutability.ast_debug(w);
                 w.write(&format!("{}", v));
                 if let Some(ss) = tys_opt {
                     w.write("<");
