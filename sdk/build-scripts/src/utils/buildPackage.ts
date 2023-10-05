@@ -90,6 +90,7 @@ async function buildESM(
 		entryPoints,
 		outdir: 'dist/esm',
 		sourcemap: true,
+
 		...buildOptions,
 	});
 	await buildTypes('tsconfig.esm.json');
