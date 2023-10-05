@@ -45,11 +45,20 @@ impl Query {
             .cloned()?)
     }
 
+    // availableRange - pending impl. on IndexerV2
+    // dryRunTransactionBlock
+    // coinMetadata
+    // resolveNameServiceAddress
+    // event_connection -> TODO: need to define typings
+
     async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<ObjectOwner>> {
         // Currently only an account address can own an object
-        let o = ctx.data_provider().fetch_obj(address, None).await?;
-        Ok(o.and_then(|q| q.owner)
-            .map(|o| ObjectOwner::Address(Address { address: o })))
+        let owner_address = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_owner(address)
+            .await?;
+
+        Ok(owner_address.map(|o| ObjectOwner::Address(Address { address: o })))
     }
 
     async fn object(
@@ -58,35 +67,31 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        ctx.data_provider().fetch_obj(address, version).await
+        ctx.data_unchecked::<PgManager>()
+            .fetch_obj(address, version)
+            .await
+            .extend()
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
         Some(Address { address })
     }
 
-    async fn transaction_block(
-        &self,
-        ctx: &Context<'_>,
-        digest: String,
-    ) -> Result<Option<TransactionBlock>> {
-        let result = ctx.data_unchecked::<PgManager>().fetch_tx(&digest).await?;
-        result.map(TransactionBlock::try_from).transpose().extend()
-    }
-
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        let result = if let Some(epoch_id) = id {
+        if let Some(epoch_id) = id {
             ctx.data_unchecked::<PgManager>()
                 .fetch_epoch(epoch_id)
-                .await?
+                .await
+                .extend()
         } else {
             Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_epoch()
-                    .await?,
+                    .await
+                    .extend(),
             )
-        };
-        Ok(result.map(Epoch::from))
+            .transpose()
+        }
     }
 
     async fn checkpoint(
@@ -94,24 +99,35 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        let result = if let Some(id) = id {
+        if let Some(id) = id {
             match (&id.digest, &id.sequence_number) {
-                (Some(_), Some(_)) => return Err(Error::InvalidCheckpointQuery.extend()),
-                _ => {
-                    ctx.data_unchecked::<PgManager>()
-                        .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
-                        .await?
-                }
+                (Some(_), Some(_)) => Err(Error::InvalidCheckpointQuery.extend()),
+                _ => ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_checkpoint(id.digest.as_deref(), id.sequence_number)
+                    .await
+                    .extend(),
             }
         } else {
             Some(
                 ctx.data_unchecked::<PgManager>()
                     .fetch_latest_checkpoint()
-                    .await?,
+                    .await
+                    .extend(),
             )
-        };
+            .transpose()
+        }
+    }
 
-        result.map(Checkpoint::try_from).transpose().extend()
+    async fn transaction_block(
+        &self,
+        ctx: &Context<'_>,
+        digest: String,
+    ) -> Result<Option<TransactionBlock>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_tx(&digest)
+            .await
+            .extend()
     }
 
     async fn checkpoint_connection(
@@ -121,10 +137,13 @@ impl Query {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Connection<String, Checkpoint>> {
-        ctx.data_provider()
+    ) -> Result<Option<Connection<String, Checkpoint>>> {
+        let result = ctx
+            .data_provider()
             .fetch_checkpoint_connection(first, after, last, before)
-            .await
+            .await?;
+
+        Ok(Some(result))
     }
 
     async fn protocol_config(

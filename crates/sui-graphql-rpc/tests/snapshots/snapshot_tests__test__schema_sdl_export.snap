@@ -399,10 +399,10 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
-	transactionBlock(digest: String!): TransactionBlock
 	epoch(id: Int): Epoch
 	checkpoint(id: CheckpointId): Checkpoint
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	transactionBlock(digest: String!): TransactionBlock
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
@@ -551,8 +551,8 @@ input TransactionBlockFilter {
 }
 
 enum TransactionBlockKindInput {
-	PROGRAMMABLE_TX
 	SYSTEM_TX
+	PROGRAMMABLE_TX
 }
 
 type Validator {
@@ -603,4 +603,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-
