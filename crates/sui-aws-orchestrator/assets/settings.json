@@ -7,6 +7,6 @@
     "specs": "m5d.8xlarge",
     "repository": {
         "url": "https://github.com/mystenlabs/sui.git",
-        "commit": "exp-dynamic-config-on-tx-rate-2"
+        "commit": "exp-dynamic-config-on-tx-rate-3"
     }
 }
