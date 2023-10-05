@@ -220,7 +220,7 @@ async fn request_status(
     match Uuid::parse_str(&id) {
         Ok(task_id) => {
             let status = state.faucet.get_batch_send_status(task_id).await;
-            return (StatusCode::CREATED, Json(status));
+            (StatusCode::CREATED, Json(status))
         }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

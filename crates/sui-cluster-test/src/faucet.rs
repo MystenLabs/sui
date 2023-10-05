@@ -133,7 +133,7 @@ impl FaucetClient for RemoteFaucetClient {
         faucet_response
     }
     async fn get_batch_send_status(&self, task_id: Uuid) -> BatchStatusFaucetResponse {
-        let status_url = format!("{}/v1/status/{}", self.remote_url, task_id.to_string());
+        let status_url = format!("{}/v1/status/{}", self.remote_url, task_id);
         debug!(
             "Checking status for task {} from remote faucet {}",
             task_id.to_string(),
