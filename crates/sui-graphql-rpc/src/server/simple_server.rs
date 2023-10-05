@@ -9,10 +9,16 @@ use crate::extensions::feature_gate::FeatureGate;
 use crate::extensions::logger::Logger;
 use crate::extensions::query_limits_checker::QueryLimitsChecker;
 use crate::extensions::timeout::Timeout;
+use crate::metrics::RequestMetrics;
 use crate::server::builder::ServerBuilder;
 
+use prometheus::Registry;
 use std::default::Default;
 use std::env;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
+static PROM_ADDR: &str = "0.0.0.0:9184";
 
 pub async fn start_example_server(conn: ConnectionConfig, service_config: ServiceConfig) {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -32,6 +38,10 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         })
         .unwrap();
 
+    let prom_addr: SocketAddr = PROM_ADDR.parse().unwrap();
+    let registry = start_prom(prom_addr);
+    let metrics = RequestMetrics::new(&registry);
+
     let builder = ServerBuilder::new(conn.port, conn.host);
     println!("Launch GraphiQL IDE at: http://{}", builder.address());
 
@@ -42,6 +52,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_loader)
         .context_data(service_config)
         .context_data(pg_conn_pool)
+        .context_data(Arc::new(metrics))
         .extension(QueryLimitsChecker::default())
         .extension(FeatureGate)
         .extension(Logger::default())
@@ -49,4 +60,10 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .build()
         .run()
         .await;
+}
+
+fn start_prom(binding_address: SocketAddr) -> Registry {
+    println!("Starting Prometheus HTTP endpoint at {}", binding_address);
+    let registry_service = mysten_metrics::start_prometheus_server(binding_address);
+    registry_service.default_registry()
 }

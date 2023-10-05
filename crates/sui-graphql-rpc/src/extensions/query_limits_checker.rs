@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::ServiceConfig;
+use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::ExecutableDocument;
@@ -140,6 +141,10 @@ impl Extension for QueryLimitsChecker {
         }
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes { num_nodes, depth });
+        }
+        if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
+            metrics.num_nodes.observe(num_nodes as f64);
+            metrics.query_depth.observe(depth as f64);
         }
         Ok(doc)
     }
