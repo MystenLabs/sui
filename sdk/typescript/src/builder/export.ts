@@ -15,6 +15,7 @@ export {
 	TransactionBlock,
 	isTransactionBlock,
 	type TransactionObjectArgument,
+	type TransactionResult,
 } from './TransactionBlock.js';
 
 export { getPureSerializationType };

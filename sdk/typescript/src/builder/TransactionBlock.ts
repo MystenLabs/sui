@@ -39,7 +39,7 @@ export type TransactionObjectArgument = Exclude<
 	{ kind: 'Input'; type: 'pure' }
 >;
 
-type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
+export type TransactionResult = Extract<TransactionArgument, { kind: 'Result' }> &
 	Extract<TransactionArgument, { kind: 'NestedResult' }>[];
 
 const DefaultOfflineLimits = {
