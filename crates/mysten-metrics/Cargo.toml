@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+axum.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tracing.workspace = true
 scopeguard.workspace = true

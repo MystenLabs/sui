@@ -6172,6 +6172,7 @@ name = "mysten-metrics"
 version = "0.7.0"
 dependencies = [
  "async-trait",
+ "axum",
  "dashmap",
  "futures",
  "once_cell",
@@ -9860,6 +9861,7 @@ dependencies = [
  "crossterm 0.25.0",
  "eyre",
  "futures",
+ "mysten-metrics",
  "prettytable-rs",
  "prometheus-parse",
  "reqwest",
