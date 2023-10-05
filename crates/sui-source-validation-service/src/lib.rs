@@ -370,6 +370,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 pub async fn watch_for_upgrades(
     config: &Config,
     app_state: Arc<RwLock<AppState>>,
+    network: Network,
     channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
@@ -385,7 +386,14 @@ pub async fn watch_for_upgrades(
         }
     }
 
-    let client: WsClient = WsClientBuilder::default().build(LOCALNET_WS_URL).await?;
+    let websocket_url = match network {
+        Network::Mainnet => MAINNET_WS_URL,
+        Network::Testnet => TESTNET_WS_URL,
+        Network::Devnet => DEVNET_WS_URL,
+        Network::Localnet => LOCALNET_WS_URL,
+    };
+
+    let client: WsClient = WsClientBuilder::default().build(websocket_url).await?;
     let mut subscription: Subscription<SuiTransactionBlockEffects> = client
         .subscribe(
             "suix_subscribeTransaction",

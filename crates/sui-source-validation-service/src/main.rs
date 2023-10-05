@@ -10,7 +10,7 @@ use clap::Parser;
 use telemetry_subscribers::TelemetryConfig;
 
 use sui_source_validation_service::{
-    host_port, initialize, parse_config, serve, watch_for_upgrades, AppState,
+    host_port, initialize, parse_config, serve, watch_for_upgrades, AppState, Network,
 };
 
 #[derive(Parser, Debug)]
@@ -31,8 +31,9 @@ pub async fn main() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let app_state_copy = app_state.clone();
     let mut threads = vec![];
-    let watcher =
-        tokio::spawn(async move { watch_for_upgrades(&package_config, app_state, None).await });
+    let watcher = tokio::spawn(async move {
+        watch_for_upgrades(&package_config, app_state, Network::Localnet, None).await
+    });
     threads.push(watcher);
     let server = tokio::spawn(async { serve(app_state_copy)?.await.map_err(anyhow::Error::from) });
     threads.push(server);
