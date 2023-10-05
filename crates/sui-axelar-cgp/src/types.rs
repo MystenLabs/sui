@@ -4,8 +4,8 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use ethcontract::json::json;
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::json;
 use strum_macros::{Display, EnumDiscriminants, EnumIter, EnumProperty};
 use thiserror::Error;
 use tokio::task::JoinError;
@@ -18,6 +18,7 @@ use sui_sdk::types::digests::TransactionDigest;
     derive(Display, EnumIter),
     strum(serialize_all = "kebab-case")
 )]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     #[error(transparent)]
     UncategorizedError(#[from] anyhow::Error),

@@ -18,13 +18,12 @@ thiserror.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 tracing.workspace = true
+serde_json.workspace = true
 
 clap = { workspace = true, features = ["env"] }
 
 rxrust = "1.0.0-beta.4"
-ethcontract = "0.25.1"
 
-web3 = "0.19.0"
 futures = "0.3.28"
 bcs = "0.1.5"
 
