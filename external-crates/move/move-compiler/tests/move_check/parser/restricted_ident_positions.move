@@ -1,10 +1,10 @@
-module r#a::r#acquries {
-    struct r#As<r#break> { r#const: r#break, r#move: u64 }
-    const r#False: bool = false;
-    fun r#invariant<r#break>(r#as: r#As<r#break>): r#break {
-        let r#As { r#const, r#move: r#copy } = r#as;
-        assert!(r#copy > 1, 0);
-        r#copy;
-        r#const
+module `a`::`acquries` {
+    struct `As`<`break`> { `const`: `break`, `move`: u64 }
+    const `False`: bool = false;
+    fun `invariant`<`break`>(`as`: `As`<`break`>): `break` {
+        let `As` { `const`, `move`: `copy` } = `as`;
+        assert!(`copy` > 1, 0);
+        `copy`;
+        `const`
     }
 }

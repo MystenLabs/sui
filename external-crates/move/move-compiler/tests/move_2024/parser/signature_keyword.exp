@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/signature_keyword.move:2:12
+  │
+2 │     struct signature<T> { t: T }
+  │            ^^^^^^^^^
+  │            │
+  │            Unexpected 'signature'
+  │            Expected an identifier
+

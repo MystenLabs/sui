@@ -83,6 +83,9 @@ pub enum Tok {
     RestrictedIdentifier,
     Mut,
     Enum,
+    Type,
+    Signature,
+    Match,
 }
 
 impl fmt::Display for Tok {
@@ -160,6 +163,9 @@ impl fmt::Display for Tok {
             RestrictedIdentifier => "r#[Identifier]",
             Mut => "mut",
             Enum => "enum",
+            Type => "type",
+            Signature => "signature",
+            Match => "match",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -440,6 +446,31 @@ fn find_token(
                 get_decimal_number(text)
             }
         }
+        '`' => {
+            let (is_valid, len) = if (text.len() > 1)
+                && matches!(text[1..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
+            {
+                let sub = &text[1..];
+                let len = get_name_len(sub);
+                if !matches!(text[1 + len..].chars().next(), Some('`')) {
+                    (false, len + 1)
+                } else {
+                    (true, len + 2)
+                }
+            } else {
+                (false, 1)
+            };
+            if !is_valid {
+                let loc = make_loc(file_hash, start_offset, start_offset + len);
+                let msg = "Missing closing backtick (`) for restricted identifier escaping";
+                return Err(Box::new(diag!(
+                    Syntax::InvalidRestrictedIdentifier,
+                    (loc, msg)
+                )));
+            } else {
+                (Tok::RestrictedIdentifier, len)
+            }
+        }
         'A'..='Z' | 'a'..='z' | '_' => {
             let is_hex = text.starts_with("x\"");
             if is_hex || text.starts_with("b\"") {
@@ -458,14 +489,6 @@ fn find_token(
                         )));
                     }
                 }
-            } else if text.starts_with("r#")
-                && text.len() > 2
-                && matches!(text[2..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
-            {
-                // r#identifier
-                let sub = &text[2..];
-                let len = get_name_len(sub);
-                (Tok::RestrictedIdentifier, 2 + len)
             } else {
                 let len = get_name_len(text);
                 (get_name_token(syntax_edition, &text[..len]), len)
@@ -659,6 +682,9 @@ fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
             SyntaxEdition::E2024 => match name {
                 "mut" => Tok::Mut,
                 "enum" => Tok::Enum,
+                "type" => Tok::Type,
+                "signature" => Tok::Signature,
+                "match" => Tok::Match,
                 _ => Tok::Identifier,
             },
         },

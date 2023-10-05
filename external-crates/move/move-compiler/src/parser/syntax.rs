@@ -294,9 +294,10 @@ fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     let id: Symbol = match context.tokens.peek() {
         Tok::Identifier => context.tokens.content().into(),
         Tok::RestrictedIdentifier => {
-            // peel off r#
-            let after_prefix = &context.tokens.content()[2..];
-            after_prefix.into()
+            // peel off backticks ``
+            let content = context.tokens.content();
+            let peeled = &content[1..content.len() - 1];
+            peeled.into()
         }
         _ => {
             return Err(unexpected_token_error(context.tokens, "an identifier"));

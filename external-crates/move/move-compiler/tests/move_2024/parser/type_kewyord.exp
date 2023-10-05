@@ -1,0 +1,9 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/type_kewyord.move:2:12
+  │
+2 │     struct type<T> { t: T }
+  │            ^^^^
+  │            │
+  │            Unexpected 'type'
+  │            Expected an identifier
+
