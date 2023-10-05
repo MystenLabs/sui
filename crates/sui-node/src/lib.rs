@@ -67,7 +67,8 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
+    ConsensusThroughputCalculator, ConsensusThroughputProfiler, Level, ThroughputProfile,
+    ThroughputProfileRanges,
 };
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
@@ -1067,12 +1068,29 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
+        let r = epoch_store
+            .protocol_config()
+            .consensus_throughput_profile_ranges()
+            .iter()
+            .enumerate()
+            .map(|(profile_index, throughput)| ThroughputProfile {
+                level: Level::from(profile_index),
+                throughput: *throughput,
+            })
+            .collect::<Vec<ThroughputProfile>>();
+
+        let ranges = if r.is_empty() {
+            ThroughputProfileRanges::default()
+        } else {
+            ThroughputProfileRanges::new(&r)
+        };
+
         let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
             throughput_calculator.clone(),
             None,
             None,
             state.metrics.clone(),
-            ThroughputProfileRanges::default(), // TODO: move configuration to protocol-config and potentially differentiate for each environment.
+            ranges,
         ));
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
