@@ -1,7 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{schema_v2::tx_indices, types_v2::TxIndex};
+use sui_types::SuiAddress;
+
+use crate::{
+    models_v2::address_metrics::DerivedAddressInfo,
+    models_v2::move_call_metrics::DerivedMoveCallInfo,
+    schema_v2::tx_indices,
+    types_v2::{IndexerResult, TxIndex},
+};
+
 use diesel::prelude::*;
 
 #[derive(QueryableByName)]
@@ -61,5 +69,51 @@ impl From<TxIndex> for StoredTxIndex {
                 .map(|(p, m, f)| Some(format!("{}::{}::{}", p, m, f)))
                 .collect(),
         }
+    }
+}
+
+impl StoredTxIndex {
+    pub fn get_senders_address_info(&self) -> Vec<DerivedAddressInfo> {
+        let tx_digest = self.transaction_digest.clone();
+        self.senders
+            .iter()
+            .map(|&s| DerivedAddressInfo {
+                address: s.clone(),
+                tx: tx_digest.clone(),
+                checkpoint: self.checkpoint_sequence_number,
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn get_recipients_address_info(&self) -> Vec<DerivedAddressInfo> {
+        let tx_digest = self.transaction_digest.clone();
+        self.recipients
+            .iter()
+            .map(|&s| DerivedAddressInfo {
+                address: s.clone(),
+                tx: tx_digest.clone(),
+                checkpoint: self.checkpoint_sequence_number,
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn get_move_calls(&self) -> Vec<DerivedMoveCallInfo> {
+        self.package_module_functions
+            .iter()
+            .filter_map(|pmf_option| {
+                let pmf = pmf_option.as_ref()?;
+                let mut split = pmf.split("::");
+                let package = split.next()?;
+                let module = split.next()?;
+                let function = split.next()?;
+                Some((
+                    self.tx_sequence_number,
+                    self.checkpoint_sequence_number,
+                    package.to_string(),
+                    module.to_string(),
+                    function.to_string(),
+                ))
+            })
+            .collect::<Vec<_>>()
     }
 }

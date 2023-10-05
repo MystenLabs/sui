@@ -10,7 +10,7 @@ use tracing::{error, info};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::metrics::IndexerMetrics;
-
+use crate::models_v2::tx_count_metrics::TxCountMetricsDelta;
 use crate::store::IndexerStoreV2;
 use crate::types_v2::IndexerResult;
 use crate::IndexerConfig;
@@ -110,9 +110,11 @@ async fn commit_checkpoints<S>(
     let tx_count = tx_batch.len();
     let epochs_count = epochs_batch.len();
 
+    let tx_count_metrics_delta = TxCountMetricsDelta::from_tx_batch(&tx_batch);
     {
         let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
         futures::future::join_all(vec![
+            state.persist_tx_count_metrics(&tx_batch),
             state.persist_transactions(tx_batch),
             state.persist_tx_indices(tx_indices_batch),
             state.persist_events(events_batch),

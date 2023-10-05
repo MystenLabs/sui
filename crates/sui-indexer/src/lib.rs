@@ -44,6 +44,7 @@ pub mod metrics;
 pub mod models;
 pub mod models_v2;
 pub mod processors;
+pub mod processors_v2;
 pub mod schema;
 pub mod schema_v2;
 pub mod store;

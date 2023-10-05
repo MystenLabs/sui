@@ -11,7 +11,6 @@ use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
-
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };

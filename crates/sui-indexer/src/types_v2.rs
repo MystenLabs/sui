@@ -42,7 +42,6 @@ pub struct IndexedCheckpoint {
     pub non_refundable_storage_fee: u64,
     pub checkpoint_commitments: Vec<CheckpointCommitment>,
     pub validator_signature: AggregateAuthoritySignature,
-    pub successful_tx_num: usize,
     pub end_of_epoch_data: Option<EndOfEpochData>,
     pub end_of_epoch: bool,
 }
@@ -51,7 +50,6 @@ impl IndexedCheckpoint {
     pub fn from_sui_checkpoint(
         checkpoint: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
         contents: &sui_types::messages_checkpoint::CheckpointContents,
-        successful_tx_num: usize,
     ) -> Self {
         let total_gas_cost = checkpoint.epoch_rolling_gas_cost_summary.computation_cost as i64
             + checkpoint.epoch_rolling_gas_cost_summary.storage_cost as i64
@@ -73,7 +71,6 @@ impl IndexedCheckpoint {
             non_refundable_storage_fee: checkpoint
                 .epoch_rolling_gas_cost_summary
                 .non_refundable_storage_fee,
-            successful_tx_num,
             network_total_transactions: checkpoint.network_total_transactions,
             timestamp_ms: checkpoint.timestamp_ms,
             validator_signature: auth_sig.clone(),
@@ -539,4 +536,52 @@ impl From<IndexedObjectChange> for ObjectChange {
             },
         }
     }
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+#[diesel(primary_key(checkpoint))]
+pub struct AddressMetrics {
+    pub checkpoint: i64,
+    pub epoch: i64,
+    pub timestamp_ms: i64,
+    pub cumulative_addresses: i64,
+    pub cumulative_active_addresses: i64,
+    pub daily_active_addresses: i64,
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+#[diesel(primary_key(checkpoint_sequence_number))]
+pub struct TxCountMetrics {
+    pub checkpoint_sequence_number: i64,
+    pub epoch: i64,
+    pub timestamp_ms: i64,
+    pub total_transaction_blocks: i64,
+    pub total_successful_transaction_blocks: i64,
+    pub total_successful_transactions: i64,
+    pub network_total_transaction_blocks: i64,
+    pub network_total_successful_transactions: i64,
+    pub network_total_successful_transaction_blocks: i64,
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+#[diesel(primary_key(checkpoint))]
+pub struct NetworkMetrics {
+    pub checkpoint: i64,
+    pub epoch: i64,
+    pub real_time_tps: f64,
+    pub peak_tps_30d: f64,
+    pub total_addresses: i64,
+    pub total_objects: i64,
+    pub total_packages: i64,
+}
+
+#[derive(Queryable, Debug, Identifiable)]
+pub struct MoveCallMetrics {
+    pub id: i64,
+    pub epoch: i64,
+    pub day: i64,
+    pub move_package: String,
+    pub move_module: String,
+    pub move_function: String,
+    pub count: i64,
 }
