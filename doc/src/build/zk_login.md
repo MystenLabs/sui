@@ -234,6 +234,8 @@ Because generating a ZK proof can be resource-intensive and potentially slow on 
 
 Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
+
 ```bash
 curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
@@ -241,6 +243,15 @@ curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json
 "maxEpoch":"10", \
 "jwtRandomness":"100681567828351849884072155819400689117", \
 "salt":"248191903847969014646285995941615069143", \
+"keyClaimName":"sub" \
+}'
+
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
+"maxEpoch":"10", \
+"jwtRandomness":"S76Qi8c/SZlmmotnFMr13Q==", \
+"salt":"urgFnwIxJ++Ooswtf0Nn1w==", \
 "keyClaimName":"sub" \
 }'
 
