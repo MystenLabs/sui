@@ -53,6 +53,10 @@ pub enum DbValidationError {
     RequiresPackageAndModule,
     #[error("Requires package")]
     RequiresPackage,
+    #[error("'first' can only be used with 'after")]
+    FirstAfter,
+    #[error("'last' can only be used with 'before'")]
+    LastBefore,
 }
 
 pub(crate) struct PgManager {
@@ -340,8 +344,6 @@ impl PgManager {
         let mut query = objects::dsl::objects.into_boxed();
 
         if let Some(filter) = filter {
-            self.validate_obj_filter(&filter)?;
-
             if let Some(object_ids) = filter.object_ids {
                 query = query.filter(
                     objects::dsl::object_id.eq_any(
@@ -458,6 +460,32 @@ impl PgManager {
         Ok(())
     }
 
+    pub(crate) fn validate_cursor_pagination(
+        &self,
+        first: &Option<u64>,
+        after: &Option<String>,
+        last: &Option<u64>,
+        before: &Option<String>,
+    ) -> Result<(), Error> {
+        if first.is_some() && before.is_some() {
+            return Err(DbValidationError::FirstAfter.into());
+        }
+
+        if last.is_some() && after.is_some() {
+            return Err(DbValidationError::LastBefore.into());
+        }
+
+        if before.is_some() && after.is_some() {
+            return Err(Error::CursorNoBeforeAfter);
+        }
+
+        if first.is_some() && last.is_some() {
+            return Err(Error::CursorNoFirstLast);
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
         let digest = Digest::from_str(digest)?.into_vec();
 
@@ -544,6 +572,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
+        self.validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
             self.validate_tx_block_filter(filter)?;
         }
@@ -603,6 +632,10 @@ impl PgManager {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>, Error> {
+        self.validate_cursor_pagination(&first, &after, &last, &before)?;
+        if let Some(filter) = &filter {
+            self.validate_obj_filter(filter)?;
+        }
         let objects = self
             .multi_get_objs(first, after, last, before, filter)
             .await?;
@@ -631,6 +664,7 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
+        self.validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
             .multi_get_checkpoints(first, after, last, before)
             .await?;
