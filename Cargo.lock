@@ -10874,7 +10874,6 @@ name = "sui-oracle"
 version = "1.12.0"
 dependencies = [
  "anyhow",
- "axum",
  "bcs",
  "chrono",
  "clap",

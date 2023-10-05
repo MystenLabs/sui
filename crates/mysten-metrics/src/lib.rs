@@ -464,7 +464,9 @@ pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
     registry_service
 }
 
-async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+pub async fn metrics(
+    Extension(registry_service): Extension<RegistryService>,
+) -> (StatusCode, String) {
     let metrics_families = registry_service.gather_all();
     match TextEncoder.encode_to_string(&metrics_families) {
         Ok(metrics) => (StatusCode::OK, metrics),
