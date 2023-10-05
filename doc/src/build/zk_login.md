@@ -232,7 +232,11 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+Builders have two options: either use the Mysten Labs-maintained proving service or run their own service using the docker images we provide.
+
+### Mysten-Labs proving service
+
+If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -287,6 +291,50 @@ export type PartialZkLoginSignature = Omit<
 >;
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ````
+
+### Setting up your own services
+
+We have published two docker images: [prover](https://hub.docker.com/) and [prover-fe](https://hub.docker.com/).
+
+The prover service needs the [Groth16 proving key](https://docs.circom.io/getting-started/proving-circuits/) that was generated during the [ceremony](https://blog.sui.io/crs-ceremony-zklogin/). Please download the zkey file (CRS) from the Sui Foundation's [github](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey). You can check that you have downloaded the right zkey file by verifying that its Blake2b hash is `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` (Tip: use b2sum to compute the blake2b hash).
+
+Run prover at `PORT1` with the zkey file:
+
+```bash
+docker run \
+  -e ZKEY=/app/binaries/zkLogin.zkey \
+  -e WITNESS_BINARIES=/app/binaries \
+  -v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
+  -p PORT1:8080 \
+  <prover-image>
+```
+
+Run prover-fe at `PORT2`:
+
+```bash
+docker run \
+    -e PROVER_URI='http://localhost:PORT1/input' \
+    -e NODE_ENV=production \
+    -e DEBUG=zkLogin:info,jwks \
+    -p PORT2:8080 \
+    <prover-fe-image>
+```
+
+Expose the prover-fe service appropriately and keep the prover service internal.
+
+Two endpoints are supported on prover-fe:
+
+1. `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`
+2. `/v1`: See above.
+
+A few things to note:
+
+1. The `prover` image needs to be run on Linux-based machines (amd64). 
+
+2. If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
+
+3. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
+
 
 ## Assemble the zkLogin signature and submit the transaction
 
