@@ -29,6 +29,8 @@ use std::{
 // Context
 //**************************************************************************************************
 
+const DEBUG_PRINT: bool = false;
+
 struct Context<'env> {
     env: &'env mut CompilationEnv,
     struct_declared_abilities: UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
@@ -408,8 +410,6 @@ fn function(
         body,
     }
 }
-
-const DEBUG_PRINT: bool = false;
 
 fn function_body(
     context: &mut Context,

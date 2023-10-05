@@ -22,11 +22,11 @@ warning[W09004]: unnecessary trailing semicolon
   ┌─ tests/move_check/liveness/trailing_semi_loops.move:7:26
   │
 7 │         { (loop (): ()) };
-  │         -----------------^
-  │         │                │
-  │         │                Invalid trailing ';'
-  │         │                A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
-  │         Any code after this expression will not be reached
+  │            -------       ^
+  │            │             │
+  │            │             Invalid trailing ';'
+  │            │             A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │            Any code after this expression will not be reached
   │
   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
