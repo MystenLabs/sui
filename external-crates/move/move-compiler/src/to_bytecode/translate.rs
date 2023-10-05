@@ -795,7 +795,13 @@ fn var(v: Var) -> IR::Var {
 }
 
 fn field(f: Field) -> IR::Field {
-    sp(f.0.loc, IR::Field_(f.0.value))
+    // If it's a positional field, lower it into `pos{field_idx}` so they're a valid identifier
+    let field_ident = if f.0.value.parse::<u8>().is_ok() {
+        format!("pos{}", f.0.value).into()
+    } else {
+        f.0.value
+    };
+    sp(f.0.loc, IR::Field_(field_ident))
 }
 
 fn struct_definition_name(
