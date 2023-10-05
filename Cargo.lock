@@ -9870,7 +9870,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sui-config",
- "sui-node",
  "sui-swarm-config",
  "sui-types",
  "tempfile",

@@ -30,7 +30,6 @@ prometheus-parse.workspace = true
 mysten-metrics.workspace = true
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
-sui-node = { path = "../sui-node" }
 sui-swarm-config =  { path = "../sui-swarm-config" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
