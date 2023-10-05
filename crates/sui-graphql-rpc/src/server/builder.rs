@@ -117,18 +117,15 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 mod tests {
     use super::*;
     use crate::{
-        context_data::{
-            data_provider::DataProvider, db_data_provider::PgManager,
-            sui_sdk_data_provider::sui_sdk_client_v0,
-        },
+        context_data::{data_provider::DataProvider, sui_sdk_data_provider::sui_sdk_client_v0},
         extensions::timeout::{Timeout, TimeoutConfig},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
+    use std::sync::Arc;
     use std::time::Duration;
-    use std::{env, sync::Arc};
 
     #[tokio::test]
     async fn test_timeout() {

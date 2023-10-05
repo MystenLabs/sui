@@ -283,7 +283,6 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
     type Error = Error;
 
     fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
-        // TODO (wlmyng): Split the below into resolver methods
         let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
 
         let sender_signed_data: SenderSignedData =
@@ -329,7 +328,6 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
 impl TryFrom<StoredObject> for Object {
     type Error = Error;
 
-    // TODO (wlmyng): Refactor into resolvers once we retire sui-sdk data provider
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let version = o.object_version as u64;
         let (object_id, _sequence_number, digest) = &o.get_object_ref()?;
