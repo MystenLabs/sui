@@ -2700,7 +2700,7 @@ dependencies = [
  "cpufeatures",
  "curve25519-dalek-derive",
  "digest 0.10.6",
- "fiat-crypto 0.2.1",
+ "fiat-crypto",
  "platforms",
  "rustc_version",
  "subtle",
@@ -2726,7 +2726,6 @@ checksum = "44339b9ecede7f72a0d3b012bf9bb5a616dc8bfde23ce544e42da075c87198f0"
 dependencies = [
  "byteorder",
  "digest 0.9.0",
- "fiat-crypto 0.1.17",
  "rand_core 0.6.4",
  "subtle",
  "zeroize",
@@ -3783,12 +3782,6 @@ dependencies = [
  "rand_core 0.6.4",
  "subtle",
 ]
-
-[[package]]
-name = "fiat-crypto"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a214f5bb88731d436478f3ae1f8a277b62124089ba9fb67f4f93fb100ef73c90"
 
 [[package]]
 name = "fiat-crypto"
@@ -14092,7 +14085,6 @@ dependencies = [
  "fdlimit",
  "ff 0.12.1",
  "ff 0.13.0",
- "fiat-crypto 0.1.17",
  "findshlibs",
  "fixed-hash",
  "fixedbitset 0.2.0",

@@ -47,7 +47,6 @@ move-bytecode-viewer = { path = "../move-bytecode-viewer" }
 
 [dev-dependencies]
 datatest-stable = "0.1.1"
-httpmock = "0.6.6"
 
 [[bin]]
 name = "move"
@@ -66,6 +65,4 @@ name = "build_testsuite"
 harness = false
 
 [features]
-address20 = ["move-stdlib/address20"]
-address32 = ["move-stdlib/address32"]
 tiered-gas = [ "move-vm-test-utils/tiered-gas" ]

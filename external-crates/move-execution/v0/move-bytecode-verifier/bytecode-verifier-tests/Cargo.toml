@@ -23,4 +23,3 @@ move-vm-config = { path = "../../move-vm/config" }
 
 [features]
 fuzzing = ["move-binary-format/fuzzing"]
-address32 = ["move-core-types/address32"]
