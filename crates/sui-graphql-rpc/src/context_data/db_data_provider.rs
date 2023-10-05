@@ -41,6 +41,20 @@ use sui_sdk::types::{
     transaction::{SenderSignedData, TransactionDataAPI},
 };
 
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
+pub enum DbValidationError {
+    #[error("Before checkpoint must be greater than after checkpoint")]
+    InvalidCheckpointOrder,
+    #[error("Filtering objects by package::module::type is not currently supported")]
+    UnsupportedPMT,
+    #[error("Filtering objects by object keys is not currently supported")]
+    UnsupportedObjectKeys,
+    #[error("Requires package and module")]
+    RequiresPackageAndModule,
+    #[error("Requires package")]
+    RequiresPackage,
+}
+
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
 }
@@ -164,6 +178,7 @@ impl PgManager {
                     transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
                 ))
                 .into_boxed();
+
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -181,9 +196,21 @@ impl PgManager {
             if let Some(kind) = filter.kind {
                 query = query.filter(transactions::dsl::transaction_kind.eq(kind as i16));
             }
-            if let Some(checkpoint) = filter.checkpoint {
+            if let Some(checkpoint) = filter.after_checkpoint {
                 query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
+                    .filter(transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64));
+            }
+            if let Some(checkpoint) = filter.before_checkpoint {
+                query = query
+                    .filter(transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64));
+            }
+            if let Some(transaction_ids) = filter.transaction_ids {
+                let digests = transaction_ids
+                    .into_iter()
+                    .map(|id| Ok::<Vec<u8>, Error>(Digest::from_str(&id)?.into_vec()))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
             // Filters for tx_indices table
@@ -207,14 +234,35 @@ impl PgManager {
                 }
                 _ => {}
             }
+            // sign and sent are indexed the same
+            let mut senders = Vec::new();
+            if let Some(signer) = filter.sign_address {
+                senders.push(signer.into_vec());
+            }
             if let Some(sender) = filter.sent_address {
-                query = query.filter(tx_indices::dsl::senders.contains(vec![sender.into_vec()]));
+                senders.push(sender.into_vec());
+            }
+            if !senders.is_empty() {
+                query = query.filter(tx_indices::dsl::senders.contains(senders));
             }
             if let Some(receiver) = filter.recv_address {
                 query =
                     query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
             }
-            // TODO: sign_, paid_address, input_, changed_object
+            if let Some(paid_address) = filter.paid_address {
+                query =
+                    query.filter(tx_indices::dsl::payers.contains(vec![paid_address.into_vec()]));
+            }
+
+            if let Some(input_object) = filter.input_object {
+                query = query
+                    .filter(tx_indices::dsl::input_objects.contains(vec![input_object.into_vec()]));
+            }
+            if let Some(changed_object) = filter.changed_object {
+                query = query.filter(
+                    tx_indices::dsl::changed_objects.contains(vec![changed_object.into_vec()]),
+                );
+            }
         };
 
         let limit = first.or(last).unwrap_or(10) as i64;
@@ -292,6 +340,8 @@ impl PgManager {
         let mut query = objects::dsl::objects.into_boxed();
 
         if let Some(filter) = filter {
+            self.validate_obj_filter(&filter)?;
+
             if let Some(object_ids) = filter.object_ids {
                 query = query.filter(
                     objects::dsl::object_id.eq_any(
@@ -301,10 +351,6 @@ impl PgManager {
                             .collect::<Vec<_>>(),
                     ),
                 );
-            }
-
-            if let Some(_object_keys) = filter.object_keys {
-                // TODO: Temporary table? Probably better than a long list of ORs
             }
 
             if let Some(owner) = filter.owner {
@@ -364,6 +410,50 @@ impl PgManager {
             .parse::<i64>()
             .map_err(|_| Error::Internal("Invalid checkpoint cursor".to_string()))?;
         Ok(sequence_number)
+    }
+
+    pub(crate) fn validate_package_dependencies(
+        &self,
+        package: Option<&SuiAddress>,
+        module: Option<&String>,
+        function: Option<&String>,
+    ) -> Result<(), Error> {
+        if function.is_some() {
+            if package.is_none() || module.is_none() {
+                return Err(DbValidationError::RequiresPackageAndModule.into());
+            }
+        } else if module.is_some() && package.is_none() {
+            return Err(DbValidationError::RequiresPackage.into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_tx_block_filter(
+        &self,
+        filter: &TransactionBlockFilter,
+    ) -> Result<(), Error> {
+        if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
+            if before <= after {
+                return Err(DbValidationError::InvalidCheckpointOrder.into());
+            }
+        }
+        self.validate_package_dependencies(
+            filter.package.as_ref(),
+            filter.module.as_ref(),
+            filter.function.as_ref(),
+        )?;
+        Ok(())
+    }
+
+    pub(crate) fn validate_obj_filter(&self, filter: &ObjectFilter) -> Result<(), Error> {
+        if filter.package.is_some() || filter.module.is_some() || filter.ty.is_some() {
+            return Err(DbValidationError::UnsupportedPMT.into());
+        }
+        if filter.object_keys.is_some() {
+            return Err(DbValidationError::UnsupportedObjectKeys.into());
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
@@ -452,6 +542,10 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
+        if let Some(filter) = &filter {
+            self.validate_tx_block_filter(filter)?;
+        }
+
         let transactions = self
             .multi_get_txs(first, after, last, before, filter)
             .await?;
@@ -590,7 +684,6 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
     type Error = Error;
 
     fn try_from(tx: StoredTransaction) -> Result<Self, Self::Error> {
-        // TODO (wlmyng): Split the below into resolver methods
         let digest = Digest::try_from(tx.transaction_digest.as_slice())?;
 
         let sender_signed_data: SenderSignedData =
@@ -636,7 +729,6 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
 impl TryFrom<StoredObject> for Object {
     type Error = Error;
 
-    // TODO (wlmyng): Refactor into resolvers once we retire sui-sdk data provider
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let version = o.object_version as u64;
         let (object_id, _sequence_number, digest) = &o.get_object_ref()?;

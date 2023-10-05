@@ -153,14 +153,6 @@ impl Query {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        if let Some(filter) = &filter {
-            validate_package_dependencies(
-                filter.package.as_ref(),
-                filter.module.as_ref(),
-                filter.function.as_ref(),
-            )?;
-        }
-
         ctx.data_unchecked::<PgManager>()
             .fetch_txs(first, after, last, before, filter)
             .await
@@ -176,14 +168,6 @@ impl Query {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>> {
-        if let Some(filter) = &filter {
-            validate_package_dependencies(
-                filter.package.as_ref(),
-                filter.module.as_ref(),
-                filter.ty.as_ref(),
-            )?;
-        }
-
         ctx.data_unchecked::<PgManager>()
             .fetch_objs(first, after, last, before, filter)
             .await
@@ -199,19 +183,4 @@ impl Query {
             .fetch_protocol_config(protocol_version)
             .await
     }
-}
-
-pub(crate) fn validate_package_dependencies(
-    package: Option<&SuiAddress>,
-    module: Option<&String>,
-    function: Option<&String>,
-) -> Result<()> {
-    if function.is_some() {
-        if package.is_none() || module.is_none() {
-            return Err(Error::RequiresPackageAndModule.extend());
-        }
-    } else if module.is_some() && package.is_none() {
-        return Err(Error::RequiresPackage.extend());
-    }
-    Ok(())
 }
