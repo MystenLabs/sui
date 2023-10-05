@@ -399,6 +399,8 @@ type Query {
 	checkpoint(id: CheckpointId): Checkpoint
 	transactionBlock(digest: String!): TransactionBlock
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
@@ -537,13 +539,15 @@ input TransactionBlockFilter {
 	module: String
 	function: String
 	kind: TransactionBlockKindInput
-	checkpoint: Int
+	afterCheckpoint: Int
+	beforeCheckpoint: Int
 	signAddress: SuiAddress
 	sentAddress: SuiAddress
 	recvAddress: SuiAddress
 	paidAddress: SuiAddress
 	inputObject: SuiAddress
 	changedObject: SuiAddress
+	transactionIds: [String!]
 }
 
 enum TransactionBlockKindInput {

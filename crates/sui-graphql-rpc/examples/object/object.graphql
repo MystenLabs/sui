@@ -1,0 +1,17 @@
+{
+  object(
+    address: "0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91"
+  ) {
+    location
+    version
+    digest
+    storageRebate
+    owner {
+      defaultNameServiceName
+    }
+    previousTransactionBlock {
+      digest
+    }
+    kind
+  }
+}
