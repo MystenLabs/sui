@@ -829,7 +829,7 @@ importers:
         version: 8.0.1(webpack@5.79.0)
       eslint-webpack-plugin:
         specifier: ^4.0.1
-        version: 4.0.1(webpack@5.79.0)
+        version: 4.0.1(eslint@8.45.0)(webpack@5.79.0)
       git-rev-sync:
         specifier: ^3.0.2
         version: 3.0.2
@@ -1290,6 +1290,15 @@ importers:
 
   sdk/docs:
     dependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../dapp-kit
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../typescript
+      '@tanstack/react-query':
+        specifier: ^4.29.25
+        version: 4.29.25(react-dom@18.2.0)(react@18.2.0)
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
@@ -1308,6 +1317,10 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
 
   sdk/kiosk:
     dependencies:
@@ -14060,7 +14073,7 @@ packages:
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
     dev: true
 
-  /eslint-webpack-plugin@4.0.1(webpack@5.79.0):
+  /eslint-webpack-plugin@4.0.1(eslint@8.45.0)(webpack@5.79.0):
     resolution: {integrity: sha512-fUFcXpui/FftGx3NzvWgLZXlLbu+m74sUxGEgxgoxYcUtkIQbS6SdNNZkS99m5ycb23TfoNYrDpp1k/CK5j6Hw==}
     engines: {node: '>= 14.15.0'}
     peerDependencies:
@@ -14068,6 +14081,7 @@ packages:
       webpack: ^5.0.0
     dependencies:
       '@types/eslint': 8.37.0
+      eslint: 8.45.0
       jest-worker: 29.5.0
       micromatch: 4.0.5
       normalize-path: 3.0.0
