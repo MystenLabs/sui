@@ -965,7 +965,6 @@ async fn run_bench_worker(
     Some(worker)
 }
 
-
 /// Creates a new progress bar based on the provided duration. The method is agnostic to the actual
 /// usage - weather we want to track the overall benchmark duration or an individual benchmark run.
 fn create_progress_bar(duration: Interval) -> ProgressBar {
