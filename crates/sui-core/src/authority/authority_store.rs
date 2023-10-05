@@ -986,6 +986,7 @@ impl AuthorityStore {
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes objects, certificates, parents and clean up locks atomically.
+    #[instrument(level = "debug", skip_all)]
     pub async fn update_state(
         &self,
         inner_temporary_store: InnerTemporaryStore,
