@@ -225,7 +225,12 @@ impl PackageHooks for TestHooks {
         _: &PathBuf,
         manifest: &SourceManifest,
     ) -> anyhow::Result<Symbol> {
-        Ok(manifest.package.name)
+        let name = manifest.package.name.to_string();
+        if name.ends_with("-rename") {
+            Ok(Symbol::from(name.replace("-rename", "-resolved")))
+        } else {
+            Ok(manifest.package.name)
+        }
     }
 }
 
