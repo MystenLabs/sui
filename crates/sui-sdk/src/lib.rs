@@ -116,6 +116,9 @@ pub const SUI_TESTNET_URL: &str = "https://fullnode.testnet.sui.io:443";
 /// By default the `maximum concurrent requests` is set to 256 and
 /// the `request timeout` is set to 60 seconds. These can be adjusted using the
 /// `max_concurrent_requests` function, and the `request_timeout` function.
+/// If you use the WebSocket, consider setting the `ws_ping_interval` field to a
+/// value of your choice to prevent the inactive WS subscription being
+/// disconnected due to proxy timeout.
 ///
 /// # Examples
 ///
