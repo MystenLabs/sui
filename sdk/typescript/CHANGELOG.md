@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.43.2
+
+### Patch Changes
+
+- 9b052166d: Register Option enum to sdk bcs registry
+
 ## 0.43.1
 
 ### Patch Changes
