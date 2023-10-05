@@ -317,6 +317,10 @@ struct FeatureFlags {
     // If true, allow verify with legacy zklogin address
     #[serde(skip_serializing_if = "is_false")]
     verify_legacy_zklogin_address: bool,
+
+    // Enable throughput aware consensus submission
+    #[serde(skip_serializing_if = "is_false")]
+    throughput_aware_consensus_submission: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1001,6 +1005,10 @@ impl ProtocolConfig {
     pub fn verify_legacy_zklogin_address(&self) -> bool {
         self.feature_flags.verify_legacy_zklogin_address
     }
+
+    pub fn throughput_aware_consensus_submission(&self) -> bool {
+        self.feature_flags.throughput_aware_consensus_submission
+    }
 }
 
 #[cfg(not(msim))]
@@ -1601,6 +1609,10 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.throughput_aware_consensus_submission = true
+                    }
                 }
                 // Use this template when making changes:
                 //

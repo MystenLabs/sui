@@ -44,9 +44,10 @@ use tokio::time::{self, sleep, timeout};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::{classify, SequencedConsensusTransactionKey};
-use crate::consensus_throughput_calculator::ConsensusThroughputProfiler;
+use crate::consensus_throughput_calculator::{ConsensusThroughputProfiler, Level};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt};
+use sui_protocol_config::ProtocolConfig;
 use sui_simulator::anemo::PeerId;
 use sui_simulator::narwhal_network::connectivity::ConnectionStatus;
 use sui_types::base_types::AuthorityName;
@@ -312,6 +313,7 @@ pub struct ConsensusAdapter {
     /// Semaphore limiting parallel submissions to narwhal
     submit_semaphore: Semaphore,
     latency_observer: LatencyObserver,
+    protocol_config: ProtocolConfig,
 }
 
 pub trait CheckConnection: Send + Sync {
@@ -343,6 +345,7 @@ impl ConsensusAdapter {
         max_submit_position: Option<usize>,
         submit_delay_step_override: Option<Duration>,
         metrics: ConsensusAdapterMetrics,
+        protocol_config: ProtocolConfig,
     ) -> Self {
         let num_inflight_transactions = Default::default();
         let low_scoring_authorities =
@@ -360,6 +363,7 @@ impl ConsensusAdapter {
             submit_semaphore: Semaphore::new(max_pending_local_submissions),
             latency_observer: LatencyObserver::new(),
             consensus_throughput_profiler: ArcSwapOption::empty(),
+            protocol_config,
         }
     }
 
@@ -434,7 +438,7 @@ impl ConsensusAdapter {
         committee: &Committee,
         tx_digest: &TransactionDigest,
     ) -> (Duration, usize, usize, usize) {
-        let (mut position, positions_moved, preceding_disconnected) =
+        let (position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
@@ -446,8 +450,9 @@ impl ConsensusAdapter {
 
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
-        let latency = self.override_by_throughput_profiler(latency);
-        let (delay_step, position) = self.override_by_max_submit_position_settings(latency, position);
+        let latency = self.override_by_throughput_profiler(position, latency);
+        let (delay_step, position) =
+            self.override_by_max_submit_position_settings(latency, position);
 
         self.metrics
             .sequencing_resubmission_interval_ms
@@ -464,19 +469,21 @@ impl ConsensusAdapter {
     // According to the throughput profile we want to either allow some transaction duplication or not)
     // When throughput profile is Low and the validator is in position = 1, then it will submit to consensus with much lower latency.
     // When throughput profile is High then we go back to default operation and no-one co-submits.
-    fn override_by_throughput_profiler(&self, latency: Duration) -> Duration {
+    fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
+        const LOW_THROUGHPUT_LATENCY_MS: u64 = 800;
+
         let p = self.consensus_throughput_profiler.load();
+
         if let Some(profiler) = p.as_ref() {
             let (level, _) = profiler.throughput_level();
 
-            // we only run this for the position = 1 validator to help the position = 0.
-            if position == 1 {
-                match level {
-                    Level::Low => {
-                        return Duration::from_secs(1) // we can tune this further - for now assign to 1 second as this gets doubled on the final assignment
-                    }
-                    _ => {}
-                }
+            // we only run this for the position = 1 validator to co-submit with the validator of
+            // position = 0. We also enable this only when the feature is enabled on the protocol config.
+            if self.protocol_config.throughput_aware_consensus_submission()
+                && position == 1
+                && level == Level::Low
+            {
+                return Duration::from_millis(LOW_THROUGHPUT_LATENCY_MS); // we can tune this further - for now assign to 1 second as this gets doubled on the final assignment
             }
         }
         latency
@@ -485,7 +492,11 @@ impl ConsensusAdapter {
     /// Overrides the latency and the position if there are defined settings for `max_submit_position` and
     /// `submit_delay_step_override`. If the `max_submit_position` has defined, then that will always be used
     /// irrespective of any so far decision. Same for the `submit_delay_step_override`.
-    fn override_by_max_submit_position_settings(&self, latency: Duration, mut position: usize) -> (Duration, usize) {
+    fn override_by_max_submit_position_settings(
+        &self,
+        latency: Duration,
+        mut position: usize,
+    ) -> (Duration, usize) {
         // Respect any manual override for position and latency from the settings
         if let Some(max_submit_position) = self.max_submit_position {
             position = std::cmp::min(position, max_submit_position);
@@ -1152,6 +1163,7 @@ mod adapter_tests {
             Some(1),
             Some(Duration::from_secs(2)),
             ConsensusAdapterMetrics::new_test(),
+            sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
         );
 
         // transaction to submit
@@ -1183,6 +1195,7 @@ mod adapter_tests {
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE(),
         );
 
         let (delay_step, position, positions_moved, _) =

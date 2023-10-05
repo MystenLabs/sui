@@ -93,6 +93,7 @@ impl AuthorityServer {
             None,
             None,
             ConsensusAdapterMetrics::new_test(),
+            state.epoch_store_for_testing().protocol_config().clone(),
         ));
 
         let metrics = Arc::new(ValidatorServiceMetrics::new_for_tests());
