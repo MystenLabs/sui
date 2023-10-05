@@ -18,8 +18,10 @@ diesel.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 hex.workspace = true
 hyper.workspace = true
+mysten-metrics.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true
+prometheus.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true

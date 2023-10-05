@@ -11,6 +11,7 @@ mod client;
 mod context_data;
 mod error;
 mod extensions;
+mod metrics;
 mod types;
 
 use async_graphql::*;
