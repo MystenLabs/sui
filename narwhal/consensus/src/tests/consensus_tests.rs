@@ -534,7 +534,7 @@ async fn test_leader_schedule_from_store() {
     assert_ne!(leader_2.id(), new_leader_2.id());
 }
 
-fn setup_tracing() -> TelemetryGuards {
+fn setup_tracing() -> Vec<TelemetryGuards> {
     // Setup tracing
     let tracing_level = "debug";
     let network_tracing_level = "info";

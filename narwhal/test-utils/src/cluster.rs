@@ -791,7 +791,7 @@ impl AuthorityDetails {
     }
 }
 
-pub fn setup_tracing() -> TelemetryGuards {
+pub fn setup_tracing() -> Vec<TelemetryGuards> {
     // Setup tracing
     let tracing_level = "debug";
     let network_tracing_level = "info";

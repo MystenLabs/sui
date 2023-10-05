@@ -222,7 +222,7 @@ fn string_transaction(id: u32) -> String {
     format!("test transaction:{id}")
 }
 
-fn setup_tracing() -> TelemetryGuards {
+fn setup_tracing() -> Vec<TelemetryGuards> {
     // Setup tracing
     let tracing_level = "debug";
     let network_tracing_level = "info";
