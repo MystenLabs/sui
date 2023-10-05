@@ -354,7 +354,9 @@ impl PgManager {
             }
 
             if let Some(owner) = filter.owner {
-                query = query.filter(objects::dsl::owner_id.eq(owner.into_vec()));
+                query = query
+                    .filter(objects::dsl::owner_id.eq(owner.into_vec()))
+                    .filter(objects::dsl::owner_type.between(1, 2));
             }
         }
 
