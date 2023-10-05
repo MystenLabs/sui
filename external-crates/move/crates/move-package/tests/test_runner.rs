@@ -221,7 +221,12 @@ impl PackageHooks for TestHooks {
     }
 
     fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
-        Ok(manifest.package.name)
+        let name = manifest.package.name.to_string();
+        if name.ends_with("-rename") {
+            Ok(Symbol::from(name.replace("-rename", "-resolved")))
+        } else {
+            Ok(manifest.package.name)
+        }
     }
 }
 
