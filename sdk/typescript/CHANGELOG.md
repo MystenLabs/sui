@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.43.3
+
+### Patch Changes
+
+- 004fb1991: Export TransactionResult type
+
 ## 0.43.2
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @mysten/deepbook
 
+## 0.5.4
+
+### Patch Changes
+
+- Updated dependencies [004fb1991]
+  - @mysten/sui.js@0.43.3
+
 ## 0.5.3
 
 ### Patch Changes
