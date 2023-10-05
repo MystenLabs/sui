@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+axum.workspace = true
 tracing.workspace = true
 scopeguard.workspace = true
 prometheus.workspace = true

@@ -27,9 +27,9 @@ serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 prometheus-parse.workspace = true
 
+mysten-metrics.workspace = true
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
-sui-node = { path = "../sui-node" }
 sui-swarm-config =  { path = "../sui-swarm-config" }
 workspace-hack.workspace = true
 
