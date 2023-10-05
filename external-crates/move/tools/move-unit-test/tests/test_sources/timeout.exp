@@ -24,7 +24,7 @@ Failures in 0x1::M:
 │    ┌─ timeout.move:18:29
 │    │
 │ 18 │     fun no_timeout_fail() { abort 0 }
-│    │         ---------------     ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 00000000000000000000000000000001::M rooted here
+│    │         ---------------     ^^^^^^^ Test was not expected to error, but it aborted with code 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M rooted here
 │    │         │                    
 │    │         In this function in 0x1::M
 │ 
