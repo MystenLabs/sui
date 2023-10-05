@@ -260,6 +260,7 @@ impl TelemetryConfig {
             self.crash_on_panic = true
         }
 
+        self.enable_otlp_tracing = true;
         if env::var("TRACE_FILTER").is_ok() {
             self.enable_otlp_tracing = true
         }
@@ -359,7 +360,8 @@ impl TelemetryConfig {
                 opentelemetry::sdk::propagation::TraceContextPropagator::new(),
             );
 
-            let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
+            //let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
+            let trace_env_filter = EnvFilter::from_str("off").unwrap();
             let (trace_env_filter, reload_handle) = reload::Layer::new(trace_env_filter);
             trace_filter_handle = Some(FilterHandle(reload_handle));
 
