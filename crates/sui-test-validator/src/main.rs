@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use axum::{
+    extract::Path,
     response::IntoResponse,
     routing::{get, post},
     Extension, Json, Router,
@@ -15,9 +16,13 @@ use sui_cluster_test::{
     config::{ClusterTestOpt, Env},
     faucet::{FaucetClient, FaucetClientFactory},
 };
-use sui_faucet::{FaucetRequest, FixedAmountRequest};
+use sui_faucet::{
+    BatchFaucetResponse, BatchStatusFaucetResponse, FaucetError, FaucetRequest, FaucetResponse,
+    FixedAmountRequest,
+};
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
+use uuid::Uuid;
 
 /// Start a Sui validator and fullnode for easy testing.
 #[derive(Parser, Debug)]
@@ -134,6 +139,8 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
     let app = Router::new()
         .route("/", get(health))
         .route("/gas", post(faucet_request))
+        .route("/v1/gas", post(faucet_batch_request))
+        .route("/v1/status/:task_id", get(request_status))
         .layer(
             ServiceBuilder::new()
                 .layer(cors)
@@ -165,13 +172,61 @@ async fn faucet_request(
         FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
             state.faucet.request_sui_coins(recipient).await
         }
-        // (jian) TODO: add this onto the validator and cluster test faucets
-        FaucetRequest::GetBatchSendStatusRequest(_) => todo!(),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(FaucetResponse::from(FaucetError::Internal(
+                    "Input Error.".to_string(),
+                ))),
+            )
+        }
     };
 
     if !result.transferred_gas_objects.is_empty() {
         (StatusCode::CREATED, Json(result))
     } else {
         (StatusCode::INTERNAL_SERVER_ERROR, Json(result))
+    }
+}
+
+async fn faucet_batch_request(
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    let result = match payload {
+        FaucetRequest::FixedAmountRequest(FixedAmountRequest { recipient }) => {
+            state.faucet.batch_request_sui_coins(recipient).await
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(BatchFaucetResponse::from(FaucetError::Internal(
+                    "Input Error.".to_string(),
+                ))),
+            )
+        }
+    };
+    if result.task.is_some() {
+        (StatusCode::CREATED, Json(result))
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(result))
+    }
+}
+
+async fn request_status(
+    Extension(state): Extension<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match Uuid::parse_str(&id) {
+        Ok(task_id) => {
+            let status = state.faucet.get_batch_send_status(task_id).await;
+            return (StatusCode::CREATED, Json(status));
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(BatchStatusFaucetResponse::from(FaucetError::Internal(
+                e.to_string(),
+            ))),
+        ),
     }
 }

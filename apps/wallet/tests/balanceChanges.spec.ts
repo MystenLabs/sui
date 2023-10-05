@@ -5,8 +5,6 @@ import { expect, test } from './fixtures';
 import { createWallet, importWallet } from './utils/auth';
 import { generateKeypairFromMnemonic, requestSuiFromFaucet } from './utils/localnet';
 
-test.skip();
-
 const receivedAddressMnemonic = [
 	'beef',
 	'beef',
@@ -40,12 +38,15 @@ const currentWalletMnemonic = [
 const COIN_TO_SEND = 20;
 
 test('request SUI from local faucet', async ({ page, extensionUrl }) => {
+	test.setTimeout(30_000);
 	await createWallet(page, extensionUrl);
 	await page.getByRole('navigation').getByRole('link', { name: 'Coins' }).click();
 
 	const originalBalance = await page.getByTestId('coin-balance').textContent();
 	await page.getByTestId('faucet-request-button').click();
-	await expect(page.getByText(/SUI Received/i)).toBeVisible();
+	await expect(page.getByText(/SUI Received/i)).toBeVisible({
+		timeout: 30_000,
+	});
 	await expect(page.getByTestId('coin-balance')).not.toHaveText(`${originalBalance}SUI`);
 });
 
