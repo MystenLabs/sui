@@ -26,7 +26,3 @@ move-compiler = { path = "../move-compiler" }
 move-ir-types = { path = "../move-ir/types" }
 move-package = { path = "../tools/move-package" }
 move-symbol-pool = { path = "../move-symbol-pool" }
-
-[features]
-address20 = ["move-compiler/address20"]
-address32 = ["move-compiler/address32"]

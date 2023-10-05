@@ -37,5 +37,3 @@ move-package = { path = "../../../move/tools/move-package" }
 
 [features]
 testing = []
-address20 = ["move-core-types/address20"]
-address32 = ["move-core-types/address32"]

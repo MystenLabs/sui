@@ -141,7 +141,7 @@ bs58 = { version = "0.4", features = ["check"] }
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto" }
+bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto", default-features = false }
 bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
@@ -206,7 +206,7 @@ csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "4", features = ["digest"] }
-curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
+curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2" }
@@ -244,7 +244,7 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
+ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["serde", "std", "u64_backend"] }
 ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", default-features = false, features = ["alloc", "std"] }
 either = { version = "1" }
@@ -270,7 +270,6 @@ fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff-594e8ee84c453af0 = { package = "ff", version = "0.13", default-features = false, features = ["alloc"] }
 ff-5ef9efb8ec2df382 = { package = "ff", version = "0.12", default-features = false }
-fiat-crypto = { version = "0.1" }
 fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -427,7 +426,7 @@ move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
 move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
 move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model" }
+move-model = { path = "../../external-crates/move/move-model", default-features = false }
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
@@ -917,7 +916,7 @@ bs58 = { version = "0.4", features = ["check"] }
 bstr = { version = "1" }
 bulletproofs = { version = "4" }
 byte-slice-cast = { version = "1" }
-bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto" }
+bytecode-interpreter-crypto = { path = "../../external-crates/move/move-prover/interpreter/crypto", default-features = false }
 bytecount = { version = "0.6", default-features = false }
 bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
@@ -990,7 +989,7 @@ csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 ctr = { version = "0.9", default-features = false }
 curve25519-dalek = { version = "4", features = ["digest"] }
-curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "std"] }
+curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["std", "u64_backend"] }
 curve25519-dalek-ng = { version = "4", features = ["serde"] }
 darling-56bd22fc3884b12 = { package = "darling", version = "0.20" }
 darling-582f2526e08bb6a0 = { package = "darling", version = "0.14" }
@@ -1045,7 +1044,7 @@ ecdsa-582f2526e08bb6a0 = { package = "ecdsa", version = "0.14", default-features
 ecdsa-986da7b5efc2b80e = { package = "ecdsa", version = "0.16", features = ["pem", "signing", "std", "verifying"] }
 ed25519-consensus = { version = "2" }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "serde", "std"] }
+ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["serde", "std", "u64_backend"] }
 ed25519-dff4ba8e3ae991db = { package = "ed25519", version = "1", features = ["alloc", "serde", "zeroize"] }
 ed25519-f595c2ba2a3f28df = { package = "ed25519", version = "2", default-features = false, features = ["alloc", "std"] }
 either = { version = "1" }
@@ -1073,7 +1072,6 @@ fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
 ff-594e8ee84c453af0 = { package = "ff", version = "0.13", default-features = false, features = ["alloc"] }
 ff-5ef9efb8ec2df382 = { package = "ff", version = "0.12", default-features = false }
-fiat-crypto = { version = "0.1" }
 fixed-hash = { version = "0.7", default-features = false, features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -1245,7 +1243,7 @@ move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
 move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
 move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model" }
+move-model = { path = "../../external-crates/move/move-model", default-features = false }
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
 move-proc-macros = { path = "../../external-crates/move/testing-infra/move-proc-macros", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }

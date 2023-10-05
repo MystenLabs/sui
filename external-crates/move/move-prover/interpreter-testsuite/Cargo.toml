@@ -22,3 +22,5 @@ datatest-stable = "0.1.1"
 [[test]]
 name = "concrete_check_testsuite"
 harness = false
+
+[dependencies]

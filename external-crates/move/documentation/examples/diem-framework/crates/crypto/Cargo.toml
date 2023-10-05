@@ -9,9 +9,9 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "1.0.52"
 bytes = "1.0.1"
-curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std"] }
+curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 digest = "0.9.0"
-ed25519-dalek = { version = "0.1.0", package = "ed25519-dalek-fiat", default-features = false, features = ["std", "serde"] }
+ed25519-dalek = { version = "0.1.0", package = "ed25519-dalek-fiat", default-features = false, features = ["std", "serde", "u64_backend"] }
 hex = "0.4.3"
 hkdf = "0.10.0"
 once_cell = "1.7.2"
@@ -26,7 +26,7 @@ sha2 = "0.9.3"
 static_assertions = "1.1.0"
 thiserror = "1.0.24"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
-x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std"] }
+x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 aes-gcm = "0.8.0"
 diem-crypto-derive = { path = "../crypto-derive" }
 
@@ -45,13 +45,10 @@ serde_json = "1.0.64"
 trybuild = "=1.0.53"
 
 [features]
-default = ["fiat"]
+default = []
 assert-private-keys-not-cloneable = []
 cloneable-private-keys = []
 fuzzing = ["proptest", "proptest-derive", "cloneable-private-keys"]
-fiat = ["curve25519-dalek/fiat_u64_backend", "ed25519-dalek/fiat_u64_backend", "x25519-dalek/fiat_u64_backend"]
-u64 = ["curve25519-dalek/u64_backend", "ed25519-dalek/u64_backend", "x25519-dalek/u64_backend"]
-u32 = ["curve25519-dalek/u32_backend", "ed25519-dalek/u32_backend", "x25519-dalek/u32_backend"]
 
 [[bench]]
 name = "noise"
