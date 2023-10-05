@@ -63,7 +63,7 @@ Because tracing is expensive, it is not enabled by default. To enable trace expo
 
 2. Using the filter expression and duration of your choice, run:
 
-      $ curl 'http://127.0.0.1:1337/enable-tracing?filter=sui-node=trace,info&duration=10s'
+      $ curl -X POST 'http://127.0.0.1:1337/enable-tracing?filter=sui-node=trace,info&duration=10s'
 
 Tracing will automatically be disabled after the specified duration has elapsed, in order to avoid leaving tracing on unintentionally.
 

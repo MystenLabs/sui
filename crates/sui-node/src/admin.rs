@@ -42,7 +42,7 @@ use tracing::info;
 // Set a time-limited tracing config. After the duration expires, tracing will be disabled
 // automatically.
 //
-//   $ curl 'http://127.0.0.1:1337/enable-tracing?filter=info&duration=10s'
+//   $ curl -X POST 'http://127.0.0.1:1337/enable-tracing?filter=info&duration=10s'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";

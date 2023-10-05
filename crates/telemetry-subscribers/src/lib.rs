@@ -18,8 +18,7 @@ use tracing::{error, info, Level};
 use tracing::{metadata::LevelFilter, subscriber::Interest, Metadata, Subscriber};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::{
-    filter,
-    fmt::{self, format::FmtSpan},
+    filter, fmt,
     layer::{Context, SubscriberExt},
     registry::LookupSpan,
     reload, EnvFilter, Layer, Registry,
