@@ -292,7 +292,7 @@ export type PartialZkLoginSignature = Omit<
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ````
 
-### Setting up your own services
+### Setting up your own proving service
 
 We have published two docker images: [prover](https://hub.docker.com/) and [prover-fe](https://hub.docker.com/).
 
