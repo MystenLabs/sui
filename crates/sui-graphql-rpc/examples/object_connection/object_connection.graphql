@@ -27,9 +27,7 @@
     edges {
       node {
         storageRebate
-        bcs
         kind
-        defaultNameServiceName
       }
     }
   }
@@ -43,9 +41,7 @@
     edges {
       node {
         storageRebate
-        bcs
         kind
-        defaultNameServiceName
       }
     }
   }
