@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 #[derive(Parser)]
 #[command(
@@ -16,31 +16,33 @@ pub enum Command {
     NoMove {
         #[arg(
             long,
-            default_value_t = 1000000,
+            default_value_t = 500000,
             help = "Number of transactions to submit"
         )]
         tx_count: u64,
         #[arg(
             long,
-            default_value_t = false,
-            help = "Whether to include cert verification and tx manager in the benchmark"
+            default_value = "baseline",
+            ignore_case = true,
+            help = "Which component to benchmark"
         )]
-        end_to_end: bool,
+        component: Component,
     },
     #[command(name = "move")]
     Move {
         #[arg(
             long,
-            default_value_t = 1000000,
+            default_value_t = 500000,
             help = "Number of transactions to submit"
         )]
         tx_count: u64,
         #[arg(
             long,
-            default_value_t = false,
-            help = "Whether to include cert verification and tx manager in the benchmark"
+            default_value = "baseline",
+            ignore_case = true,
+            help = "Which component to benchmark"
         )]
-        end_to_end: bool,
+        component: Component,
         #[arg(
             long,
             default_value_t = 2,
@@ -64,4 +66,15 @@ pub enum Command {
         )]
         computation: u8,
     },
+}
+
+#[derive(Copy, Clone, ValueEnum)]
+pub enum Component {
+    /// Baseline includes the execution and storage layer only.
+    Baseline,
+    /// On top of Baseline, this schedules transactions through the transaction manager.
+    WithTxManager,
+    /// This goes through the `handle_certificate` entry point on authority_server, which includes
+    /// certificate verification, transaction manager, as well as a noop consensus layer.
+    ValidatorService,
 }

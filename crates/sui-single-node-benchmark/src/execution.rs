@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::benchmark_context::BenchmarkContext;
+use crate::command::Component;
 use crate::tx_generator::{MoveTxGenerator, NonMoveTxGenerator, RootObjectCreateTxGenerator};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -15,9 +16,9 @@ use tracing::info;
 /// The execution does not invoke Move VM, and is considered the cheapest kind of transaction.
 ///
 /// \tx_count: the number of transactions to execute.
-/// \end_to_end: Whether to include cert verification and tx manager in the measurement.
-pub async fn benchmark_simple_transfer(tx_count: u64, end_to_end: bool) {
-    let ctx = BenchmarkContext::new(tx_count, 1, end_to_end).await;
+/// \component: The component to benchmark.
+pub async fn benchmark_simple_transfer(tx_count: u64, component: Component) {
+    let ctx = BenchmarkContext::new(tx_count, 1, component).await;
     let transactions = ctx
         .generate_transactions(Arc::new(NonMoveTxGenerator::new()))
         .await;
@@ -29,14 +30,14 @@ pub async fn benchmark_simple_transfer(tx_count: u64, end_to_end: bool) {
 /// by the parameters.
 ///
 /// \tx_count: the number of transactions to execute.
-/// \end_to_end: Whether to include cert verification and tx manager in the measurement.
+/// \component: The component to benchmark.
 /// \num_input_objects: the number of address owned input coin objects for each transaction.
 /// These objects will be read during input checking, and merged during execution.
 /// \num_dynamic_fields: the number of dynamic fields read during execution of each transaction.
 /// \computation: Computation intensity for each transaction.
 pub async fn benchmark_move_transactions(
     tx_count: u64,
-    end_to_end: bool,
+    component: Component,
     num_input_objects: u8,
     num_dynamic_fields: u64,
     computation: u8,
@@ -45,7 +46,7 @@ pub async fn benchmark_move_transactions(
         num_input_objects >= 1,
         "Each transaction requires at least 1 input object"
     );
-    let mut ctx = BenchmarkContext::new(tx_count, num_input_objects as u64, end_to_end).await;
+    let mut ctx = BenchmarkContext::new(tx_count, num_input_objects as u64, component).await;
     let move_package = ctx.publish_package().await;
     let root_objects = preparing_dynamic_fields(&mut ctx, move_package.0, num_dynamic_fields).await;
     let transactions = ctx
@@ -113,7 +114,7 @@ async fn benchmark_transactions(ctx: &BenchmarkContext, transactions: Vec<Transa
     info!("Sample transaction: {:?}", sample_transaction.data());
     let effects = ctx
         .validator()
-        .execute_transaction(sample_transaction)
+        .execute_tx_immediately(sample_transaction.into_unsigned())
         .await;
     info!("Sample effects: {:?}\n\n", effects);
     assert!(effects.status().is_ok());

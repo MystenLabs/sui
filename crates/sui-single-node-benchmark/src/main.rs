@@ -18,18 +18,18 @@ async fn main() {
     match args {
         Command::NoMove {
             tx_count,
-            end_to_end,
-        } => benchmark_simple_transfer(tx_count, end_to_end).await,
+            component,
+        } => benchmark_simple_transfer(tx_count, component).await,
         Command::Move {
             tx_count,
-            end_to_end,
+            component,
             num_input_objects,
             num_dynamic_fields,
             computation,
         } => {
             benchmark_move_transactions(
                 tx_count,
-                end_to_end,
+                component,
                 num_input_objects,
                 num_dynamic_fields,
                 computation,
