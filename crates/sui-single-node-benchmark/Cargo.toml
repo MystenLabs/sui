@@ -15,6 +15,9 @@ async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
+prometheus.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tracing.workspace = true
@@ -22,7 +25,6 @@ workspace-hack.workspace = true
 
 [dev-dependencies]
 move-package.workspace = true
-prometheus.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-simulator.workspace = true

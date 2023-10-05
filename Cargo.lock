@@ -11300,6 +11300,8 @@ dependencies = [
  "move-core-types",
  "move-package",
  "prometheus",
+ "strum 0.24.1",
+ "strum_macros 0.24.3",
  "sui-core",
  "sui-macros",
  "sui-protocol-config",
