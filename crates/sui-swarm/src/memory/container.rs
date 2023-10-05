@@ -45,7 +45,10 @@ impl Container {
         let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
 
         let thread = thread::spawn(move || {
-            let span = if get_global_telemetry_config().enable_otlp_tracing {
+            let span = if get_global_telemetry_config()
+                .map(|c| c.enable_otlp_tracing)
+                .unwrap_or(false)
+            {
                 // we cannot have long-lived root spans when exporting trace data to otlp
                 None
             } else {

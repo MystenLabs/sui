@@ -197,9 +197,9 @@ fn clear_global_telemetry_config() {
     *global_config = None;
 }
 
-pub fn get_global_telemetry_config() -> Arc<TelemetryConfig> {
+pub fn get_global_telemetry_config() -> Option<TelemetryConfig> {
     let global_config = GLOBAL_CONFIG.lock().unwrap();
-    global_config.clone().unwrap().into()
+    global_config.clone()
 }
 
 impl TelemetryConfig {
