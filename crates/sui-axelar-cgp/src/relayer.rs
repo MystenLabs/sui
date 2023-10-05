@@ -10,6 +10,7 @@ use axum::Router;
 use clap::Parser;
 use futures::future::try_join_all;
 use rxrust::observable::ObservableItem;
+
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -21,12 +22,11 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use telemetry_subscribers::TelemetryConfig;
 
 use crate::handlers::process_commands;
-use crate::listeners::sui_listener::{ContractCall, SuiListener};
-use crate::listeners::Subject;
+use crate::listener::{ContractCall, Subject, SuiListener};
 use crate::types::Error;
 
 mod handlers;
-mod listeners;
+mod listener;
 mod types;
 
 #[derive(Parser)]

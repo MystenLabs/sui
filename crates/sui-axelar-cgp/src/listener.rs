@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::convert::Infallible;
 use std::fmt::Debug;
 
 use futures::stream::StreamExt;
 use rxrust::observer::Observer;
+use rxrust::subject::SubjectThreads;
 use serde::Deserialize;
 use tracing::{error, info};
 
@@ -13,8 +15,7 @@ use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::types::parse_sui_struct_tag;
 use sui_sdk::SuiClient;
 
-use crate::listeners::Subject;
-
+pub type Subject<T> = SubjectThreads<T, Infallible>;
 pub struct SuiListener {
     client: SuiClient,
     gateway: ObjectID,
