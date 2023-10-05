@@ -437,13 +437,6 @@ impl ConsensusAdapter {
         let (mut position, positions_moved, preceding_disconnected) =
             self.submission_position(committee, tx_digest);
 
-        // TODO: not connected at the moment to any submission decision - adding just to trigger and
-        // monitor the throughput profile updates.
-        let p = self.consensus_throughput_profiler.load();
-        if let Some(profiler) = p.as_ref() {
-            let _ = profiler.throughput_level();
-        }
-
         const MAX_LATENCY: Duration = Duration::from_secs(5 * 60);
         const DEFAULT_LATENCY: Duration = Duration::from_secs(3); // > p50 consensus latency with global deployment
         let latency = self.latency_observer.latency().unwrap_or(DEFAULT_LATENCY);
@@ -453,12 +446,9 @@ impl ConsensusAdapter {
 
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
+        let latency = self.override_by_throughput_profiler(latency);
+        let (delay_step, position) = self.override_by_max_submit_position_settings(latency, position);
 
-        if let Some(max_submit_position) = self.max_submit_position {
-            position = std::cmp::min(position, max_submit_position);
-        }
-
-        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
         self.metrics
             .sequencing_resubmission_interval_ms
             .set(delay_step.as_millis() as i64);
@@ -469,6 +459,40 @@ impl ConsensusAdapter {
             positions_moved,
             preceding_disconnected,
         )
+    }
+
+    // According to the throughput profile we want to either allow some transaction duplication or not)
+    // When throughput profile is Low and the validator is in position = 1, then it will submit to consensus with much lower latency.
+    // When throughput profile is High then we go back to default operation and no-one co-submits.
+    fn override_by_throughput_profiler(&self, latency: Duration) -> Duration {
+        let p = self.consensus_throughput_profiler.load();
+        if let Some(profiler) = p.as_ref() {
+            let (level, _) = profiler.throughput_level();
+
+            // we only run this for the position = 1 validator to help the position = 0.
+            if position == 1 {
+                match level {
+                    Level::Low => {
+                        return Duration::from_secs(1) // we can tune this further - for now assign to 1 second as this gets doubled on the final assignment
+                    }
+                    _ => {}
+                }
+            }
+        }
+        latency
+    }
+
+    /// Overrides the latency and the position if there are defined settings for `max_submit_position` and
+    /// `submit_delay_step_override`. If the `max_submit_position` has defined, then that will always be used
+    /// irrespective of any so far decision. Same for the `submit_delay_step_override`.
+    fn override_by_max_submit_position_settings(&self, latency: Duration, mut position: usize) -> (Duration, usize) {
+        // Respect any manual override for position and latency from the settings
+        if let Some(max_submit_position) = self.max_submit_position {
+            position = std::cmp::min(position, max_submit_position);
+        }
+
+        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
+        (delay_step, position)
     }
 
     /// Check when this authority should submit the certificate to consensus.
