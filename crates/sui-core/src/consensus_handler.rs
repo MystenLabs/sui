@@ -77,9 +77,8 @@ impl<T, C> ConsensusHandler<T, C> {
         let mut last_consensus_stats = epoch_store
             .get_last_consensus_stats()
             .expect("Should be able to read last consensus index");
-        // last_consensus_stats is zero at the beginning of epoch for every field.
-        if last_consensus_stats.index.last_committed_round == 0 {
-            assert_eq!(last_consensus_stats.hash, 0);
+        // stats is empty at the beginning of epoch.
+        if !last_consensus_stats.stats.is_initialized() {
             last_consensus_stats.stats = ConsensusStats::new(committee.size());
         }
         let transaction_scheduler =
