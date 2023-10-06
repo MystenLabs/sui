@@ -125,6 +125,8 @@ pub struct ExecutionIndicesWithHash {
 /// stored on disk.
 #[enum_dispatch]
 pub trait ConsensusStatsAPI {
+    fn is_initialized(&self) -> bool;
+
     fn get_narwhal_certificates(&self, authority: usize) -> u64;
     fn inc_narwhal_certificates(&mut self, authority: usize) -> u64;
 
@@ -160,6 +162,10 @@ pub struct ConsensusStatsV1 {
 }
 
 impl ConsensusStatsAPI for ConsensusStatsV1 {
+    fn is_initialized(&self) -> bool {
+        !self.narwhal_certificates.is_empty()
+    }
+
     fn get_narwhal_certificates(&self, authority: usize) -> u64 {
         self.narwhal_certificates[authority]
     }
