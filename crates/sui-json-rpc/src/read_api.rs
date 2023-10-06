@@ -371,7 +371,8 @@ impl ReadApi {
             }
         }
 
-        let object_cache = ObjectProviderCache::new(self.state.clone());
+        let object_cache =
+            ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
         if opts.show_balance_changes {
             let mut results = vec![];
             for resp in temp_response.values() {
@@ -781,7 +782,8 @@ impl ReadApiServer for ReadApi {
                 }
             }
 
-            let object_cache = ObjectProviderCache::new(self.state.clone());
+            let object_cache =
+                ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
             if opts.show_balance_changes {
                 if let Some(effects) = &temp_response.effects {
                     let balance_changes = get_balance_changes_from_effect(
