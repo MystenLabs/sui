@@ -1,15 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::models_v2::checkpoints::StoredCheckpoint;
+use crate::models_v2::events::{StoredEvent, StoredEvent2};
+use crate::models_v2::transactions::{
+    event_bytes_to_sui_event, StoredEventBytes,
+};
 use crate::{
     errors::IndexerError,
     models_v2::{epoch::StoredEpochInfo, objects::ObjectRefColumn, packages::StoredPackage},
     models_v2::{objects::StoredObject, transactions::StoredTransaction, tx_indices::TxDigest},
-    schema_v2::{checkpoints, epochs, objects, packages, transactions},
+    schema_v2::{checkpoints, epochs, objects, packages, transactions, events},
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
+use diesel::{TextExpressionMethods, debug_query, BoolExpressionMethods};
 use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
@@ -21,19 +26,28 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
-use sui_json_rpc_types::{CheckpointId, EpochInfo, SuiTransactionBlockResponse, TransactionFilter};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, SuiTransactionBlockResponse,
+    TransactionFilter, SuiEvent,
+};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
+    event::EventID,
     move_package::MovePackage,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
+pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
+pub const TIMESTAMP_MS_STR: &str = "timestamp_ms";
+pub const EVENTS_STR: &str = "events";
+
+pub const LARGER_THAN_MAX_EVENT_LIMIT: usize = u16::MAX as usize;
 
 #[derive(Clone)]
 pub struct IndexerReader {
@@ -495,6 +509,341 @@ impl IndexerReader {
         .await
     }
 
+    pub async fn query_events_in_blocking_task(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        self.spawn_blocking(move |this| {
+            this.query_events_impl(filter, cursor, limit, descending_order)
+        })
+        .await
+    }
+
+    fn query_events_by_tx_digest(
+        &self,
+        tx_digest: TransactionDigest,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        let cursor_event_seq = if let Some(cursor) = cursor {
+            if cursor.tx_digest != tx_digest {
+                return Err(IndexerError::InvalidArgumentError(
+                    "Cursor tx_digest does not match the tx_digest in the query.".into(),
+                ));
+            }
+            // Note 1. Postgresql array index starts from 1
+            // Convert 0-indexed to 1-indexed
+            Some(cursor.event_seq as i64 + 1)
+        } else {
+            None
+        };
+
+        // Note 2. Postgresql array slice is inclusive on both ends, but the cursor is exclusive.
+        // Note 3. It does not matter if the index is out of bound, it only returns valid elements.
+        //      For example, for an 10-item array, [-1: 100] returns the whole array.
+        let limit = limit as i64;
+        let event_slice_str = match (descending_order, cursor_event_seq) {
+            // Desc, w/o cursor
+            // [array_length(events, 1) - limit + 1: array_length(events, 1)]
+            (true, None) => {
+                format!("{EVENTS_STR}[ARRAY_LENGTH({EVENTS_STR}, 1) - {} + 1: ARRAY_LENGTH({EVENTS_STR}, 1)]", limit)
+            }
+            // Desc, w/ cursor
+            // [cursor - limit: cursor + 1]
+            (true, Some(cursor_event_seq)) => {
+                format!(
+                    "{EVENTS_STR}[{}: {}]",
+                    cursor_event_seq - limit,
+                    cursor_event_seq - 1
+                )
+            }
+            // Asc, w/o cursor
+            // [1, limit]
+            (false, None) => {
+                format!("{EVENTS_STR}[{}: {}]", 1, limit)
+            }
+            // Asc, w/ cursor
+            // [cursor + 1, cursor + limit]
+            (false, Some(cursor_event_seq)) => {
+                format!(
+                    "{EVENTS_STR}[{}: {}]",
+                    cursor_event_seq + 1,
+                    cursor_event_seq + limit,
+                )
+            }
+        };
+
+        // It's important to cast Cardinality (i32) to int8, which is i64 in Rust.
+        let query = format!(
+            "SELECT {event_slice_str} AS events, {TIMESTAMP_MS_STR}, CARDINALITY({EVENTS_STR})::int8 AS length FROM transactions WHERE transaction_digest = '\\x{}'::bytea LIMIT 1",
+            Hex::encode(tx_digest.clone().into_inner().to_vec()),
+        );
+
+        tracing::debug!("query_events_by_tx_digest: {}", query);
+
+        let mut stored_event_bytes: Vec<StoredEventBytes> =
+            self.run_query(|conn| diesel::sql_query(query.clone()).load(conn))?;
+
+        // If transaction does not exist, or it does not have any events, return
+        if stored_event_bytes.is_empty() {
+            return Ok(vec![]);
+        }
+        // Safe to remove: check emptiness above
+        let StoredEventBytes { events, timestamp_ms, length: cardinality } = stored_event_bytes.remove(0);
+        if events.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Here we calcualte the real indices of returned slice based on cardinality, with 1-indexed subscript
+        let (start_idx, end_idx) = match (descending_order, cursor_event_seq) {
+            // Desc, w/o cursor
+            // [max(cardinality - limit + 1, 1), cardinality]
+            (true, None) => (std::cmp::max(cardinality - limit + 1, 1) as u64, cardinality),
+            // Desc, w/ cursor
+            // [max(cursor - limit, 1), min(cursor - 1, cardinality)]
+            // It's worth noting here if the cursor is corrupted, the returned results can be unexpected.
+            // For example, for a 10-item array, if cursor is 100 and limit is 50, it returns empty array.
+            // If cursor is 15 and limit is 10, it returns [6, 10]. It shouldn't be an issue in practice
+            // when client uses the correct cursor.
+            (true, Some(cursor_event_seq)) => {
+                (
+                    std::cmp::max(cursor_event_seq - limit, 1) as u64,
+                    std::cmp::min(cursor_event_seq - 1, cardinality),
+                )
+            }
+            // Asc, w/o cursor
+            // [1, min(limit, cardinality)]
+            (false, None) => (1, std::cmp::min(limit, cardinality)),
+            // Asc, w/ cursor
+            // [cursor + 1, min(cursor + limit, cardinality)]
+            (false, Some(cursor_event_seq)) => {
+                (
+                    cursor_event_seq as u64 + 1,
+                    std::cmp::min(cursor_event_seq + limit, cardinality),
+                )
+            }
+        };
+
+        // If end index is smaller than start index, return empty array
+        if (end_idx as u64) < start_idx {
+            assert_eq!(events.len(), 0);
+            return Ok(vec![]);
+        }
+
+        // Now adjust Postgresl array index to 0-indexed subscript
+        let start_idx = start_idx - 1;
+        let end_idx = end_idx as u64 - 1;
+
+        assert_eq!(events.len() as u64, end_idx - start_idx + 1, "events: {:?}, start_idx: {}, end_idx: {}", events.len(), start_idx, end_idx);
+        let event_seqs: Vec<u64> = (start_idx..=end_idx).collect();
+
+        let iter = events
+            .into_iter()
+            .zip(event_seqs.into_iter())
+            .map(|(e, seq)| (e, seq));
+        let events: Vec<_> = if descending_order {
+            iter.rev().collect()
+        } else {
+            iter.collect()
+        };
+
+        event_bytes_to_sui_event(tx_digest, events, timestamp_ms as u64, self)
+    }
+
+    fn query_events_impl(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        if let EventFilter::Transaction(tx_digest) = filter {
+            return self.query_events_by_tx_digest(tx_digest, cursor, limit, descending_order);
+        }
+
+        let (tx_seq, event_seq) = if let Some(cursor) = cursor {
+            let EventID {
+                tx_digest,
+                event_seq,
+            } = cursor;
+            (
+                self.run_query(|conn| {
+                    transactions::dsl::transactions
+                        .select(transactions::tx_sequence_number)
+                        .filter(
+                            transactions::dsl::transaction_digest
+                                .eq(tx_digest.into_inner().to_vec()),
+                        )
+                        .first::<i64>(conn)
+                })?,
+                event_seq,
+            )
+        } else {
+            if descending_order {
+                let max_tx_seq: i64 = self.run_query(|conn| {
+                    events::dsl::events
+                        .select(events::tx_sequence_number)
+                        .order(events::dsl::tx_sequence_number.desc())
+                        .first::<i64>(conn)
+                })?;
+                (max_tx_seq + 1, 0)
+            } else {
+                (-1, 0)
+            }
+        };
+
+        let main_where_clause = match filter {
+            EventFilter::Sender(sender) => {
+                format!("senders @> ARRAY['\\x{}'::bytea]", Hex::encode(sender.to_vec()))
+            }
+            EventFilter::Package(package_id) => {
+                format!("package = '\\x{}'::bytea", package_id.to_hex())
+            }
+            EventFilter::MoveModule { package, module } => {
+                format!("package = '\\x{}'::bytea AND module = '{}'", package.to_hex(), module.to_string())
+            }
+            EventFilter::MoveEventType(struct_tag) => {
+                format!("event_type = '{}'", struct_tag.to_string())
+            }
+            EventFilter::MoveEventModule { package, module } => {
+                format!("event_type LIKE '{}::{}::%'", package.to_hex(), module.to_string())
+            }
+            EventFilter::MoveEventField { .. }
+            | EventFilter::All(_)
+            | EventFilter::Any(_)
+            | EventFilter::And(_, _)
+            | EventFilter::Or(_, _)
+            | EventFilter::TimeRange { .. } => {
+                return Err(IndexerError::NotSupportedError(
+                    "This type of EventFilter is not supported.".into(),
+                ));
+            }
+            EventFilter::Transaction(_) => {
+                // Processed above
+                unreachable!()
+            }
+        };
+
+        // let cursor_clause = if let Some((tx_seq, event_seq)) = cursor {
+        //     if descending_order {
+        //         format!("AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+        //     } else {
+        //         format!("AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+        //     }
+        // } else {
+        //     "".to_string()
+        // };
+
+        let (cursor_ne, cursor_eq) = 
+            if descending_order {
+                (format!("AND {TX_SEQUENCE_NUMBER_STR} < {}", tx_seq),
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {})", tx_seq, event_seq))
+            } else {
+                (format!("AND {TX_SEQUENCE_NUMBER_STR} > {}", tx_seq),
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {})", tx_seq, event_seq))
+            };
+        // } else {
+        //     ("".to_string(), "".to_string())
+        // };
+        let order_clause = if descending_order {
+            format!("{TX_SEQUENCE_NUMBER_STR} DESC, {EVENT_SEQUENCE_NUMBER_STR} DESC")
+        } else {
+            format!("{TX_SEQUENCE_NUMBER_STR} ASC, {EVENT_SEQUENCE_NUMBER_STR} ASC")
+        };
+        // `UNION` removes duplicates so it's fine when cursor is None.
+        let query = format!(
+            "(SELECT * FROM events WHERE {} {} ORDER BY {} LIMIT {}) UNION (SELECT * FROM events WHERE {} {} ORDER BY {} LIMIT {}) ORDER BY {} LIMIT {}",
+            main_where_clause,
+            cursor_ne,
+            order_clause,
+            limit,
+            main_where_clause,
+            cursor_eq,
+            order_clause,
+            limit,
+            order_clause,
+            limit,
+        );
+        // let mut query = match filter {
+        //     EventFilter::Package(package_id) => {
+        //         events::table.filter(events::dsl::package.eq(package_id.to_vec())).into_boxed()
+        //     }
+        //     EventFilter::MoveModule { package, module } => events::table
+        //         .filter(events::dsl::package.eq(package.to_vec()))
+        //         .filter(events::dsl::module.eq(module.to_string()))
+        //         .into_boxed(),
+        //     EventFilter::MoveEventType(struct_tag) => {
+        //         events::table.filter(events::dsl::event_type.eq(struct_tag.to_string())).into_boxed()
+        //     }
+        //     EventFilter::MoveEventModule { package, module } => {
+        //         events::table.filter(events::dsl::event_type.like(format!(
+        //             "{}::{}::%",
+        //             package.to_hex_literal(),
+        //             module.to_string()
+        //         ))).into_boxed()
+        //     }
+        //     EventFilter::MoveEventField { .. }
+        //     | EventFilter::All(_)
+        //     | EventFilter::Any(_)
+        //     | EventFilter::And(_, _)
+        //     | EventFilter::Or(_, _)
+        //     | EventFilter::TimeRange { .. } => {
+        //         return Err(IndexerError::NotSupportedError(
+        //             "This type of EventFilter is not supported.".into(),
+        //         ));
+        //     }
+        //     EventFilter::Transaction(_) => {
+        //         // Processed above
+        //         unreachable!()
+        //     }
+        //     EventFilter::Sender(_) => {
+        //         // Processed above
+        //         unreachable!()
+        //     }
+        // };
+        // if let Some((tx_seq, event_seq)) = cursor {
+        //     if descending_order {
+        //         query = query.clone().filter(events::dsl::tx_sequence_number.lt(tx_seq))
+        //         .union(
+        //             query.clone().filter(events::dsl::tx_sequence_number.eq(tx_seq).and(
+        //             events::dsl::event_sequence_number.lt(event_seq as i64))
+        //             )
+        //         );
+        //         // query = query.filter(events::dsl::tx_sequence_number.lt(tx_seq))
+        //         // .or_filter(
+        //         //     events::dsl::tx_sequence_number.eq(tx_seq).and(
+        //         //     events::dsl::event_sequence_number.lt(event_seq as i64)
+        //         //     )
+        //         // );
+        //     } else {
+        //         query = query.filter(events::dsl::tx_sequence_number.gt(tx_seq))
+        //         .or_filter(
+        //             events::dsl::tx_sequence_number.eq(tx_seq).and(
+        //             events::dsl::event_sequence_number.gt(event_seq as i64))
+        //         );
+        //     }
+        // }
+        // if descending_order {
+        //     query = query.order((events::dsl::tx_sequence_number.desc(), events::dsl::event_sequence_number.desc()));
+        // } else {
+        //     query = query.order((events::dsl::tx_sequence_number.asc(), events::dsl::event_sequence_number.asc()));
+        // }
+        // query = query.limit(limit as i64);
+
+        // let debug = debug_query::<diesel::pg::Pg, _>(&query);
+        // println!("@@@@@@@@@ sql: {}", debug.to_string());
+
+        println!("@@@@@@@@@ sql: {}", query);
+        let stored_events = self.run_query(|conn| 
+            diesel::sql_query(query)
+            .load::<StoredEvent2>(conn))?;
+        stored_events.into_iter().map(|se| se.try_into_sui_event(self)).collect()
+    }
+
     fn query_transaction_blocks_impl(
         &self,
         filter: Option<TransactionFilter>,
@@ -612,7 +961,8 @@ impl IndexerReader {
             limit,
         );
 
-        tracing::debug!("query_transaction_blocks: {}", query);
+        // tracing::debug!("query_transaction_blocks: {}", query);
+        println!("query_transaction_blocks: {}", query);
 
         let tx_digests = self
             .run_query(|conn| diesel::sql_query(query.clone()).load::<TxDigest>(conn))?

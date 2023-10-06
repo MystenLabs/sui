@@ -4,6 +4,7 @@ use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
 use sui_json_rpc_types::BalanceChange;
 use sui_json_rpc_types::ObjectChange;
+use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlock;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
@@ -12,6 +13,7 @@ use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
+use sui_types::error::SuiResult;
 use sui_types::event::Event;
 use sui_types::transaction::SenderSignedData;
 
@@ -113,30 +115,36 @@ impl StoredTransaction {
         };
 
         let events = if options.show_events {
-            let events = self
-                .events
-                .into_iter()
-                .map(|event| match event {
-                    Some(event) => {
-                        let event: Event = bcs::from_bytes(&event).map_err(|e| {
-                            IndexerError::PersistentStorageDataCorruptionError(format!(
-                                "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
-                                tx_digest
-                            ))
-                        })?;
-                        Ok(event)
-                    }
-                    None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "Event should not be null, tx_digest={:?}",
-                        tx_digest
-                    ))),
-                })
-                .collect::<Result<Vec<Event>, IndexerError>>()?;
-            let timestamp = self.timestamp_ms as u64;
-            let tx_events = TransactionEvents { data: events };
-            let tx_events =
-                SuiTransactionBlockEvents::try_from(tx_events, tx_digest, Some(timestamp), module)?;
-            Some(tx_events)
+            Some(event_bytes_to_transcation_block_events(
+                tx_digest,
+                self.events,
+                self.timestamp_ms as u64,
+                module,
+            )?)
+            // let events = self
+            //     .events
+            //     .into_iter()
+            //     .map(|event| match event {
+            //         Some(event) => {
+            //             let event: Event = bcs::from_bytes(&event).map_err(|e| {
+            //                 IndexerError::PersistentStorageDataCorruptionError(format!(
+            //                     "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
+            //                     tx_digest
+            //                 ))
+            //             })?;
+            //             Ok(event)
+            //         }
+            //         None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+            //             "Event should not be null, tx_digest={:?}",
+            //             tx_digest
+            //         ))),
+            //     })
+            //     .collect::<Result<Vec<Event>, IndexerError>>()?;
+            // let timestamp = self.timestamp_ms as u64;
+            // let tx_events = TransactionEvents { data: events };
+            // let tx_events =
+            //     SuiTransactionBlockEvents::try_from(tx_events, tx_digest, Some(timestamp), module)?;
+            // Some(tx_events)
         } else {
             None
         };
@@ -194,3 +202,109 @@ impl StoredTransaction {
         })
     }
 }
+
+/// Convert event bytes of a single transaction
+/// into SuiTransactionBlockEvents
+pub fn event_bytes_to_transcation_block_events(
+    tx_digest: TransactionDigest,
+    event_bytes: Vec<Option<Vec<u8>>>,
+    timestamp: u64,
+    module_resolver: &impl GetModule,
+) -> IndexerResult<SuiTransactionBlockEvents> {
+    let events = event_bytes
+        .into_iter()
+        .map(|event| match event {
+            Some(event) => {
+                let event: Event = bcs::from_bytes(&event).map_err(|e| {
+                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
+                        tx_digest
+                    ))
+                })?;
+                Ok(event)
+            }
+            None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Event should not be null, tx_digest={:?}",
+                tx_digest
+            ))),
+        })
+        .collect::<Result<Vec<Event>, IndexerError>>()?;
+    let tx_events = TransactionEvents { data: events };
+    let tx_events = SuiTransactionBlockEvents::try_from(
+        tx_events,
+        tx_digest,
+        Some(timestamp),
+        module_resolver,
+    )?;
+    Ok(tx_events)
+}
+
+pub fn event_bytes_to_sui_event(
+    tx_digest: TransactionDigest,
+    events: Vec<(Vec<u8>, u64)>,
+    timestamp: u64,
+    module_resolver: &impl GetModule,
+) -> IndexerResult<Vec<SuiEvent>> {
+    let events = events
+        .into_iter()
+        // .map(|(event, seq)| match event {
+        .map(|(event, seq)| {
+            // Some(event) => {
+            let event: Event = bcs::from_bytes(&event).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Can't convert event bytes into Event. tx_digest={:?} Error: {e}",
+                    tx_digest
+                ))
+            })?;
+            Ok((event, seq))
+            // }
+            // None => Err(IndexerError::PersistentStorageDataCorruptionError(format!(
+            //     "Event should not be null, tx_digest={:?}",
+            //     tx_digest
+            // ))),
+        })
+        .collect::<Result<Vec<(Event, u64)>, IndexerError>>()?;
+
+    let tx_events = events
+        .into_iter()
+        .map(|(event, seq)| {
+            SuiEvent::try_from(event, tx_digest, seq, Some(timestamp), module_resolver)
+        })
+        .collect::<SuiResult<Vec<_>>>()
+        .map_err(|e| {
+            IndexerError::DataTransformationError(format!(
+                "Can't convert Event into SuiEvent. tx_digest={:?} Error: {e}",
+                tx_digest
+            ))
+        })?;
+    Ok(tx_events)
+}
+
+// #[derive(QueryableByName)]
+// pub struct StoredEventBytes {
+//     // FIXME type?
+//     #[diesel(sql_type = "Array<Bytea>")]
+//     pub events: Vec<Option<Vec<u8>>>,
+//     #[diesel(sql_type = "BigInt")]
+//     pub timestamp_ms: i64,
+// }
+
+#[derive(QueryableByName, Debug)]
+pub struct StoredEventBytes {
+    // #[sql_type = "diesel::pg::sql_types::Array<diesel::pg::sql_types::Bytea>"]
+    // pub events: Vec<Option<Vec<u8>>>,
+    #[diesel(sql_type = diesel::pg::sql_types::Array<diesel::pg::sql_types::Bytea>)]
+    pub events: Vec<Vec<u8>>,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub timestamp_ms: i64,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub length: i64,
+}
+
+// #[derive(QueryableByName, Selectable)]
+// struct StoredEventBytes {
+//     #[sql_type = "diesel::pg::sql_types::Array<diesel::pg::sql_types::Bytea>"]
+//     pub events: Vec<Option<Vec<u8>>>,
+//     #[sql_type = "diesel::sql_types::BigInt"]
+//     pub timestamp_ms: i64,
+// }
