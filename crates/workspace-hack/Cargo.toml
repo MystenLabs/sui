@@ -172,8 +172,8 @@ colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1" }
+console-api = { version = "0.6", default-features = false, features = ["transport"] }
+console-subscriber = { version = "0.2" }
 const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
@@ -517,8 +517,8 @@ prometheus = { version = "0.13" }
 prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
-prost = { version = "0.11" }
-prost-types = { version = "0.11" }
+prost = { version = "0.12" }
+prost-types = { version = "0.12" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 quanta = { version = "0.11" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -677,8 +677,8 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.8", features = ["tls"] }
-tonic-health = { version = "0.8" }
+tonic = { version = "0.10", features = ["tls"] }
+tonic-health = { version = "0.10" }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.3", features = ["full"] }
 tower-layer = { version = "0.3", default-features = false }
@@ -687,7 +687,6 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -927,8 +926,8 @@ colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4" }
 comfy-table = { version = "6" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
-console-api = { version = "0.4", default-features = false, features = ["transport"] }
-console-subscriber = { version = "0.1" }
+console-api = { version = "0.6", default-features = false, features = ["transport"] }
+console-subscriber = { version = "0.2" }
 const-oid = { version = "0.9", default-features = false }
 const-str = { version = "0.5" }
 constant_time_eq = { version = "0.2", default-features = false }
@@ -1336,10 +1335,10 @@ prometheus-http-query = { version = "0.6", default-features = false, features = 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
 proptest-derive = { version = "0.3", default-features = false }
-prost = { version = "0.11" }
-prost-build = { version = "0.11" }
-prost-derive = { version = "0.11", default-features = false }
-prost-types = { version = "0.11" }
+prost = { version = "0.12" }
+prost-build = { version = "0.12" }
+prost-derive = { version = "0.12", default-features = false }
+prost-types = { version = "0.12" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 quanta = { version = "0.11" }
 quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default-features = false }
@@ -1524,9 +1523,9 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.8", features = ["tls"] }
-tonic-build = { version = "0.8" }
-tonic-health = { version = "0.8" }
+tonic = { version = "0.10", features = ["tls"] }
+tonic-build = { version = "0.10" }
+tonic-health = { version = "0.10" }
 toolchain_find = { version = "0.2", default-features = false }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.3", features = ["full"] }
@@ -1537,7 +1536,6 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
-tracing-futures = { version = "0.2" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
