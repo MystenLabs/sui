@@ -18,6 +18,7 @@ use crate::{
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
+        transaction_block_kind::TransactionBlockKind,
     },
 };
 use async_graphql::connection::{Connection, Edge};
@@ -874,6 +875,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
         };
 
+        let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
         Ok(Self {
             digest,
             effects,
@@ -881,6 +883,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             bcs: Some(Base64::from(&tx.raw_transaction)),
             gas_input: Some(gas_input),
             epoch_id,
+            kind: Some(kind),
         })
     }
 }
