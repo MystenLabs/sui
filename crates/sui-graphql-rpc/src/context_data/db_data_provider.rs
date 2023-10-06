@@ -18,7 +18,10 @@ use crate::{
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
-        transaction_block_kind::TransactionBlockKind,
+        transaction_block_kind::{
+            ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
+            TransactionBlockKind,
+        },
     },
 };
 use async_graphql::connection::{Connection, Edge};
@@ -44,7 +47,9 @@ use sui_sdk::types::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
     object::{Data, Object as SuiObject},
-    transaction::{SenderSignedData, TransactionDataAPI, TransactionExpiration},
+    transaction::{
+        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionKind, TransactonExpiration,
+    },
 };
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -954,6 +959,65 @@ impl From<StoredEpochInfo> for Epoch {
             storage_fund: None,
             safe_mode: None,
             start_timestamp: None,
+        }
+    }
+}
+
+impl From<&TransactionKind> for TransactionBlockKind {
+    fn from(value: &TransactionKind) -> Self {
+        match value {
+            TransactionKind::ConsensusCommitPrologue(x) => {
+                let consensus = ConsensusCommitPrologueTransaction {
+                    epoch_id: x.epoch,
+                    round: Some(x.round),
+                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
+                };
+                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
+            }
+            TransactionKind::ChangeEpoch(x) => {
+                let change = ChangeEpochTransaction {
+                    epoch_id: x.epoch,
+                    timestamp: DateTime::from_ms(x.epoch_start_timestamp_ms as i64),
+                    storage_charge: Some(BigInt::from(x.storage_charge)),
+                    computation_charge: Some(BigInt::from(x.computation_charge)),
+                    storage_rebate: Some(BigInt::from(x.storage_rebate)),
+                };
+                TransactionBlockKind::ChangeEpochTransaction(change)
+            }
+            TransactionKind::Genesis(x) => {
+                let genesis = GenesisTransaction {
+                    objects: Some(
+                        x.objects
+                            .clone()
+                            .into_iter()
+                            .map(Object::from)
+                            .collect::<Vec<_>>(),
+                    ),
+                };
+                TransactionBlockKind::GenesisTransaction(genesis)
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+// TODO fix this GenesisObject
+#[allow(unreachable_code)]
+impl From<GenesisObject> for Object {
+    fn from(value: GenesisObject) -> Self {
+        match value {
+            GenesisObject::RawObject { data, owner } => Self {
+                owner: Some(
+                    SuiAddress::from_bytes(owner.get_owner_address().unwrap().to_vec()).unwrap(),
+                ),
+                storage_rebate: None,
+                bcs: None,
+                previous_transaction: None,
+                kind: None,
+                address: SuiAddress::from_bytes(data.id().into_bytes()).unwrap(),
+                version: unimplemented!(),
+                digest: unimplemented!(),
+            },
         }
     }
 }
