@@ -48,7 +48,7 @@ use sui_sdk::types::{
     },
     object::{Data, Object as SuiObject},
     transaction::{
-        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionKind, TransactonExpiration,
+        GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
 
