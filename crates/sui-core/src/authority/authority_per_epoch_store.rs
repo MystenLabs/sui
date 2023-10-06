@@ -1829,6 +1829,10 @@ impl AuthorityPerEpochStore {
         ))
     }
 
+    // Caller is not required to set ExecutionIndices with the right semantics in
+    // VerifiedSequencedConsensusTransaction.
+    // Also, ConsensusStats and hash will not be updated in the db with this function, unlike in
+    // process_consensus_transactions_and_commit_boundary().
     #[cfg(any(test, feature = "test-utils"))]
     pub(crate) async fn process_consensus_transactions_for_tests<C: CheckpointServiceNotify>(
         &self,
