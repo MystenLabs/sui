@@ -789,6 +789,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                     "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
                 ))
             })?;
+
         let live_object_set_digest =
             checkpoint_commitments
                 .iter()
