@@ -27,21 +27,21 @@ pub enum Level {
     High,
 }
 
-impl Level {
-    fn as_int(&self) -> usize {
-        match self {
-            Level::Low => 0,
-            Level::High => 1,
-        }
-    }
-}
-
 impl From<usize> for Level {
     fn from(value: usize) -> Self {
         if value == 0 {
             Level::Low
         } else {
             Level::High
+        }
+    }
+}
+
+impl From<Level> for usize {
+    fn from(value: Level) -> Self {
+        match value {
+            Level::Low => 0,
+            Level::High => 1,
         }
     }
 }
@@ -275,7 +275,7 @@ impl ConsensusThroughputProfiler {
 
             self.metrics
                 .consensus_calculated_throughput_profile
-                .set(profile.level.as_int() as i64);
+                .set(usize::from(profile.level) as i64);
 
             p
         } else {
