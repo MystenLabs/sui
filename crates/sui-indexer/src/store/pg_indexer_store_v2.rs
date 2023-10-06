@@ -175,6 +175,7 @@ impl PgIndexerStoreV2 {
                                 .eq(excluded(objects::checkpoint_sequence_number)),
                             objects::owner_type.eq(excluded(objects::owner_type)),
                             objects::owner_id.eq(excluded(objects::owner_id)),
+                            objects::owner_type.eq(excluded(objects::owner_type)),
                             objects::serialized_object.eq(excluded(objects::serialized_object)),
                             objects::coin_type.eq(excluded(objects::coin_type)),
                             objects::coin_balance.eq(excluded(objects::coin_balance)),
@@ -736,6 +737,7 @@ fn make_final_list_of_objects_to_commit(
         .collect()
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ObjectChangeToCommit {
     MutatedObject(StoredObject),
     DeletedObject(ObjectID),
