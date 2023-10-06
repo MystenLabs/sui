@@ -1,9 +1,9 @@
 module a::m {
     public fun foo(): u64 {
-        let `mut` = 0;
-        let `enum` = 0;
-        let `type` = 0;
-        let `match` = 0;
+        let mut `mut` = 0;
+        let mut `enum` = 0;
+        let mut `type` = 0;
+        let mut `match` = 0;
         `mut` +
         `enum`+
         `type` +

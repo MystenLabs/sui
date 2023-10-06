@@ -1545,7 +1545,9 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
             let eborrow = match er.exp {
                 sp!(_, TE::Use(v)) => {
-                    check_mutability(context, eloc, "mutable borrow", &v);
+                    if mut_ {
+                        check_mutability(context, eloc, "mutable borrow", &v);
+                    }
                     TE::BorrowLocal(mut_, v)
                 }
                 erexp => TE::TempBorrow(mut_, Box::new(T::exp(er.ty, erexp))),
@@ -2064,7 +2066,9 @@ fn exp_dotted_to_borrow(
             let sp!(ebloc, eb_) = eb.exp;
             let e_ = match eb_ {
                 TE::Use(v) => {
-                    check_mutability(context, loc, "mutable borrow", &v);
+                    if mut_ {
+                        check_mutability(context, loc, "mutable borrow", &v);
+                    }
                     TE::BorrowLocal(mut_, v)
                 }
                 eb_ => {

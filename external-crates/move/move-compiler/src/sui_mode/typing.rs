@@ -395,7 +395,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
-            (parameters[0].1.loc, msg),
+            (parameters[0].2.loc, msg),
             (otw_loc, otw_msg),
         );
         diag.add_note(OTW_NOTE);
