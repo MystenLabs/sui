@@ -28,7 +28,7 @@ use sui_types::{
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     move_package::MovePackage,
-    object::{Object, ObjectRead},
+    object::Object,
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 
@@ -460,7 +460,7 @@ impl IndexerReader {
         object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> Result<Vec<ObjectRead>, IndexerError> {
+    ) -> Result<Vec<StoredObject>, IndexerError> {
         self.spawn_blocking(move |this| {
             this.get_owned_objects_impl(address, object_type, cursor, limit)
         })
@@ -473,8 +473,8 @@ impl IndexerReader {
         object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> Result<Vec<ObjectRead>, IndexerError> {
-        let objects: Vec<StoredObject> = self.run_query(|conn| {
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.run_query(|conn| {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
@@ -488,11 +488,7 @@ impl IndexerReader {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
             query.load::<StoredObject>(conn)
-        })?;
-        objects
-            .into_iter()
-            .map(|object| object.try_into_object_read(self))
-            .collect::<Result<Vec<_>, _>>()
+        })
     }
 
     pub async fn multi_get_objects_in_blocking_task(

@@ -49,9 +49,18 @@ impl IndexerApiV2 {
             .into());
         }
         let options = options.unwrap_or_default();
-        let mut objects = self
+        let objects = self
             .inner
             .get_owned_objects_in_blocking_task(address, None, cursor, limit + 1)
+            .await?;
+        let mut objects = self
+            .inner
+            .spawn_blocking(move |this| {
+                objects
+                    .into_iter()
+                    .map(|object| object.try_into_object_read(&this))
+                    .collect::<Result<Vec<_>, _>>()
+            })
             .await?;
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
