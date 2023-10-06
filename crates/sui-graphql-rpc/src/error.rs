@@ -65,7 +65,7 @@ pub enum Error {
     CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
-    #[error("Internal error occurred while processing request")]
+    #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
 

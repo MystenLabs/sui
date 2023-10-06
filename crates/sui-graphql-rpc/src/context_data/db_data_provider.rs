@@ -9,7 +9,10 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
+        committee_member::CommitteeMember,
+        date_time::DateTime,
         digest::Digest,
+        end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
         object::{Object, ObjectFilter, ObjectKind},
@@ -36,13 +39,17 @@ use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::{
     digests::ChainIdentifier,
     effects::TransactionEffects,
-    messages_checkpoint::CheckpointDigest,
+    messages_checkpoint::{
+        CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
+    },
     object::{Data, Object as SuiObject},
     transaction::{SenderSignedData, TransactionDataAPI},
 };
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
+    #[error("Invalid checkpoint combination. 'before' or 'after' checkpoint cannot be used with 'at' checkpoint")]
+    InvalidCheckpointCombination,
     #[error("Before checkpoint must be greater than after checkpoint")]
     InvalidCheckpointOrder,
     #[error("Filtering objects by package::module::type is not currently supported")]
@@ -182,7 +189,6 @@ impl PgManager {
                     transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
                 ))
                 .into_boxed();
-
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -197,16 +203,21 @@ impl PgManager {
 
         if let Some(filter) = filter {
             // Filters for transaction table
-            if let Some(kind) = filter.kind {
-                query = query.filter(transactions::dsl::transaction_kind.eq(kind as i16));
-            }
-            if let Some(checkpoint) = filter.after_checkpoint {
+            // at_checkpoint mutually exclusive with before_ and after_checkpoint
+            if let Some(checkpoint) = filter.at_checkpoint {
                 query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64));
-            }
-            if let Some(checkpoint) = filter.before_checkpoint {
-                query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64));
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
+            } else {
+                if let Some(checkpoint) = filter.after_checkpoint {
+                    query = query.filter(
+                        transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64),
+                    );
+                }
+                if let Some(checkpoint) = filter.before_checkpoint {
+                    query = query.filter(
+                        transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64),
+                    );
+                }
             }
             if let Some(transaction_ids) = filter.transaction_ids {
                 let digests = transaction_ids
@@ -436,6 +447,11 @@ impl PgManager {
         &self,
         filter: &TransactionBlockFilter,
     ) -> Result<(), Error> {
+        if filter.at_checkpoint.is_some()
+            && (filter.before_checkpoint.is_some() || filter.after_checkpoint.is_some())
+        {
+            return Err(DbValidationError::InvalidCheckpointCombination.into());
+        }
         if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
             if before <= after {
                 return Err(DbValidationError::InvalidCheckpointOrder.into());
@@ -714,15 +730,70 @@ impl PgManager {
 impl TryFrom<StoredCheckpoint> for Checkpoint {
     type Error = Error;
     fn try_from(c: StoredCheckpoint) -> Result<Self, Self::Error> {
+        let checkpoint_commitments: Vec<CheckpointCommitment> =
+            bcs::from_bytes(&c.checkpoint_commitments).map_err(|e| {
+                Error::Internal(format!(
+                    "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
+                ))
+            })?;
+
+        let live_object_set_digest =
+            checkpoint_commitments
+                .iter()
+                .find_map(|commitment| match commitment {
+                    CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
+                        Some(Digest::from_array(digest.digest.into_inner()).to_string())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => None,
+                });
+
+        let end_of_epoch_data: Option<NativeEndOfEpochData> = if c.end_of_epoch {
+            c.end_of_epoch_data
+                .map(|data| {
+                    bcs::from_bytes(&data).map_err(|e| {
+                        Error::Internal(format!(
+                            "Can't convert end_of_epoch_data into EndOfEpochData. Error: {e}",
+                        ))
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+
+        let end_of_epoch = end_of_epoch_data.map(|e| {
+            let committees = e.next_epoch_committee;
+            let new_committee = if committees.is_empty() {
+                None
+            } else {
+                Some(
+                    committees
+                        .iter()
+                        .map(|c| CommitteeMember {
+                            authority_name: Some(c.0.into_concise().to_string()),
+                            stake_unit: Some(c.1),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            };
+
+            EndOfEpochData {
+                new_committee,
+                next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
+            }
+        });
+
         Ok(Self {
             digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
             sequence_number: c.sequence_number as u64,
+            timestamp: DateTime::from_ms(c.timestamp_ms),
             validator_signature: Some(c.validator_signature.into()),
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
                 .map(|d| Digest::try_from(d).map(|digest| digest.to_string()))
                 .transpose()?,
-            live_object_set_digest: None,
+            live_object_set_digest,
             network_total_transactions: Some(c.network_total_transactions as u64),
             rolling_gas_summary: Some(GasCostSummary {
                 computation_cost: c.computation_cost as u64,
@@ -731,7 +802,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                 non_refundable_storage_fee: c.non_refundable_storage_fee as u64,
             }),
             epoch_id: c.epoch as u64,
-            end_of_epoch: None,
+            end_of_epoch,
         })
     }
 }

@@ -63,6 +63,7 @@ scalar BigInt
 type Checkpoint {
 	digest: String!
 	sequenceNumber: Int!
+	timestamp: DateTime
 	validatorSignature: Base64
 	previousCheckpointDigest: String
 	liveObjectSetDigest: String
@@ -70,6 +71,7 @@ type Checkpoint {
 	rollingGasSummary: GasCostSummary
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type CheckpointConnection {
@@ -544,6 +546,7 @@ input TransactionBlockFilter {
 	function: String
 	kind: TransactionBlockKindInput
 	afterCheckpoint: Int
+	atCheckpoint: Int
 	beforeCheckpoint: Int
 	signAddress: SuiAddress
 	sentAddress: SuiAddress
