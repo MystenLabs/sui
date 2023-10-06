@@ -17,7 +17,7 @@ export function resolveRoyaltyRule(params: RuleResolvingParams) {
 	const [amount] = txb.moveCall({
 		target: `${packageId}::royalty_rule::fee_amount`,
 		typeArguments: [itemType],
-		arguments: [policyObj, objArg(txb, price ?? '')],
+		arguments: [policyObj, txb.pure.u64(price || '0')],
 	});
 
 	// splits the coin.

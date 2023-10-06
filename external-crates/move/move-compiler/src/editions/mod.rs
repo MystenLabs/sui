@@ -31,6 +31,7 @@ pub enum FeatureGate {
     PostFixAbilities,
     StructTypeVisibility,
     DotCall,
+    PositionalFields,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -97,6 +98,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
     FeatureGate::DotCall,
+    FeatureGate::PositionalFields,
 ];
 
 impl Edition {
@@ -169,6 +171,7 @@ impl FeatureGate {
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
             FeatureGate::DotCall => "Method syntax is",
+            FeatureGate::PositionalFields => "Positional fields are",
         }
     }
 }

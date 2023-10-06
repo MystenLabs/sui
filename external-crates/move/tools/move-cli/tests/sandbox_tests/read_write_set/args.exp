@@ -1,5 +1,5 @@
 Command `sandbox publish`:
-Command `experimental read-write-set storage/0x00000000000000000000000000000001/modules/RWSet.mv read_f -v`:
+Command `experimental read-write-set storage/0x0000000000000000000000000000000000000000000000000000000000000001/modules/RWSet.mv read_f -v`:
 Inferring read/write set for 1 module(s)
 Accesses:
 Formal(0): Read
@@ -8,7 +8,7 @@ Formal(0)/f: Read
 Locals:
 Ret(0): Formal(0)/f
 
-Command `experimental read-write-set storage/0x00000000000000000000000000000001/modules/RWSet.mv write_f -v`:
+Command `experimental read-write-set storage/0x0000000000000000000000000000000000000000000000000000000000000001/modules/RWSet.mv write_f -v`:
 Inferring read/write set for 1 module(s)
 Accesses:
 Formal(0): Read

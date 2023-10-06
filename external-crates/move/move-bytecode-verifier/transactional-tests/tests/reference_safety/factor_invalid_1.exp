@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 1-28:
-Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::M,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M'. Got VMErr
 }
 
 task 1 'publish'. lines 30-57:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: CALL_BORROWED_MUTABLE_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::M2,

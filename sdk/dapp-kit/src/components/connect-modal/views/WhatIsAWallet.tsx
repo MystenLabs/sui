@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Heading } from '../../ui/Heading.js';
 import { InfoSection } from '../InfoSection.js';
 import * as styles from './WhatIsAWallet.css.js';
 
 export function WhatIsAWallet() {
 	return (
 		<div className={styles.container}>
-			<h2 className={styles.title}>What is a Wallet</h2>
+			<Heading as="h2">What is a Wallet</Heading>
 			<div className={styles.content}>
 				<InfoSection title="Easy Login">
 					No need to create new accounts and passwords for every website. Just connect your wallet

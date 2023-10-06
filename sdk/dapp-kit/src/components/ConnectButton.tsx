@@ -6,6 +6,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useCurrentAccount } from '../hooks/wallet/useCurrentAccount.js';
 import { AccountDropdownMenu } from './AccountDropdownMenu.js';
 import { ConnectModal } from './connect-modal/ConnectModal.js';
+import { Button } from './ui/Button.js';
 
 type ConnectButtonProps = {
 	connectText?: ReactNode;
@@ -19,6 +20,6 @@ export function ConnectButton({
 	return currentAccount ? (
 		<AccountDropdownMenu currentAccount={currentAccount} />
 	) : (
-		<ConnectModal trigger={<button {...buttonProps}>{connectText}</button>} />
+		<ConnectModal trigger={<Button {...buttonProps}>{connectText}</Button>} />
 	);
 }

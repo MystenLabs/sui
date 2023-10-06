@@ -3,7 +3,7 @@
 
 import { type AccountSourceSerializedUI } from '_src/background/account-sources/AccountSource';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { type ZkProvider } from '_src/background/accounts/zk/providers';
+import { type ZkLoginProvider } from '_src/background/accounts/zklogin/providers';
 import { type Status } from '_src/background/storage-migration';
 import { type ExportedKeypair, type SerializedSignature } from '@mysten/sui.js/cryptography';
 
@@ -39,8 +39,8 @@ type MethodPayloads = {
 				password: string;
 		  }
 		| {
-				type: 'zk';
-				provider: ZkProvider;
+				type: 'zkLogin';
+				provider: ZkLoginProvider;
 		  };
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
 	signData: { data: string; id: string };

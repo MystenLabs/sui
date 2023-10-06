@@ -8,8 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
-const FLOAT_SCALING_FACTOR = 1_000_000_000n;
-export const DEFAULT_TICK_SIZE = 1n * FLOAT_SCALING_FACTOR;
 const DEEPBOOK_KEY = 'deepbook';
 
 export const mainnetPools = {
@@ -92,13 +90,13 @@ async function getDeepBookPriceForCoin(coin: Coins, deepbookClient: DeepBookClie
 		promises.push(getPriceForPool(poolName2, deepbookClient));
 	}
 
-	return Promise.all(promises).then(([price1, price2]) => {
-		if (price1 && price2) {
-			return (price1 + price2) / 2n;
-		}
+	const [price1, price2] = await Promise.all(promises);
 
-		return price1 || price2;
-	});
+	if (price1 && price2) {
+		return (price1 + price2) / 2n;
+	}
+
+	return price1 || price2;
 }
 
 async function getDeepbookPricesInUSD(coins: Coins[], deepBookClient: DeepBookClient) {
@@ -108,7 +106,7 @@ async function getDeepbookPricesInUSD(coins: Coins[], deepBookClient: DeepBookCl
 
 function useDeepbookPricesInUSD(coins: Coins[]) {
 	return useQuery({
-		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', ...coins],
+		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', coins],
 		queryFn: async () => {
 			const deepBookClient = await getDeepBookClient();
 

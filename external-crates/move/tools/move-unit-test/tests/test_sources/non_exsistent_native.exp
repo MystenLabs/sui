@@ -9,7 +9,7 @@ Failures in 0x1::M:
 
 ┌── non_existent_native ──────
 │ INTERNAL TEST ERROR: INTERNAL VM INVARIANT VIOLATION.
-│ Test was not expected to error, but it gave a UNEXPECTED_VERIFIER_ERROR (code 2017) error originating in the module 00000000000000000000000000000001::M rooted here
+│ Test was not expected to error, but it gave a UNEXPECTED_VERIFIER_ERROR (code 2017) error originating in the module 0000000000000000000000000000000000000000000000000000000000000001::M rooted here
 └──────────────────
 
 Test result: FAILED. Total tests: 1; passed: 0; failed: 1

@@ -1,0 +1,202 @@
+error[E03009]: unbound variable
+  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:7:13
+  │
+7 │         Foo(t, y) = x;
+  │             ^ Invalid assignment. Unbound variable 't'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:8:9
+  │
+8 │         Foo() = x;
+  │         ^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:8:9
+  │
+8 │         Foo() = x;
+  │         ^^^^^ Missing assignment for field '1' in '0x42::M::Foo'
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:9:9
+  │
+6 │     fun f(x: Foo) {
+  │              --- Expected: '0x42::M::Foo'
+  ·
+9 │         Bar() = x;
+  │         ^^^^^
+  │         │
+  │         Invalid deconstruction assignment
+  │         Given: '0x42::M::Bar'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:10:9
+   │
+ 6 │     fun f(x: Foo) {
+   │              --- Expected: '0x42::M::Foo'
+   ·
+10 │         Bar(_, _) = x;
+   │         ^^^^^^^^^
+   │         │
+   │         Invalid deconstruction assignment
+   │         Given: '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:10:9
+   │
+10 │         Bar(_, _) = x;
+   │         ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:10:9
+   │
+10 │         Bar(_, _) = x;
+   │         ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:14:13
+   │
+14 │         let Foo() = x;
+   │             ^^^^^ Missing binding for field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:14:13
+   │
+14 │         let Foo() = x;
+   │             ^^^^^ Missing binding for field '1' in '0x42::M::Foo'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:15:13
+   │
+13 │     fun g(x: Foo) {
+   │              --- Expected: '0x42::M::Foo'
+14 │         let Foo() = x;
+15 │         let Bar() = x;
+   │             ^^^^^
+   │             │
+   │             Invalid deconstruction binding
+   │             Given: '0x42::M::Bar'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:16:13
+   │
+13 │     fun g(x: Foo) {
+   │              --- Expected: '0x42::M::Foo'
+   ·
+16 │         let Bar(c, d) = x;
+   │             ^^^^^^^^^
+   │             │
+   │             Invalid deconstruction binding
+   │             Given: '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:16:13
+   │
+16 │         let Bar(c, d) = x;
+   │             ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:16:13
+   │
+16 │         let Bar(c, d) = x;
+   │             ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:20:9
+   │
+19 │     fun h(x: Bar) {
+   │              --- Expected: '0x42::M::Bar'
+20 │         Foo(_, _) = x;
+   │         ^^^^^^^^^
+   │         │
+   │         Invalid deconstruction assignment
+   │         Given: '0x42::M::Foo'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:21:13
+   │
+21 │         Foo(t, y) = x;
+   │             ^ Invalid assignment. Unbound variable 't'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:22:9
+   │
+19 │     fun h(x: Bar) {
+   │              --- Expected: '0x42::M::Bar'
+   ·
+22 │         Foo() = x;
+   │         ^^^^^
+   │         │
+   │         Invalid deconstruction assignment
+   │         Given: '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:22:9
+   │
+22 │         Foo() = x;
+   │         ^^^^^ Missing assignment for field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:22:9
+   │
+22 │         Foo() = x;
+   │         ^^^^^ Missing assignment for field '1' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:23:9
+   │
+23 │         Bar(_, _) = x;
+   │         ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:23:9
+   │
+23 │         Bar(_, _) = x;
+   │         ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:27:13
+   │
+26 │     fun z(x: Bar) {
+   │              --- Expected: '0x42::M::Bar'
+27 │         let Foo(t, y) = x;
+   │             ^^^^^^^^^
+   │             │
+   │             Invalid deconstruction binding
+   │             Given: '0x42::M::Foo'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:28:13
+   │
+26 │     fun z(x: Bar) {
+   │              --- Expected: '0x42::M::Bar'
+27 │         let Foo(t, y) = x;
+28 │         let Foo() = x;
+   │             ^^^^^
+   │             │
+   │             Invalid deconstruction binding
+   │             Given: '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:28:13
+   │
+28 │         let Foo() = x;
+   │             ^^^^^ Missing binding for field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:28:13
+   │
+28 │         let Foo() = x;
+   │             ^^^^^ Missing binding for field '1' in '0x42::M::Foo'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:29:13
+   │
+29 │         let Bar(_, _) = x;
+   │             ^^^^^^^^^ Unbound field '0' in '0x42::M::Bar'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/positional_struct_lhs_unpack.move:29:13
+   │
+29 │         let Bar(_, _) = x;
+   │             ^^^^^^^^^ Unbound field '1' in '0x42::M::Bar'
+

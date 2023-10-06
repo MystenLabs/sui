@@ -10,7 +10,7 @@ edition = "2021"
 serde.workspace = true
 reqwest.workspace = true
 tracing.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 sui-core.workspace = true
+workspace-hack.workspace = true
 

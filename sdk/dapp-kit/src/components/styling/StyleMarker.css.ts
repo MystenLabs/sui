@@ -4,9 +4,17 @@
 import { globalStyle } from '@vanilla-extract/css';
 
 import { styleDataAttributeSelector } from '../../constants/styleDataAttribute.js';
+import { themeVars } from '../../themes/themeContract.js';
 
 globalStyle(createScopedSelector('*'), {
 	boxSizing: 'border-box',
+	color: themeVars.colors.body,
+	fontFamily: themeVars.typography.fontFamily,
+	fontSize: themeVars.fontWeights.normal,
+	fontStyle: themeVars.typography.fontStyle,
+	fontWeight: themeVars.fontWeights.normal,
+	lineHeight: themeVars.typography.lineHeight,
+	letterSpacing: themeVars.typography.letterSpacing,
 });
 
 globalStyle(createScopedSelector('button'), {
@@ -16,7 +24,6 @@ globalStyle(createScopedSelector('button'), {
 	fontFamily: 'inherit',
 	lineHeight: 'inherit',
 	letterSpacing: 'inherit',
-	outline: 'none',
 	color: 'inherit',
 	border: 0,
 	padding: 0,

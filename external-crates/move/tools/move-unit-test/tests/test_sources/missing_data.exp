@@ -23,7 +23,7 @@ Failures in 0x1::MissingData:
 │ 5 │     fun missing_data() acquires Missing {
 │   │         ------------ In this function in 0x1::MissingData
 │ 6 │         borrow_global<Missing>(@0x0);
-│   │         ^^^^^^^^^^^^^ Test was not expected to error, but it gave a MISSING_DATA (code 4008) error originating in the module 00000000000000000000000000000001::MissingData rooted here
+│   │         ^^^^^^^^^^^^^ Test was not expected to error, but it gave a MISSING_DATA (code 4008) error originating in the module 0000000000000000000000000000000000000000000000000000000000000001::MissingData rooted here
 │ 
 │ 
 └──────────────────
@@ -36,7 +36,7 @@ Failures in 0x1::MissingData:
 │ 5 │     fun missing_data() acquires Missing {
 │   │         ------------ In this function in 0x1::MissingData
 │ 6 │         borrow_global<Missing>(@0x0);
-│   │         ^^^^^^^^^^^^^ Test was not expected to error, but it gave a MISSING_DATA (code 4008) error originating in the module 00000000000000000000000000000001::MissingData rooted here
+│   │         ^^^^^^^^^^^^^ Test was not expected to error, but it gave a MISSING_DATA (code 4008) error originating in the module 0000000000000000000000000000000000000000000000000000000000000001::MissingData rooted here
 │ 
 │ 
 │ stack trace

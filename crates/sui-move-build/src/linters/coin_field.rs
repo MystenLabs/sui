@@ -88,7 +88,7 @@ fn is_mident_sui_coin(sp!(_, mident): &E::ModuleIdent) -> bool {
     }
     let sui_addr = NumericalAddress::new(AccountAddress::TWO.into_bytes(), NumberFormat::Hex);
     match mident.address {
-        A::Numerical(_, addr) => addr.value == sui_addr,
+        A::Numerical { value: addr, .. } => addr.value == sui_addr,
         A::NamedUnassigned(n) => n.value == SUI_PKG_NAME.into(),
     }
 }

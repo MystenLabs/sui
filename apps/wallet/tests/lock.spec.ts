@@ -7,7 +7,7 @@ import { createWallet } from './utils/auth';
 test.skip();
 
 test('wallet unlock', async ({ page, context, extensionUrl }) => {
-	test.skip(true, 'Skip while ZK-auth work is in progress');
+	test.skip(true, 'Skip while zkLogin work is in progress');
 
 	await createWallet(page, extensionUrl);
 	await page.getByTestId('menu').click();
@@ -18,7 +18,7 @@ test('wallet unlock', async ({ page, context, extensionUrl }) => {
 });
 
 test('wallet auto-lock', async ({ page, extensionUrl }) => {
-	test.skip(true, 'Skip while ZK-auth work is in progress');
+	test.skip(true, 'Skip while zkLogin work is in progress');
 
 	test.skip(
 		process.env.CI !== 'true',

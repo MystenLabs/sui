@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 1 'publish'. lines 12-37:
-Error: Unable to publish module '00000000000000000000000000000042::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::A'. Got VMError: {
     major_status: WRITEREF_EXISTS_BORROW_ERROR,
     sub_status: None,
     location: 0x42::A,

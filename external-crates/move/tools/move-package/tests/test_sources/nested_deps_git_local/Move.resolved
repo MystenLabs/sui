@@ -96,7 +96,7 @@ ResolvedGraph {
                 addresses: None,
                 dev_address_assignments: Some(
                     {
-                        "std": 00000000000000000000000000000001,
+                        "std": 0000000000000000000000000000000000000000000000000000000000000001,
                     },
                 ),
                 build: None,
@@ -118,7 +118,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "std": 00000000000000000000000000000001,
+                "std": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -144,7 +144,7 @@ ResolvedGraph {
                 ),
                 dev_address_assignments: Some(
                     {
-                        "std": 00000000000000000000000000000001,
+                        "std": 0000000000000000000000000000000000000000000000000000000000000001,
                     },
                 ),
                 build: None,
@@ -154,7 +154,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "std": 00000000000000000000000000000001,
+                "std": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -176,7 +176,7 @@ ResolvedGraph {
                 addresses: Some(
                     {
                         "std": Some(
-                            00000000000000000000000000000001,
+                            0000000000000000000000000000000000000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -204,7 +204,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "std": 00000000000000000000000000000001,
+                "std": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },

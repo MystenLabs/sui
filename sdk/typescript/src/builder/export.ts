@@ -10,6 +10,12 @@ export {
 	type TransactionBlockInput,
 	UpgradePolicy,
 } from './Transactions.js';
-export { TransactionBlock, isTransactionBlock } from './TransactionBlock.js';
+
+export {
+	TransactionBlock,
+	isTransactionBlock,
+	type TransactionObjectArgument,
+	type TransactionResult,
+} from './TransactionBlock.js';
 
 export { getPureSerializationType };

@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSuiClient } from '@mysten/dapp-kit';
-import { KIOSK_ITEM, KioskClient, KioskItem, KioskOwnerCap, Network } from '@mysten/kiosk';
+import { useSuiClientContext } from '@mysten/dapp-kit';
+import { KIOSK_ITEM, KioskClient, KioskItem, KioskOwnerCap } from '@mysten/kiosk';
 import { SuiClient } from '@mysten/sui.js/src/client';
 import { useQuery } from '@tanstack/react-query';
 
 import { getKioskIdFromOwnerCap, ORIGINBYTE_KIOSK_OWNER_TOKEN } from '../utils/kiosk';
+import { useKioskClient } from './useKioskClient';
 
 export enum KioskTypes {
 	SUI = 'sui',
@@ -74,16 +75,8 @@ async function getOriginByteKioskContents(address: string, client: SuiClient) {
 	return contents;
 }
 
-// TODO: Replace `getSuiKioskContent` references to also pass in the network.
-async function getSuiKioskContents(
-	address: string,
-	client: SuiClient,
-	network: Network = Network.MAINNET,
-) {
-	const kioskClient = new KioskClient({ client, network });
-
+async function getSuiKioskContents(address: string, kioskClient: KioskClient) {
 	const ownedKiosks = await kioskClient.getOwnedKiosks({ address });
-
 	const contents = await Promise.all(
 		ownedKiosks.kioskIds.map(async (id: string) => {
 			const kiosk = await kioskClient.getKiosk({
@@ -105,18 +98,15 @@ async function getSuiKioskContents(
 	return contents;
 }
 
-export function useGetKioskContents(
-	address?: string | null,
-	network?: Network,
-	disableOriginByteKiosk?: boolean,
-) {
-	const client = useSuiClient();
+export function useGetKioskContents(address?: string | null, disableOriginByteKiosk?: boolean) {
+	const { client: suiClient, network } = useSuiClientContext();
+	const kioskClient = useKioskClient();
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: ['get-kiosk-contents', address, network, disableOriginByteKiosk],
+		queryKey: ['get-kiosk-contents', address, disableOriginByteKiosk, network, kioskClient.network],
 		queryFn: async () => {
-			const suiKiosks = await getSuiKioskContents(address!, client, network);
-			const obKiosks = await getOriginByteKioskContents(address!, client);
+			const suiKiosks = await getSuiKioskContents(address!, kioskClient);
+			const obKiosks = await getOriginByteKioskContents(address!, suiClient);
 			return [...suiKiosks, ...obKiosks];
 		},
 		select(data) {
@@ -136,5 +126,6 @@ export function useGetKioskContents(
 				lookup,
 			};
 		},
+		enabled: !!address,
 	});
 }
