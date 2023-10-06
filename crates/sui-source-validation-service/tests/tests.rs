@@ -6,6 +6,7 @@ use reqwest::Client;
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::FileExt;
+use std::sync::{Arc, RwLock};
 use std::{collections::BTreeMap, path::PathBuf};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -85,7 +86,9 @@ async fn test_end_to_end() -> anyhow::Result<()> {
         })],
     };
     // Start watching for upgrades.
-    let t = tokio::spawn(async move { watch_for_upgrades(&config).await });
+    let sources = NetworkLookup::new();
+    let dummy_app_state = Arc::new(RwLock::new(AppState { sources }));
+    let t = tokio::spawn(async move { watch_for_upgrades(&config, dummy_app_state).await });
 
     // Set up to upgrade package.
     let package = effects
@@ -274,7 +277,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     );
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, test_lookup);
-    tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
+    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    tokio::spawn(serve(app_state).expect("Cannot start service."));
 
     let client = Client::new();
 
