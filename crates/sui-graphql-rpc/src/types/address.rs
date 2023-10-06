@@ -3,7 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
-use crate::context_data::context_ext::DataProviderContextExt;
+use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 
 use super::name_service::NameService;
 use super::{
@@ -34,14 +34,26 @@ pub(crate) enum AddressTransactionBlockRelationship {
 impl Address {
     async fn transaction_block_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         relation: Option<AddressTransactionBlockRelationship>,
         filter: Option<TransactionBlockFilter>,
-    ) -> Option<Connection<String, TransactionBlock>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, TransactionBlock>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_txs(
+                first,
+                after,
+                last,
+                before,
+                filter,
+                Some(self.address),
+                relation,
+            )
+            .await
+            .extend()
     }
 
     // =========== Owner interface methods =============
@@ -58,10 +70,11 @@ impl Address {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
-        ctx.data_provider()
-            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+    ) -> Result<Option<Connection<String, Object>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_objs(first, after, last, before, filter)
             .await
+            .extend()
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {

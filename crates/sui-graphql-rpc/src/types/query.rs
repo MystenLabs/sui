@@ -154,7 +154,7 @@ impl Query {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, filter)
+            .fetch_txs(first, after, last, before, filter, None, None)
             .await
             .extend()
     }
