@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
 import NumberInput from '_components/number-input';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { useField, useFormikContext } from 'formik';
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { forwardRef } from 'react';
 
 import Alert from '../components/alert';
@@ -37,7 +38,7 @@ const styles = cva(
 );
 
 type ActionButtonProps = {
-	actionText: string;
+	actionText?: string;
 	onActionClicked?: PillProps['onClick'];
 	actionType?: PillProps['type'];
 	name: string;
@@ -125,6 +126,7 @@ type InputWithActionZodFormProps = VariantProps<typeof styles> &
 	}) &
 	ActionButtonProps & {
 		errorString?: string;
+		suffix?: ReactNode;
 	};
 
 export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActionZodFormProps>(
@@ -139,6 +141,8 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 			dark,
 			rounded,
 			errorString,
+			value,
+			suffix,
 			...props
 		},
 		forwardRef,
@@ -153,6 +157,17 @@ export const InputWithActionButton = forwardRef<HTMLInputElement, InputWithActio
 						disabled={disabled}
 						ref={forwardRef}
 					/>
+					{suffix && value && (
+						<div className="absolute z-0 flex h-full max-w-full items-center pl-3">
+							<span className="invisible max-w-full text-sm">{value}</span>
+							<span>
+								<Text variant="body" color="steel">
+									{suffix}
+								</Text>
+							</span>
+						</div>
+					)}
+
 					<div className="flex items-center justify-end absolute right-0 max-w-[20%] mx-3 overflow-hidden">
 						<Pill
 							text={actionText}
