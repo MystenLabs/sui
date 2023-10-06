@@ -5,6 +5,8 @@ use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
 
+use crate::context_data::db_data_provider::DbValidationError;
+
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 /// `<https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>`
@@ -43,6 +45,8 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error(transparent)]
+    DbValidation(#[from] DbValidationError),
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
     #[error("String is not valid base58: {0}")]
@@ -68,7 +72,8 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::InvalidCheckpointQuery
+            Error::DbValidation(_)
+            | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::CursorNoReversePagination

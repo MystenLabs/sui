@@ -143,7 +143,8 @@ pub(crate) struct TransactionBlockFilter {
     pub function: Option<String>,
 
     pub kind: Option<TransactionBlockKindInput>,
-    pub checkpoint: Option<u64>,
+    pub after_checkpoint: Option<u64>,
+    pub before_checkpoint: Option<u64>,
 
     pub sign_address: Option<SuiAddress>,
     pub sent_address: Option<SuiAddress>,
@@ -152,4 +153,6 @@ pub(crate) struct TransactionBlockFilter {
 
     pub input_object: Option<SuiAddress>,
     pub changed_object: Option<SuiAddress>,
+
+    pub transaction_ids: Option<Vec<String>>,
 }

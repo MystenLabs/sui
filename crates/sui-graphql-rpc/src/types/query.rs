@@ -7,11 +7,11 @@ use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
     epoch::Epoch,
-    object::Object,
+    object::{Object, ObjectFilter},
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
-    transaction_block::TransactionBlock,
+    transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
     config::ServiceConfig,
@@ -138,12 +138,40 @@ impl Query {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Checkpoint>>> {
-        let result = ctx
-            .data_provider()
-            .fetch_checkpoint_connection(first, after, last, before)
-            .await?;
+        ctx.data_unchecked::<PgManager>()
+            .fetch_checkpoints(first, after, last, before)
+            .await
+            .extend()
+    }
 
-        Ok(Some(result))
+    async fn transaction_block_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Option<Connection<String, TransactionBlock>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_txs(first, after, last, before, filter)
+            .await
+            .extend()
+    }
+
+    async fn object_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<ObjectFilter>,
+    ) -> Result<Option<Connection<String, Object>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_objs(first, after, last, before, filter)
+            .await
+            .extend()
     }
 
     async fn protocol_config(
