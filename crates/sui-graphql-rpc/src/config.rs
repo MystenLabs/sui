@@ -155,8 +155,7 @@ struct ServerConfig {
 impl ServerConfig {
     pub fn from_yaml(path: &str) -> Self {
         let contents = std::fs::read_to_string(path).unwrap();
-        let config = serde_yaml::from_str::<Self>(&contents).unwrap();
-        config
+        serde_yaml::from_str::<Self>(&contents).unwrap()
     }
 
     pub fn to_yaml_file(&self, path: PathBuf) {
