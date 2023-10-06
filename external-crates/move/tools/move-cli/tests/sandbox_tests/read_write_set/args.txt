@@ -1,3 +1,3 @@
 sandbox publish
-experimental read-write-set storage/0x00000000000000000000000000000001/modules/RWSet.mv read_f -v
-experimental read-write-set storage/0x00000000000000000000000000000001/modules/RWSet.mv write_f -v
+experimental read-write-set storage/0x0000000000000000000000000000000000000000000000000000000000000001/modules/RWSet.mv read_f -v
+experimental read-write-set storage/0x0000000000000000000000000000000000000000000000000000000000000001/modules/RWSet.mv write_f -v

@@ -757,7 +757,10 @@ fn max_vec_len() {
         },
         Constant {
             type_: tvec(SignatureToken::Address),
-            data: large_vec(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            data: large_vec(vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]),
         },
         // double large
         Constant {
@@ -796,7 +799,8 @@ fn max_vec_len() {
         Constant {
             type_: tvec(tvec(SignatureToken::Address)),
             data: double_vec(large_vec(vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
             ])),
         },
     ];
