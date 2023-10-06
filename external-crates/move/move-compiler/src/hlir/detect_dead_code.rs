@@ -14,6 +14,48 @@ use move_symbol_pool::Symbol;
 use std::{collections::BTreeMap, iter::Peekable};
 
 //**************************************************************************************************
+// Description
+//**************************************************************************************************
+// This analysis considers the input for potentially dead code due to control flow. It tracks
+// control flow in a somewhat fine-grained way, and when it finds a position that diverges it
+// reports that as an error.
+//
+// For simplicity, it aims to satify the following requirements:
+//
+//     1. For each block, if we discover a divergent instruction either at the top level or
+//        embedded in a value position (e.g., the RHS of a let, or tail-value position), we report
+//        that user to the error as possible dead code, under the following guidelines:.
+//        a) If the divergent code is nested within a value, we report it as a value error.
+//        b) If the divergent code is in a statement position and the block has a trailing unit as
+//           its last expression, report it as a trailing semicolon error.
+//        c) If the divergent code is in any other statement position, report it as such.
+//        d) If both arms of an if diverge in the same way in value or tail position, report the
+//           entire if together.
+//
+//     2. We only report the first such error we find, as described above, per-block. For example,
+//        this will only yield one error, pointing at the first line:
+//            {
+//                1 + loop {};
+//                1 + loop {};
+//            }
+//
+//     3. If we discover a malformed sub-expression, we do not return a further error.
+//        For example, we would report a trailing semicolon error for this:
+//            {
+//                if (true) { return 0 } else { return 1 };
+//            }
+//        However, we will not for this `if`, only its inner arms, as they are malformed:
+//            {
+//                if (true) { return 0; } else { return 1; };
+//            }
+//        This is because the former case has two well-formed sub-blocks, but the latter case is
+//        already going to raise warnings for each of the sub-block cases.
+//
+//  The implementation proceeds as a context-based walk, considering `tail` (or `return`) position,
+//  `value` position, and `statement` position. Errors are reported differently depending upon
+//  where they are found.
+
+//**************************************************************************************************
 // Context
 //**************************************************************************************************
 
@@ -44,11 +86,11 @@ impl<'env> Context<'env> {
         match error {
             AbortCalled | Divergent | InfiniteLoop | LoopControlCalled | ReturnCalled => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DIVERGENT_EXP)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, VALUE_UNREACHABLE_MSG)));
             }
             UnreachableCode => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, NOT_EXECUTED_MSG)));
             }
             _ => (),
         }
@@ -57,13 +99,13 @@ impl<'env> Context<'env> {
     fn report_tail_error(&mut self, sp!(site, error): ControlFlow) {
         use ControlFlow_::*;
         match error {
-            InfiniteLoop => {
+            AbortCalled | InfiniteLoop => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, NOT_EXECUTED_MSG)));
             }
             UnreachableCode => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, NOT_EXECUTED_MSG)));
             }
             _ => (),
         }
@@ -74,11 +116,11 @@ impl<'env> Context<'env> {
         match error {
             AbortCalled | Divergent | InfiniteLoop | ReturnCalled => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DIVERGENT_EXP)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, UNREACHABLE_MSG)));
             }
             UnreachableCode => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, NOT_EXECUTED_MSG)));
             }
             _ => (),
         }
@@ -87,8 +129,7 @@ impl<'env> Context<'env> {
     fn report_statement_tail_error(&mut self, sp!(site, error): ControlFlow, tail_exp: &T::Exp) {
         use ControlFlow_::*;
         match error {
-            AlreadyReported | AbortCalled | Divergent | InfiniteLoop | ReturnCalled
-            | LoopControlCalled
+            AbortCalled | Divergent | InfiniteLoop | ReturnCalled | LoopControlCalled
                 if matches!(tail_exp.exp.value, T::UnannotatedExp_::Unit { .. }) =>
             {
                 self.env.add_diag(diag!(
@@ -101,26 +142,27 @@ impl<'env> Context<'env> {
             AbortCalled | Divergent | InfiniteLoop | ReturnCalled | LoopControlCalled => {
                 self.env.add_diag(diag!(
                     UnusedItem::DeadCode,
-                    (tail_exp.exp.loc, DEAD_ERR_CMD)
+                    (tail_exp.exp.loc, NOT_EXECUTED_MSG)
                 ));
             }
             UnreachableCode => {
                 self.env
-                    .add_diag(diag!(UnusedItem::DeadCode, (site, DEAD_ERR_CMD)));
+                    .add_diag(diag!(UnusedItem::DeadCode, (site, NOT_EXECUTED_MSG)));
             }
             _ => (),
         }
     }
 }
 
-const DIVERGENT_EXP: &str = "Invalid use of a divergent expression. \
-     The code following the evaluation of this expression will be dead and should be removed.";
+const VALUE_UNREACHABLE_MSG: &str =
+    "Expected a value. Any code surrounding or after this expression will not be reached";
 
-const DEAD_ERR_CMD: &str =
+const UNREACHABLE_MSG: &str = "Any code after this expression will not be reached";
+
+const NOT_EXECUTED_MSG: &str =
     "Unreachable code. This statement (and any following statements) will not be executed.";
 
 const SEMI_MSG: &str = "Invalid trailing ';'";
-const UNREACHABLE_MSG: &str = "Any code after this expression will not be reached";
 const INFO_MSG: &str =
     "A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. \
      That '()' value will not be reachable";
@@ -276,14 +318,19 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::IfElse(test, conseq, alt) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
+                return None;
             };
             let conseq_flow = tail(context, conseq);
             let alt_flow = tail(context, alt);
             match (conseq_flow, alt_flow) {
                 _ if matches!(ty, sp!(_, N::Type_::Unit)) => None,
                 (Some(cflow), Some(aflow)) => {
-                    context.report_tail_error(cflow);
-                    context.report_tail_error(aflow);
+                    if cflow.value == aflow.value {
+                        context.report_tail_error(sp(*eloc, cflow.value));
+                    } else {
+                        context.report_tail_error(cflow);
+                        context.report_tail_error(aflow);
+                    }
                     None
                 }
                 _ => None,
@@ -296,8 +343,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         //  statements
         // -----------------------------------------------------------------------------------------
-        E::Return(_) => return_called(*eloc),
-        E::Abort(_) => abort_called(*eloc),
+        E::Return(_) | E::Abort(_) => value(context, e),
         E::Break | E::Continue => loop_control_called(*eloc),
         E::Assign(_, _, _) | E::Mutate(_, _) => None,
 
@@ -310,22 +356,17 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
 
 fn tail_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
-
     let last_exp = seq.iter().last();
-
-    let stmt_control_flow = statement_block(context, seq, false, true);
-
-    if let Some(control_flow) = stmt_control_flow {
-        if let Some(sp!(_, S::Seq(last))) = last_exp {
-            context.report_statement_tail_error(control_flow, last);
-            if let Some(tail_control_flow) = tail(context, last) {
-                context.report_tail_error(tail_control_flow);
-            }
-        }
+    let stmt_flow = statement_block(context, seq, false, true);
+    if let (Some(control_flow), Some(sp!(_, S::Seq(last)))) = (stmt_flow, last_exp) {
+        context.report_statement_tail_error(control_flow, last);
+        None
+    } else if let Some(control_flow) = stmt_flow {
+        context.report_tail_error(control_flow);
         None
     } else {
         match last_exp {
-            None => panic!("ICE tail block with no expressions"),
+            None => None,
             Some(sp!(_, S::Seq(last))) => tail(context, last),
             Some(_) => panic!("ICE last sequence item should be an exp"),
         }
@@ -339,14 +380,21 @@ fn tail_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
 fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
 
-    if is_binop(e) {
-        return process_binops(context, e);
-    }
-
     let T::Exp {
         ty,
         exp: sp!(eloc, e_),
     } = e;
+
+    macro_rules! value_report {
+        ($nested_value:expr) => {{
+            if let Some(control_flow) = value(context, $nested_value) {
+                context.report_value_error(control_flow);
+                already_reported(*eloc)
+            } else {
+                None
+            }
+        }};
+    }
 
     match e_ {
         // -----------------------------------------------------------------------------------------
@@ -355,22 +403,20 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::IfElse(test, conseq, alt) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
+                return already_reported(*eloc);
             };
-            let conseq_flow = value(context, conseq);
-            let alt_flow = value(context, alt);
-            match (conseq_flow, alt_flow) {
-                _ if matches!(ty, sp!(_, N::Type_::Unit)) => None,
-                (Some(cflow), Some(aflow)) if cflow.value == aflow.value => {
-                    context.report_value_error(sp(*eloc, cflow.value));
-                    None
+            if !matches!(ty, sp!(_, N::Type_::Unit)) {
+                if let (Some(cflow), Some(aflow)) = (value(context, conseq), value(context, alt)) {
+                    if cflow.value == aflow.value {
+                        context.report_value_error(sp(*eloc, cflow.value));
+                    } else {
+                        context.report_value_error(cflow);
+                        context.report_value_error(aflow);
+                    }
+                    return already_reported(*eloc);
                 }
-                (Some(cflow), Some(aflow)) => {
-                    context.report_value_error(cflow);
-                    context.report_value_error(aflow);
-                    None
-                }
-                _ => None,
             }
+            None
         }
         E::While(_, _) | E::Loop { .. } => statement(context, e),
         E::Block(seq) => value_block(context, seq),
@@ -378,81 +424,42 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
         // -----------------------------------------------------------------------------------------
-        E::ModuleCall(call) => {
-            let arg_flows = value_list(context, &call.arguments);
-            let result = if arg_flows.is_empty() {
-                None
-            } else {
-                already_reported(*eloc)
-            };
-            for flow in arg_flows {
-                context.report_value_error(flow);
-            }
-            result
-        }
+        E::ModuleCall(call) => value_report!(&call.arguments),
 
-        E::Builtin(_, args) | E::Vector(_, _, _, args) => {
-            let arg_flows = value_list(context, args);
-            let result = if arg_flows.is_empty() {
-                None
-            } else {
-                already_reported(*eloc)
-            };
-            for flow in arg_flows {
-                context.report_value_error(flow);
-            }
-            result
-        }
+        E::Builtin(_, args) | E::Vector(_, _, _, args) => value_report!(args),
 
-        E::Pack(_, _, _, fields) => {
-            let mut divergent_term = false;
-            for (_, _, (_, (_, field_exp))) in fields {
-                if let Some(control_flow) = value(context, field_exp) {
-                    context.report_value_error(control_flow);
-                    divergent_term = true;
-                }
-            }
-            if divergent_term {
-                already_reported(*eloc)
-            } else {
-                None
-            }
-        }
+        E::Pack(_, _, _, fields) => fields
+            .iter()
+            .find_map(|(_, _, (_, (_, field_exp)))| value_report!(field_exp)),
 
-        E::ExpList(items) => {
-            let mut divergent_term = false;
-            for item in items {
-                match item {
-                    T::ExpListItem::Single(entry, _) => {
-                        if let Some(control_flow) = value(context, entry) {
-                            context.report_value_error(control_flow);
-                            divergent_term = true;
+        E::ExpList(_) => {
+            use T::UnannotatedExp_ as TE;
+            if let TE::ExpList(ref items) = e.exp.value {
+                for item in items {
+                    match item {
+                        T::ExpListItem::Single(exp, _) => {
+                            let next = value_report!(exp);
+                            if next.is_some() {
+                                return next;
+                            }
                         }
-                    }
-                    T::ExpListItem::Splat(_, _, _) => {
-                        panic!("ICE splats should be lowered already")
+                        T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
                     }
                 }
-            }
-            if divergent_term {
-                already_reported(*eloc)
-            } else {
                 None
+            } else {
+                value_report!(e)
             }
         }
 
-        E::Dereference(base_exp)
+        E::Annotate(base_exp, _)
+        | E::Dereference(base_exp)
         | E::UnaryExp(_, base_exp)
         | E::Borrow(_, base_exp, _)
         | E::Cast(base_exp, _)
-        | E::TempBorrow(_, base_exp) => {
-            if let Some(control_flow) = value(context, base_exp) {
-                context.report_value_error(control_flow);
-            }
-            None
-        }
+        | E::TempBorrow(_, base_exp) => value_report!(base_exp),
+
         E::BorrowLocal(_, _) => None,
-        E::Annotate(base_exp, _) => value(context, base_exp),
 
         // -----------------------------------------------------------------------------------------
         // value-based expressions without subexpressions -- no control flow
@@ -462,15 +469,12 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         // -----------------------------------------------------------------------------------------
         //  statements
         // -----------------------------------------------------------------------------------------
-        E::Return(_) => return_called(*eloc),
-        E::Abort(_) => abort_called(*eloc),
+        E::Return(rhs) => value_report!(rhs).or_else(|| return_called(*eloc)),
+        E::Abort(rhs) => value_report!(rhs).or_else(|| abort_called(*eloc)),
         E::Break | E::Continue => loop_control_called(*eloc),
         E::Assign(_, _, _) | E::Mutate(_, _) => None, // These are unit-valued
 
-        // -----------------------------------------------------------------------------------------
-        //  matches that handled earlier
-        // -----------------------------------------------------------------------------------------
-        E::BinopExp(_, _, _, _) => panic!("ICE binops unhandled"),
+        E::BinopExp(_, _, _, _) => process_binops(context, e),
 
         // -----------------------------------------------------------------------------------------
         // odds and ends
@@ -482,14 +486,13 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
 fn value_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
     let last_exp = seq.iter().last();
-    if let Some(control_flow) = statement_block(context, seq, false, true) {
-        if let Some(sp!(_, S::Seq(last))) = last_exp {
-            context.report_statement_tail_error(control_flow, last);
-            value(context, last)
-        } else {
-            context.report_value_error(control_flow);
-            None
-        }
+    let stmt_flow = statement_block(context, seq, false, true);
+    if let (Some(control_flow), Some(sp!(_, S::Seq(last)))) = (stmt_flow, last_exp) {
+        context.report_statement_tail_error(control_flow, last);
+        already_reported(control_flow.loc)
+    } else if let Some(control_flow) = stmt_flow {
+        context.report_value_error(control_flow);
+        already_reported(control_flow.loc)
     } else {
         match last_exp {
             None => None,
@@ -499,33 +502,12 @@ fn value_block(context: &mut Context, seq: &T::Sequence) -> Option<ControlFlow> 
     }
 }
 
-fn value_list(context: &mut Context, e: &T::Exp) -> Vec<ControlFlow> {
-    use T::UnannotatedExp_ as TE;
-    let mut result = vec![];
-    if let TE::ExpList(ref items) = e.exp.value {
-        for item in items {
-            match item {
-                T::ExpListItem::Single(exp, _) => {
-                    if let Some(control_flow) = value(context, exp) {
-                        result.push(control_flow);
-                    }
-                }
-                T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
-            }
-        }
-    } else if let Some(control_flow) = value(context, e) {
-        result.push(control_flow)
-    }
-    result
-}
-
 // -------------------------------------------------------------------------------------------------
 // Statement Position
 // -------------------------------------------------------------------------------------------------
 
 fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
-
     let T::Exp {
         exp: sp!(eloc, e_), ..
     } = e;
@@ -538,12 +520,11 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 context.report_value_error(test_control_flow);
                 statement(context, conseq);
                 statement(context, alt);
-                Some(sp(*eloc, test_control_flow.value))
+                already_reported(*eloc)
             } else {
+                // if the test was okay but the arms both diverged, we need to report that for the
+                // purpose of trailing semicolons.
                 match (statement(context, conseq), statement(context, alt)) {
-                    (Some(cflow), Some(aflow)) if (cflow.value == aflow.value) => {
-                        Some(sp(*eloc, cflow.value))
-                    }
                     (Some(_), Some(_)) => divergent(*eloc),
                     _ => None,
                 }
@@ -553,8 +534,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::While(test, body) => {
             if let Some(test_control_flow) = value(context, test) {
                 context.report_value_error(test_control_flow);
-                statement(context, body);
-                Some(test_control_flow)
+                already_reported(*eloc)
             } else {
                 statement(context, body);
                 // we don't know if a while loop will ever run so we drop errors for the bodies.
@@ -577,14 +557,18 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::Return(rhs) => {
             if let Some(rhs_control_flow) = value(context, rhs) {
                 context.report_value_error(rhs_control_flow);
+                already_reported(*eloc)
+            } else {
+                return_called(*eloc)
             }
-            return_called(*eloc)
         }
         E::Abort(rhs) => {
             if let Some(rhs_control_flow) = value(context, rhs) {
                 context.report_value_error(rhs_control_flow);
+                already_reported(*eloc)
+            } else {
+                abort_called(*eloc)
             }
-            abort_called(*eloc)
         }
         E::Break | E::Continue => loop_control_called(*eloc),
 
@@ -600,8 +584,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::Mutate(lhs, rhs) => {
             if let Some(rhs_control_flow) = value(context, rhs) {
                 context.report_value_error(rhs_control_flow);
-            }
-            if let Some(lhs_control_flow) = value(context, lhs) {
+            } else if let Some(lhs_control_flow) = value(context, lhs) {
                 context.report_value_error(lhs_control_flow);
             }
             None
@@ -628,7 +611,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Move { .. }
         | E::Copy { .. }
         | E::Spec(..)
-        | E::UnresolvedError => value_statement(context, e),
+        | E::UnresolvedError => value(context, e),
 
         E::Value(_) | E::Unit { .. } => None,
 
@@ -647,19 +630,19 @@ fn statement_block(
 ) -> Option<ControlFlow> {
     use T::SequenceItem_ as S;
 
-    // special case trailing semicolon reporting
+    // if we're in statement position, we need to check for a trailing semicolon error
+    // this code does that by noting a trialing unit and then proceeding as if we are not in
+    // statement position.
     if stmt_pos && has_trailing_unit(seq) {
         let last = seq.iter().last();
         let result = statement_block(context, seq, false, true);
-        if let (Some(error), Some(sp!(_, S::Seq(entry)))) = (result, last) {
-            context.report_statement_tail_error(error, entry);
-            return Some(error);
+        return if let (Some(control_flow), Some(sp!(_, S::Seq(entry)))) = (result, last) {
+            context.report_statement_tail_error(control_flow, entry);
+            None
         } else {
-            return result;
-        }
+            None
+        };
     }
-
-    let mut saw_error = false;
 
     let iterator = if skip_last {
         seq.iter().skip_last().enumerate().collect::<Vec<_>>()
@@ -671,24 +654,23 @@ fn statement_block(
 
     for (ndx, sp!(_, seq_item)) in iterator {
         match seq_item {
-            S::Seq(entry) if saw_error => {
-                // in an error mode, we process for any more errors that self-report.
-                statement(context, entry);
-            }
             S::Seq(entry) if ndx == last_ndx => {
+                // If this is the last statement, the error may indicate a trailing semicolon
+                // error. Return it to whoever is expecting it so they can report it appropriately.
                 return statement(context, entry);
             }
             S::Seq(entry) => {
                 let entry_result = statement(context, entry);
                 if entry_result.is_some() {
                     context.report_statement_error(unreachable_code(locs[ndx + 1]).unwrap());
-                    saw_error = true;
+                    return None;
                 }
             }
             S::Declare(_) => (),
             S::Bind(_, _, expr) => {
                 if let Some(control_flow) = value(context, expr) {
                     context.report_value_error(control_flow);
+                    return None;
                 }
             }
         }
@@ -696,17 +678,8 @@ fn statement_block(
     None
 }
 
-fn value_statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
-    if let Some(control_flow) = value(context, e) {
-        context.report_value_error(control_flow);
-        Some(control_flow)
-    } else {
-        None
-    }
-}
-
 // -------------------------------------------------------------------------------------------------
-// HHelpers
+// Helpers
 // -------------------------------------------------------------------------------------------------
 
 struct SkipLastIterator<I: Iterator>(Peekable<I>);
@@ -723,11 +696,6 @@ trait SkipLast: Iterator + Sized {
     }
 }
 impl<I: Iterator> SkipLast for I {}
-
-fn is_binop(e: &T::Exp) -> bool {
-    use T::UnannotatedExp_ as E;
-    matches!(e.exp.value, E::BinopExp(_, _, _, _))
-}
 
 fn has_trailing_unit(seq: &T::Sequence) -> bool {
     use T::SequenceItem_ as S;
@@ -790,16 +758,13 @@ fn process_binops(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 let rhs = value_stack.pop().expect("ICE binop hlir issue");
                 if let Some(control_flow) = lhs {
                     context.report_value_error(control_flow);
-                }
-                if let Some(control_flow) = rhs {
+                    value_stack.push(already_reported(eloc));
+                } else if let Some(control_flow) = rhs {
                     context.report_value_error(control_flow);
+                    value_stack.push(already_reported(eloc));
+                } else {
+                    value_stack.push(lhs);
                 }
-                let new_value_flow = match (lhs, rhs) {
-                    (Some(_), _) => already_reported(eloc),
-                    (_, Some(_)) => already_reported(eloc),
-                    _ => None,
-                };
-                value_stack.push(new_value_flow);
             }
             Pn::Val(maybe_control_flow) => value_stack.push(maybe_control_flow),
         }
