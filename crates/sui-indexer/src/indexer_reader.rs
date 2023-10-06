@@ -457,16 +457,20 @@ impl IndexerReader {
     pub async fn get_owned_objects_in_blocking_task(
         &self,
         address: SuiAddress,
+        object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, cursor, limit))
-            .await
+        self.spawn_blocking(move |this| {
+            this.get_owned_objects_impl(address, object_type, cursor, limit)
+        })
+        .await
     }
 
     fn get_owned_objects_impl(
         &self,
         address: SuiAddress,
+        object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<ObjectRead>, IndexerError> {
@@ -476,6 +480,10 @@ impl IndexerReader {
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
                 .limit(limit as i64)
                 .into_boxed();
+            if let Some(object_type) = object_type {
+                query = query.filter(objects::dsl::object_type.eq(object_type));
+            }
+
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }

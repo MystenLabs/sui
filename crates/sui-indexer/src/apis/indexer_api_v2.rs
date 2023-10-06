@@ -51,7 +51,7 @@ impl IndexerApiV2 {
         let options = options.unwrap_or_default();
         let mut objects = self
             .inner
-            .get_owned_objects_in_blocking_task(address, cursor, limit + 1)
+            .get_owned_objects_in_blocking_task(address, None, cursor, limit + 1)
             .await?;
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
