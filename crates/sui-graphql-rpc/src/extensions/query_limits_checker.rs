@@ -145,6 +145,7 @@ impl Extension for QueryLimitsChecker {
         if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
             metrics.num_nodes.observe(num_nodes as f64);
             metrics.query_depth.observe(depth as f64);
+            metrics.query_payload_size.observe(query.len() as f64);
         }
         Ok(doc)
     }
