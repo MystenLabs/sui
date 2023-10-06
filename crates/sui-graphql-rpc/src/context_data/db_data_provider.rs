@@ -9,8 +9,10 @@ use crate::{
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
+        committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
+        end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
         object::{Object, ObjectFilter, ObjectKind},
@@ -37,7 +39,9 @@ use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::{
     digests::ChainIdentifier,
     effects::TransactionEffects,
-    messages_checkpoint::{CheckpointCommitment, CheckpointDigest},
+    messages_checkpoint::{
+        CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
+    },
     object::{Data, Object as SuiObject},
     transaction::{SenderSignedData, TransactionDataAPI},
 };
@@ -732,8 +736,6 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                     "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
                 ))
             })?;
-
-        // TODO: validate this
         let live_object_set_digest =
             checkpoint_commitments
                 .last()
@@ -742,6 +744,42 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                         Digest::from_array(digest.digest.into_inner()).to_string()
                     }
                 });
+
+        let end_of_epoch_data: Option<NativeEndOfEpochData> = if c.end_of_epoch {
+            c.end_of_epoch_data
+                .map(|data| {
+                    bcs::from_bytes(&data).map_err(|e| {
+                        Error::Internal(format!(
+                            "Can't convert end_of_epoch_data into EndOfEpochData. Error: {e}",
+                        ))
+                    })
+                })
+                .transpose()?
+        } else {
+            None
+        };
+
+        let end_of_epoch = end_of_epoch_data.map(|e| {
+            let committees = e.next_epoch_committee;
+            let new_committee = if committees.is_empty() {
+                None
+            } else {
+                Some(
+                    committees
+                        .iter()
+                        .map(|c| CommitteeMember {
+                            authority_name: Some(c.0.into_concise().to_string()),
+                            stake_unit: Some(c.1),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            };
+
+            EndOfEpochData {
+                new_committee,
+                next_protocol_version: Some(e.next_epoch_protocol_version.as_u64()),
+            }
+        });
 
         Ok(Self {
             digest: Digest::try_from(c.checkpoint_digest)?.to_string(),
@@ -761,7 +799,7 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                 non_refundable_storage_fee: c.non_refundable_storage_fee as u64,
             }),
             epoch_id: c.epoch as u64,
-            end_of_epoch: None,
+            end_of_epoch,
         })
     }
 }
