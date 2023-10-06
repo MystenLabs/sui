@@ -3,8 +3,15 @@
 
 use crate::context_data::db_data_provider::PgManager;
 
-use super::{base64::Base64, end_of_epoch_data::EndOfEpochData, epoch::Epoch, gas::GasCostSummary, date_time::DateTime, transaction_block::{TransactionBlockFilter, TransactionBlock}};
-use async_graphql::{*, connection::Connection};
+use super::{
+    base64::Base64,
+    date_time::DateTime,
+    end_of_epoch_data::EndOfEpochData,
+    epoch::Epoch,
+    gas::GasCostSummary,
+    transaction_block::{TransactionBlock, TransactionBlockFilter},
+};
+use async_graphql::{connection::Connection, *};
 
 #[derive(InputObject)]
 pub(crate) struct CheckpointId {
@@ -52,9 +59,8 @@ impl Checkpoint {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
-        // update filter with checkpoint sequence number
         let mut filter = filter;
-        filter.get_or_insert_with(Default::default).checkpoint = Some(self.sequence_number);
+        filter.get_or_insert_with(Default::default).at_checkpoint = Some(self.sequence_number);
 
         ctx.data_unchecked::<PgManager>()
             .fetch_txs(first, after, last, before, filter)

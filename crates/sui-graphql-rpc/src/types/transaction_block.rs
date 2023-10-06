@@ -145,6 +145,7 @@ pub(crate) struct TransactionBlockFilter {
 
     pub kind: Option<TransactionBlockKindInput>,
     pub after_checkpoint: Option<u64>,
+    pub at_checkpoint: Option<u64>,
     pub before_checkpoint: Option<u64>,
 
     pub sign_address: Option<SuiAddress>,

@@ -44,6 +44,8 @@ use sui_sdk::types::{
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
+    #[error("Invalid checkpoint combination. 'before' or 'after' checkpoint cannot be used with 'at' checkpoint")]
+    InvalidCheckpointCombination,
     #[error("Before checkpoint must be greater than after checkpoint")]
     InvalidCheckpointOrder,
     #[error("Filtering objects by package::module::type is not currently supported")]
@@ -197,16 +199,21 @@ impl PgManager {
 
         if let Some(filter) = filter {
             // Filters for transaction table
-            if let Some(kind) = filter.kind {
-                query = query.filter(transactions::dsl::transaction_kind.eq(kind as i16));
-            }
-            if let Some(checkpoint) = filter.after_checkpoint {
+            // at_checkpoint mutually exclusive with before_ and after_checkpoint
+            if let Some(checkpoint) = filter.at_checkpoint {
                 query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64));
-            }
-            if let Some(checkpoint) = filter.before_checkpoint {
-                query = query
-                    .filter(transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64));
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
+            } else {
+                if let Some(checkpoint) = filter.after_checkpoint {
+                    query = query.filter(
+                        transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64),
+                    );
+                }
+                if let Some(checkpoint) = filter.before_checkpoint {
+                    query = query.filter(
+                        transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64),
+                    );
+                }
             }
             if let Some(transaction_ids) = filter.transaction_ids {
                 let digests = transaction_ids
@@ -436,6 +443,11 @@ impl PgManager {
         &self,
         filter: &TransactionBlockFilter,
     ) -> Result<(), Error> {
+        if filter.at_checkpoint.is_some()
+            && (filter.before_checkpoint.is_some() || filter.after_checkpoint.is_some())
+        {
+            return Err(DbValidationError::InvalidCheckpointCombination.into());
+        }
         if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
             if before <= after {
                 return Err(DbValidationError::InvalidCheckpointOrder.into());
