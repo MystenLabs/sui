@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::{
-    AuthorityPerEpochStore, ExecutionIndicesWithHash,
+    AuthorityPerEpochStore, ConsensusStats, ConsensusStatsAPI, ExecutionIndicesWithStats,
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
@@ -42,10 +42,10 @@ pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
     /// corresponding store. This store is also used to get the current epoch ID.
     epoch_store: Arc<AuthorityPerEpochStore>,
-    /// Holds the highest transaction index that has been seen so far. It is used for avoiding replaying
-    /// already processed transactions and also act as a chain consistency check by calculating and storing a
-    /// hash chain.
-    last_seen: ExecutionIndicesWithHash,
+    /// Holds the indices, hash and stats after the last consensus commit
+    /// It is used for avoiding replaying already processed transactions,
+    /// checking chain consistency, and accumulating per-epoch consensus output stats.
+    last_consensus_stats: ExecutionIndicesWithStats,
     checkpoint_service: Arc<C>,
     /// parent_sync_store is needed when determining the next version to assign for shared objects.
     object_store: T,
@@ -73,16 +73,20 @@ impl<T, C> ConsensusHandler<T, C> {
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
     ) -> Self {
-        // last_seen is zero at the beginning of epoch, including for hash.
-        // It needs to be recovered on restart to ensure consistent consensus hash.
-        let last_seen = epoch_store
-            .get_last_consensus_index()
+        // Recover last_consensus_stats so it is consistent across validators.
+        let mut last_consensus_stats = epoch_store
+            .get_last_consensus_stats()
             .expect("Should be able to read last consensus index");
+        // last_consensus_stats is zero at the beginning of epoch for every field.
+        if last_consensus_stats.index.last_committed_round == 0 {
+            assert_eq!(last_consensus_stats.hash, 0);
+            last_consensus_stats.stats = ConsensusStats::new(committee.size());
+        }
         let transaction_scheduler =
             AsyncTransactionScheduler::start(transaction_manager, epoch_store.clone());
         Self {
             epoch_store,
-            last_seen,
+            last_consensus_stats,
             checkpoint_service,
             object_store,
             low_scoring_authorities,
@@ -96,29 +100,21 @@ impl<T, C> ConsensusHandler<T, C> {
     /// Updates the execution indexes based on the provided input. Some is returned when the indexes
     /// are updated which means that the transaction has been seen for first time. None is returned
     /// otherwise.
-    fn update_hash(
-        &mut self,
-        index: ExecutionIndices,
-        v: &[u8],
-    ) -> Option<ExecutionIndicesWithHash> {
-        if let Some(execution_indexes) = update_hash(&self.last_seen, index, v) {
-            self.last_seen = execution_indexes.clone();
-            return Some(execution_indexes);
-        }
-        None
+    fn update_index_and_hash(&mut self, index: ExecutionIndices, v: &[u8]) -> bool {
+        update_index_and_hash(&mut self.last_consensus_stats, index, v)
     }
 }
 
-fn update_hash(
-    last_seen: &ExecutionIndicesWithHash,
+fn update_index_and_hash(
+    last_consensus_stats: &mut ExecutionIndicesWithStats,
     index: ExecutionIndices,
     v: &[u8],
-) -> Option<ExecutionIndicesWithHash> {
-    if last_seen.index >= index {
-        return None;
+) -> bool {
+    if last_consensus_stats.index >= index {
+        return false;
     }
 
-    let previous_hash = last_seen.hash;
+    let previous_hash = last_consensus_stats.hash;
     let mut hasher = DefaultHasher::new();
     previous_hash.hash(&mut hasher);
     v.hash(&mut hasher);
@@ -130,7 +126,10 @@ fn update_hash(
             index.sub_dag_index, index.transaction_index, hash
         );
     }
-    Some(ExecutionIndicesWithHash { index, hash })
+
+    last_consensus_stats.index = index;
+    last_consensus_stats.hash = hash;
+    true
 }
 
 #[async_trait]
@@ -148,12 +147,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .protocol_config()
             .consensus_order_end_of_epoch_last());
 
-        let last_committed_round = self
-            .epoch_store
-            .get_last_consensus_index()
-            .expect("Unrecoverable error in consensus handler")
-            .index
-            .last_committed_round;
+        let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
         let round = consensus_output.sub_dag.leader_round();
 
@@ -254,10 +248,14 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
         {
             assert_eq!(cert.header().payload().len(), batches.len());
             let author = cert.header().author();
+            let num_certs = self
+                .last_consensus_stats
+                .stats
+                .inc_narwhal_certificates(author.0 as usize);
             self.metrics
                 .consensus_committed_certificates
                 .with_label_values(&[&author.to_string()])
-                .inc();
+                .set(num_certs as i64);
             let output_cert = Arc::new(cert.clone());
             for batch in batches {
                 assert!(output_cert.header().payload().contains_key(&batch.digest()));
@@ -281,6 +279,19 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                         .consensus_handler_processed
                         .with_label_values(&[classify(&transaction)])
                         .inc();
+                    if matches!(
+                        &transaction.kind,
+                        ConsensusTransactionKind::UserTransaction(_)
+                    ) {
+                        let num_txns = self
+                            .last_consensus_stats
+                            .stats
+                            .inc_user_transactions(author.0 as usize);
+                        self.metrics
+                            .consensus_committed_user_transactions
+                            .with_label_values(&[&author.to_string()])
+                            .set(num_txns as i64);
+                    }
                     let transaction = SequencedConsensusTransactionKind::External(transaction);
                     transactions.push((
                         serialized_transaction.clone(),
@@ -311,15 +322,14 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                     transaction_index: seq as u64,
                 };
 
-                let index_with_hash = match self.update_hash(index, &serialized) {
-                    Some(i) => i,
-                    None => {
-                        debug!(
-                            "Ignore consensus transaction at index {:?} as it appear to be already processed",
-                            index
-                        );
-                        continue;
-                    }
+                let index_with_stats = if self.update_index_and_hash(index, &serialized) {
+                    self.last_consensus_stats.clone()
+                } else {
+                    debug!(
+                        "Ignore consensus transaction at index {:?} as it appear to be already processed",
+                        index
+                    );
+                    continue;
                 };
 
                 let certificate_author = AuthorityName::from_bytes(
@@ -334,7 +344,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                 let sequenced_transaction = SequencedConsensusTransaction {
                     certificate: output_cert.clone(),
                     certificate_author,
-                    consensus_index: index_with_hash,
+                    consensus_index: index_with_stats.index,
                     transaction,
                 };
 
@@ -390,6 +400,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                 .process_consensus_transactions_and_commit_boundary(
                     &sequenced_transactions,
                     end_of_publish_transactions,
+                    &self.last_consensus_stats,
                     &self.checkpoint_service,
                     &self.object_store,
                 )
@@ -437,12 +448,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
     }
 
     async fn last_executed_sub_dag_index(&self) -> u64 {
-        let index_with_hash = self
-            .epoch_store
-            .get_last_consensus_index()
-            .expect("Failed to load consensus indices");
-
-        index_with_hash.index.sub_dag_index
+        self.last_consensus_stats.index.sub_dag_index
     }
 }
 
@@ -554,7 +560,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
 pub struct SequencedConsensusTransaction {
     pub certificate: Arc<narwhal_types::Certificate>,
     pub certificate_author: AuthorityName,
-    pub consensus_index: ExecutionIndicesWithHash,
+    pub consensus_index: ExecutionIndices,
     pub transaction: SequencedConsensusTransactionKind,
 }
 
@@ -672,6 +678,7 @@ impl SequencedConsensusTransaction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authority::authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI};
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointServiceNoop;
     use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
@@ -727,7 +734,7 @@ mod tests {
         );
 
         // AND
-        // Create a transaction
+        // Create test transactions
         let transactions = test_certificates(&state).await;
         let mut certificates = Vec::new();
         let mut batches = Vec::new();
@@ -775,28 +782,39 @@ mod tests {
             .handle_consensus_output(consensus_output.clone())
             .await;
 
-        // AND capturing the index
-        let last_seen_1 = consensus_handler.last_seen.clone();
+        // AND capturing the consensus stats
+        let num_certificates = certificates.len();
+        let num_transactions = transactions.len();
+        let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
-            last_seen_1.index.transaction_index,
-            transactions.len() as u64
+            last_consensus_stats_1.index.transaction_index,
+            num_transactions as u64
         );
-        assert_eq!(last_seen_1.index.sub_dag_index, 10_u64);
-        assert_eq!(last_seen_1.index.last_committed_round, 5_u64);
+        assert_eq!(last_consensus_stats_1.index.sub_dag_index, 10_u64);
+        assert_eq!(last_consensus_stats_1.index.last_committed_round, 5_u64);
+        assert_ne!(last_consensus_stats_1.hash, 0);
+        assert_eq!(
+            last_consensus_stats_1.stats.get_narwhal_certificates(0),
+            num_certificates as u64
+        );
+        assert_eq!(
+            last_consensus_stats_1.stats.get_user_transactions(0),
+            num_transactions as u64
+        );
 
         // WHEN processing the same output multiple times
-        // THEN the execution indices do not update
+        // THEN the consensus stats do not update
         for _ in 0..2 {
             consensus_handler
                 .handle_consensus_output(consensus_output.clone())
                 .await;
-            let last_seen_2 = consensus_handler.last_seen.clone();
-            assert_eq!(last_seen_1, last_seen_2);
+            let last_consensus_stats_2 = consensus_handler.last_consensus_stats.clone();
+            assert_eq!(last_consensus_stats_1, last_consensus_stats_2);
         }
     }
 
     #[test]
-    pub fn test_update_hash() {
+    pub fn test_update_index_and_hash() {
         let index0 = ExecutionIndices {
             sub_dag_index: 0,
             transaction_index: 0,
@@ -813,15 +831,16 @@ mod tests {
             last_committed_round: 0,
         };
 
-        let last_seen = ExecutionIndicesWithHash {
+        let mut last_seen = ExecutionIndicesWithStats {
             index: index1,
             hash: 1000,
+            stats: ConsensusStats::default(),
         };
 
         let tx = &[0];
-        assert!(update_hash(&last_seen, index0, tx).is_none());
-        assert!(update_hash(&last_seen, index1, tx).is_none());
-        assert!(update_hash(&last_seen, index2, tx).is_some());
+        assert!(!update_index_and_hash(&mut last_seen, index0, tx));
+        assert!(!update_index_and_hash(&mut last_seen, index1, tx));
+        assert!(update_index_and_hash(&mut last_seen, index2, tx));
     }
 
     #[test]

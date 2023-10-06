@@ -236,7 +236,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
-    pub consensus_committed_certificates: IntCounterVec,
+    pub consensus_committed_certificates: IntGaugeVec,
+    pub consensus_committed_user_transactions: IntGaugeVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -538,22 +539,25 @@ impl AuthorityMetrics {
                 "scores from consensus for each authority",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
-            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+            ).unwrap(),
+            consensus_committed_certificates: register_int_gauge_vec_with_registry!(
                 "consensus_committed_certificates",
                 "Number of committed certificates, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
+            consensus_committed_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_committed_user_transactions",
+                "Number of committed user transactions, sliced by submitter",
+                &["authority"],
+                registry,
+            ).unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             authenticator_state_update_failed: register_int_counter_with_registry!(
