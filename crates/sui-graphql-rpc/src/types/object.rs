@@ -114,6 +114,7 @@ impl Object {
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
+        // TODO: implement DB counterpart without using Sui SDK client
         ctx.data_provider()
             .fetch_balance(&self.address, type_)
             .await
@@ -127,6 +128,7 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Connection<String, Balance>> {
+        // TODO: implement DB counterpart without using Sui SDK client
         ctx.data_provider()
             .fetch_balance_connection(&self.address, first, after, last, before)
             .await

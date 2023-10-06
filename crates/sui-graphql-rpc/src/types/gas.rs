@@ -50,6 +50,7 @@ impl GasInput {
     }
 
     async fn gas_payment(&self, ctx: &Context<'_>) -> Result<Option<Vec<Object>>> {
+        // TODO: implement DB counterpart without using Sui SDK client
         let payment_objs = ctx
             .data_provider()
             .multi_get_object_with_options(
@@ -128,6 +129,7 @@ impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
+        // TODO: implement DB counterpart without using Sui SDK client
         let gas_obj = ctx
             .data_provider()
             .get_object_with_options(self.object_id, SuiObjectDataOptions::full_content())
