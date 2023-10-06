@@ -310,7 +310,6 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
-    #[ignore]
     #[tokio::test]
     async fn test_query_complexity_metrics() {
         let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
