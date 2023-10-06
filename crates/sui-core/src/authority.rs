@@ -4201,6 +4201,14 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .deprecated_get_transaction_checkpoint(&digest)
             .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
     }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<Option<Object>> {
+        self.database.get_object_by_key(&object_id, version)
+    }
 }
 
 #[cfg(msim)]
