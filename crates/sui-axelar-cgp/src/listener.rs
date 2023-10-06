@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use futures::stream::StreamExt;
 use rxrust::observer::Observer;
 use rxrust::subject::SubjectThreads;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{error, info};
 
 use sui_sdk::rpc_types::{EventFilter, SuiEvent};
@@ -62,7 +62,7 @@ pub trait SuiAxelarEvent {
         Self: Sized;
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ContractCall {
     source: Vec<u8>,
     destination: Vec<u8>,
@@ -79,7 +79,7 @@ impl SuiAxelarEvent for ContractCall {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct OperatorshipTransferred {
     epoch: u64,
     new_operators_hash: Vec<u8>,
