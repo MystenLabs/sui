@@ -1,3 +1,8 @@
+---
+source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
+assertion_line: 14
+expression: sdl
+---
 type Address implements ObjectOwner {
 	"""
 	Similar behavior to the `transactionBlockConnection` in Query but
@@ -607,3 +612,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+
