@@ -23,8 +23,6 @@ export type SerializeSignatureInput = {
 	signatureScheme: SignatureScheme;
 	/** Base64-encoded signature */
 	signature: Uint8Array;
-	/** @deprecated use publicKey instead */
-	pubKey?: PublicKey;
 	/** Base64-encoded public key */
 	publicKey?: PublicKey;
 };
@@ -41,14 +39,13 @@ export type SerializedSignature = string;
 export function toSerializedSignature({
 	signature,
 	signatureScheme,
-	pubKey,
-	publicKey = pubKey,
+	publicKey,
 }: SerializeSignatureInput): SerializedSignature {
 	if (!publicKey) {
 		throw new Error('`publicKey` is required');
 	}
 
-	const pubKeyBytes = publicKey.toBytes();
+	const pubKeyBytes = publicKey.toRawBytes();
 	const serializedSignature = new Uint8Array(1 + signature.length + pubKeyBytes.length);
 	serializedSignature.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
 	serializedSignature.set(signature, 1);

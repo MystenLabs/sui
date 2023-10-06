@@ -21,9 +21,6 @@ import { ObjectOwner, SuiJsonValue } from './common.js';
 import { SuiEvent } from './events.js';
 import { SuiGasData, SuiMovePackage, SuiObjectRef } from './objects.js';
 
-/** @deprecated Use `string` instead. */
-export const EpochId = string();
-
 export const SuiChangeEpoch = object({
 	epoch: string(),
 	storage_charge: string(),
@@ -153,8 +150,6 @@ export const SuiTransactionBlockData = object({
 });
 export type SuiTransactionBlockData = Infer<typeof SuiTransactionBlockData>;
 
-/** @deprecated Use `string` instead. */
-export const AuthoritySignature = string();
 export const GenericAuthoritySignature = union([string(), array(string())]);
 
 export const AuthorityQuorumSignInfo = object({
@@ -275,11 +270,6 @@ export type TransactionFilter =
 	| { ToAddress: string };
 
 export type EmptySignInfo = object;
-
-/** @deprecated Use `string` instead. */
-export const AuthorityName = string();
-/** @deprecated Use `string` instead. */
-export type AuthorityName = Infer<typeof AuthorityName>;
 
 export const SuiTransactionBlock = object({
 	data: SuiTransactionBlockData,

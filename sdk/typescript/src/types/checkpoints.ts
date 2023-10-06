@@ -22,16 +22,6 @@ export const GasCostSummary = object({
 });
 export type GasCostSummary = Infer<typeof GasCostSummary>;
 
-/** @deprecated Use `string` instead. */
-export const CheckPointContentsDigest = string();
-/** @deprecated Use `string` instead. */
-export type CheckPointContentsDigest = Infer<typeof CheckPointContentsDigest>;
-
-/** @deprecated Use `string` instead. */
-export const CheckpointDigest = string();
-/** @deprecated Use `string` instead. */
-export type CheckpointDigest = Infer<typeof CheckpointDigest>;
-
 export const ECMHLiveObjectSetDigest = object({
 	digest: array(number()),
 });
@@ -39,11 +29,6 @@ export type ECMHLiveObjectSetDigest = Infer<typeof ECMHLiveObjectSetDigest>;
 
 export const CheckpointCommitment = any();
 export type CheckpointCommitment = Infer<typeof CheckpointCommitment>;
-
-/** @deprecated Use `string` instead. */
-export const ValidatorSignature = string();
-/** @deprecated Use `string` instead. */
-export type ValidatorSignature = Infer<typeof ValidatorSignature>;
 
 export const EndOfEpochData = object({
 	nextEpochCommittee: array(tuple([string(), string()])),

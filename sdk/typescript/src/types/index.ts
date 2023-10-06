@@ -8,18 +8,6 @@ export {
 	ProtocolConfig,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	SuiJsonValue,
-	/** @deprecated Use `string` instead. */
-	SuiAddress,
-	/** @deprecated Use `string` instead. */
-	SequenceNumber,
-	/** @deprecated Use `string` instead. */
-	TransactionDigest,
-	/** @deprecated Use `string` instead. */
-	TransactionEffectsDigest,
-	/** @deprecated Use `string` instead. */
-	TransactionEventDigest,
-	/** @deprecated Use `string` instead. */
-	ObjectId,
 } from './common.js';
 export {
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
@@ -34,8 +22,6 @@ export {
 	MovePackageContent,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	ObjectContentFields,
-	/** @deprecated Use `string` instead. */
-	ObjectDigest,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	ObjectRead,
 	/** @deprecated This type will be removed in a future version */
@@ -134,18 +120,12 @@ export {
 	/** @deprecated This method will be removed in a future version of the SDK */
 } from './events.js';
 export {
-	/** @deprecated Use `string` instead. */
-	AuthorityName,
-	/** @deprecated Use `string` instead. */
-	AuthoritySignature,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	BalanceChange,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	DevInspectResults,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	DryRunTransactionBlockResponse,
-	/** @deprecated Use `string` instead. */
-	EpochId,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	type ExecuteTransactionRequestType,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
@@ -359,16 +339,10 @@ export {
 	DynamicFieldType,
 } from './dynamic_fields.js';
 export {
-	/** @deprecated Use `string` instead. */
-	ValidatorSignature,
-	/** @deprecated Use `string` instead. */
-	CheckPointContentsDigest,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	Checkpoint,
 	/** @deprecated Current type is an alias for `any`, use `unknown` instead */
 	CheckpointCommitment,
-	/** @deprecated Use `string` instead. */
-	CheckpointDigest,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
 	CheckpointPage,
 	/** @deprecated Import type from `@mysten/sui.js/client` instead */
