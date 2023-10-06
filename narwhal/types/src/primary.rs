@@ -932,7 +932,11 @@ impl Certificate {
         }
     }
 
-    pub fn verify(&mut self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+    pub fn verify(
+        self,
+        committee: &Committee,
+        worker_cache: &WorkerCache,
+    ) -> DagResult<Certificate> {
         match self {
             Certificate::V1(certificate) => certificate.verify(committee, worker_cache),
             Certificate::V2(certificate) => certificate.verify(committee, worker_cache),
@@ -984,7 +988,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Certificate {
 #[enum_dispatch]
 pub trait CertificateAPI {
     fn header(&self) -> &Header;
-    fn aggregated_signature(&self) -> &AggregateSignatureBytes;
+    fn aggregated_signature(&self) -> Option<&AggregateSignatureBytes>;
     fn signed_authorities(&self) -> &roaring::RoaringBitmap;
     fn metadata(&self) -> &Metadata;
 
@@ -993,11 +997,8 @@ pub trait CertificateAPI {
     fn header_mut(&mut self) -> &mut Header;
 
     // CertificateV2
-    fn aggregate_signature_verification_state(&self) -> &AggregateSignatureVerificationState;
-    fn set_aggregate_signature_verification_state(
-        &mut self,
-        state: AggregateSignatureVerificationState,
-    );
+    fn signature_verification_state(&self) -> &SignatureVerificationState;
+    fn set_signature_verification_state(&mut self, state: SignatureVerificationState);
 }
 
 #[serde_as]
@@ -1015,18 +1016,15 @@ impl CertificateAPI for CertificateV1 {
         &self.header
     }
 
-    fn aggregated_signature(&self) -> &AggregateSignatureBytes {
-        &self.aggregated_signature
+    fn aggregated_signature(&self) -> Option<&AggregateSignatureBytes> {
+        Some(&self.aggregated_signature)
     }
 
-    fn aggregate_signature_verification_state(&self) -> &AggregateSignatureVerificationState {
+    fn signature_verification_state(&self) -> &SignatureVerificationState {
         unimplemented!("CertificateV2 field! Use aggregated_signature.");
     }
 
-    fn set_aggregate_signature_verification_state(
-        &mut self,
-        _state: AggregateSignatureVerificationState,
-    ) {
+    fn set_signature_verification_state(&mut self, _state: SignatureVerificationState) {
         unimplemented!("CertificateV2 field! Use aggregated_signature.");
     }
 
@@ -1182,8 +1180,11 @@ impl CertificateV1 {
     }
 
     /// Verifies the validity of the certificate.
-    /// TODO: Output a different type, similar to Sui VerifiedCertificate.
-    pub fn verify(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+    pub fn verify(
+        self,
+        committee: &Committee,
+        worker_cache: &WorkerCache,
+    ) -> DagResult<Certificate> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -1194,8 +1195,8 @@ impl CertificateV1 {
         );
 
         // Genesis certificates are always valid.
-        if self.round() == 0 && Self::genesis(committee).contains(self) {
-            return Ok(());
+        if self.round() == 0 && Self::genesis(committee).contains(&self) {
+            return Ok(Certificate::V1(self));
         }
 
         // Save signature verifications when the header is invalid.
@@ -1215,7 +1216,7 @@ impl CertificateV1 {
             .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
-        Ok(())
+        Ok(Certificate::V1(self))
     }
 
     pub fn round(&self) -> Round {
@@ -1234,31 +1235,31 @@ impl CertificateV1 {
 // Holds AggregateSignatureBytes but with the added layer to specify the
 // signatures verification state. This will be used to take advantage of the
 // certificate chain that is formed via the DAG by only verifying the
-// non-parents of the certificate chain when they are fetched from validators
+// leaves of the certificate chain when they are fetched from validators
 // during catchup.
 #[derive(Clone, Serialize, Deserialize, MallocSizeOf, Debug)]
-pub enum AggregateSignatureVerificationState {
-    // This state occurs when the cert was a parent of another fetched certificate
-    // that was verified directly, then this certificate is verified indirectly.
-    VerifiedIndirectly(AggregateSignatureBytes),
+pub enum SignatureVerificationState {
+    // This state occurs when the certificate has not yet received a quorum of
+    // signatures.
+    Unsigned(AggregateSignatureBytes),
+    // This state occurs when a certificate has just been received from the network
+    // and has not been verified yet.
+    Unverified(AggregateSignatureBytes),
     // This state occurs when a certificate was either created locally, received
     // via brodacast, or fetched but was not the parent of another certifiate.
     // Therefore this certificate had to be verified directly.
     VerifiedDirectly(AggregateSignatureBytes),
-    // This state occurs when a certificate has just been received from the network
-    // and has not been verified yet.
-    Unverified(AggregateSignatureBytes),
-    // This state occurs when the certificate has not yet received a quorum of
-    // signatures.
-    Unsigned(AggregateSignatureBytes),
+    // This state occurs when the cert was a parent of another fetched certificate
+    // that was verified directly, then this certificate is verified indirectly.
+    VerifiedIndirectly,
     // This state occurs only for genesis certificates which always has valid
     // signatures bytes but the bytes are garbage so we don't mark them as verified.
-    Genesis(AggregateSignatureBytes),
+    Genesis,
 }
 
-impl Default for AggregateSignatureVerificationState {
+impl Default for SignatureVerificationState {
     fn default() -> Self {
-        AggregateSignatureVerificationState::Unsigned(AggregateSignatureBytes::default())
+        SignatureVerificationState::Unsigned(AggregateSignatureBytes::default())
     }
 }
 
@@ -1266,7 +1267,7 @@ impl Default for AggregateSignatureVerificationState {
 #[derive(Clone, Serialize, Deserialize, Default, MallocSizeOf)]
 pub struct CertificateV2 {
     pub header: Header,
-    pub aggregate_signature_verification_state: AggregateSignatureVerificationState,
+    pub signature_verification_state: SignatureVerificationState,
     #[serde_as(as = "NarwhalBitmap")]
     signed_authorities: roaring::RoaringBitmap,
     pub metadata: Metadata,
@@ -1277,25 +1278,22 @@ impl CertificateAPI for CertificateV2 {
         &self.header
     }
 
-    fn aggregated_signature(&self) -> &AggregateSignatureBytes {
-        match &self.aggregate_signature_verification_state {
-            AggregateSignatureVerificationState::VerifiedIndirectly(bytes)
-            | AggregateSignatureVerificationState::VerifiedDirectly(bytes)
-            | AggregateSignatureVerificationState::Unverified(bytes)
-            | AggregateSignatureVerificationState::Unsigned(bytes)
-            | AggregateSignatureVerificationState::Genesis(bytes) => bytes,
+    fn aggregated_signature(&self) -> Option<&AggregateSignatureBytes> {
+        match &self.signature_verification_state {
+            SignatureVerificationState::VerifiedDirectly(bytes)
+            | SignatureVerificationState::Unverified(bytes)
+            | SignatureVerificationState::Unsigned(bytes) => Some(bytes),
+            SignatureVerificationState::VerifiedIndirectly
+            | SignatureVerificationState::Genesis => None,
         }
     }
 
-    fn aggregate_signature_verification_state(&self) -> &AggregateSignatureVerificationState {
-        &self.aggregate_signature_verification_state
+    fn signature_verification_state(&self) -> &SignatureVerificationState {
+        &self.signature_verification_state
     }
 
-    fn set_aggregate_signature_verification_state(
-        &mut self,
-        state: AggregateSignatureVerificationState,
-    ) {
-        self.aggregate_signature_verification_state = state;
+    fn set_signature_verification_state(&mut self, state: SignatureVerificationState) {
+        self.signature_verification_state = state;
     }
 
     fn signed_authorities(&self) -> &roaring::RoaringBitmap {
@@ -1326,9 +1324,7 @@ impl CertificateV2 {
                     epoch: committee.epoch(),
                     ..Default::default()
                 }),
-                aggregate_signature_verification_state: AggregateSignatureVerificationState::Genesis(
-                    AggregateSignatureBytes::default(),
-                ),
+                signature_verification_state: SignatureVerificationState::Genesis,
                 ..Self::default()
             })
             .collect()
@@ -1418,14 +1414,14 @@ impl CertificateV2 {
         let aggregate_signature_bytes = AggregateSignatureBytes::from(&aggregated_signature);
 
         let aggregate_signature_verification_state = if !check_stake {
-            AggregateSignatureVerificationState::Unsigned(aggregate_signature_bytes)
+            SignatureVerificationState::Unsigned(aggregate_signature_bytes)
         } else {
-            AggregateSignatureVerificationState::Unverified(aggregate_signature_bytes)
+            SignatureVerificationState::Unverified(aggregate_signature_bytes)
         };
 
         Ok(Certificate::V2(CertificateV2 {
             header,
-            aggregate_signature_verification_state,
+            signature_verification_state: aggregate_signature_verification_state,
             signed_authorities,
             metadata: Metadata::default(),
         }))
@@ -1461,8 +1457,11 @@ impl CertificateV2 {
     }
 
     /// Verifies the validity of the certificate.
-    /// TODO: Output a different type, similar to Sui VerifiedCertificate.
-    pub fn verify(&mut self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+    pub fn verify(
+        self,
+        committee: &Committee,
+        worker_cache: &WorkerCache,
+    ) -> DagResult<Certificate> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -1473,8 +1472,8 @@ impl CertificateV2 {
         );
 
         // Genesis certificates are always valid.
-        if self.round() == 0 && Self::genesis(committee).contains(self) {
-            return Ok(());
+        if self.round() == 0 && Self::genesis(committee).contains(&self) {
+            return Ok(Certificate::V2(self));
         }
 
         // Save signature verifications when the header is invalid.
@@ -1487,18 +1486,18 @@ impl CertificateV2 {
             DagError::CertificateRequiresQuorum
         );
 
-        self.verify_signature(pks)?;
+        let verified_cert = self.verify_signature(pks)?;
 
-        Ok(())
+        Ok(verified_cert)
     }
 
-    fn verify_signature(&mut self, pks: Vec<PublicKey>) -> DagResult<()> {
-        let aggregrate_signature_bytes = match self.aggregate_signature_verification_state {
-            AggregateSignatureVerificationState::VerifiedIndirectly(ref bytes) => bytes,
-            AggregateSignatureVerificationState::VerifiedDirectly(_)
-            | AggregateSignatureVerificationState::Genesis(_) => return Ok(()),
-            AggregateSignatureVerificationState::Unverified(ref bytes) => bytes,
-            AggregateSignatureVerificationState::Unsigned(_) => {
+    fn verify_signature(mut self, pks: Vec<PublicKey>) -> DagResult<Certificate> {
+        let aggregrate_signature_bytes = match self.signature_verification_state {
+            SignatureVerificationState::VerifiedIndirectly
+            | SignatureVerificationState::VerifiedDirectly(_)
+            | SignatureVerificationState::Genesis => return Ok(Certificate::V2(self)),
+            SignatureVerificationState::Unverified(ref bytes) => bytes,
+            SignatureVerificationState::Unsigned(_) => {
                 bail!(DagError::CertificateRequiresQuorum);
             }
         };
@@ -1510,12 +1509,10 @@ impl CertificateV2 {
             .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             .map_err(|_| DagError::InvalidSignature)?;
 
-        self.aggregate_signature_verification_state =
-            AggregateSignatureVerificationState::VerifiedDirectly(
-                aggregrate_signature_bytes.clone(),
-            );
+        self.signature_verification_state =
+            SignatureVerificationState::VerifiedDirectly(aggregrate_signature_bytes.clone());
 
-        Ok(())
+        Ok(Certificate::V2(self))
     }
 
     pub fn round(&self) -> Round {

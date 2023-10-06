@@ -182,7 +182,7 @@ async fn accept_suspended_certificates() {
     );
     let certificates = certificates.into_iter().collect_vec();
 
-    // Try to aceept certificates from round 2 to 5. All of them should be suspended.
+    // Try to accept certificates from round 2 to 5. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
@@ -195,7 +195,7 @@ async fn accept_suspended_certificates() {
         }
     }
 
-    // Try to aceept certificates from round 1. All of them should be accepted.
+    // Try to accept certificates from round 1. All of them should be accepted.
     for cert in &certificates[..NUM_AUTHORITIES] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,
@@ -206,7 +206,7 @@ async fn accept_suspended_certificates() {
     // Wait for all notifications to arrive.
     accept.collect::<Vec<()>>().await;
 
-    // Try to aceept certificates from round 2 and above again. All of them should be accepted.
+    // Try to accept certificates from round 2 and above again. All of them should be accepted.
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,

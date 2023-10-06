@@ -441,19 +441,20 @@ async fn process_certificates_helper(
     let verify_tasks = all_certificates
         .chunks(VERIFY_CERTIFICATES_BATCH_SIZE)
         .map(|certs| {
-            let mut certs = certs.to_vec();
+            let certs = certs.to_vec();
             let sync = synchronizer.clone();
             let metrics = metrics.clone();
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 let now = Instant::now();
-                for c in &mut certs {
-                    sync.sanitize_certificate(c)?;
+                let mut sanitized_certs = Vec::new();
+                for c in certs {
+                    sanitized_certs.push(sync.sanitize_certificate(c)?);
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
                     .inc_by(now.elapsed().as_micros() as u64);
-                Ok::<Vec<Certificate>, DagError>(certs)
+                Ok::<Vec<Certificate>, DagError>(sanitized_certs)
             })
         })
         .collect_vec();

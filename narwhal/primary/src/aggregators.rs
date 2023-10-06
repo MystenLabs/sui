@@ -71,9 +71,12 @@ impl VotesAggregator {
             let (_, pks) = cert.signed_by(committee);
 
             let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(cert.digest());
-            match AggregateSignature::try_from(cert.aggregated_signature())
-                .map_err(|_| DagError::InvalidSignature)?
-                .verify_secure(&to_intent_message(certificate_digest), &pks[..])
+            match AggregateSignature::try_from(
+                cert.aggregated_signature()
+                    .ok_or(DagError::InvalidSignature)?,
+            )
+            .map_err(|_| DagError::InvalidSignature)?
+            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             {
                 Err(err) => {
                     warn!(
