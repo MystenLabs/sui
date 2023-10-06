@@ -63,7 +63,7 @@ impl Checkpoint {
         filter.get_or_insert_with(Default::default).at_checkpoint = Some(self.sequence_number);
 
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, filter, None, None)
+            .fetch_txs(first, after, last, before, filter)
             .await
             .extend()
     }
