@@ -232,7 +232,12 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service. If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+There are two options:  
+1. Call the Mysten Labs-maintained proving service
+1. Run proving service in your backend using the provided Docker images. 
+### Call Mysten-Labs proving service
+
+If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
@@ -287,6 +292,52 @@ export type PartialZkLoginSignature = Omit<
 >;
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ````
+
+### Running your own proving service
+
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
+
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated.
+
+```bash
+curl -O https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey
+```
+
+   1. To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
+
+1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
+
+```bash
+docker run \
+  -e ZKEY=/app/binaries/zkLogin.zkey \
+  -e WITNESS_BINARIES=/app/binaries \
+  -v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
+  -p PORT1:8080 \
+  <prover-image>
+```
+
+1. Run `prover-fe` at `PORT2`:
+
+```bash
+docker run \
+    -e PROVER_URI='http://localhost:PORT1/input' \
+    -e NODE_ENV=production \
+    -e DEBUG=zkLogin:info,jwks \
+    -p PORT2:8080 \
+    <prover-fe-image>
+```
+
+1. Expose the `prover-fe` service appropriately and keep the prover service internal.
+
+1. To call the proving service, the following two endpoints are supported:
+   1. `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`
+   1. `/v1`: The request and response are the same as the Mysten Labs maintained service
+
+A few things to note:
+
+1. If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
+
+1. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
 
 ## Assemble the zkLogin signature and submit the transaction
 
@@ -592,14 +643,6 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 ## Does zkLogin work on mobile?
 
 zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
-
-## Can I run my own ZK Proving Service?
-
-Yes, you can choose to run the server binary on premise and generate ZK proofs yourself instead of calling a provider. Please contact us for more instructions.
-
-## What RPC providers support the ZK Proving Service?
-
-The application can currently call the Mysten Labs-maintained ZK Proving Service. Please reach out to whitelist the application's registered client ID to use the service.
 
 ## Is account recovery possible if the user loses the OAuth credentials?
 

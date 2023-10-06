@@ -45,14 +45,17 @@ impl Address {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs(
+            .fetch_txs_for_address(
                 first,
                 after,
                 last,
                 before,
                 filter,
-                Some(self.address),
-                relation,
+                (
+                    self.address,
+                    // Assume signer if no relationship is specified
+                    relation.unwrap_or(AddressTransactionBlockRelationship::Sign),
+                ),
             )
             .await
             .extend()
@@ -73,12 +76,8 @@ impl Address {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>> {
-        let filter = filter.map(|mut x| {
-            x.owner = Some(self.address);
-            x
-        });
         ctx.data_unchecked::<PgManager>()
-            .fetch_objs(first, after, last, before, filter)
+            .fetch_owned_objs(first, after, last, before, filter, self.address)
             .await
             .extend()
     }
