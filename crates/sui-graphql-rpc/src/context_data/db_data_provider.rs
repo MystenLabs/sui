@@ -580,34 +580,44 @@ impl PgManager {
         Ok(ChainIdentifier::from(digest).to_string())
     }
 
-    pub(crate) async fn fetch_txs(
+    pub(crate) async fn fetch_txs_for_address(
         &self,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         mut filter: Option<TransactionBlockFilter>,
-        self_address: Option<SuiAddress>,
         // TODO: Do we really need this when filter seems to be able to do the same?
-        relation: Option<AddressTransactionBlockRelationship>,
+        address_relation: (SuiAddress, AddressTransactionBlockRelationship),
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
-        if let Some(r) = relation {
-            if filter.is_none() {
-                filter = Some(TransactionBlockFilter::default());
-            }
-            // Override filter with relation
-            // TODO: is this the desired behavior?
-            filter = filter.map(|mut f| {
-                match r {
-                    AddressTransactionBlockRelationship::Sign => f.sign_address = self_address,
-                    AddressTransactionBlockRelationship::Sent => f.sent_address = self_address,
-                    AddressTransactionBlockRelationship::Recv => f.recv_address = self_address,
-                    AddressTransactionBlockRelationship::Paid => f.paid_address = self_address,
-                };
-                f
-            });
+        let (address, relation) = address_relation;
+        if filter.is_none() {
+            filter = Some(TransactionBlockFilter::default());
         }
+        let address = Some(address);
+        // Override filter with relation
+        // TODO: is this the desired behavior?
+        filter = filter.map(|mut f| {
+            match relation {
+                AddressTransactionBlockRelationship::Sign => f.sign_address = address,
+                AddressTransactionBlockRelationship::Sent => f.sent_address = address,
+                AddressTransactionBlockRelationship::Recv => f.recv_address = address,
+                AddressTransactionBlockRelationship::Paid => f.paid_address = address,
+            };
+            f
+        });
 
+        self.fetch_txs(first, after, last, before, filter).await
+    }
+
+    pub(crate) async fn fetch_txs(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
         self.validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
             self.validate_tx_block_filter(filter)?;
@@ -658,6 +668,22 @@ impl PgManager {
         let stored_obj = self.get_obj(address, version).await?;
 
         stored_obj.map(Object::try_from).transpose()
+    }
+
+    pub(crate) async fn fetch_owned_objs(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<ObjectFilter>,
+        owner: SuiAddress,
+    ) -> Result<Option<Connection<String, Object>>, Error> {
+        let filter = filter.map(|mut x| {
+            x.owner = Some(owner);
+            x
+        });
+        self.fetch_objs(first, after, last, before, filter).await
     }
 
     pub(crate) async fn fetch_objs(
