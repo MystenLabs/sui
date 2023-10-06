@@ -237,8 +237,12 @@ export class SuiWallet implements Wallet {
 		return { accounts: this.accounts };
 	};
 
-	#signTransactionBlock: SuiSignTransactionBlockMethod = async (input) => {
-		if (!isTransactionBlock(input.transactionBlock)) {
+	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({
+		transactionBlock,
+		account,
+		...input
+	}) => {
+		if (!isTransactionBlock(transactionBlock)) {
 			throw new Error(
 				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
 			);
@@ -251,8 +255,8 @@ export class SuiWallet implements Wallet {
 					...input,
 					// account might be undefined if previous version of adapters is used
 					// in that case use the first account address
-					account: input.account?.address || this.#accounts[0]?.address || '',
-					transaction: input.transactionBlock.serialize(),
+					account: account?.address || this.#accounts[0]?.address || '',
+					transaction: transactionBlock.serialize(),
 				},
 			}),
 			(response) => response.result,

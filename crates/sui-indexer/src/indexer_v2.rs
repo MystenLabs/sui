@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::apis::IndexerApiV2;
 use crate::errors::IndexerError;
+use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
 use crate::IndexerConfig;
 use anyhow::Result;
@@ -23,38 +25,16 @@ pub struct IndexerV2;
 const DOWNLOAD_QUEUE_SIZE: usize = 1000;
 
 impl IndexerV2 {
-    pub async fn start<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
+    pub async fn start_writer<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
         config: &IndexerConfig,
-        registry: &Registry,
         store: S,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         info!(
-            "Sui indexer of version {:?} started...",
+            "Sui indexerV2 Writer (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        mysten_metrics::init_metrics(registry);
 
-        // For testing purposes, for the time being we allow an indexer to be a
-        // reader and writer at the same time
-        let _handle = if config.rpc_server_worker {
-            info!("Starting indexer reader");
-            let handle = build_json_rpc_server(registry, store.clone(), config, None)
-                .await
-                .expect("Json rpc server should not run into errors upon start.");
-            Some(tokio::spawn(async move { handle.stopped().await }))
-        } else {
-            None
-        };
-
-        if !config.fullnode_sync_worker {
-            if let Some(handle) = _handle {
-                handle.await.expect("Rpc server task failed");
-            }
-            return Ok(());
-        }
-
-        info!("Starting fullnode sync worker");
         // None will be returned when checkpoints table is empty.
         let last_seq_from_db = store
             .get_latest_tx_checkpoint_sequence_number()
@@ -90,17 +70,39 @@ impl IndexerV2 {
 
         Ok(())
     }
+
+    pub async fn start_reader(
+        config: &IndexerConfig,
+        registry: &Registry,
+        db_url: String,
+    ) -> Result<(), IndexerError> {
+        info!(
+            "Sui indexerV2 Reader (version {:?}) started...",
+            env!("CARGO_PKG_VERSION")
+        );
+        let indexer_reader = IndexerReader::new(db_url)?;
+        let handle = build_json_rpc_server(registry, indexer_reader, config, None)
+            .await
+            .expect("Json rpc server should not run into errors upon start.");
+        tokio::spawn(async move { handle.stopped().await })
+            .await
+            .expect("Rpc server task failed");
+
+        Ok(())
+    }
 }
 
-pub async fn build_json_rpc_server<S: IndexerStoreV2 + Sync + Send + 'static + Clone>(
+pub async fn build_json_rpc_server(
     prometheus_registry: &Registry,
-    _state: S,
+    reader: IndexerReader,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
-    let builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
+    let mut builder = JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry);
 
     // TODO: Register modules here
+
+    builder.register_module(IndexerApiV2::new(reader.clone()))?;
     // builder.register_module()...
 
     let default_socket_addr: SocketAddr = SocketAddr::new(

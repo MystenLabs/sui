@@ -12,9 +12,9 @@ proc-macro = true
 [dependencies]
 quote.workspace = true
 syn = { version = "2", features = ["full", "fold", "extra-traits"] }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 proc-macro2.workspace = true
 sui-enum-compat-util.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim-macros.workspace = true

@@ -404,10 +404,18 @@ pub(crate) fn convert_json_rpc_checkpoint(
         }
     });
 
+    let timestamp = i64::try_from(c.timestamp_ms).map_err(|_| {
+        Error::Internal(format!(
+            "Cannot convert start timestamp u64 ({}) of checkpoint ({sequence_number}) into i64 required by DateTime",
+            c.timestamp_ms
+        ))
+    })?;
+
     Ok(Checkpoint {
         digest,
         sequence_number,
         validator_signature,
+        timestamp: DateTime::from_ms(timestamp),
         previous_checkpoint_digest,
         live_object_set_digest: None, // TODO fix this
         network_total_transactions,

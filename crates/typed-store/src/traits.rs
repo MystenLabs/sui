@@ -39,23 +39,6 @@ where
     /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
     fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
 
-    /// Returns the value for the given key from the map, if it exists
-    /// or the given default value if it does not.
-    /// This method is not thread safe
-    fn get_or_insert_unsafe<F: FnOnce() -> V>(
-        &self,
-        key: &K,
-        default: F,
-    ) -> Result<V, Self::Error> {
-        self.get(key).and_then(|optv| match optv {
-            Some(v) => Ok(v),
-            None => {
-                self.insert(key, &default())?;
-                self.get(key).transpose().expect("default just inserted")
-            }
-        })
-    }
-
     /// Inserts the given key-value pair into the map.
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error>;
 

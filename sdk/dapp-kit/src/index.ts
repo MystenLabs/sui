@@ -19,4 +19,5 @@ export * from './hooks/wallet/useSignAndExecuteTransactionBlock.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/useSuiClientInfiniteQuery.js';
+export * from './themes/lightTheme.js';
 export * from './types.js';

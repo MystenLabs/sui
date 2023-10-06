@@ -199,8 +199,11 @@ fn module(
         .collect();
 
     let addr_name = match &ident.value.address {
-        Address::Numerical(None, _) => None,
-        Address::Numerical(Some(name), _) | Address::NamedUnassigned(name) => Some(*name),
+        Address::Numerical { name: None, .. } => None,
+        Address::Numerical {
+            name: Some(name), ..
+        }
+        | Address::NamedUnassigned(name) => Some(*name),
     };
     let addr_bytes = context.resolve_address(ident.value.address);
     let (imports, explicit_dependency_declarations) = context.materialize(
@@ -332,7 +335,12 @@ fn address_names<'a>(
         .filter_map(|sp!(_, mident)| {
             let ModuleIdent_ { address, module } = mident;
             let ModuleName(sp!(_, module)) = module;
-            if let Address::Numerical(Some(sp!(_, named)), sp!(_, numeric)) = address {
+            if let Address::Numerical {
+                name: Some(sp!(_, named)),
+                value: sp!(_, numeric),
+                ..
+            } = address
+            {
                 Some(((numeric.into_inner(), module.as_str()), *named))
             } else {
                 None
@@ -787,7 +795,13 @@ fn var(v: Var) -> IR::Var {
 }
 
 fn field(f: Field) -> IR::Field {
-    sp(f.0.loc, IR::Field_(f.0.value))
+    // If it's a positional field, lower it into `pos{field_idx}` so they're a valid identifier
+    let field_ident = if f.0.value.parse::<u8>().is_ok() {
+        format!("pos{}", f.0.value).into()
+    } else {
+        f.0.value
+    };
+    sp(f.0.loc, IR::Field_(field_ident))
 }
 
 fn struct_definition_name(

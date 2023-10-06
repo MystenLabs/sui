@@ -13,6 +13,7 @@ import initSentry from '_src/ui/app/helpers/sentry';
 import store from '_store';
 import { thunkExtras } from '_store/thunk-extras';
 import { GrowthBookProvider } from '@growthbook/growthbook-react';
+import { KioskClientProvider } from '@mysten/core/src/components/KioskClientProvider';
 import { SuiClientProvider } from '@mysten/dapp-kit';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import cn from 'classnames';
@@ -84,23 +85,25 @@ function AppWrapper() {
 							<SuiClientProvider
 								networks={{ [walletApiProvider.apiEnv]: walletApiProvider.instance.fullNode }}
 							>
-								<AccountsFormProvider>
-									<UnlockAccountProvider>
-										<div
-											className={cn(
-												'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
-												isFullscreen && 'shadow-lg rounded-xl',
-											)}
-										>
-											<ErrorBoundary>
-												<App />
-												<ZkLoginAccountWarningModal />
-											</ErrorBoundary>
-											<div id="overlay-portal-container"></div>
-											<div id="toaster-portal-container"></div>
-										</div>
-									</UnlockAccountProvider>
-								</AccountsFormProvider>
+								<KioskClientProvider>
+									<AccountsFormProvider>
+										<UnlockAccountProvider>
+											<div
+												className={cn(
+													'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
+													isFullscreen && 'shadow-lg rounded-xl',
+												)}
+											>
+												<ErrorBoundary>
+													<App />
+													<ZkLoginAccountWarningModal />
+												</ErrorBoundary>
+												<div id="overlay-portal-container"></div>
+												<div id="toaster-portal-container"></div>
+											</div>
+										</UnlockAccountProvider>
+									</AccountsFormProvider>
+								</KioskClientProvider>
 							</SuiClientProvider>
 						</PersistQueryClientProvider>
 					</Fragment>

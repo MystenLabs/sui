@@ -96,6 +96,7 @@ jobs:
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
       # non-deterministic `test` job.
       SUI_SKIP_SIMTESTS: 1
+      PG_DB_URL: ${{ secrets.INDEXER_V2_TEST_DB_URL }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

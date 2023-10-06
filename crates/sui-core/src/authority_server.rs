@@ -222,16 +222,30 @@ pub struct ValidatorService {
 }
 
 impl ValidatorService {
-    pub async fn new(
+    pub fn new(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
-        prometheus_registry: &Registry,
-    ) -> Result<Self> {
-        Ok(Self {
+        metrics: Arc<ValidatorServiceMetrics>,
+    ) -> Self {
+        Self {
             state,
             consensus_adapter,
-            metrics: Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
-        })
+            metrics,
+        }
+    }
+
+    pub fn validator_state(&self) -> &Arc<AuthorityState> {
+        &self.state
+    }
+
+    pub async fn execute_certificate_for_testing(
+        &self,
+        cert: CertifiedTransaction,
+    ) -> HandleCertificateResponseV2 {
+        self.handle_certificate_v2(tonic::Request::new(cert))
+            .await
+            .unwrap()
+            .into_inner()
     }
 
     async fn handle_transaction(

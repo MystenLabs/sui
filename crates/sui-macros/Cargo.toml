@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 sui-proc-macros.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 once_cell.workspace = true
 futures.workspace = true
 tracing.workspace = true
+workspace-hack.workspace = true

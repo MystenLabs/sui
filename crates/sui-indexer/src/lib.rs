@@ -189,7 +189,6 @@ impl Indexer {
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
-        mysten_metrics::init_metrics(registry);
 
         if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");

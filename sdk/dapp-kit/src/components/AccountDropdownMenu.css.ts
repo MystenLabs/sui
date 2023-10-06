@@ -3,40 +3,39 @@
 
 import { style } from '@vanilla-extract/css';
 
-export const triggerButton = style({
-	display: 'inline-flex',
-	justifyContent: 'space-between',
-	alignItems: 'center',
+import { themeVars } from '../themes/themeContract.js';
+
+export const connectedAccount = style({
 	gap: 8,
-	paddingLeft: 24,
-	paddingRight: 24,
-	paddingTop: 16,
-	paddingBottom: 16,
-	borderRadius: 12,
-	boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
-	backgroundColor: 'white',
-	color: '#182435',
 });
 
 export const menuContent = style({
-	width: 180,
-	maxHeight: 200,
-	borderRadius: 12,
-	marginTop: 4,
-	padding: 8,
 	display: 'flex',
 	flexDirection: 'column',
+	width: 180,
+	maxHeight: 200,
+	marginTop: 4,
+	padding: 8,
 	gap: 8,
-	backgroundColor: 'white',
+	borderRadius: themeVars.radii.large,
+	backgroundColor: themeVars.backgroundColors.dropdownMenu,
 });
 
-export const switchAccountButton = style({
+export const menuItem = style({
+	padding: 8,
+	userSelect: 'none',
+	outline: 'none',
 	display: 'flex',
-	justifyContent: 'space-between',
 	alignItems: 'center',
+	borderRadius: themeVars.radii.large,
+	selectors: {
+		'&[data-highlighted]': {
+			backgroundColor: themeVars.backgroundColors.primaryButton,
+		},
+	},
 });
 
-export const disconnectButton = style({
+export const switchAccountMenuItem = style({
 	display: 'flex',
 	justifyContent: 'space-between',
 	alignItems: 'center',
@@ -44,5 +43,6 @@ export const disconnectButton = style({
 
 export const separator = style({
 	height: 1,
-	backgroundColor: '#F3F6F8',
+	flexShrink: 0,
+	backgroundColor: themeVars.backgroundColors.dropdownMenuSeparator,
 });

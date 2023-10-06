@@ -77,7 +77,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const coinIDs = coins.map((coin) => Coin.getID(coin));
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
-			objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
+			objects: [coinIDs[1], tx.object(coinIDs[2])],
 		});
 		tx.moveCall({
 			target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,

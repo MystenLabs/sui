@@ -4,6 +4,7 @@
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 
+import { Heading } from '../../ui/Heading.js';
 import * as styles from './WalletListItem.css.js';
 
 type WalletListItemProps = {
@@ -15,14 +16,20 @@ type WalletListItemProps = {
 
 export function WalletListItem({ name, icon, onClick, isSelected = false }: WalletListItemProps) {
 	return (
-		<li className={clsx(styles.container, { [styles.selectedContainer]: isSelected })}>
-			<button className={styles.buttonContainer} type="button" onClick={onClick}>
+		<li className={styles.container}>
+			<button
+				className={clsx(styles.walletItem, { [styles.selectedWalletItem]: isSelected })}
+				type="button"
+				onClick={onClick}
+			>
 				{typeof icon === 'string' ? (
 					<img className={styles.walletIcon} src={icon} alt={`${name} logo`} />
 				) : (
 					icon
 				)}
-				<div className={styles.walletName}>{name}</div>
+				<Heading size="md" truncate asChild>
+					<div>{name}</div>
+				</Heading>
 			</button>
 		</li>
 	);

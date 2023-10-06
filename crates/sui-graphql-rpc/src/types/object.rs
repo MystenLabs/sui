@@ -11,8 +11,8 @@ use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
-use crate::context_data::context_ext::DataProviderContextExt;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
+use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 use crate::types::base64::Base64;
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -37,13 +37,13 @@ pub(crate) enum ObjectKind {
 
 #[derive(InputObject)]
 pub(crate) struct ObjectFilter {
-    package: Option<SuiAddress>,
-    module: Option<String>,
-    ty: Option<String>,
+    pub package: Option<SuiAddress>,
+    pub module: Option<String>,
+    pub ty: Option<String>,
 
-    owner: Option<SuiAddress>,
-    object_ids: Option<Vec<SuiAddress>>,
-    object_keys: Option<Vec<ObjectKey>>,
+    pub owner: Option<SuiAddress>,
+    pub object_ids: Option<Vec<SuiAddress>>,
+    pub object_keys: Option<Vec<ObjectKey>>,
 }
 
 #[derive(InputObject)]
@@ -78,7 +78,7 @@ impl Object {
     ) -> Result<Option<TransactionBlock>> {
         if let Some(tx) = &self.previous_transaction {
             let loader = ctx.data_unchecked::<DataLoader<SuiClientLoader, LruCache>>();
-            loader.load_one(*tx).await
+            Ok(loader.load_one(*tx).await.unwrap_or(None))
         } else {
             Ok(None)
         }
@@ -106,10 +106,11 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
-        ctx.data_provider()
-            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+    ) -> Result<Option<Connection<String, Object>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_owned_objs(first, after, last, before, filter, self.address)
             .await
+            .extend()
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {

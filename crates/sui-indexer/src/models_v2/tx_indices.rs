@@ -4,6 +4,12 @@
 use crate::{schema_v2::tx_indices, types_v2::TxIndex};
 use diesel::prelude::*;
 
+#[derive(QueryableByName)]
+pub struct TxDigest {
+    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    pub transaction_digest: Vec<u8>,
+}
+
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
 #[diesel(table_name = tx_indices)]
 pub struct StoredTxIndex {

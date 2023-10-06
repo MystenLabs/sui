@@ -29,8 +29,8 @@ pub struct StoredEvent {
     pub package: Vec<u8>,
     pub module: String,
     pub event_type: String,
-    pub bcs: Vec<u8>,
     pub timestamp_ms: i64,
+    pub bcs: Vec<u8>,
 }
 
 impl From<IndexedEvent> for StoredEvent {
