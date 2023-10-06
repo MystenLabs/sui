@@ -117,11 +117,14 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 mod tests {
     use super::*;
     use crate::{
+        config::ServiceConfig,
         context_data::{
             data_provider::DataProvider, db_data_provider::PgManager,
             sui_sdk_data_provider::sui_sdk_client_v0,
         },
+        extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::{Timeout, TimeoutConfig},
+        metrics::RequestMetrics,
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -305,5 +308,40 @@ mod tests {
         .map(|e| e.message)
         .collect();
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_query_complexity_metrics() {
+        let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        let metrics = RequestMetrics::new(&registry);
+        let metrics = Arc::new(metrics);
+        let metrics2 = metrics.clone();
+
+        let service_config = ServiceConfig::default();
+        let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
+        let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            .max_query_depth(service_config.limits.max_query_depth)
+            .max_query_nodes(service_config.limits.max_query_nodes)
+            .context_data(service_config)
+            .context_data(data_provider)
+            .context_data(metrics)
+            .extension(QueryLimitsChecker::default())
+            .build_schema();
+        let _ = schema.execute("{ chainIdentifier }").await;
+
+        assert_eq!(metrics2.num_nodes.get_sample_count(), 1);
+        assert_eq!(metrics2.query_depth.get_sample_count(), 1);
+        assert_eq!(metrics2.num_nodes.get_sample_sum(), 1.);
+        assert_eq!(metrics2.query_depth.get_sample_sum(), 1.);
+
+        let _ = schema
+            .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
+            .await;
+        assert_eq!(metrics2.num_nodes.get_sample_count(), 2);
+        assert_eq!(metrics2.query_depth.get_sample_count(), 2);
+        assert_eq!(metrics2.num_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
     }
 }
