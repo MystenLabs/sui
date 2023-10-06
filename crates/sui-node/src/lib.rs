@@ -67,7 +67,7 @@ use sui_core::consensus_adapter::{
 };
 use sui_core::consensus_handler::ConsensusHandler;
 use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, ConsensusThroughputProfiler, Level, ThroughputProfile,
+    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfile,
     ThroughputProfileRanges,
 };
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
@@ -1074,7 +1074,7 @@ impl SuiNode {
             .iter()
             .enumerate()
             .map(|(profile_index, throughput)| ThroughputProfile {
-                level: Level::from(profile_index),
+                level: profile_index.into(),
                 throughput: *throughput,
             })
             .collect::<Vec<ThroughputProfile>>();
