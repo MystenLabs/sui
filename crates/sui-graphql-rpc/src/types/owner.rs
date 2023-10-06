@@ -109,6 +109,10 @@ impl Owner {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>> {
+        let filter = filter.map(|mut x| {
+            x.owner = Some(self.address);
+            x
+        });
         ctx.data_unchecked::<PgManager>()
             .fetch_objs(first, after, last, before, filter)
             .await
