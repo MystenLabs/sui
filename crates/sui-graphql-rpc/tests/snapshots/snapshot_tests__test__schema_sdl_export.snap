@@ -3,9 +3,13 @@ source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
 type Address implements ObjectOwner {
+	"""
+	Similar behavior to the `transactionBlockConnection` in Query but
+	supports additional `AddressTransactionBlockRelationship` filter
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -263,7 +267,7 @@ type Object implements ObjectOwner {
 	kind: ObjectKind
 	owner: Owner
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -337,7 +341,7 @@ type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -607,3 +611,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+

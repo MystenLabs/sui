@@ -5,7 +5,7 @@
 use crate::{
     error::Error,
     types::{
-        address::Address,
+        address::{Address, AddressTransactionBlockRelationship},
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
@@ -570,8 +570,28 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-        filter: Option<TransactionBlockFilter>,
+        mut filter: Option<TransactionBlockFilter>,
+        self_address: Option<SuiAddress>,
+        // TODO: Do we really need this when filter seems to be able to do the same?
+        relation: Option<AddressTransactionBlockRelationship>,
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
+        if let Some(r) = relation {
+            if filter.is_none() {
+                filter = Some(TransactionBlockFilter::default());
+            }
+            // Override filter with relation
+            // TODO: is this the desired behavior?
+            filter = filter.map(|mut f| {
+                match r {
+                    AddressTransactionBlockRelationship::Sign => f.sign_address = self_address,
+                    AddressTransactionBlockRelationship::Sent => f.sent_address = self_address,
+                    AddressTransactionBlockRelationship::Recv => f.recv_address = self_address,
+                    AddressTransactionBlockRelationship::Paid => f.paid_address = self_address,
+                };
+                f
+            });
+        }
+
         self.validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
             self.validate_tx_block_filter(filter)?;

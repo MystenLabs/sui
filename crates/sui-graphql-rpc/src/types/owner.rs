@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::context_ext::DataProviderContextExt;
+use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::*;
@@ -108,10 +108,15 @@ impl Owner {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
-        ctx.data_provider()
-            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+    ) -> Result<Option<Connection<String, Object>>> {
+        let filter = filter.map(|mut x| {
+            x.owner = Some(self.address);
+            x
+        });
+        ctx.data_unchecked::<PgManager>()
+            .fetch_objs(first, after, last, before, filter)
             .await
+            .extend()
     }
 
     pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
