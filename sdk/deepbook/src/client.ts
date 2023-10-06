@@ -298,6 +298,7 @@ export class DeepBookClient {
 			target: `0x2::coin::zero`,
 			arguments: [],
 		});
+
 		const [base_coin_ret, quote_coin_ret] = txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,

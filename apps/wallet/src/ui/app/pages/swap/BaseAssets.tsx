@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
+import { useActiveAddress, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { useNavigate } from 'react-router-dom';
