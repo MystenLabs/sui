@@ -1527,19 +1527,19 @@ impl ProtocolConfig {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
                     }
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.throughput_aware_consensus_submission = true;
+                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
+                    } else {
+                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 2_000];
+                    }
                 }
                 27 => {
                     // zklogin::check_zklogin_id
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.throughput_aware_consensus_submission = true;
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 3_000];
-                    } else {
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 2_000];
-                    }
                 }
                 // Use this template when making changes:
                 //

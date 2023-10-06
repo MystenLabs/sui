@@ -46,6 +46,7 @@ impl From<Level> for usize {
     }
 }
 
+#[derive(Debug)]
 pub struct ThroughputProfileRanges {
     /// Holds the throughput profiles by the throughput range (upper_throughput, cool_down_threshold)
     profiles: BTreeMap<u64, ThroughputProfile>,

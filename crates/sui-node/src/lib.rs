@@ -1085,6 +1085,8 @@ impl SuiNode {
             ThroughputProfileRanges::new(&r)
         };
 
+        info!("Throughput profile ranges: {:?}", ranges);
+
         let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
             throughput_calculator.clone(),
             None,
