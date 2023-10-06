@@ -27,8 +27,8 @@ use super::name_service::NameService;
     ),
     field(
         name = "balance",
-        ty = "Balance",
-        arg(name = "type", ty = "Option<String>")
+        ty = "Option<Balance>",
+        arg(name = "type", ty = "String")
     ),
     field(
         name = "balance_connection",
@@ -115,11 +115,11 @@ impl Owner {
             .extend()
     }
 
-    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_balance(&self.address, type_)
+    pub async fn balance(&self, ctx: &Context<'_>, type_: String) -> Result<Option<Balance>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balance(self.address, type_)
             .await
+            .extend()
     }
 
     pub async fn balance_connection(

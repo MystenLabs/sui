@@ -459,8 +459,9 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
 
 fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
     Balance {
-        coin_object_count: b.coin_object_count as u64,
-        total_balance: BigInt::from_str(&format!("{}", b.total_balance)).unwrap(),
+        coin_object_count: Some(b.coin_object_count as u64),
+        total_balance: Some(BigInt::from_str(&format!("{}", b.total_balance)).unwrap()),
+        coin_type: Some(b.coin_type),
     }
 }
 

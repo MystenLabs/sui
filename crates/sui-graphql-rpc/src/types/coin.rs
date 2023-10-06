@@ -6,9 +6,15 @@ use super::move_object::MoveObject;
 use async_graphql::*;
 
 use sui_types::coin::Coin as NativeSuiCoin;
+use super::big_int::BigInt;
 
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct Coin {
+    #[graphql(skip)]
     pub move_obj: MoveObject,
+    pub id: ID,
+    pub balance: Option<BigInt>
 }
 
 #[Object]
