@@ -1533,8 +1533,7 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
-                }
-                28 => {
+
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
                         cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 3_000];
