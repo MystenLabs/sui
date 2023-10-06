@@ -736,13 +736,16 @@ impl TryFrom<StoredCheckpoint> for Checkpoint {
                     "Can't convert checkpoint_commitments into CheckpointCommitments. Error: {e}",
                 ))
             })?;
+
         let live_object_set_digest =
             checkpoint_commitments
-                .last()
-                .map(|commitment| match commitment {
+                .iter()
+                .find_map(|commitment| match commitment {
                     CheckpointCommitment::ECMHLiveObjectSetDigest(digest) => {
-                        Digest::from_array(digest.digest.into_inner()).to_string()
+                        Some(Digest::from_array(digest.digest.into_inner()).to_string())
                     }
+                    #[allow(unreachable_patterns)]
+                    _ => None,
                 });
 
         let end_of_epoch_data: Option<NativeEndOfEpochData> = if c.end_of_epoch {
