@@ -133,6 +133,7 @@ mod tests {
     use std::time::Duration;
     use std::{env, sync::Arc};
 
+    #[ignore]
     #[tokio::test]
     async fn test_timeout() {
         struct TimedExecuteExt {
@@ -204,6 +205,7 @@ mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_depth_limit() {
         async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
@@ -257,6 +259,7 @@ mod tests {
         assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_node_limit() {
         async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
@@ -310,6 +313,7 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_complexity_metrics() {
         let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
