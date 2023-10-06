@@ -44,7 +44,8 @@ impl RequestMetrics {
                 "Size of the query payload string",
                 QUERY_PAYLOAD_SIZE_BUCKETS.to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         }
     }
 }
