@@ -410,7 +410,7 @@ move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
 move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
 move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model", default-features = false }
+move-model = { path = "../../external-crates/move/move-model" }
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
@@ -1201,7 +1201,7 @@ move-ir-compiler = { path = "../../external-crates/move/move-ir-compiler" }
 move-ir-to-bytecode = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "../../external-crates/move/move-ir-compiler/move-ir-to-bytecode/syntax" }
 move-ir-types = { path = "../../external-crates/move/move-ir/types", default-features = false }
-move-model = { path = "../../external-crates/move/move-model", default-features = false }
+move-model = { path = "../../external-crates/move/move-model" }
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
 move-proc-macros = { path = "../../external-crates/move/testing-infra/move-proc-macros", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
