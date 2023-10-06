@@ -136,6 +136,7 @@
     digest
     sequenceNumber
     timestamp
+    validatorSignature
     previousCheckpointDigest
     liveObjectSetDigest
     networkTotalTransactions
