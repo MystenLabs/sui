@@ -59,6 +59,7 @@ impl TransactionBlock {
             return Ok(None);
         }
         let gcs = self.effects.as_ref().unwrap().gas_effects.gcs;
+        // TODO: implement DB counterpart without using Sui SDK client
         let data_provider = ctx.data_provider();
         let system_state = data_provider.get_latest_sui_system_state().await?;
         let protocol_configs = data_provider.fetch_protocol_config(None).await?;

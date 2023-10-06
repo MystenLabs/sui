@@ -55,6 +55,9 @@ use sui_sdk::{
 
 use super::data_provider::DataProvider;
 
+// TODO: Ensure the logic is this file is for verification/experimentation only
+// and is not used in production
+
 const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
