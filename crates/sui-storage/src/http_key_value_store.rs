@@ -441,4 +441,28 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             .await
             .map(|maybe| maybe.and_then(|bytes| deser::<_, Object>(&key, bytes.as_ref())))
     }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        let keys = digests
+            .iter()
+            .map(|digest| Key::TxToCheckpoint(*digest))
+            .collect::<Vec<_>>();
+
+        let fetches = self.multi_fetch(keys).await;
+
+        let results = fetches
+            .iter()
+            .zip(digests.iter())
+            .map(map_fetch)
+            .map(|maybe_bytes| {
+                maybe_bytes
+                    .and_then(|(bytes, key)| deser::<_, CheckpointSequenceNumber>(&key, bytes))
+            })
+            .collect::<Vec<_>>();
+
+        Ok(results)
+    }
 }

@@ -404,6 +404,13 @@ impl TransactionKeyValueStore {
     ) -> SuiResult<Option<Object>> {
         self.inner.get_object(object_id, version).await
     }
+
+    pub async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        self.inner.multi_get_transaction_checkpoint(digests).await
+    }
 }
 
 /// Immutable key/value store trait for storing/retrieving transactions, effects, and events.
@@ -437,6 +444,11 @@ pub trait TransactionKeyValueStoreTrait {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
 }
 
 /// A TransactionKeyValueStoreTrait that falls back to a secondary store for any key for which the
@@ -581,6 +593,31 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         if res.is_none() {
             res = self.fallback.get_object(object_id, version).await?;
         }
+        Ok(res)
+    }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        let mut res = self
+            .primary
+            .multi_get_transaction_checkpoint(digests)
+            .await?;
+
+        let (fallback, indices) = find_fallback(&res, digests);
+
+        if fallback.is_empty() {
+            return Ok(res);
+        }
+
+        let secondary_res = self
+            .fallback
+            .multi_get_transaction_checkpoint(&fallback)
+            .await?;
+
+        merge_res(&mut res, secondary_res, &indices);
+
         Ok(res)
     }
 }
