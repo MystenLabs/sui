@@ -84,7 +84,6 @@ pub enum Tok {
     Mut,
     Enum,
     Type,
-    Signature,
     Match,
 }
 
@@ -164,7 +163,6 @@ impl fmt::Display for Tok {
             Mut => "mut",
             Enum => "enum",
             Type => "type",
-            Signature => "signature",
             Match => "match",
         };
         fmt::Display::fmt(s, formatter)
@@ -683,7 +681,6 @@ fn get_name_token(syntax_edition: SyntaxEdition, name: &str) -> Tok {
                 "mut" => Tok::Mut,
                 "enum" => Tok::Enum,
                 "type" => Tok::Type,
-                "signature" => Tok::Signature,
                 "match" => Tok::Match,
                 _ => Tok::Identifier,
             },
