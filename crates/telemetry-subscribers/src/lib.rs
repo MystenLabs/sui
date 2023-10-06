@@ -118,7 +118,6 @@ impl Filters {
             let res = trace.update(directives);
             // after duration is elapsed, reset to the env setting
             let trace = trace.clone();
-            // load TRACE_FILTER env
             let trace_filter_env = env::var("TRACE_FILTER").unwrap_or_else(|_| "off".to_string());
             tokio::spawn(async move {
                 tokio::time::sleep(duration).await;
@@ -130,6 +129,15 @@ impl Filters {
         } else {
             info!("tracing not enabled, ignoring update");
             Ok(())
+        }
+    }
+
+    pub fn reset_trace(&self) {
+        if let Some(trace) = &self.trace {
+            let trace_filter_env = env::var("TRACE_FILTER").unwrap_or_else(|_| "off".to_string());
+            if let Err(e) = trace.update(trace_filter_env) {
+                error!("failed to reset trace filter: {}", e);
+            }
         }
     }
 }

@@ -43,9 +43,14 @@ use tracing::info;
 // automatically.
 //
 //   $ curl -X POST 'http://127.0.0.1:1337/enable-tracing?filter=info&duration=10s'
+//
+// Reset tracing to the TRACE_FILTER env var.
+//
+//   $ curl -X POST 'http://127.0.0.1:1337/reset-tracing'
 
 const LOGGING_ROUTE: &str = "/logging";
 const TRACING_ROUTE: &str = "/enable-tracing";
+const TRACING_RESET_ROUTE: &str = "/reset-tracing";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
 const CLEAR_BUFFER_STAKE_ROUTE: &str = "/clear-override-buffer-stake";
 const FORCE_CLOSE_EPOCH: &str = "/force-close-epoch";
@@ -77,6 +82,7 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filters: Filters) {
         )
         .route(FORCE_CLOSE_EPOCH, post(force_close_epoch))
         .route(TRACING_ROUTE, post(enable_tracing))
+        .route(TRACING_RESET_ROUTE, post(reset_tracing))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -115,6 +121,14 @@ async fn enable_tracing(
         ),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
+}
+
+async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    state.filters.reset_trace();
+    (
+        StatusCode::OK,
+        "tracing filter reset to TRACE_FILTER env var".into(),
+    )
 }
 
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
