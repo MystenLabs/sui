@@ -43,7 +43,7 @@ use sui_sdk::types::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
     object::{Data, Object as SuiObject},
-    transaction::{SenderSignedData, TransactionDataAPI},
+    transaction::{SenderSignedData, TransactionDataAPI, TransactionExpiration},
 };
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
@@ -869,12 +869,18 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             ))),
         }?;
 
+        let epoch_id = match sender_signed_data.intent_message().value.expiration() {
+            TransactionExpiration::None => None,
+            TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
+        };
+
         Ok(Self {
             digest,
             effects,
             sender: Some(sender),
             bcs: Some(Base64::from(&tx.raw_transaction)),
             gas_input: Some(gas_input),
+            epoch_id,
         })
     }
 }
