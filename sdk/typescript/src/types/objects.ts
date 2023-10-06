@@ -22,7 +22,6 @@ import {
 } from 'superstruct';
 
 import { ObjectOwner } from './common.js';
-import type { OwnedObjectRef } from './transactions.js';
 
 export const ObjectType = union([string(), literal('package')]);
 export type ObjectType = Infer<typeof ObjectType>;
@@ -36,6 +35,16 @@ export const SuiObjectRef = object({
 	version: union([number(), string(), bigint()]),
 });
 export type SuiObjectRef = Infer<typeof SuiObjectRef>;
+
+export const OwnedObjectRef = object({
+	owner: ObjectOwner,
+	reference: SuiObjectRef,
+});
+export type OwnedObjectRef = Infer<typeof OwnedObjectRef>;
+export const TransactionEffectsModifiedAtVersions = object({
+	objectId: string(),
+	sequenceNumber: string(),
+});
 
 export const SuiGasData = object({
 	payment: array(SuiObjectRef),

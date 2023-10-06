@@ -17,7 +17,6 @@ import type {
 } from '../client/index.js';
 import { IntentScope, messageWithIntent } from '../cryptography/intent.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
-import { getTotalGasUsedUpperBound } from '../types/index.js';
 import type { Signer } from './signer.js';
 import type { SignedMessage, SignedTransaction } from './types.js';
 
@@ -180,20 +179,5 @@ export abstract class SignerWithProvider implements Signer {
 		return this.client.dryRunTransactionBlock({
 			transactionBlock: dryRunTxBytes,
 		});
-	}
-
-	/**
-	 * Returns the estimated gas cost for the transaction
-	 * @param tx The transaction to estimate the gas cost. When string it is assumed it's a serialized tx in base64
-	 * @returns total gas cost estimation
-	 * @throws whens fails to estimate the gas cost
-	 */
-	async getGasCostEstimation(...args: Parameters<SignerWithProvider['dryRunTransactionBlock']>) {
-		const txEffects = await this.dryRunTransactionBlock(...args);
-		const gasEstimation = getTotalGasUsedUpperBound(txEffects.effects);
-		if (typeof gasEstimation === 'undefined') {
-			throw new Error('Failed to estimate the gas cost from transaction');
-		}
-		return gasEstimation;
 	}
 }
