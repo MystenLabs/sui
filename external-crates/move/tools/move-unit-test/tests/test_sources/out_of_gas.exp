@@ -25,7 +25,7 @@ Failures in 0x42::m:
 │  9 │ fun t1() {
 │    │     -- In this function in 0x42::m
 │ 10 │     loop {}
-│    │          ^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 00000000000000000000000000000042::m but instead it ran out of gas in the module 00000000000000000000000000000042::m rooted here
+│    │          ^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000042::m but instead it ran out of gas in the module 0000000000000000000000000000000000000000000000000000000000000042::m rooted here
 │ 
 │ 
 └──────────────────
@@ -38,7 +38,7 @@ Failures in 0x42::m:
 │ 15 │ fun t2() {
 │    │     -- In this function in 0x42::m
 │ 16 │     0 - 1;
-│    │       ^ Test did not error as expected. Expected test to run out of gas in the module 00000000000000000000000000000042::m but instead it gave an arithmetic error originating in the module 00000000000000000000000000000042::m rooted here
+│    │       ^ Test did not error as expected. Expected test to run out of gas in the module 0000000000000000000000000000000000000000000000000000000000000042::m but instead it gave an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000042::m rooted here
 │ 
 │ 
 └──────────────────

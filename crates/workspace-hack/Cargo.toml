@@ -401,7 +401,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
@@ -418,7 +418,7 @@ move-read-write-set-types = { path = "../../external-crates/move/tools/read-writ
 move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
+move-stdlib = { path = "../../external-crates/move/move-stdlib", features = ["testing"] }
 move-stdlib-v0 = { path = "../../external-crates/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-vm-rework = { path = "../../external-crates/move-execution/vm-rework/move-stdlib", default-features = false }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }
@@ -1192,7 +1192,7 @@ move-bytecode-viewer = { path = "../../external-crates/move/tools/move-bytecode-
 move-cli = { path = "../../external-crates/move/tools/move-cli", default-features = false }
 move-command-line-common = { path = "../../external-crates/move/move-command-line-common", default-features = false }
 move-compiler = { path = "../../external-crates/move/move-compiler", default-features = false }
-move-core-types = { path = "../../external-crates/move/move-core/types", features = ["address32", "fuzzing"] }
+move-core-types = { path = "../../external-crates/move/move-core/types", features = ["fuzzing"] }
 move-coverage = { path = "../../external-crates/move/tools/move-coverage" }
 move-disassembler = { path = "../../external-crates/move/tools/move-disassembler" }
 move-docgen = { path = "../../external-crates/move/move-prover/move-docgen", default-features = false }
@@ -1210,7 +1210,7 @@ move-read-write-set-types = { path = "../../external-crates/move/tools/read-writ
 move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
-move-stdlib = { path = "../../external-crates/move/move-stdlib", default-features = false, features = ["testing"] }
+move-stdlib = { path = "../../external-crates/move/move-stdlib", features = ["testing"] }
 move-stdlib-v0 = { path = "../../external-crates/move-execution/v0/move-stdlib", default-features = false }
 move-stdlib-vm-rework = { path = "../../external-crates/move-execution/vm-rework/move-stdlib", default-features = false }
 move-symbol-pool = { path = "../../external-crates/move/move-symbol-pool" }

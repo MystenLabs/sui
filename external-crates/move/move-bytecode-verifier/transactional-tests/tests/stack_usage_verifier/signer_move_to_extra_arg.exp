@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 0 'publish'. lines 1-13:
-Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::M'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
     location: 0x42::M,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000042::M'. Got VMErr
 }
 
 task 1 'publish'. lines 15-24:
-Error: Unable to publish module '00000000000000000000000000000042::N'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::N'. Got VMError: {
     major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
     sub_status: None,
     location: 0x42::N,
