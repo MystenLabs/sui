@@ -4,8 +4,8 @@
 
 use crate::{
     file_format::{
-        AbilitySet, FieldDefinition, IdentifierIndex, ModuleHandleIndex, SignatureToken,
-        StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex,
+        AbilitySet, DeclaredTypeHandle, DeclaredTypeHandleIndex, FieldDefinition, IdentifierIndex,
+        ModuleHandleIndex, SignatureToken, StructDefinition, StructFieldInformation,
         StructTypeParameter, TableIndex, TypeSignature,
     },
     internals::ModuleIndex,
@@ -30,7 +30,7 @@ struct TypeSignatureIndex(u16);
 pub struct StDefnMaterializeState {
     pub self_module_handle_idx: ModuleHandleIndex,
     pub identifiers_len: usize,
-    pub struct_handles: Vec<StructHandle>,
+    pub declared_type_handles: Vec<DeclaredTypeHandle>,
     pub new_handles: BTreeSet<(ModuleHandleIndex, IdentifierIndex)>,
 }
 
@@ -38,20 +38,22 @@ impl StDefnMaterializeState {
     pub fn new(
         self_module_handle_idx: ModuleHandleIndex,
         identifiers_len: usize,
-        struct_handles: Vec<StructHandle>,
+        struct_handles: Vec<DeclaredTypeHandle>,
     ) -> Self {
         Self {
             self_module_handle_idx,
             identifiers_len,
-            struct_handles,
+            declared_type_handles: struct_handles,
             new_handles: BTreeSet::new(),
         }
     }
 
-    fn add_struct_handle(&mut self, handle: StructHandle) -> Option<StructHandleIndex> {
+    fn add_struct_handle(&mut self, handle: DeclaredTypeHandle) -> Option<DeclaredTypeHandleIndex> {
         if self.new_handles.insert((handle.module, handle.name)) {
-            self.struct_handles.push(handle);
-            Some(StructHandleIndex((self.struct_handles.len() - 1) as u16))
+            self.declared_type_handles.push(handle);
+            Some(DeclaredTypeHandleIndex(
+                (self.declared_type_handles.len() - 1) as u16,
+            ))
         } else {
             None
         }
@@ -70,12 +72,12 @@ impl StDefnMaterializeState {
                 let inner = self.potential_abilities(ty);
                 inner.intersect(AbilitySet::VECTOR)
             }
-            Struct(idx) => {
-                let sh = &self.struct_handles[idx.0 as usize];
+            DeclaredType(idx) => {
+                let sh = &self.declared_type_handles[idx.0 as usize];
                 sh.abilities
             }
-            StructInstantiation(idx, type_args) => {
-                let sh = &self.struct_handles[idx.0 as usize];
+            DeclaredTypeInstantiation(idx, type_args) => {
+                let sh = &self.declared_type_handles[idx.0 as usize];
 
                 // Gather the abilities of the type actuals.
                 let type_args_abilities = type_args.iter().map(|ty| self.potential_abilities(ty));
@@ -88,14 +90,14 @@ impl StDefnMaterializeState {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructHandleGen {
+pub struct DeclaredTypeHandleGen {
     module_idx: PropIndex,
     name_idx: PropIndex,
     abilities: AbilitySetGen,
     type_parameters: Vec<(AbilitySetGen, bool)>,
 }
 
-impl StructHandleGen {
+impl DeclaredTypeHandleGen {
     pub fn strategy(ability_count: impl Into<SizeRange>) -> impl Strategy<Value = Self> {
         let ability_count = ability_count.into();
         (
@@ -117,7 +119,7 @@ impl StructHandleGen {
         self_module_handle_idx: ModuleHandleIndex,
         module_len: usize,
         identifiers_len: usize,
-    ) -> StructHandle {
+    ) -> DeclaredTypeHandle {
         let idx = prop_index_avoid(
             self.module_idx,
             self_module_handle_idx.into_index(),
@@ -131,7 +133,7 @@ impl StructHandleGen {
                 is_phantom,
             })
             .collect();
-        StructHandle {
+        DeclaredTypeHandle {
             module: ModuleHandleIndex(idx as TableIndex),
             name: IdentifierIndex(self.name_idx.index(identifiers_len) as TableIndex),
             abilities: self.abilities.materialize(),
@@ -207,7 +209,7 @@ impl StructDefinitionGen {
                 is_phantom,
             })
             .collect();
-        let handle = StructHandle {
+        let handle = DeclaredTypeHandle {
             module: state.self_module_handle_idx,
             name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
             abilities,
@@ -259,7 +261,7 @@ impl FieldDefinitionGen {
     fn materialize(self, state: &StDefnMaterializeState) -> FieldDefinition {
         FieldDefinition {
             name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
-            signature: TypeSignature(self.signature_gen.materialize(&state.struct_handles)),
+            signature: TypeSignature(self.signature_gen.materialize(&state.declared_type_handles)),
         }
     }
 }

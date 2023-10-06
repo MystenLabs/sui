@@ -4,12 +4,12 @@
 
 use crate::{
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, ConstantPoolIndex, FieldHandle,
-        FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex, FunctionDefinition,
-        FunctionHandle, FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex,
-        IdentifierIndex, LocalIndex, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
-        StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
-        StructDefinitionIndex, StructHandle, TableIndex, Visibility,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, ConstantPoolIndex, DeclaredTypeHandle,
+        FieldHandle, FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex,
+        FunctionDefinition, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+        FunctionInstantiationIndex, IdentifierIndex, LocalIndex, ModuleHandleIndex, Signature,
+        SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
+        StructDefinition, StructDefinitionIndex, TableIndex, Visibility,
     },
     internals::ModuleIndex,
     proptest_types::{
@@ -131,7 +131,7 @@ pub struct FnHandleMaterializeState<'a> {
     self_module_handle_idx: ModuleHandleIndex,
     module_handles_len: usize,
     identifiers_len: usize,
-    struct_handles: &'a [StructHandle],
+    struct_handles: &'a [DeclaredTypeHandle],
     signatures: SignatureState,
     function_handles: HashSet<(ModuleHandleIndex, IdentifierIndex)>,
 }
@@ -141,7 +141,7 @@ impl<'a> FnHandleMaterializeState<'a> {
         self_module_handle_idx: ModuleHandleIndex,
         module_handles_len: usize,
         identifiers_len: usize,
-        struct_handles: &'a [StructHandle],
+        struct_handles: &'a [DeclaredTypeHandle],
         signatures: Vec<Signature>,
     ) -> Self {
         Self {
@@ -235,7 +235,7 @@ pub struct FnDefnMaterializeState<'a> {
     self_module_handle_idx: ModuleHandleIndex,
     identifiers_len: usize,
     constant_pool_len: usize,
-    struct_handles: &'a [StructHandle],
+    struct_handles: &'a [DeclaredTypeHandle],
     struct_defs: &'a [StructDefinition],
     signatures: SignatureState,
     function_handles: Vec<FunctionHandle>,
@@ -252,7 +252,7 @@ impl<'a> FnDefnMaterializeState<'a> {
         self_module_handle_idx: ModuleHandleIndex,
         identifiers_len: usize,
         constant_pool_len: usize,
-        struct_handles: &'a [StructHandle],
+        struct_handles: &'a [DeclaredTypeHandle],
         struct_defs: &'a [StructDefinition],
         signatures: Vec<Signature>,
         function_handles: Vec<FunctionHandle>,
@@ -476,6 +476,8 @@ impl CodeUnitGen {
         CodeUnit {
             locals: state.add_signature(locals_signature),
             code,
+            // TODO(tzakian)[enums] generate jump tables
+            jump_tables: vec![],
         }
     }
 }
@@ -894,10 +896,10 @@ impl BytecodeGen {
     fn check_signature_token(token: &SignatureToken) -> bool {
         use SignatureToken::*;
         match token {
-            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Struct(_)
+            U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | DeclaredType(_)
             | TypeParameter(_) => true,
             Vector(element_token) => BytecodeGen::check_signature_token(element_token),
-            StructInstantiation(_, type_arguments) => type_arguments
+            DeclaredTypeInstantiation(_, type_arguments) => type_arguments
                 .iter()
                 .all(BytecodeGen::check_signature_token),
             Reference(_) | MutableReference(_) => false,

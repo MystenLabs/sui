@@ -623,6 +623,8 @@ pub enum StatusCode {
     // or took too long to run based on metering policies
     PROGRAM_TOO_COMPLEX = 1130,
 
+    ENUM_TAG_MISMATCH = 1131,
+
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.
     // Invariant Violation Errors: 2000-2999
@@ -671,6 +673,7 @@ pub enum StatusCode {
     CODE_DESERIALIZATION_ERROR = 3024,
     INVALID_FLAG_BITS = 3025,
     TRAILING_BYTES = 3026,
+    UNKNOWN_ENUM_FLAG = 3027,
 
     // Errors that can arise at runtime
     // Runtime Errors: 4000-4999

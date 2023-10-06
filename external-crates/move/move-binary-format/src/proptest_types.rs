@@ -29,7 +29,7 @@ use functions::{
 use crate::proptest_types::{
     metadata::MetadataGen,
     signature::SignatureGen,
-    types::{StDefnMaterializeState, StructDefinitionGen, StructHandleGen},
+    types::{DeclaredTypeHandleGen, StDefnMaterializeState, StructDefinitionGen},
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -147,8 +147,8 @@ impl CompiledModuleStrategyGen {
         //
         // Struct generators
         //
-        let struct_handles_strat = vec(
-            StructHandleGen::strategy(self.struct_type_params.clone()),
+        let declared_type_handles_strat = vec(
+            DeclaredTypeHandleGen::strategy(self.struct_type_params.clone()),
             1..=self.size,
         );
         let struct_defs_strat = vec(
@@ -211,7 +211,7 @@ impl CompiledModuleStrategyGen {
                 metadata_strat,
             ),
             module_handles_strat,
-            (struct_handles_strat, struct_defs_strat),
+            (declared_type_handles_strat, struct_defs_strat),
             random_sigs_strat,
             (function_handles_strat, function_defs_strat),
             friends_strat,
@@ -221,7 +221,7 @@ impl CompiledModuleStrategyGen {
                     self_idx_gen,
                     (address_identifier_gens, identifier_gens, constant_pool_gen, metdata_gen),
                     module_handles_gen,
-                    (struct_handle_gens, struct_def_gens),
+                    (declared_type_handle_gens, struct_def_gens),
                     random_sigs_gens,
                     (function_handle_gens, function_def_gens),
                     friend_decl_gens,
@@ -273,17 +273,17 @@ impl CompiledModuleStrategyGen {
 
                     //
                     // struct handles
-                    let mut struct_handles = vec![];
+                    let mut declared_type_handles = vec![];
                     if module_handles_len > 1 {
-                        let mut struct_handles_set = BTreeSet::new();
-                        for struct_handle_gen in struct_handle_gens.into_iter() {
-                            let sh = struct_handle_gen.materialize(
+                        let mut declared_type_handles_set = BTreeSet::new();
+                        for declared_type_handle_gen in declared_type_handle_gens.into_iter() {
+                            let sh = declared_type_handle_gen.materialize(
                                 self_module_handle_idx,
                                 module_handles_len,
                                 identifiers_len,
                             );
-                            if struct_handles_set.insert((sh.module, sh.name)) {
-                                struct_handles.push(sh);
+                            if declared_type_handles_set.insert((sh.module, sh.name)) {
+                                declared_type_handles.push(sh);
                             }
                         }
                     }
@@ -294,7 +294,7 @@ impl CompiledModuleStrategyGen {
                     let mut state = StDefnMaterializeState::new(
                         self_module_handle_idx,
                         identifiers_len,
-                        struct_handles,
+                        declared_type_handles,
                     );
                     let mut struct_def_to_field_count: HashMap<usize, usize> = HashMap::new();
                     let mut struct_defs: Vec<StructDefinition> = vec![];
@@ -306,13 +306,16 @@ impl CompiledModuleStrategyGen {
                             }
                         }
                     }
-                    let StDefnMaterializeState { struct_handles, .. } = state;
+                    let StDefnMaterializeState {
+                        declared_type_handles,
+                        ..
+                    } = state;
 
                     //
                     // Create some random signatures.
                     let mut signatures: Vec<_> = random_sigs_gens
                         .into_iter()
-                        .map(|sig_gen| sig_gen.materialize(&struct_handles))
+                        .map(|sig_gen| sig_gen.materialize(&declared_type_handles))
                         .collect();
 
                     //
@@ -323,7 +326,7 @@ impl CompiledModuleStrategyGen {
                             self_module_handle_idx,
                             module_handles_len,
                             identifiers_len,
-                            &struct_handles,
+                            &declared_type_handles,
                             signatures,
                         );
                         for function_handle_gen in function_handle_gens {
@@ -344,7 +347,7 @@ impl CompiledModuleStrategyGen {
                         self_module_handle_idx,
                         identifiers_len,
                         constant_pool_len,
-                        &struct_handles,
+                        &declared_type_handles,
                         &struct_defs,
                         signatures,
                         function_handles,
@@ -370,7 +373,7 @@ impl CompiledModuleStrategyGen {
                         version: crate::file_format_common::VERSION_MAX,
                         module_handles,
                         self_module_handle_idx,
-                        struct_handles,
+                        declared_type_handles,
                         function_handles,
                         field_handles,
                         friend_decls,
@@ -388,6 +391,9 @@ impl CompiledModuleStrategyGen {
                         address_identifiers,
                         constant_pool,
                         metadata,
+                        // TODO(tzakian)[enums] Generate this!
+                        enum_defs: vec![],
+                        enum_def_instantiations: vec![],
                     }
                 },
             )

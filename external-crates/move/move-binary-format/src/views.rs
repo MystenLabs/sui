@@ -62,12 +62,12 @@ impl<'a, T: ModuleAccess> ModuleView<'a, T> {
             .map(move |module_handle| ModuleHandleView::new(module, module_handle))
     }
 
-    pub fn struct_handles(
+    pub fn declared_type_handles(
         &self,
     ) -> impl DoubleEndedIterator<Item = StructHandleView<'a, T>> + Send {
         let module = self.module;
         module
-            .struct_handles()
+            .declared_type_handles()
             .iter()
             .map(move |struct_handle| StructHandleView::new(module, struct_handle))
     }
@@ -201,18 +201,18 @@ impl<'a, T: ModuleAccess> ModuleHandleView<'a, T> {
 
 pub struct StructHandleView<'a, T> {
     module: &'a T,
-    struct_handle: &'a StructHandle,
+    struct_handle: &'a DeclaredTypeHandle,
 }
 
 impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
-    pub fn new(module: &'a T, struct_handle: &'a StructHandle) -> Self {
+    pub fn new(module: &'a T, struct_handle: &'a DeclaredTypeHandle) -> Self {
         Self {
             module,
             struct_handle,
         }
     }
 
-    pub fn handle(&self) -> &StructHandle {
+    pub fn handle(&self) -> &DeclaredTypeHandle {
         self.struct_handle
     }
 
@@ -237,10 +237,10 @@ impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
     }
 
     /// Return the StructHandleIndex of this handle in the module's struct handle table
-    pub fn handle_idx(&self) -> StructHandleIndex {
-        for (idx, handle) in self.module.struct_handles().iter().enumerate() {
+    pub fn handle_idx(&self) -> DeclaredTypeHandleIndex {
+        for (idx, handle) in self.module.declared_type_handles().iter().enumerate() {
             if handle == self.handle() {
-                return StructHandleIndex::new(idx as u16);
+                return DeclaredTypeHandleIndex::new(idx as u16);
             }
         }
         unreachable!("Cannot resolve StructHandle {:?} in module {:?}. This should never happen in a well-formed `StructHandleView`. Perhaps this handle came from a different module?", self.handle(), self.module().name())
@@ -337,7 +337,7 @@ pub struct StructDefinitionView<'a, T> {
 
 impl<'a, T: ModuleAccess> StructDefinitionView<'a, T> {
     pub fn new(module: &'a T, struct_def: &'a StructDefinition) -> Self {
-        let struct_handle = module.struct_handle_at(struct_def.struct_handle);
+        let struct_handle = module.declared_type_handle_at(struct_def.struct_handle);
         let struct_handle_view = StructHandleView::new(module, struct_handle);
         Self {
             module,
@@ -722,7 +722,7 @@ impl<'a, T: ModuleAccess> ViewInternals for ModuleView<'a, T> {
 }
 
 impl_view_internals!(ModuleHandleView, ModuleHandle, module_handle);
-impl_view_internals!(StructHandleView, StructHandle, struct_handle);
+impl_view_internals!(StructHandleView, DeclaredTypeHandle, struct_handle);
 impl_view_internals!(FunctionHandleView, FunctionHandle, function_handle);
 impl_view_internals!(StructDefinitionView, StructDefinition, struct_def);
 impl_view_internals!(FunctionDefinitionView, FunctionDefinition, function_def);

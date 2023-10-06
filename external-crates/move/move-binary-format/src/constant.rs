@@ -20,9 +20,9 @@ fn sig_to_ty(sig: &SignatureToken) -> Option<MoveTypeLayout> {
         SignatureToken::Vector(v) => Some(MoveTypeLayout::Vector(Box::new(sig_to_ty(v.as_ref())?))),
         SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_)
-        | SignatureToken::Struct(_)
+        | SignatureToken::DeclaredType(_)
         | SignatureToken::TypeParameter(_)
-        | SignatureToken::StructInstantiation(_, _) => None,
+        | SignatureToken::DeclaredTypeInstantiation(_, _) => None,
     }
 }
 

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::file_format::{
-    Ability, AbilitySet, Signature, SignatureToken, StructHandle, StructHandleIndex, TableIndex,
-    TypeParameterIndex,
+    Ability, AbilitySet, DeclaredTypeHandle, DeclaredTypeHandleIndex, Signature, SignatureToken,
+    TableIndex, TypeParameterIndex,
 };
 use proptest::{
     collection::{vec, SizeRange},
@@ -69,7 +69,7 @@ impl SignatureGen {
         vec(SignatureTokenGen::strategy(), sig_count).prop_map(|signatures| Self { signatures })
     }
 
-    pub fn materialize(self, struct_handles: &[StructHandle]) -> Signature {
+    pub fn materialize(self, struct_handles: &[DeclaredTypeHandle]) -> Signature {
         Signature(
             self.signatures
                 .into_iter()
@@ -157,7 +157,7 @@ impl SignatureTokenGen {
         Self::owned_strategy().prop_map(|atom| SignatureTokenGen::MutableReference(Box::new(atom)))
     }
 
-    pub fn materialize(self, struct_handles: &[StructHandle]) -> SignatureToken {
+    pub fn materialize(self, struct_handles: &[DeclaredTypeHandle]) -> SignatureToken {
         use SignatureTokenGen::*;
         match self {
             Bool => SignatureToken::Bool,
@@ -179,7 +179,9 @@ impl SignatureTokenGen {
                     let struct_idx = idx.index(struct_handles_len);
                     let sh = &struct_handles[struct_idx];
                     if sh.type_parameters.is_empty() {
-                        SignatureToken::Struct(StructHandleIndex(struct_idx as TableIndex))
+                        SignatureToken::DeclaredType(DeclaredTypeHandleIndex(
+                            struct_idx as TableIndex,
+                        ))
                     } else {
                         let mut type_params = vec![];
                         for type_param in &sh.type_parameters {
@@ -190,8 +192,8 @@ impl SignatureTokenGen {
                                 _ => type_params.push(SignatureToken::U64),
                             }
                         }
-                        SignatureToken::StructInstantiation(
-                            StructHandleIndex(struct_idx as TableIndex),
+                        SignatureToken::DeclaredTypeInstantiation(
+                            DeclaredTypeHandleIndex(struct_idx as TableIndex),
                             type_params,
                         )
                     }
