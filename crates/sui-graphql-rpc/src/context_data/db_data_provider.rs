@@ -576,6 +576,9 @@ impl PgManager {
         relation: Option<AddressTransactionBlockRelationship>,
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
         if let Some(r) = relation {
+            if filter.is_none() {
+                filter = Some(TransactionBlockFilter::default());
+            }
             // Override filter with relation
             // TODO: is this the desired behavior?
             filter = filter.map(|mut f| {

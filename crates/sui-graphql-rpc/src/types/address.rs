@@ -32,6 +32,8 @@ pub(crate) enum AddressTransactionBlockRelationship {
 #[allow(unused_variables)]
 #[Object]
 impl Address {
+    /// Similar behavior to the `transactionBlockConnection` in Query but
+    /// supports additional `AddressTransactionBlockRelationship` filter
     async fn transaction_block_connection(
         &self,
         ctx: &Context<'_>,

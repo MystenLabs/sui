@@ -124,7 +124,7 @@ impl TransactionBlockEffects {
     }
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum TransactionBlockKindInput {
     SystemTx = 0,
     ProgrammableTx = 1,
@@ -136,7 +136,7 @@ pub enum ExecutionStatus {
     Failure,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Debug, Default)]
 pub(crate) struct TransactionBlockFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
