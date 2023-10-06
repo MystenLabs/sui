@@ -34,6 +34,11 @@ use crate::{
     ty::{Type, TypeDisplayContext},
 };
 
+#[cfg(feature = "address32")]
+const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+#[cfg(not(feature = "address32"))]
+const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffff";
+
 // =================================================================================================
 /// # Declarations
 
@@ -1106,9 +1111,8 @@ impl ModuleName {
     /// Determine whether this is a script. The move-compiler infrastructure uses MAX_ADDR
     /// for pseudo modules created from scripts, so use this address to check.
     pub fn is_script(&self) -> bool {
-        static MAX_ADDR: Lazy<BigUint> = Lazy::new(|| {
-            BigUint::from_str_radix("ffffffffffffffffffffffffffffffff", 16).expect("valid hex")
-        });
+        static MAX_ADDR: Lazy<BigUint> =
+            Lazy::new(|| BigUint::from_str_radix(MAX_ADDR_STRING, 16).expect("valid hex"));
         self.0 == *MAX_ADDR
     }
 }
