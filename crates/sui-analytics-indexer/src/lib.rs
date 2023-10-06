@@ -77,6 +77,9 @@ pub struct AnalyticsIndexerConfig {
     /// Number of checkpoints to process before uploading to the datastore.
     #[clap(long, default_value = "10000", global = true)]
     pub checkpoint_interval: u64,
+    /// Checkpoint sequence number to start the download from
+    #[clap(long, default_value = None, global = true)]
+    pub starting_checkpoint_seq_num: Option<u64>,
     /// Time to process in seconds before uploading to the datastore.
     #[clap(long, default_value = "600", global = true)]
     pub time_interval_s: u64,
@@ -206,7 +209,7 @@ impl FileMetadata {
 }
 
 pub struct Processor {
-    pub handler: Box<dyn Handler>,
+    pub processor: Box<dyn Handler>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
 }
 
@@ -214,24 +217,38 @@ pub struct Processor {
 impl Handler for Processor {
     #[inline]
     fn name(&self) -> &str {
-        self.handler.name()
+        self.processor.name()
     }
 
     #[inline]
     async fn process_checkpoint(&mut self, checkpoint_data: &CheckpointData) -> Result<()> {
-        self.handler.process_checkpoint(checkpoint_data).await
+        self.processor.process_checkpoint(checkpoint_data).await
     }
 }
 
 impl Processor {
-    pub fn new(
-        handler: Box<dyn Handler>,
+    pub async fn new<S: Serialize + 'static>(
+        handler: Box<dyn AnalyticsHandler<S>>,
+        writer: Box<dyn AnalyticsWriter<S>>,
         starting_checkpoint_seq_num: CheckpointSequenceNumber,
-    ) -> Self {
-        Processor {
-            handler,
+        metrics: AnalyticsMetrics,
+        config: AnalyticsIndexerConfig,
+    ) -> Result<Self> {
+        let processor = Box::new(
+            AnalyticsProcessor::new(
+                handler,
+                writer,
+                starting_checkpoint_seq_num,
+                metrics,
+                config,
+            )
+            .await?,
+        );
+
+        Ok(Processor {
+            processor,
             starting_checkpoint_seq_num,
-        }
+        })
     }
 
     pub fn last_committed_checkpoint(&self) -> Option<u64> {
@@ -239,10 +256,10 @@ impl Processor {
     }
 }
 
-pub async fn read_store_for_epoch_and_checkpoint(
+pub async fn read_store_for_checkpoint(
     remote_store_config: ObjectStoreConfig,
     file_type: FileType,
-) -> Result<(EpochId, CheckpointSequenceNumber)> {
+) -> Result<CheckpointSequenceNumber> {
     let remote_object_store = remote_store_config.make()?;
     let remote_store_is_empty = remote_object_store
         .list_with_delimiter(None)
@@ -262,7 +279,7 @@ pub async fn read_store_for_epoch_and_checkpoint(
         .max_by(|x, y| x.end.cmp(&y.end))
         .map(|r| r.end)
         .unwrap_or(0);
-    Ok((epoch, next_checkpoint_seq_num))
+    Ok(next_checkpoint_seq_num)
 }
 
 pub async fn make_checkpoint_processor(
@@ -270,31 +287,21 @@ pub async fn make_checkpoint_processor(
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<CheckpointEntry>> = Box::new(CheckpointHandler::new());
-    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
-        config.remote_store_config.clone(),
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::Checkpoint).await?;
+    let writer = make_writer::<CheckpointEntry>(
+        config.clone(),
         FileType::Checkpoint,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<CheckpointEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
     )
-    .await?;
-    let writer: Box<dyn AnalyticsWriter<CheckpointEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::Checkpoint,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    .await
 }
 
 pub async fn make_transaction_processor(
@@ -302,31 +309,21 @@ pub async fn make_transaction_processor(
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<TransactionEntry>> = Box::new(TransactionHandler::new());
-    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
-        config.remote_store_config.clone(),
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::Transaction).await?;
+    let writer = make_writer::<TransactionEntry>(
+        config.clone(),
         FileType::Transaction,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<TransactionEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
     )
-    .await?;
-    let writer: Box<dyn AnalyticsWriter<TransactionEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::Transaction,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    .await
 }
 
 pub async fn make_object_processor(
@@ -334,29 +331,21 @@ pub async fn make_object_processor(
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new());
-    let (epoch, starting_checkpoint_seq_num) =
-        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::Object)
-            .await?;
-    let writer: Box<dyn AnalyticsWriter<ObjectEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::Object,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::Object).await?;
+    let writer = make_writer::<ObjectEntry>(
+        config.clone(),
+        FileType::Object,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<ObjectEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
 }
 
 pub async fn make_event_processor(
@@ -364,62 +353,40 @@ pub async fn make_event_processor(
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new());
-    let (epoch, starting_checkpoint_seq_num) =
-        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::Event)
-            .await?;
-    let writer: Box<dyn AnalyticsWriter<EventEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::Event,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::Event).await?;
+    let writer =
+        make_writer::<EventEntry>(config.clone(), FileType::Event, starting_checkpoint_seq_num)?;
+    Processor::new::<EventEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
 }
 
 pub async fn make_transaction_objects_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
-    let handler: Box<dyn AnalyticsHandler<TransactionObjectEntry>> =
-        Box::new(TransactionObjectsHandler::new());
-    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
-        config.remote_store_config.clone(),
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::TransactionObjects).await?;
+    let handler = Box::new(TransactionObjectsHandler::new());
+    let writer = make_writer(
+        config.clone(),
         FileType::TransactionObjects,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<TransactionObjectEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
     )
-    .await?;
-    let writer: Box<dyn AnalyticsWriter<TransactionObjectEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::TransactionObjects,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    .await
 }
 
 pub async fn make_move_package_processor(
@@ -427,61 +394,69 @@ pub async fn make_move_package_processor(
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<MovePackageEntry>> = Box::new(PackageHandler::new());
-    let (epoch, starting_checkpoint_seq_num) = read_store_for_epoch_and_checkpoint(
-        config.remote_store_config.clone(),
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::MovePackage).await?;
+    let writer = make_writer::<MovePackageEntry>(
+        config.clone(),
         FileType::MovePackage,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<MovePackageEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
     )
-    .await?;
-    let writer: Box<dyn AnalyticsWriter<MovePackageEntry>> = match config.file_format {
-        FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
-            epoch,
-            FileType::MovePackage,
-            starting_checkpoint_seq_num,
-        )?),
-    };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    .await
 }
 
 pub async fn make_move_call_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
+    let starting_checkpoint_seq_num =
+        get_starting_checkpoint_seq_num(config.clone(), FileType::MoveCall).await?;
     let handler: Box<dyn AnalyticsHandler<MoveCallEntry>> = Box::new(MoveCallHandler::new());
-    let (epoch, starting_checkpoint_seq_num) =
-        read_store_for_epoch_and_checkpoint(config.remote_store_config.clone(), FileType::MoveCall)
-            .await?;
-    let writer: Box<dyn AnalyticsWriter<MoveCallEntry>> = match config.file_format {
+    let writer = make_writer::<MoveCallEntry>(
+        config.clone(),
+        FileType::MoveCall,
+        starting_checkpoint_seq_num,
+    )?;
+    Processor::new::<MoveCallEntry>(
+        handler,
+        writer,
+        starting_checkpoint_seq_num,
+        metrics,
+        config,
+    )
+    .await
+}
+
+pub fn make_writer<S: Serialize>(
+    config: AnalyticsIndexerConfig,
+    file_type: FileType,
+    starting_checkpoint_seq_num: u64,
+) -> Result<Box<dyn AnalyticsWriter<S>>> {
+    Ok(match config.file_format {
         FileFormat::CSV => Box::new(CSVWriter::new(
             &config.checkpoint_dir,
-            epoch,
-            FileType::MoveCall,
+            file_type,
             starting_checkpoint_seq_num,
         )?),
+    })
+}
+
+pub async fn get_starting_checkpoint_seq_num(
+    config: AnalyticsIndexerConfig,
+    file_type: FileType,
+) -> Result<u64> {
+    let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
+        starting_checkpoint_seq_num
+    } else {
+        read_store_for_checkpoint(config.remote_store_config.clone(), file_type).await?
     };
-    let handler = Box::new(
-        AnalyticsProcessor::new(
-            handler,
-            writer,
-            epoch,
-            starting_checkpoint_seq_num,
-            metrics,
-            config,
-        )
-        .await?,
-    );
-    Ok(Processor::new(handler, starting_checkpoint_seq_num))
+    Ok(checkpoint)
 }
 
 pub async fn make_analytics_processor(
