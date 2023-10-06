@@ -321,11 +321,20 @@ mod tests {
         let service_config = ServiceConfig::default();
         let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
         let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+
+        let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+        let pg_conn_pool = PgManager::new(db_url, None)
+            .map_err(|e| {
+                println!("Failed to create pg connection pool: {}", e);
+                e
+            })
+            .unwrap();
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)
             .context_data(service_config)
             .context_data(data_provider)
+            .context_data(pg_conn_pool)
             .context_data(metrics)
             .extension(QueryLimitsChecker::default())
             .build_schema();
