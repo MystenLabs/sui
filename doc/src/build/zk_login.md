@@ -295,7 +295,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 ### Running your own proving service
 
-1. Download two images from from Docker Hub repository, tagged with [prover](todo) and [prover-fe](todo). 
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
 
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated.
 
