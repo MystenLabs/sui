@@ -533,6 +533,12 @@ module sui_system::sui_system {
         sui_system_state_inner::active_validator_addresses(self)
     }
 
+    /// Returns a boolean value indicating if the StakingPool is in-active or not, the epoch number the StakingPool was de-activated at if it is inactive.
+    public fun get_deactivation_epoch_for_validator(wrapper: &mut SuiSystemState, pool_id: &ID): (bool, u64) {
+        let self = load_system_state_mut(wrapper);
+        sui_system_state_inner::get_deactivation_epoch_for_validator(self, pool_id)
+    }
+
     #[allow(unused_function)]
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:

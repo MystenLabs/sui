@@ -574,6 +574,21 @@ module sui_system::validator_set {
         staking_pool::exchange_rates(validator::get_staking_pool_ref(validator))
     }
 
+    public(friend) fun get_deactivation_epoch_for_validator(
+        self: &mut ValidatorSet, pool_id: &ID
+    ) :  (bool, u64) {
+        let validator =
+            // If the pool id is recorded in the mapping, then it must be either candidate or active.
+            if (table::contains(&self.staking_pool_mappings, *pool_id)) {
+                let validator_address = *table::borrow(&self.staking_pool_mappings, *pool_id);
+                get_active_or_pending_or_candidate_validator_ref(self, validator_address, ANY_VALIDATOR)
+            } else { // otherwise it's inactive
+                let wrapper = table::borrow_mut(&mut self.inactive_validators, *pool_id);
+                validator_wrapper::load_validator_maybe_upgrade(wrapper)
+            };
+        staking_pool::get_deactivation_epoch(validator::get_staking_pool_ref(validator))
+    }
+
     /// Get the total number of validators in the next epoch.
     public(friend) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
         vector::length(&self.active_validators) - vector::length(&self.pending_removals) + table_vec::length(&self.pending_active_validators)
