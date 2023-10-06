@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::rc::Rc;
+
 use super::{
     big_int::BigInt, date_time::DateTime, epoch::Epoch, object::Object, sui_address::SuiAddress,
 };
@@ -103,7 +105,7 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => todo!(),
+            _ => unimplemented!(),
         }
     }
 }
@@ -112,16 +114,16 @@ impl From<GenesisObject> for Object {
     fn from(value: GenesisObject) -> Self {
         match value {
             GenesisObject::RawObject { data, owner } => Self {
-                address: todo!(),
-                version: todo!(),
-                digest: todo!(),
-                storage_rebate: todo!(),
                 owner: Some(
                     SuiAddress::from_bytes(owner.get_owner_address().unwrap().to_vec()).unwrap(),
                 ),
-                bcs: todo!(),
-                previous_transaction: todo!(),
-                kind: todo!(),
+                storage_rebate: None,
+                bcs: None,
+                previous_transaction: None,
+                kind: None,
+                address: SuiAddress::from_bytes(data.id().into_bytes()).unwrap(),
+                version: unimplemented!(),
+                digest: unimplemented!(),
             },
         }
     }
