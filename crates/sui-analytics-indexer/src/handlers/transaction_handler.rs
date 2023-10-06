@@ -5,12 +5,13 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use tracing::error;
 
 use sui_indexer::framework::Handler;
 use sui_rest_api::{CheckpointData, CheckpointTransaction};
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
@@ -75,8 +76,8 @@ impl TransactionHandler {
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
         let gas_summary = effects.gas_cost_summary();
-        let move_calls = txn_data.move_calls();
-        let packages: BTreeSet<_> = move_calls
+        let move_calls_vec = txn_data.move_calls();
+        let packages: BTreeSet<_> = move_calls_vec
             .iter()
             .map(|(package, _, _)| package.to_canonical_string())
             .collect();
@@ -84,8 +85,41 @@ impl TransactionHandler {
             .iter()
             .map(|s| s.as_str())
             .collect::<Vec<_>>()
-            .join(",");
+            .join("-");
         let transaction_digest = transaction.digest().base58_encode();
+
+        let mut transfers: u64 = 0;
+        let mut split_coins: u64 = 0;
+        let mut merge_coins: u64 = 0;
+        let mut publish: u64 = 0;
+        let mut upgrade: u64 = 0;
+        let mut others: u64 = 0;
+        let mut move_calls_count = 0;
+        let move_calls = move_calls_vec.len() as u64;
+
+        let is_sponsored_tx = txn_data.is_sponsored_tx();
+        let is_system_txn = txn_data.is_system_tx();
+        if !is_system_txn {
+            let kind = txn_data.kind();
+            if let TransactionKind::ProgrammableTransaction(pt) = txn_data.kind() {
+                for cmd in &pt.commands {
+                    match cmd {
+                        Command::MoveCall(_) => move_calls_count += 1,
+                        Command::TransferObjects(_, _) => transfers += 1,
+                        Command::SplitCoins(_, _) => split_coins += 1,
+                        Command::MergeCoins(_, _) => merge_coins += 1,
+                        Command::Publish(_, _) => publish += 1,
+                        Command::Upgrade(_, _, _, _) => upgrade += 1,
+                        _ => others += 1,
+                    }
+                }
+            } else {
+                error!("Transaction kind [{kind}] is not programmable transaction and not a system transaction");
+            }
+            if move_calls_count != move_calls {
+                error!("Mismatch in move calls count: commands {move_calls_count} != {move_calls} calls");
+            }
+        }
 
         let entry = TransactionEntry {
             transaction_digest,
@@ -95,6 +129,8 @@ impl TransactionHandler {
 
             sender: txn_data.sender().to_string(),
             transaction_kind: txn_data.kind().name().to_owned(),
+            is_system_txn,
+            is_sponsored_tx,
             transaction_count: txn_data.kind().num_commands() as u64,
             execution_success: effects.status().is_ok(),
             input: txn_data
@@ -108,8 +144,15 @@ impl TransactionHandler {
             deleted: (effects.deleted().len()
                 + effects.unwrapped_then_deleted().len()
                 + effects.wrapped().len()) as u64,
-            move_calls: move_calls.len() as u64,
+            transfers,
+            split_coins,
+            merge_coins,
+            publish,
+            upgrade,
+            others,
+            move_calls,
             packages,
+            gas_owner: txn_data.gas_owner().to_string(),
             gas_object_id: gas_object.0 .0.to_string(),
             gas_object_sequence: gas_object.0 .1.value(),
             gas_object_digest: gas_object.0 .2.to_string(),

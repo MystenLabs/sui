@@ -24,4 +24,4 @@ move-vm-runtime = { path = "../../../external-crates/move-execution/v0/move-vm/r
 
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+workspace-hack.workspace = true

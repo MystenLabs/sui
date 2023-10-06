@@ -12,7 +12,7 @@ import {
 	SuiObjectResponse,
 	type DynamicFieldInfo,
 } from '@mysten/sui.js/client';
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { bcs } from './bcs';
@@ -36,8 +36,8 @@ const DEFAULT_QUERY_LIMIT = 50;
  */
 export function objArg(
 	txb: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionArgument,
-): TransactionArgument {
+	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
+): TransactionObjectArgument {
 	if (typeof arg === 'string') {
 		return txb.object(arg);
 	}

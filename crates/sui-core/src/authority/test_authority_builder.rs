@@ -47,6 +47,7 @@ pub struct TestAuthorityBuilder<'a> {
     genesis: Option<&'a Genesis>,
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
+    disable_indexer: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -116,6 +117,11 @@ impl<'a> TestAuthorityBuilder<'a> {
             &config.genesis,
             config.validator_configs()[0].protocol_key_pair(),
         )
+    }
+
+    pub fn disable_indexer(mut self) -> Self {
+        self.disable_indexer = true;
+        self
     }
 
     pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
@@ -195,13 +201,17 @@ impl<'a> TestAuthorityBuilder<'a> {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(
-            path.join("indexes"),
-            &registry,
-            epoch_store
-                .protocol_config()
-                .max_move_identifier_len_as_option(),
-        )));
+        let index_store = if self.disable_indexer {
+            None
+        } else {
+            Some(Arc::new(IndexStore::new(
+                path.join("indexes"),
+                &registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
+            )))
+        };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let state = AuthorityState::new(

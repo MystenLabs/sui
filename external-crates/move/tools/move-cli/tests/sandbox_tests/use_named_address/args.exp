@@ -8,5 +8,5 @@ error[E02001]: duplicate declaration, item, or annotation
   ┌─ ./sources/M.move:1:11
   │
 1 │ module A::M {
-  │           - Module previously defined here, with '(A=0x42)::M'
+  │           - Module previously defined here, with 'A::M'
 

@@ -20,7 +20,7 @@ export function isExecuteTransactionRequest(
 
 export type SuiSignTransactionSerialized = Omit<
 	SuiSignTransactionBlockInput,
-	'transaction' | 'account'
+	'transactionBlock' | 'account'
 > & {
 	transaction: string;
 	account: string;

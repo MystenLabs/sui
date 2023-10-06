@@ -5,5 +5,5 @@ error[E01002]: unexpected token
   │                                             ^^^
   │                                             │
   │                                             Unexpected 'has'
-  │                                             Expected one of: ',', '{', or ';'
+  │                                             Expected one of: ',', '{', '(', or ';'
 

@@ -9,14 +9,14 @@ module A::M {
 }
 
 module A::Ex0 {
-    friend 0x42::M;
+    friend 0x41::M;
 }
 
 module A::Ex1 {
-    use 0x42::M;
-    public fun ex(): 0x42::M::S {
-        0x42::M::C;
-        0x42::M::s()
+    use 0x41::M;
+    public fun ex(): 0x41::M::S {
+        0x41::M::C;
+        0x41::M::s()
     }
 
     public fun ex2(): M::S {

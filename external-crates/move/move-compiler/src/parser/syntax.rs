@@ -656,11 +656,15 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
 //      Bind =
 //          <Var>
 //          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindField> "}"
+//          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> ")"
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     if context.tokens.peek() == Tok::Identifier {
         let next_tok = context.tokens.lookahead()?;
-        if next_tok != Tok::LBrace && next_tok != Tok::Less && next_tok != Tok::ColonColon {
+        if !matches!(
+            next_tok,
+            Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
+        ) {
             let v = Bind_::Var(parse_var(context)?);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
@@ -671,13 +675,31 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     // it is possible that the user intention was to use a variable name.
     let ty = parse_name_access_chain(context, || "a variable or struct name")?;
     let ty_args = parse_optional_type_args(context)?;
-    let args = parse_comma_list(
-        context,
-        Tok::LBrace,
-        Tok::RBrace,
-        parse_bind_field,
-        "a field binding",
-    )?;
+    let args = if context.tokens.peek() == Tok::LParen {
+        let current_loc = current_token_loc(context.tokens);
+        context.env.check_feature(
+            FeatureGate::PositionalFields,
+            context.package_name,
+            current_loc,
+        );
+        let args = parse_comma_list(
+            context,
+            Tok::LParen,
+            Tok::RParen,
+            parse_bind,
+            "a field binding",
+        )?;
+        FieldBindings::Positional(args)
+    } else {
+        let args = parse_comma_list(
+            context,
+            Tok::LBrace,
+            Tok::RBrace,
+            parse_bind_field,
+            "a field binding",
+        )?;
+        FieldBindings::Named(args)
+    };
     let end_loc = context.tokens.previous_end_loc();
     let unpack = Bind_::Unpack(Box::new(ty), ty_args, args);
     Ok(spanned(
@@ -1482,6 +1504,7 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 // Parse an expression term optionally followed by a chain of dot or index accesses:
 //      DotOrIndexChain =
 //          <DotOrIndexChain> "." <Identifier>
+//          | <DotOrIndexChain> "." <Number>
 //          | <DotOrIndexChain> "[" <Exp> "]"                      spec only
 //          | <DotOrIndexChain> <OptionalTypeArgs> "(" Comma<Exp> ")"
 //          | <Term>
@@ -1492,19 +1515,64 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
         let exp = match context.tokens.peek() {
             Tok::Period => {
                 context.tokens.advance()?;
-                let n = parse_identifier(context)?;
-                if is_start_of_call_after_function_name(context, &n) {
-                    let call_start = context.tokens.start_loc();
-                    let mut tys = None;
-                    if context.tokens.peek() == Tok::Less && n.loc.end() as usize == call_start {
-                        let loc = make_loc(context.tokens.file_hash(), call_start, call_start);
-                        tys = parse_optional_type_args(context)
-                            .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
+                let loc = current_token_loc(context.tokens);
+                match context.tokens.peek() {
+                    Tok::NumValue | Tok::NumTypedValue
+                        if context.env.check_feature(
+                            FeatureGate::PositionalFields,
+                            context.package_name,
+                            loc,
+                        ) =>
+                    {
+                        let contents = context.tokens.content();
+                        context.tokens.advance()?;
+                        match parse_u8(contents) {
+                            Ok((parsed, NumberFormat::Decimal)) => {
+                                let field_access = Name::new(loc, format!("{parsed}").into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                            Ok((_, NumberFormat::Hex)) => {
+                                let msg = "Invalid field access. Expected a decimal number but was given a hexadecimal";
+                                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                                diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
+                                context.env.add_diag(diag);
+                                // Continue on with the parsing
+                                let field_access = Name::new(loc, contents.into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                            Err(_) => {
+                                let msg = format!(
+                                    "Invalid field access. Expected a number less than or equal to {}",
+                                    u8::MAX
+                                );
+                                let mut diag = diag!(Syntax::UnexpectedToken, (loc, msg));
+                                diag.add_note("Positional fields must be a decimal number in the range [0 .. 255] and not be typed, e.g. `0`");
+                                context.env.add_diag(diag);
+                                // Continue on with the parsing
+                                let field_access = Name::new(loc, contents.into());
+                                Exp_::Dot(Box::new(lhs), field_access)
+                            }
+                        }
                     }
-                    let args = parse_call_args(context)?;
-                    Exp_::DotCall(Box::new(lhs), n, tys, args)
-                } else {
-                    Exp_::Dot(Box::new(lhs), n)
+                    _ => {
+                        let n = parse_identifier(context)?;
+                        if is_start_of_call_after_function_name(context, &n) {
+                            let call_start = context.tokens.start_loc();
+                            let mut tys = None;
+                            if context.tokens.peek() == Tok::Less
+                                && n.loc.end() as usize == call_start
+                            {
+                                let loc =
+                                    make_loc(context.tokens.file_hash(), call_start, call_start);
+                                tys = parse_optional_type_args(context)
+                                    .map_err(|diag| add_type_args_ambiguity_label(loc, diag))?;
+                            }
+                            let args = parse_call_args(context)?;
+                            Exp_::DotCall(Box::new(lhs), n, tys, args)
+                        } else {
+                            Exp_::Dot(Box::new(lhs), n)
+                        }
+                    }
                 }
             }
             Tok::LBracket => {
@@ -2035,7 +2103,7 @@ fn parse_parameter(context: &mut Context) -> Result<(Var, Type), Box<Diagnostic>
 // Parse a struct definition:
 //      StructDecl =
 //          "struct" <StructDefName> ("has" <Ability> (, <Ability>)+)?
-//          ("{" Comma<FieldAnnot> "}" ("has" <Ability> (, <Ability>)+;)? | ";")
+//          (("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")") ("has" <Ability> (, <Ability>)+;)? | ";")
 //      StructDefName =
 //          <Identifier> <OptionalTypeParameters>
 // Where the the two "has" statements are mutually exclusive -- a struct cannot be declared with
@@ -2085,13 +2153,14 @@ fn parse_struct_decl(
                     context.tokens.advance()?;
                     Ok(true)
                 }
-                Tok::LBrace | Tok::Semicolon => Ok(false),
+                Tok::LBrace | Tok::Semicolon | Tok::LParen => Ok(false),
                 _ => Err(unexpected_token_error(
                     context.tokens,
                     &format!(
-                        "one of: '{}', '{}', or '{}'",
+                        "one of: '{}', '{}', '{}', or '{}'",
                         Tok::Comma,
                         Tok::LBrace,
+                        Tok::LParen,
                         Tok::Semicolon
                     ),
                 )),
@@ -2108,19 +2177,13 @@ fn parse_struct_decl(
             StructFields::Native(loc)
         }
         _ => {
-            let list = parse_comma_list(
-                context,
-                Tok::LBrace,
-                Tok::RBrace,
-                parse_field_annot,
-                "a field",
-            )?;
+            let fields = parse_struct_fields(context)?;
             parse_postfix_ability_declarations(
                 infix_ability_declaration_loc,
                 &mut abilities,
                 context,
             )?;
-            StructFields::Defined(list)
+            fields
         }
     };
 
@@ -2147,6 +2210,13 @@ fn parse_field_annot(context: &mut Context) -> Result<(Field, Type), Box<Diagnos
     consume_token(context.tokens, Tok::Colon)?;
     let st = parse_type(context)?;
     Ok((f, st))
+}
+
+// Parse a positional struct field:
+//      PosField = <DocComments> <Type>
+fn parse_positional_field(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
+    context.tokens.match_doc_comments();
+    parse_type(context)
 }
 
 // Parse a postfix ability declaration:
@@ -2204,6 +2274,35 @@ fn parse_postfix_ability_declarations(
         consume_token(context.tokens, Tok::Semicolon)?;
     }
     Ok(())
+}
+
+fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagnostic>> {
+    let positional_declaration = context.tokens.peek() == Tok::LParen;
+    if positional_declaration {
+        let current_package = context.package_name;
+        let loc = current_token_loc(context.tokens);
+        context
+            .env
+            .check_feature(FeatureGate::PositionalFields, current_package, loc);
+
+        let list = parse_comma_list(
+            context,
+            Tok::LParen,
+            Tok::RParen,
+            parse_positional_field,
+            "a type",
+        )?;
+        Ok(StructFields::Positional(list))
+    } else {
+        let fields = parse_comma_list(
+            context,
+            Tok::LBrace,
+            Tok::RBrace,
+            parse_field_annot,
+            "a field",
+        )?;
+        Ok(StructFields::Defined(fields))
+    }
 }
 
 fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {

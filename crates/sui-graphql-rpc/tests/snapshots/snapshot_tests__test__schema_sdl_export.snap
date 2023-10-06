@@ -3,9 +3,13 @@ source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
 type Address implements ObjectOwner {
+	"""
+	Similar behavior to the `transactionBlockConnection` in Query but
+	supports additional `AddressTransactionBlockRelationship` filter
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -63,6 +67,7 @@ scalar BigInt
 type Checkpoint {
 	digest: String!
 	sequenceNumber: Int!
+	timestamp: DateTime
 	validatorSignature: Base64
 	previousCheckpointDigest: String
 	liveObjectSetDigest: String
@@ -70,6 +75,7 @@ type Checkpoint {
 	rollingGasSummary: GasCostSummary
 	endOfEpoch: EndOfEpochData
 	epoch: Epoch
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type CheckpointConnection {
@@ -263,7 +269,7 @@ type Object implements ObjectOwner {
 	kind: ObjectKind
 	owner: Owner
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -337,7 +343,7 @@ type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance!
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
@@ -399,10 +405,12 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
-	transactionBlock(digest: String!): TransactionBlock
 	epoch(id: Int): Epoch
 	checkpoint(id: CheckpointId): Checkpoint
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	transactionBlock(digest: String!): TransactionBlock
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
@@ -541,18 +549,21 @@ input TransactionBlockFilter {
 	module: String
 	function: String
 	kind: TransactionBlockKindInput
-	checkpoint: Int
+	afterCheckpoint: Int
+	atCheckpoint: Int
+	beforeCheckpoint: Int
 	signAddress: SuiAddress
 	sentAddress: SuiAddress
 	recvAddress: SuiAddress
 	paidAddress: SuiAddress
 	inputObject: SuiAddress
 	changedObject: SuiAddress
+	transactionIds: [String!]
 }
 
 enum TransactionBlockKindInput {
-	PROGRAMMABLE_TX
 	SYSTEM_TX
+	PROGRAMMABLE_TX
 }
 
 type Validator {

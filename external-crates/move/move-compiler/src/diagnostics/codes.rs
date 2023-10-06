@@ -220,6 +220,7 @@ codes!(
         UnboundField: { msg: "unbound field", severity: BlockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
+        PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

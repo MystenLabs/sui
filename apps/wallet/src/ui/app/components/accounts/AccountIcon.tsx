@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { isZkLoginAccountSerializedUI } from '_src/background/accounts/zklogin/ZkLoginAccount';
 import {
 	LedgerLogo17,
 	LogoGoogle,
@@ -34,7 +34,7 @@ function ProviderIcon({ provider }: { provider: string }) {
 }
 
 export function AccountIcon({ account }: { account: SerializedUIAccount }) {
-	if (isZkAccountSerializedUI(account)) {
+	if (isZkLoginAccountSerializedUI(account)) {
 		return <ProviderIcon provider={account.provider} />;
 	}
 	if (account.type === 'qredo') {

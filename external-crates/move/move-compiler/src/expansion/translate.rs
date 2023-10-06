@@ -12,12 +12,14 @@ use crate::{
         byte_string, hex_string,
     },
     parser::ast::{
-        self as P, Ability, ConstantName, Field, FunctionName, ModuleName, StructName, Var,
+        self as P, Ability, ConstantName, Field, FieldBindings, FunctionName, ModuleName,
+        StructName, Var,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
+use move_core_types::account_address::AccountAddress;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use std::{
@@ -36,6 +38,7 @@ type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 struct Context<'env, 'map> {
     module_members: UniqueMap<ModuleIdent, ModuleMembers>,
     named_address_mapping: Option<&'map NamedAddressMap>,
+    address_conflicts: BTreeSet<Symbol>,
     address: Option<Address>,
     aliases: AliasMap,
     is_source_definition: bool,
@@ -52,6 +55,7 @@ impl<'env, 'map> Context<'env, 'map> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
+        address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
         let mut all_filter_alls = WarningFilters::new_for_dependency();
         for allow in compilation_env.filter_attributes() {
@@ -63,6 +67,7 @@ impl<'env, 'map> Context<'env, 'map> {
             module_members,
             env: compilation_env,
             named_address_mapping: None,
+            address_conflicts,
             address: None,
             aliases: AliasMap::new(),
             is_source_definition: false,
@@ -122,6 +127,40 @@ impl<'env, 'map> Context<'env, 'map> {
     }
 }
 
+/// We mark named addresses as having a conflict if there is not a bidirectional mapping between
+/// the name and its value
+fn compute_address_conflicts(
+    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    prog: &P::Program,
+) -> BTreeSet<Symbol> {
+    let mut name_to_addr: BTreeMap<Symbol, BTreeSet<AccountAddress>> = BTreeMap::new();
+    let mut addr_to_name: BTreeMap<AccountAddress, BTreeSet<Symbol>> = BTreeMap::new();
+    let all_addrs = prog.named_address_maps.all().iter().chain(
+        pre_compiled_lib
+            .iter()
+            .flat_map(|pre| pre.parser.named_address_maps.all()),
+    );
+    for map in all_addrs {
+        for (n, addr) in map {
+            let n = *n;
+            let addr = addr.into_inner();
+            name_to_addr.entry(n).or_default().insert(addr);
+            addr_to_name.entry(addr).or_default().insert(n);
+        }
+    }
+    let name_to_addr_conflicts = name_to_addr
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .map(|(n, _)| n);
+    let addr_to_name_conflicts = addr_to_name
+        .into_iter()
+        .filter(|(_, addrs)| addrs.len() > 1)
+        .flat_map(|(_, ns)| ns.into_iter());
+    name_to_addr_conflicts
+        .chain(addr_to_name_conflicts)
+        .collect()
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -131,10 +170,12 @@ pub fn program(
     pre_compiled_lib: Option<&FullyCompiledProgram>,
     prog: P::Program,
 ) -> E::Program {
+    let address_conflicts = compute_address_conflicts(pre_compiled_lib, &prog);
     let module_members = {
         let mut members = UniqueMap::new();
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -142,6 +183,7 @@ pub fn program(
         );
         all_module_members(
             compilation_env,
+            &address_conflicts,
             &prog.named_address_maps,
             &mut members,
             true,
@@ -151,6 +193,7 @@ pub fn program(
             assert!(pre_compiled.parser.lib_definitions.is_empty());
             all_module_members(
                 compilation_env,
+                &address_conflicts,
                 &pre_compiled.parser.named_address_maps,
                 &mut members,
                 false,
@@ -160,7 +203,7 @@ pub fn program(
         members
     };
 
-    let mut context = Context::new(compilation_env, module_members);
+    let mut context = Context::new(compilation_env, module_members, address_conflicts);
 
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
@@ -296,6 +339,7 @@ fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) ->
 fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameAccess) -> Address {
     address_(
         context.env,
+        &context.address_conflicts,
         context.named_address_mapping.as_ref().unwrap(),
         suggest_declaration,
         ln,
@@ -304,6 +348,7 @@ fn address(context: &mut Context, suggest_declaration: bool, ln: P::LeadingNameA
 
 fn address_(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_address_mapping: &NamedAddressMap,
     suggest_declaration: bool,
     ln: P::LeadingNameAccess,
@@ -312,11 +357,15 @@ fn address_(
     let sp!(loc, ln_) = ln;
     match ln_ {
         P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res.is_ok()); //
-            Address::Numerical(None, sp(loc, bytes))
+            debug_assert!(name_res.is_ok());
+            Address::anonymous(loc, bytes)
         }
         P::LeadingNameAccess_::Name(n) => match named_address_mapping.get(&n.value).copied() {
-            Some(addr) => Address::Numerical(Some(n), sp(loc, addr)),
+            Some(addr) => Address::Numerical {
+                name: Some(n),
+                value: sp(loc, addr),
+                name_conflict: address_conflicts.contains(&n.value),
+            },
             None => {
                 if name_res.is_ok() {
                     compilation_env.add_diag(address_without_value_error(
@@ -416,7 +465,7 @@ fn set_sender_address(
             context
                 .env
                 .add_diag(diag!(Declarations::InvalidModule, (loc, msg)));
-            Address::Numerical(None, sp(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
+            Address::anonymous(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS)
         }
     })
 }
@@ -801,7 +850,7 @@ fn attribute_value(
         match avalue_ {
             PV::Value(v) => EV::Value(value(context, v)?),
             PV::ModuleAccess(sp!(ident_loc, PN::Two(sp!(aloc, LN::AnonymousAddress(a)), n))) => {
-                let addr = Address::Numerical(None, sp(aloc, a));
+                let addr = Address::anonymous(aloc, a);
                 let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n)));
                 if context.module_members.get(&mident).is_none() {
                     context.env.add_diag(diag!(
@@ -940,6 +989,7 @@ fn warning_filter(
 
 fn all_module_members<'a>(
     compilation_env: &mut CompilationEnv,
+    address_conflicts: &BTreeSet<Symbol>,
     named_addr_maps: &NamedAddressMaps,
     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
     always_add: bool,
@@ -958,21 +1008,21 @@ fn all_module_members<'a>(
                     Some(a) => {
                         address_(
                             compilation_env,
+                            address_conflicts,
                             named_addr_map,
                             /* suggest_declaration */ true,
                             *a,
                         )
                     }
                     // Error will be handled when the module is compiled
-                    None => {
-                        Address::Numerical(None, sp(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS))
-                    }
+                    None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
                 };
                 module_members(members, always_add, addr, m)
             }
             P::Definition::Address(addr_def) => {
                 let addr = address_(
                     compilation_env,
+                    address_conflicts,
                     named_addr_map,
                     /* suggest_declaration */ false,
                     addr_def.addr,
@@ -1412,6 +1462,10 @@ fn struct_fields(
 ) -> E::StructFields {
     let pfields_vec = match pfields {
         P::StructFields::Native(loc) => return E::StructFields::Native(loc),
+        P::StructFields::Positional(tys) => {
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
+            return E::StructFields::Positional(field_tys);
+        }
         P::StructFields::Defined(v) => v,
     };
     let mut field_map = UniqueMap::new();
@@ -1431,7 +1485,7 @@ fn struct_fields(
             ));
         }
     }
-    E::StructFields::Defined(field_map)
+    E::StructFields::Named(field_map)
 }
 
 //**************************************************************************************************
@@ -2229,7 +2283,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 .into_iter()
                 .map(|(f, pe)| (f, exp_(context, pe)))
                 .collect();
-            let efields = fields(context, loc, "construction", "argument", efields_vec);
+            let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             match en_opt {
                 Some(en) => EE::Pack(en, tys_opt, efields),
                 None => {
@@ -2513,7 +2567,7 @@ fn num_too_big_error(loc: Loc, type_description: &'static str) -> Diagnostic {
 // Fields
 //**************************************************************************************************
 
-fn fields<T>(
+fn named_fields<T>(
     context: &mut Context,
     loc: Loc,
     case: &str,
@@ -2572,11 +2626,24 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         PB::Unpack(ptn, ptys_opt, pfields) => {
             let tn = name_access_chain(context, Access::ApplyNamed, *ptn)?;
             let tys_opt = optional_types(context, ptys_opt);
-            let vfields: Option<Vec<(Field, E::LValue)>> = pfields
-                .into_iter()
-                .map(|(f, pb)| Some((f, bind(context, pb)?)))
-                .collect();
-            let fields = fields(context, loc, "deconstruction binding", "binding", vfields?);
+            let fields = match pfields {
+                FieldBindings::Named(named_bindings) => {
+                    let vfields: Option<Vec<(Field, E::LValue)>> = named_bindings
+                        .into_iter()
+                        .map(|(f, pb)| Some((f, bind(context, pb)?)))
+                        .collect();
+                    let fields =
+                        named_fields(context, loc, "deconstruction binding", "binding", vfields?);
+                    E::FieldBindings::Named(fields)
+                }
+                FieldBindings::Positional(positional_bindings) => {
+                    let fields: Option<Vec<E::LValue>> = positional_bindings
+                        .into_iter()
+                        .map(|b| bind(context, b))
+                        .collect();
+                    E::FieldBindings::Positional(fields?)
+                }
+            };
             EL::Unpack(tn, tys_opt, fields)
         }
     };
@@ -2674,7 +2741,16 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let en = name_access_chain(context, Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
             let efields = assign_unpack_fields(context, loc, pfields)?;
-            EL::Unpack(en, tys_opt, efields)
+            EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields))
+        }
+        PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
+            context
+                .env
+                .check_feature(FeatureGate::PositionalFields, context.current_package, loc);
+            let en = name_access_chain(context, Access::ApplyNamed, pn)?;
+            let tys_opt = optional_types(context, ptys_opt);
+            let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();
+            EL::Unpack(en, tys_opt, E::FieldBindings::Positional(pfields?))
         }
         _ => {
             context.env.add_diag(diag!(
@@ -2700,7 +2776,7 @@ fn assign_unpack_fields(
         .into_iter()
         .map(|(f, e)| Some((f, assign(context, e)?)))
         .collect::<Option<_>>()?;
-    Some(fields(
+    Some(named_fields(
         context,
         loc,
         "deconstructing assignment",
@@ -2875,9 +2951,14 @@ fn unbound_names_bind(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
         EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_bind(unbound, l))
+            }
+        },
     }
 }
 
@@ -2896,9 +2977,14 @@ fn unbound_names_assign(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
         EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_assign(unbound, l))
+            }
+        },
     }
 }
 

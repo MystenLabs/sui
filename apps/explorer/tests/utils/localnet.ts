@@ -24,7 +24,7 @@ export async function split_coin(address: string) {
 	tx.moveCall({
 		target: '0x2::pay::split',
 		typeArguments: ['0x2::sui::SUI'],
-		arguments: [tx.object(coin_id), tx.pure(10)],
+		arguments: [tx.object(coin_id), tx.pure.u64(10)],
 	});
 
 	const result = await client.signAndExecuteTransactionBlock({

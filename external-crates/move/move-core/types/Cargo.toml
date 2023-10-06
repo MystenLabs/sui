@@ -38,5 +38,5 @@ arbitrary = { version = "1.1.7", features = [ "derive_arbitrary"] }
 [features]
 address20 = []
 address32 = []
-default = []
+default = ["address32"]
 fuzzing = ["proptest", "proptest-derive", "arbitrary"]

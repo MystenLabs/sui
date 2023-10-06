@@ -13,7 +13,7 @@ import { Text } from '../../../shared/text';
 import { getGroupTitle } from '../manage/AccountGroup';
 import { useForgotPasswordContext } from './ForgotPasswordPage';
 
-const zkLoginType: AccountType = 'zk';
+const zkLoginType: AccountType = 'zkLogin';
 
 export function ResetWarningPage() {
 	const navigate = useNavigate();

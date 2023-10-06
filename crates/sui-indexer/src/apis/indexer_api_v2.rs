@@ -5,12 +5,13 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
+use crate::indexer_reader::IndexerReader;
+use crate::IndexerError;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
-
-use sui_json_rpc::api::IndexerApiServer;
+use sui_json_rpc::api::{cap_page_limit, IndexerApiServer};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectResponse,
@@ -23,15 +24,50 @@ use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::event::EventID;
 
-use crate::store::PgIndexerStoreV2;
-
 pub(crate) struct IndexerApiV2 {
-    pg_store: PgIndexerStoreV2,
+    inner: IndexerReader,
 }
 
 impl IndexerApiV2 {
-    pub fn new(pg_store: PgIndexerStoreV2) -> Self {
-        Self { pg_store }
+    pub fn new(inner: IndexerReader) -> Self {
+        Self { inner }
+    }
+
+    async fn get_owned_objects_internal(
+        &self,
+        address: SuiAddress,
+        query: Option<SuiObjectResponseQuery>,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> RpcResult<ObjectsPage> {
+        let SuiObjectResponseQuery { filter, options } = query.unwrap_or_default();
+        if filter.is_some() {
+            // TODO: do we want to support this?
+            return Err(IndexerError::NotSupportedError(
+                "Indexer does not support querying owned objects with filters".into(),
+            )
+            .into());
+        }
+        let options = options.unwrap_or_default();
+        let mut objects = self
+            .inner
+            .get_owned_objects_in_blocking_task(address, cursor, limit + 1)
+            .await?;
+        let has_next_page = objects.len() > limit;
+        objects.truncate(limit);
+
+        let next_cursor = objects.last().map(|o_read| o_read.object_id());
+
+        let data = objects
+            .into_iter()
+            .map(|o| (o, options.clone()).try_into())
+            .collect::<Result<Vec<SuiObjectResponse>, _>>()?;
+
+        Ok(Page {
+            data,
+            next_cursor,
+            has_next_page,
+        })
     }
 }
 
@@ -44,8 +80,12 @@ impl IndexerApiServer for IndexerApiV2 {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<ObjectsPage> {
-        // A ref impl can be found in https://github.com/MystenLabs/sui/pull/13574/
-        unimplemented!()
+        let limit = cap_page_limit(limit);
+        if limit == 0 {
+            return Ok(ObjectsPage::empty());
+        }
+        self.get_owned_objects_internal(address, query, cursor, limit)
+            .await
     }
 
     async fn query_transaction_blocks(
@@ -55,8 +95,30 @@ impl IndexerApiServer for IndexerApiV2 {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<TransactionBlocksPage> {
-        // A ref impl can be found in https://github.com/MystenLabs/sui/pull/13574/
-        unimplemented!()
+        let limit = cap_page_limit(limit);
+        if limit == 0 {
+            return Ok(TransactionBlocksPage::empty());
+        }
+        let mut results = self
+            .inner
+            .query_transaction_blocks_in_blocking_task(
+                query.filter,
+                query.options.unwrap_or_default(),
+                cursor,
+                limit + 1,
+                descending_order.unwrap_or(true),
+            )
+            .await
+            .map_err(|e: IndexerError| anyhow::anyhow!(e))?;
+
+        let has_next_page = results.len() > limit;
+        results.truncate(limit);
+        let next_cursor = results.last().map(|o| o.digest);
+        Ok(Page {
+            data: results,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn query_events(
@@ -76,7 +138,23 @@ impl IndexerApiServer for IndexerApiV2 {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<DynamicFieldPage> {
-        unimplemented!()
+        let limit = cap_page_limit(limit);
+        if limit == 0 {
+            return Ok(DynamicFieldPage::empty());
+        }
+        let mut results = self
+            .inner
+            .get_dynamic_fields_in_blocking_task(parent_object_id, cursor, limit + 1)
+            .await?;
+
+        let has_next_page = results.len() > limit;
+        results.truncate(limit);
+        let next_cursor = results.last().map(|o| o.object_id);
+        Ok(Page {
+            data: results,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_dynamic_field_object(

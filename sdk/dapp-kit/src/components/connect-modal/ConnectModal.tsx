@@ -11,6 +11,8 @@ import { useConnectWallet } from '../../hooks/wallet/useConnectWallet.js';
 import { BackIcon } from '../icons/BackIcon.js';
 import { CloseIcon } from '../icons/CloseIcon.js';
 import { StyleMarker } from '../styling/StyleMarker.js';
+import { Heading } from '../ui/Heading.js';
+import { IconButton } from '../ui/IconButton.js';
 import * as styles from './ConnectModal.css.js';
 import { ConnectionStatus } from './views/ConnectionStatus.js';
 import { GettingStarted } from './views/GettingStarted.js';
@@ -108,13 +110,17 @@ export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: Conne
 								})}
 							>
 								<div className={styles.walletListContent}>
-									<Dialog.Title className={styles.title}>Connect a Wallet</Dialog.Title>
+									<Dialog.Title className={styles.title} asChild>
+										<Heading as="h2">Connect a Wallet</Heading>
+									</Dialog.Title>
 									<WalletList
 										selectedWalletName={selectedWallet?.name}
 										onPlaceholderClick={() => setCurrentView('getting-started')}
 										onSelect={(wallet) => {
-											setSelectedWallet(wallet);
-											connectWallet(wallet);
+											if (selectedWallet?.name !== wallet.name) {
+												setSelectedWallet(wallet);
+												connectWallet(wallet);
+											}
 										}}
 									/>
 								</div>
@@ -126,24 +132,22 @@ export function ConnectModal({ trigger, open, defaultOpen, onOpenChange }: Conne
 									What is a Wallet?
 								</button>
 							</div>
-
 							<div
 								className={clsx(styles.viewContainer, {
 									[styles.selectedViewContainer]: !!currentView,
 								})}
 							>
-								<button
-									className={styles.backButton}
-									onClick={() => resetSelection()}
-									type="button"
-									aria-label="Back"
-								>
-									<BackIcon />
-								</button>
+								<div className={styles.backButtonContainer}>
+									<IconButton type="button" aria-label="Back" onClick={() => resetSelection()}>
+										<BackIcon />
+									</IconButton>
+								</div>
 								{modalContent}
 							</div>
-							<Dialog.Close className={styles.closeButton} aria-label="Close">
-								<CloseIcon />
+							<Dialog.Close className={styles.closeButtonContainer} asChild>
+								<IconButton type="button" aria-label="Close">
+									<CloseIcon />
+								</IconButton>
 							</Dialog.Close>
 						</Dialog.Content>
 					</Dialog.Overlay>

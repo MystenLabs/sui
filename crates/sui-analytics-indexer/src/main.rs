@@ -4,9 +4,8 @@
 use clap::*;
 use prometheus::Registry;
 use sui_analytics_indexer::{
-    analytics_metrics::{start_prometheus_server, AnalyticsMetrics},
-    errors::AnalyticsIndexerError,
-    make_analytics_processor, AnalyticsIndexerConfig,
+    analytics_metrics::AnalyticsMetrics, errors::AnalyticsIndexerError, make_analytics_processor,
+    AnalyticsIndexerConfig,
 };
 use sui_indexer::framework::IndexerBuilder;
 use tracing::info;
@@ -19,7 +18,7 @@ async fn main() -> Result<(), AnalyticsIndexerError> {
 
     let config = AnalyticsIndexerConfig::parse();
     info!("Parsed config: {:#?}", config);
-    let registry_service = start_prometheus_server(
+    let registry_service = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
             config.client_metric_host, config.client_metric_port

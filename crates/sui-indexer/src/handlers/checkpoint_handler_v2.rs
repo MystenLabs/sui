@@ -263,10 +263,18 @@ where
 
         let event = bcs::from_bytes::<SystemEpochInfoEvent>(&epoch_event.contents)?;
 
-        let last_epoch = system_state.epoch - 1;
-        let network_tx_count_prev_epoch = state
-            .get_network_total_transactions_by_end_of_epoch(last_epoch)
-            .await?;
+        // Now we just entered epoch X, we want to calculate the diff between
+        // TotalTransactionsByEndOfEpoch(X-1) and TotalTransactionsByEndOfEpoch(X-2)
+        let network_tx_count_prev_epoch = match system_state.epoch {
+            // If first epoch change, this number is 0
+            1 => Ok(0),
+            _ => {
+                let last_epoch = system_state.epoch - 2;
+                state
+                    .get_network_total_transactions_by_end_of_epoch(last_epoch)
+                    .await
+            }
+        }?;
 
         Ok(Some(EpochToCommit {
             last_epoch: Some(IndexedEpochInfo::from_end_of_epoch_data(

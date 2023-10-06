@@ -1,5 +1,54 @@
 # @mysten/sui.js
 
+## 0.43.3
+
+### Patch Changes
+
+- 004fb1991: Export TransactionResult type
+
+## 0.43.2
+
+### Patch Changes
+
+- 9b052166d: Register Option enum to sdk bcs registry
+
+## 0.43.1
+
+### Patch Changes
+
+- faa13ded9: Ensure that TransactionBlocks can be copied via structuredClone to workaround bug in sui wallet
+- c5684bb52: rename zk to zkLogin
+
+## 0.43.0
+
+### Minor Changes
+
+- 781d073d9: Update getFaucetRequestStatus to GET request
+- e4484852b: Improve APIs for building transaction inputs
+
+  - txb.splitCoins now accepts `amounts`` as raw JavaScript number
+  - txb.transferObjects now accepts `address` as JavaScript string
+  - All single objects, or lists of objects, now also accepts object IDs as JavaScript strings
+  - txb.pure accepts `SerializedBcs` (eg `txb.pure(bcs.U64.serialize(123))`)
+  - Added pure helpers (`txb.pure.address()`, `txb.bool()`, and `txb.pure.u{8-256}()`) to simplify serialization of pure values
+  - Deprecated using `txb.pure` with raw JavaScript values, or an explicit type argument.
+
+- 1bc430161: Updated BCS defintions to use new BCS schema builder
+
+### Patch Changes
+
+- 3764c464f: - add support for basic parsing of zkLogin signatures
+  - new zklogin package
+- 71e0a3197: zklogin improvements
+
+  - use new bcs api
+  - rename `toBufferBE` to `toBigEndianBytes`
+  - stop exporting `ZkLoginSignatureInputs` and `extractClaimValue`
+
+- Updated dependencies [1bc430161]
+- Updated dependencies [e4484852b]
+  - @mysten/bcs@0.8.0
+
 ## 0.42.0
 
 ### Minor Changes

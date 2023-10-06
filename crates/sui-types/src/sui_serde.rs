@@ -247,6 +247,16 @@ where
     T: Display + FromStr,
     <T as FromStr>::Err: Display;
 
+impl<T> BigInt<T>
+where
+    T: Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+}
+
 impl<T> SerializeAs<T> for BigInt<T>
 where
     T: Display + FromStr + Copy,

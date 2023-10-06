@@ -45,4 +45,4 @@ sui-protocol-config.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true

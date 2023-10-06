@@ -7,13 +7,13 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 serde.workspace = true
 tracing.workspace = true
 serde_with.workspace = true
 sui-protocol-config-macros.workspace = true
 schemars.workspace = true
 insta.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

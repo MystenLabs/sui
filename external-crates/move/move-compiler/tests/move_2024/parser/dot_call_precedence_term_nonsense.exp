@@ -35,7 +35,7 @@ error[E04023]: invalid method call
    │         ^^^^^^^^^^^^^^^^^
    │         │
    │         Invalid method call
-   │         Method calls are only supported on single types. Got an expression of type: '((a=0x42)::m::X, (a=0x42)::m::Y)'
+   │         Method calls are only supported on single types. Got an expression of type: '(a::m::X, a::m::Y)'
 
 error[E04023]: invalid method call
    ┌─ tests/move_2024/parser/dot_call_precedence_term_nonsense.move:23:9
@@ -64,7 +64,7 @@ error[E04007]: incompatible types
 25 │         return { X{} }.xval();
    │         ^^^^^^^^^^^^^^
    │         │        │
-   │         │        Given: '(a=0x42)::m::X'
+   │         │        Given: 'a::m::X'
    │         Invalid return
 
 error[E04023]: invalid method call

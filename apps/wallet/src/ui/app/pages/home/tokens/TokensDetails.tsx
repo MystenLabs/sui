@@ -30,7 +30,7 @@ import { Coin } from '@mysten/sui.js/framework';
 import { formatAddress, MIST_PER_SUI, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'classnames';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import Interstitial, { type InterstitialConfig } from '../interstitial';
 import { useOnrampProviders } from '../onramp/useOnrampProviders';
@@ -64,33 +64,21 @@ function PinButton({ unpin, onClick }: { unpin?: boolean; onClick: () => void })
 
 function TokenRowButton({
 	coinBalance,
-	page,
-	copy,
+	children,
+	to,
 }: {
 	coinBalance: CoinBalanceType;
-	page: 'send' | 'swap';
-	copy: string;
+	children: ReactNode;
+	to: string;
+	onClick?: () => void;
 }) {
-	const params = new URLSearchParams({
-		type: coinBalance.coinType,
-	});
-
 	return (
 		<ButtonOrLink
-			to={`/${page}?${params.toString()}`}
-			onClick={
-				page === 'send'
-					? () =>
-							ampli.selectedCoin({
-								coinType: coinBalance.coinType,
-								totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
-							})
-					: undefined
-			}
+			to={to}
 			key={coinBalance.coinType}
 			className="no-underline text-subtitle font-medium text-steel hover:font-semibold hover:text-hero"
 		>
-			{copy}
+			{children}
 		</ButtonOrLink>
 	);
 }
@@ -99,31 +87,26 @@ export function TokenRow({
 	coinBalance,
 	renderActions,
 	onClick,
-	as: Tag = 'div',
-	borderBottom,
 }: {
 	coinBalance: CoinBalanceType;
 	renderActions?: boolean;
-	as?: 'div' | 'button';
 	onClick?: () => void;
-	borderBottom?: boolean;
 }) {
 	const coinType = coinBalance.coinType;
 	const balance = BigInt(coinBalance.totalBalance);
 	const [formatted, symbol] = useFormatCoin(balance, coinType);
-	const isButton = Tag === 'button';
+	const Tag = onClick ? 'button' : 'div';
+	const params = new URLSearchParams({
+		type: coinBalance.coinType,
+	});
 
-	const isRenderSwapButton = useMemo(() => {
-		return allowedSwapCoinsList.includes(coinType);
-	}, [coinType]);
+	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 
 	return (
 		<Tag
 			className={clsx(
-				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center border-solid border-t-transparent border-x-transparent bg-transparent',
-				isButton && 'hover:cursor-pointer',
-				borderBottom && 'border-b border-gray-45',
-				!borderBottom && 'border-b-transparent',
+				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent',
+				onClick && 'hover:cursor-pointer',
 			)}
 			onClick={onClick}
 		>
@@ -136,9 +119,22 @@ export function TokenRow({
 
 					{renderActions ? (
 						<div className="flex gap-2.5 items-center">
-							<TokenRowButton coinBalance={coinBalance} page="send" copy="Send" />
+							<TokenRowButton
+								coinBalance={coinBalance}
+								to={`/send?${params.toString()}`}
+								onClick={() =>
+									ampli.selectedCoin({
+										coinType: coinBalance.coinType,
+										totalBalance: Number(BigInt(coinBalance.totalBalance) / MIST_PER_SUI),
+									})
+								}
+							>
+								Send
+							</TokenRowButton>
 							{isRenderSwapButton && (
-								<TokenRowButton coinBalance={coinBalance} page="swap" copy="Swap" />
+								<TokenRowButton coinBalance={coinBalance} to={`/swap?${params.toString()}`}>
+									Swap
+								</TokenRowButton>
 							)}
 						</div>
 					) : (
@@ -155,7 +151,7 @@ export function TokenRow({
 			</div>
 
 			<div className="ml-auto flex flex-col items-end gap-1.5">
-				{formatted !== '0' && (
+				{balance > 0n && (
 					<Text variant="body" color="gray-90" weight="medium">
 						{formatted} {symbol}
 					</Text>

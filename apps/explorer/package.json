@@ -77,7 +77,6 @@
 		"react-router-dom": "^6.14.2",
 		"throttle-debounce": "^5.0.0",
 		"topojson-client": "^3.1.0",
-		"vite-plugin-rewrite-all": "^1.0.1",
 		"zod": "^3.21.4"
 	},
 	"devDependencies": {
@@ -111,6 +110,7 @@
 		"tsconfig-paths": "^4.2.0",
 		"typescript": "^5.1.6",
 		"vite": "^4.4.4",
+		"vite-plugin-rewrite-all": "^1.0.1",
 		"vite-plugin-svgr": "^3.2.0",
 		"vitest": "^0.33.0"
 	},

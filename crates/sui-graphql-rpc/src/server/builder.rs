@@ -2,18 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    extensions::limits_info::ShowUsage,
+    extensions::query_limits_checker::ShowUsage,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql::{EmptyMutation, EmptySubscription};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::Router;
+use axum::http::HeaderMap;
 use axum::{
     extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo},
-    middleware, TypedHeader,
+    middleware,
 };
+use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
 use std::{any::Any, net::SocketAddr};
@@ -91,12 +92,12 @@ impl ServerBuilder {
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    usage: Option<TypedHeader<ShowUsage>>,
+    headers: HeaderMap,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut req = req.into_inner();
-    if let Some(TypedHeader(usage)) = usage {
-        req.data.insert(usage)
+    if headers.contains_key(ShowUsage::name()) {
+        req.data.insert(ShowUsage)
     }
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
@@ -116,15 +117,21 @@ async fn graphiql() -> impl axum::response::IntoResponse {
 mod tests {
     use super::*;
     use crate::{
-        context_data::{data_provider::DataProvider, sui_sdk_data_provider::sui_sdk_client_v0},
+        config::ServiceConfig,
+        context_data::{
+            data_provider::DataProvider, db_data_provider::PgManager,
+            sui_sdk_data_provider::sui_sdk_client_v0,
+        },
+        extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::{Timeout, TimeoutConfig},
+        metrics::RequestMetrics,
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
-    use std::sync::Arc;
     use std::time::Duration;
+    use std::{env, sync::Arc};
 
     #[tokio::test]
     async fn test_timeout() {
@@ -156,8 +163,16 @@ mod tests {
         async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
@@ -194,8 +209,16 @@ mod tests {
         async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .max_query_depth(depth)
                 .build_schema();
             schema.execute(query).await
@@ -239,8 +262,16 @@ mod tests {
         async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+            let pg_conn_pool = PgManager::new(db_url, None)
+                .map_err(|e| {
+                    println!("Failed to create pg connection pool: {}", e);
+                    e
+                })
+                .unwrap();
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
+                .context_data(pg_conn_pool)
                 .max_query_nodes(nodes)
                 .build_schema();
             schema.execute(query).await
@@ -277,5 +308,40 @@ mod tests {
         .map(|e| e.message)
         .collect();
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_query_complexity_metrics() {
+        let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        let metrics = RequestMetrics::new(&registry);
+        let metrics = Arc::new(metrics);
+        let metrics2 = metrics.clone();
+
+        let service_config = ServiceConfig::default();
+        let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
+        let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+        let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
+            .max_query_depth(service_config.limits.max_query_depth)
+            .max_query_nodes(service_config.limits.max_query_nodes)
+            .context_data(service_config)
+            .context_data(data_provider)
+            .context_data(metrics)
+            .extension(QueryLimitsChecker::default())
+            .build_schema();
+        let _ = schema.execute("{ chainIdentifier }").await;
+
+        assert_eq!(metrics2.num_nodes.get_sample_count(), 1);
+        assert_eq!(metrics2.query_depth.get_sample_count(), 1);
+        assert_eq!(metrics2.num_nodes.get_sample_sum(), 1.);
+        assert_eq!(metrics2.query_depth.get_sample_sum(), 1.);
+
+        let _ = schema
+            .execute("{ chainIdentifier protocolConfig { configs { value key }} }")
+            .await;
+        assert_eq!(metrics2.num_nodes.get_sample_count(), 2);
+        assert_eq!(metrics2.query_depth.get_sample_count(), 2);
+        assert_eq!(metrics2.num_nodes.get_sample_sum(), 2. + 4.);
+        assert_eq!(metrics2.query_depth.get_sample_sum(), 1. + 3.);
     }
 }

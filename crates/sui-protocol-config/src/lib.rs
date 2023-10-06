@@ -364,8 +364,11 @@ pub struct ProtocolConfig {
     max_input_objects: Option<u64>,
 
     /// Max size of objects a transaction can write to disk after completion. Enforce by the Sui adapter.
+    /// This is the sum of the serialized size of all objects written to disk.
+    /// The max size of individual objects on the other hand is `max_move_object_size`.
     max_size_written_objects: Option<u64>,
     /// Max size of objects a system transaction can write to disk after completion. Enforce by the Sui adapter.
+    /// Similar to `max_size_written_objects` but for system transactions.
     max_size_written_objects_system_tx: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
@@ -1336,8 +1339,10 @@ impl ProtocolConfig {
                     cfg.storage_gas_price = Some(76);
                     cfg.feature_flags.loaded_child_objects_fixed = true;
                     // max size of written objects during a TXn
+                    // this is a sum of all objects written during a TXn
                     cfg.max_size_written_objects = Some(5 * 1000 * 1000);
                     // max size of written objects during a system TXn to allow for larger writes
+                    // akin to `max_size_written_objects` but for system TXns
                     cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                     cfg.feature_flags.package_upgrades = true;
                 }

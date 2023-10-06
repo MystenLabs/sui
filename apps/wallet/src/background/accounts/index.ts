@@ -27,7 +27,7 @@ import { ImportedAccount } from './ImportedAccount';
 import { LedgerAccount } from './LedgerAccount';
 import { MnemonicAccount } from './MnemonicAccount';
 import { QredoAccount } from './QredoAccount';
-import { ZkAccount, type ZkAccountSerialized } from './zk/ZkAccount';
+import { ZkLoginAccount, type ZkLoginAccountSerialized } from './zklogin/ZkLoginAccount';
 
 function toAccount(account: SerializedAccount) {
 	if (MnemonicAccount.isOfType(account)) {
@@ -42,8 +42,8 @@ function toAccount(account: SerializedAccount) {
 	if (QredoAccount.isOfType(account)) {
 		return new QredoAccount({ id: account.id, cachedData: account });
 	}
-	if (ZkAccount.isOfType(account)) {
-		return new ZkAccount({ id: account.id, cachedData: account });
+	if (ZkLoginAccount.isOfType(account)) {
+		return new ZkLoginAccount({ id: account.id, cachedData: account });
 	}
 	throw new Error(`Unknown account of type ${account.type}`);
 }
@@ -262,8 +262,8 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 			for (const aLedgerAccount of accounts) {
 				newSerializedAccounts.push(await LedgerAccount.createNew({ ...aLedgerAccount, password }));
 			}
-		} else if (type === 'zk') {
-			newSerializedAccounts.push(await ZkAccount.createNew(payload.args));
+		} else if (type === 'zkLogin') {
+			newSerializedAccounts.push(await ZkLoginAccount.createNew(payload.args));
 		} else {
 			throw new Error(`Unknown accounts type to create ${type}`);
 		}
@@ -368,10 +368,10 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		if (!account) {
 			throw new Error(`Account with id ${accountID} not found.`);
 		}
-		if (!(account instanceof ZkAccount)) {
+		if (!(account instanceof ZkLoginAccount)) {
 			throw new Error(`Account with id ${accountID} is not a zkLogin account.`);
 		}
-		const updates: Partial<ZkAccountSerialized> = { warningAcknowledged: true };
+		const updates: Partial<ZkLoginAccountSerialized> = { warningAcknowledged: true };
 		await (await getDB()).accounts.update(accountID, updates);
 		accountsEvents.emit('accountStatusChanged', { accountID });
 		await uiConnection.send(createMessage({ type: 'done' }, msg.id));
