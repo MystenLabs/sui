@@ -81,6 +81,10 @@ impl MoveValue {
 }
 
 impl MoveValue {
+    pub fn new(layout: MoveTypeLayout, bcs: Base64) -> Self {
+        Self { layout, bcs }
+    }
+
     fn data_impl(&self) -> Result<MoveData> {
         // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
         // deserializing via `value::MoveValue` (but this is significantly more code).
