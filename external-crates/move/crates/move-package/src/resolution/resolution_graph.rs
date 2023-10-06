@@ -136,15 +136,18 @@ impl ResolvedGraph {
                 };
             }
 
+            let pkg_orig_name = resolved_pkg.source_package.package.name;
+
             resolved_pkg
                 .define_addresses_in_package(&mut resolving_table)
-                .with_context(|| format!("Resolving addresses for '{pkg_name}'"))?;
+                .with_context(|| format!("Resolving addresses for '{pkg_orig_name}'"))?;
 
             for (dep_name, dep, _pkg) in graph.immediate_dependencies(pkg_name, dep_mode) {
+                let dep_orig_name = dep.dep_orig_name;
                 resolved_pkg
                     .process_dependency(dep_name, dep, &package_table, &mut resolving_table)
                     .with_context(|| {
-                        format!("Processing dependency '{dep_name}' of '{pkg_name}'")
+                        format!("Processing dependency '{dep_orig_name}' of '{pkg_orig_name}'")
                     })?;
             }
 
@@ -366,6 +369,7 @@ impl Package {
         package_table: &PackageTable,
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
+        let pkg_orig_name = self.source_package.package.name;
         let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
             .with_context(|| {
                 format!(
@@ -373,6 +377,8 @@ impl Package {
                     &self.source_package.package.name
                 )
             })?;
+        let dep_orig_name = dep.dep_orig_name;
+
         let mut dep_renaming = BTreeMap::new();
 
         for (to, subst) in dep.subst.iter().flatten() {
@@ -387,7 +393,7 @@ impl Package {
                             "Tried to rename named address {0} from package '{1}', \
                              however {1} does not contain that address",
                             from,
-                            dep_name,
+                            dep_orig_name,
                         )
                     }
 
@@ -396,7 +402,7 @@ impl Package {
                     {
                         bail!(
                             "Duplicate renaming of named address '{to}' in dependencies of \
-                             '{pkg_name}'. Substituted with '{from}' from dependency '{dep_name}' \
+                             '{pkg_orig_name}'. Substituted with '{from}' from dependency '{dep_orig_name}' \
                              and '{prev_from}' from dependency '{prev_dep}'.",
                         )
                     }
@@ -418,15 +424,15 @@ impl Package {
 
         let Some(resolved_dep) = package_table.get(&dep_name) else {
             bail!(
-                "Unable to find resolved information for dependency '{dep_name}' of \
-                 '{pkg_name}'",
+                "Unable to find resolved information for dependency '{dep_orig_name}' of \
+                 '{pkg_orig_name}'",
             );
         };
 
         if let Some(digest) = dep.digest {
             if digest != resolved_dep.source_digest {
                 bail!(
-                    "Source digest mismatch in dependency '{dep_name}' of '{pkg_name}'. \
+                    "Source digest mismatch in dependency '{dep_orig_name}' of '{pkg_orig_name}'. \
                      Expected '{digest}' but got '{}'.",
                     resolved_dep.source_digest
                 )
@@ -437,6 +443,7 @@ impl Package {
     }
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
+        let pkg_orig_name = self.source_package.package.name;
         let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
             .with_context(|| {
                 format!(
@@ -453,7 +460,7 @@ impl Package {
                 }
                 None => {
                     unresolved_addresses
-                        .push(format!("  Named address '{name}' in package '{pkg_name}'"));
+                        .push(format!("  Named address '{name}' in package '{pkg_orig_name}'"));
                 }
             }
         }
