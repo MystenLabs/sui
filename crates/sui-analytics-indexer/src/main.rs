@@ -3,43 +3,47 @@
 
 use clap::*;
 use prometheus::Registry;
+use std::sync::Arc;
+use sui_analytics_indexer::errors::AnalyticsIndexerError::GenericError;
 use sui_analytics_indexer::{
     analytics_metrics::AnalyticsMetrics, errors::AnalyticsIndexerError, make_analytics_processor,
     AnalyticsIndexerConfig,
 };
 use sui_indexer::framework::IndexerBuilder;
+use tokio::runtime;
 use tracing::info;
 
-#[tokio::main]
-async fn main() -> Result<(), AnalyticsIndexerError> {
+fn main() -> Result<(), AnalyticsIndexerError> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
     let config = AnalyticsIndexerConfig::parse();
     info!("Parsed config: {:#?}", config);
-    let registry_service = mysten_metrics::start_prometheus_server(
-        format!(
-            "{}:{}",
-            config.client_metric_host, config.client_metric_port
-        )
-        .parse()
-        .unwrap(),
-    );
-    let registry: Registry = registry_service.default_registry();
-    mysten_metrics::init_metrics(&registry);
-    let metrics = AnalyticsMetrics::new(&registry);
 
     let rest_url = config.rest_url.clone();
-    let processor = make_analytics_processor(config, metrics)
-        .await
-        .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
-    IndexerBuilder::new()
-        .last_downloaded_checkpoint(processor.last_committed_checkpoint())
-        .rest_url(&rest_url)
-        .handler(processor)
-        .run()
-        .await;
+    let fetcher_runtime = runtime::Builder::new_multi_thread()
+        .thread_name("checkpoint-fetcher")
+        .enable_all()
+        .build()
+        .expect("Failed to create runtime");
+    let uploader_runtime = Arc::new(
+        runtime::Builder::new_multi_thread()
+            .thread_name("checkpoint-uploader")
+            .enable_all()
+            .build()
+            .expect("Failed to create runtime"),
+    );
+    let processor = fetcher_runtime
+        .block_on(make_analytics_processor(config, uploader_runtime))
+        .map_err(|_| GenericError("dsad".to_string()))?;
+    fetcher_runtime.block_on(
+        IndexerBuilder::new()
+            .last_downloaded_checkpoint(processor.last_committed_checkpoint())
+            .rest_url(&rest_url)
+            .handler(processor)
+            .run(),
+    );
 
     Ok(())
 }

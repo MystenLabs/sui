@@ -12,7 +12,7 @@ use anyhow::Result;
 use object_store::path::Path;
 use object_store::DynObjectStore;
 use serde::Serialize;
-use tokio::runtime::Handle;
+use tokio::runtime::{Handle, Runtime};
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
@@ -96,6 +96,7 @@ impl<S: Serialize + 'static> AnalyticsProcessor<S> {
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
+        runtime: Arc<Runtime>,
     ) -> Result<Self> {
         let local_store_config = ObjectStoreConfig {
             directory: Some(config.checkpoint_dir.clone()),
@@ -110,7 +111,7 @@ impl<S: Serialize + 'static> AnalyticsProcessor<S> {
         let checkpoint_dir = config.checkpoint_dir.clone();
         let cloned_metrics = metrics.clone();
         tokio::task::spawn_blocking(move || {
-            Handle::current()
+            runtime
                 .block_on(Self::start_syncing_with_remote(
                     remote_object_store,
                     local_object_store.clone(),

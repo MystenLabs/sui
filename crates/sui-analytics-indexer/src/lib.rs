@@ -3,14 +3,17 @@
 
 use std::ops::Range;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
 use clap::*;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
+use tokio::runtime::Runtime;
 use tracing::info;
 
 use sui_indexer::framework::Handler;
@@ -233,6 +236,7 @@ impl Processor {
         starting_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
+        runtime: Arc<Runtime>,
     ) -> Result<Self> {
         let processor = Box::new(
             AnalyticsProcessor::new(
@@ -241,6 +245,7 @@ impl Processor {
                 starting_checkpoint_seq_num,
                 metrics,
                 config,
+                runtime,
             )
             .await?,
         );
@@ -285,6 +290,7 @@ pub async fn read_store_for_checkpoint(
 pub async fn make_checkpoint_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<CheckpointEntry>> = Box::new(CheckpointHandler::new());
     let starting_checkpoint_seq_num =
@@ -300,6 +306,7 @@ pub async fn make_checkpoint_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -307,6 +314,7 @@ pub async fn make_checkpoint_processor(
 pub async fn make_transaction_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<TransactionEntry>> = Box::new(TransactionHandler::new());
     let starting_checkpoint_seq_num =
@@ -322,6 +330,7 @@ pub async fn make_transaction_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -329,6 +338,7 @@ pub async fn make_transaction_processor(
 pub async fn make_object_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new());
     let starting_checkpoint_seq_num =
@@ -344,6 +354,7 @@ pub async fn make_object_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -351,6 +362,7 @@ pub async fn make_object_processor(
 pub async fn make_event_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new());
     let starting_checkpoint_seq_num =
@@ -363,6 +375,7 @@ pub async fn make_event_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -370,6 +383,7 @@ pub async fn make_event_processor(
 pub async fn make_transaction_objects_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(config.clone(), FileType::TransactionObjects).await?;
@@ -385,6 +399,7 @@ pub async fn make_transaction_objects_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -392,6 +407,7 @@ pub async fn make_transaction_objects_processor(
 pub async fn make_move_package_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<MovePackageEntry>> = Box::new(PackageHandler::new());
     let starting_checkpoint_seq_num =
@@ -407,6 +423,7 @@ pub async fn make_move_package_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -414,6 +431,7 @@ pub async fn make_move_package_processor(
 pub async fn make_move_call_processor(
     config: AnalyticsIndexerConfig,
     metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(config.clone(), FileType::MoveCall).await?;
@@ -429,6 +447,7 @@ pub async fn make_move_call_processor(
         starting_checkpoint_seq_num,
         metrics,
         config,
+        runtime,
     )
     .await
 }
@@ -461,15 +480,28 @@ pub async fn get_starting_checkpoint_seq_num(
 
 pub async fn make_analytics_processor(
     config: AnalyticsIndexerConfig,
-    metrics: AnalyticsMetrics,
+    runtime: Arc<Runtime>,
 ) -> Result<Processor> {
+    let registry_service = mysten_metrics::start_prometheus_server(
+        format!(
+            "{}:{}",
+            config.client_metric_host, config.client_metric_port
+        )
+        .parse()
+        .unwrap(),
+    );
+    let registry: Registry = registry_service.default_registry();
+    mysten_metrics::init_metrics(&registry);
+    let metrics = AnalyticsMetrics::new(&registry);
     match config.file_type {
-        FileType::Checkpoint => make_checkpoint_processor(config, metrics).await,
-        FileType::Object => make_object_processor(config, metrics).await,
-        FileType::Transaction => make_transaction_processor(config, metrics).await,
-        FileType::Event => make_event_processor(config, metrics).await,
-        FileType::TransactionObjects => make_transaction_objects_processor(config, metrics).await,
-        FileType::MoveCall => make_move_call_processor(config, metrics).await,
-        FileType::MovePackage => make_move_package_processor(config, metrics).await,
+        FileType::Checkpoint => make_checkpoint_processor(config, metrics, runtime).await,
+        FileType::Object => make_object_processor(config, metrics, runtime).await,
+        FileType::Transaction => make_transaction_processor(config, metrics, runtime).await,
+        FileType::Event => make_event_processor(config, metrics, runtime).await,
+        FileType::TransactionObjects => {
+            make_transaction_objects_processor(config, metrics, runtime).await
+        }
+        FileType::MoveCall => make_move_call_processor(config, metrics, runtime).await,
+        FileType::MovePackage => make_move_package_processor(config, metrics, runtime).await,
     }
 }
