@@ -36,7 +36,7 @@ pub mod indexer_api;
 pub mod logger;
 mod metrics;
 pub mod move_utils;
-mod name_service;
+pub mod name_service;
 mod object_changes;
 pub mod read_api;
 mod routing_layer;
