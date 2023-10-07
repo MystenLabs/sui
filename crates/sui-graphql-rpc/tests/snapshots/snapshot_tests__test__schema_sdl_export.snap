@@ -64,6 +64,14 @@ scalar Base64
 scalar BigInt
 
 
+type ChangeEpochTransaction {
+	timestamp: DateTime
+	storageCharge: BigInt
+	computationCharge: BigInt
+	storageRebate: BigInt
+	epoch: Epoch
+}
+
 type Checkpoint {
 	digest: String!
 	sequenceNumber: Int!
@@ -150,6 +158,12 @@ type CommitteeMember {
 	stakeUnit: Int
 }
 
+type ConsensusCommitPrologueTransaction {
+	round: Int
+	timestamp: DateTime
+	epoch: Epoch
+}
+
 scalar DateTime
 
 type EndOfEpochData {
@@ -225,6 +239,10 @@ type GasInput {
 	gasPayment: [Object!]
 	gasPrice: BigInt
 	gasBudget: BigInt
+}
+
+type GenesisTransaction {
+	objects: [SuiAddress!]
 }
 
 
@@ -503,6 +521,7 @@ type TransactionBlock {
 	sender: Address
 	bcs: Base64
 	gasInput: GasInput
+	kind: TransactionBlockKind
 	digest: String!
 	expiration: Epoch
 }
@@ -560,6 +579,8 @@ input TransactionBlockFilter {
 	changedObject: SuiAddress
 	transactionIds: [String!]
 }
+
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX

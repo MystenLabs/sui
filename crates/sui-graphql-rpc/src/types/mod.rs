@@ -27,6 +27,7 @@ pub(crate) mod storage_fund;
 pub(crate) mod sui_address;
 pub(crate) mod system_parameters;
 pub(crate) mod transaction_block;
+pub(crate) mod transaction_block_kind;
 pub(crate) mod validator;
 pub(crate) mod validator_credentials;
 pub(crate) mod validator_set;

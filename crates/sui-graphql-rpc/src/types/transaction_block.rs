@@ -13,6 +13,7 @@ use super::{
     epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
+    transaction_block_kind::TransactionBlockKind,
 };
 use async_graphql::*;
 use sui_json_rpc_types::{
@@ -31,6 +32,7 @@ pub(crate) struct TransactionBlock {
     pub gas_input: Option<GasInput>,
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
+    pub kind: Option<TransactionBlockKind>,
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {
@@ -48,6 +50,7 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
             epoch_id: None,
+            kind: None, // TODO (stefan) fix this
         }
     }
 }
