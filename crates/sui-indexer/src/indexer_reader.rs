@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::models_v2::checkpoints::StoredCheckpoint;
+use crate::models_v2::display::StoredDisplay;
+use crate::schema_v2::display;
 use crate::{
     errors::IndexerError,
     models_v2::{epoch::StoredEpochInfo, objects::ObjectRefColumn, packages::StoredPackage},
@@ -858,6 +860,27 @@ impl IndexerReader {
             Ok((object_id, (object_id, seq, object_digest)))
         })
         .collect::<IndexerResult<HashMap<_, _>>>()
+    }
+
+    fn get_display_update_event(
+        &self,
+        object_type: String,
+    ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
+        let stored_display = self.run_query(|conn| {
+            display::table
+                .filter(display::object_type.eq(object_type))
+                .first::<StoredDisplay>(conn)
+                .optional()
+        })?;
+
+        let stored_display = match stored_display {
+            Some(display) => display,
+            None => return Ok(None),
+        };
+
+        let display_update = stored_display.to_display_update_event()?;
+
+        Ok(Some(display_update))
     }
 }
 

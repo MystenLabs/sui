@@ -24,6 +24,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    display (object_type) {
+        object_type -> Text,
+        id -> Bytea,
+        version -> Int2,
+        bcs -> Bytea,
+    }
+}
+
+diesel::table! {
     epochs (epoch) {
         epoch -> Int8,
         validators -> Array<Nullable<Bytea>>,
@@ -123,6 +132,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
+    display,
     epochs,
     events,
     objects,
