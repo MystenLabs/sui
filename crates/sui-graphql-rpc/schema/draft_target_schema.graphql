@@ -444,16 +444,10 @@ type DisplayEntry {
 
 type Epoch {
   epochId: Int!
-  systemStateVersion: Int
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
 
-  systemParameters: SystemParameters
-  stakeSubsidy: StakeSubsidy
   validatorSet: ValidatorSet
-  storageFund: StorageFund
-  safeMode: SafeMode
-
   startTimestamp: DateTime
   endTimestamp: DateTime
 
@@ -474,6 +468,19 @@ type Epoch {
     # Enhancement (post-MVP) relies on compound filters.
     filter: TransactionBlockFilter,
   ): TransactionBlockConnection
+}
+
+type SuiSystemStateSummary {
+  epoch: Epoch
+  protocolConfigs: ProtocolConfigs
+  systemStateVersion: Int
+  referenceGasPrice: BigInt
+
+  systemParameters: SystemParameters
+  stakeSubsidy: StakeSubsidy
+  validatorSet: ValidatorSet
+  storageFund: StorageFund
+  safeMode: SafeMode
 }
 
 type ProtocolConfigs {
