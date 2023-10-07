@@ -117,7 +117,8 @@ input CheckpointId {
 }
 
 type Coin {
-	id: ID!
+	balance: BigInt
+	asMoveObject: MoveObject
 }
 
 type CoinConnection {
@@ -242,6 +243,31 @@ type GenesisTransaction {
 }
 
 
+
+type MoveObject {
+	contents: MoveValue
+	hasPublicTransfer: Boolean
+	asObject: Object
+	asCoin: Coin
+	asStakedSui: StakedSui
+}
+
+type MoveValue {
+	bcs: Base64!
+	data: \
+The contents of a Move Value, corresponding to the following recursive type:
+
+type MoveData =
+    { Address: SuiAddress }
+  | { UID:     SuiAddress }
+  | { Bool:    bool }
+  | { Number:  BigInt }
+  | { String:  string }
+  | { Vector:  [MoveData] }
+  | { Option:   MoveData? }
+  | { Struct:  [{ name: string, value: MoveData }] }
+!
+}
 
 scalar NameService
 
@@ -493,6 +519,10 @@ type StakeSubsidy {
 	decreaseRate: Int
 }
 
+type StakedSui {
+	asMoveObject: MoveObject
+}
+
 type StorageFund {
 	totalObjectStorageRebates: BigInt
 	nonRefundableBalance: BigInt
@@ -627,6 +657,20 @@ type ValidatorSet {
 	inactivePoolsSize: Int
 	validatorCandidatesSize: Int
 }
+
+scalar \
+The contents of a Move Value, corresponding to the following recursive type:
+
+type MoveData =
+    { Address: SuiAddress }
+  | { UID:     SuiAddress }
+  | { Bool:    bool }
+  | { Number:  BigInt }
+  | { String:  string }
+  | { Vector:  [MoveData] }
+  | { Option:   MoveData? }
+  | { Struct:  [{ name: string, value: MoveData }] }
+
 
 schema {
 	query: Query

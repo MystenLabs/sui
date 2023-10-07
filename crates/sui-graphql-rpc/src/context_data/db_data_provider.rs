@@ -34,9 +34,9 @@ use sui_indexer::{
     indexer_reader::IndexerReader,
     models_v2::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
-        transactions::StoredTransaction,
+        packages::StoredPackage, transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, objects, transactions, tx_indices},
+    schema_v2::{checkpoints, epochs, objects, packages, transactions, tx_indices},
     PgConnectionPoolConfig,
 };
 use sui_json_rpc_types::SuiTransactionBlockEffects;
@@ -46,6 +46,7 @@ use sui_sdk::types::{
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
+    move_package::MovePackage as SuiMovePackage,
     object::{Data, Object as SuiObject},
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
@@ -129,6 +130,24 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredObject>(conn).optional())
             .await
+    }
+
+    /// TODO: cache modules/packages
+    async fn get_package(&self, address: Vec<u8>) -> Result<Option<StoredPackage>, Error> {
+        let mut query = packages::dsl::packages.into_boxed();
+        query = query.filter(packages::dsl::package_id.eq(address));
+
+        self.run_query_async(|conn| query.get_result::<StoredPackage>(conn).optional())
+            .await
+    }
+
+    pub async fn fetch_native_package(&self, package_id: Vec<u8>) -> Result<SuiMovePackage, Error> {
+        let package = self
+            .get_package(package_id)
+            .await?
+            .ok_or_else(|| Error::Internal("Package not found".to_string()))?;
+
+        bcs::from_bytes(&package.move_package).map_err(|e| Error::Internal(e.to_string()))
     }
 
     async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {

@@ -1,15 +1,37 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::big_int::BigInt;
+use super::move_object::MoveObject;
 use async_graphql::*;
 
-pub(crate) struct Coin;
+use sui_types::coin::Coin as NativeSuiCoin;
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
+pub(crate) struct Coin {
+    pub move_obj: MoveObject,
+}
+
 #[Object]
 impl Coin {
-    async fn id(&self) -> ID {
-        unimplemented!()
+    async fn balance(&self) -> Option<BigInt> {
+        self.move_obj
+            .native_object
+            .data
+            .try_as_move()
+            .and_then(|x| {
+                if x.is_coin() {
+                    Some(NativeSuiCoin::extract_balance_if_coin(
+                        &self.move_obj.native_object,
+                    ))
+                } else {
+                    None
+                }
+            })
+            .and_then(|x| x.expect("Coin should have balance."))
+            .map(BigInt::from)
+    }
+
+    async fn as_move_object(&self) -> Option<MoveObject> {
+        Some(self.move_obj.clone())
     }
 }
