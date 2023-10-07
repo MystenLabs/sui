@@ -38,8 +38,8 @@ pub(crate) struct MoveValue {
 
 scalar!(
     MoveData,
-    r#"\
-The contents of a Move Value, corresponding to the following recursive type:
+    "MoveData",
+    r#"The contents of a Move Value, corresponding to the following recursive type:
 
 type MoveData =
     { Address: SuiAddress }
