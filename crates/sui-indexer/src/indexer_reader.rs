@@ -194,6 +194,14 @@ impl IndexerReader {
         Ok(Some(object))
     }
 
+    pub async fn get_object_in_blocking_task(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<Option<Object>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_object(&object_id, None))
+            .await
+    }
+
     pub async fn get_object_read_in_blocking_task(
         &self,
         object_id: ObjectID,
