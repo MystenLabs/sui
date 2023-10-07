@@ -18,7 +18,7 @@ impl Coin {
             .native_object
             .data
             .try_as_move()
-            .map(|x| {
+            .and_then(|x| {
                 if x.is_coin() {
                     Some(NativeSuiCoin::extract_balance_if_coin(
                         &self.move_obj.native_object,
@@ -27,9 +27,7 @@ impl Coin {
                     None
                 }
             })
-            .flatten()
-            .map(|x| x.expect("Coin should have balance."))
-            .flatten()
+            .and_then(|x| x.expect("Coin should have balance."))
             .map(BigInt::from)
     }
 

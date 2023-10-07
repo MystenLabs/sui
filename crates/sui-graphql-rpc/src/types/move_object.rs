@@ -39,7 +39,6 @@ impl MoveObject {
                     .try_as_move()
                     .unwrap()
                     .contents()
-                    .clone()
                     .into(),
             )));
         }
@@ -59,35 +58,27 @@ impl MoveObject {
     }
 
     async fn as_coin(&self) -> Option<Coin> {
-        self.native_object
-            .data
-            .try_as_move()
-            .map(|x| {
-                if x.is_coin() {
-                    Some(Coin {
-                        move_obj: self.clone(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .flatten()
+        self.native_object.data.try_as_move().and_then(|x| {
+            if x.is_coin() {
+                Some(Coin {
+                    move_obj: self.clone(),
+                })
+            } else {
+                None
+            }
+        })
     }
 
     async fn as_staked_sui(&self) -> Option<StakedSui> {
-        self.native_object
-            .data
-            .try_as_move()
-            .map(|x| {
-                if x.type_().is_staked_sui() {
-                    Some(StakedSui {
-                        move_obj: self.clone(),
-                    })
-                } else {
-                    None
-                }
-            })
-            .flatten()
+        self.native_object.data.try_as_move().and_then(|x| {
+            if x.type_().is_staked_sui() {
+                Some(StakedSui {
+                    move_obj: self.clone(),
+                })
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -96,6 +87,7 @@ impl GetModule for MoveObject {
     type Item = CompiledModule;
 
     /// TODO: cache modules
+    #[allow(clippy::disallowed_methods)]
     fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
         let p = block_on(self.pg_manager.fetch_native_package(id.address().to_vec()))?;
         p.deserialize_module(
@@ -104,15 +96,16 @@ impl GetModule for MoveObject {
             true,
         )
         .map_err(|e| Error::new(e.to_string()))
-        .map(|x| Some(x))
+        .map(Some)
     }
 }
 
 impl ModuleResolver for MoveObject {
     type Error = Error;
 
+    #[allow(clippy::disallowed_methods)]
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let p = block_on(self.pg_manager.fetch_native_package(id.address().to_vec()))?;
-        Ok(p.get_module(id).map(|x| x.clone()))
+        Ok(p.get_module(id).cloned())
     }
 }
