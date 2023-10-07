@@ -2,7 +2,7 @@
 # section but not in both (see package B).
 
 [package]
-name = "Root"
+name = "Root-rename"
 
 [dependencies]
 A = { local = "./deps_only/A" }
