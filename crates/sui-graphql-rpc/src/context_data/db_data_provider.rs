@@ -53,6 +53,8 @@ use sui_sdk::types::{
     },
 };
 
+use super::DEFAULT_PAGE_SIZE;
+
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
     #[error("Invalid checkpoint combination. 'before' or 'after' checkpoint cannot be used with 'at' checkpoint")]
@@ -305,7 +307,7 @@ impl PgManager {
             }
         };
 
-        let limit = first.or(last).unwrap_or(10) as i64;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredTransaction>> = self
@@ -350,7 +352,7 @@ impl PgManager {
                 .order(checkpoints::dsl::sequence_number.desc());
         }
 
-        let limit = first.or(last).unwrap_or(10) as i64;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredCheckpoint>> = self
@@ -410,7 +412,7 @@ impl PgManager {
                 .order(objects::dsl::checkpoint_sequence_number.desc());
         }
 
-        let limit = first.or(last).unwrap_or(10) as i64;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredObject>> = self
