@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{big_int::BigInt, date_time::DateTime, epoch::Epoch, object::Object};
+use super::{big_int::BigInt, date_time::DateTime, epoch::Epoch, sui_address::SuiAddress};
 use crate::context_data::db_data_provider::PgManager;
 use async_graphql::{ComplexObject, Context, Result, ResultExt, SimpleObject, Union};
 
@@ -19,16 +19,13 @@ pub(crate) enum TransactionBlockKind {
 pub(crate) struct ConsensusCommitPrologueTransaction {
     #[graphql(skip)]
     pub(crate) epoch_id: u64,
-    // # TODO: This is the "leader round" -- does this line up with
-    // # checkpoints? In which case, it may suffice to have a `Checkpoint`
-    // # here.
     pub(crate) round: Option<u64>,
     pub(crate) timestamp: Option<DateTime>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct GenesisTransaction {
-    pub(crate) objects: Option<Vec<Object>>,
+    pub(crate) objects: Option<Vec<SuiAddress>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]

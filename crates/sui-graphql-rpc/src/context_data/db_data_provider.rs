@@ -990,7 +990,7 @@ impl From<&TransactionKind> for TransactionBlockKind {
                         x.objects
                             .clone()
                             .into_iter()
-                            .map(Object::from)
+                            .map(SuiAddress::from)
                             .collect::<Vec<_>>(),
                     ),
                 };
@@ -1003,21 +1003,12 @@ impl From<&TransactionKind> for TransactionBlockKind {
 
 // TODO fix this GenesisObject
 #[allow(unreachable_code)]
-impl From<GenesisObject> for Object {
+impl From<GenesisObject> for SuiAddress {
     fn from(value: GenesisObject) -> Self {
         match value {
-            GenesisObject::RawObject { data, owner } => Self {
-                owner: Some(
-                    SuiAddress::from_bytes(owner.get_owner_address().unwrap().to_vec()).unwrap(),
-                ),
-                storage_rebate: None,
-                bcs: None,
-                previous_transaction: None,
-                kind: None,
-                address: SuiAddress::from_bytes(data.id().into_bytes()).unwrap(),
-                version: unimplemented!(),
-                digest: unimplemented!(),
-            },
+            GenesisObject::RawObject { data, owner: _ } => {
+                SuiAddress::from_bytes(data.id().to_vec()).unwrap()
+            }
         }
     }
 }

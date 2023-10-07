@@ -242,7 +242,7 @@ type GasInput {
 }
 
 type GenesisTransaction {
-	objects: [Object!]
+	objects: [SuiAddress!]
 }
 
 
