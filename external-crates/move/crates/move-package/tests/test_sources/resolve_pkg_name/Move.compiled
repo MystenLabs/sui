@@ -1,5 +1,5 @@
 CompiledPackageInfo {
-    package_name: "Root",
+    package_name: "Root-rename",
     address_alias_instantiation: {
         "AA": 0000000000000000000000000000000000000000000000000000000000000001,
         "BA": 0000000000000000000000000000000000000000000000000000000000000001,
