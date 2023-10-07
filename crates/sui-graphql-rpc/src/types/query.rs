@@ -70,10 +70,13 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_obj(address, version)
-            .await
-            .extend()
+        // Use SDK data provider while DB is being reworked
+        // TODO: revert to DB data provider once it's reworked
+        ctx.data_provider().fetch_obj(address, version).await
+        // ctx.data_unchecked::<PgManager>()
+        //     .fetch_obj(address, version)
+        //     .await
+        //     .extend()
     }
 
     async fn address(&self, address: SuiAddress) -> Option<Address> {
