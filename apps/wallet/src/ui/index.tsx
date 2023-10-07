@@ -35,6 +35,8 @@ import { useAppSelector } from './app/hooks';
 import './styles/global.scss';
 import 'bootstrap-icons/font/bootstrap-icons.scss';
 
+import { DeepBookContextProvider } from '_shared/deepBook/context';
+
 async function init() {
 	if (process.env.NODE_ENV === 'development') {
 		Object.defineProperty(window, 'store', { value: store });
@@ -86,23 +88,25 @@ function AppWrapper() {
 								networks={{ [walletApiProvider.apiEnv]: walletApiProvider.instance.fullNode }}
 							>
 								<KioskClientProvider>
-									<AccountsFormProvider>
-										<UnlockAccountProvider>
-											<div
-												className={cn(
-													'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
-													isFullscreen && 'shadow-lg rounded-xl',
-												)}
-											>
-												<ErrorBoundary>
-													<App />
-													<ZkLoginAccountWarningModal />
-												</ErrorBoundary>
-												<div id="overlay-portal-container"></div>
-												<div id="toaster-portal-container"></div>
-											</div>
-										</UnlockAccountProvider>
-									</AccountsFormProvider>
+									<DeepBookContextProvider>
+										<AccountsFormProvider>
+											<UnlockAccountProvider>
+												<div
+													className={cn(
+														'relative flex flex-col flex-nowrap items-center justify-center w-popup-width min-h-popup-minimum max-h-popup-height h-screen overflow-hidden',
+														isFullscreen && 'shadow-lg rounded-xl',
+													)}
+												>
+													<ErrorBoundary>
+														<App />
+														<ZkLoginAccountWarningModal />
+													</ErrorBoundary>
+													<div id="overlay-portal-container"></div>
+													<div id="toaster-portal-container"></div>
+												</div>
+											</UnlockAccountProvider>
+										</AccountsFormProvider>
+									</DeepBookContextProvider>
 								</KioskClientProvider>
 							</SuiClientProvider>
 						</PersistQueryClientProvider>

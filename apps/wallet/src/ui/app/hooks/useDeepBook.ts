@@ -4,15 +4,14 @@
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { useSigner } from '_app/hooks/useSigner';
 import { type WalletSigner } from '_app/WalletSigner';
-import { getActiveNetworkSuiClient } from '_shared/sui-client';
-import { useGetCoins, useGetObject, useGetOwnedObjects } from '@mysten/core';
-import { useSuiClient } from '@mysten/dapp-kit';
-import { DeepBookClient } from '@mysten/deepbook';
-import { type TransactionBlock } from '@mysten/sui.js/builder';
+import { useDeepBookClient } from '_shared/deepBook/context';
+import { useGetObject, useGetOwnedObjects } from '@mysten/core';
+import { type DeepBookClient } from '@mysten/deepbook';
+import { TransactionBlock } from '@mysten/sui.js/builder';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 const DEEPBOOK_KEY = 'deepbook';
 export const SUI_CONVERSION_RATE = 1e6;
@@ -68,19 +67,12 @@ export function getUSDCurrency(amount: number | null) {
 	});
 }
 
-async function getDeepBookClient(accountCapId?: string): Promise<DeepBookClient> {
-	const suiClient = await getActiveNetworkSuiClient();
-
-	return new DeepBookClient(suiClient, accountCapId);
-}
-
 export function useDeepbookPools() {
+	const deepBookClient = useDeepBookClient();
+
 	return useQuery({
 		queryKey: [DEEPBOOK_KEY, 'get-all-pools'],
-		queryFn: async () => {
-			const deepBookClient = await getDeepBookClient();
-			return deepBookClient.getAllPools({});
-		},
+		queryFn: () => deepBookClient.getAllPools({}),
 	});
 }
 
@@ -127,11 +119,11 @@ async function getDeepbookPricesInUSD(coins: Coins[], deepBookClient: DeepBookCl
 }
 
 function useDeepbookPricesInUSD(coins: Coins[]) {
+	const deepBookClient = useDeepBookClient();
 	return useQuery({
+		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', ...coins],
 		queryFn: async () => {
-			const deepBookClient = await getDeepBookClient();
-
 			return getDeepbookPricesInUSD(coins, deepBookClient);
 		},
 	});
@@ -197,18 +189,29 @@ export function useSuiBalanceInUSDC(suiBalance: BigInt | BigNumber | null) {
 	return useBalanceConversion(suiBalance, Coins.SUI, Coins.USDC, SUI_CONVERSION_RATE);
 }
 
-export function useCreateAccount() {
+export function useCreateAccount({
+	onSuccess,
+	deepBookClient,
+}: {
+	onSuccess: () => void;
+	deepBookClient: DeepBookClient;
+}) {
 	const activeAccount = useActiveAccount();
+	const activeAccountAddress = activeAccount?.address;
 	const signer = useSigner(activeAccount);
 
 	return useMutation({
-		mutationKey: [DEEPBOOK_KEY, 'create-account'],
+		mutationKey: [DEEPBOOK_KEY, 'create-account', activeAccountAddress],
 		mutationFn: async () => {
-			const deepBookClient = await getDeepBookClient();
-			const txb = deepBookClient.createAccount(activeAccount?.address);
+			if (activeAccountAddress) {
+				const txb = deepBookClient.createAccount(activeAccountAddress);
 
-			return signer?.signAndExecuteTransactionBlock({ transactionBlock: txb });
+				return signer?.signAndExecuteTransactionBlock({ transactionBlock: txb });
+			}
+
+			return null;
 		},
+		onSuccess,
 	});
 }
 
@@ -250,51 +253,6 @@ export function useMarketAccountCap(activeAccountAddress?: string) {
 	};
 }
 
-export function useSuiUsdcTxnBlock(balanceInMist: string, accountCapId: string) {
-	const mainnetPools = useMainnetPools();
-	const coinsMap = useMainnetCoinsMap();
-	const [txnBlock, setTxnBlock] = useState<TransactionBlock | undefined>();
-	const activeAccount = useActiveAccount();
-	const activeAccountAddress = activeAccount?.address;
-	const client = useSuiClient();
-
-	const { data: suiCoinsData } = useGetCoins(coinsMap.SUI, activeAccountAddress);
-	const { data: usdcCoinsData } = useGetCoins(coinsMap.USDC, activeAccountAddress);
-
-	const suiCoinObjectId = suiCoinsData?.pages?.[0]?.data?.[0]?.coinObjectId;
-	const usdcCoinObjectId = usdcCoinsData?.pages?.[0]?.data?.[0]?.coinObjectId;
-
-	useEffect(() => {
-		async function getTxnBlock() {
-			const deepBookClient = await getDeepBookClient(accountCapId);
-
-			const txn = await deepBookClient.placeMarketOrder(
-				mainnetPools.SUI_USDC_2,
-				1000000000n,
-				'ask',
-				'0x99663671f8252d5a956bbfd32fcabeb52669c34b8b7d1f0b35ce400702a064c9',
-				undefined,
-				undefined,
-				accountCapId,
-			);
-
-			setTxnBlock(txn);
-		}
-
-		getTxnBlock();
-	}, [
-		accountCapId,
-		activeAccountAddress,
-		balanceInMist,
-		client,
-		mainnetPools.SUI_USDC_2,
-		suiCoinObjectId,
-		usdcCoinObjectId,
-	]);
-
-	return txnBlock;
-}
-
 export function useGetEstimateSuiToUSDC({
 	balanceInMist,
 	accountCapId,
@@ -304,15 +262,38 @@ export function useGetEstimateSuiToUSDC({
 	accountCapId: string;
 	signer: WalletSigner | null;
 }) {
-	const txn = useSuiUsdcTxnBlock(balanceInMist, accountCapId);
+	const mainnetPools = useMainnetPools();
+	const deepBookClient = useDeepBookClient();
+	const poolId = mainnetPools.SUI_USDC_2;
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: [DEEPBOOK_KEY, 'get-estimate', txn?.serialize()],
+		queryKey: [DEEPBOOK_KEY, 'get-estimate', poolId, accountCapId],
 		queryFn: async () => {
-			if (txn && signer) {
+			const txb = new TransactionBlock();
+
+			// if SUI > USDC
+			const baseCoin = txb.splitCoins(txb.gas, [balanceInMist]);
+
+			// if USDC > SUI
+			// useGetAllCoins implementation. Paginate through until get desired balance
+			// value in coin metaData
+
+			const txn = await deepBookClient.placeMarketOrder(
+				mainnetPools.SUI_USDC_2,
+				1000000000n,
+				'ask',
+				baseCoin,
+				undefined,
+				undefined,
+				accountCapId,
+				txb,
+			);
+
+			if (signer && txn) {
 				return signer.dryRunTransactionBlock({ transactionBlock: txn });
 			}
+
 			return null;
 		},
 		enabled: !!balanceInMist && !!signer && !!accountCapId,

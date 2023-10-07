@@ -7,7 +7,6 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Button } from '_app/shared/ButtonUI';
 import { Form } from '_app/shared/forms/Form';
 import { InputWithActionButton } from '_app/shared/InputWithAction';
-import { ErrorBoundary } from '_components/error-boundary';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
@@ -15,7 +14,6 @@ import {
 	allowedSwapCoinsList,
 	getUSDCurrency,
 	useCoinsReFetchingConfig,
-	useCreateAccount,
 	useGetEstimateSuiToUSDC,
 	useMainnetCoinsMap,
 	useMarketAccountCap,
@@ -29,13 +27,12 @@ import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
 import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
-import { Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 
 import { AssetData } from './AssetData';
-import { BaseAssets } from './BaseAssets';
 import { GasFeeSection } from './GasFeeSection';
 import { QuoteAssetSection } from './QuoteAssetSection';
 import { initialValues, useCoinTypeData, type FormValues } from './utils';
@@ -51,19 +48,14 @@ function getSwapPageAtcText(
 	return `Swap ${fromSymbol} to ${toSymbol}`;
 }
 
-function SwapPageForm() {
+export function SwapPage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const activeAccount = useActiveAccount();
 	const signer = useSigner(activeAccount);
 	const activeAccountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { mutate } = useCreateAccount();
-	const {
-		data: marketAccountCapData,
-		refetch: refetchUseMarketAccountCapLoading,
-		isLoading: useMarketAccountCapLoading,
-	} = useMarketAccountCap(activeAccount?.address);
+	const { data: marketAccountCapData } = useMarketAccountCap(activeAccount?.address);
 	const coinsMap = useMainnetCoinsMap();
 
 	const accountCapId = marketAccountCapData?.owner as string;
@@ -89,9 +81,7 @@ function SwapPageForm() {
 	const symbol = coinMetadata.data?.symbol ?? '';
 
 	const coinDecimals = coinMetadata.data?.decimals ?? 0;
-	const balanceInMist = new BigNumber(formattedBalance || '0')
-		.times(MIST_PER_SUI.toString())
-		.toString();
+	const balanceInMist = new BigNumber(formattedBalance).times(MIST_PER_SUI.toString()).toString();
 
 	const { data: estimateData } = useGetEstimateSuiToUSDC({ balanceInMist, signer, accountCapId });
 
@@ -187,13 +177,6 @@ function SwapPageForm() {
 
 	const totalGas = txnSummary?.gas?.totalGas;
 
-	useEffect(() => {
-		if (!accountCapId && !useMarketAccountCapLoading) {
-			mutate();
-			refetchUseMarketAccountCapLoading();
-		}
-	}, [accountCapId, useMarketAccountCapLoading, mutate, refetchUseMarketAccountCapLoading]);
-
 	const handleOnsubmit: SubmitHandler<FormValues> = async (data) => {};
 
 	return (
@@ -277,16 +260,5 @@ function SwapPageForm() {
 				</Loading>
 			</div>
 		</Overlay>
-	);
-}
-
-export function SwapPage() {
-	return (
-		<ErrorBoundary>
-			<Routes>
-				<Route path="/" element={<SwapPageForm />} />
-				<Route path="/base-assets" element={<BaseAssets />} />
-			</Routes>
-		</ErrorBoundary>
 	);
 }

@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SharedObjectRef } from '@mysten/sui.js/bcs';
 import {
 	getFullnodeUrl,
 	OrderArguments,
 	PaginatedEvents,
 	PaginationArguments,
 	SuiClient,
+	SuiObjectRef,
 } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	TransactionBlock,
+	TransactionObjectArgument,
+	TransactionResult,
+} from '@mysten/sui.js/transactions';
 import {
 	normalizeStructTag,
 	normalizeSuiAddress,
@@ -39,6 +45,29 @@ import {
 } from './utils';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
+
+function objArg(
+	txb: TransactionBlock,
+	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
+): TransactionObjectArgument {
+	if (typeof arg === 'string') {
+		return txb.object(arg);
+	}
+
+	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
+		return txb.objectRef(arg);
+	}
+
+	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
+		return txb.sharedObjectRef(arg);
+	}
+
+	if ('kind' in arg) {
+		return arg;
+	}
+
+	throw new Error('Invalid argument type');
+}
 
 export class DeepBookClient {
 	#poolTypeArgsCache: Map<string, string[]> = new Map();
@@ -281,12 +310,12 @@ export class DeepBookClient {
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',
-		baseCoin: string | undefined = undefined,
-		quoteCoin: string | undefined = undefined,
+		baseCoin: TransactionResult | string | undefined = undefined, // take in txn Object args
+		quoteCoin: TransactionResult | string | undefined = undefined, // take in txn Object args
 		clientOrderId: string | undefined = undefined,
 		recipientAddress: string = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
 		if (!baseCoin && orderType === 'ask') {
 			throw new Error('Must specify a valid base coin for an ask order');
@@ -308,8 +337,8 @@ export class DeepBookClient {
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.pure.u64(quantity),
 				txb.pure.bool(orderType === 'bid'),
-				baseCoin ? txb.object(baseCoin) : emptyCoin,
-				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
+				baseCoin ? objArg(txb, baseCoin) : emptyCoin,
+				quoteCoin ? objArg(txb, quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});

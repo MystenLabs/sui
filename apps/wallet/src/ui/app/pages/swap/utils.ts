@@ -18,7 +18,7 @@ export const initialValues = {
 
 export type FormValues = typeof initialValues;
 
-export function useCoinTypeData(activeCoinType: string | null) {
+export function useCoinTypeData(coinType: string | null) {
 	const selectedAddress = useActiveAddress();
 
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -34,10 +34,10 @@ export function useCoinTypeData(activeCoinType: string | null) {
 		},
 	);
 
-	const coin = coins?.find(({ coinType }) => coinType === activeCoinType);
+	const coin = coins?.find(({ coinType: cType }) => cType === coinType);
 	const coinBalance = coin?.totalBalance;
-	const [formattedBalance] = useFormatCoin(coinBalance, activeCoinType);
-	const coinMetadata = useCoinMetadata(activeCoinType);
+	const [formattedBalance] = useFormatCoin(coinBalance, coinType);
+	const coinMetadata = useCoinMetadata(coinType);
 
 	return {
 		coin,

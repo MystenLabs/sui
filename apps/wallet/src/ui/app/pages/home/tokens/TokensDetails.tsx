@@ -104,7 +104,7 @@ export function TokenRow({
 	return (
 		<Tag
 			className={clsx(
-				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent',
+				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent border-transparent',
 				onClick && 'hover:cursor-pointer',
 			)}
 			onClick={onClick}

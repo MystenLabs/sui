@@ -25,7 +25,7 @@ export function GasFeeSection({ totalGas }: { totalGas?: string }) {
 
 	const amount = watch('amount');
 
-	const estimatedFess = useMemo(() => {
+	const estimatedFees = useMemo(() => {
 		if (!amount || !isValid) {
 			return null;
 		}
@@ -33,9 +33,9 @@ export function GasFeeSection({ totalGas }: { totalGas?: string }) {
 		return new BigNumber(amount).times(FEES_PERCENTAGE);
 	}, [amount, isValid]);
 
-	const estimatedFessAsBigInt = estimatedFess ? new BigNumber(estimatedFess) : null;
+	const estimatedFeesAsBigInt = estimatedFees ? new BigNumber(estimatedFees) : null;
 
-	const { rawValue } = useSuiBalanceInUSDC(estimatedFessAsBigInt);
+	const { rawValue } = useSuiBalanceInUSDC(estimatedFeesAsBigInt);
 
 	const formattedEstimatedFees = getUSDCurrency(rawValue);
 
@@ -49,8 +49,8 @@ export function GasFeeSection({ totalGas }: { totalGas?: string }) {
 				}
 			>
 				<Text variant="bodySmall" weight="medium" color="steel-darker">
-					{estimatedFess
-						? `${estimatedFess.toLocaleString()} ${activeCoinData?.symbol} (${formattedEstimatedFees})`
+					{estimatedFees
+						? `${estimatedFees.toLocaleString()} ${activeCoinData?.symbol} (${formattedEstimatedFees})`
 						: '--'}
 				</Text>
 			</DescriptionItem>
