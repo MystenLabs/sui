@@ -2,6 +2,7 @@ ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/multiple_deps_rename",
         root_package: "test",
+        root_package_orig_name: "test",
         package_graph: {
             "test": [
                 (

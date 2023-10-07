@@ -2,6 +2,7 @@ ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/parsing_invalid_identifier_package_name",
         root_package: "®´∑œ",
+        root_package_orig_name: "®´∑œ",
         package_graph: {
             "®´∑œ": [],
         },
