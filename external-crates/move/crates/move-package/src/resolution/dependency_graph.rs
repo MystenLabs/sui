@@ -66,6 +66,8 @@ pub struct DependencyGraph {
     /// Path to the root package and its name (according to its manifest)
     pub root_path: PathBuf,
     pub root_package: PM::PackageName,
+    /// Root package name as defined in its manifest (can be different from the resolved name).
+    pub root_package_orig_name: PM::PackageName,
 
     /// Transitive dependency graph, with dependency edges `P -> Q` labelled according to whether Q
     /// is always a dependency of P or only in dev-mode.
@@ -270,6 +272,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         let mut combined_graph = DependencyGraph {
             root_path,
             root_package: root_pkg_name,
+            root_package_orig_name: root_pkg_orig_name,
             package_graph: DiGraphMap::new(),
             package_table: BTreeMap::new(),
             always_deps: BTreeSet::new(),
@@ -1108,6 +1111,7 @@ impl DependencyGraph {
         let mut graph = DependencyGraph {
             root_path,
             root_package,
+            root_package_orig_name: root_package,
             package_graph,
             package_table,
             always_deps: BTreeSet::new(),
