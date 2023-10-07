@@ -4,6 +4,7 @@
 use core::result::Result::Ok;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -28,12 +29,14 @@ use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 
 use crate::models_v2::checkpoints::StoredCheckpoint;
+use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::epoch::StoredEpochInfo;
 use crate::models_v2::events::StoredEvent;
 use crate::models_v2::objects::StoredObject;
 use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
 use crate::models_v2::tx_indices::StoredTxIndex;
+use crate::schema_v2::display;
 use crate::schema_v2::{checkpoints, epochs, events, objects, packages, transactions, tx_indices};
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
@@ -132,6 +135,33 @@ impl PgIndexerStoreV2 {
             }
         })
         .context("Failed to read object from PostgresDB")
+    }
+
+    fn persist_display_updates(
+        &self,
+        display_updates: BTreeMap<String, StoredDisplay>,
+    ) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::insert_into(display::table)
+                    .values(display_updates.values().collect::<Vec<_>>())
+                    .on_conflict(display::object_type)
+                    .do_update()
+                    .set((
+                        display::id.eq(excluded(display::id)),
+                        display::version.eq(excluded(display::version)),
+                        display::bcs.eq(excluded(display::bcs)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed to write display updates to PostgresDB")?;
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )?;
+
+        Ok(())
     }
 
     fn persist_objects_chunk(
@@ -634,6 +664,18 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         let elapsed = guard.stop_and_record();
         info!(elapsed, "Persisted {} events", len);
         Ok(())
+    }
+
+    async fn persist_displays(
+        &self,
+        display_updates: BTreeMap<String, StoredDisplay>,
+    ) -> Result<(), IndexerError> {
+        if display_updates.is_empty() {
+            return Ok(());
+        }
+
+        self.spawn_blocking_task(move |this| this.persist_display_updates(display_updates))
+            .await?
     }
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {

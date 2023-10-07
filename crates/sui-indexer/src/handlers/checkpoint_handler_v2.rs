@@ -3,11 +3,12 @@
 
 use crate::handlers::committer::start_tx_checkpoint_commit_task;
 use crate::handlers::tx_processor::IndexingPackageCache;
+use crate::models_v2::display::StoredDisplay;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use sui_rest_api::CheckpointData;
 use sui_rest_api::CheckpointTransaction;
@@ -306,14 +307,14 @@ where
         let object_changes: TransactionObjectChangesToCommit =
             Self::index_objects(data.clone(), &metrics, &module_resolver);
 
-        let (checkpoint, db_transactions, db_events, db_indices) = {
+        let (checkpoint, db_transactions, db_events, db_indices, db_displays) = {
             let CheckpointData {
                 transactions,
                 checkpoint_summary,
                 checkpoint_contents,
             } = data;
 
-            let (db_transactions, db_events, db_indices) = Self::index_transactions(
+            let (db_transactions, db_events, db_indices, db_displays) = Self::index_transactions(
                 transactions,
                 &checkpoint_summary,
                 &checkpoint_contents,
@@ -331,6 +332,7 @@ where
                 db_transactions,
                 db_events,
                 db_indices,
+                db_displays,
             )
         };
 
@@ -339,6 +341,7 @@ where
             transactions: db_transactions,
             events: db_events,
             tx_indices: db_indices,
+            display_updates: db_displays,
             object_changes,
             packages,
             epoch,
@@ -350,7 +353,12 @@ where
         checkpoint_summary: &CertifiedCheckpointSummary,
         checkpoint_contents: &CheckpointContents,
         metrics: &IndexerMetrics,
-    ) -> IndexerResult<(Vec<IndexedTransaction>, Vec<IndexedEvent>, Vec<TxIndex>)> {
+    ) -> IndexerResult<(
+        Vec<IndexedTransaction>,
+        Vec<IndexedEvent>,
+        Vec<TxIndex>,
+        BTreeMap<String, StoredDisplay>,
+    )> {
         let checkpoint_seq = checkpoint_summary.sequence_number();
 
         let mut tx_seq_num_iter = checkpoint_contents
@@ -368,6 +376,7 @@ where
 
         let mut db_transactions = Vec::new();
         let mut db_events = Vec::new();
+        let mut db_displays = BTreeMap::new();
         let mut db_indices = Vec::new();
 
         for tx in transactions {
@@ -408,6 +417,13 @@ where
                     checkpoint_summary.timestamp_ms,
                 )
             }));
+
+            db_displays.extend(
+                events
+                    .iter()
+                    .flat_map(StoredDisplay::try_from_event)
+                    .map(|display| (display.object_type.clone(), display)),
+            );
 
             let objects = input_objects
                 .iter()
@@ -490,7 +506,7 @@ where
                 move_calls,
             });
         }
-        Ok((db_transactions, db_events, db_indices))
+        Ok((db_transactions, db_events, db_indices, db_displays))
     }
 
     fn index_objects(
