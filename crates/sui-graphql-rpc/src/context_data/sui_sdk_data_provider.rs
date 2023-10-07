@@ -54,6 +54,7 @@ use sui_sdk::{
 };
 
 use super::data_provider::DataProvider;
+use super::DEFAULT_PAGE_SIZE;
 
 // TODO: Ensure the logic is this file is for verification/experimentation only
 // and is not used in production
@@ -61,8 +62,6 @@ use super::data_provider::DataProvider;
 const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
-
-const DEFAULT_PAGE_SIZE: usize = 50;
 
 pub(crate) struct SuiClientLoader {
     pub client: SuiClient,
@@ -236,7 +235,7 @@ impl DataProvider for SuiClient {
     ) -> Result<Connection<String, Balance>> {
         ensure_forward_pagination(&first, &after, &last, &before)?;
 
-        let count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64) as usize;
+        let count = first.unwrap_or(DEFAULT_PAGE_SIZE) as usize;
         let offset = after
             .map(|q| q.parse::<usize>().unwrap())
             .unwrap_or(0_usize);
