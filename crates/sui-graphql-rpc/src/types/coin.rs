@@ -6,20 +6,24 @@ use super::move_object::MoveObject;
 use async_graphql::*;
 
 use sui_types::coin::Coin as NativeSuiCoin;
-use super::big_int::BigInt;
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[derive(Clone, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Coin {
+    pub id: ID,
     #[graphql(skip)]
     pub move_obj: MoveObject,
-    pub id: ID,
-    pub balance: Option<BigInt>
+    #[graphql(skip)]
+    pub balance: Option<BigInt>,
 }
 
-#[Object]
+#[ComplexObject]
 impl Coin {
     async fn balance(&self) -> Option<BigInt> {
+        if let Some(existing_balance) = &self.balance {
+            return Some(existing_balance.clone());
+        }
+
         self.move_obj
             .native_object
             .data

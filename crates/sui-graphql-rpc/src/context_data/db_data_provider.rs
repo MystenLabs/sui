@@ -17,6 +17,7 @@ use crate::{
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
+        move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
@@ -1244,12 +1245,17 @@ impl TryFrom<StoredObject> for Coin {
     type Error = Error;
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
-        let object_id = SuiAddress::try_from(o.object_id).map_err(|_| {
+        let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
             Error::Internal("Failed to convert object_id to SuiAddress".to_string())
         })?;
         let id = ID(object_id.to_string());
         let balance = o.coin_balance.map(BigInt::from);
+        let native_object: SuiObject = o.try_into()?;
 
-        Ok(Self { id, balance })
+        Ok(Self {
+            id,
+            balance,
+            move_obj: MoveObject { native_object },
+        })
     }
 }
