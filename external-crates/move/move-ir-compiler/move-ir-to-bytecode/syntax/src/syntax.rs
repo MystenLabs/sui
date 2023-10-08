@@ -1481,7 +1481,7 @@ fn parse_acquire_list(
     Ok(al)
 }
 
-//// Spec language parsing ////
+/// Spec language parsing ///
 
 // parses Name '.' Name and returns pair of strings.
 fn spec_parse_dot_name(

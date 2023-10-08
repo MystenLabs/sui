@@ -286,6 +286,7 @@ where
 
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
+#[allow(clippy::needless_if)]
 fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
     if matches!(
         context.tokens.peek(),

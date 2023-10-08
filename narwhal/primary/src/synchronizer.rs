@@ -990,10 +990,7 @@ impl Synchronizer {
             //         to workers #1 (rather than workers #0). Also, clients will never be able to retrieve batch
             //         X as they will be querying worker #1.
             if !inner.payload_store.contains(*digest, *worker_id)? {
-                missing
-                    .entry(*worker_id)
-                    .or_insert_with(Vec::new)
-                    .push(*digest);
+                missing.entry(*worker_id).or_default().push(*digest);
             }
         }
 

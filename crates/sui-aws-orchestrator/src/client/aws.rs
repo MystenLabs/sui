@@ -265,7 +265,7 @@ impl ServerProviderClient for AwsClient {
         for instance in instances {
             instance_ids
                 .entry(&instance.region)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(instance.id.clone());
         }
 
@@ -290,7 +290,7 @@ impl ServerProviderClient for AwsClient {
         for instance in instances {
             instance_ids
                 .entry(&instance.region)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(instance.id.clone());
         }
 
