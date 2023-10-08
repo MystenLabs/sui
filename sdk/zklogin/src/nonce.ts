@@ -2,18 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { PublicKey } from '@mysten/sui.js/cryptography';
+import { toB64, toHEX } from '@mysten/bcs';
 import { toBigEndianBytes } from '@mysten/sui.js/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { base64url } from 'jose';
 
 import { poseidonHash } from './poseidon.js';
-import { toBigIntBE } from './utils.js';
 
 export const NONCE_LENGTH = 27;
 
+function toBigIntBE(bytes: Uint8Array) {
+	const hex = toHEX(bytes);
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
+	return BigInt(`0x${hex}`);
+}
+
 export function generateRandomness() {
-	// Once Node 20 enters LTS, we can just use crypto.getRandomValues(new Uint8Array(16)), but until then this improves compatibility:
-	return String(toBigIntBE(randomBytes(16)));
+	// Once Node 20 enters LTS, we can just use crypto.getRandomValues(new Uint8Array(16)), but until then we use `randomBytes` to improve compatibility:
+	return toB64(randomBytes(16));
 }
 
 export function generateNonce(publicKey: PublicKey, maxEpoch: number, randomness: bigint | string) {
