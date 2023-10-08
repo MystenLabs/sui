@@ -1517,12 +1517,6 @@ impl ProtocolConfig {
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
                 }
-                27 => {
-                    // zklogin::check_zklogin_id
-                    cfg.check_zklogin_id_cost_base = Some(200);
-                    // zklogin::check_zklogin_issuer
-                    cfg.check_zklogin_issuer_cost_base = Some(200);
-                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

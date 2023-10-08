@@ -388,10 +388,10 @@ where
 
         let mut interval = tokio::time::interval(self.config.interval_period());
         let mut peer_events = {
-            let (subscriber, peers) = self.network.subscribe().unwrap();
-            for peer_id in peers {
-                self.spawn_get_latest_from_peer(peer_id);
-            }
+            let (subscriber, _peers) = self.network.subscribe().unwrap();
+            // for peer_id in peers {
+            //     self.spawn_get_latest_from_peer(peer_id);
+            // }
             subscriber
         };
         let (
@@ -602,8 +602,9 @@ where
         use tokio::sync::broadcast::error::RecvError;
 
         match peer_event {
-            Ok(PeerEvent::NewPeer(peer_id)) => {
-                self.spawn_get_latest_from_peer(peer_id);
+            Ok(PeerEvent::NewPeer(_peer_id)) => {
+                trace!("State-Sync skipping new peer event");
+                // self.spawn_get_latest_from_peer(peer_id);
             }
             Ok(PeerEvent::LostPeer(peer_id, _)) => {
                 self.peer_heights.write().unwrap().peers.remove(&peer_id);
@@ -638,13 +639,13 @@ where
     }
 
     fn handle_tick(&mut self, _now: std::time::Instant) {
-        let task = query_peers_for_their_latest_checkpoint(
-            self.network.clone(),
-            self.peer_heights.clone(),
-            self.weak_sender.clone(),
-            self.config.timeout(),
-        );
-        self.tasks.spawn(task);
+        // let task = query_peers_for_their_latest_checkpoint(
+        //     self.network.clone(),
+        //     self.peer_heights.clone(),
+        //     self.weak_sender.clone(),
+        //     self.config.timeout(),
+        // );
+        // self.tasks.spawn(task);
 
         if let Some(layer) = self.download_limit_layer.as_ref() {
             layer.maybe_prune_map();
