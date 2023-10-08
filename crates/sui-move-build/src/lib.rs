@@ -39,7 +39,7 @@ use move_package::{
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
-    resolution::resolution_graph::Package, source_package::parsed_manifest::CustomDepInfo,
+    resolution::resolution_graph::Package, source_package::parsed_manifest::OnChainInfo,
     source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
@@ -597,14 +597,10 @@ impl PackageHooks for SuiPackageHooks {
         vec![PUBLISHED_AT_MANIFEST_FIELD.to_string()]
     }
 
-    fn custom_dependency_key(&self) -> Option<String> {
-        None
-    }
-
-    fn resolve_custom_dependency(
+    fn resolve_on_chain_dependency(
         &self,
         _dep_name: move_symbol_pool::Symbol,
-        _info: &CustomDepInfo,
+        _info: &OnChainInfo,
     ) -> anyhow::Result<()> {
         Ok(())
     }
