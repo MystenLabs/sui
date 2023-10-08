@@ -232,13 +232,12 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         };
 
         // collect sub-graphs for "regular" and "dev" dependencies
-        let root_pkg_name =
-            custom_resolve_pkg_name(&root_path, &root_manifest).with_context(|| {
-                format!(
-                    "Resolving package name for '{}'",
-                    root_manifest.package.name
-                )
-            })?;
+        let root_pkg_name = custom_resolve_pkg_name(&root_manifest).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                root_manifest.package.name
+            )
+        })?;
         let root_pkg_orig_name = root_manifest.package.name;
         let (mut dep_graphs, resolved_name_deps, mut dep_orig_names, mut overrides) = self
             .collect_graphs(
@@ -440,9 +439,9 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 // resolve name and version
                 let manifest =
                     parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
-                let resolved_pkg_name = custom_resolve_pkg_name(&pkg_path, &manifest)
+                let resolved_pkg_name = custom_resolve_pkg_name(&manifest)
                     .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
-                let resolved_version = resolve_version(&pkg_path, &manifest)
+                let resolved_version = resolve_version(&manifest)
                     .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
                 check_for_dep_cycles(d.clone(), resolved_pkg_name, &mut self.visited_dependencies)?;
 

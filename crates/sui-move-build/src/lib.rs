@@ -609,15 +609,11 @@ impl PackageHooks for SuiPackageHooks {
         Ok(())
     }
 
-    fn custom_resolve_pkg_name(
-        &self,
-        _: &PathBuf,
-        manifest: &SourceManifest,
-    ) -> anyhow::Result<Symbol> {
+    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
         Ok(manifest.package.name.clone())
     }
 
-    fn resolve_version(&self, _: &PathBuf, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+    fn resolve_version(&self, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
         Ok(None)
     }
 }

@@ -349,13 +349,12 @@ impl Package {
     }
 
     fn define_addresses_in_package(&self, resolving_table: &mut ResolvingTable) -> Result<()> {
-        let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
-            .with_context(|| {
-                format!(
-                    "Resolving package name for '{}'",
-                    &self.source_package.package.name
-                )
-            })?;
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
             resolving_table.define((pkg_name, *name), *addr)?;
         }
@@ -370,13 +369,12 @@ impl Package {
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
         let pkg_orig_name = self.source_package.package.name;
-        let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
-            .with_context(|| {
-                format!(
-                    "Resolving package name for '{}'",
-                    &self.source_package.package.name
-                )
-            })?;
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         let dep_orig_name = dep.dep_orig_name;
 
         let mut dep_renaming = BTreeMap::new();
@@ -444,13 +442,12 @@ impl Package {
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
         let pkg_orig_name = self.source_package.package.name;
-        let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
-            .with_context(|| {
-                format!(
-                    "Resolving package name for '{}'",
-                    &self.source_package.package.name
-                )
-            })?;
+        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+            format!(
+                "Resolving package name for '{}'",
+                &self.source_package.package.name
+            )
+        })?;
         let mut unresolved_addresses = Vec::new();
 
         for (name, addr) in resolving_table.bindings(pkg_name) {
@@ -477,7 +474,7 @@ impl Package {
     }
 
     pub fn immediate_dependencies(&self, graph: &ResolvedGraph) -> BTreeSet<PackageName> {
-        let pkg_name = custom_resolve_pkg_name(&self.package_path, &self.source_package)
+        let pkg_name = custom_resolve_pkg_name(&self.source_package)
             .with_context(|| {
                 format!(
                     "Resolving package name for '{}'",

@@ -5,7 +5,7 @@ use crate::source_package::parsed_manifest::{CustomDepInfo, SourceManifest};
 use anyhow::bail;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
-use std::{path::PathBuf, sync::Mutex};
+use std::sync::Mutex;
 
 // TODO: remove static hooks and refactor this crate for better customizability
 
@@ -28,17 +28,9 @@ pub trait PackageHooks {
         info: &CustomDepInfo,
     ) -> anyhow::Result<()>;
 
-    fn custom_resolve_pkg_name(
-        &self,
-        pkg_path: &PathBuf,
-        manifest: &SourceManifest,
-    ) -> anyhow::Result<Symbol>;
+    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol>;
 
-    fn resolve_version(
-        &self,
-        pkg_path: &PathBuf,
-        manifest: &SourceManifest,
-    ) -> anyhow::Result<Option<Symbol>>;
+    fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>>;
 }
 static HOOKS: Lazy<Mutex<Option<Box<dyn PackageHooks + Send + Sync>>>> =
     Lazy::new(|| Mutex::new(None));
@@ -77,23 +69,17 @@ pub(crate) fn custom_package_info_fields() -> Vec<String> {
     }
 }
 
-pub(crate) fn custom_resolve_pkg_name(
-    pkg_path: &PathBuf,
-    manifest: &SourceManifest,
-) -> anyhow::Result<Symbol> {
+pub(crate) fn custom_resolve_pkg_name(manifest: &SourceManifest) -> anyhow::Result<Symbol> {
     if let Some(hooks) = &*HOOKS.lock().unwrap() {
-        hooks.custom_resolve_pkg_name(pkg_path, manifest)
+        hooks.custom_resolve_pkg_name(manifest)
     } else {
         Ok(manifest.package.name)
     }
 }
 
-pub(crate) fn resolve_version(
-    pkg_path: &PathBuf,
-    manifest: &SourceManifest,
-) -> anyhow::Result<Option<Symbol>> {
+pub(crate) fn resolve_version(manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
     if let Some(hooks) = &*HOOKS.lock().unwrap() {
-        hooks.resolve_version(pkg_path, manifest)
+        hooks.resolve_version(manifest)
     } else {
         Ok(None)
     }
