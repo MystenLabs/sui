@@ -77,6 +77,7 @@ pub(crate) struct Owner {
     pub address: SuiAddress,
 }
 
+#[allow(clippy::diverging_sub_expression)]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]

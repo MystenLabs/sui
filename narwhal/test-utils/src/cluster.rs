@@ -512,6 +512,7 @@ struct AuthorityDetailsInternal {
     workers: HashMap<WorkerId, WorkerNodeDetails>,
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 impl AuthorityDetails {
     pub fn new(
         id: usize,

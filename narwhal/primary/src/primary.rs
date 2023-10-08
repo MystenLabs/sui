@@ -66,7 +66,7 @@ use types::{
     WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
-#[cfg(any(test))]
+#[cfg(test)]
 #[path = "tests/primary_tests.rs"]
 pub mod primary_tests;
 
