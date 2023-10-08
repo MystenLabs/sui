@@ -22,7 +22,7 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::{node_state_getter::NodeStateGetter, headers::Accept, AppError, Bcs};
+use crate::{headers::Accept, node_state_getter::NodeStateGetter, AppError, Bcs};
 
 pub const GET_LATEST_CHECKPOINT_PATH: &str = "/checkpoints";
 pub const GET_CHECKPOINT_PATH: &str = "/checkpoints/:checkpoint";
