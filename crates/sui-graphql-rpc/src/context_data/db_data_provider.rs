@@ -1244,7 +1244,10 @@ impl TryFrom<StoredObject> for Coin {
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
-            Error::Internal(format!("Failed to convert object_id {:?} to SuiAddress", o.object_id))
+            Error::Internal(format!(
+                "Failed to convert object_id {:?} to SuiAddress",
+                o.object_id
+            ))
         })?;
         let id = ID(object_id.to_string());
         let balance = o.coin_balance.map(BigInt::from);
