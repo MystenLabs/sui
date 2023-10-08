@@ -94,11 +94,15 @@ impl StateSnapshotReaderV1 {
         for file_metadata in manifest.file_metadata() {
             match file_metadata.file_type {
                 FileType::Object => {
-                    let entry = object_files.entry(file_metadata.bucket_num).or_default();
+                    let entry = object_files
+                        .entry(file_metadata.bucket_num)
+                        .or_insert_with(BTreeMap::new);
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
                 FileType::Reference => {
-                    let entry = ref_files.entry(file_metadata.bucket_num).or_default();
+                    let entry = ref_files
+                        .entry(file_metadata.bucket_num)
+                        .or_insert_with(BTreeMap::new);
                     entry.insert(file_metadata.part_num, file_metadata.clone());
                 }
             }
