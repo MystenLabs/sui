@@ -16,7 +16,7 @@ use std::{
 
 use crate::{
     lock_file::{schema, LockFile},
-    package_hooks::{self, custom_resolve_pkg_id, resolve_version, PackageIdentifier},
+    package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
     source_package::{
         layout::SourcePackageLayout,
         manifest_parser::{
@@ -1117,7 +1117,7 @@ impl DependencyGraph {
         } in packages.packages.into_iter().flatten()
         {
             let pkg_id = PackageIdentifier::from(pkg_id.as_str());
-            let source = parse_dependency(pkg_id.as_str(), source)
+            let source = parse_dependency(source)
                 .with_context(|| format!("Deserializing dependency '{pkg_id}'"))?;
 
             let source = match source {
@@ -1523,23 +1523,9 @@ impl fmt::Display for Package {
                 f.write_str(&path_escape(subdir)?)?;
             }
 
-            PM::DependencyKind::Custom(PM::CustomDepInfo {
-                node_url,
-                package_address,
-                subdir,
-                package_name: _,
-            }) => {
-                let custom_key = package_hooks::custom_dependency_key().ok_or(fmt::Error)?;
-
-                f.write_str(&custom_key)?;
-                write!(f, " = ")?;
-                f.write_str(&str_escape(node_url.as_str())?)?;
-
-                write!(f, ", address = ")?;
-                f.write_str(&str_escape(package_address.as_str())?)?;
-
-                write!(f, ", subdir = ")?;
-                f.write_str(&path_escape(subdir)?)?;
+            PM::DependencyKind::OnChain(PM::OnChainInfo { id }) => {
+                write!(f, "id = ")?;
+                f.write_str(&str_escape(id.as_str())?)?;
             }
         }
 
