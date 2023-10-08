@@ -14,8 +14,8 @@ use itertools::Itertools;
 #[allow(unused_imports)]
 use log::{debug, info, log, warn, Level};
 
-use move_core_types::language_storage::StructTag;
 use move_compiler::interface_generator::NATIVE_INTERFACE;
+use move_core_types::language_storage::StructTag;
 use move_model::{
     ast::{Attribute, TempIndex, TraceKind},
     code_writer::CodeWriter,

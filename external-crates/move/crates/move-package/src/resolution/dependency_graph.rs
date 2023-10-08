@@ -108,14 +108,14 @@ impl DependencyGraphInfo {
         mode: DependencyMode,
         is_override: bool,
         is_external: bool,
-        version: Option<Symbol>
+        version: Option<Symbol>,
     ) -> Self {
         Self {
             g,
             mode,
             is_override,
             is_external,
-            version
+            version,
         }
     }
 }
@@ -240,26 +240,28 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 )
             })?;
         let root_pkg_orig_name = root_manifest.package.name;
-        let (mut dep_graphs, resolved_name_deps, mut dep_orig_names, mut overrides) = self.collect_graphs(
-            parent,
-            root_pkg_name,
-            root_pkg_orig_name,
-            root_path.clone(),
-            DependencyMode::Always,
-            root_manifest.dependencies.clone(),
-        )?;
+        let (mut dep_graphs, resolved_name_deps, mut dep_orig_names, mut overrides) = self
+            .collect_graphs(
+                parent,
+                root_pkg_name,
+                root_pkg_orig_name,
+                root_path.clone(),
+                DependencyMode::Always,
+                root_manifest.dependencies.clone(),
+            )?;
         let dep_lock_files = dep_graphs
             .values()
             .map(|graph_info| graph_info.g.write_to_lock(self.install_dir.clone()))
             .collect::<Result<Vec<LockFile>>>()?;
-        let (dev_dep_graphs, dev_resolved_name_deps, dev_dep_orig_names, dev_overrides) = self.collect_graphs(
-            parent,
-            root_pkg_name,
-            root_pkg_orig_name,
-            root_path.clone(),
-            DependencyMode::DevOnly,
-            root_manifest.dev_dependencies.clone(),
-        )?;
+        let (dev_dep_graphs, dev_resolved_name_deps, dev_dep_orig_names, dev_overrides) = self
+            .collect_graphs(
+                parent,
+                root_pkg_name,
+                root_pkg_orig_name,
+                root_path.clone(),
+                DependencyMode::DevOnly,
+                root_manifest.dev_dependencies.clone(),
+            )?;
 
         let dev_dep_lock_files = dev_dep_graphs
             .values()
@@ -310,7 +312,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 mode,
                 is_override,
                 is_external: _,
-                version: _
+                version: _,
             },
         ) in dep_graphs.iter_mut()
         {
@@ -332,7 +334,14 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         // we can mash overrides together as the sets cannot overlap (it's asserted during pruning)
         overrides.extend(dev_overrides);
 
-        combined_graph.merge(dep_graphs, parent, &all_deps, &overrides, &dep_orig_names, root_pkg_orig_name)?;
+        combined_graph.merge(
+            dep_graphs,
+            parent,
+            &all_deps,
+            &overrides,
+            &dep_orig_names,
+            root_pkg_orig_name,
+        )?;
 
         combined_graph.check_acyclic()?;
         combined_graph.discover_always_deps();
@@ -354,7 +363,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         BTreeMap<PM::PackageName, DependencyGraphInfo>,
         PM::Dependencies,
         BTreeMap<Symbol, PM::PackageName>,
-        BTreeMap<Symbol, Package>
+        BTreeMap<Symbol, Package>,
     )> {
         let mut dep_graphs = BTreeMap::new();
         let mut resolved_name_deps = PM::Dependencies::new();
@@ -378,7 +387,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 })?;
             dep_graphs.insert(
                 resolved_pkg_name,
-                DependencyGraphInfo::new(pkg_graph, mode, is_override, is_external, resolved_version),
+                DependencyGraphInfo::new(
+                    pkg_graph,
+                    mode,
+                    is_override,
+                    is_external,
+                    resolved_version,
+                ),
             );
             resolved_name_deps.insert(resolved_pkg_name, dep.clone());
             dep_orig_names.insert(resolved_pkg_name, dep_pkg_name);
@@ -391,7 +406,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 let mut dep_pkg = Package {
                     kind,
                     resolver: None,
-                    version: resolved_version
+                    version: resolved_version,
                 };
                 dep_pkg.kind.reroot(parent)?;
                 overrides.insert(resolved_pkg_name, dep_pkg);
@@ -423,16 +438,12 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                     std::fs::read_to_string(pkg_path.join(SourcePackageLayout::Lock.path())).ok();
 
                 // resolve name and version
-                let manifest = parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
-                let resolved_pkg_name = custom_resolve_pkg_name(
-                    &pkg_path,
-                    &manifest
-                ).with_context(
-                    || format!("Resolving package name for '{}'", dep_pkg_name)
-                )?;
-                let resolved_version = resolve_version(&pkg_path, &manifest).with_context(
-                    || format!("Resolving version for '{}'", dep_pkg_name)
-                )?;
+                let manifest =
+                    parse_source_manifest(parse_move_manifest_string(manifest_string.clone())?)?;
+                let resolved_pkg_name = custom_resolve_pkg_name(&pkg_path, &manifest)
+                    .with_context(|| format!("Resolving package name for '{}'", dep_pkg_name))?;
+                let resolved_version = resolve_version(&pkg_path, &manifest)
+                    .with_context(|| format!("Resolving version for '{}'", dep_pkg_name))?;
                 check_for_dep_cycles(d.clone(), resolved_pkg_name, &mut self.visited_dependencies)?;
 
                 // save dependency for cycle detection
@@ -454,7 +465,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                         p.kind.reroot(&d.kind)?;
                     }
                 }
-                (pkg_graph, d.dep_override, false, resolved_pkg_name, resolved_version)
+                (
+                    pkg_graph,
+                    d.dep_override,
+                    false,
+                    resolved_pkg_name,
+                    resolved_version,
+                )
             }
             PM::Dependency::External(resolver) => {
                 let pkg_graph = DependencyGraph::get_external(
@@ -470,7 +487,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 (pkg_graph, false, true, dep_pkg_name, None)
             }
         };
-        Ok((pkg_graph, is_override, is_external, resolved_pkg_name, resolved_version))
+        Ok((
+            pkg_graph,
+            is_override,
+            is_external,
+            resolved_pkg_name,
+            resolved_version,
+        ))
     }
 
     /// Computes dependency hashes.
@@ -534,7 +557,13 @@ impl DependencyGraph {
             )?;
             self.prune_overriden_pkgs(root_package, root_package_orig_name, mode, &o, &dev_o)?;
         } else {
-            self.prune_overriden_pkgs(root_package, root_package_orig_name, mode, overrides, dev_overrides)?;
+            self.prune_overriden_pkgs(
+                root_package,
+                root_package_orig_name,
+                mode,
+                overrides,
+                dev_overrides,
+            )?;
         }
         Ok(())
     }
@@ -900,7 +929,7 @@ impl DependencyGraph {
                     let mut pkg = Package {
                         kind: kind.clone(),
                         resolver: None,
-                        version: dep_version
+                        version: dep_version,
                     };
                     pkg.kind.reroot(parent)?;
                     entry.insert(pkg);
@@ -1094,7 +1123,7 @@ impl DependencyGraph {
             let pkg = Package {
                 kind: source.kind,
                 resolver,
-                version: version.map(|v| Symbol::from(v))
+                version: version.map(|v| Symbol::from(v)),
             };
 
             match package_table.entry(pkg_name) {
@@ -1654,7 +1683,7 @@ fn deps_equal<'a>(
     for pkg_name in diff_pkgs {
         if let Some((dep, pkg)) = graph1_edges.remove(pkg_name) {
             graph1_pkgs.push((dep, *pkg_name, pkg));
-            continue
+            continue;
         }
         if let Some((dep, pkg)) = graph2_edges.remove(pkg_name) {
             graph2_pkgs.push((dep, *pkg_name, pkg));

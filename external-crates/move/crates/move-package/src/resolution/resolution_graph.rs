@@ -459,8 +459,9 @@ impl Package {
                     self.resolved_table.insert(name, addr);
                 }
                 None => {
-                    unresolved_addresses
-                        .push(format!("  Named address '{name}' in package '{pkg_orig_name}'"));
+                    unresolved_addresses.push(format!(
+                        "  Named address '{name}' in package '{pkg_orig_name}'"
+                    ));
                 }
             }
         }

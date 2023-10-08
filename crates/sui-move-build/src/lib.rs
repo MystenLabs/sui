@@ -617,11 +617,7 @@ impl PackageHooks for SuiPackageHooks {
         Ok(manifest.package.name.clone())
     }
 
-    fn resolve_version(
-        &self,
-        _: &PathBuf,
-        _: &SourceManifest,
-    ) -> anyhow::Result<Option<Symbol>> {
+    fn resolve_version(&self, _: &PathBuf, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
         Ok(None)
     }
 }
