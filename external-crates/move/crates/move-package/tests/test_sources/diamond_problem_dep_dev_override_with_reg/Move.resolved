@@ -58,18 +58,21 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/A",
                 ),
+                version: None,
                 resolver: None,
             },
             "B": Package {
                 kind: Local(
                     "deps_only/B",
                 ),
+                version: None,
                 resolver: None,
             },
             "C": Package {
                 kind: Local(
                     "deps_only/C-v1",
                 ),
+                version: None,
                 resolver: None,
             },
         },

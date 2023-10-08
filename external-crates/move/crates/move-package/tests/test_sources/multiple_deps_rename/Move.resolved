@@ -32,12 +32,14 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/C",
                 ),
+                version: None,
                 resolver: None,
             },
             "D": Package {
                 kind: Local(
                     "deps_only/D",
                 ),
+                version: None,
                 resolver: None,
             },
         },

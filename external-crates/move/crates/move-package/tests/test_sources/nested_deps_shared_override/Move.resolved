@@ -66,18 +66,21 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/more",
                 ),
+                version: None,
                 resolver: None,
             },
             "Nested": Package {
                 kind: Local(
                     "deps_only/nested",
                 ),
+                version: None,
                 resolver: None,
             },
             "Shared": Package {
                 kind: Local(
                     "deps_only/shared",
                 ),
+                version: None,
                 resolver: None,
             },
         },

@@ -232,6 +232,14 @@ impl PackageHooks for TestHooks {
             Ok(manifest.package.name)
         }
     }
+
+    fn resolve_version(
+        &self,
+        _: &PathBuf,
+        _: &SourceManifest,
+    ) -> anyhow::Result<Option<Symbol>> {
+        Ok(None)
+    }
 }
 
 datatest_stable::harness!(run_test, "tests/test_sources", r".*\.toml$");

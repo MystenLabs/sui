@@ -33,6 +33,12 @@ pub trait PackageHooks {
         pkg_path: &PathBuf,
         manifest: &SourceManifest,
     ) -> anyhow::Result<Symbol>;
+
+    fn resolve_version(
+        &self,
+        pkg_path: &PathBuf,
+        manifest: &SourceManifest,
+    ) -> anyhow::Result<Option<Symbol>>;
 }
 static HOOKS: Lazy<Mutex<Option<Box<dyn PackageHooks + Send + Sync>>>> =
     Lazy::new(|| Mutex::new(None));
@@ -79,5 +85,16 @@ pub(crate) fn custom_resolve_pkg_name(
         hooks.custom_resolve_pkg_name(pkg_path, manifest)
     } else {
         Ok(manifest.package.name)
+    }
+}
+
+pub(crate) fn resolve_version(
+    pkg_path: &PathBuf,
+    manifest: &SourceManifest,
+) -> anyhow::Result<Option<Symbol>> {
+    if let Some(hooks) = &*HOOKS.lock().unwrap() {
+        hooks.resolve_version(pkg_path, manifest)
+    } else {
+        Ok(None)
     }
 }

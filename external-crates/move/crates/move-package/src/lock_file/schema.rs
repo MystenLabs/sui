@@ -45,6 +45,9 @@ pub struct Package {
     /// structs, so it is deserialized into a generic data structure.
     pub source: Value,
 
+    /// The version resolved from the version resolution hook.
+    pub version: Option<String>,
+
     pub dependencies: Option<Vec<Dependency>>,
     #[serde(rename = "dev-dependencies")]
     pub dev_dependencies: Option<Vec<Dependency>>,
