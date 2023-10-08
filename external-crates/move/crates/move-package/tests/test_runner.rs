@@ -198,7 +198,7 @@ struct TestHooks();
 
 impl PackageHooks for TestHooks {
     fn custom_package_info_fields(&self) -> Vec<String> {
-        vec!["test_hooks_field".to_owned()]
+        vec!["test_hooks_field".to_owned(), "version".to_owned()]
     }
 
     fn custom_dependency_key(&self) -> Option<String> {
@@ -229,8 +229,12 @@ impl PackageHooks for TestHooks {
         }
     }
 
-    fn resolve_version(&self, _: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
-        Ok(None)
+    fn resolve_version(&self, manifest: &SourceManifest) -> anyhow::Result<Option<Symbol>> {
+        Ok(manifest
+            .package
+            .custom_properties
+            .get(&Symbol::from("version"))
+            .map(|v| Symbol::from(v.as_ref())))
     }
 }
 
