@@ -763,7 +763,7 @@ impl SimpleFaucet {
             // Insert the coins into the map based on the destination address
             address_coins_map
                 .entry(owner.get_owner_address().unwrap())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(coin_obj_ref);
         });
 
@@ -778,7 +778,7 @@ impl SimpleFaucet {
             let index = *request_count.entry(addy).or_insert(0);
 
             // The address coin map should contain the coins transferred in the given request.
-            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(Vec::new);
+            let coins_created_for_address = address_coins_map.entry(addy).or_default();
 
             if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
                 return Err(FaucetError::CoinAmountTransferredIncorrect(format!(

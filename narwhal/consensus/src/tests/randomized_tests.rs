@@ -650,9 +650,7 @@ fn create_execution_plan(
             // shuffle the children here again to create a different execution plan
             children.shuffle(&mut rand);
 
-            while !children.is_empty() {
-                let c = children.pop().unwrap();
-
+            while let Some(c) = children.pop() {
                 // has this children any other dependencies (certificate parents that have not been
                 // already sorted)? If not, then add it to the candidate of nodes without incoming edges.
                 let has_more_dependencies = adjacency_parent_to_children

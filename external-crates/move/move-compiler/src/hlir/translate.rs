@@ -1510,7 +1510,7 @@ fn struct_name(sp!(_, t): &H::Type) -> Option<StructName> {
         H::SingleType_::Base(bt) => bt,
         H::SingleType_::Ref(_, bt) => bt,
     };
-    let H::BaseType_::Apply(_, tname ,_ ) = &bt.value else {
+    let H::BaseType_::Apply(_, tname, _) = &bt.value else {
         return None;
     };
     if let H::TypeName_::ModuleType(_, struct_name) = tname.value {

@@ -960,7 +960,7 @@ fn process_package(
     }
     let loaded_dependencies: Vec<_> = dependencies
         .iter()
-        .zip(dependency_objects.into_iter())
+        .zip(dependency_objects)
         .filter_map(|(dependency, object)| {
             Some((
                 InputObjectKind::MovePackage(*dependency),

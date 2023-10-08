@@ -2431,7 +2431,8 @@ impl Frame {
             .loader()
             .vm_config()
             .runtime_limits_config
-            .max_value_nest_depth else {
+            .max_value_nest_depth
+        else {
             return Ok(1);
         };
         Self::check_depth_of_type_impl(resolver, ty, 0, max_depth)

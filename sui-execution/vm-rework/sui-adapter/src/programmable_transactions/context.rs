@@ -48,7 +48,7 @@ mod checked {
     use sui_types::execution::ExecutionResults;
     use sui_types::{
         balance::Balance,
-        base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
+        base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
@@ -1323,7 +1323,7 @@ mod checked {
         MoveObject::new_from_execution(
             struct_tag.into(),
             has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
+            old_obj_ver.unwrap_or_default(),
             contents,
             protocol_config,
         )

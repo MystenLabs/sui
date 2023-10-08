@@ -532,7 +532,7 @@ impl TransactionManager {
             )
             .expect("Checking object existence cannot fail!")
             .into_iter()
-            .zip(input_object_cache_misses.into_iter());
+            .zip(input_object_cache_misses);
 
         // After this point, the function cannot return early and must run to the end. Otherwise,
         // it can lead to data inconsistencies and potentially some transactions will never get

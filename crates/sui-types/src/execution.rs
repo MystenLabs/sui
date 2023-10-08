@@ -123,7 +123,7 @@ impl ExecutionResultsV2 {
         lamport_version: SequenceNumber,
         prev_tx: TransactionDigest,
     ) {
-        for (id, mut obj) in self.written_objects.iter_mut() {
+        for (id, obj) in self.written_objects.iter_mut() {
             // TODO: All of the following is no longer necessary and can be simplified.
 
             // Update the version for the written object.

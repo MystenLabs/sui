@@ -98,7 +98,7 @@ impl BenchmarkBank {
     async fn pay_sui(
         &mut self,
         coin_configs: &[GasCoinConfig],
-        mut init_coin: &mut Gas,
+        init_coin: &mut Gas,
         gas_price: u64,
     ) -> Result<UpdatedAndNewlyMintedGasCoins> {
         let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();

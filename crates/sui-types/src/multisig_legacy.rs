@@ -311,7 +311,7 @@ impl MultiSigPublicKeyLegacy {
             });
         }
         Ok(MultiSigPublicKeyLegacy {
-            pk_map: pks.into_iter().zip(weights.into_iter()).collect(),
+            pk_map: pks.into_iter().zip(weights).collect(),
             threshold,
         })
     }

@@ -1812,7 +1812,7 @@ where
                         .object_map
                         .entry(effects_digest)
                         .or_default()
-                        .extend(fastpath_input_objects.into_iter());
+                        .extend(fastpath_input_objects);
                 }
                 result
             }

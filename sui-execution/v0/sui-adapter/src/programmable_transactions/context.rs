@@ -1374,7 +1374,7 @@ mod checked {
         MoveObject::new_from_execution(
             struct_tag.into(),
             has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
+            old_obj_ver.unwrap_or_default(),
             contents,
             protocol_config,
         )

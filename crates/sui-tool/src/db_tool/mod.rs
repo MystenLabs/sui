@@ -498,7 +498,7 @@ pub fn print_db_table_summary(
     table_name: &str,
 ) -> anyhow::Result<()> {
     let summary = table_summary(store, epoch, path, table_name)?;
-    let quantiles = vec![25, 50, 75, 90, 99];
+    let quantiles = [25, 50, 75, 90, 99];
     println!(
         "Total num keys = {}, total key bytes = {}, total value bytes = {}",
         summary.num_keys, summary.key_bytes_total, summary.value_bytes_total

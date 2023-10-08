@@ -133,9 +133,9 @@ pub fn end_transaction(
                 inventories
                     .address_inventories
                     .entry(a)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .entry(ty)
-                    .or_insert_with(Set::new)
+                    .or_default()
                     .insert(id, ());
             }
             Owner::ObjectOwner(_) => (),
@@ -143,14 +143,14 @@ pub fn end_transaction(
                 inventories
                     .shared_inventory
                     .entry(ty)
-                    .or_insert_with(Set::new)
+                    .or_default()
                     .insert(id, ());
             }
             Owner::Immutable => {
                 inventories
                     .immutable_inventory
                     .entry(ty)
-                    .or_insert_with(Set::new)
+                    .or_default()
                     .insert(id, ());
             }
         }

@@ -1147,7 +1147,7 @@ mod tests {
 
         fs::write(
             root.join("Cargo.toml"),
-            vec![
+            [
                 r#"[workspace]"#,
                 r#"members = ["crates/foo"]"#,
                 r#"exclude = ["#,
@@ -1167,7 +1167,7 @@ mod tests {
 
         fs::write(
             root.join("crates/bar/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "bar""#,
                 r#""#,
@@ -1184,7 +1184,7 @@ mod tests {
 
         fs::write(
             root.join("crates/baz/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "baz""#,
                 r#""#,
@@ -1200,7 +1200,7 @@ mod tests {
 
         fs::write(
             root.join("crates/qux/Cargo.toml"),
-            vec![
+            [
                 r#"[package]"#,
                 r#"name = "qux""#,
                 r#""#,
@@ -1216,7 +1216,7 @@ mod tests {
 
         fs::write(
             root.join("crates/quy/Cargo.toml"),
-            vec![r#"[package]"#, r#"name = "quy""#].join("\n"),
+            [r#"[package]"#, r#"name = "quy""#].join("\n"),
         )
         .unwrap();
 

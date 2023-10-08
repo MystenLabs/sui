@@ -64,7 +64,7 @@ impl IntoIterator for Operations {
 
 impl Operations {
     pub fn new(mut ops: Vec<Operation>) -> Self {
-        for (index, mut op) in ops.iter_mut().enumerate() {
+        for (index, op) in ops.iter_mut().enumerate() {
             op.operation_identifier = (index as u64).into()
         }
         Self(ops)

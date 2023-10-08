@@ -1160,7 +1160,7 @@ impl CheckpointBuilder {
             let effects = self.effects_store.multi_get_executed_effects(&pending)?;
             let effects = effects
                 .into_iter()
-                .zip(pending.into_iter())
+                .zip(pending)
                 .map(|(opt, digest)| match opt {
                     Some(x) => x,
                     None => panic!(

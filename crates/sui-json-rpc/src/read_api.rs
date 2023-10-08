@@ -1247,10 +1247,10 @@ fn get_value_from_move_struct(
 ) -> Result<String, Error> {
     let parts: Vec<&str> = var_name.split('.').collect();
     if parts.is_empty() {
-        return Err(anyhow!("Display template value cannot be empty"))?;
+        Err(anyhow!("Display template value cannot be empty"))?;
     }
     if parts.len() > MAX_DISPLAY_NESTED_LEVEL {
-        return Err(anyhow!(
+        Err(anyhow!(
             "Display template value nested depth cannot exist {}",
             MAX_DISPLAY_NESTED_LEVEL
         ))?;
@@ -1266,13 +1266,13 @@ fn get_value_from_move_struct(
                     if let Some(value) = fields.get(part) {
                         current_value = value;
                     } else {
-                        return Err(anyhow!(
+                        Err(anyhow!(
                             "Field value {} cannot be found in struct",
                             var_name
                         ))?;
                     }
                 } else {
-                    return Err(Error::UnexpectedError(format!(
+                    Err(Error::UnexpectedError(format!(
                         "Unexpected move struct type for field {}",
                         var_name
                     )))?;
