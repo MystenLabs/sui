@@ -11,8 +11,8 @@ use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
+use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
-use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
 use crate::types::base64::Base64;
 
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
@@ -115,11 +115,11 @@ impl Object {
             .extend()
     }
 
-    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_balance(&self.address, type_)
+    pub async fn balance(&self, ctx: &Context<'_>, type_: String) -> Result<Option<Balance>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balance(self.address, type_)
             .await
+            .extend()
     }
 
     pub async fn balance_connection(
@@ -129,22 +129,26 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Connection<String, Balance>> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_balance_connection(&self.address, first, after, last, before)
+    ) -> Result<Option<Connection<String, Balance>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balances(self.address, first, after, last, before)
             .await
+            .extend()
     }
 
     pub async fn coin_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<Connection<String, Coin>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, Coin>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coins(self.address, type_, first, after, last, before)
+            .await
+            .extend()
     }
 
     pub async fn stake_connection(

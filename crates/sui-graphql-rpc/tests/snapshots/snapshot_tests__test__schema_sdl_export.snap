@@ -10,8 +10,8 @@ type Address implements ObjectOwner {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -26,8 +26,9 @@ enum AddressTransactionBlockRelationship {
 }
 
 type Balance {
-	coinObjectCount: Int!
-	totalBalance: BigInt!
+	coinType: String
+	coinObjectCount: Int
+	totalBalance: BigInt
 }
 
 type BalanceConnection {
@@ -121,6 +122,7 @@ input CheckpointId {
 }
 
 type Coin {
+	id: ID!
 	balance: BigInt
 	asMoveObject: MoveObject
 }
@@ -318,8 +320,8 @@ type Object implements ObjectOwner {
 	owner: Owner
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -379,7 +381,7 @@ enum ObjectKind {
 interface ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
+	balance(type: String!): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
@@ -392,8 +394,8 @@ type Owner implements ObjectOwner {
 	asObject: Object
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -669,4 +671,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-

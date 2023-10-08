@@ -26,7 +26,8 @@ impl ScalarType for BigInt {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("The provided string is not a number")]
 pub(crate) struct NotANumber;
 
 impl FromStr for BigInt {
@@ -62,7 +63,7 @@ macro_rules! impl_From {
     }
 }
 
-impl_From!(u8, u16, u32, u64, u128, U256);
+impl_From!(u8, u16, u32, i64, u64, u128, U256);
 
 #[cfg(test)]
 mod tests {

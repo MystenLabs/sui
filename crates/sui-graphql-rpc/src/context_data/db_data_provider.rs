@@ -6,15 +6,18 @@ use crate::{
     error::Error,
     types::{
         address::{Address, AddressTransactionBlockRelationship},
+        balance::Balance,
         base64::Base64,
         big_int::BigInt,
         checkpoint::Checkpoint,
+        coin::Coin,
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
+        move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
@@ -24,7 +27,10 @@ use crate::{
         },
     },
 };
-use async_graphql::connection::{Connection, Edge};
+use async_graphql::{
+    connection::{Connection, Edge},
+    ID,
+};
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
     QueryDsl, RunQueryDsl,
@@ -73,6 +79,8 @@ pub enum DbValidationError {
     FirstAfter,
     #[error("'last' can only be used with 'before'")]
     LastBefore,
+    #[error("Pagination is currently disabled on balances")]
+    PaginationDisabledOnBalances,
 }
 
 pub(crate) struct PgManager {
@@ -200,6 +208,110 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredCheckpoint>(conn).optional())
             .await
+    }
+
+    async fn multi_get_coins(
+        &self,
+        address: Vec<u8>,
+        coin_type: Option<String>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
+        let mut query = objects::dsl::objects.into_boxed();
+        query = query
+            .filter(objects::dsl::owner_id.eq(address))
+            .filter(objects::dsl::owner_type.eq(1)); // Leverage index on objects table
+
+        if let Some(coin_type) = coin_type {
+            query = query.filter(objects::dsl::coin_type.eq(coin_type));
+        }
+
+        if let Some(after) = after {
+            let after = self.parse_obj_cursor(&after)?;
+            query = query
+                .filter(objects::dsl::checkpoint_sequence_number.gt(after))
+                .order(objects::dsl::checkpoint_sequence_number.asc());
+        } else if let Some(before) = before {
+            let before = self.parse_obj_cursor(&before)?;
+            query = query
+                .filter(objects::dsl::checkpoint_sequence_number.lt(before))
+                .order(objects::dsl::checkpoint_sequence_number.desc());
+        }
+
+        let limit = first.or(last).unwrap_or(10) as i64;
+        query = query.limit(limit + 1);
+
+        let result: Option<Vec<StoredObject>> = self
+            .run_query_async(|conn| query.load(conn).optional())
+            .await?;
+
+        result
+            .map(|mut stored_objs| {
+                let has_next_page = stored_objs.len() as i64 > limit;
+                if has_next_page {
+                    stored_objs.pop();
+                }
+
+                Ok((stored_objs, has_next_page))
+            })
+            .transpose()
+    }
+
+    async fn get_balance(
+        &self,
+        address: Vec<u8>,
+        coin_type: String,
+    ) -> Result<Vec<(Option<String>, Option<i64>, Option<String>)>, Error> {
+        let query = objects::dsl::objects
+            .group_by(objects::dsl::coin_type)
+            .select((
+                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::Text>>(
+                    "CAST(SUM(coin_balance) AS VARCHAR)",
+                ),
+                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
+                    "COUNT(*)",
+                ),
+                objects::dsl::coin_type,
+            ))
+            .filter(objects::dsl::owner_id.eq(address))
+            .filter(objects::dsl::owner_type.eq(1))
+            .filter(objects::dsl::coin_type.eq(coin_type));
+
+        self.run_query_async(|conn| query.load(conn)).await
+    }
+
+    async fn multi_get_balances(
+        &self,
+        address: Vec<u8>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Vec<(Option<String>, Option<i64>, Option<String>)>, Error> {
+        // Todo (wlmyng): paginating on balances does not really make sense
+        // We'll always need to calculate all balances first
+        if first.is_some() || after.is_some() || last.is_some() || before.is_some() {
+            return Err(DbValidationError::PaginationDisabledOnBalances.into());
+        }
+
+        let query = objects::dsl::objects
+            .group_by(objects::dsl::coin_type)
+            .select((
+                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::Text>>(
+                    "CAST(SUM(coin_balance) AS VARCHAR)",
+                ),
+                diesel::dsl::sql::<diesel::sql_types::Nullable<diesel::sql_types::BigInt>>(
+                    "COUNT(*)",
+                ),
+                objects::dsl::coin_type,
+            ))
+            .filter(objects::dsl::owner_id.eq(address))
+            .filter(objects::dsl::owner_type.eq(1))
+            .filter(objects::dsl::coin_type.is_not_null());
+
+        self.run_query_async(|conn| query.load(conn)).await
     }
 
     async fn multi_get_txs(
@@ -676,7 +788,6 @@ impl PgManager {
         address: SuiAddress,
     ) -> Result<Option<SuiAddress>, Error> {
         let address = address.into_vec();
-
         let stored_obj = self.get_obj(address, None).await?;
 
         Ok(stored_obj
@@ -773,6 +884,101 @@ impl PgManager {
                                 .map(|checkpoint| Edge::new(cursor, checkpoint))
                         }),
                 );
+            Ok(Some(connection))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) async fn fetch_balance(
+        &self,
+        address: SuiAddress,
+        coin_type: String,
+    ) -> Result<Option<Balance>, Error> {
+        let address = address.into_vec();
+        let balances = self.get_balance(address, coin_type).await?;
+
+        if let Some((Some(balance), Some(count), coin_type)) = balances.first() {
+            let total_balance =
+                BigInt::from_str(balance).map_err(|e| Error::Internal(e.to_string()))?;
+            Ok(Some(Balance {
+                coin_object_count: Some(*count as u64),
+                total_balance: Some(total_balance),
+                coin_type: coin_type.clone(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) async fn fetch_balances(
+        &self,
+        address: SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, Balance>>, Error> {
+        let address = address.into_vec();
+
+        let balances = self
+            .multi_get_balances(address, first, after, last, before)
+            .await?;
+
+        let mut connection = Connection::new(false, false);
+        for (balance, count, coin_type) in balances {
+            if let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) {
+                match BigInt::from_str(&balance) {
+                    Ok(total_balance) => {
+                        connection.edges.push(Edge::new(
+                            coin_type.clone(),
+                            Balance {
+                                coin_object_count: Some(count as u64),
+                                total_balance: Some(total_balance),
+                                coin_type: Some(coin_type),
+                            },
+                        ));
+                    }
+                    Err(e) => {
+                        return Err(Error::Internal(e.to_string()));
+                    }
+                }
+            } else {
+                return Err(Error::Internal(
+                    "Expected fields are missing on balance calculation".to_string(),
+                ));
+            }
+        }
+        Ok(Some(connection))
+    }
+
+    pub(crate) async fn fetch_coins(
+        &self,
+        address: SuiAddress,
+        coin_type: Option<String>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, Coin>>, Error> {
+        let address = address.into_vec();
+        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
+
+        let coins = self
+            .multi_get_coins(address, Some(coin_type), first, after, last, before)
+            .await?;
+
+        if let Some((stored_objs, has_next_page)) = coins {
+            let mut connection = Connection::new(false, has_next_page);
+            connection
+                .edges
+                .extend(stored_objs.into_iter().filter_map(|stored_obj| {
+                    let cursor = stored_obj.checkpoint_sequence_number.to_string();
+                    Coin::try_from(stored_obj)
+                        .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
+                        .ok()
+                        .map(|obj| Edge::new(cursor, obj))
+                }));
             Ok(Some(connection))
         } else {
             Ok(None)
@@ -1031,5 +1237,26 @@ impl From<GenesisObject> for SuiAddress {
                 SuiAddress::from_bytes(data.id().to_vec()).unwrap()
             }
         }
+    }
+}
+impl TryFrom<StoredObject> for Coin {
+    type Error = Error;
+
+    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
+        let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
+            Error::Internal(format!(
+                "Failed to convert object_id {:?} to SuiAddress",
+                o.object_id
+            ))
+        })?;
+        let id = ID(object_id.to_string());
+        let balance = o.coin_balance.map(BigInt::from);
+        let native_object: SuiObject = o.try_into()?;
+
+        Ok(Self {
+            id,
+            balance,
+            move_obj: MoveObject { native_object },
+        })
     }
 }

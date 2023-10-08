@@ -3,7 +3,7 @@
 
 use async_graphql::{connection::Connection, *};
 
-use crate::context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager};
+use crate::context_data::db_data_provider::PgManager;
 
 use super::name_service::NameService;
 use super::{
@@ -82,11 +82,11 @@ impl Address {
             .extend()
     }
 
-    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_balance(&self.address, type_)
+    pub async fn balance(&self, ctx: &Context<'_>, type_: String) -> Result<Option<Balance>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balance(self.address, type_)
             .await
+            .extend()
     }
 
     pub async fn balance_connection(
@@ -96,22 +96,26 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Connection<String, Balance>> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_balance_connection(&self.address, first, after, last, before)
+    ) -> Result<Option<Connection<String, Balance>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balances(self.address, first, after, last, before)
             .await
+            .extend()
     }
 
     pub async fn coin_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
         type_: Option<String>,
-    ) -> Option<Connection<String, Coin>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, Coin>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_coins(self.address, type_, first, after, last, before)
+            .await
+            .extend()
     }
 
     pub async fn stake_connection(
