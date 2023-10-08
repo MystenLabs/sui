@@ -118,9 +118,9 @@ input CheckpointId {
 }
 
 type Coin {
+	id: ID!
 	balance: BigInt
 	asMoveObject: MoveObject
-	id: ID!	
 }
 
 type CoinConnection {

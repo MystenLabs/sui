@@ -121,10 +121,10 @@ input CheckpointId {
 	sequenceNumber: Int
 }
 
-type Coin {	
-	asMoveObject: MoveObject
+type Coin {
 	id: ID!
 	balance: BigInt
+	asMoveObject: MoveObject
 }
 
 type CoinConnection {

@@ -222,7 +222,7 @@ impl PgManager {
         let mut query = objects::dsl::objects.into_boxed();
         query = query
             .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(1));
+            .filter(objects::dsl::owner_type.eq(1)); // Leverage index on objects table
 
         if let Some(coin_type) = coin_type {
             query = query.filter(objects::dsl::coin_type.eq(coin_type));
@@ -788,7 +788,6 @@ impl PgManager {
         address: SuiAddress,
     ) -> Result<Option<SuiAddress>, Error> {
         let address = address.into_vec();
-
         let stored_obj = self.get_obj(address, None).await?;
 
         Ok(stored_obj
@@ -897,7 +896,6 @@ impl PgManager {
         coin_type: String,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
-
         let balances = self.get_balance(address, coin_type).await?;
 
         if let Some((Some(balance), Some(count), coin_type)) = balances.first() {
@@ -1246,7 +1244,7 @@ impl TryFrom<StoredObject> for Coin {
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let object_id = SuiAddress::try_from(o.object_id.clone()).map_err(|_| {
-            Error::Internal("Failed to convert object_id to SuiAddress".to_string())
+            Error::Internal(format!("Failed to convert object_id {:?} to SuiAddress", o.object_id))
         })?;
         let id = ID(object_id.to_string());
         let balance = o.coin_balance.map(BigInt::from);
