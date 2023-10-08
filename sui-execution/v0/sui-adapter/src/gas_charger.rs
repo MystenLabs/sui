@@ -138,10 +138,10 @@ pub mod checked {
                 .map(|obj_ref| {
                     let obj = temporary_store.objects().get(&obj_ref.0).unwrap();
                     let Data::Move(move_obj) = &obj.data else {
-                    return Err(ExecutionError::invariant_violation(
-                        "Provided non-gas coin object as input for gas!"
-                    ));
-                };
+                        return Err(ExecutionError::invariant_violation(
+                            "Provided non-gas coin object as input for gas!",
+                        ));
+                    };
                     if !move_obj.type_().is_gas_coin() {
                         return Err(ExecutionError::invariant_violation(
                             "Provided non-gas coin object as input for gas!",

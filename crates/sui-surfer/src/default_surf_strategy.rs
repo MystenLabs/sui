@@ -37,7 +37,10 @@ impl SurfStrategy for DefaultSurfStrategy {
         entry_functions.shuffle(&mut state.rng);
         for entry in entry_functions {
             let Some(args) = Self::choose_function_call_args(state, entry.parameters).await else {
-                debug!("Failed to choose arguments for Move function {:?}::{:?}", entry.module, entry.function);
+                debug!(
+                    "Failed to choose arguments for Move function {:?}::{:?}",
+                    entry.module, entry.function
+                );
                 continue;
             };
             state

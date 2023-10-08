@@ -1529,7 +1529,7 @@ impl AuthorityStore {
     pub async fn revert_state_update(&self, tx_digest: &TransactionDigest) -> SuiResult {
         let Some(effects) = self.get_executed_effects(tx_digest)? else {
             debug!("Not reverting {:?} as it was not executed", tx_digest);
-            return Ok(())
+            return Ok(());
         };
 
         info!(?tx_digest, ?effects, "reverting transaction");
@@ -2024,7 +2024,7 @@ impl ChildObjectResolver for AuthorityStore {
         let Some(child_object) =
             self.find_object_lt_or_eq_version(*child, child_version_upper_bound)
         else {
-            return Ok(None)
+            return Ok(None);
         };
 
         let parent = *parent;
@@ -2045,8 +2045,10 @@ impl ChildObjectResolver for AuthorityStore {
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        let Some(recv_object) = self.get_object_by_key(receiving_object_id, receive_object_at_version)? else {
-            return Ok(None)
+        let Some(recv_object) =
+            self.get_object_by_key(receiving_object_id, receive_object_at_version)?
+        else {
+            return Ok(None);
         };
 
         // Check for:

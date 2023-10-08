@@ -323,9 +323,10 @@ async fn run_fetch_task(
         .set_bounds(gc_round, written_rounds)
         .set_max_items(MAX_CERTIFICATES_TO_FETCH);
     let Some(response) =
-        fetch_certificates_helper(state.authority_id, &state.network, &committee, request).await else {
-            return Err(DagError::NoCertificateFetched);
-        };
+        fetch_certificates_helper(state.authority_id, &state.network, &committee, request).await
+    else {
+        return Err(DagError::NoCertificateFetched);
+    };
 
     // Process and store fetched certificates.
     let num_certs_fetched = response.certificates.len();

@@ -1101,8 +1101,12 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
-    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
-        return Ok(DisplayFieldsResponse { data: None, error: None });
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)?
+    else {
+        return Ok(DisplayFieldsResponse {
+            data: None,
+            error: None,
+        });
     };
     if let Some(display_object) =
         get_display_object_by_type(kv_store, fullnode_api, &object_type).await?

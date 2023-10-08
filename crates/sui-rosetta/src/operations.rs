@@ -169,7 +169,9 @@ impl Operations {
         };
 
         let OperationMetadata::Stake { validator } = metadata else {
-            return Err(Error::InvalidInput("Cannot find delegation info from metadata.".into()))
+            return Err(Error::InvalidInput(
+                "Cannot find delegation info from metadata.".into(),
+            ));
         };
 
         Ok(InternalOperation::Stake {
@@ -199,7 +201,9 @@ impl Operations {
 
         let stake_ids = if let Some(metadata) = op.metadata {
             let OperationMetadata::WithdrawStake { stake_ids } = metadata else {
-                return Err(Error::InvalidInput("Cannot find withdraw stake info from metadata.".into()))
+                return Err(Error::InvalidInput(
+                    "Cannot find withdraw stake info from metadata.".into(),
+                ));
             };
             stake_ids
         } else {

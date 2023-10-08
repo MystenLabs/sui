@@ -236,7 +236,8 @@ impl SimpleFaucet {
         // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
-        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await else {
+        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await
+        else {
             error!(?uuid, "Timeout when getting consumer lock");
             return None;
         };
@@ -261,7 +262,9 @@ impl SimpleFaucet {
         // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
-        let Ok(mut batch_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await else {
+        let Ok(mut batch_consumer) =
+            tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await
+        else {
             error!(?uuid, "Timeout when getting batch consumer lock");
             return None;
         };
@@ -950,7 +953,7 @@ pub async fn batch_gather(
 ) -> Result<(), FaucetError> {
     // Gather the rest of the batch after the first item has been taken.
     for _ in 1..batch_request_size {
-        let Some(req)  = request_consumer.recv().await else {
+        let Some(req) = request_consumer.recv().await else {
             error!("Request consumer queue closed");
             return Err(FaucetError::ChannelClosed);
         };
@@ -1459,7 +1462,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid, false).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 
@@ -1743,7 +1748,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid, false).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 

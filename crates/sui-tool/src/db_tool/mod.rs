@@ -325,10 +325,16 @@ pub fn remove_transaction(path: &Path, opt: RemoveTransactionOptions) -> anyhow:
     };
     let epoch_store = AuthorityEpochTables::open(epoch, &path.join("store"), None);
     let Some(_transaction) = perpetual_db.get_transaction(&opt.digest)? else {
-        bail!("Transaction {:?} not found and cannot be re-executed!", opt.digest);
+        bail!(
+            "Transaction {:?} not found and cannot be re-executed!",
+            opt.digest
+        );
     };
     let Some(effects) = perpetual_db.get_effects(&opt.digest)? else {
-        bail!("Transaction {:?} not executed or effects have been pruned!", opt.digest);
+        bail!(
+            "Transaction {:?} not executed or effects have been pruned!",
+            opt.digest
+        );
     };
     let mut objects_to_remove = vec![];
     for mutated_obj in effects.modified_at_versions() {
@@ -460,7 +466,9 @@ pub fn rewind_checkpoint_execution(
         None,
         None,
     );
-    let Some(checkpoint) = checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)? else {
+    let Some(checkpoint) =
+        checkpoint_db.get_checkpoint_by_sequence_number(checkpoint_sequence_number)?
+    else {
         bail!("Checkpoint {checkpoint_sequence_number} not found!");
     };
     if epoch != checkpoint.epoch() {

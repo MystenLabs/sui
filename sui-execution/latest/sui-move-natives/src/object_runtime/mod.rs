@@ -380,7 +380,8 @@ impl<'a> ObjectRuntime<'a> {
             child_layout,
             child_fully_annotated_layout,
             child_move_type,
-        )? else {
+        )?
+        else {
             return Ok(None);
         };
         // NB: It is important that the object only be added to the received set after it has been

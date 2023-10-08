@@ -105,9 +105,9 @@ pub async fn perform_zk_login_test_tx(
         .get_coins(zklogin_address, None, None, None)
         .await?
         .next_cursor
-        else {
-            panic!("Faucet did not work correctly and the provided Sui address has no coins")
-        };
+    else {
+        panic!("Faucet did not work correctly and the provided Sui address has no coins")
+    };
     let txb_res = sui
         .transaction_builder()
         .transfer_object(

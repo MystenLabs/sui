@@ -278,10 +278,12 @@ impl SuiNode {
             let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
                 warn!(
                     "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
-                    id.iss,
-                    provider
+                    id.iss, provider
                 );
-                metrics.invalid_jwks.with_label_values(&[&provider.to_string()]).inc();
+                metrics
+                    .invalid_jwks
+                    .with_label_values(&[&provider.to_string()])
+                    .inc();
                 return false;
             };
 

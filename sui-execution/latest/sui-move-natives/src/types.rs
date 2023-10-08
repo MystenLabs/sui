@@ -97,7 +97,7 @@ pub fn is_one_time_witness(
 
     let cost = context.gas_used();
     let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
-        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]))
+        return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
     let is_otw = is_otw_struct(&struct_layout, &type_tag);

@@ -52,9 +52,8 @@ async fn test_publishing_with_unpublished_deps() {
     )
     .await;
 
-    let ObjectRead::Exists(read_ref, package_obj, _) = authority
-        .get_object_read(&package.0)
-        .unwrap()
+    let ObjectRead::Exists(read_ref, package_obj, _) =
+        authority.get_object_read(&package.0).unwrap()
     else {
         panic!("Can't read package")
     };
@@ -296,7 +295,7 @@ async fn test_custom_property_check_unpublished_dependencies() {
         check_unpublished_dependencies(&gather_published_ids(&resolution_graph).1.unpublished)
             .err()
             .unwrap()
-     else {
+    else {
         panic!("Expected ModulePublishFailure")
     };
 

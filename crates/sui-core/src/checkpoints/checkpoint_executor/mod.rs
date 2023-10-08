@@ -290,10 +290,9 @@ impl CheckpointExecutor {
         let Some(latest_synced_checkpoint) = self
             .checkpoint_store
             .get_highest_synced_checkpoint()
-            .expect("Failed to read highest synced checkpoint") else {
-            debug!(
-                "No checkpoints to schedule, highest synced checkpoint is None",
-            );
+            .expect("Failed to read highest synced checkpoint")
+        else {
+            debug!("No checkpoints to schedule, highest synced checkpoint is None",);
             return;
         };
 
