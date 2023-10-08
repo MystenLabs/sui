@@ -1,5 +1,6 @@
 [package]
 name = "B"
+version = "1"
 
 [dependencies]
 E = { local = "../E" }

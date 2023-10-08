@@ -85,7 +85,9 @@ ResolvedGraph {
                 kind: Local(
                     "deps_only/B1",
                 ),
-                version: None,
+                version: Some(
+                    "2",
+                ),
                 resolver: None,
             },
             "C": Package {
@@ -182,7 +184,9 @@ ResolvedGraph {
                     license: None,
                     edition: None,
                     flavor: None,
-                    custom_properties: {},
+                    custom_properties: {
+                        "version": "2",
+                    },
                 },
                 addresses: None,
                 dev_address_assignments: None,

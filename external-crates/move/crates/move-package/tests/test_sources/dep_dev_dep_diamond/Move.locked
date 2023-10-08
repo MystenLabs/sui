@@ -41,3 +41,4 @@ source = { local = "deps_only/C" }
 [[move.package]]
 name = "D"
 source = { local = "deps_only/D" }
+version = "1"
