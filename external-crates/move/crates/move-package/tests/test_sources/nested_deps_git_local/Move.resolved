@@ -36,7 +36,9 @@ ResolvedGraph {
                         subdir: "language/move-stdlib/nursery",
                     },
                 ),
-                version: None,
+                version: Some(
+                    "1.5.0",
+                ),
                 resolver: None,
             },
             "MoveStdlib": Package {
@@ -47,7 +49,9 @@ ResolvedGraph {
                         subdir: "language/move-stdlib",
                     },
                 ),
-                version: None,
+                version: Some(
+                    "1.5.0",
+                ),
                 resolver: None,
             },
         },
