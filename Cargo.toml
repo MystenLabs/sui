@@ -500,6 +500,7 @@ move-core-types = { path = "external-crates/move/move-core/types", features = [
   "address32",
 ] }
 move-disassembler = { path = "external-crates/move/tools/move-disassembler" }
+move-model = { path = "external-crates/move/move-model" }
 move-package = { path = "external-crates/move/tools/move-package" }
 move-unit-test = { path = "external-crates/move/tools/move-unit-test" }
 move-vm-config = { path = "external-crates/move/move-vm/config" }

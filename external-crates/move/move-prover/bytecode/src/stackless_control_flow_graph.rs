@@ -237,6 +237,15 @@ impl StacklessControlFlowGraph {
         self.entry_block_id
     }
 
+    /// Return the bytecode instructions in a given block
+    pub fn block_instrs<'a>(&'a self, id: BlockId, bytecode: &'a [Bytecode]) -> &[Bytecode] {
+        match self.blocks[&id].content {
+            // TODO: double check slice here
+            BlockContent::Basic { lower, upper } => &bytecode[lower as usize..=upper as usize],
+            BlockContent::Dummy => &[],
+        }
+    }
+
     pub fn exit_block(&self) -> BlockId {
         if self.backward {
             DUMMY_ENTRANCE

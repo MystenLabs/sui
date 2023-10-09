@@ -45,7 +45,7 @@ use move_core_types::{
 use proptest::{collection::vec, prelude::*, strategy::BoxedStrategy};
 use ref_cast::RefCast;
 use serde::{Deserialize, Serialize};
-use std::ops::BitOr;
+use std::{fmt, ops::BitOr};
 use variant_count::VariantCount;
 
 /// Generic index into one of the tables in the binary format.
@@ -665,6 +665,10 @@ impl AbilitySet {
 
     pub fn singleton(ability: Ability) -> Self {
         Self(ability as u8)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        *self == Self::EMPTY
     }
 
     pub fn has_ability(self, ability: Ability) -> bool {
@@ -2162,4 +2166,15 @@ pub fn empty_script() -> CompiledScript {
 
 pub fn basic_test_script() -> CompiledScript {
     empty_script()
+}
+
+impl fmt::Display for Ability {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Ability::Copy => write!(f, "copy"),
+            Ability::Drop => write!(f, "drop"),
+            Ability::Store => write!(f, "store"),
+            Ability::Key => write!(f, "key"),
+        }
+    }
 }

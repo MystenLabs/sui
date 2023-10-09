@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::{
     access::ModuleAccess,
     file_format::{
@@ -20,7 +22,6 @@ use move_core_types::{
 };
 use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Defines normalized representations of Move types, fields, kinds, structs, functions, and
 /// modules. These representations are useful in situations that require require comparing
@@ -647,6 +648,111 @@ impl Bytecode {
             FB::VecUnpack(sig_idx, len) => B::VecUnpack(signature_to_single_type(m, sig_idx), *len),
             FB::VecSwap(sig_idx) => B::VecSwap(signature_to_single_type(m, sig_idx)),
         }
+    }
+}
+
+pub struct StructDisplayContext<'a> {
+    pub struct_: &'a Struct,
+    pub name: Identifier,
+    pub indent: &'a str,
+}
+
+impl<'a> std::fmt::Display for StructDisplayContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.indent)?;
+        write!(f, "struct {}", self.name)?;
+        // TODO: type params
+        if !self.struct_.abilities.is_empty() {
+            write!(
+                f,
+                "  has {}",
+                self.struct_
+                    .abilities
+                    .into_iter()
+                    .map(|a| a.to_string())
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )?;
+        }
+        writeln!(f, "  {{")?;
+        for field in &self.struct_.fields {
+            // TODO: allow type aliases here
+            writeln!(f, "{}  {}: {},", self.indent, field.name, field.type_)?;
+        }
+        writeln!(f, "{}}}", self.indent)
+    }
+}
+
+pub struct FunctionDisplayContext<'a> {
+    pub function: &'a Function,
+    pub name: Identifier,
+    pub indent: &'a str,
+    pub body: &'a str,
+    // TOD: support for function and type names, type aliases
+}
+
+impl<'a> std::fmt::Display for FunctionDisplayContext<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.indent)?;
+        match self.function.visibility {
+            Visibility::Public => write!(f, "public ")?,
+            Visibility::Friend => write!(f, "friend ")?,
+            Visibility::Private => (),
+        }
+        if self.function.is_entry {
+            write!(f, "entry ")?;
+        }
+        write!(f, "fun {}", self.name)?;
+        if !self.function.type_parameters.is_empty() {
+            write!(f, "<")?;
+            let mut counter = 0;
+            for abilities in &self.function.type_parameters {
+                write!(f, "T{}", counter)?;
+                if !abilities.is_empty() {
+                    write!(
+                        f,
+                        ": {}",
+                        abilities
+                            .into_iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" + ")
+                    )?;
+                }
+                counter += 1;
+            }
+            write!(f, ">")?;
+        }
+        if self.function.parameters.is_empty() {
+            write!(f, "()")?;
+        } else {
+            write!(f, "(")?;
+            let mut counter = 0;
+            for param in &self.function.parameters {
+                writeln!(f, "a{}: {}", counter, param)?;
+                counter += 1;
+            }
+            writeln!(f, "{})", self.indent)?;
+        }
+        if !self.function.return_.is_empty() {
+            if self.function.return_.len() == 1 {
+                write!(f, ": {}", self.function.return_[0])?;
+            } else {
+                write!(
+                    f,
+                    ": ({})",
+                    self.function
+                        .return_
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?;
+            }
+        }
+        writeln!(f, "{} {{", self.indent)?;
+        writeln!(f, "{}", self.body)?;
+        writeln!(f, "}}")
     }
 }
 

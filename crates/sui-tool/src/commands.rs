@@ -8,10 +8,14 @@ use crate::{
     verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::{anyhow, Result};
+use move_binary_format::CompiledModule;
 use std::env;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
+use sui_json_rpc_types::SuiRawMovePackage;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
 
 use sui_types::{base_types::*, object::Owner};
@@ -252,6 +256,13 @@ pub enum ToolCommand {
             help = "The Base64-encoding of the bcs bytes of SenderSignedData"
         )]
         sender_signed_data: String,
+    },
+
+    #[command(name = "analyze-packages")]
+    AnalyzePackages {
+        /// Path to JSON file with package binary data
+        #[arg(long)]
+        json_path: PathBuf,
     },
 }
 
@@ -581,6 +592,24 @@ impl ToolCommand {
                     .unwrap();
                 let result = agg.process_transaction(transaction).await;
                 println!("{:?}", result);
+            }
+            ToolCommand::AnalyzePackages { json_path } => {
+                let file = File::open(json_path)?;
+                let reader = BufReader::new(file);
+                let packages: Vec<SuiRawMovePackage> = serde_json::from_reader(reader)?;
+                let mut modules = Vec::new();
+                for pkg in packages {
+                    println!("{}", pkg.id);
+//                    println!("{}", pkg.linkage_table);
+                    for (_, bytes) in pkg.module_map {
+                        let module = CompiledModule::deserialize_with_defaults(&bytes).unwrap();
+                        modules.push(module)
+                    }
+                }
+                let env = move_model::run_bytecode_model_builder(modules.iter())?;
+                for m in move_stackless_bytecode::decompiler::Decompiler::decompile_all(&env) {
+                    //                    println!("{}")
+                }
             }
         };
         Ok(())

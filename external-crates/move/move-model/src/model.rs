@@ -45,7 +45,7 @@ use move_binary_format::{
         SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
         Visibility,
     },
-    normalized::{FunctionRef, Type as MType},
+    normalized::{self, FunctionRef, Type as MType},
     views::{
         FieldDefinitionView, FunctionDefinitionView, FunctionHandleView, SignatureTokenView,
         StructDefinitionView, StructHandleView,
@@ -1403,6 +1403,12 @@ impl GlobalEnv {
         self.get_module(fun.module_id).into_function(fun.id)
     }
 
+    /// Return `rue if `fun` is a valid qualified ID for this environment
+    pub fn has_function(&self, fun: QualifiedId<FunId>) -> bool {
+        let m = self.get_module(fun.module_id);
+        m.data.function_data.contains_key(&fun.id)
+    }
+
     /// Return the `StructEnv` for `str`
     pub fn get_struct(&self, str: QualifiedId<StructId>) -> StructEnv<'_> {
         self.get_module(str.module_id).into_struct(str.id)
@@ -2094,6 +2100,10 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a FunctionEnv by id.
     pub fn into_function(self, id: FunId) -> FunctionEnv<'env> {
+        println!("into function");
+        for (id, data) in &self.data.function_data {
+            println!("{} -> {:?}", data.name.display(self.symbol_pool()), id)
+        }
         let data = self.data.function_data.get(&id).expect("FunId undefined");
         FunctionEnv {
             module_env: self,
@@ -2132,6 +2142,7 @@ impl<'env> ModuleEnv<'env> {
             .env
             .find_module(&module_name)
             .expect("unexpected reference to module not found in global env");
+        println!("getting used function for {}", view.name().as_str());
         module_env.into_function(FunId::new(self.env.symbol_pool.make(view.name().as_str())))
     }
 
@@ -2332,7 +2343,7 @@ impl<'env> ModuleEnv<'env> {
                 let declaring_module_env = self
                     .env
                     .find_module(&self.env.to_module_name(&struct_view.module_id()))
-                    .expect("undefined module");
+                    .unwrap_or_else(|| panic!("undefined module {}", struct_view.module_id()));
                 let struct_env = declaring_module_env
                     .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
                     .expect("undefined struct");
@@ -2346,7 +2357,7 @@ impl<'env> ModuleEnv<'env> {
                 let declaring_module_env = self
                     .env
                     .find_module(&self.env.to_module_name(&struct_view.module_id()))
-                    .expect("undefined module");
+                    .unwrap_or_else(|| panic!("undefined module {}", struct_view.module_id()));
                 let struct_env = declaring_module_env
                     .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
                     .expect("undefined struct");
@@ -2613,6 +2624,26 @@ impl<'env> StructEnv<'env> {
             }
             StructInfo::Generated { .. } => None,
         }
+    }
+
+    pub fn get_normalized(&self) -> (Identifier, normalized::Struct) {
+        let StructInfo::Declared { def_idx, .. } =  self.data.info else {
+            panic!("Cannot normalize generated struct")
+        };
+        normalized::Struct::from_idx(&self.module_env.data.module, &def_idx)
+    }
+
+    /// Print the full struct declaration with abilities, field names, and type names
+    pub fn display(&self, indent: &str) -> String {
+        let (name, s) = self.get_normalized();
+        format!(
+            "{}",
+            normalized::StructDisplayContext {
+                struct_: &s,
+                name,
+                indent
+            }
+        )
     }
 
     /// Shortcut for accessing the symbol pool.
@@ -3230,6 +3261,26 @@ impl<'env> FunctionEnv<'env> {
             Some(code) => &code.code,
             None => &[],
         }
+    }
+
+    pub fn get_normalized(&self) -> (Identifier, normalized::Function) {
+        let name = self.get_identifier();
+        let fun = normalized::Function::new_from_name(&self.module_env.data.module, &name).unwrap();
+        (name, fun)
+    }
+
+    /// Print the full struct declaration with abilities, field names, and type names
+    pub fn display(&self, indent: &str, body: &str) -> String {
+        let (name, function) = self.get_normalized();
+        format!(
+            "{}",
+            normalized::FunctionDisplayContext {
+                function: &function,
+                name,
+                indent,
+                body
+            }
+        )
     }
 
     /// Returns the value of a boolean pragma for this function. This first looks up a
