@@ -470,7 +470,7 @@ impl ConsensusAdapter {
     // When throughput profile is Low and the validator is in position = 1, then it will submit to consensus with much lower latency.
     // When throughput profile is High then we go back to default operation and no-one co-submits.
     fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
-        const LOW_THROUGHPUT_LATENCY_MS: u64 = 1000;
+        const LOW_THROUGHPUT_LATENCY_MS: u64 = 1250;
 
         let p = self.consensus_throughput_profiler.load();
 
