@@ -6,7 +6,6 @@ import type { Message } from '_messages';
 import { PortStream } from '_messaging/PortStream';
 import { type BasePayload } from '_payloads';
 import { isLoadedFeaturesPayload } from '_payloads/feature-gating';
-import type { KeyringPayload } from '_payloads/keyring';
 import { isSetNetworkPayload, type SetNetworkPayload } from '_payloads/network';
 import { isPermissionRequests } from '_payloads/permissions';
 import type { GetPermissionRequests, PermissionResponse } from '_payloads/permissions';
@@ -195,20 +194,14 @@ export class BackgroundClient {
 		);
 	}
 
-	public verifyPassword(password: string, legacyAccounts: boolean = false) {
+	public verifyPassword(args: MethodPayload<'verifyPassword'>['args']) {
 		return lastValueFrom(
 			this.sendMessage(
-				legacyAccounts
-					? createMessage<KeyringPayload<'verifyPassword'>>({
-							type: 'keyring',
-							method: 'verifyPassword',
-							args: { password },
-					  })
-					: createMessage<MethodPayload<'verifyPassword'>>({
-							type: 'method-payload',
-							method: 'verifyPassword',
-							args: { password },
-					  }),
+				createMessage<MethodPayload<'verifyPassword'>>({
+					type: 'method-payload',
+					method: 'verifyPassword',
+					args,
+				}),
 			).pipe(take(1)),
 		);
 	}

@@ -15,7 +15,6 @@ import type { ApprovalRequest } from '_payloads/transactions/ApprovalRequest';
 import { isGetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { GetTransactionRequestsResponse } from '_payloads/transactions/ui/GetTransactionRequestsResponse';
 import { isTransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
-import Keyring from '_src/background/keyring';
 import Permissions from '_src/background/Permissions';
 import Tabs from '_src/background/Tabs';
 import Transactions from '_src/background/Transactions';
@@ -47,6 +46,7 @@ import { type AccountType } from '../accounts/Account';
 import { accountsEvents } from '../accounts/events';
 import { getAutoLockMinutes, notifyUserActive, setAutoLockMinutes } from '../auto-lock-accounts';
 import { backupDB, getDB, settingsKeys } from '../db';
+import { clearStatus, doMigration, getStatus } from '../legacy-accounts/storage-migration';
 import NetworkEnv from '../NetworkEnv';
 import {
 	acceptQredoConnection,
@@ -54,7 +54,6 @@ import {
 	getUIQredoPendingRequest,
 	rejectQredoConnection,
 } from '../qredo';
-import { clearStatus, doMigration, getStatus } from '../storage-migration';
 import { Connection } from './Connection';
 
 export class UiConnection extends Connection {
@@ -113,8 +112,6 @@ export class UiConnection extends Connection {
 			} else if (isDisconnectApp(payload)) {
 				await Permissions.delete(payload.origin, payload.specificAccounts);
 				this.send(createMessage({ type: 'done' }, id));
-			} else if (isBasePayload(payload) && payload.type === 'keyring') {
-				await Keyring.handleUiMessage(msg, this);
 			} else if (isBasePayload(payload) && payload.type === 'get-features') {
 				await growthbook.loadFeatures();
 				this.send(

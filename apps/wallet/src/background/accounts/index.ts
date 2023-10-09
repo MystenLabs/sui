@@ -15,6 +15,7 @@ import { accountSourcesEvents } from '../account-sources/events';
 import { MnemonicAccountSource } from '../account-sources/MnemonicAccountSource';
 import { type UiConnection } from '../connections/UiConnection';
 import { backupDB, getDB } from '../db';
+import { LegacyVault } from '../legacy-accounts/LegacyVault';
 import { makeUniqueKey } from '../storage-utils';
 import {
 	isKeyPairExportableAccount,
@@ -290,6 +291,13 @@ export async function accountsHandleUIMessage(msg: Message, uiConnection: UiConn
 		return true;
 	}
 	if (isMethodPayload(payload, 'verifyPassword')) {
+		if (payload.args.legacyAccounts) {
+			if (!(await LegacyVault.verifyPassword(payload.args.password))) {
+				throw new Error('Wrong password');
+			}
+			await uiConnection.send(createMessage({ type: 'done' }, msg.id));
+			return true;
+		}
 		const allAccounts = await getAllAccounts();
 		for (const anAccount of allAccounts) {
 			if (isPasswordUnLockable(anAccount)) {
