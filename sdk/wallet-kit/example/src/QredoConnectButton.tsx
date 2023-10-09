@@ -7,7 +7,7 @@ type QredoConnectInput = {
 	service: string;
 	apiUrl: string;
 	token: string;
-	organization: string;
+	workspace: string;
 };
 type QredoConnectFeature = {
 	'qredo:connect': {
@@ -42,7 +42,7 @@ export function QredoConnectButton() {
 						service: 'qredo-testing',
 						apiUrl: 'http://localhost:8080/connect/sui',
 						token: 'aToken',
-						organization: 'org1',
+						workspace: 'org1',
 					});
 				} catch (e) {
 					console.log(e);

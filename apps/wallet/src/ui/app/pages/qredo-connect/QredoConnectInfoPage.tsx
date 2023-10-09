@@ -80,8 +80,8 @@ export function QredoConnectInfoPage() {
 								</div>
 							) : (
 								<LabelValuesContainer>
-									<LabelValueItem label="Service" value={data.service} />
-									<LabelValueItem label="Organization" value={data.organization || '-'} />
+									<LabelValueItem label="Service Name" value={data.service} />
+									<LabelValueItem label="Workspace" value={data.organization || '-'} />
 									<LabelValueItem label="Token" value={data.partialToken} />
 									<LabelValueItem label="API URL" value={data.apiUrl} />
 								</LabelValuesContainer>

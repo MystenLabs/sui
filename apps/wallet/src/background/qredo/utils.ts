@@ -45,7 +45,7 @@ export function validateInputOrThrow(input: QredoConnectInput) {
 		service,
 		apiUrl: apiUrl.toString(),
 		token,
-		organization: trimString(input.organization),
+		organization: trimString('organization' in input ? input.organization : input.workspace),
 	};
 }
 

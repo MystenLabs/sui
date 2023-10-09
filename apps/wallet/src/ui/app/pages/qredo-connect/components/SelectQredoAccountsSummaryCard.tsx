@@ -62,7 +62,7 @@ export function SelectQredoAccountsSummaryCard({
 	}, [qredoConnectedAccounts, data, onChange]);
 	return (
 		<SummaryCard
-			header="Select accounts"
+			header="Select Qredo accounts"
 			body={
 				<Loading loading={isLoading}>
 					{error ? (
