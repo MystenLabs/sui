@@ -149,8 +149,6 @@ export type FetchKioskOptions = {
 	withKioskFields?: boolean;
 	/** Include the listing prices. */
 	withListingPrices?: boolean;
-	/** Include extension metadata */
-	withExtensionDetails?: boolean;
 	/** Include the objects for the Items in the kiosk. Defaults to `display` only. */
 	withObjects?: boolean;
 	/** Pass the data options for the objects, when fetching, in case you want to query other details. */
