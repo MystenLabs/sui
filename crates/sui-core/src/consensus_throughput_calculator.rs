@@ -288,21 +288,18 @@ impl ConsensusThroughputCalculator {
         let mut inner = self.inner.lock();
         let timestamp_secs: TimestampSecs = timestamp_ms / 1_000; // lowest bucket we care is seconds
 
-        if let Some((front_ts, transactions)) = inner.observations.pop_front() {
+        if let Some((front_ts, transactions)) = inner.observations.front_mut() {
             // First check that the timestamp is monotonically incremented - ignore any observation that is not
             // later from previous one (it shouldn't really happen).
-            if timestamp_secs < front_ts {
+            if timestamp_secs < *front_ts {
                 warn!("Ignoring observation of transactions:{} as has earlier timestamp than last observation {}s < {}s", num_of_transactions, timestamp_secs, front_ts);
                 return;
             }
 
             // Not very likely, but if transactions refer to same second we add to the last element.
-            if timestamp_secs == front_ts {
-                inner
-                    .observations
-                    .push_front((front_ts, transactions + num_of_transactions));
+            if timestamp_secs == *front_ts {
+                *transactions += num_of_transactions
             } else {
-                inner.observations.push_front((front_ts, transactions));
                 inner
                     .observations
                     .push_front((timestamp_secs, num_of_transactions));
@@ -350,9 +347,7 @@ impl ConsensusThroughputCalculator {
 
     // Returns the current (live calculated) throughput and the corresponding timestamp of when this got updated.
     pub fn current_throughput(&self) -> (u64, TimestampSecs) {
-        let r = self.current_throughput.load();
-        let (throughput, timestamp) = r.as_ref();
-        (*throughput, *timestamp)
+        *self.current_throughput.load().as_ref()
     }
 }
 
@@ -420,7 +415,7 @@ mod tests {
 
         // Let's now add 0 transactions after 5 seconds. Since 5 seconds have passed since the last
         // update and now the transactions are 0 we expect the throughput to be calculate as:
-        // 2800 + 2500 + 0 = 5300 / 15 - 4sec = 5300 / 11sec = 302 tx/sec
+        // 2800 + 2500 + 0 = 5300 / (15sec - 4sec) = 5300 / 11sec = 481 tx/sec
         calculator.add_transactions(15_000 as TimestampMs, 0);
 
         assert_eq!(calculator.current_throughput(), (481, 15));
