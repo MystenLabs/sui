@@ -14,6 +14,8 @@ use sui_sdk::types::programmable_transaction_builder::ProgrammableTransactionBui
 use sui_sdk::types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_sdk::types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 use sui_sdk::types::Identifier;
+
+// handler for `/process_commands` endpoint
 pub async fn process_commands(
     State(state): State<RelayerState>,
     Json(payload): Json<Vec<u8>>,
@@ -56,7 +58,6 @@ pub async fn process_commands(
         .map_err(|e| anyhow!(e))?;
 
     // todo: dry run?
-
     let resp = sui_client
         .quorum_driver_api()
         .execute_transaction_block(
