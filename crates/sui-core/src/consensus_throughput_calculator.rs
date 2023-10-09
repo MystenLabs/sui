@@ -126,7 +126,9 @@ struct ConsensusThroughputCalculatorInner {
 }
 
 /// The ConsensusThroughputProfiler is responsible for assigning the right throughput profile by polling
-/// the measured consensus throughput.
+/// the measured consensus throughput. It is important to rely on the ConsensusThroughputCalculator to measure
+/// throughput as we need to make sure that validators will see an as possible consistent view to assign
+/// the right profile.
 pub struct ConsensusThroughputProfiler {
     /// The throughput profile will be eligible for update every `throughput_profile_update_interval` seconds.
     /// A bucketing approach is followed where the throughput timestamp is used in order to calculate on which
