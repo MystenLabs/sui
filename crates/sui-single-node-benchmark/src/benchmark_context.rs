@@ -232,4 +232,19 @@ impl BenchmarkContext {
             *gas_objects = Arc::new(refreshed_gas_objects);
         }
     }
+
+    pub(crate) async fn validator_sign_transactions(&self, transactions: Vec<Transaction>) {
+        info!(
+            "Started signing {} transactions. You can now attach a profiler",
+            transactions.len(),
+        );
+        let tasks: FuturesUnordered<_> = transactions
+            .into_iter()
+            .map(|tx| {
+                let validator = self.validator();
+                tokio::spawn(async move { validator.sign_transaction(tx).await })
+            })
+            .collect();
+        let _results: Vec<_> = tasks.collect().await;
+    }
 }

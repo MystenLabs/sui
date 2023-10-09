@@ -18,6 +18,7 @@ use sui_types::committee::Committee;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction,
@@ -115,6 +116,7 @@ impl SingleValidator {
         cert: CertifiedTransaction,
         component: Component,
     ) -> TransactionEffects {
+        assert!(!matches!(component, Component::TxnSigning));
         let effects = match component {
             Component::Baseline => {
                 let cert = VerifiedExecutableTransaction::new_from_certificate(
@@ -142,8 +144,21 @@ impl SingleValidator {
                     .await;
                 response.signed_effects.into_data()
             }
+            Component::TxnSigning => unreachable!(),
         };
         assert!(effects.status().is_ok());
         effects
+    }
+
+    pub async fn sign_transaction(&self, transaction: Transaction) -> HandleTransactionResponse {
+        let result = self
+            .get_validator()
+            .handle_transaction(
+                &self.epoch_store,
+                VerifiedTransaction::new_unchecked(transaction),
+            )
+            .await
+            .unwrap();
+        result
     }
 }
