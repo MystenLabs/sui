@@ -80,44 +80,40 @@ export function extractKioskData(
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
-			const type = getTypeWithoutPackageAddress(val.name.type);
-			switch (type) {
-				case 'kiosk::Item':
-					acc.itemIds.push(val.objectId);
-					acc.items.push({
-						objectId: val.objectId,
-						type: val.objectType,
-						isLocked: false,
-						kioskId,
-					});
-					break;
-				case 'kiosk::Listing':
-					acc.listingIds.push(val.objectId);
-					listings.push({
-						objectId: (val.name.value as { id: string }).id,
-						listingId: val.objectId,
-						isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
-					});
-					break;
-				case 'kiosk::Lock':
-					lockedItemIds?.push((val.name.value as { id: string }).id);
-					break;
-				case 'kiosk_extension::ExtensionKey':
-					acc.extensions.push({
-						objectId: val.objectId,
-						type: getInnerType(val.name?.type),
-					});
-					break;
+			const type = val.name.type;
+
+			if (type.startsWith('0x2::kiosk::Item')) {
+				acc.itemIds.push(val.objectId);
+				acc.items.push({
+					objectId: val.objectId,
+					type: val.objectType,
+					isLocked: false,
+					kioskId,
+				});
 			}
+			if (type.startsWith('0x2::kiosk::Listing')) {
+				acc.listingIds.push(val.objectId);
+				listings.push({
+					objectId: (val.name.value as { id: string }).id,
+					listingId: val.objectId,
+					isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
+				});
+			}
+			if (type.startsWith('0x2::kiosk::Lock')) {
+				lockedItemIds?.push((val.name.value as { id: string }).id);
+			}
+
+			if (type.startsWith('0x2::kiosk_extension::ExtensionKey')) {
+				acc.extensions.push({
+					objectId: val.objectId,
+					type: getInnerType(val.name?.type),
+				});
+			}
+
 			return acc;
 		},
 		{ items: [], itemIds: [], listingIds: [], extensions: [] },
 	);
-}
-
-// e.g. 0x2::kiosk::Item -> kiosk::Item
-export function getTypeWithoutPackageAddress(type: string) {
-	return type.split('<')[0].split('::').slice(-2).join('::');
 }
 
 /**
