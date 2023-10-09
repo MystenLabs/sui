@@ -53,7 +53,16 @@ where
     G: fastcrypto::groups::GroupElement,
 {
     fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
-        // Can't measure size of internal vec<u8> here because it's private.
+        // Can't measure size of internal Vec<u8> here because it's private.
+        0
+    }
+}
+impl<G> MallocSizeOf for fastcrypto_tbls::ecies::MultiRecipientEncryption<G>
+where
+    G: fastcrypto::groups::GroupElement,
+{
+    fn size_of(&self, _ops: &mut crate::MallocSizeOfOps) -> usize {
+        // Can't measure size of internal Vec<Vec<u8>> here because it's private.
         0
     }
 }

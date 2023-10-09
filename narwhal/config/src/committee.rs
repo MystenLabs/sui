@@ -255,14 +255,12 @@ impl Committee {
             .iter()
             .map(|(id, authority)| {
                 let pk = fastcrypto::groups::bls12381::G2Element::from_byte_array(
-                    // TODO-DNS is it safe to call expect here?
                     authority
                         .protocol_key()
                         .as_bytes()
                         .try_into()
                         .expect("key length should match"),
                 )
-                // TODO-DNS is it safe to call expect here?
                 .expect("should work to convert BLS key to G2Element");
                 (
                     *id,

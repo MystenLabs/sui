@@ -4,9 +4,10 @@
 use config::{AuthorityIdentifier, Committee};
 use crypto::RandomnessPrivateKey;
 use fastcrypto::groups;
-use fastcrypto_tbls::dkg;
+use fastcrypto_tbls::{dkg, nodes};
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
+use sui_protocol_config::ProtocolConfig;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -14,8 +15,8 @@ use types::{
     Certificate, CertificateAPI, ConditionalBroadcastReceiver, HeaderAPI, Round, SystemMessage,
 };
 
-type G = groups::bls12381::G2Element; // TODO-DNS is it correct for these to be the same?
-type EG = groups::bls12381::G2Element;
+type PkG = groups::bls12381::G2Element;
+type EncG = groups::bls12381::G2Element;
 
 /// Updates Narwhal system state based on certificates received from consensus.
 pub struct StateHandler {
@@ -39,32 +40,53 @@ pub struct StateHandler {
 
 // Internal state for randomness DKG and generation.
 struct RandomnessState {
-    party: dkg::Party<G, EG>,
-    messages: Vec<dkg::Message<G, EG>>,
-    processed_messages: Vec<dkg::ProcessedMessage<G, EG>>,
-    shares: dkg::SharesMap<<G as groups::GroupElement>::ScalarType>,
-    confirmations: Vec<dkg::Confirmation<EG>>,
-    dkg_output: Option<dkg::Output<G, EG>>,
+    party: dkg::Party<PkG, EncG>,
+    messages: Vec<dkg::Message<PkG, EncG>>,
+    processed_messages: Vec<dkg::ProcessedMessage<PkG, EncG>>,
+    shares: dkg::SharesMap<<PkG as groups::GroupElement>::ScalarType>,
+    confirmations: Vec<dkg::Confirmation<EncG>>,
+    dkg_output: Option<dkg::Output<PkG, EncG>>,
 }
 
 impl RandomnessState {
-    fn try_new(committee: Committee, private_key: RandomnessPrivateKey) -> Option<Self> {
-        let total_stake = committee.total_stake() as f64;
-        let info = committee.randomness_dkg_info();
+    fn try_new(
+        protocol_config: ProtocolConfig,
+        committee: Committee,
+        private_key: RandomnessPrivateKey,
+    ) -> Option<Self> {
+        if !protocol_config.random_beacon() {
+            return None;
+        }
 
+        let info = committee.randomness_dkg_info();
         let nodes = info
             .iter()
-            .map(|(id, pk, stake)| fastcrypto_tbls::nodes::Node::<EG> {
+            .map(|(id, pk, stake)| nodes::Node::<EncG> {
                 id: id.0,
                 pk: pk.clone(),
-                weight: ((*stake as f64 / total_stake) * 2000.0) as u16, // TODO-DNS update to reduce in fastcrypto
+                weight: *stake as u16,
             })
             .collect();
-        let party = match dkg::Party::<G, EG>::new(
+        let nodes = match nodes::Nodes::new(nodes) {
+            Ok(nodes) => nodes,
+            Err(err) => {
+                error!("Error while initializing random beacon state: {err:?}");
+                return None;
+            }
+        };
+        // TODO_DNS do we expect to want to vary this in the future? in which case it should be in protocl config
+        const DKG_THRESHOLD: u16 = 3_334; // f+1 of total 10,000 stake.
+        let (nodes, t) = nodes.reduce(
+            DKG_THRESHOLD,
+            protocol_config.random_beacon_reduction_allowed_delta(),
+        );
+        let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
-            (info.len() / 3 + 1) as u32, // TODO-DNS - what to use for `t`?
-            fastcrypto_tbls::random_oracle::RandomOracle::new("dkg"),
+            t.into(),
+            fastcrypto_tbls::random_oracle::RandomOracle::new(
+                format!("dkg {}", committee.epoch()).as_str(),
+            ),
             &mut rand::thread_rng(),
         ) {
             Ok(party) => party,
@@ -90,7 +112,7 @@ impl RandomnessState {
             .await;
     }
 
-    fn add_message(&mut self, msg: dkg::Message<G, EG>) {
+    fn add_message(&mut self, msg: dkg::Message<PkG, EncG>) {
         if !self.shares.is_empty() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
             return;
@@ -106,7 +128,7 @@ impl RandomnessState {
         }
     }
 
-    fn add_confirmation(&mut self, conf: dkg::Confirmation<EG>) {
+    fn add_confirmation(&mut self, conf: dkg::Confirmation<EncG>) {
         self.confirmations.push(conf)
     }
 
@@ -115,8 +137,6 @@ impl RandomnessState {
     async fn advance(&mut self, tx_system_messages: &Sender<SystemMessage>) {
         // Once we have enough ProcessedMessages, send a Confirmation.
         if self.shares.is_empty() && !self.processed_messages.is_empty() {
-            // TODO-DNS make sure fastcrypto code is updated to dedupe processed messages
-            // instead of returning error
             match self.party.merge(&self.processed_messages) {
                 Ok((shares, conf)) => {
                     self.shares = shares;
@@ -135,7 +155,7 @@ impl RandomnessState {
                 &self.messages,
                 &self.confirmations,
                 self.shares.clone(),
-                todo!(), // TODO-DNS - how to set threshold?
+                self.party.t() * 2 - 1, // t==f+1, we want 2f+1
                 &mut rand::thread_rng(),
             ) {
                 Ok(shares) => {
@@ -151,13 +171,14 @@ impl RandomnessState {
 impl StateHandler {
     #[must_use]
     pub fn spawn(
+        protocol_config: ProtocolConfig,
         authority_id: AuthorityIdentifier,
         committee: Committee,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
         rx_shutdown: ConditionalBroadcastReceiver,
         tx_committed_own_headers: Option<Sender<(Round, Vec<Round>)>>,
         tx_system_messages: Sender<SystemMessage>,
-        randomness_private_key: Option<RandomnessPrivateKey>,
+        randomness_private_key: RandomnessPrivateKey,
         network: anemo::Network,
     ) -> JoinHandle<()> {
         spawn_logged_monitored_task!(
@@ -168,8 +189,11 @@ impl StateHandler {
                     rx_shutdown,
                     tx_committed_own_headers,
                     tx_system_messages,
-                    randomness_state: randomness_private_key
-                        .and_then(|key| RandomnessState::try_new(committee, key)),
+                    randomness_state: RandomnessState::try_new(
+                        protocol_config,
+                        committee,
+                        randomness_private_key,
+                    ),
                     network,
                 }
                 .run()

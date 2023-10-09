@@ -407,7 +407,6 @@ impl Header {
 
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         match self {
-            // TODO-DNS: dedupe identical impls for this.
             Header::V1(data) => data.validate(committee, worker_cache),
             Header::V2(data) => data.validate(committee, worker_cache),
         }

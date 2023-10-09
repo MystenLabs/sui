@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 26;
+const MAX_PROTOCOL_VERSION: u64 = 27;
 
 // Record history of protocol version allocations here:
 //
@@ -76,6 +76,7 @@ const MAX_PROTOCOL_VERSION: u64 = 26;
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
+// Version 27: Add support for random beacon.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -291,6 +292,14 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    // Enable v2 of Headers for Narwhal
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_header_v2: bool,
+
+    // Enable random beacon protocol
+    #[serde(skip_serializing_if = "is_false")]
+    random_beacon: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -780,8 +789,12 @@ pub struct ProtocolConfig {
     // Applied at the end of an epoch as a delta from the new epoch value, so setting this to 1
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
-    // === Random Beacon ===
-    // TODO-DNS add random beacon configs, for now thresholds and reduction are hard-coded.
+
+    /// === random beacon ===
+    
+    /// Maximum allowed precision loss when reducing voting weights for the random beacon
+    /// protocol.
+    random_beacon_reduction_allowed_delta: Option<u16>,
 }
 
 // feature flags
@@ -937,6 +950,19 @@ impl ProtocolConfig {
     // this function only exists for readability in the genesis code.
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
+    }
+
+    pub fn narwhal_header_v2(&self) -> bool {
+        self.feature_flags.narwhal_header_v2
+    }
+
+    pub fn random_beacon(&self) -> bool {
+        let ret = self.feature_flags.random_beacon;
+        if ret {
+            // random beacon requires narwhal v2 headers
+            assert!(self.feature_flags.narwhal_header_v2);
+        }
+        ret
     }
 }
 
@@ -1306,7 +1332,9 @@ impl ProtocolConfig {
 
             max_jwk_votes_per_validator_per_epoch: None,
 
-                max_age_of_jwk_in_epochs: None,
+            max_age_of_jwk_in_epochs: None,
+            
+            random_beacon_reduction_allowed_delta: None,
 
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
@@ -1491,6 +1519,14 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
+                    }
+                }
+                27 => {
+                    cfg.random_beacon_reduction_allowed_delta = Some(800);
+                    // Only enable random beacon in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
                     }
                 }
                 // Use this template when making changes:
