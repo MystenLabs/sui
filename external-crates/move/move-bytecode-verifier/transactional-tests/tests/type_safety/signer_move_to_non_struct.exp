@@ -1,7 +1,7 @@
 processed 1 task
 
 task 0 'publish'. lines 1-10:
-Error: Unable to publish module '00000000000000000000000000000042::N'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::N'. Got VMError: {
     major_status: MOVETO_TYPE_MISMATCH_ERROR,
     sub_status: None,
     location: 0x42::N,

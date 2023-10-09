@@ -3,6 +3,7 @@
 
 export * from './hooks/useSuiClient.js';
 export * from './components/ConnectButton.js';
+export * from './components/connect-modal/ConnectModal.js';
 export * from './components/SuiClientProvider.js';
 export * from './components/WalletProvider.js';
 export * from './hooks/wallet/useCurrentAccount.js';
@@ -18,4 +19,5 @@ export * from './hooks/wallet/useSignAndExecuteTransactionBlock.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/useSuiClientInfiniteQuery.js';
+export * from './themes/lightTheme.js';
 export * from './types.js';

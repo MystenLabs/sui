@@ -5,7 +5,6 @@
 //! as 'native`, but do not appear in the compiled module. For developer sanity, they must be marked
 //! with the `FAKE_NATIVE_ATTR`
 
-use move_core_types::account_address::AccountAddress;
 use std::convert::TryInto;
 
 use crate::{
@@ -90,12 +89,13 @@ pub fn resolve_builtin(
     let sp!(_, ModuleIdent_ { address, module }) = module;
     // Only resolve if either (a) the address is named "std" or (b) its value is 0x1
     match address {
-        Address::Numerical(Some(sp!(_, n)), _) | Address::NamedUnassigned(sp!(_, n))
-            if *n == symbol!("std") => {}
-        Address::Numerical(_, sp!(_, a)) if a.into_inner() == AccountAddress::ONE => {}
-        _ => {
-            return None;
+        Address::Numerical {
+            name: Some(sp!(_, n)),
+            ..
         }
+        | Address::NamedUnassigned(sp!(_, n))
+            if *n == symbol!("std") => {}
+        _ => return None,
     };
     Some(match (module.value().as_str(), function.value().as_str()) {
         ("vector", "empty") => |tys| IR::Bytecode_::VecPack(expect_one_ty_arg(tys), 0),

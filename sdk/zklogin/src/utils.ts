@@ -4,14 +4,16 @@
 import { poseidonHash } from './poseidon.js';
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 32;
-const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
-const MAX_AUD_VALUE_LENGTH = 145;
+export const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
+export const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
-// TODO: We need to rewrite this to not depend on Buffer.
-export function toBufferBE(num: bigint, width: number) {
-	const hex = num.toString(16);
-	return Buffer.from(hex.padStart(width * 2, '0').slice(-width * 2), 'hex');
+export function toBigIntBE(buffer: Buffer) {
+	const hex = buffer.toString('hex');
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
+	return BigInt(`0x${hex}`);
 }
 
 /**
@@ -33,6 +35,9 @@ export function chunkArray<T>(array: T[], chunk_size: number): T[][] {
 
 function bytesBEToBigInt(bytes: number[]): bigint {
 	const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
 	return BigInt('0x' + hex);
 }
 

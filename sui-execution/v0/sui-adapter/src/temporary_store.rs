@@ -259,7 +259,7 @@ impl<'backing> TemporaryStore<'backing> {
         let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
-        let effects = TransactionEffects::new_from_execution(
+        let effects = TransactionEffects::new_from_execution_v1(
             protocol_version,
             status,
             epoch,
@@ -742,7 +742,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) {
         let wrapper = get_sui_system_state_wrapper(self.store.as_object_store())
             .expect("System state wrapper object must exist");
-        let new_object =
+        let (new_object, _) =
             wrapper.advance_epoch_safe_mode(params, self.store.as_object_store(), protocol_config);
         self.write_object(new_object, WriteKind::Mutate);
     }

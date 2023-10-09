@@ -19,7 +19,7 @@ import {
 } from '../session-ephemeral-values';
 import { accountsEvents } from './events';
 
-export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo' | 'zk';
+export type AccountType = 'mnemonic-derived' | 'imported' | 'ledger' | 'qredo' | 'zkLogin';
 
 export abstract class Account<
 	T extends SerializedAccount = SerializedAccount,

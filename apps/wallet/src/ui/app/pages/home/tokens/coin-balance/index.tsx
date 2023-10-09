@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { Heading } from '_src/ui/app/shared/heading';
 import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin, useSuiCoinData } from '@mysten/core';
@@ -13,6 +14,7 @@ export type CoinProps = {
 };
 
 export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
+	const isDefiWalletEnabled = useIsWalletDefiEnabled();
 	const [formatted, symbol] = useFormatCoin(walletBalance, type);
 	const { data } = useSuiCoinData();
 	const { currentPrice } = data || {};
@@ -42,7 +44,11 @@ export function CoinBalance({ amount: walletBalance, type }: CoinProps) {
 			</div>
 			<div>
 				{walletBalanceInUsd ? (
-					<Text variant="caption" weight="medium" color="steel">
+					<Text
+						variant="caption"
+						weight="medium"
+						color={isDefiWalletEnabled ? 'hero-darkest' : 'steel'}
+					>
 						{walletBalanceInUsd}
 					</Text>
 				) : null}

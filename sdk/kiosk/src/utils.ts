@@ -12,8 +12,8 @@ import {
 	SuiObjectResponse,
 	type DynamicFieldInfo,
 } from '@mysten/sui.js/client';
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 import { bcs } from './bcs';
 import {
@@ -36,8 +36,8 @@ const DEFAULT_QUERY_LIMIT = 50;
  */
 export function objArg(
 	txb: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionArgument,
-): TransactionArgument {
+	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
+): TransactionObjectArgument {
 	if (typeof arg === 'string') {
 		return txb.object(arg);
 	}
@@ -80,39 +80,40 @@ export function extractKioskData(
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
-			const type = getTypeWithoutPackageAddress(val.name.type);
+			const type = val.name.type;
 
-			switch (type) {
-				case 'kiosk::Item':
-					acc.itemIds.push(val.objectId);
-					acc.items.push({
-						objectId: val.objectId,
-						type: val.objectType,
-						isLocked: false,
-						kioskId,
-					});
-					break;
-				case 'kiosk::Listing':
-					acc.listingIds.push(val.objectId);
-					listings.push({
-						objectId: (val.name.value as { id: string }).id,
-						listingId: val.objectId,
-						isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
-					});
-					break;
-				case 'kiosk::Lock':
-					lockedItemIds?.push((val.name.value as { id: string }).id);
-					break;
+			if (type.startsWith('0x2::kiosk::Item')) {
+				acc.itemIds.push(val.objectId);
+				acc.items.push({
+					objectId: val.objectId,
+					type: val.objectType,
+					isLocked: false,
+					kioskId,
+				});
 			}
+			if (type.startsWith('0x2::kiosk::Listing')) {
+				acc.listingIds.push(val.objectId);
+				listings.push({
+					objectId: (val.name.value as { id: string }).id,
+					listingId: val.objectId,
+					isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
+				});
+			}
+			if (type.startsWith('0x2::kiosk::Lock')) {
+				lockedItemIds?.push((val.name.value as { id: string }).id);
+			}
+
+			if (type.startsWith('0x2::kiosk_extension::ExtensionKey')) {
+				acc.extensions.push({
+					objectId: val.objectId,
+					type: normalizeStructTag(parseStructTag(val.name.type).typeParams[0]),
+				});
+			}
+
 			return acc;
 		},
 		{ items: [], itemIds: [], listingIds: [], extensions: [] },
 	);
-}
-
-// e.g. 0x2::kiosk::Item -> kiosk::Item
-export function getTypeWithoutPackageAddress(type: string) {
-	return type.split('::').slice(-2).join('::');
 }
 
 /**

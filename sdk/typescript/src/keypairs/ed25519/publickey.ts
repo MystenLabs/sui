@@ -6,11 +6,9 @@ import nacl from 'tweetnacl';
 
 import type { PublicKeyInitData } from '../../cryptography/publickey.js';
 import { bytesEqual, PublicKey } from '../../cryptography/publickey.js';
+import { SIGNATURE_SCHEME_TO_FLAG } from '../../cryptography/signature-scheme.js';
 import type { SerializedSignature } from '../../cryptography/signature.js';
-import {
-	parseSerializedSignature,
-	SIGNATURE_SCHEME_TO_FLAG,
-} from '../../cryptography/signature.js';
+import { parseSerializedSignature } from '../../cryptography/signature.js';
 
 const PUBLIC_KEY_SIZE = 32;
 

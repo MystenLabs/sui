@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 serde_yaml.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true

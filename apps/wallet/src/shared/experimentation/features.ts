@@ -26,6 +26,7 @@ export enum FEATURES {
 	WALLET_QREDO = 'wallet-qredo',
 	WALLET_APPS_BANNER_CONFIG = 'wallet-apps-banner-config',
 	WALLET_INTERSTITIAL_CONFIG = 'wallet-interstitial-config',
+	WALLET_DEFI = 'wallet-defi',
 }
 
 export function setAttributes(network?: { apiEnv: API_ENV; customRPC?: string | null }) {

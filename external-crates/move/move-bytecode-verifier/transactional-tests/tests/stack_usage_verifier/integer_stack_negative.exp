@@ -1,7 +1,7 @@
 processed 6 tasks
 
 task 0 'publish'. lines 1-14:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMErr
 }
 
 task 1 'publish'. lines 17-30:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMErr
 }
 
 task 2 'publish'. lines 32-45:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMErr
 }
 
 task 3 'publish'. lines 47-60:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,
@@ -37,7 +37,7 @@ Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMErr
 }
 
 task 4 'publish'. lines 62-75:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,
@@ -46,7 +46,7 @@ Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMErr
 }
 
 task 5 'publish'. lines 77-90:
-Error: Unable to publish module '00000000000000000000000000000001::A'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::A'. Got VMError: {
     major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
     sub_status: None,
     location: 0x1::A,

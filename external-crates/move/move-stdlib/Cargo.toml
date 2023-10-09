@@ -36,6 +36,7 @@ move-cli = { path = "../tools/move-cli" }
 move-package = { path = "../tools/move-package" }
 
 [features]
+default = ["address32"]
 testing = []
 address20 = ["move-core-types/address20"]
 address32 = ["move-core-types/address32"]

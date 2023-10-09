@@ -73,16 +73,20 @@ impl SuiSystemStateWrapper {
         }
     }
 
+    /// Advances epoch in safe mode natively in Rust, without involking Move.
+    /// This ensures that there cannot be any failure from Move and is guaranteed to succeed.
+    /// Returns the old and new inner system state object.
     pub fn advance_epoch_safe_mode(
         &self,
         params: &AdvanceEpochParams,
         object_store: &dyn ObjectStore,
         protocol_config: &ProtocolConfig,
-    ) -> Object {
+    ) -> (Object, Object) {
         let id = self.id.id.bytes;
-        let mut field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
+        let old_field_object = get_dynamic_field_object_from_store(object_store, id, &self.version)
             .expect("Dynamic field object of wrapper should always be present in the object store");
-        let move_object = field_object
+        let mut new_field_object = old_field_object.clone();
+        let move_object = new_field_object
             .data
             .try_as_move_mut()
             .expect("Dynamic field object must be a Move object");
@@ -127,7 +131,7 @@ impl SuiSystemStateWrapper {
             }
             _ => unreachable!(),
         }
-        field_object
+        (old_field_object, new_field_object)
     }
 
     fn advance_epoch_safe_mode_impl<T>(

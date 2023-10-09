@@ -180,6 +180,8 @@ codes!(
         SpecContextRestricted:
             { msg: "syntax item restricted to spec contexts", severity: BlockingError },
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
+        InvalidRestrictedIdentifier:
+            { msg: "invalid identifier escape", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -204,6 +206,7 @@ codes!(
         InvalidAttribute: { msg: "invalid attribute", severity: NonblockingError },
         InvalidVisibilityModifier:
             { msg: "invalid visibility modifier", severity: NonblockingError },
+        InvalidUseFun: { msg: "invalid 'use fun' declaration", severity: NonblockingError },
     ],
     // errors name resolution, mostly expansion/translate and naming/translate
     NameResolution: [
@@ -219,6 +222,7 @@ codes!(
         UnboundField: { msg: "unbound field", severity: BlockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
+        PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -250,6 +254,7 @@ codes!(
                 (NOTE: this may become an error in the future)",
             severity: Warning
         },
+        InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

@@ -59,10 +59,10 @@ fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
 
 typed-store.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true

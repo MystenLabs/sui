@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { type AccountType, type SerializedUIAccount } from '_src/background/accounts/Account';
-import { type ZkProvider } from '_src/background/accounts/zk/providers';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { type ZkLoginProvider } from '_src/background/accounts/zklogin/providers';
+import { isZkLoginAccountSerializedUI } from '_src/background/accounts/zklogin/ZkLoginAccount';
 import { AccountIcon } from '_src/ui/app/components/accounts/AccountIcon';
 import { AccountItem } from '_src/ui/app/components/accounts/AccountItem';
 import { useAccountsFormContext } from '_src/ui/app/components/accounts/AccountsFormContext';
@@ -35,10 +35,10 @@ const accountTypeToLabel: Record<AccountType, string> = {
 	qredo: 'Qredo',
 	imported: 'Imported',
 	ledger: 'Ledger',
-	zk: 'zkLogin',
+	zkLogin: 'zkLogin',
 };
 
-const providerToLabel: Record<ZkProvider, string> = {
+const providerToLabel: Record<ZkLoginProvider, string> = {
 	google: 'Google',
 	twitch: 'Twitch',
 	facebook: 'Facebook',
@@ -46,7 +46,7 @@ const providerToLabel: Record<ZkProvider, string> = {
 
 export function getGroupTitle(aGroupAccount: SerializedUIAccount) {
 	// TODO: revisit this logic for determining account provider
-	return isZkAccountSerializedUI(aGroupAccount)
+	return isZkLoginAccountSerializedUI(aGroupAccount)
 		? providerToLabel[aGroupAccount?.provider] ?? 'zkLogin'
 		: accountTypeToLabel[aGroupAccount?.type] || '';
 }
@@ -227,7 +227,7 @@ export function AccountGroup({
 				<VerifyPasswordModal
 					open
 					onVerify={async (password) => {
-						if (accountsFormValues.current && accountsFormValues.current.type !== 'zk') {
+						if (accountsFormValues.current && accountsFormValues.current.type !== 'zkLogin') {
 							await createAccountMutation.mutateAsync({
 								type: accountsFormValues.current.type,
 								password,

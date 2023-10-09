@@ -1,7 +1,7 @@
 processed 4 tasks
 
 task 1 'publish'. lines 31-46:
-Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
     major_status: GLOBAL_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::Tester,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got 
 }
 
 task 2 'publish'. lines 48-62:
-Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
     major_status: GLOBAL_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::Tester,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got 
 }
 
 task 3 'publish'. lines 64-82:
-Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
     major_status: GLOBAL_REFERENCE_ERROR,
     sub_status: None,
     location: 0x1::Tester,

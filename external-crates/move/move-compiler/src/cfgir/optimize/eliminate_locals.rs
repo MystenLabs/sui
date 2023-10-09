@@ -155,10 +155,18 @@ mod count {
 
             E::Copy { var, .. } | E::Move { var, .. } => context.used(var, true),
 
-            E::ModuleCall(mcall) => exp(context, &mcall.arguments),
-            E::Builtin(_, e)
-            | E::Vector(_, _, _, e)
-            | E::Freeze(e)
+            E::ModuleCall(mcall) => {
+                for arg in &mcall.arguments {
+                    exp(context, arg);
+                }
+            }
+            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+                for arg in args.iter() {
+                    exp(context, arg);
+                }
+            }
+
+            E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
             | E::Borrow(_, e, _)
@@ -171,37 +179,18 @@ mod count {
 
             E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
 
-            E::ExpList(es) => es.iter().for_each(|item| exp_list_item(context, item)),
+            E::Multiple(es) => es.iter().for_each(|e| exp(context, e)),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
         }
     }
 
-    fn exp_list_item(context: &mut Context, item: &ExpListItem) {
-        match item {
-            ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(context, e),
-        }
-    }
-
     fn can_subst_exp(lvalue_len: usize, exp: &Exp) -> Vec<bool> {
-        use ExpListItem as I;
         use UnannotatedExp_ as E;
         match (lvalue_len, &exp.exp.value) {
             (0, _) => vec![],
             (1, _) => vec![can_subst_exp_single(exp)],
-            (_, E::ExpList(es))
-                if es.iter().all(|item| match item {
-                    I::Splat(_, _, _) => false,
-                    I::Single(_, _) => true,
-                }) =>
-            {
-                es.iter()
-                    .map(|item| match item {
-                        I::Single(e, _) => can_subst_exp_single(e),
-                        I::Splat(_, _, _) => unreachable!(),
-                    })
-                    .collect()
-            }
+            (_, E::Multiple(es)) => es.iter().map(can_subst_exp_single).collect(),
             (_, _) => (0..lvalue_len).map(|_| false).collect(),
         }
     }
@@ -227,9 +216,9 @@ mod count {
             E::BinopExp(e1, op, e2) => {
                 can_subst_exp_binary(op) && can_subst_exp_single(e1) && can_subst_exp_single(e2)
             }
-            E::ExpList(es) => es.iter().all(can_subst_exp_item),
+            E::Multiple(es) => es.iter().all(can_subst_exp_single),
             E::Pack(_, _, fields) => fields.iter().all(|(_, _, e)| can_subst_exp_single(e)),
-            E::Vector(_, _, _, eargs) => can_subst_exp_single(eargs),
+            E::Vector(_, _, _, eargs) => eargs.iter().all(can_subst_exp_single),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
         }
@@ -241,14 +230,6 @@ mod count {
 
     fn can_subst_exp_binary(sp!(_, op_): &BinOp) -> bool {
         op_.is_pure()
-    }
-
-    fn can_subst_exp_item(item: &ExpListItem) -> bool {
-        use ExpListItem as I;
-        match item {
-            I::Single(e, _) => can_subst_exp_single(e),
-            I::Splat(_, es, _) => can_subst_exp_single(es),
-        }
     }
 }
 
@@ -364,10 +345,17 @@ mod eliminate {
             | E::UnresolvedError
             | E::BorrowLocal(_, _) => (),
 
-            E::ModuleCall(mcall) => exp(context, &mut mcall.arguments),
-            E::Builtin(_, e)
-            | E::Vector(_, _, _, e)
-            | E::Freeze(e)
+            E::ModuleCall(mcall) => {
+                for arg in mcall.arguments.iter_mut() {
+                    exp(context, arg);
+                }
+            }
+            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+                for arg in args.iter_mut() {
+                    exp(context, arg);
+                }
+            }
+            E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
             | E::Borrow(_, e, _)
@@ -380,15 +368,9 @@ mod eliminate {
 
             E::Pack(_, _, fields) => fields.iter_mut().for_each(|(_, _, e)| exp(context, e)),
 
-            E::ExpList(es) => es.iter_mut().for_each(|item| exp_list_item(context, item)),
+            E::Multiple(es) => es.iter_mut().for_each(|e| exp(context, e)),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
-        }
-    }
-
-    fn exp_list_item(context: &mut Context, item: &mut ExpListItem) {
-        match item {
-            ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(context, e),
         }
     }
 
@@ -400,37 +382,30 @@ mod eliminate {
         match eliminated.len() {
             0 => (),
             1 => remove_eliminated_single(context, eliminated.pop().unwrap().unwrap(), e),
-
             _ => {
                 let tys = match &mut e.ty.value {
                     Type_::Multiple(tys) => tys,
                     _ => panic!("ICE local elimination type mismatch"),
                 };
                 let es = match &mut e.exp.value {
-                    UnannotatedExp_::ExpList(es) => es,
+                    UnannotatedExp_::Multiple(es) => es,
                     _ => panic!("ICE local elimination type mismatch"),
                 };
                 let old_tys = std::mem::take(tys);
                 let old_es = std::mem::take(es);
-                for ((mut item, ty), elim_opt) in old_es.into_iter().zip(old_tys).zip(eliminated) {
-                    let e = match &mut item {
-                        ExpListItem::Single(e, _) => e,
-                        ExpListItem::Splat(_, _, _) => {
-                            panic!("ICE local elimination filtering failed")
-                        }
-                    };
+                for ((mut e, ty), elim_opt) in old_es.into_iter().zip(old_tys).zip(eliminated) {
                     match elim_opt {
                         None => {
                             tys.push(ty);
-                            es.push(item)
+                            es.push(e)
                         }
                         Some(v) => {
-                            remove_eliminated_single(context, v, e);
+                            remove_eliminated_single(context, v, &mut e);
                             match &e.ty.value {
                                 Type_::Unit => (),
                                 Type_::Single(_) => {
                                     tys.push(ty);
-                                    es.push(item)
+                                    es.push(e)
                                 }
                                 Type_::Multiple(_) => {
                                     panic!("ICE local elimination replacement type mismatch")

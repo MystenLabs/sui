@@ -136,7 +136,6 @@
 		"@sentry/browser": "^7.61.0",
 		"@tanstack/react-query": "^4.29.25",
 		"@tanstack/react-query-persist-client": "^4.29.25",
-		"bigint-buffer": "^1.1.5",
 		"bignumber.js": "^9.1.1",
 		"bootstrap-icons": "^1.10.5",
 		"buffer": "^6.0.3",

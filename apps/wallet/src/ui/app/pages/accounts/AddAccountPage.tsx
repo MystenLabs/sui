@@ -4,7 +4,10 @@
 import { Button } from '_app/shared/ButtonUI';
 import { Text } from '_app/shared/text';
 import Overlay from '_components/overlay';
-import { zkProviderDataMap, type ZkProvider } from '_src/background/accounts/zk/providers';
+import {
+	zkLoginProviderDataMap,
+	type ZkLoginProvider,
+} from '_src/background/accounts/zklogin/providers';
 import { ampli } from '_src/shared/analytics/ampli';
 import { LedgerLogo17 as LedgerLogo } from '@mysten/icons';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -45,11 +48,11 @@ export function AddAccountPage() {
 	const [isConnectLedgerModalOpen, setConnectLedgerModalOpen] = useState(forceShowLedger);
 	const createAccountsMutation = useCreateAccountsMutation();
 	const createZkLoginAccount = useCallback(
-		async (provider: ZkProvider) => {
-			await setAccountsFormValues({ type: 'zk', provider });
+		async (provider: ZkLoginProvider) => {
+			await setAccountsFormValues({ type: 'zkLogin', provider });
 			await createAccountsMutation.mutateAsync(
 				{
-					type: 'zk',
+					type: 'zkLogin',
 				},
 				{
 					onSuccess: () => {
@@ -63,7 +66,7 @@ export function AddAccountPage() {
 		},
 		[setAccountsFormValues, createAccountsMutation, navigate],
 	);
-	const [forcedZkLoginProvider, setForcedZkLoginProvider] = useState<ZkProvider | null>(null);
+	const [forcedZkLoginProvider, setForcedZkLoginProvider] = useState<ZkLoginProvider | null>(null);
 	const forceZkLoginWithProviderRef = useRef(searchParams.get('forceZkLoginProvider'));
 	const forcedLoginHandledRef = useRef(false);
 	const { data: accountsTotalByType, isLoading: isAccountsCountLoading } = useCountAccountsByType();
@@ -71,9 +74,13 @@ export function AddAccountPage() {
 		if (isAccountsCountLoading) {
 			return;
 		}
-		const zkLoginProvider = forceZkLoginWithProviderRef.current as ZkProvider;
-		if (zkLoginProvider && zkProviderDataMap[zkLoginProvider] && !forcedLoginHandledRef.current) {
-			const totalProviderAccounts = accountsTotalByType?.zk?.extra?.[zkLoginProvider] || 0;
+		const zkLoginProvider = forceZkLoginWithProviderRef.current as ZkLoginProvider;
+		if (
+			zkLoginProvider &&
+			zkLoginProviderDataMap[zkLoginProvider] &&
+			!forcedLoginHandledRef.current
+		) {
+			const totalProviderAccounts = accountsTotalByType?.zkLogin?.extra?.[zkLoginProvider] || 0;
 			if (totalProviderAccounts === 0) {
 				setForcedZkLoginProvider(zkLoginProvider);
 				createZkLoginAccount(zkLoginProvider).finally(() => setForcedZkLoginProvider(null));

@@ -57,9 +57,9 @@ export function SendTransaction() {
 		tx.moveCall({
 			target: '0x2::devnet_nft::mint',
 			arguments: [
-				tx.pure('some name'),
-				tx.pure('some description'),
-				tx.pure(
+				tx.pure.string('some name'),
+				tx.pure.string('some description'),
+				tx.pure.string(
 					'https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop',
 				),
 			],

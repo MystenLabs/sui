@@ -131,6 +131,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
+use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
@@ -235,7 +236,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
-    pub consensus_committed_certificates: IntCounterVec,
+    pub consensus_committed_certificates: IntGaugeVec,
+    pub consensus_committed_user_transactions: IntGaugeVec,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -537,22 +539,25 @@ impl AuthorityMetrics {
                 "scores from consensus for each authority",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
-            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+            ).unwrap(),
+            consensus_committed_certificates: register_int_gauge_vec_with_registry!(
                 "consensus_committed_certificates",
                 "Number of committed certificates, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
+            consensus_committed_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_committed_user_transactions",
+                "Number of committed user transactions, sliced by submitter",
+                &["authority"],
+                registry,
+            ).unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             authenticator_state_update_failed: register_int_counter_with_registry!(
@@ -670,7 +675,8 @@ impl AuthorityState {
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             epoch_store.epoch(),
-            &transaction.data().intent_message().value,
+            transaction.data().transaction_data(),
+            transaction.tx_signatures(),
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
         )?;
@@ -756,6 +762,16 @@ impl AuthorityState {
                     .1,
             }),
         }
+    }
+
+    pub(crate) fn check_system_overload(
+        &self,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
+        self.transaction_manager.check_execution_overload(tx_data)?;
+        consensus_adapter.check_consensus_overload()?;
+        Ok(())
     }
 
     /// Executes a transaction that's known to have correct effects.
@@ -1297,6 +1313,7 @@ impl AuthorityState {
                     epoch_store.reference_gas_price(),
                     epoch_store.epoch(),
                     &transaction,
+                    &[],
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
@@ -4183,6 +4200,14 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         self.database
             .deprecated_get_transaction_checkpoint(&digest)
             .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+    }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<Option<Object>> {
+        self.database.get_object_by_key(&object_id, version)
     }
 }
 

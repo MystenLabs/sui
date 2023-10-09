@@ -79,6 +79,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -167,6 +169,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -255,6 +259,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -343,6 +349,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -431,6 +439,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -519,6 +529,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -607,6 +619,8 @@ validator_configs:
       shared_object_disabled: false
       user_transaction_disabled: false
       receiving_objects_disabled: false
+      zklogin_sig_disabled: false
+      zklogin_disabled_providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:

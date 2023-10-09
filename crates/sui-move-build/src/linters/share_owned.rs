@@ -150,7 +150,7 @@ impl SimpleAbsInt for ShareOwnedVerifierAI {
             let mut d = diag!(
                 SHARE_OWNED_DIAG,
                 (*loc, msg),
-                (f.arguments.exp.loc, uid_msg)
+                (f.arguments[0].exp.loc, uid_msg)
             );
             if let Value::NotFreshObj(l) = args[0] {
                 d.add_secondary_label((l, "A potentially owned object coming from here"))

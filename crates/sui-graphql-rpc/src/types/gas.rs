@@ -8,6 +8,7 @@ use sui_json_rpc_types::{OwnedObjectRef, SuiGasData, SuiObjectDataOptions};
 use sui_sdk::types::{
     base_types::{ObjectID, SuiAddress as NativeSuiAddress},
     gas::GasCostSummary as NativeGasCostSummary,
+    transaction::GasData,
 };
 
 use super::{address::Address, big_int::BigInt, sui_address::SuiAddress};
@@ -31,6 +32,17 @@ impl From<&SuiGasData> for GasInput {
     }
 }
 
+impl From<&GasData> for GasInput {
+    fn from(s: &GasData) -> Self {
+        Self {
+            owner: s.owner,
+            price: s.price,
+            budget: s.budget,
+            payment_obj_ids: s.payment.iter().map(|o| o.0).collect(),
+        }
+    }
+}
+
 #[Object]
 impl GasInput {
     async fn gas_sponsor(&self) -> Option<Address> {
@@ -38,6 +50,7 @@ impl GasInput {
     }
 
     async fn gas_payment(&self, ctx: &Context<'_>) -> Result<Option<Vec<Object>>> {
+        // TODO: implement DB counterpart without using Sui SDK client
         let payment_objs = ctx
             .data_provider()
             .multi_get_object_with_options(
@@ -116,6 +129,7 @@ impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
 #[Object]
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
+        // TODO: implement DB counterpart without using Sui SDK client
         let gas_obj = ctx
             .data_provider()
             .get_object_with_options(self.object_id, SuiObjectDataOptions::full_content())

@@ -15,12 +15,13 @@ use crate::{
     parser::ast::{Ability_, FunctionName, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
+        program_info::TypingProgramInfo,
         CompilationEnv, Identifier,
     },
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
-        core::{ability_not_satisfied_tips, error_format, error_format_, Subst, TypingProgramInfo},
+        core::{ability_not_satisfied_tips, error_format, error_format_, Subst},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -36,7 +37,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
     fn context<'a>(
         env: &'a mut CompilationEnv,
         program_info: &'a TypingProgramInfo,
-        _program: &T::Program,
+        _program: &T::Program_,
     ) -> Self::Context<'a> {
         Context::new(env, program_info)
     }

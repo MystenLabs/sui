@@ -3,11 +3,15 @@ source: crates/sui-graphql-rpc/tests/snapshot_tests.rs
 expression: sdl
 ---
 type Address implements ObjectOwner {
+	"""
+	Similar behavior to the `transactionBlockConnection` in Query but
+	supports additional `AddressTransactionBlockRelationship` filter
+	"""
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -22,8 +26,9 @@ enum AddressTransactionBlockRelationship {
 }
 
 type Balance {
-	coinObjectCount: Int!
-	totalBalance: BigInt!
+	coinType: String
+	coinObjectCount: Int
+	totalBalance: BigInt
 }
 
 type BalanceConnection {
@@ -60,16 +65,26 @@ scalar Base64
 scalar BigInt
 
 
+type ChangeEpochTransaction {
+	timestamp: DateTime
+	storageCharge: BigInt
+	computationCharge: BigInt
+	storageRebate: BigInt
+	epoch: Epoch
+}
+
 type Checkpoint {
 	digest: String!
 	sequenceNumber: Int!
+	timestamp: DateTime
 	validatorSignature: Base64
 	previousCheckpointDigest: String
 	liveObjectSetDigest: String
 	networkTotalTransactions: Int
 	rollingGasSummary: GasCostSummary
-	epoch: Epoch
 	endOfEpoch: EndOfEpochData
+	epoch: Epoch
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type CheckpointConnection {
@@ -101,8 +116,15 @@ type CheckpointEdge {
 	cursor: String!
 }
 
+input CheckpointId {
+	digest: String
+	sequenceNumber: Int
+}
+
 type Coin {
 	id: ID!
+	balance: BigInt
+	asMoveObject: MoveObject
 }
 
 type CoinConnection {
@@ -137,6 +159,12 @@ type CoinEdge {
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
+}
+
+type ConsensusCommitPrologueTransaction {
+	round: Int
+	timestamp: DateTime
+	epoch: Epoch
 }
 
 scalar DateTime
@@ -216,7 +244,40 @@ type GasInput {
 	gasBudget: BigInt
 }
 
+type GenesisTransaction {
+	objects: [SuiAddress!]
+}
 
+
+
+"""
+The contents of a Move Value, corresponding to the following recursive type:
+
+type MoveData =
+    { Address: SuiAddress }
+  | { UID:     SuiAddress }
+  | { Bool:    bool }
+  | { Number:  BigInt }
+  | { String:  string }
+  | { Vector:  [MoveData] }
+  | { Option:   MoveData? }
+  | { Struct:  [{ name: string, value: MoveData }] }
+
+"""
+scalar MoveData
+
+type MoveObject {
+	contents: MoveValue
+	hasPublicTransfer: Boolean
+	asObject: Object
+	asCoin: Coin
+	asStakedSui: StakedSui
+}
+
+type MoveValue {
+	bcs: Base64!
+	data: MoveData!
+}
 
 scalar NameService
 
@@ -258,9 +319,9 @@ type Object implements ObjectOwner {
 	kind: ObjectKind
 	owner: Owner
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -320,7 +381,7 @@ enum ObjectKind {
 interface ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
+	balance(type: String!): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
@@ -332,9 +393,9 @@ type Owner implements ObjectOwner {
 	asAddress: Address
 	asObject: Object
 	location: SuiAddress!
-	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection!
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -394,7 +455,12 @@ type Query {
 	owner(address: SuiAddress!): ObjectOwner
 	object(address: SuiAddress!, version: Int): Object
 	address(address: SuiAddress!): Address
-	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection!
+	epoch(id: Int): Epoch
+	checkpoint(id: CheckpointId): Checkpoint
+	transactionBlock(digest: String!): TransactionBlock
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 }
 
@@ -463,6 +529,10 @@ type StakeSubsidy {
 	decreaseRate: Int
 }
 
+type StakedSui {
+	asMoveObject: MoveObject
+}
+
 type StorageFund {
 	totalObjectStorageRebates: BigInt
 	nonRefundableBalance: BigInt
@@ -487,6 +557,7 @@ type TransactionBlock {
 	sender: Address
 	bcs: Base64
 	gasInput: GasInput
+	kind: TransactionBlockKind
 	digest: String!
 	expiration: Epoch
 }
@@ -533,18 +604,23 @@ input TransactionBlockFilter {
 	module: String
 	function: String
 	kind: TransactionBlockKindInput
-	checkpoint: Int
+	afterCheckpoint: Int
+	atCheckpoint: Int
+	beforeCheckpoint: Int
 	signAddress: SuiAddress
 	sentAddress: SuiAddress
 	recvAddress: SuiAddress
 	paidAddress: SuiAddress
 	inputObject: SuiAddress
 	changedObject: SuiAddress
+	transactionIds: [String!]
 }
 
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
+
 enum TransactionBlockKindInput {
-	PROGRAMMABLE_TX
 	SYSTEM_TX
+	PROGRAMMABLE_TX
 }
 
 type Validator {
@@ -595,4 +671,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-
