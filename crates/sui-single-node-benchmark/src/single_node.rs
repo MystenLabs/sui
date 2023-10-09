@@ -72,12 +72,11 @@ impl SingleValidator {
             ConsensusAdapterMetrics::new_test(),
             epoch_store.protocol_config().clone(),
         ));
-        ValidatorState::EndToEnd(Arc::new(ValidatorService::new(
+        let validator_service = Arc::new(ValidatorService::new(
             validator,
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new_for_tests()),
-        )));
-
+        ));
         Self {
             validator_service,
             epoch_store,
