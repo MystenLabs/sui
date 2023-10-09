@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import { Button, type ButtonProps } from './ButtonUI';
-import { ModalDialog } from './ModalDialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './Dialog';
 import { Text } from './text';
 
 export type ConfirmationModalProps = {
@@ -31,54 +31,57 @@ export function ConfirmationModal({
 	const [isConfirmLoading, setIsConfirmLoading] = useState(false);
 	const [isCancelLoading, setIsCancelLoading] = useState(false);
 	return (
-		<ModalDialog
-			isOpen={isOpen}
-			title={title}
-			body={
-				hint ? (
-					<div className="break-words text-center">
-						<Text variant="pBodySmall" color="steel-dark" weight="normal">
-							{hint}
-						</Text>
-					</div>
-				) : null
-			}
-			onClose={async () => {
-				if (isCancelLoading || isConfirmLoading) {
+		<Dialog
+			open={isOpen}
+			onOpenChange={async (open) => {
+				if (open || isCancelLoading || isConfirmLoading) {
 					return;
 				}
 				setIsCancelLoading(true);
 				await onResponse(false);
 				setIsCancelLoading(false);
 			}}
-			footer={
-				<div className="flex flex-row self-stretch gap-3">
-					<Button
-						variant={cancelStyle}
-						size="tall"
-						text={cancelText}
-						loading={isCancelLoading}
-						disabled={isConfirmLoading}
-						onClick={async () => {
-							setIsCancelLoading(true);
-							await onResponse(false);
-							setIsCancelLoading(false);
-						}}
-					/>
-					<Button
-						variant={confirmStyle}
-						size="tall"
-						text={confirmText}
-						loading={isConfirmLoading}
-						disabled={isCancelLoading}
-						onClick={async () => {
-							setIsConfirmLoading(true);
-							await onResponse(true);
-							setIsConfirmLoading(false);
-						}}
-					/>
-				</div>
-			}
-		/>
+		>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>{title}</DialogTitle>
+				</DialogHeader>
+				{hint ? (
+					<div className="break-words text-center">
+						<Text variant="pBodySmall" color="steel-dark" weight="normal">
+							{hint}
+						</Text>
+					</div>
+				) : null}
+				<DialogFooter>
+					<div className="flex flex-row self-stretch gap-3">
+						<Button
+							variant={cancelStyle}
+							size="tall"
+							text={cancelText}
+							loading={isCancelLoading}
+							disabled={isConfirmLoading}
+							onClick={async () => {
+								setIsCancelLoading(true);
+								await onResponse(false);
+								setIsCancelLoading(false);
+							}}
+						/>
+						<Button
+							variant={confirmStyle}
+							size="tall"
+							text={confirmText}
+							loading={isConfirmLoading}
+							disabled={isCancelLoading}
+							onClick={async () => {
+								setIsConfirmLoading(true);
+								await onResponse(true);
+								setIsConfirmLoading(false);
+							}}
+						/>
+					</div>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
