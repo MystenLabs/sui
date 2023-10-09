@@ -26,7 +26,7 @@ use crate::drivers::driver::Driver;
 use crate::drivers::HistogramWrapper;
 use crate::system_state_observer::SystemStateObserver;
 use crate::workloads::payload::Payload;
-use crate::workloads::WorkloadInfo;
+use crate::workloads::{GroupID, WorkloadInfo};
 use crate::{ExecutionEffects, ValidatorProxy};
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{Debug, Formatter};
@@ -301,7 +301,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
     async fn run(
         &self,
         proxies: Vec<Arc<dyn ValidatorProxy + Send + Sync>>,
-        workloads: Vec<WorkloadInfo>,
+        workloads_by_group_id: BTreeMap<GroupID, Vec<WorkloadInfo>>,
         system_state_observer: Arc<SystemStateObserver>,
         registry: &Registry,
         show_progress: bool,
@@ -312,25 +312,36 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
         let mut tasks = Vec::new();
         let (tx, mut rx) = channel(100);
         let (stress_stat_tx, mut stress_stat_rx) = channel(100);
-        let mut bench_workers = vec![];
+
+        // All the benchmark workers that are grouped by GroupID. The group is order in group id order
+        // ascending. This is important as benchmark groups should be executed in order to follow the input settings.
+        let mut bench_workers = VecDeque::new();
 
         let mut worker_id = 0;
-        for workload in workloads.iter() {
-            let proxy = proxies
-                .choose(&mut rand::thread_rng())
-                .context("Failed to get proxy for bench driver")?;
-            bench_workers.extend(
-                self.make_workers(
-                    &mut worker_id,
-                    workload,
-                    proxy.clone(),
-                    system_state_observer.clone(),
-                )
-                .await,
-            );
+        let mut num_workers = 0;
+
+        for (_, workloads) in workloads_by_group_id.iter() {
+            let mut workers = vec![];
+
+            for workload in workloads {
+                let proxy = proxies
+                    .choose(&mut rand::thread_rng())
+                    .context("Failed to get proxy for bench driver")?;
+                workers.extend(
+                    self.make_workers(
+                        &mut worker_id,
+                        workload,
+                        proxy.clone(),
+                        system_state_observer.clone(),
+                    )
+                    .await,
+                );
+            }
+
+            num_workers += workers.len();
+            bench_workers.push_back(workers);
         }
 
-        let num_workers = bench_workers.len();
         if bench_workers.is_empty() {
             return Err(anyhow!("No workers to run benchmark!"));
         }
@@ -403,7 +414,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
                 for (_, v) in stat_collection.iter() {
                     let duration = v.bench_stats.duration.as_secs() as f32;
 
-                    // no reason to do any measurements when duration is zero -as this will output NaN
+                    // no reason to do any measurements when duration is zero as this will output NaN
                     if duration == 0.0 {
                         continue;
                     }
@@ -500,7 +511,7 @@ impl Driver<(BenchmarkStats, StressStats)> for BenchDriver {
 /// again from the beginning. That allows running benchmarks with repeatable patterns across the whole
 /// benchmark duration.
 async fn spawn_workers_scheduler(
-    bench_workers: Vec<BenchWorker>,
+    mut bench_workers: VecDeque<Vec<BenchWorker>>,
     cancellation_token: CancellationToken,
     total_benchmark_progress_cloned: Arc<ProgressBar>,
     total_benchmark_gas_used: Arc<AtomicU64>,
@@ -519,23 +530,12 @@ async fn spawn_workers_scheduler(
         let mut check_interval = time::interval(Duration::from_millis(500));
         check_interval.set_missed_tick_behavior(time::MissedTickBehavior::Burst);
 
-        // group the workers by the group id, sort the groups by group id (using the BTreeMap) and
-        // finally collect them to a VecDeque.
-        let mut all_workers: VecDeque<Vec<BenchWorker>> = bench_workers
-            .into_iter()
-            .fold(BTreeMap::new(), |mut acc, val| {
-                acc.entry(val.group).or_insert(Vec::new()).push(val);
-                acc
-            })
-            .into_values()
-            .collect();
-
         // Set the total benchmark start time
         let total_benchmark_start_time = print_and_start_benchmark().await;
 
         // Initially boostrap the first tasks
         tx_workers_to_run
-            .send(all_workers.pop_front().unwrap())
+            .send(bench_workers.pop_front().unwrap())
             .await
             .expect("Should be able to send next workers to run");
 
@@ -563,12 +563,12 @@ async fn spawn_workers_scheduler(
                     // If workers have all finished, then we can progress to the next group run, if
                     // any exists
                     if running_workers.is_empty() {
-                        all_workers.push_back(finished_workers);
+                        bench_workers.push_back(finished_workers);
 
                         finished_workers = Vec::new();
 
                         // cycle through the workers set
-                        tx_workers_to_run.send(all_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
+                        tx_workers_to_run.send(bench_workers.pop_front().unwrap()).await.expect("Should be able to send next workers to run");
                     }
                 },
                 // Next workers to run

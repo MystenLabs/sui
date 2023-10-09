@@ -18,9 +18,11 @@ use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use workload::*;
 
+pub type GroupID = u32;
+
 #[derive(Debug, Clone)]
 pub struct WorkloadParams {
-    pub group: u32,
+    pub group: GroupID,
     pub target_qps: u64,
     pub num_workers: u64,
     pub max_ops: u64,

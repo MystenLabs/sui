@@ -9,8 +9,9 @@ use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::shared_counter::SharedCounterWorkloadBuilder;
 use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
-use crate::workloads::{WorkloadBuilderInfo, WorkloadInfo};
+use crate::workloads::{GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::info;
@@ -24,7 +25,7 @@ impl WorkloadConfiguration {
         bank: BenchmarkBank,
         opts: &Opts,
         system_state_observer: Arc<SystemStateObserver>,
-    ) -> Result<Vec<WorkloadInfo>> {
+    ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         let mut workload_builders = vec![];
 
         // Create the workload builders for each Run spec
@@ -92,7 +93,7 @@ impl WorkloadConfiguration {
         mut bank: BenchmarkBank,
         system_state_observer: Arc<SystemStateObserver>,
         gas_request_chunk_size: u64,
-    ) -> Result<Vec<WorkloadInfo>> {
+    ) -> Result<BTreeMap<GroupID, Vec<WorkloadInfo>>> {
         // Generate the workloads and init them
         let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let (workload_params, workload_builders): (Vec<_>, Vec<_>) = workload_builders
@@ -113,14 +114,20 @@ impl WorkloadConfiguration {
                 .await;
         }
 
-        Ok(workloads
-            .into_iter()
-            .zip(workload_params)
-            .map(|(workload, workload_params)| WorkloadInfo {
-                workload_params,
-                workload,
-            })
-            .collect())
+        let all_workloads = workloads.into_iter().zip(workload_params).fold(
+            BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
+            |mut acc, (workload, workload_params)| {
+                let w = WorkloadInfo {
+                    workload,
+                    workload_params,
+                };
+
+                acc.entry(w.workload_params.group).or_default().push(w);
+                acc
+            },
+        );
+
+        Ok(all_workloads)
     }
 
     pub async fn create_workload_builders(
