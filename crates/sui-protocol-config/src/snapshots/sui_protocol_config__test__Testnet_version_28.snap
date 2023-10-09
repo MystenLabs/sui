@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 27
+version: 28
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -195,6 +195,8 @@ hash_keccak256_data_cost_per_block: 2
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
+check_zklogin_id_cost_base: 200
+check_zklogin_issuer_cost_base: 200
 scoring_decision_mad_divisor: 2.3
 scoring_decision_cutoff_value: 2.5
 execution_version: 1
