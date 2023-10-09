@@ -31,6 +31,7 @@ pub enum FeatureGate {
     PostFixAbilities,
     StructTypeVisibility,
     DotCall,
+    PositionalFields,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -38,6 +39,12 @@ pub enum Flavor {
     #[default]
     GlobalStorage,
     Sui,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+pub enum SyntaxEdition {
+    Legacy,
+    E2024,
 }
 
 //**************************************************************************************************
@@ -97,6 +104,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::PostFixAbilities,
     FeatureGate::StructTypeVisibility,
     FeatureGate::DotCall,
+    FeatureGate::PositionalFields,
 ];
 
 impl Edition {
@@ -117,6 +125,13 @@ impl Edition {
         SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
     }
 
+    pub fn syntax(&self) -> SyntaxEdition {
+        match *self {
+            Self::LEGACY => SyntaxEdition::Legacy,
+            Self::E2024_ALPHA => SyntaxEdition::E2024,
+            _ => self.unknown_edition_panic(),
+        }
+    }
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match *self {
@@ -169,6 +184,7 @@ impl FeatureGate {
             FeatureGate::PostFixAbilities => "Postfix abilities are",
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
             FeatureGate::DotCall => "Method syntax is",
+            FeatureGate::PositionalFields => "Positional fields are",
         }
     }
 }

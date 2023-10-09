@@ -34,7 +34,6 @@ import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
 import { WelcomePage } from './pages/accounts/WelcomePage';
-import { AccountsDev } from './pages/AccountsDevPage';
 import { ApprovalRequestPage } from './pages/approval-request';
 import HomePage, {
 	AppsPage,
@@ -208,9 +207,6 @@ const App = () => {
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
 			</Route>
-			{process.env.NODE_ENV === 'development' ? (
-				<Route path="/accounts-dev" element={<AccountsDev />} />
-			) : null}
 		</Routes>
 	);
 };

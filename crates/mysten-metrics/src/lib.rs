@@ -1,15 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use dashmap::DashMap;
 use std::future::Future;
+use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
 use once_cell::sync::OnceCell;
-use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry, TextEncoder};
 use tap::TapFallible;
 use tracing::warn;
 
@@ -428,5 +430,49 @@ mod tests {
         let metric_1 = metrics.remove(0);
         assert_eq!(metric_1.get_name(), "sui_counter_2");
         assert_eq!(metric_1.get_help(), "counter_2_desc");
+    }
+}
+
+pub const METRICS_ROUTE: &str = "/metrics";
+
+// Creates a new http server that has as a sole purpose to expose
+// and endpoint that prometheus agent can use to poll for the metrics.
+// A RegistryService is returned that can be used to get access in prometheus Registries.
+pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
+    let registry = Registry::new();
+
+    let registry_service = RegistryService::new(registry);
+
+    if cfg!(msim) {
+        // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
+        // can't yet run it in the simulator.
+        warn!("not starting prometheus server in simulator");
+        return registry_service;
+    }
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    registry_service
+}
+
+pub async fn metrics(
+    Extension(registry_service): Extension<RegistryService>,
+) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
     }
 }

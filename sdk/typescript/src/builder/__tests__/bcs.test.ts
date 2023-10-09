@@ -53,6 +53,14 @@ it('can serialize enum with "kind" property', () => {
 	expect(result).toEqual(transaction);
 });
 
+it('can serialize Option<T> types using the legacy registry API', () => {
+	const none = bcs.ser('Option<u8>', { None: true }).toBytes();
+	const some = bcs.ser('Option<u8>', { Some: 2 }).toBytes();
+
+	expect(none).toEqual(new Uint8Array([0]));
+	expect(some).toEqual(new Uint8Array([1, 2]));
+});
+
 function ref(): { objectId: string; version: string; digest: string } {
 	return {
 		objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),

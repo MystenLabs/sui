@@ -862,12 +862,22 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             et.define_type_param(&loc, name, ty);
         }
         let fields = match &def.fields {
-            EA::StructFields::Defined(fields) => {
+            EA::StructFields::Named(fields) => {
                 let mut field_map = BTreeMap::new();
                 for (_name_loc, field_name_, (idx, ty)) in fields {
                     let field_sym = et.symbol_pool().make(field_name_);
                     let field_ty = et.translate_type(ty);
                     field_map.insert(field_sym, (*idx, field_ty));
+                }
+                Some(field_map)
+            }
+            EA::StructFields::Positional(tys) => {
+                let mut field_map = BTreeMap::new();
+                for (idx, ty) in tys.iter().enumerate() {
+                    let field_name_ = format!("{idx}");
+                    let field_sym = et.symbol_pool().make(&field_name_);
+                    let field_ty = et.translate_type(ty);
+                    field_map.insert(field_sym, (idx, field_ty));
                 }
                 Some(field_map)
             }

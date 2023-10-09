@@ -8,6 +8,8 @@ CREATE TABLE objects (
     -- bytes of SuiAddress/ObjectID of the owner ID.
     -- Non-null for objects with an owner: Addresso or Objects
     owner_id                    bytea,
+    -- Object type
+    object_type                 text,
     -- bcs serialized Object
     serialized_object           bytea         NOT NULL,
     -- Non-null when the object is a coin.

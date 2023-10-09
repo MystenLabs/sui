@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { isZkAccountSerializedUI } from '_src/background/accounts/zk/ZkAccount';
+import { isZkLoginAccountSerializedUI } from '_src/background/accounts/zklogin/ZkLoginAccount';
 
 import { Button } from '../../shared/ButtonUI';
 import { SocialButton } from '../../shared/SocialButton';
@@ -22,7 +22,7 @@ export function UnlockAccountButton({
 	if (isPasswordUnlockable) {
 		return <Button text={title} onClick={() => unlockAccount(account)} />;
 	}
-	if (isZkAccountSerializedUI(account)) {
+	if (isZkLoginAccountSerializedUI(account)) {
 		return (
 			<SocialButton
 				provider={account.provider}

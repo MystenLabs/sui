@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { blake2b } from '@noble/hashes/blake2b';
-import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
+import { bytesToHex } from '@noble/hashes/utils';
 
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/index.js';
-import { toBufferBE } from './utils.js';
+import { toBigEndianBytes } from './utils.js';
 
 export function computeZkLoginAddressFromSeed(addressSeed: bigint, iss: string) {
-	const addressSeedBytesBigEndian = toBufferBE(addressSeed, 32);
-	const addressParamBytes = utf8ToBytes(iss);
+	const addressSeedBytesBigEndian = toBigEndianBytes(addressSeed, 32);
+	const addressParamBytes = new TextEncoder().encode(iss);
 	const tmp = new Uint8Array(2 + addressSeedBytesBigEndian.length + addressParamBytes.length);
 
 	tmp.set([SIGNATURE_SCHEME_TO_FLAG.ZkLogin]);

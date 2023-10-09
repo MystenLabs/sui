@@ -54,12 +54,14 @@ use sui_sdk::{
 };
 
 use super::data_provider::DataProvider;
+use super::DEFAULT_PAGE_SIZE;
+
+// TODO: Ensure the logic is this file is for verification/experimentation only
+// and is not used in production
 
 const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
 const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 const DATA_LOADER_LRU_CACHE_SIZE: usize = 1_000;
-
-const DEFAULT_PAGE_SIZE: usize = 50;
 
 pub(crate) struct SuiClientLoader {
     pub client: SuiClient,
@@ -233,7 +235,7 @@ impl DataProvider for SuiClient {
     ) -> Result<Connection<String, Balance>> {
         ensure_forward_pagination(&first, &after, &last, &before)?;
 
-        let count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64) as usize;
+        let count = first.unwrap_or(DEFAULT_PAGE_SIZE) as usize;
         let offset = after
             .map(|q| q.parse::<usize>().unwrap())
             .unwrap_or(0_usize);
@@ -285,14 +287,7 @@ impl DataProvider for SuiClient {
             .map(SerdeBigInt::from);
 
         let pg = self.read_api().get_checkpoints(after, count, false).await?;
-        let system_state = self.governance_api().get_latest_sui_system_state().await?;
-        let protocol_configs = self.fetch_protocol_config(None).await?;
-
-        let data: Result<Vec<_>, _> = pg
-            .data
-            .iter()
-            .map(|c| convert_json_rpc_checkpoint(c, &system_state, &protocol_configs))
-            .collect();
+        let data: Result<Vec<_>, _> = pg.data.iter().map(convert_json_rpc_checkpoint).collect();
 
         let checkpoints = data.map_err(|e| {
             Error::Internal(format!(
@@ -377,8 +372,6 @@ pub(crate) async fn lru_cache_data_loader(
 
 pub(crate) fn convert_json_rpc_checkpoint(
     c: &sui_json_rpc_types::Checkpoint,
-    system_state: &SuiSystemStateSummary,
-    protocol_configs: &ProtocolConfigs,
 ) -> Result<Checkpoint> {
     let digest = c.digest.to_string();
     let sequence_number = c.sequence_number;
@@ -389,7 +382,6 @@ pub(crate) fn convert_json_rpc_checkpoint(
     let previous_checkpoint_digest = c.previous_digest.map(|x| x.to_string());
     let network_total_transactions = Some(c.network_total_transactions);
     let rolling_gas_summary = GasCostSummary::from(&c.epoch_rolling_gas_cost_summary);
-    let epoch = convert_to_epoch(rolling_gas_summary, system_state, protocol_configs).ok();
 
     let end_of_epoch_data = &c.end_of_epoch_data;
     let end_of_epoch = end_of_epoch_data.clone().map(|e| {
@@ -414,15 +406,23 @@ pub(crate) fn convert_json_rpc_checkpoint(
         }
     });
 
+    let timestamp = i64::try_from(c.timestamp_ms).map_err(|_| {
+        Error::Internal(format!(
+            "Cannot convert start timestamp u64 ({}) of checkpoint ({sequence_number}) into i64 required by DateTime",
+            c.timestamp_ms
+        ))
+    })?;
+
     Ok(Checkpoint {
         digest,
         sequence_number,
         validator_signature,
+        timestamp: DateTime::from_ms(timestamp),
         previous_checkpoint_digest,
         live_object_set_digest: None, // TODO fix this
         network_total_transactions,
         rolling_gas_summary: Some(rolling_gas_summary),
-        epoch,
+        epoch_id: c.epoch,
         end_of_epoch,
     })
 }
@@ -459,8 +459,9 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
 
 fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
     Balance {
-        coin_object_count: b.coin_object_count as u64,
-        total_balance: BigInt::from_str(&format!("{}", b.total_balance)).unwrap(),
+        coin_object_count: Some(b.coin_object_count as u64),
+        total_balance: Some(BigInt::from_str(&format!("{}", b.total_balance)).unwrap()),
+        coin_type: Some(b.coin_type),
     }
 }
 

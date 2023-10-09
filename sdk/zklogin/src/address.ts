@@ -29,7 +29,7 @@ export function jwtToAddress(jwt: string, userSalt: bigint) {
 
 	lengthChecks(header, payload, keyClaimName, processor);
 
-	return computeZkAddress({
+	return computeZkLoginAddress({
 		userSalt,
 		claimName: keyClaimName,
 		claimValue: keyClaimDetails.value,
@@ -38,7 +38,7 @@ export function jwtToAddress(jwt: string, userSalt: bigint) {
 	});
 }
 
-export interface ComputeZKAddressOptions {
+export interface ComputeZkLoginAddressOptions {
 	claimName: string;
 	claimValue: string;
 	userSalt: bigint;
@@ -46,12 +46,12 @@ export interface ComputeZKAddressOptions {
 	aud: string;
 }
 
-export function computeZkAddress({
+export function computeZkLoginAddress({
 	claimName,
 	claimValue,
 	iss,
 	aud,
 	userSalt,
-}: ComputeZKAddressOptions) {
+}: ComputeZkLoginAddressOptions) {
 	return computeZkLoginAddressFromSeed(genAddressSeed(userSalt, claimName, claimValue, aud), iss);
 }

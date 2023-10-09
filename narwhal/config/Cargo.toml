@@ -17,8 +17,8 @@ fastcrypto.workspace = true
 mysten-util-mem.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 mysten-network.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 rand.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

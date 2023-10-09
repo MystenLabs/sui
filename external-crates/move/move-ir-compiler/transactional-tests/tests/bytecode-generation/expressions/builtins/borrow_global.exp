@@ -3,7 +3,7 @@ processed 4 tasks
 task 0 'print-bytecode'. lines 1-14:
 // Move bytecode v6
 module 1d6.M {
-use 00000000000000000000000000000001::signer;
+use 0000000000000000000000000000000000000000000000000000000000000001::signer;
 
 
 struct T has key {

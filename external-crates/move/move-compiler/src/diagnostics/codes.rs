@@ -180,6 +180,8 @@ codes!(
         SpecContextRestricted:
             { msg: "syntax item restricted to spec contexts", severity: BlockingError },
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
+        InvalidRestrictedIdentifier:
+            { msg: "invalid identifier escape", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -220,6 +222,7 @@ codes!(
         UnboundField: { msg: "unbound field", severity: BlockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
+        PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

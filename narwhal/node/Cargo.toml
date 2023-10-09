@@ -42,10 +42,10 @@ sui-protocol-config.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
-workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 anemo.workspace = true
 reqwest.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

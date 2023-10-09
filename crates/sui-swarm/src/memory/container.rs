@@ -5,7 +5,7 @@ use futures::FutureExt;
 use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
-use sui_node::{metrics, SuiNode, SuiNodeHandle};
+use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
 use tracing::{info, trace};
 
@@ -78,7 +78,7 @@ impl Container {
             let runtime = builder.enable_all().build().unwrap();
 
             runtime.block_on(async move {
-                let registry_service = metrics::start_prometheus_server(config.metrics_address);
+                let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
                 info!(
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address

@@ -5,8 +5,8 @@
 use crate::{
     cfgir::cfg::MutForwardCFG,
     hlir::ast::{
-        BaseType, BaseType_, Command, Command_, Exp, ExpListItem, FunctionSignature, SingleType,
-        TypeName, TypeName_, UnannotatedExp_, Value, Value_, Var,
+        BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
+        TypeName_, UnannotatedExp_, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
     parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
@@ -59,10 +59,11 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
         C::Return { exp: e, .. } | C::Abort(e) | C::JumpIf { cond: e, .. } => optimize_exp(e),
         C::IgnoreAndPop { exp: e, .. } => {
             let c = optimize_exp(e);
-            match foldable_exps(e) {
-                // All values, so the command can be removed
-                Some(_) => return None,
-                None => c,
+            if ignorable_exp(e) {
+                // value(s), so the command can be removed
+                return None;
+            } else {
+                c
             }
         }
 
@@ -87,15 +88,17 @@ fn optimize_exp(e: &mut Exp) -> bool {
         | E::Copy { .. }
         | E::Unreachable => false,
 
-        E::ModuleCall(mcall) => optimize_exp(&mut mcall.arguments),
-        E::Builtin(_, e) | E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _) => optimize_exp(e),
+        E::ModuleCall(mcall) => mcall.arguments.iter_mut().map(optimize_exp).any(|x| x),
+        E::Builtin(_, args) => args.iter_mut().map(optimize_exp).any(|x| x),
+
+        E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _) => optimize_exp(e),
 
         E::Pack(_, _, fields) => fields
             .iter_mut()
             .map(|(_, _, e)| optimize_exp(e))
             .any(|changed| changed),
 
-        E::ExpList(es) => es.iter_mut().map(optimize_exp_item).any(|changed| changed),
+        E::Multiple(es) => es.iter_mut().map(optimize_exp).any(|changed| changed),
 
         //************************************
         // Foldable cases
@@ -122,16 +125,15 @@ fn optimize_exp(e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            let (v1, v2) = match (foldable_exp(e1), foldable_exp(e2)) {
-                (Some(v1), Some(v2)) => (v1, v2),
-                _ => return changed,
-            };
-            match fold_binary_op(e.exp.loc, op, v1, v2) {
-                Some(folded) => {
+            if let (Some(v1), Some(v2)) = (foldable_exp(e1), foldable_exp(e2)) {
+                if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
                     true
+                } else {
+                    changed
                 }
-                None => changed,
+            } else {
+                changed
             }
         }
 
@@ -159,24 +161,23 @@ fn optimize_exp(e: &mut Exp) -> bool {
                 E::Vector(_, n, ty, eargs) => (*n, ty, eargs),
                 _ => unreachable!(),
             };
-            let changed = optimize_exp(eargs);
+            let changed = eargs.iter_mut().map(optimize_exp).any(|changed| changed);
             if !is_valid_const_type(ty) {
                 return changed;
             }
-            let vs = match foldable_exps(eargs) {
-                Some(vs) => vs,
-                None => return changed,
-            };
+            let mut vs = vec![];
+            for earg in eargs {
+                let eloc = earg.exp.loc;
+                if let Some(v) = foldable_exp(earg) {
+                    vs.push(sp(eloc, v));
+                } else {
+                    return changed;
+                }
+            }
             debug_assert!(n == vs.len());
             *e_ = evalue_(e.exp.loc, Value_::Vector(ty.clone(), vs));
             true
         }
-    }
-}
-
-fn optimize_exp_item(item: &mut ExpListItem) -> bool {
-    match item {
-        ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => optimize_exp(e),
     }
 }
 
@@ -422,20 +423,12 @@ fn foldable_exp(e: &Exp) -> Option<Value_> {
     }
 }
 
-fn foldable_exps(e: &Exp) -> Option<Vec<Value>> {
+fn ignorable_exp(e: &Exp) -> bool {
     use UnannotatedExp_ as E;
     match &e.exp.value {
-        E::Unit { .. } => Some(vec![]),
-        E::ExpList(items) => {
-            let mut values = vec![];
-            for item in items {
-                match item {
-                    ExpListItem::Single(e, _) => values.push(sp(e.exp.loc, foldable_exp(e)?)),
-                    ExpListItem::Splat(_, es, _) => values.extend(foldable_exps(es)?),
-                }
-            }
-            Some(values)
-        }
-        _ => Some(vec![sp(e.exp.loc, foldable_exp(e)?)]),
+        E::Unit { .. } => true,
+        E::Value(_) => true,
+        E::Multiple(es) => es.iter().all(ignorable_exp),
+        _ => false,
     }
 }

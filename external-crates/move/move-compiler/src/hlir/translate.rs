@@ -616,9 +616,9 @@ fn block(
             S::Declare(binds) => declare_bind_list(context, &binds),
             S::Bind(binds, ty, e) => {
                 let expected_tys = expected_types(context, sloc, ty);
-                let res = exp_(context, result, Some(&expected_tys), *e);
+                let res = exp(context, result, Some(&expected_tys), *e);
                 declare_bind_list(context, &binds);
-                assign_command(context, result, sloc, binds, res);
+                assign_command(context, result, sloc, binds, *res);
             }
         }
     }
@@ -734,10 +734,7 @@ fn assign_command(
         lvalues.push(ls);
         after.append(&mut af);
     }
-    result.push_back(sp(
-        loc,
-        S::Command(sp(loc, C::Assign(lvalues, Box::new(rvalue)))),
-    ));
+    result.push_back(sp(loc, S::Command(sp(loc, C::Assign(lvalues, rvalue)))));
     result.append(&mut after);
 }
 
@@ -1119,9 +1116,81 @@ fn exp_(
     e_res
 }
 
-enum TmpItem {
-    Single(Box<H::SingleType>),
-    Splat(Loc, Vec<H::SingleType>),
+fn exp_list(
+    context: &mut Context,
+    result: &mut Block,
+    ty: Option<&H::Type>,
+    e: T::Exp,
+) -> Vec<H::Exp> {
+    use T::UnannotatedExp_ as TE;
+    if let TE::ExpList(items) = e.exp.value {
+        exp_list_items_to_vec(context, result, ty, e.exp.loc, items)
+    } else if let TE::Unit { .. } = e.exp.value {
+        vec![]
+    } else {
+        vec![*exp(context, result, ty, e)]
+    }
+}
+
+fn exp_list_items_to_vec(
+    context: &mut Context,
+    result: &mut Block,
+    ty: Option<&H::Type>,
+    loc: Loc,
+    items: Vec<T::ExpListItem>,
+) -> Vec<H::Exp> {
+    use H::{Type_ as HT, UnannotatedExp_ as HE};
+    assert!(!items.is_empty());
+    let mut tys = vec![];
+    let mut tes = vec![];
+
+    for item in items.into_iter() {
+        match item {
+            T::ExpListItem::Single(te, ts) => {
+                let t = single_type(context, *ts);
+                tys.push(t.clone());
+                tes.push((te, Some(sp(t.loc, HT::Single(t)))));
+            }
+            T::ExpListItem::Splat(_, _, _) => panic!("ICE spalt is unsupported."),
+        }
+    }
+
+    let es = exp_evaluation_order(context, result, tes);
+    assert!(
+        es.len() == tys.len(),
+        "ICE exp_evaluation_order changed arity"
+    );
+
+    // Because we previously froze subpoints of ExpLists as its own binding expression for that
+    // ExpList, we need to process this possible vector the same way.
+
+    if let Some(expected_ty @ sp!(tloc, HT::Multiple(etys))) = ty {
+        // We have to check that the arity of the expected type matches because some ill-typed
+        // programs flow through this code. In those cases, the error has already been reported and
+        // we bail.
+        if etys.len() == tys.len() {
+            let current_ty = sp(*tloc, HT::Multiple(tys));
+            match needs_freeze(context, &current_ty, expected_ty) {
+                Freeze::NotNeeded => es,
+                Freeze::Point => unreachable!(),
+                Freeze::Sub(_) => {
+                    let current_exp = H::Exp {
+                        ty: current_ty,
+                        exp: sp(loc, HE::Multiple(es)),
+                    };
+                    let frozen = freeze(context, result, expected_ty, current_exp);
+                    match frozen.exp.value {
+                        HE::Multiple(final_es) => final_es,
+                        _ => unreachable!(),
+                    }
+                }
+            }
+        } else {
+            es
+        }
+    } else {
+        es
+    }
 }
 
 fn exp_impl(
@@ -1206,8 +1275,8 @@ fn exp_impl(
         }
         TE::Assign(assigns, lvalue_ty, te) => {
             let expected_type = expected_types(context, eloc, lvalue_ty);
-            let e = exp_(context, result, Some(&expected_type), *te);
-            assign_command(context, result, eloc, assigns, e);
+            let e = exp(context, result, Some(&expected_type), *te);
+            assign_command(context, result, eloc, assigns, *e);
             HE::Unit {
                 case: H::UnitCase::Implicit,
             }
@@ -1263,12 +1332,12 @@ fn exp_impl(
             } = *call;
             let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
             let htys = base_types(context, type_arguments);
-            let harg = exp(context, result, Some(&expected_type), *arguments);
+            let hargs = exp_list(context, result, Some(&expected_type), *arguments);
             let call = H::ModuleCall {
                 module,
                 name,
                 type_arguments: htys,
-                arguments: harg,
+                arguments: hargs,
                 acquires,
             };
             HE::ModuleCall(Box::new(call))
@@ -1276,8 +1345,8 @@ fn exp_impl(
         TE::Builtin(bf, targ) => builtin(context, result, eloc, *bf, targ),
         TE::Vector(vec_loc, n, tty, targ) => {
             let ty = Box::new(base_type(context, *tty));
-            let arg = exp(context, result, None, *targ);
-            HE::Vector(vec_loc, n, ty, arg)
+            let args = exp_list(context, result, None, *targ);
+            HE::Vector(vec_loc, n, ty, args)
         }
         TE::Dereference(te) => {
             let e = exp(context, result, None, *te);
@@ -1369,38 +1438,8 @@ fn exp_impl(
             };
             HE::Pack(s, bs, fields)
         }
-        TE::ExpList(titems) => {
-            assert!(!titems.is_empty());
-            let mut tmp_items = vec![];
-            let mut tes = vec![];
-            for titem in titems {
-                match titem {
-                    T::ExpListItem::Single(te, ts) => {
-                        let s = single_type(context, *ts);
-                        tmp_items.push(TmpItem::Single(Box::new(s)));
-                        tes.push((te, None));
-                    }
-                    T::ExpListItem::Splat(sloc, te, tss) => {
-                        let ss = single_types(context, tss);
-                        tmp_items.push(TmpItem::Splat(sloc, ss));
-                        tes.push((te, None));
-                    }
-                }
-            }
-            let es = exp_evaluation_order(context, result, tes);
-            assert!(
-                es.len() == tmp_items.len(),
-                "ICE exp_evaluation_order changed arity"
-            );
-            let items = es
-                .into_iter()
-                .zip(tmp_items)
-                .map(|(e, tmp_item)| match tmp_item {
-                    TmpItem::Single(s) => H::ExpListItem::Single(e, s),
-                    TmpItem::Splat(loc, ss) => H::ExpListItem::Splat(loc, e, ss),
-                })
-                .collect();
-            HE::ExpList(items)
+        TE::ExpList(items) => {
+            HE::Multiple(exp_list_items_to_vec(context, result, None, eloc, items))
         }
         TE::Borrow(mut_, te, f) => {
             let e = exp(context, result, None, *te);
@@ -1578,25 +1617,21 @@ fn bind_exp_impl_(
         .iter()
         .map(|(v, st)| sp(v.loc(), H::LValue_::Var(*v, Box::new(st.clone()))))
         .collect();
-    let asgn = sp(loc, C::Assign(lvalues, Box::new(e)));
+    let asgn = sp(loc, C::Assign(lvalues, e));
     result.push_back(sp(loc, S::Command(asgn)));
 
     let mut etemps = tmps
         .into_iter()
         .map(|(var, st)| {
             let evar_ = sp(var.loc(), use_tmp(var));
-            let ty = sp(st.loc, H::Type_::Single(st.clone()));
-            let evar = H::exp(ty, evar_);
-            H::ExpListItem::Single(evar, Box::new(st))
+            let ty = sp(st.loc, H::Type_::Single(st));
+            H::exp(ty, evar_)
         })
         .collect::<Vec<_>>();
     match etemps.len() {
         0 => unreachable!(),
-        1 => match etemps.pop().unwrap() {
-            H::ExpListItem::Single(e, _) => e.exp.value,
-            H::ExpListItem::Splat(_, _, _) => unreachable!(),
-        },
-        _ => E::ExpList(etemps),
+        1 => etemps.pop().unwrap().exp.value,
+        _ => E::Multiple(etemps),
     }
 }
 
@@ -1629,24 +1664,24 @@ fn builtin(
                 texpected_tys,
             );
             let expected_ty = type_(context, sp(loc, texpected_ty_));
-            let arg = exp(context, result, Some(&expected_ty), *targ);
+            let args = exp_list(context, result, Some(&expected_ty), *targ);
             let ty = base_type(context, bt);
-            E::Builtin(Box::new(sp(loc, HB::MoveTo(ty))), arg)
+            E::Builtin(Box::new(sp(loc, HB::MoveTo(ty))), args)
         }
         TB::MoveFrom(bt) => {
             let ty = base_type(context, bt);
-            let arg = exp(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::MoveFrom(ty))), arg)
+            let args = exp_list(context, result, None, *targ);
+            E::Builtin(Box::new(sp(loc, HB::MoveFrom(ty))), args)
         }
         TB::BorrowGlobal(mut_, bt) => {
             let ty = base_type(context, bt);
-            let arg = exp(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::BorrowGlobal(mut_, ty))), arg)
+            let args = exp_list(context, result, None, *targ);
+            E::Builtin(Box::new(sp(loc, HB::BorrowGlobal(mut_, ty))), args)
         }
         TB::Exists(bt) => {
             let ty = base_type(context, bt);
-            let arg = exp(context, result, None, *targ);
-            E::Builtin(Box::new(sp(loc, HB::Exists(ty))), arg)
+            let args = exp_list(context, result, None, *targ);
+            E::Builtin(Box::new(sp(loc, HB::Exists(ty))), args)
         }
         TB::Freeze(_bt) => {
             let arg = exp(context, result, None, *targ);
@@ -1700,9 +1735,9 @@ fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &
                 Freeze::NotNeeded
             }
         }
-        (T::Multiple(actaul_ss), T::Multiple(actual_es)) => {
-            assert!(actaul_ss.len() == actual_es.len());
-            let points = actaul_ss
+        (T::Multiple(actual_ss), T::Multiple(actual_es)) => {
+            assert!(actual_ss.len() == actual_es.len());
+            let points = actual_ss
                 .iter()
                 .zip(actual_es)
                 .map(|(a, e)| needs_freeze_single(a, e))
@@ -1731,7 +1766,6 @@ fn freeze(context: &mut Context, result: &mut Block, expected_type: &H::Type, e:
     match needs_freeze(context, &e.ty, expected_type) {
         Freeze::NotNeeded => e,
         Freeze::Point => freeze_point(e),
-
         Freeze::Sub(points) => {
             let loc = e.exp.loc;
             let actual_tys = match &e.ty.value {
@@ -1749,7 +1783,7 @@ fn freeze(context: &mut Context, result: &mut Block, expected_type: &H::Type, e:
                 .cloned()
                 .map(|(v, ty)| sp(loc, H::LValue_::Var(v, Box::new(ty))))
                 .collect::<Vec<_>>();
-            let assign = sp(loc, H::Command_::Assign(lvalues, Box::new(e)));
+            let assign = sp(loc, H::Command_::Assign(lvalues, e));
             result.push_back(sp(loc, H::Statement_::Command(assign)));
 
             let exps = new_temps
@@ -1765,21 +1799,14 @@ fn freeze(context: &mut Context, result: &mut Block, expected_type: &H::Type, e:
                     }
                 })
                 .collect::<Vec<_>>();
-            let ss = exps
+            let tys = exps
                 .iter()
                 .map(|e| match &e.ty.value {
                     T::Single(s) => s.clone(),
                     _ => panic!("ICE list item has Multple type"),
                 })
                 .collect::<Vec<_>>();
-
-            let tys = sp(loc, T::Multiple(ss.clone()));
-            let items = exps
-                .into_iter()
-                .zip(ss)
-                .map(|(e, s)| H::ExpListItem::Single(e, Box::new(s)))
-                .collect();
-            H::exp(tys, sp(loc, E::ExpList(items)))
+            H::exp(sp(loc, T::Multiple(tys)), sp(loc, E::Multiple(exps)))
         }
     }
 }

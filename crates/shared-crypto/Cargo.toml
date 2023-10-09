@@ -11,5 +11,5 @@ serde.workspace = true
 serde_repr.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 eyre.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 bcs.workspace = true
+workspace-hack.workspace = true

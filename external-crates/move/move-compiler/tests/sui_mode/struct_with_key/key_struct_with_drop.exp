@@ -5,7 +5,7 @@ error[E05001]: ability constraint not satisfied
    │             ^^^^^^^^^^^
    │             │
    │             Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
-   │             The type '(sui=0x2)::object::UID' does not have the ability 'drop'
+   │             The type 'sui::object::UID' does not have the ability 'drop'
    ·
 12 │     struct UID has store {
    │            --- To satisfy the constraint, the 'drop' ability would need to be added here

@@ -265,7 +265,7 @@ export class UiConnection extends Connection {
 					await accountSource.verifyRecoveryData(entropy);
 				}
 				const db = await getDB();
-				const zkLoginType: AccountType = 'zk';
+				const zkLoginType: AccountType = 'zkLogin';
 				const accountSourceIDs = recoveryData.map(({ accountSourceID }) => accountSourceID);
 				await db.transaction('rw', db.accountSources, db.accounts, async () => {
 					await db.accountSources.where('id').noneOf(accountSourceIDs).delete();

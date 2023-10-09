@@ -38,8 +38,8 @@ export function attachRoyaltyRuleTx(
 		arguments: [
 			objArg(tx, policy),
 			objArg(tx, policyCap),
-			tx.pure(percentageBps, 'u16'),
-			tx.pure(minAmount, 'u64'),
+			tx.pure.u16(Number(percentageBps)),
+			tx.pure.u64(minAmount),
 		],
 	});
 }
@@ -69,6 +69,6 @@ export function attachFloorPriceRuleTx(
 	tx.moveCall({
 		target: `${packageId}::floor_price_rule::add`,
 		typeArguments: [type],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure(minPrice, 'u64')],
+		arguments: [objArg(tx, policy), objArg(tx, policyCap), tx.pure.u64(minPrice)],
 	});
 }

@@ -15,7 +15,7 @@ use async_graphql::*;
 pub(crate) struct Epoch {
     pub epoch_id: u64,
     pub system_state_version: Option<BigInt>,
-    pub protocol_configs: Option<ProtocolConfigs>,
+    pub protocol_configs: Option<ProtocolConfigs>, // TODO (wlmyng): This can now be resolved as StoredEpochInfo contains protocol_version info
     pub reference_gas_price: Option<BigInt>,
     pub system_parameters: Option<SystemParameters>,
     pub stake_subsidy: Option<StakeSubsidy>,

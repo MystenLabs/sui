@@ -75,28 +75,15 @@ npm install @mysten/zklogin
 
 Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
 
-In Devnet and Testnet, a dev-use only client ID is provided below. These URLs can be used with the `redirect_uri` set to `https://zklogin-dev-redirect.vercel.app/api/auth`, which will use the `state` parameter to issue a redirect to your application.
-
-| Provider | Dev-Use Only Client ID |
-| ----------- | ----------- |
-| Google | 25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com |
-| Facebook | 233307156352917 |
-| Twitch | rs1bh065i9ya4ydvifixl4kss0uhpt |
-
-
-For example, the following TypeScript code can be used in Devnet and Testnet to construct a login URL for testing.
+For example, the following TypeScript code can be used to construct a login URL for testing.
 
 ```typescript
 const REDIRECT_URI = '<YOUR_SITE_URL>';
 
 const params = new URLSearchParams({
-   // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
-   state: new URLSearchParams({
-      redirect_uri: REDIRECT_URI
-   }).toString(),
-   // Test Client ID for devnet / testnet:
-   client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
-   redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
+   // See below for how to configure client ID and redirect URL
+   client_id: $CLIENT_ID,
+   redirect_uri: $REDIRECT_URL,
    response_type: 'id_token',
    scope: 'openid',
    // See below for details about generation of the nonce
@@ -106,7 +93,7 @@ const params = new URLSearchParams({
 const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 ```
 
-In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
+You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
 
 ### Google
 
@@ -179,17 +166,47 @@ The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce`
 | Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` |
 | Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` |
 
+
+## Decoding JWT
+
+Upon successful redirection the ID Provider will attach the JWT token as a URL parameter (Using the Google Flow as an example)
+
+```
+http://host/auth#state=redirect_url_______&id_token=tokenPartA.tokenPartB.tokenPartC_______&authuser=0&prompt=none
+```
+
+The `id_token` param is actually the JWT token in encoded format. You can validate the correctness of the encoded token
+and investigate its structure by pasting it in the [jwt.io](jwt.io) website.
+
+To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
+
+```typescript
+
+const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
+
+export interface JwtPayload {
+   iss?: string;  
+   sub?: string;  //Subject ID
+   aud?: string[] | string;
+   exp?: number;
+   nbf?: number;
+   iat?: number;
+   jti?: string;
+}
+```
+
+
 ## User Salt Management
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
 1. Client Side:
-   - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
-   - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
+   - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
+   - Option 2: Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
 2. Backend service that exposes an endpoint that returns a unique salt for each user consistently.
-   - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
-   - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
+   - Option 3: Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
+   - Option 4: Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
+Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you wish to use the Mysten ran salt server, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 ```bash
 curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
@@ -206,7 +223,7 @@ Once the OAuth flow completes, the JWT token can be found in the redirect URL. A
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
 
-const address = jwtToAddress(jwt, userSalt)
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt)
 ```
 
 ## Get the Zero-Knowledge Proof
@@ -215,27 +232,124 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service (the endpoint is currently experimental and only available in devnet).
+There are two options:  
+1. Call the Mysten Labs-maintained proving service
+1. Run proving service in your backend using the provided Docker images. 
+### Call Mysten-Labs proving service
 
-Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
+If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
 ```bash
-curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
+"maxEpoch":"10", \
+"jwtRandomness":"100681567828351849884072155819400689117", \
+"salt":"248191903847969014646285995941615069143", \
+"keyClaimName":"sub" \
+}'
+
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
+"maxEpoch":"10", \
+"jwtRandomness":"S76Qi8c/SZlmmotnFMr13Q==", \
+"salt":"urgFnwIxJ++Ooswtf0Nn1w==", \
+"keyClaimName":"sub" \
+}'
 
 Response:
 
-`{"proofPoints":{"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
+`{"proofPoints":{
+  "a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
+      "14650660244262428784196747165683760208919070184766586754097510948934669736103",
+      "1"],
+  "b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
+  "10547097602625638823059992458926868829066244356588080322181801706465994418281"],
+  ["12744153306027049365027606189549081708414309055722206371798414155740784907883",
+  "17883388059920040098415197241200663975335711492591606641576557652282627716838"],
+  ["1","0"]],
+  
+  "c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
+  "19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},
+  
+  "issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw", "indexMod4": 2 },
+  "headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
 ```
+
+To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
+
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
+
+ ```typescript
+ const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
+
+export type PartialZkLoginSignature = Omit<
+	Parameters<typeof getZkLoginSignature>['0']['inputs'],
+	'addressSeed'
+>;
+const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
+````
+
+### Running your own proving service
+
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
+
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated.
+
+```bash
+curl -O https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey
+```
+
+   1. To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
+
+1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
+
+```bash
+docker run \
+  -e ZKEY=/app/binaries/zkLogin.zkey \
+  -e WITNESS_BINARIES=/app/binaries \
+  -v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
+  -p PORT1:8080 \
+  <prover-image>
+```
+
+1. Run `prover-fe` at `PORT2`:
+
+```bash
+docker run \
+    -e PROVER_URI='http://localhost:PORT1/input' \
+    -e NODE_ENV=production \
+    -e DEBUG=zkLogin:info,jwks \
+    -p PORT2:8080 \
+    <prover-fe-image>
+```
+
+1. Expose the `prover-fe` service appropriately and keep the prover service internal.
+
+1. To call the proving service, the following two endpoints are supported:
+   1. `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`
+   1. `/v1`: The request and response are the same as the Mysten Labs maintained service
+
+A few things to note:
+
+1. If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
+
+1. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
   ```typescript
-  const ephemeralKeyPair = new Ed25519Keypair();
+ const ephemeralKeyPair = new Ed25519Keypair();
 
 const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
+
+txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
    client,
@@ -243,22 +357,33 @@ const { bytes, signature: userSignature } = await txb.sign({
 });
   ```
 
-Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
-  ```typescript
-  import { getZkLoginSignature } from "@mysten/zklogin";
+Next, generate an Address Seed by combining `userSalt`, `sub` (subject ID) and `aud` (audience).
 
-const zkLoginSignature = getZkLoginSignature({
-   inputs,
+Set the address Seed and the partial ZkLogin Signature to be the `inputs` param.
+
+You can now serialize the zkLogin signature by combining the ZK proof (`inputs`),
+the `maxEpoch` and the ephemeral signature (`userSignature`).
+
+```typescript
+import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
+
+const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
+
+const zkLoginSignature : SerializedSignature = getZkLoginSignature({
+   inputs: {
+      ...partialZkLoginSignature,
+      addressSeed
+   },
    maxEpoch,
    userSignature,
 });
-  ```
+```
 
 Finally, execute the transaction.
   ```typescript
   client.executeTransactionBlock({
    transactionBlock: bytes,
-   signature: zkSignature,
+   signature: zkLoginSignature,
 });
   ```
 
@@ -518,14 +643,6 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 ## Does zkLogin work on mobile?
 
 zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
-
-## Can I run my own ZK Proving Service?
-
-Yes, you can choose to run the server binary on premise and generate ZK proofs yourself instead of calling a provider. Please contact us for more instructions.
-
-## What RPC providers support the ZK Proving Service?
-
-The application can currently call the Mysten Labs-maintained ZK Proving Service. Please reach out to whitelist the application's registered client ID to use the service.
 
 ## Is account recovery possible if the user loses the OAuth credentials?
 

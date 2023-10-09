@@ -14,6 +14,7 @@ import { NetworkContext, useNetwork } from '~/context';
 import { Banner, type BannerProps } from '~/ui/Banner';
 import { persistableStorage } from '~/utils/analytics/amplitude';
 import { type Network, NetworkConfigs, createSuiClient } from '~/utils/api/DefaultRpcClient';
+import { KioskClientProvider } from '@mysten/core/src/components/KioskClientProvider';
 
 const toastVariants: Partial<Record<ToastType, BannerProps['variant']>> = {
 	success: 'positive',
@@ -47,29 +48,31 @@ export function Layout() {
 					network={network as Network}
 					onNetworkChange={setNetwork}
 				>
-					<NetworkContext.Provider value={[network, setNetwork]}>
-						<Outlet />
-						<Toaster
-							position="bottom-center"
-							gutter={8}
-							containerStyle={{
-								top: 40,
-								left: 40,
-								bottom: 40,
-								right: 40,
-							}}
-							toastOptions={{
-								duration: 4000,
-							}}
-						>
-							{(toast) => (
-								<Banner shadow border variant={toastVariants[toast.type]}>
-									{resolveValue(toast.message, toast)}
-								</Banner>
-							)}
-						</Toaster>
-						<ReactQueryDevtools />
-					</NetworkContext.Provider>
+					<KioskClientProvider>
+						<NetworkContext.Provider value={[network, setNetwork]}>
+							<Outlet />
+							<Toaster
+								position="bottom-center"
+								gutter={8}
+								containerStyle={{
+									top: 40,
+									left: 40,
+									bottom: 40,
+									right: 40,
+								}}
+								toastOptions={{
+									duration: 4000,
+								}}
+							>
+								{(toast) => (
+									<Banner shadow border variant={toastVariants[toast.type]}>
+										{resolveValue(toast.message, toast)}
+									</Banner>
+								)}
+							</Toaster>
+							<ReactQueryDevtools />
+						</NetworkContext.Provider>
+					</KioskClientProvider>
 				</SuiClientProvider>
 			</WalletKitProvider>
 		</Fragment>

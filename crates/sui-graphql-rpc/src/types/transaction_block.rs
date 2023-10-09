@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::{
-    context_ext::DataProviderContextExt, sui_sdk_data_provider::convert_to_epoch,
+    context_ext::DataProviderContextExt, db_data_provider::PgManager,
+    sui_sdk_data_provider::convert_to_epoch,
 };
 
 use super::{
@@ -12,6 +13,7 @@ use super::{
     epoch::Epoch,
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
+    transaction_block_kind::TransactionBlockKind,
 };
 use async_graphql::*;
 use sui_json_rpc_types::{
@@ -28,10 +30,13 @@ pub(crate) struct TransactionBlock {
     pub sender: Option<Address>,
     pub bcs: Option<Base64>,
     pub gas_input: Option<GasInput>,
+    #[graphql(skip)]
+    pub epoch_id: Option<u64>,
+    pub kind: Option<TransactionBlockKind>,
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {
-    fn from(tx_block: sui_json_rpc_types::SuiTransactionBlockResponse) -> Self {
+    fn from(tx_block: SuiTransactionBlockResponse) -> Self {
         let transaction = tx_block.transaction.as_ref();
         let sender = transaction.map(|tx| Address {
             address: SuiAddress::from_array(tx.data.sender().to_inner()),
@@ -44,6 +49,8 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
             sender,
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
+            epoch_id: None,
+            kind: None, // TODO (stefan) fix this
         }
     }
 }
@@ -55,15 +62,17 @@ impl TransactionBlock {
     }
 
     async fn expiration(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        if self.effects.is_none() {
-            return Ok(None);
+        match self.epoch_id {
+            None => Ok(None),
+            Some(epoch_id) => {
+                let epoch = ctx
+                    .data_unchecked::<PgManager>()
+                    .fetch_epoch_strict(epoch_id)
+                    .await
+                    .extend()?;
+                Ok(Some(epoch))
+            }
         }
-        let gcs = self.effects.as_ref().unwrap().gas_effects.gcs;
-        let data_provider = ctx.data_provider();
-        let system_state = data_provider.get_latest_sui_system_state().await?;
-        let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(gcs, &system_state, &protocol_configs)?;
-        Ok(Some(epoch))
     }
 }
 
@@ -96,7 +105,7 @@ impl From<&SuiTransactionBlockEffects> for TransactionBlockEffects {
         };
 
         Self {
-            // TODO: This is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
+            // TODO (wlmyng): To remove as this is the wrong digest, effects digest is not a field on SuiTransactionBlockEffects
             digest: Digest::from_array(tx_effects.transaction_digest().into_inner()),
             gas_effects: GasEffects::from((tx_effects.gas_cost_summary(), tx_effects.gas_object())),
             status,
@@ -124,10 +133,10 @@ impl TransactionBlockEffects {
     }
 }
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum TransactionBlockKindInput {
-    ProgrammableTx,
-    SystemTx,
+    SystemTx = 0,
+    ProgrammableTx = 1,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -136,20 +145,24 @@ pub enum ExecutionStatus {
     Failure,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Debug, Default)]
 pub(crate) struct TransactionBlockFilter {
-    package: Option<SuiAddress>,
-    module: Option<String>,
-    function: Option<String>,
+    pub package: Option<SuiAddress>,
+    pub module: Option<String>,
+    pub function: Option<String>,
 
-    kind: Option<TransactionBlockKindInput>,
-    checkpoint: Option<u64>,
+    pub kind: Option<TransactionBlockKindInput>,
+    pub after_checkpoint: Option<u64>,
+    pub at_checkpoint: Option<u64>,
+    pub before_checkpoint: Option<u64>,
 
-    sign_address: Option<SuiAddress>,
-    sent_address: Option<SuiAddress>,
-    recv_address: Option<SuiAddress>,
-    paid_address: Option<SuiAddress>,
+    pub sign_address: Option<SuiAddress>,
+    pub sent_address: Option<SuiAddress>,
+    pub recv_address: Option<SuiAddress>,
+    pub paid_address: Option<SuiAddress>,
 
-    input_object: Option<SuiAddress>,
-    changed_object: Option<SuiAddress>,
+    pub input_object: Option<SuiAddress>,
+    pub changed_object: Option<SuiAddress>,
+
+    pub transaction_ids: Option<Vec<String>>,
 }

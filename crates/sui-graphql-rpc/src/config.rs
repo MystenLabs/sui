@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,7 @@ const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
@@ -110,6 +111,56 @@ impl Default for Limits {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
         }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+struct InternalFeatureConfig {
+    #[serde(default)]
+    pub(crate) query_limits_checker: bool,
+    #[serde(default)]
+    pub(crate) feature_gate: bool,
+    #[serde(default)]
+    pub(crate) logger: bool,
+    #[serde(default)]
+    pub(crate) query_timeout: bool,
+    #[serde(default)]
+    pub(crate) metrics: bool,
+}
+
+impl Default for InternalFeatureConfig {
+    fn default() -> Self {
+        Self {
+            query_limits_checker: true,
+            feature_gate: true,
+            logger: true,
+            query_timeout: true,
+            metrics: true,
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+struct ServerConfig {
+    #[serde(default)]
+    pub(crate) service: ServiceConfig,
+    #[serde(default)]
+    pub(crate) connection: ConnectionConfig,
+    #[serde(default)]
+    pub(crate) internal_features: InternalFeatureConfig,
+}
+
+#[allow(dead_code)]
+impl ServerConfig {
+    pub fn from_yaml(path: &str) -> Self {
+        let contents = std::fs::read_to_string(path).unwrap();
+        serde_yaml::from_str::<Self>(&contents).unwrap()
+    }
+
+    pub fn to_yaml_file(&self, path: PathBuf) {
+        let config = serde_yaml::to_string(&self).unwrap();
+        std::fs::write(path, config).unwrap();
     }
 }
 

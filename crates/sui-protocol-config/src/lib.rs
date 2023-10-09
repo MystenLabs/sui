@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 26;
+const MAX_PROTOCOL_VERSION: u64 = 27;
 
 // Record history of protocol version allocations here:
 //
@@ -76,6 +76,7 @@ const MAX_PROTOCOL_VERSION: u64 = 26;
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
+// Version 27: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -363,8 +364,11 @@ pub struct ProtocolConfig {
     max_input_objects: Option<u64>,
 
     /// Max size of objects a transaction can write to disk after completion. Enforce by the Sui adapter.
+    /// This is the sum of the serialized size of all objects written to disk.
+    /// The max size of individual objects on the other hand is `max_move_object_size`.
     max_size_written_objects: Option<u64>,
     /// Max size of objects a system transaction can write to disk after completion. Enforce by the Sui adapter.
+    /// Similar to `max_size_written_objects` but for system transactions.
     max_size_written_objects_system_tx: Option<u64>,
 
     /// Maximum size of serialized transaction effects.
@@ -760,6 +764,11 @@ pub struct ProtocolConfig {
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_block: Option<u64>,
+
+    // zklogin::check_zklogin_id
+    check_zklogin_id_cost_base: Option<u64>,
+    // zklogin::check_zklogin_issuer
+    check_zklogin_issuer_cost_base: Option<u64>,
 
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
@@ -1282,6 +1291,10 @@ impl ProtocolConfig {
             hmac_hmac_sha3_256_input_cost_per_byte: Some(2),
             hmac_hmac_sha3_256_input_cost_per_block: Some(2),
 
+            // zklogin::check_zklogin_id
+            check_zklogin_id_cost_base: None,
+            // zklogin::check_zklogin_issuer
+            check_zklogin_issuer_cost_base: None,
 
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
@@ -1326,8 +1339,10 @@ impl ProtocolConfig {
                     cfg.storage_gas_price = Some(76);
                     cfg.feature_flags.loaded_child_objects_fixed = true;
                     // max size of written objects during a TXn
+                    // this is a sum of all objects written during a TXn
                     cfg.max_size_written_objects = Some(5 * 1000 * 1000);
                     // max size of written objects during a system TXn to allow for larger writes
+                    // akin to `max_size_written_objects` but for system TXns
                     cfg.max_size_written_objects_system_tx = Some(50 * 1000 * 1000);
                     cfg.feature_flags.package_upgrades = true;
                 }
@@ -1490,6 +1505,12 @@ impl ProtocolConfig {
                         cfg.transfer_receive_object_cost_base = Some(52);
                         cfg.feature_flags.receive_objects = true;
                     }
+                }
+                27 => {
+                    // zklogin::check_zklogin_id
+                    cfg.check_zklogin_id_cost_base = Some(200);
+                    // zklogin::check_zklogin_issuer
+                    cfg.check_zklogin_issuer_cost_base = Some(200);
                 }
                 // Use this template when making changes:
                 //
