@@ -1625,9 +1625,10 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 3_000];
-                    } else {
                         cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 2_000];
+                    } else {
+                        // Mainnet and testnet
+                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
                     }
                 }
                 // Use this template when making changes:
