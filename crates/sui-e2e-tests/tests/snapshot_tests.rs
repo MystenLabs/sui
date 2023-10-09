@@ -45,6 +45,7 @@ async fn run_one(
                 package_path: _,
                 build_config: _,
                 cmd: _,
+                ..
             } => unimplemented!("Supporting Move publish and upgrade commands"),
             _ => panic!("Command {:?} not supported by RPC snapshot tests", cli_cmd),
         }

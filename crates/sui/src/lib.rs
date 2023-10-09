@@ -6,6 +6,8 @@ pub mod client_commands;
 pub mod console;
 pub mod fire_drill;
 pub mod keytool;
+pub mod package_cache;
+pub mod package_hooks;
 pub mod shell;
 pub mod sui_commands;
 pub mod validator_commands;

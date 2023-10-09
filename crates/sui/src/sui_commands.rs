@@ -6,8 +6,9 @@ use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
+use crate::package_hooks::SuiPackageHooks;
 use crate::validator_commands::SuiValidatorCommand;
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, Context};
 use clap::*;
 use fastcrypto::traits::KeyPair;
 use move_package::BuildConfig;
@@ -27,7 +28,6 @@ use sui_config::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
-use sui_move_build::SuiPackageHooks;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -139,6 +139,9 @@ pub enum SuiCommand {
     /// Tool to build and test Move applications.
     #[clap(name = "move")]
     Move {
+        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
+        #[clap(long = "client.config")]
+        config: Option<PathBuf>,
         /// Path to a package which the command should be run with respect to.
         #[clap(long = "path", short = 'p', global = true)]
         package_path: Option<PathBuf>,
@@ -148,6 +151,8 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
+        #[clap(short = 'y', long = "yes")]
+        accept_defaults: bool,
     },
 
     /// Tool for Fire Drill
@@ -159,7 +164,6 @@ pub enum SuiCommand {
 
 impl SuiCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
-        move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
         match self {
             SuiCommand::Start {
                 config,
@@ -285,6 +289,11 @@ impl SuiCommand {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None, None).await?;
+
+                SuiPackageHooks::register_from_ctx(&context)
+                    .await
+                    .with_context(|| "Error registering package hooks")?;
+
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -315,10 +324,21 @@ impl SuiCommand {
                 Ok(())
             }
             SuiCommand::Move {
+                config,
                 package_path,
                 build_config,
                 cmd,
-            } => execute_move_command(package_path, build_config, cmd),
+                accept_defaults,
+            } => {
+                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path, accept_defaults).await?;
+                let context = WalletContext::new(&config_path, None, None).await?;
+                SuiPackageHooks::register_from_ctx(&context)
+                    .await
+                    .with_context(|| "Error registering package hooks")?;
+
+                execute_move_command(package_path, build_config, cmd)
+            }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
         }
     }
