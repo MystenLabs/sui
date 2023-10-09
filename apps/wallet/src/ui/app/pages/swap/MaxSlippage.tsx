@@ -17,7 +17,7 @@ import { type FormValues } from './utils';
 const MAX_SLIPPAGE_COPY =
 	'Slippage % is the difference between the price you expect to pay or receive for a coin when you initiate a transaction and the actual price at which the transaction is executed.';
 
-export function MaxSlippage({ setModalOpen }: { setModalOpen: () => void }) {
+export function MaxSlippage({ onOpen }: { onOpen: () => void }) {
 	const { watch } = useFormContext<FormValues>();
 	const allowedMaxSlippagePercentage = watch('allowedMaxSlippagePercentage');
 
@@ -37,10 +37,7 @@ export function MaxSlippage({ setModalOpen }: { setModalOpen: () => void }) {
 					{allowedMaxSlippagePercentage}%
 				</Text>
 
-				<IconButton
-					onClick={setModalOpen}
-					icon={<Settings16 className="h-4 w-4 text-hero-dark" />}
-				/>
+				<IconButton onClick={onOpen} icon={<Settings16 className="h-4 w-4 text-hero-dark" />} />
 			</div>
 		</DescriptionItem>
 	);
@@ -49,11 +46,8 @@ export function MaxSlippage({ setModalOpen }: { setModalOpen: () => void }) {
 export function MaxSlippageModal({ isOpen, onClose }: { onClose: () => void; isOpen: boolean }) {
 	const {
 		register,
-		watch,
 		formState: { errors },
 	} = useFormContext<FormValues>();
-
-	const value = watch('allowedMaxSlippagePercentage');
 
 	const errorString = errors.allowedMaxSlippagePercentage?.message;
 
@@ -71,7 +65,6 @@ export function MaxSlippageModal({ isOpen, onClose }: { onClose: () => void; isO
 							<InputWithActionButton
 								{...register('allowedMaxSlippagePercentage')}
 								placeholder="0.0"
-								value={value}
 								suffix={<div className="ml-2">%</div>}
 							/>
 							{errorString ? (

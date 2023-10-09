@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
-import { useCreateAccount, useMarketAccountCap } from '_hooks';
+import { useGetOwnedObjects } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { DeepBookClient } from '@mysten/deepbook';
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 
 type DeepBookContextProps = {
 	client: DeepBookClient;
+	accountCapId: string;
 };
 
 const DeepBookContext = createContext<DeepBookContextProps | null>(null);
@@ -28,33 +29,37 @@ export function useDeepBookClient() {
 	return useDeepBookContext().client;
 }
 
+export function useDeepBookAccountCapId() {
+	return useDeepBookContext().accountCapId;
+}
+
 export function DeepBookContextProvider({ children }: DeepBookContextProviderProps) {
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
+	const activeAccountAddress = activeAccount?.address;
 
-	const { data, isLoading, refetch } = useMarketAccountCap(activeAccount?.address);
+	const { data } = useGetOwnedObjects(
+		activeAccountAddress,
+		{
+			MatchAll: [{ StructType: '0xdee9::custodian_v2::AccountCap' }],
+		},
+		1,
+	);
 
-	const accountCapId = data?.owner as string;
+	const objectContent = data?.pages?.[0]?.data?.[0]?.data?.content;
+	const objectFields = objectContent?.dataType === 'moveObject' ? objectContent?.fields : null;
+
+	const accountCapId = (objectFields as Record<string, string | number | object>)?.owner as string;
 
 	const deepBookClient = useMemo(() => {
 		return new DeepBookClient(suiClient, accountCapId);
 	}, [accountCapId, suiClient]);
 
-	const { mutate } = useCreateAccount({
-		onSuccess: refetch,
-		deepBookClient,
-	});
-
-	useEffect(() => {
-		if (!accountCapId && !isLoading) {
-			mutate();
-		}
-	}, [accountCapId, isLoading, mutate]);
-
 	return (
 		<DeepBookContext.Provider
 			value={{
 				client: deepBookClient,
+				accountCapId,
 			}}
 		>
 			{children}

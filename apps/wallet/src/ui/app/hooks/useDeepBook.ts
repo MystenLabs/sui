@@ -6,15 +6,19 @@ import { useSigner } from '_app/hooks/useSigner';
 import { type WalletSigner } from '_app/WalletSigner';
 import { useDeepBookClient } from '_shared/deepBook/context';
 import { useGetObject, useGetOwnedObjects } from '@mysten/core';
+import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { TransactionBlock } from '@mysten/sui.js/builder';
+import { type CoinStruct, type SuiClient } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
 const DEEPBOOK_KEY = 'deepbook';
-export const SUI_CONVERSION_RATE = 1e6;
+export const SUI_CONVERSION_RATE = 6;
+export const USDC_DECIMALS = 9;
+export const MAX_FLOAT = 2;
 
 export enum Coins {
 	SUI = 'SUI',
@@ -61,7 +65,7 @@ export function getUSDCurrency(amount: number | null) {
 		return null;
 	}
 
-	return amount.toLocaleString('en', {
+	return parseFloat(amount.toFixed(MAX_FLOAT)).toLocaleString('en', {
 		style: 'currency',
 		currency: 'USD',
 	});
@@ -113,18 +117,13 @@ async function getDeepBookPriceForCoin(coin: Coins, deepbookClient: DeepBookClie
 	return price1 || price2;
 }
 
-async function getDeepbookPricesInUSD(coins: Coins[], deepBookClient: DeepBookClient) {
-	const promises = coins.map((coin) => getDeepBookPriceForCoin(coin, deepBookClient));
-	return Promise.all(promises);
-}
-
 function useDeepbookPricesInUSD(coins: Coins[]) {
 	const deepBookClient = useDeepBookClient();
 	return useQuery({
-		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', ...coins],
+		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', coins],
 		queryFn: async () => {
-			return getDeepbookPricesInUSD(coins, deepBookClient);
+			const promises = coins.map((coin) => getDeepBookPriceForCoin(coin, deepBookClient));
+			return Promise.all(promises);
 		},
 	});
 }
@@ -162,7 +161,7 @@ export function useBalanceConversion(
 	conversionRate: number = 1,
 ) {
 	const { data: averagePrice, ...rest } = useAveragePrice(base, quote);
-	const averagePriceWithConversion = averagePrice.dividedBy(conversionRate);
+	const averagePriceWithConversion = averagePrice.shiftedBy(conversionRate);
 
 	const rawValue = useMemo(() => {
 		if (!averagePriceWithConversion || !balance) return null;
@@ -183,10 +182,6 @@ export function useBalanceConversion(
 		averagePrice: averagePriceWithConversion,
 		...rest,
 	};
-}
-
-export function useSuiBalanceInUSDC(suiBalance: BigInt | BigNumber | null) {
-	return useBalanceConversion(suiBalance, Coins.SUI, Coins.USDC, SUI_CONVERSION_RATE);
 }
 
 export function useCreateAccount({
@@ -215,87 +210,163 @@ export function useCreateAccount({
 	});
 }
 
-export function useMarketAccountCap(activeAccountAddress?: string) {
-	const {
-		data,
-		isLoading: getOwnedObjectsLoading,
-		isError: getOwnedObjectsError,
-		isRefetching: isRefetchingOwnedObjects,
-		refetch,
-	} = useGetOwnedObjects(
-		activeAccountAddress,
-		{
-			MatchAll: [{ StructType: '0xdee9::custodian_v2::AccountCap' }],
-		},
-		10,
-	);
+const MAX_COINS_PER_REQUEST = 10;
 
-	const objectId = data?.pages?.[0]?.data?.[0]?.data?.objectId;
+export async function getCoinsByBalance({
+	coinType,
+	balance,
+	suiClient,
+	address,
+}: {
+	coinType: string;
+	balance: string;
+	suiClient: SuiClient;
+	address: string;
+}) {
+	let cursor: string | undefined | null = null;
+	let currentBalance = 0n;
+	let hasNextPage = true;
+	const coins = [];
+	const bigIntBalance = BigInt(Math.floor(Number(balance)));
 
-	const {
-		data: suiObjectResponseData,
-		isLoading: getObjectLoading,
-		isRefetching: isRefetchingObject,
-		isError: getObjectError,
-	} = useGetObject(objectId);
+	while (currentBalance < bigIntBalance && hasNextPage) {
+		const { data, nextCursor } = await suiClient.getCoins({
+			owner: address,
+			coinType,
+			cursor,
+			limit: MAX_COINS_PER_REQUEST,
+		});
 
-	const fieldsData =
-		suiObjectResponseData?.data?.content?.dataType === 'moveObject'
-			? (suiObjectResponseData?.data?.content?.fields as Record<string, string | number | object>)
-			: null;
+		if (!data || !data.length) {
+			break;
+		}
 
-	return {
-		data: fieldsData,
-		isLoading: getObjectLoading || getOwnedObjectsLoading,
-		isError: getOwnedObjectsError || getObjectError,
-		isRefetching: isRefetchingObject || isRefetchingOwnedObjects,
-		refetch,
-	};
+		for (const coin of data) {
+			currentBalance += BigInt(coin.balance);
+			coins.push(coin);
+
+			if (currentBalance >= bigIntBalance) {
+				break;
+			}
+		}
+
+		cursor = nextCursor;
+		hasNextPage = !!nextCursor;
+	}
+
+	return coins;
 }
 
-export function useGetEstimateSuiToUSDC({
-	balanceInMist,
+export async function getPlaceMarketOrderTxn({
+	deepBookClient,
+	poolId,
+	balance,
+	accountCapId,
+	coins,
+	coinType,
+	address,
+}: {
+	deepBookClient: DeepBookClient;
+	poolId: string;
+	balance: string;
+	accountCapId: string;
+	coins: CoinStruct[];
+	coinType: string;
+	address: string;
+}) {
+	const txb = new TransactionBlock();
+
+	let swapCoin;
+	if (coinType === SUI_TYPE_ARG) {
+		swapCoin = txb.splitCoins(txb.gas, [balance]);
+	} else {
+		const primaryCoinInput = txb.object(coins[0].coinObjectId);
+		const restCoins = coins.slice(1);
+
+		if (restCoins.length) {
+			txb.mergeCoins(
+				primaryCoinInput,
+				coins.slice(1).map((coin) => txb.object(coin.coinObjectId)),
+			);
+		}
+
+		const balance = coins.reduce((acc, coin) => acc + BigInt(coin.balance), 0n);
+		swapCoin = txb.splitCoins(primaryCoinInput, [balance]);
+	}
+
+	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
+
+	return await deepBookClient.placeMarketOrder(
+		accountCap,
+		poolId,
+		BigInt(balance),
+		coinType === SUI_TYPE_ARG ? 'ask' : 'bid',
+		coinType === SUI_TYPE_ARG ? swapCoin : undefined,
+		coinType === SUI_TYPE_ARG ? undefined : swapCoin,
+		undefined,
+		address,
+		txb,
+	);
+}
+
+export function useGetEstimate({
+	balance,
 	accountCapId,
 	signer,
+	coinType,
+	poolId,
 }: {
-	balanceInMist: string;
+	balance: string;
 	accountCapId: string;
 	signer: WalletSigner | null;
+	coinType: string;
+	poolId: string;
 }) {
-	const mainnetPools = useMainnetPools();
+	const queryClient = useQueryClient();
+	const suiClient = useSuiClient();
+	const activeAccount = useActiveAccount();
+	const activeAddress = activeAccount?.address;
 	const deepBookClient = useDeepBookClient();
-	const poolId = mainnetPools.SUI_USDC_2;
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
-		queryKey: [DEEPBOOK_KEY, 'get-estimate', poolId, accountCapId],
+		queryKey: [
+			DEEPBOOK_KEY,
+			'get-estimate',
+			poolId,
+			accountCapId,
+			balance,
+			coinType,
+			activeAddress,
+		],
 		queryFn: async () => {
-			const txb = new TransactionBlock();
+			const data = await getCoinsByBalance({
+				coinType,
+				balance,
+				suiClient,
+				address: activeAddress!,
+			});
 
-			// if SUI > USDC
-			const baseCoin = txb.splitCoins(txb.gas, [balanceInMist]);
-
-			// if USDC > SUI
-			// useGetAllCoins implementation. Paginate through until get desired balance
-			// value in coin metaData
-
-			const txn = await deepBookClient.placeMarketOrder(
-				mainnetPools.SUI_USDC_2,
-				1000000000n,
-				'ask',
-				baseCoin,
-				undefined,
-				undefined,
-				accountCapId,
-				txb,
-			);
-
-			if (signer && txn) {
-				return signer.dryRunTransactionBlock({ transactionBlock: txn });
+			if (!data?.length) {
+				return null;
 			}
 
-			return null;
+			const txn = await getPlaceMarketOrderTxn({
+				deepBookClient,
+				poolId,
+				balance,
+				accountCapId,
+				address: activeAddress!,
+				coins: data,
+				coinType,
+			});
+
+			if (!accountCapId) {
+				queryClient.invalidateQueries(['get-owned-objects']);
+			}
+
+			return signer?.dryRunTransactionBlock({ transactionBlock: txn });
 		},
-		enabled: !!balanceInMist && !!signer && !!accountCapId,
+		enabled: !!balance && !!signer && !!activeAddress,
 	});
 }

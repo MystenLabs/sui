@@ -1,56 +1,94 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import {
 	Coins,
 	getUSDCurrency,
+	MAX_FLOAT,
+	SUI_CONVERSION_RATE,
+	USDC_DECIMALS,
 	useBalanceConversion,
+	useMainnetCoinsMap,
 	useRecognizedCoins,
-	useSuiBalanceInUSDC,
 } from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
 import { IconButton } from '_components/IconButton';
+import { useCoinsReFetchingConfig } from '_hooks';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { AssetData } from '_pages/swap/AssetData';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { QuoteAssets } from '_pages/swap/QuoteAssets';
-import { useCoinMetadata } from '@mysten/core';
+import { useCoinMetadata, useFormatCoin } from '@mysten/core';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Refresh16 } from '@mysten/icons';
+import { type BalanceChange } from '@mysten/sui.js/client';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
-import { useSearchParams } from 'react-router-dom';
 
-import { useCoinTypeData, type FormValues } from './utils';
+import { type FormValues } from './utils';
 
-export function QuoteAssetSection() {
+export function QuoteAssetSection({
+	activeCoinType,
+	balanceChanges,
+}: {
+	activeCoinType: string | null;
+	balanceChanges: BalanceChange[];
+}) {
+	const coinsMap = useMainnetCoinsMap();
+	const activeAccount = useActiveAccount();
+	const activeAccountAddress = activeAccount?.address;
 	const recognizedCoins = useRecognizedCoins();
 	const [isQuoteAssetOpen, setQuoteAssetOpen] = useState(false);
 	const [isSlippageModalOpen, setSlippageModalOpen] = useState(false);
+
 	const {
-		getValues,
+		watch,
+		setValue,
 		formState: { isValid },
 	} = useFormContext<FormValues>();
-	const [searchParams] = useSearchParams();
-	const activeCoinType = searchParams.get('type');
 	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
-	const quoteAssetType = getValues('quoteAssetType');
-	const { formattedBalance: quoteAssetBalance, coinMetadata: quotedAssetMetaData } =
-		useCoinTypeData(quoteAssetType);
+	const quoteAssetType = watch('quoteAssetType');
+	const rawQuoteAssetAmount = balanceChanges.find(
+		(balanceChange) => balanceChange.coinType === quoteAssetType,
+	)?.amount;
+
+	const quotedAssetAmount = new BigNumber(rawQuoteAssetAmount || '0').shiftedBy(
+		activeCoinType === SUI_TYPE_ARG ? -6 : -USDC_DECIMALS,
+	);
+
+	const quotedAssetAmountAsNum = quotedAssetAmount.toNumber();
+
+	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
+
+	useEffect(() => {
+		const newQuoteAsset = activeCoinType === SUI_TYPE_ARG ? coinsMap[Coins.USDC] : SUI_TYPE_ARG;
+		setValue('quoteAssetType', newQuoteAsset);
+	}, [activeCoinType, coinsMap, quoteAssetType, setValue]);
+
+	const { data: coinBalanceData } = useSuiClientQuery(
+		'getBalance',
+		{ coinType: quoteAssetType, owner: activeAccountAddress! },
+		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
+	);
+
+	const coinBalance = coinBalanceData?.totalBalance;
+
+	const [quoteAssetBalance, _, quotedAssetMetaData] = useFormatCoin(coinBalance, quoteAssetType);
+
 	const quotedAssetSymbol = quotedAssetMetaData.data?.symbol ?? '';
-	const amount = getValues('amount');
+	const amount = watch('amount');
 
-	const { rawValue, averagePrice, refetch, isRefetching } = useSuiBalanceInUSDC(
+	const { rawValue, averagePrice, refetch, isRefetching } = useBalanceConversion(
 		new BigNumber(amount),
+		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
+		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
+		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	);
 
-	const averagePriceAsString = averagePrice?.toString();
-
-	const { rawValue: rawValueQuoteToUsd } = useBalanceConversion(
-		new BigNumber(rawValue || 0),
-		quotedAssetSymbol as Coins,
-		Coins.USDC,
-	);
+	const averagePriceAsString = parseFloat(averagePrice.toNumber().toFixed(MAX_FLOAT))?.toString();
 
 	if (!quotedAssetMetaData.data) {
 		return null;
@@ -86,10 +124,10 @@ export function QuoteAssetSection() {
 					isValid && 'border-solid border-hero-darkest/10',
 				)}
 			>
-				{rawValue && !isRefetching ? (
+				{quotedAssetAmountAsNum && !isRefetching ? (
 					<>
 						<Text variant="body" weight="semibold" color="steel-darker">
-							{rawValue}
+							{quotedAssetAmountAsNum}
 						</Text>
 						<Text variant="body" weight="semibold" color="steel">
 							{quotedAssetSymbol}
@@ -106,7 +144,11 @@ export function QuoteAssetSection() {
 					<DescriptionItem
 						title={
 							<Text variant="bodySmall" color="steel-dark">
-								{isRefetching ? '--' : getUSDCurrency(rawValueQuoteToUsd)}
+								{isRefetching
+									? '--'
+									: getUSDCurrency(
+											activeCoinType === SUI_TYPE_ARG ? quotedAssetAmountAsNum : Number(amount),
+									  )}
 							</Text>
 						}
 					>
@@ -125,7 +167,7 @@ export function QuoteAssetSection() {
 
 					<div className="h-px w-full bg-hero-darkest/10 my-3" />
 
-					<MaxSlippage setModalOpen={() => setSlippageModalOpen(true)} />
+					<MaxSlippage onOpen={() => setSlippageModalOpen(true)} />
 					<MaxSlippageModal
 						isOpen={isSlippageModalOpen}
 						onClose={() => setSlippageModalOpen(false)}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
+import { useRecognizedPackages } from '_app/hooks/useRecognizedPackages';
 import { useSigner } from '_app/hooks/useSigner';
 import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout';
 import { Button } from '_app/shared/ButtonUI';
@@ -12,19 +13,30 @@ import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
 import {
 	allowedSwapCoinsList,
+	Coins,
+	getCoinsByBalance,
+	getPlaceMarketOrderTxn,
 	getUSDCurrency,
+	SUI_CONVERSION_RATE,
+	USDC_DECIMALS,
+	useBalanceConversion,
 	useCoinsReFetchingConfig,
-	useGetEstimateSuiToUSDC,
+	useGetEstimate,
 	useMainnetCoinsMap,
-	useMarketAccountCap,
+	useMainnetPools,
 	useSortedCoinsByCategories,
-	useSuiBalanceInUSDC,
 } from '_hooks';
-import { useTransactionSummary, useZodForm } from '@mysten/core';
-import { useSuiClientQuery } from '@mysten/dapp-kit';
+import {
+	DeepBookContextProvider,
+	useDeepBookAccountCapId,
+	useDeepBookClient,
+} from '_shared/deepBook/context';
+import { useFormatCoin, useTransactionSummary, useZodForm } from '@mysten/core';
+import { useSuiClient, useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
 import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
-import { MIST_PER_SUI } from '@mysten/sui.js/utils';
+import { SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
 import { useMemo } from 'react';
@@ -35,7 +47,7 @@ import { z } from 'zod';
 import { AssetData } from './AssetData';
 import { GasFeeSection } from './GasFeeSection';
 import { QuoteAssetSection } from './QuoteAssetSection';
-import { initialValues, useCoinTypeData, type FormValues } from './utils';
+import { initialValues, type FormValues } from './utils';
 
 function getSwapPageAtcText(
 	fromSymbol: string,
@@ -43,26 +55,39 @@ function getSwapPageAtcText(
 	coinsMap: Record<string, string>,
 ) {
 	const toSymbol =
-		Object.entries(coinsMap).find(([key, value]) => value === quoteAssetType)?.[0] || '';
+		quoteAssetType === SUI_TYPE_ARG
+			? Coins.SUI
+			: Object.entries(coinsMap).find(([key, value]) => value === quoteAssetType)?.[0] || '';
 
 	return `Swap ${fromSymbol} to ${toSymbol}`;
 }
 
-export function SwapPage() {
+export function SwapPageContent() {
+	const queryClient = useQueryClient();
+	const suiClient = useSuiClient();
+	const mainnetPools = useMainnetPools();
+	const deepBookClient = useDeepBookClient();
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const activeAccount = useActiveAccount();
 	const signer = useSigner(activeAccount);
 	const activeAccountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: marketAccountCapData } = useMarketAccountCap(activeAccount?.address);
 	const coinsMap = useMainnetCoinsMap();
 
-	const accountCapId = marketAccountCapData?.owner as string;
+	const accountCapId = useDeepBookAccountCapId();
 
 	const activeCoinType = searchParams.get('type');
 
-	const { isLoading, formattedBalance, coinMetadata } = useCoinTypeData(activeCoinType);
+	const { data: coinBalanceData, isLoading } = useSuiClientQuery(
+		'getBalance',
+		{ coinType: activeCoinType, owner: activeAccountAddress! },
+		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
+	);
+
+	const rawBalance = coinBalanceData?.totalBalance;
+
+	const [formattedBalance, _, coinMetadata] = useFormatCoin(rawBalance, activeCoinType);
 
 	const { data: coinBalances } = useSuiClientQuery(
 		'getAllBalances',
@@ -81,9 +106,7 @@ export function SwapPage() {
 	const symbol = coinMetadata.data?.symbol ?? '';
 
 	const coinDecimals = coinMetadata.data?.decimals ?? 0;
-	const balanceInMist = new BigNumber(formattedBalance).times(MIST_PER_SUI.toString()).toString();
-
-	const { data: estimateData } = useGetEstimateSuiToUSDC({ balanceInMist, signer, accountCapId });
+	const maxBalanceInMist = rawBalance || '0';
 
 	const validationSchema = useMemo(() => {
 		return z.object({
@@ -106,7 +129,7 @@ export function SwapPage() {
 					return z.NEVER;
 				}
 
-				if (bigNumberValue.shiftedBy(coinDecimals).gt(BigInt(balanceInMist).toString())) {
+				if (bigNumberValue.shiftedBy(coinDecimals).gt(BigInt(maxBalanceInMist).toString())) {
 					context.addIssue({
 						code: 'custom',
 						message: 'Not available in account',
@@ -132,12 +155,15 @@ export function SwapPage() {
 				return percent;
 			}),
 		});
-	}, [balanceInMist, coinDecimals]);
+	}, [maxBalanceInMist, coinDecimals]);
 
 	const form = useZodForm({
 		mode: 'all',
 		schema: validationSchema,
-		defaultValues: initialValues,
+		defaultValues: {
+			...initialValues,
+			quoteAssetType: coinsMap.USDC,
+		},
 	});
 
 	const {
@@ -162,22 +188,91 @@ export function SwapPage() {
 		name: 'amount',
 		control,
 	});
-	const quoteAssetType = getValues('quoteAssetType');
-	const amountAsBigInt = new BigNumber(amount);
-	const { rawValue } = useSuiBalanceInUSDC(amountAsBigInt);
+	const quoteAssetType = useWatch({
+		name: 'quoteAssetType',
+		control,
+	});
+	const { rawValue } = useBalanceConversion(
+		new BigNumber(amount),
+		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
+		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
+		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+	);
+
 	const atcText = useMemo(() => {
 		return getSwapPageAtcText(symbol, quoteAssetType, coinsMap);
 	}, [symbol, quoteAssetType, coinsMap]);
 
+	const balance = amount
+		? new BigNumber(activeCoinType === SUI_TYPE_ARG ? amount : Math.floor(Number(rawValue || '0')))
+				.shiftedBy(activeCoinType === SUI_TYPE_ARG ? SUI_DECIMALS : USDC_DECIMALS)
+				.toString()
+		: '0';
+
+	const { data: currentEstimatedData } = useGetEstimate({
+		balance,
+		signer,
+		accountCapId,
+		coinType: activeCoinType || '',
+		poolId: mainnetPools.SUI_USDC_2,
+	});
+
+	const recognizedPackagesList = useRecognizedPackages();
+
 	const txnSummary = useTransactionSummary({
-		transaction: estimateData as DryRunTransactionBlockResponse,
-		recognizedPackagesList: [],
+		transaction: currentEstimatedData as DryRunTransactionBlockResponse,
+		recognizedPackagesList,
 		currentAddress: activeAccountAddress,
 	});
 
 	const totalGas = txnSummary?.gas?.totalGas;
 
-	const handleOnsubmit: SubmitHandler<FormValues> = async (data) => {};
+	const { mutate: handleSwap, isLoading: isSwapLoading } = useMutation({
+		mutationFn: async () => {
+			const data = await getCoinsByBalance({
+				coinType: activeCoinType!,
+				balance,
+				suiClient,
+				address: activeAccountAddress!,
+			});
+
+			const txn = await getPlaceMarketOrderTxn({
+				deepBookClient,
+				poolId: mainnetPools.SUI_USDC_2,
+				balance,
+				accountCapId,
+				coins: data || [],
+				coinType: activeCoinType!,
+				address: activeAccountAddress!,
+			});
+
+			if (!txn || !signer) {
+				throw new Error('Missing data');
+			}
+
+			return signer.signAndExecuteTransactionBlock({
+				transactionBlock: txn,
+				options: {
+					showInput: true,
+					showEffects: true,
+					showEvents: true,
+				},
+			});
+		},
+		onSuccess: (response) => {
+			queryClient.invalidateQueries(['get-coins']);
+			queryClient.invalidateQueries(['coin-balance']);
+
+			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
+				response.digest,
+			)}&from=transactions`;
+			return navigate(receiptUrl);
+		},
+	});
+
+	const handleOnsubmit: SubmitHandler<FormValues> = async (formData) => {
+		handleSwap();
+	};
 
 	return (
 		<Overlay showModal title="Swap" closeOverlay={() => navigate('/')}>
@@ -205,7 +300,6 @@ export function SwapPage() {
 									<InputWithActionButton
 										{...register('amount')}
 										dark
-										value={amount}
 										suffix={<div className="ml-2">{symbol}</div>}
 										type="number"
 										errorString={errors.amount?.message}
@@ -222,7 +316,9 @@ export function SwapPage() {
 										<div className="ml-3">
 											<div className="text-bodySmall font-medium text-hero-darkest/40">
 												{isPayAll ? '~ ' : ''}
-												{getUSDCurrency(rawValue)}
+												{getUSDCurrency(
+													activeCoinType === SUI_TYPE_ARG ? rawValue : Number(amount),
+												)}
 											</div>
 										</div>
 									)}
@@ -236,10 +332,18 @@ export function SwapPage() {
 									<div className="bg-gray-45 h-px w-full" />
 								</div>
 
-								<QuoteAssetSection />
+								<QuoteAssetSection
+									activeCoinType={activeCoinType}
+									balanceChanges={currentEstimatedData?.balanceChanges || []}
+								/>
 
 								<div className="mt-4">
-									<GasFeeSection totalGas={isValid ? totalGas : undefined} />
+									<GasFeeSection
+										totalGas={totalGas || ''}
+										activeCoinType={activeCoinType}
+										amount={amount}
+										isValid={isValid}
+									/>
 								</div>
 							</Form>
 						</Content>
@@ -249,7 +353,7 @@ export function SwapPage() {
 								onClick={handleSubmit(handleOnsubmit)}
 								type="submit"
 								variant="primary"
-								loading={isSubmitting}
+								loading={isSubmitting || isSwapLoading}
 								disabled={!isValid || isSubmitting}
 								size="tall"
 								text={atcText}
@@ -260,5 +364,13 @@ export function SwapPage() {
 				</Loading>
 			</div>
 		</Overlay>
+	);
+}
+
+export function SwapPage() {
+	return (
+		<DeepBookContextProvider>
+			<SwapPageContent />
+		</DeepBookContextProvider>
 	);
 }

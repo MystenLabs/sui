@@ -11,6 +11,7 @@ import {
 	SuiObjectRef,
 } from '@mysten/sui.js/client';
 import {
+	TransactionArgument,
 	TransactionBlock,
 	TransactionObjectArgument,
 	TransactionResult,
@@ -150,16 +151,28 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description: Create and Transfer custodian account to user
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @description: Create Account Cap
+	 * @param txb
 	 */
-	createAccount(currentAddress: string = this.currentAddress): TransactionBlock {
-		const txb = new TransactionBlock();
+	createAccountCap(txb: TransactionBlock = new TransactionBlock()) {
 		let [cap] = txb.moveCall({
 			typeArguments: [],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_account`,
 			arguments: [],
 		});
+		return cap;
+	}
+
+	/**
+	 * @description: Create and Transfer custodian account to user
+	 * @param currentAddress current address of the user
+	 * @param txb
+	 */
+	createAccount(
+		currentAddress: string = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
+	): TransactionBlock {
+		const cap = this.createAccountCap(txb);
 		txb.transferObjects([cap], this.#checkAddress(currentAddress));
 		return txb;
 	}
@@ -304,16 +317,20 @@ export class DeepBookClient {
 	 * @param quoteCoin the objectId of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
 	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
-	 * @param recipientAddress: address to return the unused amounts, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @param accountCapId the account cap id to use for this transaction. If omitted, `this.accountCap` will be used
+	 * @param accountCap
+	 * @param recipientAddress the address to receive the swapped asset. If omitted, `this.currentAddress` will be used. The function
+	 * @param txb
 	 */
 	async placeMarketOrder(
+		accountCap: string | Extract<TransactionArgument, { kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',
-		baseCoin: TransactionResult | string | undefined = undefined, // take in txn Object args
-		quoteCoin: TransactionResult | string | undefined = undefined, // take in txn Object args
+		baseCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
+		quoteCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
 		clientOrderId: string | undefined = undefined,
-		recipientAddress: string = this.currentAddress,
+		recipientAddress: string | undefined = this.currentAddress,
 		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
 		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
@@ -333,7 +350,7 @@ export class DeepBookClient {
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,
 			arguments: [
 				txb.object(poolId),
-				txb.object(this.#checkAccountCap()),
+				typeof accountCap === 'string' ? txb.object(this.#checkAccountCap(accountCap)) : accountCap,
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.pure.u64(quantity),
 				txb.pure.bool(orderType === 'bid'),
@@ -345,6 +362,10 @@ export class DeepBookClient {
 		const recipient = this.#checkAddress(recipientAddress);
 		txb.transferObjects([base_coin_ret], recipient);
 		txb.transferObjects([quote_coin_ret], recipient);
+		if (typeof accountCap !== 'string') {
+			txb.transferObjects([accountCap], recipient);
+		}
+
 		return txb;
 	}
 

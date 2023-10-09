@@ -1,29 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { getUSDCurrency, useSuiBalanceInUSDC } from '_app/hooks/useDeepBook';
+import {
+	Coins,
+	getUSDCurrency,
+	SUI_CONVERSION_RATE,
+	useBalanceConversion,
+} from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { useCoinMetadata } from '@mysten/core';
+import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-import { useFormContext } from 'react-hook-form';
-import { useSearchParams } from 'react-router-dom';
 
-import { FEES_PERCENTAGE, type FormValues } from './utils';
+import { FEES_PERCENTAGE } from './utils';
 
-export function GasFeeSection({ totalGas }: { totalGas?: string }) {
-	const {
-		formState: { isValid },
-		watch,
-	} = useFormContext<FormValues>();
-
-	const [searchParams] = useSearchParams();
-
-	const activeCoinType = searchParams.get('type');
-
+export function GasFeeSection({
+	activeCoinType,
+	totalGas,
+	amount,
+	isValid,
+}: {
+	activeCoinType: string | null;
+	amount: string;
+	isValid: boolean;
+	totalGas: string;
+}) {
 	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
-
-	const amount = watch('amount');
 
 	const estimatedFees = useMemo(() => {
 		if (!amount || !isValid) {
@@ -33,9 +36,12 @@ export function GasFeeSection({ totalGas }: { totalGas?: string }) {
 		return new BigNumber(amount).times(FEES_PERCENTAGE);
 	}, [amount, isValid]);
 
-	const estimatedFeesAsBigInt = estimatedFees ? new BigNumber(estimatedFees) : null;
-
-	const { rawValue } = useSuiBalanceInUSDC(estimatedFeesAsBigInt);
+	const { rawValue } = useBalanceConversion(
+		estimatedFees,
+		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
+		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
+		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+	);
 
 	const formattedEstimatedFees = getUSDCurrency(rawValue);
 
@@ -65,7 +71,7 @@ export function GasFeeSection({ totalGas }: { totalGas?: string }) {
 				}
 			>
 				<Text variant="bodySmall" weight="medium" color="steel-darker">
-					{totalGas ? parseFloat(totalGas).toLocaleString() : '--'}
+					{totalGas && isValid ? parseFloat(totalGas).toLocaleString() : '--'}
 				</Text>
 			</DescriptionItem>
 		</div>
