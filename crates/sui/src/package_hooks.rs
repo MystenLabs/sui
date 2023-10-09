@@ -22,6 +22,9 @@ use sui_move_build::PUBLISHED_AT_MANIFEST_FIELD;
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::{
+    DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+};
 
 use crate::package_cache::PackageCache;
 
@@ -138,6 +141,26 @@ impl PackageHooks for SuiPackageHooks {
                 dep.published_at.to_hex_literal()
             )
             .unwrap();
+        }
+
+        match id {
+            MOVE_STDLIB_PACKAGE_ID => {
+                writeln!(manifest, "\n[addresses]").unwrap();
+                writeln!(manifest, "std = \"0x1\"").unwrap();
+            }
+            SUI_FRAMEWORK_PACKAGE_ID => {
+                writeln!(manifest, "\n[addresses]").unwrap();
+                writeln!(manifest, "sui = \"0x2\"").unwrap();
+            }
+            SUI_SYSTEM_PACKAGE_ID => {
+                writeln!(manifest, "\n[addresses]").unwrap();
+                writeln!(manifest, "sui_system = \"0x3\"").unwrap();
+            }
+            DEEPBOOK_PACKAGE_ID => {
+                writeln!(manifest, "\n[addresses]").unwrap();
+                writeln!(manifest, "deepbook = \"0xdee9\"").unwrap();
+            }
+            _ => (),
         }
 
         fs::write(out_path.join("Move.toml"), manifest)?;
