@@ -117,9 +117,10 @@ export function extractKioskData(
 }
 
 /**
- * Returns the FIRST inner type
- * E.g. 0x2::kiosk_extension::ExtensionKey<0x5::game::Game> -> 0x5::game::Game
- * Or 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::game::Game<0x5::test::Test>
+ * Returns an inner type based on the depth provided (0 = first inner type).
+ * E.g. (depth = 0) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game> -> 0x5::game::Game
+ * E.g. (depth = 0) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::game::Game<0x5::test::Test>
+ * E.g. (depth = 1) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::test::Test
  */
 export function getInnerType(type: string, depth: number = 0): string {
 	const inner = type.split('<');
