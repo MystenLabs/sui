@@ -188,7 +188,7 @@ export function Combobox({ value, onValueChange, children }: Props) {
 				setVisible,
 			}}
 		>
-			<Command className="relative w-full" shouldFilter={false}>
+			<Command className="relative w-full" shouldFilter={false} filter={() => 1}>
 				{children}
 			</Command>
 		</ComboboxContext.Provider>
