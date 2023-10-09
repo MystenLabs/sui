@@ -13,7 +13,7 @@ import {
 	type DynamicFieldInfo,
 } from '@mysten/sui.js/client';
 import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
 import { bcs } from './bcs';
 import {
@@ -106,7 +106,7 @@ export function extractKioskData(
 			if (type.startsWith('0x2::kiosk_extension::ExtensionKey')) {
 				acc.extensions.push({
 					objectId: val.objectId,
-					type: getInnerType(val.name?.type),
+					type: normalizeStructTag(parseStructTag(val.name.type).typeParams[0]),
 				});
 			}
 
@@ -114,26 +114,6 @@ export function extractKioskData(
 		},
 		{ items: [], itemIds: [], listingIds: [], extensions: [] },
 	);
-}
-
-/**
- * Returns an inner type based on the depth provided (0 = first inner type).
- * E.g. (depth = 0) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game> -> 0x5::game::Game
- * E.g. (depth = 0) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::game::Game<0x5::test::Test>
- * E.g. (depth = 1) 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::test::Test
- */
-export function getInnerType(type: string, depth: number = 0): string {
-	const inner = type.split('<');
-	// remove first part left of first `<`.
-	inner.shift();
-	const innerWithoutFirstType = inner.join('<');
-	const removeLast = innerWithoutFirstType.split('>');
-	// remove last part from latest `>`.
-	removeLast.pop();
-
-	const result = removeLast.join('>');
-
-	return depth === 0 ? result : getInnerType(result, depth - 1);
 }
 
 /**
