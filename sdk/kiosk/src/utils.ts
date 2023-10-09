@@ -20,7 +20,6 @@ import {
 	Kiosk,
 	KIOSK_TYPE,
 	KioskData,
-	KioskExtension,
 	KioskListing,
 	TRANSFER_POLICY_CAP_TYPE,
 	TransferPolicyCap,
@@ -78,7 +77,6 @@ export function extractKioskData(
 	listings: KioskListing[],
 	lockedItemIds: string[],
 	kioskId: string,
-	extensions: KioskExtension[],
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
@@ -105,7 +103,7 @@ export function extractKioskData(
 					lockedItemIds?.push((val.name.value as { id: string }).id);
 					break;
 				case 'kiosk_extension::ExtensionKey':
-					extensions.push({
+					acc.extensions.push({
 						objectId: val.objectId,
 						type: getInnerType(val.name?.type),
 					});
@@ -127,7 +125,7 @@ export function getTypeWithoutPackageAddress(type: string) {
  * E.g. 0x2::kiosk_extension::ExtensionKey<0x5::game::Game> -> 0x5::game::Game
  * Or 0x2::kiosk_extension::ExtensionKey<0x5::game::Game<0x5::test::Test>> -> 0x5::game::Game<0x5::test::Test>
  */
-export function getInnerType(type: string, depth: number = 1): string {
+export function getInnerType(type: string, depth: number = 0): string {
 	const inner = type.split('<');
 	// remove first part left of first `<`.
 	inner.shift();
@@ -138,7 +136,7 @@ export function getInnerType(type: string, depth: number = 1): string {
 
 	const result = removeLast.join('>');
 
-	return depth === 1 ? result : getInnerType(result, depth - 1);
+	return depth === 0 ? result : getInnerType(result, depth - 1);
 }
 
 /**

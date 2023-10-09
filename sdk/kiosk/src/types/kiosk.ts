@@ -109,19 +109,22 @@ export type KioskItem = {
 	data?: SuiObjectData;
 };
 
+/** The overview type returned from `getKiosk` */
+export type KioskExtensionOverview = {
+	/** The ID of the extension's DF */
+	objectId: string;
+	/** The inner type of the Extension */
+	type: string;
+};
 /**
  * Hold the KioskExtension data
  */
-export type KioskExtension = {
-	objectId: string;
-	type: string;
+export type KioskExtension = KioskExtensionOverview & {
 	/** These fields are only there if we have `withExtensions` flag */
-	isEnabled?: boolean;
-	permissions?: string;
-	storage?: {
-		id: string;
-		size: number;
-	};
+	isEnabled: boolean;
+	permissions: string;
+	storageId: string;
+	storageSize: number;
 };
 
 /**
@@ -132,7 +135,7 @@ export type KioskData = {
 	itemIds: string[];
 	listingIds: string[];
 	kiosk?: Kiosk;
-	extensions: KioskExtension[]; // type will be defined on later versions of the SDK.
+	extensions: KioskExtensionOverview[]; // type will be defined on later versions of the SDK.
 };
 
 export type PagedKioskData = {

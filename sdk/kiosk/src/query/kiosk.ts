@@ -42,10 +42,9 @@ export async function fetchKiosk(
 
 	const listings: KioskListing[] = [];
 	const lockedItemIds: string[] = [];
-	const extensions: KioskExtension[] = [];
 
 	// extracted kiosk data.
-	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId, extensions);
+	const kioskData = extractKioskData(data, listings, lockedItemIds, kioskId);
 
 	// split the fetching in two queries as we are most likely passing different options for each kind.
 	// For items, we usually seek the Display.
@@ -73,9 +72,6 @@ export async function fetchKiosk(
 		kioskData,
 		items.filter((x) => !!x.data).map((x) => x.data!),
 	);
-
-	/// TODO: Fetch extensions, if option is there, and then set.
-	kioskData.extensions = extensions;
 
 	return {
 		data: kioskData,
@@ -154,5 +150,36 @@ export async function getOwnedKiosks(
 			kioskId: kioskIdList[idx],
 		})),
 		kioskIds: kioskIdList,
+	};
+}
+
+// Get a kiosk extension data for a given kioskId and extensionType.
+export async function fetchKioskExtension(
+	client: SuiClient,
+	kioskId: string,
+	extensionType: string,
+): Promise<KioskExtension | null> {
+	const extension = await client.getDynamicFieldObject({
+		parentId: kioskId,
+		name: {
+			type: `0x2::kiosk_extension::ExtensionKey<${extensionType}>`,
+			value: {
+				dummy_field: false,
+			},
+		},
+	});
+
+	if (!extension.data) return null;
+
+	const fields = (extension?.data?.content as { fields: { [k: string]: any } })?.fields?.value
+		?.fields;
+
+	return {
+		objectId: extension.data.objectId,
+		type: extensionType,
+		isEnabled: fields?.is_enabled,
+		permissions: fields?.permissions,
+		storageId: fields?.storage?.fields?.id?.id,
+		storageSize: fields?.storage?.fields?.size,
 	};
 }

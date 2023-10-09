@@ -13,7 +13,7 @@ import {
 	type BaseRulePackageIds,
 	type TransferPolicyRule,
 } from '../constants';
-import { fetchKiosk, getOwnedKiosks } from '../query/kiosk';
+import { fetchKiosk, fetchKioskExtension, getOwnedKiosks } from '../query/kiosk';
 import {
 	queryOwnedTransferPolicies,
 	queryTransferPolicy,
@@ -85,6 +85,15 @@ export class KioskClient {
 				options || {},
 			)
 		).data;
+	}
+
+	/**
+	 * Fetch the extension data (if any) for a kiosk, by type
+	 * @param kioskId The ID of the kiosk to lookup
+	 * @param extensionType The Type of the extension (can be used from by using the type returned by `getKiosk()`)
+	 */
+	async getKioskExtension({ kioskId, type }: { kioskId: string; type: string }) {
+		return fetchKioskExtension(this.client, kioskId, type);
 	}
 
 	/**

@@ -14,10 +14,10 @@ describe('Helper functions should return correct data', () => {
 			'0x3::hero::Hero<0x5::hero::Awesome<0x6::hero::Level>>',
 		);
 
-		expect(getInnerType(extensionType, 2)).toEqual('0x5::hero::Awesome<0x6::hero::Level>');
+		expect(getInnerType(extensionType, 1)).toEqual('0x5::hero::Awesome<0x6::hero::Level>');
 
-		expect(getInnerType(extensionType, 3)).toEqual('0x6::hero::Level');
+		expect(getInnerType(extensionType, 2)).toEqual('0x6::hero::Level');
 
-		expect(getInnerType(extensionType, 10)).toEqual('');
+		expect(getInnerType(extensionType, 9)).toEqual('');
 	});
 });
