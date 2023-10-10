@@ -366,7 +366,7 @@ impl ValidatorService {
             return Ok(Some(HandleCertificateResponseV2 {
                 signed_effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects: vec![], // fastpath is unused for now
+                fastpath_input_objects: vec![], // unused field
             }));
         }
 
@@ -447,7 +447,7 @@ impl ValidatorService {
         Ok(Some(HandleCertificateResponseV2 {
             signed_effects: effects.into_inner(),
             events,
-            fastpath_input_objects: vec![], // fastpath is unused for now
+            fastpath_input_objects: vec![], // unused field
         }))
     }
 }

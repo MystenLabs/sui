@@ -11,6 +11,7 @@ use crypto::{
 use fastcrypto::hash::{Digest, Hash};
 use std::collections::HashSet;
 use std::sync::Arc;
+use sui_protocol_config::ProtocolConfig;
 use tracing::warn;
 use types::{
     ensure,
@@ -20,6 +21,7 @@ use types::{
 
 /// Aggregates votes for a particular header into a certificate.
 pub struct VotesAggregator {
+    protocol_config: ProtocolConfig,
     weight: Stake,
     votes: Vec<(AuthorityIdentifier, Signature)>,
     used: HashSet<AuthorityIdentifier>,
@@ -27,10 +29,11 @@ pub struct VotesAggregator {
 }
 
 impl VotesAggregator {
-    pub fn new(metrics: Arc<PrimaryMetrics>) -> Self {
+    pub fn new(protocol_config: &ProtocolConfig, metrics: Arc<PrimaryMetrics>) -> Self {
         metrics.votes_received_last_round.set(0);
 
         Self {
+            protocol_config: protocol_config.clone(),
             weight: 0,
             votes: Vec::new(),
             used: HashSet::new(),
@@ -59,13 +62,21 @@ impl VotesAggregator {
             .votes_received_last_round
             .set(self.votes.len() as i64);
         if self.weight >= committee.quorum_threshold() {
-            let cert = Certificate::new_unverified(committee, header.clone(), self.votes.clone())?;
+            let cert = Certificate::new_unverified(
+                &self.protocol_config,
+                committee,
+                header.clone(),
+                self.votes.clone(),
+            )?;
             let (_, pks) = cert.signed_by(committee);
 
             let certificate_digest: Digest<{ crypto::DIGEST_LENGTH }> = Digest::from(cert.digest());
-            match AggregateSignature::try_from(cert.aggregated_signature())
-                .map_err(|_| DagError::InvalidSignature)?
-                .verify_secure(&to_intent_message(certificate_digest), &pks[..])
+            match AggregateSignature::try_from(
+                cert.aggregated_signature()
+                    .ok_or(DagError::InvalidSignature)?,
+            )
+            .map_err(|_| DagError::InvalidSignature)?
+            .verify_secure(&to_intent_message(certificate_digest), &pks[..])
             {
                 Err(err) => {
                     warn!(

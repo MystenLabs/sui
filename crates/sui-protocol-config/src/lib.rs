@@ -295,6 +295,10 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
+
+    // If true, then use CertificateV2 in narwhal.
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_certificate_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -951,6 +955,10 @@ impl ProtocolConfig {
 
     pub fn enable_effects_v2(&self) -> bool {
         self.feature_flags.enable_effects_v2
+    }
+
+    pub fn narwhal_certificate_v2(&self) -> bool {
+        self.feature_flags.narwhal_certificate_v2
     }
 }
 

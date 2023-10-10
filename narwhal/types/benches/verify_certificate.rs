@@ -4,10 +4,10 @@
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use fastcrypto::hash::Hash;
+use fastcrypto::{hash::Hash, traits::KeyPair};
 use narwhal_types::Certificate;
 use std::collections::BTreeSet;
-use test_utils::{latest_protocol_version, make_optimal_certificates, CommitteeFixture};
+use test_utils::{latest_protocol_version, make_optimal_signed_certificates, CommitteeFixture};
 
 pub fn verify_certificates(c: &mut Criterion) {
     let mut bench_group = c.benchmark_group("verify_certificate");
@@ -19,19 +19,22 @@ pub fn verify_certificates(c: &mut Criterion) {
             .committee_size(committee_size.try_into().unwrap())
             .build();
         let committee = fixture.committee();
-        let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
+        let keys: Vec<_> = fixture
+            .authorities()
+            .map(|a| (a.id(), a.keypair().copy()))
+            .collect();
 
         // process certificates for rounds, check we don't grow the dag too much
-        let genesis = Certificate::genesis(&committee)
+        let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) = make_optimal_certificates(
-            &committee,
-            &latest_protocol_version(),
+        let (certificates, _next_parents) = make_optimal_signed_certificates(
             1..=1,
             &genesis,
-            &ids,
+            &committee,
+            &latest_protocol_version(),
+            keys.as_slice(),
         );
         let certificate = certificates.front().unwrap().clone();
 
@@ -44,7 +47,9 @@ pub fn verify_certificates(c: &mut Criterion) {
             |b, cert| {
                 let worker_cache = fixture.worker_cache();
                 b.iter(|| {
-                    let _ = cert.verify(&committee, &worker_cache);
+                    cert.clone()
+                        .verify(&committee, &worker_cache)
+                        .expect("Verification failed");
                 })
             },
         );

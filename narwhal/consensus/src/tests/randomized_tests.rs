@@ -288,7 +288,7 @@ fn generate_randomised_dag(
         .rng(rand)
         .build();
     let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee);
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee);
 
     // Create a known DAG
     let (original_certificates, _last_round) = make_certificates_with_parameters(
