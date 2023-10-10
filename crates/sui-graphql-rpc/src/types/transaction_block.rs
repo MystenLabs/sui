@@ -128,7 +128,7 @@ impl TransactionBlockEffects {
         let data_provider = ctx.data_provider();
         let system_state = data_provider.get_latest_sui_system_state().await?;
         let protocol_configs = data_provider.fetch_protocol_config(None).await?;
-        let epoch = convert_to_epoch(self.gas_effects.gcs, &system_state, &protocol_configs)?;
+        let epoch = convert_to_epoch(&system_state, &protocol_configs)?;
         Ok(Some(epoch))
     }
 }

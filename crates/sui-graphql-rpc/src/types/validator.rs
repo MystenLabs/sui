@@ -11,6 +11,7 @@ use super::validator_credentials::ValidatorCredentials;
 use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct Validator {
     pub address: Address,
     pub credentials: Option<ValidatorCredentials>,
@@ -42,7 +43,7 @@ pub(crate) struct Validator {
     pub next_epoch_commission_rate: Option<u64>,
     pub at_risk: Option<u64>, // only available on sui_system_state_summary
     pub report_records: Option<Vec<SuiAddress>>, // only available on sui_system_state_summary
-                              // pub apy: Option<u64>, // Defer for StakedSui implementation
+                              // pub apy: Option<u64>, // TODO: Defer for StakedSui implementation
 }
 
 #[ComplexObject]

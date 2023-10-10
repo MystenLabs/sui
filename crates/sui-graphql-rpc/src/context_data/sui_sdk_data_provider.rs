@@ -18,11 +18,7 @@ use crate::types::object::{Object, ObjectFilter, ObjectKind};
 use crate::types::protocol_config::{
     ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs,
 };
-use crate::types::safe_mode::SafeMode;
-use crate::types::stake_subsidy::StakeSubsidy;
-use crate::types::storage_fund::StorageFund;
 use crate::types::sui_address::SuiAddress;
-use crate::types::system_parameters::SystemParameters;
 use crate::types::transaction_block::TransactionBlock;
 use crate::types::validator::Validator;
 use crate::types::validator_credentials::ValidatorCredentials;
@@ -466,7 +462,6 @@ fn convert_bal(b: sui_json_rpc_types::Balance) -> Balance {
 }
 
 pub(crate) fn convert_to_epoch(
-    gas_summary: GasCostSummary,
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
@@ -490,35 +485,7 @@ pub(crate) fn convert_to_epoch(
 
     Ok(Epoch {
         epoch_id,
-        // system_state_version: Some(BigInt::from(system_state.system_state_version)),
         reference_gas_price: Some(BigInt::from(system_state.reference_gas_price)),
-        // system_parameters: Some(SystemParameters {
-        // duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
-        // stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
-        // min_validator_count: Some(system_state.max_validator_count),
-        // max_validator_count: Some(system_state.max_validator_count),
-        // min_validator_joining_stake: Some(BigInt::from(
-        // system_state.min_validator_joining_stake,
-        // )),
-        // validator_low_stake_threshold: Some(BigInt::from(
-        // system_state.validator_low_stake_threshold,
-        // )),
-        // validator_very_low_stake_threshold: Some(BigInt::from(
-        // system_state.validator_very_low_stake_threshold,
-        // )),
-        // validator_low_stake_grace_period: Some(BigInt::from(
-        // system_state.validator_low_stake_grace_period,
-        // )),
-        // }),
-        // stake_subsidy: Some(StakeSubsidy {
-        // balance: Some(BigInt::from(system_state.stake_subsidy_balance)),
-        // distribution_counter: Some(system_state.stake_subsidy_distribution_counter),
-        // current_distribution_amount: Some(BigInt::from(
-        // system_state.stake_subsidy_current_distribution_amount,
-        // )),
-        // period_length: Some(system_state.stake_subsidy_period_length),
-        // decrease_rate: Some(system_state.stake_subsidy_decrease_rate as u64),
-        // }),
         validator_set: Some(ValidatorSet {
             total_stake: Some(BigInt::from(system_state.total_stake)),
             active_validators: Some(active_validators),
@@ -528,18 +495,6 @@ pub(crate) fn convert_to_epoch(
             inactive_pools_size: Some(system_state.inactive_pools_size),
             validator_candidates_size: Some(system_state.validator_candidates_size),
         }),
-        // storage_fund: Some(StorageFund {
-        // total_object_storage_rebates: Some(BigInt::from(
-        // system_state.storage_fund_total_object_storage_rebates,
-        // )),
-        // non_refundable_balance: Some(BigInt::from(
-        // system_state.storage_fund_non_refundable_balance,
-        // )),
-        // }),
-        // safe_mode: Some(SafeMode {
-        // enabled: Some(system_state.safe_mode),
-        // gas_summary: Some(gas_summary),
-        // }),
         protocol_version: protocol_configs.protocol_version,
         start_timestamp: Some(start_timestamp),
         end_timestamp: None,
@@ -558,7 +513,7 @@ pub(crate) fn convert_to_validators(
                     system_state
                         .at_risk_validators
                         .iter()
-                        .find(|&&(ref address, _)| address == &v.sui_address)
+                        .find(|&(address, _)| address == &v.sui_address)
                 })
                 .map(|&(_, value)| value);
 
@@ -567,7 +522,7 @@ pub(crate) fn convert_to_validators(
                     system_state
                         .validator_report_records
                         .iter()
-                        .find(|&&(ref address, _)| address == &v.sui_address)
+                        .find(|&(address, _)| address == &v.sui_address)
                 })
                 .map(|(_, value)| {
                     value

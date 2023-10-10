@@ -810,7 +810,7 @@ impl PgManager {
         let version = version.map(|v| v as i64);
 
         let stored_obj = self.get_obj(address, version).await?;
-        let sui_object = stored_obj.map(|o| SuiObject::try_from(o)).transpose()?;
+        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
         let move_object = sui_object.map(|o| MoveObject { native_object: o });
 
         Ok(move_object)
@@ -1258,9 +1258,11 @@ impl TryFrom<StoredEpochInfo> for Epoch {
 
         let active_validators = convert_to_validators(validators, None);
 
-        let mut validator_set = ValidatorSet::default();
-        validator_set.total_stake = e.new_total_stake.map(|s| BigInt::from(s as u64));
-        validator_set.active_validators = Some(active_validators);
+        let validator_set = ValidatorSet {
+            total_stake: e.new_total_stake.map(|s| BigInt::from(s as u64)),
+            active_validators: Some(active_validators),
+            ..Default::default()
+        };
 
         Ok(Self {
             epoch_id: e.epoch as u64,
@@ -1268,10 +1270,7 @@ impl TryFrom<StoredEpochInfo> for Epoch {
             reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
             validator_set: Some(validator_set),
             start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
-            end_timestamp: e
-                .epoch_end_timestamp
-                .map(|t| DateTime::from_ms(t))
-                .flatten(),
+            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
         })
     }
 }
