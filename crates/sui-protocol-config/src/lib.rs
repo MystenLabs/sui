@@ -1593,6 +1593,7 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
+
                     // Only enable effects v2 on devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_effects_v2 = true;
@@ -1625,7 +1626,7 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 2_000];
+                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
                     } else {
                         // Mainnet and testnet
                         cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
