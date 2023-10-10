@@ -3,30 +3,46 @@
 
 import { Search24 } from '@mysten/icons';
 import { Combobox, ComboboxInput, ComboboxList } from '@mysten/ui';
+import axios, { type AxiosResponse } from 'axios';
 import clsx from 'clsx';
-import { useState, useCallback, useEffect } from 'react';
+import JSZip from 'jszip';
+import { useCallback, useEffect, useState } from 'react';
 import { type Direction } from 'react-resizable-panels';
 
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
+import { VerificationApiEndpoint } from '~/components/module/VerificationApiEndpoint';
+import VerifiedModuleViewWrapper from '~/components/module/VerifiedModuleViewWrapper';
+import { type SuiVerificationCheckResultDto } from '~/components/module/dto/verification/SuiVerificationCheckResultDto';
+import { useNetwork } from '~/context';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { TabHeader } from '~/ui/Tabs';
+import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
-type ModuleType = [moduleName: string, code: string];
+export type ModuleType = [moduleName: string, code: string];
+
+export interface PackageFile {
+	relativePath: string;
+	content: string;
+}
 
 interface Props {
 	id?: string;
 	modules: ModuleType[];
 	splitPanelOrientation: Direction;
+	initialTab?: string | null;
 }
 
 interface ModuleViewWrapperProps {
 	id?: string;
 	selectedModuleName: string;
 	modules: ModuleType[];
+}
+
+export interface VerificationResult {
+	isVerified: boolean;
 }
 
 function ModuleViewWrapper({ id, selectedModuleName, modules }: ModuleViewWrapperProps) {
@@ -40,13 +56,106 @@ function ModuleViewWrapper({ id, selectedModuleName, modules }: ModuleViewWrappe
 
 	return <ModuleView id={id} name={name} code={code} />;
 }
+const VALID_TABS = ['bytecode', 'code'];
 
-function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
+function PkgModuleViewWrapper({ id, modules, splitPanelOrientation, initialTab }: Props) {
 	const isMediumOrAbove = useBreakpoint('md');
 
 	const modulenames = modules.map(([name]) => name);
 	const [searchParams, setSearchParams] = useSearchParamsMerged();
 	const [query, setQuery] = useState('');
+	const [activeTab, setActiveTab] = useState(() =>
+		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'bytecode',
+	);
+	const [packageFiles, setPackageFiles] = useState<PackageFile[]>([]);
+	const [verificationResult, setVerificationResult] = useState<VerificationResult | null>(null);
+	const [network] = useNetwork();
+
+	useEffect(() => {
+		if (!id) {
+			return;
+		}
+
+		async function codeVerificationCheck() {
+			const { status, data: fetchedVerificationCheckResult } = await axios.get<
+				SuiVerificationCheckResultDto,
+				AxiosResponse<SuiVerificationCheckResultDto>
+			>(VerificationApiEndpoint.WELLDONE_STUDIO, {
+				params: {
+					network: network.toLowerCase(),
+					packageId: id,
+				},
+			});
+
+			if (status !== 200) {
+				setVerificationResult({
+					isVerified: false,
+				});
+				return;
+			}
+			console.log('fetchedVerificationCheckResult', fetchedVerificationCheckResult);
+
+			if (fetchedVerificationCheckResult.errMsg) {
+				setVerificationResult({
+					isVerified: false,
+				});
+
+				return;
+			}
+
+			if (
+				!(
+					fetchedVerificationCheckResult.isVerified && fetchedVerificationCheckResult.verifiedSrcUrl
+				)
+			) {
+				setVerificationResult({
+					isVerified: false,
+				});
+				return;
+			}
+
+			const { status: VerifiedSrcResStatus, data: blob } = await axios.get<Blob>(
+				fetchedVerificationCheckResult.verifiedSrcUrl,
+				{
+					responseType: 'blob',
+				},
+			);
+
+			if (VerifiedSrcResStatus !== 200) {
+				throw new Error('Network response was not ok');
+			}
+
+			new JSZip().loadAsync(blob).then((unzipped: JSZip) => {
+				const filePromises: Promise<PackageFile>[] = [];
+				unzipped.forEach((relativePath: string, file: JSZip.JSZipObject) => {
+					if (!file.dir) {
+						const filePromise = file.async('text').then(
+							(content: string): PackageFile => ({
+								relativePath: file.name,
+								content: content,
+							}),
+						);
+						filePromises.push(filePromise);
+					}
+				});
+
+				Promise.all(filePromises).then((packageFiles) => {
+					setPackageFiles(
+						packageFiles.filter(
+							(packageFile) =>
+								!(
+									packageFile.relativePath.includes('Move.toml') ||
+									packageFile.relativePath.includes('Move.lock')
+								),
+						),
+					);
+					setVerificationResult({ ...fetchedVerificationCheckResult });
+				});
+			});
+		}
+
+		codeVerificationCheck().then();
+	}, [id, network]);
 
 	// Extract module in URL or default to first module in list
 	const selectedModule =
@@ -91,17 +200,44 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 		{
 			panel: (
 				<div key="bytecode" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
-					<TabHeader size="md" title="Bytecode">
-						<div
-							className={clsx(
-								'overflow-auto',
-								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-									'h-verticalListLong',
-							)}
-						>
-							<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
-						</div>
-					</TabHeader>
+					<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
+						<TabsList>
+							<TabsTrigger value="bytecode">Bytecode</TabsTrigger>
+							<TabsTrigger value="code">
+								Code {verificationResult?.isVerified ? <sup>✅</sup> : null}
+							</TabsTrigger>
+						</TabsList>
+						<TabsContent value="bytecode">
+							<div
+								className={clsx(
+									'overflow-auto',
+									(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+										'h-verticalListLong',
+								)}
+							>
+								<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
+							</div>
+						</TabsContent>
+						<TabsContent value="code">
+							<div
+								className={clsx(
+									'overflow-auto',
+									(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+										'h-verticalListLong',
+								)}
+							>
+								<VerifiedModuleViewWrapper
+									id={id}
+									modules={modules}
+									packageFiles={packageFiles}
+									setPackageFiles={setPackageFiles}
+									verificationResult={verificationResult}
+									setVerificationResult={setVerificationResult}
+									selectedModuleName={selectedModule}
+								/>
+							</div>
+						</TabsContent>
+					</Tabs>
 				</div>
 			),
 			defaultSize: 40,
