@@ -9,7 +9,6 @@ import { bcs } from '../bcs/index.js';
 import type { ProtocolConfig, SuiClient, SuiMoveNormalizedType } from '../client/index.js';
 import type { Keypair, SignatureWithBytes } from '../cryptography/index.js';
 import { SUI_TYPE_ARG } from '../framework/framework.js';
-import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import type { SuiObjectResponse } from '../types/index.js';
 import {
 	extractMutableReference,
@@ -96,13 +95,13 @@ function createTransactionResult(index: number): TransactionResult {
 }
 
 function expectClient(options: BuildOptions): SuiClient {
-	if (!options.client && !options.provider) {
+	if (!options.client) {
 		throw new Error(
 			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
 		);
 	}
 
-	return (options.client ?? options.provider!) as SuiClient;
+	return options.client;
 }
 
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
@@ -132,11 +131,7 @@ const chunk = <T>(arr: T[], size: number): T[][] =>
 	);
 
 interface BuildOptions {
-	/**
-	 * @deprecated Use `client` instead.
-	 */
-	provider?: JsonRpcProvider | SuiClient;
-	client?: SuiClient | JsonRpcProvider;
+	client?: SuiClient;
 	onlyTransactionKind?: boolean;
 	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
 	protocolConfig?: ProtocolConfig;
@@ -156,13 +151,6 @@ export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
  * Transaction Builder
  */
 export class TransactionBlock {
-	/** Returns `true` if the object is an instance of the Transaction builder class.
-	 * @deprecated Use `isTransactionBlock` from `@mysten/sui.js/transactions` instead.
-	 */
-	static is(obj: unknown): obj is TransactionBlock {
-		return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
-	}
-
 	/**
 	 * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
 	 * Supports either a byte array, or base64-encoded bytes.
@@ -196,22 +184,6 @@ export class TransactionBlock {
 		}
 
 		return tx;
-	}
-
-	/**
-	 * A helper to retrieve the Transaction builder `Transactions`
-	 * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Transactions` from `@mysten/sui.js/transactions`.
-	 */
-	static get Transactions() {
-		return Transactions;
-	}
-
-	/**
-	 * A helper to retrieve the Transaction builder `Inputs`
-	 * * @deprecated Either use the helper methods on the `TransactionBlock` class, or import `Inputs` from `@mysten/sui.js/transactions`.
-	 */
-	static get Inputs() {
-		return Inputs;
 	}
 
 	setSender(sender: string) {
@@ -526,10 +498,6 @@ export class TransactionBlock {
 	/** Derive transaction digest */
 	async getDigest(
 		options: {
-			/**
-			 * @deprecated Use `client` instead.
-			 */
-			provider?: JsonRpcProvider | SuiClient;
 			client?: SuiClient;
 		} = {},
 	): Promise<string> {
@@ -806,10 +774,8 @@ export class TransactionBlock {
 			throw new Error('Missing transaction sender');
 		}
 
-		const client = options.client || options.provider;
-
-		if (!options.protocolConfig && !options.limits && client) {
-			options.protocolConfig = await client.getProtocolConfig();
+		if (!options.protocolConfig && !options.limits && options.client) {
+			options.protocolConfig = await options.client.getProtocolConfig();
 		}
 
 		await Promise.all([this.#prepareGasPrice(options), this.#prepareTransactions(options)]);

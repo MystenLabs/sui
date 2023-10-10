@@ -47,7 +47,7 @@ export function registerUnsafeBurnerWallet(
 		address: keypair.getPublicKey().toSuiAddress(),
 		chains: ['sui:unknown'],
 		features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
-		publicKey: keypair.getPublicKey().toBytes(),
+		publicKey: keypair.getPublicKey().toRawBytes(),
 	});
 
 	class UnsafeBurnerWallet implements Wallet {

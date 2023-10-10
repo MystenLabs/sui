@@ -4,6 +4,7 @@
 # and build the application.
 FROM rust:1.70.0 AS builder
 ARG PROFILE=release
+ENV PROFILE=$PROFILE
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
@@ -19,15 +20,11 @@ RUN cargo build --profile ${PROFILE} --bin sui-graphql-rpc
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
-# Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates
-ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
-ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
 # Both bench and release profiles copy from release dir
+RUN mkdir -p /opt/sui/bin
 COPY --from=builder /sui/target/release/sui-graphql-rpc /opt/sui/bin
-# Support legacy usages of /usr/local/bin/sui-graphql-rpc
-COPY --from=builder /sui/target/release/sui-graphql-rpc /usr/local/bin
+RUN apt-get update && apt-get install -y libpq5 ca-certificates
 
 ARG BUILD_DATE
 ARG GIT_REVISION

@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::VersionDigest;
 use sui_types::committee::EpochId;
+use sui_types::digests::ObjectDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults, ExecutionResultsV2};
 use sui_types::execution_status::ExecutionStatus;
@@ -20,9 +21,7 @@ use sui_types::storage::BackingStore;
 use sui_types::sui_system_state::{get_sui_system_state_wrapper, AdvanceEpochParams};
 use sui_types::type_resolver::LayoutResolver;
 use sui_types::{
-    base_types::{
-        ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    },
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
     error::{ExecutionError, SuiError, SuiResult},
     fp_bail,
@@ -195,10 +194,39 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        // In the case of special transactions that don't require a gas object,
-        // we don't really care about the effects to gas, just use the input for it.
-        // Gas coins are guaranteed to be at least size 1 and if more than 1
-        // the first coin is where all the others are merged.
+        if self.protocol_config.enable_effects_v2() {
+            self.into_effects_v2(
+                shared_object_refs,
+                transaction_digest,
+                transaction_dependencies,
+                gas_cost_summary,
+                status,
+                gas_charger,
+                epoch,
+            )
+        } else {
+            self.into_effects_v1(
+                shared_object_refs,
+                transaction_digest,
+                transaction_dependencies,
+                gas_cost_summary,
+                status,
+                gas_charger,
+                epoch,
+            )
+        }
+    }
+
+    fn into_effects_v1(
+        self,
+        shared_object_refs: Vec<ObjectRef>,
+        transaction_digest: &TransactionDigest,
+        transaction_dependencies: BTreeSet<TransactionDigest>,
+        gas_cost_summary: GasCostSummary,
+        status: ExecutionStatus,
+        gas_charger: &mut GasCharger,
+        epoch: EpochId,
+    ) -> (InnerTemporaryStore, TransactionEffects) {
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
             let object = &self.execution_results.written_objects[&coin_id];
             (object.compute_object_reference(), object.owner)
@@ -208,26 +236,73 @@ impl<'backing> TemporaryStore<'backing> {
                 Owner::AddressOwner(SuiAddress::default()),
             )
         };
+        let lampot_version = self.lamport_timestamp;
 
-        let object_changes = self.get_object_changes();
+        let mut created = vec![];
+        let mut mutated = vec![];
+        let mut unwrapped = vec![];
+        let mut deleted = vec![];
+        let mut unwrapped_then_deleted = vec![];
+        let mut wrapped = vec![];
+        // It is important that we constructs `modified_at_versions` and `deleted_at_versions`
+        // separately, and merge them latter to achieve the exact same order as in v1.
+        let mut modified_at_versions = vec![];
+        let mut deleted_at_versions = vec![];
+        self.execution_results
+            .written_objects
+            .iter()
+            .for_each(|(id, object)| {
+                let object_ref = object.compute_object_reference();
+                let owner = object.owner;
+                if let Some(old_object_meta) = self.get_object_modified_at(id) {
+                    modified_at_versions.push((*id, old_object_meta.version));
+                    mutated.push((object_ref, owner));
+                } else if self.execution_results.created_object_ids.contains(id) {
+                    created.push((object_ref, owner));
+                } else {
+                    unwrapped.push((object_ref, owner));
+                }
+            });
+        self.execution_results
+            .modified_objects
+            .iter()
+            .filter(|id| !self.execution_results.written_objects.contains_key(id))
+            .for_each(|id| {
+                let old_object_meta = self.get_object_modified_at(id).unwrap();
+                deleted_at_versions.push((*id, old_object_meta.version));
+                if self.execution_results.deleted_object_ids.contains(id) {
+                    deleted.push((*id, lampot_version, ObjectDigest::OBJECT_DIGEST_DELETED));
+                } else {
+                    wrapped.push((*id, lampot_version, ObjectDigest::OBJECT_DIGEST_WRAPPED));
+                }
+            });
+        self.execution_results
+            .deleted_object_ids
+            .iter()
+            .filter(|id| !self.execution_results.modified_objects.contains(id))
+            .for_each(|id| {
+                unwrapped_then_deleted.push((
+                    *id,
+                    lampot_version,
+                    ObjectDigest::OBJECT_DIGEST_DELETED,
+                ));
+            });
+        modified_at_versions.extend(deleted_at_versions);
 
-        let lamport_version = self.lamport_timestamp;
-        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
-
-        let effects = TransactionEffects::new_from_execution_v2(
-            protocol_version,
+        let effects = TransactionEffects::new_from_execution_v1(
             status,
             epoch,
             gas_cost_summary,
-            // While we could derive the list of shared objects from object_changes,
-            // it is difficult to keep it in the same order as today.
-            // TODO: We will remove it when we actually construct effects v2, but for v1
-            // we keep it as it is.
+            modified_at_versions,
             shared_object_refs,
             *transaction_digest,
-            lamport_version,
-            object_changes,
+            created,
+            mutated,
+            unwrapped,
+            deleted,
+            unwrapped_then_deleted,
+            wrapped,
             updated_gas_object_info,
             if inner.events.data.is_empty() {
                 None
@@ -236,6 +311,48 @@ impl<'backing> TemporaryStore<'backing> {
             },
             transaction_dependencies.into_iter().collect(),
         );
+        (inner, effects)
+    }
+
+    fn into_effects_v2(
+        self,
+        shared_object_refs: Vec<ObjectRef>,
+        transaction_digest: &TransactionDigest,
+        transaction_dependencies: BTreeSet<TransactionDigest>,
+        gas_cost_summary: GasCostSummary,
+        status: ExecutionStatus,
+        gas_charger: &mut GasCharger,
+        epoch: EpochId,
+    ) -> (InnerTemporaryStore, TransactionEffects) {
+        // In the case of special transactions that don't require a gas object,
+        // we don't really care about the effects to gas, just use the input for it.
+        // Gas coins are guaranteed to be at least size 1 and if more than 1
+        // the first coin is where all the others are merged.
+        let gas_coin = gas_charger.gas_coin();
+
+        let object_changes = self.get_object_changes();
+
+        let lamport_version = self.lamport_timestamp;
+        let inner = self.into_inner();
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            status,
+            epoch,
+            gas_cost_summary,
+            // TODO: Provide the list of read-only shared objects directly.
+            shared_object_refs,
+            *transaction_digest,
+            lamport_version,
+            object_changes,
+            gas_coin,
+            if inner.events.data.is_empty() {
+                None
+            } else {
+                Some(inner.events.digest())
+            },
+            transaction_dependencies.into_iter().collect(),
+        );
+
         (inner, effects)
     }
 
@@ -374,26 +491,33 @@ impl<'backing> TemporaryStore<'backing> {
         self.loaded_runtime_objects.extend(loaded_runtime_objects);
     }
 
-    // TODO: Simplify this logic for effects v2.
     pub fn estimate_effects_size_upperbound(&self) -> usize {
-        let num_deletes = self.execution_results.deleted_object_ids.len()
-            + self
-                .execution_results
-                .modified_objects
-                .iter()
-                .filter(|id| {
-                    // Filter for wrapped objects.
-                    !self.execution_results.written_objects.contains_key(id)
-                        && !self.execution_results.deleted_object_ids.contains(id)
-                })
-                .count();
-        // In the worst case, the number of deps is equal to the number of input objects
-        TransactionEffects::estimate_effects_size_upperbound(
-            self.execution_results.written_objects.len(),
-            self.mutable_input_refs.len(),
-            num_deletes,
-            self.input_objects.len(),
-        )
+        if self.protocol_config.enable_effects_v2() {
+            TransactionEffects::estimate_effects_size_upperbound_v2(
+                self.execution_results.written_objects.len(),
+                self.execution_results.modified_objects.len(),
+                self.input_objects.len(),
+            )
+        } else {
+            let num_deletes = self.execution_results.deleted_object_ids.len()
+                + self
+                    .execution_results
+                    .modified_objects
+                    .iter()
+                    .filter(|id| {
+                        // Filter for wrapped objects.
+                        !self.execution_results.written_objects.contains_key(id)
+                            && !self.execution_results.deleted_object_ids.contains(id)
+                    })
+                    .count();
+            // In the worst case, the number of deps is equal to the number of input objects
+            TransactionEffects::estimate_effects_size_upperbound_v1(
+                self.execution_results.written_objects.len(),
+                self.mutable_input_refs.len(),
+                num_deletes,
+                self.input_objects.len(),
+            )
+        }
     }
 
     pub fn written_objects_size(&self) -> usize {

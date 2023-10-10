@@ -4209,6 +4209,20 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
     ) -> SuiResult<Option<Object>> {
         self.database.get_object_by_key(&object_id, version)
     }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        let res = self
+            .database
+            .deprecated_multi_get_transaction_checkpoint(digests)?;
+
+        Ok(res
+            .into_iter()
+            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+            .collect())
+    }
 }
 
 #[cfg(msim)]

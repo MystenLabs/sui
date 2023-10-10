@@ -473,6 +473,7 @@ mod checked {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all)]
     fn execution_loop<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,

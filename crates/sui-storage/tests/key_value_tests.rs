@@ -227,6 +227,16 @@ impl TransactionKeyValueStoreTrait for MockTxStore {
     ) -> SuiResult<Option<Object>> {
         Ok(self.objects.get(&ObjectKey(object_id, version)).cloned())
     }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        Ok(digests
+            .iter()
+            .map(|digest| self.tx_to_checkpoint.get(digest).cloned())
+            .collect())
+    }
 }
 
 #[tokio::test]

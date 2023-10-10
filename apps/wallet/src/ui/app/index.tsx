@@ -66,7 +66,7 @@ const HIDDEN_MENU_PATHS = [
 	'/apps/disconnectapp',
 ];
 
-const notifyUserActiveInterval = 15 * 1000; // 15 seconds
+const notifyUserActiveInterval = 5 * 1000; // 5 seconds
 
 const App = () => {
 	const dispatch = useAppDispatch();
@@ -137,9 +137,13 @@ const App = () => {
 		if (!autoLockEnabled) {
 			return;
 		}
-		const sendUpdateThrottled = throttle(notifyUserActiveInterval, () => {
-			backgroundClient.notifyUserActive();
-		});
+		const sendUpdateThrottled = throttle(
+			notifyUserActiveInterval,
+			() => {
+				backgroundClient.notifyUserActive();
+			},
+			{ noTrailing: true },
+		);
 		document.addEventListener('mousemove', sendUpdateThrottled);
 		document.addEventListener('keydown', sendUpdateThrottled);
 		return () => {
