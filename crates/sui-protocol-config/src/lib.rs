@@ -1352,7 +1352,7 @@ impl ProtocolConfig {
             max_jwk_votes_per_validator_per_epoch: None,
 
             max_age_of_jwk_in_epochs: None,
-            
+
             random_beacon_reduction_allowed_delta: None,
 
             // When adding a new constant, set it to None in the earliest version, like this:
