@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_core::authority::AuthorityState;
+use sui_types::error::UserInputError;
 use sui_types::{
     base_types::{ObjectID, VersionNumber},
     digests::{TransactionDigest, TransactionEventsDigest},
@@ -119,7 +120,7 @@ impl NodeStateGetter for AuthorityState {
     }
 }
 
-impl sui_rest_api::node_state_getter::NodeStateGetter for simulacrum::Simulacrum<StdRng> {
+impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -195,7 +196,7 @@ impl sui_rest_api::node_state_getter::NodeStateGetter for simulacrum::Simulacrum
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
-        version: SequenceNumber,
+        version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
         Ok(self
             .store()
@@ -204,6 +205,6 @@ impl sui_rest_api::node_state_getter::NodeStateGetter for simulacrum::Simulacrum
     }
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        Objectstore::get_object(&self.store(), object_id)
+        ObjectStore::get_object(&self.store(), object_id)
     }
 }
