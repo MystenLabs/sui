@@ -155,6 +155,9 @@ pub struct NodeConfig {
 
     #[serde(default = "default_jwk_fetch_interval_seconds")]
     pub jwk_fetch_interval_seconds: u64,
+
+    #[serde(default)]
+    pub emit_gas_stats_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

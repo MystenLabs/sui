@@ -168,6 +168,7 @@ impl ValidatorConfigBuilder {
                 .jwk_fetch_interval
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
+            emit_gas_stats_path: None,
         }
     }
 
@@ -403,6 +404,7 @@ impl FullnodeConfigBuilder {
             enable_experimental_rest_api: true,
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
+            emit_gas_stats_path: None,
         }
     }
 }

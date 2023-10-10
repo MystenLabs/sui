@@ -65,13 +65,20 @@ fn main() {
     let prometheus_registry = registry_service.default_registry();
 
     // Initialize logging
-    let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+    let mut telemetry_config = telemetry_subscribers::TelemetryConfig::new()
         // Set a default
         .with_sample_nth(10)
         .with_target_prefix("sui_json_rpc")
         .with_env()
-        .with_prom_registry(&prometheus_registry)
-        .init();
+        .with_prom_registry(&prometheus_registry);
+
+    if let Some(ref gas_stats_file_path) = config.emit_gas_stats_path {
+        telemetry_config = telemetry_config
+            .with_gas_stats_enabled("gas_stats")
+            .with_gas_stats_file(&gas_stats_file_path);
+    }
+
+    let (_guard, filter_handle) = telemetry_config.init();
 
     info!("Sui Node version: {VERSION}");
     info!(
