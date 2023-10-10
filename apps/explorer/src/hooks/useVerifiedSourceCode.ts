@@ -31,7 +31,7 @@ export function useVerifiedSourceCode({ packageId, moduleName }: UseVerifiedSour
 		queryKey: ['verified-source-code', packageId, moduleName, network],
 		queryFn: async () => {
 			const response = await fetch(
-				`http://source.mystenlabs.com/api?network=${network.toLowerCase()}&address=${packageId}&module=${moduleName}`,
+				`https://source.mystenlabs.com/api?network=${network.toLowerCase()}&address=${packageId}&module=${moduleName}`,
 			);
 			if (!response.ok) {
 				throw new Error(`Encountered unexpected response: ${response.status}`);
