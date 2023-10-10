@@ -2109,7 +2109,8 @@ impl AuthenticatedMessage for SenderSignedData {
         for s in signers {
             if !present_sigs.contains_key(&s) {
                 return Err(SuiError::SignerSignatureAbsent {
-                    signer: s.to_string(),
+                    expected: s.to_string(),
+                    actual: present_sigs.keys().map(|s| s.to_string()).collect(),
                 });
             }
         }
