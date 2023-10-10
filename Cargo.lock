@@ -11153,6 +11153,7 @@ dependencies = [
  "bcs",
  "reqwest",
  "serde",
+ "simulacrum",
  "sui-core",
  "sui-types",
  "tokio",
