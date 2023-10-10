@@ -835,40 +835,6 @@ impl AuthorityStore {
         self.bulk_insert_genesis_objects(objects).await
     }
 
-    /// Insert objects directly into the object table, but do not touch other tables.
-    /// This is used in fullnode to insert objects from validators certificate handling response
-    /// in fast path execution.
-    /// This is best-efforts. If the object needs to be stored as an indirect object then we
-    /// do not insert this object at all.
-    ///
-    /// Caveat: if an Object is regularly inserted as an indirect object in the stiore, but the threshold
-    /// changes in the fullnode which causes it to be considered as non-indirect, and only inserted
-    /// to the object store, this would cause the reference counting to be incorrect.
-    ///
-    /// TODO: handle this in a more resilient way.
-    pub(crate) fn _fullnode_fast_path_insert_objects_to_object_store_maybe(
-        &self,
-        objects: &Vec<Object>,
-    ) -> SuiResult {
-        let mut write_batch = self.perpetual_tables.objects.batch();
-
-        for obj in objects {
-            let StoreObjectPair(store_object, indirect_object) =
-                get_store_object_pair(obj.clone(), self.indirect_objects_threshold);
-            // Do not insert to store if the object needs to stored as indirect object too.
-            if indirect_object.is_some() {
-                continue;
-            }
-            write_batch.insert_batch(
-                &self.perpetual_tables.objects,
-                std::iter::once((ObjectKey(obj.id(), obj.version()), store_object)),
-            )?;
-        }
-
-        write_batch.write()?;
-        Ok(())
-    }
-
     /// This function should only be used for initializing genesis and should remain private.
     async fn bulk_insert_genesis_objects(&self, objects: &[Object]) -> SuiResult<()> {
         let mut batch = self.perpetual_tables.objects.batch();

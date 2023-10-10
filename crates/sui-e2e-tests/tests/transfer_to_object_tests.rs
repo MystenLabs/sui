@@ -10,7 +10,7 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiError;
-use sui_types::object::{Object, Owner};
+use sui_types::object::Owner;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -175,11 +175,12 @@ impl TestEnvironment {
             .build();
         self.test_cluster.wallet.sign_transaction(&transaction)
     }
+
     async fn move_call(
         &self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let transaction = self.create_move_call(function, arguments).await;
         self.test_cluster
             .execute_transaction_return_raw_effects(transaction)
@@ -187,7 +188,7 @@ impl TestEnvironment {
     }
 
     async fn start(&self) -> (ObjectRef, ObjectRef) {
-        let (fx, _, _) = self.move_call("start", vec![]).await.unwrap();
+        let (fx, _) = self.move_call("start", vec![]).await.unwrap();
         assert!(fx.status().is_ok());
 
         get_parent_and_child(fx.created())
