@@ -46,6 +46,7 @@ mod checked {
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
             tx_data,
+            Some(*cert.digest()),
         )?;
         let input_objects = check_objects(tx_data, input_object_kinds, input_object_data)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.

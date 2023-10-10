@@ -1315,26 +1315,44 @@ impl AuthorityState {
                 .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let (inner_temp_store, effects, _execution_error) = executor
-            .execute_transaction_to_effects(
-                &self.database,
-                protocol_config,
-                self.metrics.limits_metrics.clone(),
-                expensive_checks,
-                self.certificate_deny_config.certificate_deny_set(),
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                input_objects,
-                gas_object_refs,
-                gas_status,
-                kind,
-                signer,
-                transaction_digest,
-            );
+        let (inner_temp_store, effects, execution_error) = executor.execute_transaction_to_effects(
+            &self.database,
+            protocol_config,
+            self.metrics.limits_metrics.clone(),
+            expensive_checks,
+            self.certificate_deny_config.certificate_deny_set(),
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            input_objects,
+            gas_object_refs,
+            gas_status,
+            kind,
+            signer,
+            transaction_digest,
+        );
+
         let tx_digest = *effects.transaction_digest();
+
+        let span = trace_span!(target: "gas_stats", Level::TRACE, "gas stats");
+
+        trace!(
+            "{}: err = {:?}, o_s = {}, o_c = {}, \
+                    o_m = {}, o_u = {}, o_d = {}, \
+                    o_u_d = {}, o_w = {}, sgn = {}",
+            tx_digest,
+            execution_error.err(),
+            effects.input_shared_objects().len(),
+            effects.created().len(),
+            effects.mutated().len(),
+            effects.unwrapped().len(),
+            effects.deleted().len(),
+            effects.unwrapped().len(),
+            effects.wrapped().len(),
+            signer,
+        );
 
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
@@ -1423,8 +1441,13 @@ impl AuthorityState {
                 }
             }
         };
-        let gas_status =
-            SuiGasStatus::new(max_tx_gas, gas_price, reference_gas_price, protocol_config)?;
+        let gas_status = SuiGasStatus::new(
+            max_tx_gas,
+            gas_price,
+            reference_gas_price,
+            protocol_config,
+            None,
+        )?;
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution

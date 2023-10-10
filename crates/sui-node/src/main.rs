@@ -75,7 +75,7 @@ fn main() {
     if let Some(ref gas_stats_file_path) = config.emit_gas_stats_path {
         telemetry_config = telemetry_config
             .with_gas_stats_enabled("gas_stats")
-            .with_gas_stats_file(&gas_stats_file_path);
+            .with_gas_stats_file(gas_stats_file_path);
     }
 
     let (_guard, filter_handle) = telemetry_config.init();

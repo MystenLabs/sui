@@ -6,6 +6,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::digests::TransactionDigest;
     use crate::error::{UserInputError, UserInputResult};
     use crate::gas::{self, GasCostSummary, SuiGasStatusAPI};
     use crate::gas_model::gas_predicates::{cost_table_for_version, txn_base_cost_as_multiplier};
@@ -17,6 +18,8 @@ mod checked {
     };
     use move_core_types::vm_status::StatusCode;
     use sui_protocol_config::*;
+    use tracing::log::trace;
+    use tracing::{span, Level};
 
     /// A bucket defines a range of units that will be priced the same.
     /// After execution a call to `GasStatus::bucketize` will round the computation
@@ -193,6 +196,8 @@ mod checked {
         unmetered_storage_rebate: u64,
         /// Rounding value to round up gas charges.
         gas_rounding_step: Option<u64>,
+        /// transaction digest for logging
+        tx_digest: Option<TransactionDigest>,
     }
 
     impl SuiGasStatus {
@@ -206,6 +211,7 @@ mod checked {
             rebate_rate: u64,
             gas_rounding_step: Option<u64>,
             cost_table: SuiCostTable,
+            tx_digest: Option<TransactionDigest>,
         ) -> SuiGasStatus {
             let gas_rounding_step = gas_rounding_step.map(|val| val.max(1));
             SuiGasStatus {
@@ -222,6 +228,7 @@ mod checked {
                 unmetered_storage_rebate: 0,
                 gas_rounding_step,
                 cost_table,
+                tx_digest,
             }
         }
 
@@ -230,6 +237,7 @@ mod checked {
             gas_price: u64,
             reference_gas_price: u64,
             config: &ProtocolConfig,
+            tx_digest: Option<TransactionDigest>,
         ) -> SuiGasStatus {
             let storage_gas_price = config.storage_gas_price();
             let max_computation_budget = config.max_gas_computation_bucket() * gas_price;
@@ -255,6 +263,7 @@ mod checked {
                 config.storage_rebate_rate(),
                 gas_rounding_step,
                 sui_cost_table,
+                tx_digest,
             )
         }
 
@@ -269,7 +278,45 @@ mod checked {
                 0,
                 None,
                 SuiCostTable::unmetered(),
+                None,
             )
+        }
+
+        fn write_gas_stats(&self, summary: &GasCostSummary, digest: TransactionDigest) {
+            let gas_used = self.gas_status.gas_used_pre_gas_price();
+            let gas_rounded = if gas_used > 0 && gas_used % 1000 == 0 {
+                gas_used * self.gas_price
+            } else {
+                ((gas_used / 1000) + 1) * 1000 * self.gas_price
+            };
+            let computation_cost = if self.gas_budget <= gas_rounded {
+                self.gas_budget
+            } else {
+                gas_rounded
+            };
+
+            let (instr_count, stack_height, stack_size) = self.gas_status.get_status_info();
+
+            #[skip_checked_arithmetic]
+            span!(target: "gas_stats", Level::TRACE, "gas stats");
+
+            trace!(
+                "{}: b = {}, p = {}, c_c = {}, s_c = {}, s_r = {}, \
+                n_r_s_f = {}, ins = {}, st_h = {}, \
+                st_s = {}, gas = {}, c_c_r = {}",
+                digest,
+                self.gas_budget,
+                self.gas_price,
+                summary.computation_cost,
+                summary.storage_cost,
+                summary.storage_rebate,
+                summary.non_refundable_storage_fee,
+                instr_count,
+                stack_height,
+                stack_size,
+                gas_used,
+                computation_cost,
+            );
         }
 
         // Check whether gas arguments are legit:
@@ -364,12 +411,18 @@ mod checked {
             let sender_rebate = sender_rebate(self.storage_rebate, self.rebate_rate);
             assert!(sender_rebate <= self.storage_rebate);
             let non_refundable_storage_fee = self.storage_rebate - sender_rebate;
-            GasCostSummary {
+            let summary = GasCostSummary {
                 computation_cost: self.computation_cost,
                 storage_cost: self.storage_cost,
                 storage_rebate: sender_rebate,
                 non_refundable_storage_fee,
+            };
+
+            if let Some(digest) = self.tx_digest {
+                self.write_gas_stats(&summary, digest);
             }
+
+            summary
         }
 
         fn gas_budget(&self) -> u64 {

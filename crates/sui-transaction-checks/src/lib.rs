@@ -24,6 +24,7 @@ mod checked {
     };
     use sui_types::{
         base_types::{SequenceNumber, SuiAddress},
+        digests::TransactionDigest,
         error::{SuiError, SuiResult},
         fp_bail, fp_ensure,
         gas::SuiGasStatus,
@@ -45,6 +46,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
         transaction: &TransactionData,
+        tx_digest: Option<TransactionDigest>,
     ) -> SuiResult<SuiGasStatus> {
         check_gas(
             objects,
@@ -54,6 +56,7 @@ mod checked {
             transaction.gas_budget(),
             transaction.gas_price(),
             transaction.kind(),
+            tx_digest,
         )
     }
 
@@ -89,6 +92,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
+            None,
         )?;
         let input_objects = check_objects(transaction, input_objects, objects)?;
         check_receiving_objects(
@@ -127,6 +131,7 @@ mod checked {
             protocol_config,
             reference_gas_price,
             transaction,
+            None,
         )?;
         let input_objects = check_objects(transaction, input_objects, objects)?;
         check_receiving_objects(
@@ -348,12 +353,18 @@ mod checked {
         gas_budget: u64,
         gas_price: u64,
         tx_kind: &TransactionKind,
+        tx_digest: Option<TransactionDigest>,
     ) -> SuiResult<SuiGasStatus> {
         if tx_kind.is_system_tx() {
             Ok(SuiGasStatus::new_unmetered())
         } else {
-            let gas_status =
-                SuiGasStatus::new(gas_budget, gas_price, reference_gas_price, protocol_config)?;
+            let gas_status = SuiGasStatus::new(
+                gas_budget,
+                gas_price,
+                reference_gas_price,
+                protocol_config,
+                tx_digest,
+            )?;
 
             // check balance and coins consistency
             // load all gas coins

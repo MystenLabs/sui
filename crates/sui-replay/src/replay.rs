@@ -730,9 +730,13 @@ impl LocalExec {
         // All prep done
         let expensive_checks = true;
         let certificate_deny_set = HashSet::new();
-        let res = if let Ok(gas_status) =
-            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
-        {
+        let res = if let Ok(gas_status) = SuiGasStatus::new(
+            tx_info.gas_budget,
+            tx_info.gas_price,
+            rgp,
+            protocol_config,
+            None,
+        ) {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,

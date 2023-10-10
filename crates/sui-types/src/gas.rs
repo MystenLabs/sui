@@ -9,6 +9,7 @@ pub mod checked {
 
     use crate::gas_model::gas_predicates::gas_price_too_high;
     use crate::{
+        base_types::TransactionDigest,
         effects::{TransactionEffects, TransactionEffectsAPI},
         error::{ExecutionError, SuiResult, UserInputError, UserInputResult},
         gas_model::{gas_v2::SuiGasStatus as SuiGasStatusV2, tables::GasStatus},
@@ -57,6 +58,7 @@ pub mod checked {
             gas_price: u64,
             reference_gas_price: u64,
             config: &ProtocolConfig,
+            tx_digest: Option<TransactionDigest>,
         ) -> SuiResult<Self> {
             // Common checks. We may pull them into version specific status as needed, but they
             // are unlikely to change.
@@ -82,6 +84,7 @@ pub mod checked {
                 gas_price,
                 reference_gas_price,
                 config,
+                tx_digest,
             )))
         }
 
