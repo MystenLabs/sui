@@ -9,9 +9,12 @@ import { type Direction } from 'react-resizable-panels';
 
 import ModuleView from './ModuleView';
 import { ModuleFunctionsInteraction } from './module-functions-interaction';
+import DependencyView from '~/components/module/DependencyView';
+import { getDependencyVersionInfo, type SuiPackage } from '~/components/module/dependencyUtils';
+import { useNetwork } from '~/context';
 import { useBreakpoint } from '~/hooks/useBreakpoint';
 import { SplitPanes } from '~/ui/SplitPanes';
-import { TabHeader } from '~/ui/Tabs';
+import { TabHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '~/ui/Tabs';
 import { ListItem, VerticalList } from '~/ui/VerticalList';
 import { useSearchParamsMerged } from '~/ui/utils/LinkWithQuery';
 
@@ -21,6 +24,7 @@ interface Props {
 	id?: string;
 	modules: ModuleType[];
 	splitPanelOrientation: Direction;
+	initialTab?: string | null;
 }
 
 interface ModuleViewWrapperProps {
@@ -41,12 +45,20 @@ function ModuleViewWrapper({ id, selectedModuleName, modules }: ModuleViewWrappe
 	return <ModuleView id={id} name={name} code={code} />;
 }
 
-function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
+const VALID_TABS = ['bytecode', 'dependencies'];
+
+function PkgModuleViewWrapper({ id, modules, splitPanelOrientation, initialTab }: Props) {
 	const isMediumOrAbove = useBreakpoint('md');
 
 	const modulenames = modules.map(([name]) => name);
 	const [searchParams, setSearchParams] = useSearchParamsMerged();
 	const [query, setQuery] = useState('');
+	const [activeTab, setActiveTab] = useState(() =>
+		initialTab && VALID_TABS.includes(initialTab) ? initialTab : 'bytecode',
+	);
+	const [isDependencyViewLoading, setIsDependencyViewLoading] = useState<boolean>(true);
+	const [suiPackage, setSuiPackage] = useState<SuiPackage>();
+	const [network] = useNetwork();
 
 	// Extract module in URL or default to first module in list
 	const selectedModule =
@@ -60,6 +72,22 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 			setSearchParams({}, { replace: true });
 		}
 	}, [searchParams, setSearchParams, modulenames]);
+
+	useEffect(() => {
+		async function dependencyVersionCheck() {
+			if (!id) {
+				return;
+			}
+			const dependencyVersionInfo = await getDependencyVersionInfo(network.toLowerCase(), id);
+			if (!dependencyVersionInfo) {
+				return;
+			}
+			setSuiPackage(dependencyVersionInfo);
+		}
+		dependencyVersionCheck()
+			.then(() => setIsDependencyViewLoading(false))
+			.catch((error) => console.log(error));
+	}, [id, network]);
 
 	const filteredModules =
 		query === ''
@@ -91,17 +119,38 @@ function PkgModuleViewWrapper({ id, modules, splitPanelOrientation }: Props) {
 		{
 			panel: (
 				<div key="bytecode" className="h-full grow overflow-auto border-gray-45 pt-5 md:pl-7">
-					<TabHeader size="md" title="Bytecode">
-						<div
-							className={clsx(
-								'overflow-auto',
-								(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
-									'h-verticalListLong',
-							)}
-						>
-							<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
-						</div>
-					</TabHeader>
+					<Tabs size="lg" value={activeTab} onValueChange={setActiveTab}>
+						<TabsList>
+							<TabsTrigger value="bytecode">Bytecode</TabsTrigger>
+							<TabsTrigger value="dependencies">Dependencies</TabsTrigger>
+						</TabsList>
+						<TabsContent value="bytecode">
+							<div
+								className={clsx(
+									'overflow-auto',
+									(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+										'h-verticalListLong',
+								)}
+							>
+								<ModuleViewWrapper id={id} modules={modules} selectedModuleName={selectedModule} />
+							</div>
+						</TabsContent>
+						<TabsContent value="dependencies">
+							<div
+								className={clsx(
+									'overflow-auto',
+									(splitPanelOrientation === 'horizontal' || !isMediumOrAbove) &&
+										'h-verticalListLong',
+								)}
+							>
+								<DependencyView
+									selectedModuleName={selectedModule}
+									isLoading={isDependencyViewLoading}
+									suiPackage={suiPackage}
+								/>
+							</div>
+						</TabsContent>
+					</Tabs>
 				</div>
 			),
 			defaultSize: 40,
