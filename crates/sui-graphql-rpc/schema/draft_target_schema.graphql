@@ -680,7 +680,7 @@ type ConsensusCommitPrologueTransaction {
 }
 
 type GenesisTransaction {
-  objects: [Object]
+  objects: [SuiAddress]
 }
 
 type ChangeEpochTransaction {

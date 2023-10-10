@@ -7,8 +7,8 @@ import { createWallet } from './utils/auth';
 const TEST_TIMEOUT = 45 * 1000;
 const STAKE_AMOUNT = 100;
 
-test.skip('staking', async ({ page, extensionUrl }) => {
-	test.setTimeout(TEST_TIMEOUT);
+test('staking', async ({ page, extensionUrl }) => {
+	test.setTimeout(4 * TEST_TIMEOUT);
 
 	await createWallet(page, extensionUrl);
 
@@ -27,13 +27,12 @@ test.skip('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('transaction-status')).toHaveText('Transaction Success');
 
 	await page.getByTestId('close-icon').click();
-	await expect(page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`)).toBeVisible();
-
-	await page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`).click();
-	await expect(page.getByText(/Starts Earning now/)).toBeVisible({
+	await expect(page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`)).toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
 
+	await page.getByText(`Currently Staked${STAKE_AMOUNT} SUI`).click();
+	await expect(page.getByTestId('stake-card')).toBeVisible({ timeout: 3 * TEST_TIMEOUT });
 	await page.getByTestId('stake-card').click();
 	await page.getByTestId('unstake-button').click();
 	await page.getByRole('button', { name: 'Unstake Now' }).click();

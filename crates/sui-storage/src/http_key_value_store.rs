@@ -12,6 +12,9 @@ use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
+use sui_types::object::Object;
+use sui_types::storage::ObjectKey;
 use sui_types::{
     digests::{
         CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
@@ -50,6 +53,12 @@ pub fn encoded_tagged_key(key: &TaggedKey) -> String {
     base64_url::encode(&bytes)
 }
 
+pub fn encode_object_key(object_id: &ObjectID, version: &VersionNumber) -> String {
+    let bytes =
+        bcs::to_bytes(&ObjectKey(*object_id, *version)).expect("failed to serialize object key");
+    base64_url::encode(&bytes)
+}
+
 trait IntoSuiResult<T> {
     fn into_sui_result(self) -> SuiResult<T>;
 }
@@ -73,6 +82,7 @@ pub enum Key {
     CheckpointContentsByDigest(CheckpointContentsDigest),
     CheckpointSummaryByDigest(CheckpointDigest),
     TxToCheckpoint(TransactionDigest),
+    ObjectKey(ObjectID, VersionNumber),
 }
 
 #[derive(Clone, Debug)]
@@ -101,6 +111,7 @@ fn key_to_path_elements(key: &Key) -> SuiResult<(String, &'static str)> {
         Key::CheckpointContentsByDigest(digest) => Ok((encode_digest(digest), "cc")),
         Key::CheckpointSummaryByDigest(digest) => Ok((encode_digest(digest), "cs")),
         Key::TxToCheckpoint(digest) => Ok((encode_digest(digest), "tx2c")),
+        Key::ObjectKey(object_id, version) => Ok((encode_object_key(object_id, version), "ob")),
     }
 }
 
@@ -418,5 +429,16 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         self.fetch(key).await.map(|maybe| {
             maybe.and_then(|bytes| deser::<_, CheckpointSequenceNumber>(&key, bytes.as_ref()))
         })
+    }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> SuiResult<Option<Object>> {
+        let key = Key::ObjectKey(object_id, version);
+        self.fetch(key)
+            .await
+            .map(|maybe| maybe.and_then(|bytes| deser::<_, Object>(&key, bytes.as_ref())))
     }
 }

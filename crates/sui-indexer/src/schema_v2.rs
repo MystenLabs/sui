@@ -72,6 +72,7 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
         serialized_object -> Bytea,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,

@@ -40,5 +40,5 @@ export const notifyUserActive = throttle(
 	() => {
 		setupAutoLockAlarm();
 	},
-	{ noLeading: true },
+	{ noTrailing: true },
 );

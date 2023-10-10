@@ -14,6 +14,7 @@ axum.workspace = true
 tower.workspace = true
 tower-http.workspace = true
 http.workspace = true
+uuid.workspace = true
 
 sui-faucet.workspace = true
 sui-cluster-test.workspace = true

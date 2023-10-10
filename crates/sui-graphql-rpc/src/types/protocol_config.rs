@@ -30,6 +30,7 @@ pub(crate) struct ProtocolConfigs {
 impl ProtocolConfigs {
     async fn configs(&self, ctx: &Context<'_>) -> Result<Option<Vec<ProtocolConfigAttr>>> {
         Ok(Some(
+            // TODO: implement DB counterpart without using Sui SDK client
             ctx.data_provider()
                 .fetch_protocol_config(None)
                 .await?
@@ -42,6 +43,7 @@ impl ProtocolConfigs {
         ctx: &Context<'_>,
     ) -> Result<Option<Vec<ProtocolConfigFeatureFlag>>> {
         Ok(Some(
+            // TODO: implement DB counterpart without using Sui SDK client
             ctx.data_provider()
                 .fetch_protocol_config(None)
                 .await?
@@ -50,6 +52,7 @@ impl ProtocolConfigs {
     }
 
     async fn protocol_version(&self, ctx: &Context<'_>) -> Result<u64> {
+        // TODO: implement DB counterpart without using Sui SDK client
         Ok(ctx
             .data_provider()
             .fetch_protocol_config(None)
