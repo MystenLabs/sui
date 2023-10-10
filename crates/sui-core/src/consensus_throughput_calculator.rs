@@ -75,6 +75,14 @@ impl ThroughputProfileRanges {
             .expect("Should contain at least one throughput profile")
             .1
     }
+
+    pub fn highest_profile(&self) -> ThroughputProfile {
+        *self
+            .profiles
+            .last_key_value()
+            .expect("Should contain at least one throughput profile")
+            .1
+    }
     /// Resolves the throughput profile that corresponds to the provided throughput.
     pub fn resolve(&self, current_throughput: u64) -> ThroughputProfile {
         let mut iter = self.profiles.iter();
@@ -86,8 +94,8 @@ impl ThroughputProfileRanges {
 
         warn!("Could not resolve throughput profile for throughput {} - we shouldn't end up here. Fallback to lowest profile as default.", current_throughput);
 
-        // If not found, then we should return the lowest possible profile as default.
-        self.lowest_profile()
+        // If not found, then we should return the lowest possible profile as default to stay on safe side.
+        self.highest_profile()
     }
 }
 
@@ -179,7 +187,7 @@ impl ConsensusThroughputProfiler {
             throughput_profile_cool_down_threshold,
             profile_ranges: Default::default(),
             last_throughput_profile: ArcSwap::from_pointee(ThroughputProfileEntry {
-                profile: profile_ranges.lowest_profile(),
+                profile: profile_ranges.highest_profile(),
                 timestamp: 0,
                 throughput: 0,
             }), // assume high throughput so the node is more conservative on bootstrap
@@ -212,8 +220,10 @@ impl ConsensusThroughputProfiler {
     ) -> ThroughputProfileEntry {
         let last_profile = self.last_throughput_profile.load();
 
-        // skip any processing if provided timestamp is older than the last used one.
-        if timestamp < last_profile.timestamp {
+        // Skip any processing if provided timestamp is older than the last used one. Also return existing
+        // profile when provided timestamp is 0 - this avoids triggering an immediate update eventually overriding
+        // the default value.
+        if timestamp == 0 || timestamp < last_profile.timestamp {
             return **last_profile;
         }
 
@@ -223,11 +233,11 @@ impl ConsensusThroughputProfiler {
         let last_profile_seconds_bucket =
             last_profile.timestamp / self.throughput_profile_update_interval;
 
-        // Update only when we have a new profile & minimum time has been passed since last update.
+        // Update only when we minimum time has been passed since last update.
         // We allow the edge case to update on the same bucket when a different profile has been
         // computed for the exact same timestamp.
-        let should_update_profile = if profile != last_profile.profile
-            && (current_seconds_bucket > last_profile_seconds_bucket || last_profile.timestamp == timestamp)
+        let should_update_profile = if current_seconds_bucket > last_profile_seconds_bucket
+            || (profile != last_profile.profile && last_profile.timestamp == timestamp)
         {
             if profile < last_profile.profile {
                 // If new profile is smaller than previous one, then make sure the cool down threshold is respected.
@@ -511,14 +521,14 @@ mod tests {
 
         // When no transactions exists, the calculator will return by default "High" to err on the
         // assumption that there is lots of load.
-        assert_eq!(profiler.throughput_level(), (Low, 0));
+        assert_eq!(profiler.throughput_level(), (High, 0));
 
         calculator.add_transactions(1000 as TimestampMs, 1_000);
         calculator.add_transactions(2000 as TimestampMs, 1_000);
         calculator.add_transactions(3000 as TimestampMs, 1_000);
 
-        // We expect to have a rate of 1K tx/sec, that's < 2K limit , so throughput profile remains to "low" - nothing gets updated
-        assert_eq!(profiler.throughput_level(), (Low, 0));
+        // We expect to have a rate of 1K tx/sec, that's < 2K limit , so throughput profile remains to "High" - nothing gets updated
+        assert_eq!(profiler.throughput_level(), (High, 0));
 
         // We are adding more transactions to get over 2K tx/sec, so throughput profile should now be categorised
         // as "high"
@@ -534,13 +544,13 @@ mod tests {
 
         assert_eq!(profiler.throughput_level(), (Low, 509));
 
-        // Adding zero transactions for the next 5 seconds will make throughput zero
-        // throughput profile will remain as Low as it won't get updated.
+        // Adding zero transactions for the next 5 seconds will make throughput zero.
+        // Profile will remain Low and throughput will get updated
         calculator.add_transactions(17_000 as TimestampMs, 0);
         calculator.add_transactions(19_000 as TimestampMs, 0);
         calculator.add_transactions(20_000 as TimestampMs, 0);
 
-        assert_eq!(profiler.throughput_level(), (Low, 509));
+        assert_eq!(profiler.throughput_level(), (Low, 0));
 
         // By adding a few entries with lots of transactions for the exact same last timestamp it will
         // trigger a throughput profile update.
