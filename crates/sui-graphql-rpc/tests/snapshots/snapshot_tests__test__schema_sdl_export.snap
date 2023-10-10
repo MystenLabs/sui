@@ -266,12 +266,51 @@ type MoveData =
 """
 scalar MoveData
 
+type MoveModule {
+	fileFormatVersion: Int!
+}
+
+type MoveModuleConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [MoveModuleEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [MoveModule!]!
+}
+
+"""
+An edge in a connection.
+"""
+type MoveModuleEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: MoveModule!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 type MoveObject {
 	contents: MoveValue
 	hasPublicTransfer: Boolean
 	asObject: Object
 	asCoin: Coin
 	asStakedSui: StakedSui
+}
+
+type MovePackage {
+	module(name: String!): MoveModule
+	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	asObject: Object
 }
 
 type MoveValue {
@@ -318,6 +357,7 @@ type Object implements ObjectOwner {
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind
 	owner: Owner
+	asMovePackage: MovePackage
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String!): Balance
