@@ -5,6 +5,7 @@
 	"homepage": "https://sui-typescript-docs.vercel.app",
 	"version": "0.43.3",
 	"license": "Apache-2.0",
+	"sideEffects": false,
 	"files": [
 		"CHANGELOG.md",
 		"LICENSE",

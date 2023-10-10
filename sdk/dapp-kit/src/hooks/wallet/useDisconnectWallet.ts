@@ -9,8 +9,10 @@ import { WalletNotConnectedError } from '../../errors/walletErrors.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 import { useWalletStore } from './useWalletStore.js';
 
+type UseDisconnectWalletError = WalletNotConnectedError | Error;
+
 type UseDisconnectWalletMutationOptions = Omit<
-	UseMutationOptions<void, Error, void, unknown>,
+	UseMutationOptions<void, UseDisconnectWalletError, void, unknown>,
 	'mutationFn'
 >;
 

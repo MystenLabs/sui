@@ -54,11 +54,11 @@ export class LedgerSigner extends WalletSigner {
 	async signData(data: Uint8Array): Promise<SerializedSignature> {
 		const ledgerClient = await this.#initializeSuiLedgerClient();
 		const { signature } = await ledgerClient.signTransaction(this.#derivationPath, data);
-		const pubKey = await this.getPublicKey();
+		const publicKey = await this.getPublicKey();
 		return toSerializedSignature({
 			signature,
 			signatureScheme: this.#signatureScheme,
-			pubKey,
+			publicKey,
 		});
 	}
 

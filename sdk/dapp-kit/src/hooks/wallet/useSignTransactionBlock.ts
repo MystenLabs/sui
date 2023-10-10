@@ -18,7 +18,7 @@ import type { PartialBy } from '../../types/utilityTypes.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
-type UseSignTransactionBlockArgs = PartialBy<SuiSignTransactionBlockInput, 'account'>;
+type UseSignTransactionBlockArgs = PartialBy<SuiSignTransactionBlockInput, 'account' | 'chain'>;
 
 type UseSignTransactionBlockResult = SuiSignTransactionBlockOutput;
 
@@ -58,7 +58,7 @@ export function useSignTransactionBlock({
 			const signerAccount = signTransactionBlockArgs.account ?? currentAccount;
 			if (!signerAccount) {
 				throw new WalletNoAccountSelectedError(
-					'No wallet account is selected to sign the personal message with.',
+					'No wallet account is selected to sign the transaction block with.',
 				);
 			}
 
@@ -72,6 +72,7 @@ export function useSignTransactionBlock({
 			return await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
 				account: signerAccount,
+				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
 		},
 		...mutationOptions,

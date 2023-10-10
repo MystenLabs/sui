@@ -73,8 +73,16 @@ export type QredoConnectInput = {
 	service: string;
 	apiUrl: string;
 	token: string;
-	organization: string;
-};
+} & (
+	| {
+			/** @deprecated renamed to workspace, please use that */
+			organization: string;
+	  }
+	| {
+			workspace: string;
+	  }
+);
+
 type QredoConnectFeature = {
 	'qredo:connect': {
 		version: '0.0.1';

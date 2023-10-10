@@ -12,16 +12,21 @@ pub mod workload_configuration;
 
 use std::sync::Arc;
 
+use crate::drivers::Interval;
 use crate::workloads::payload::Payload;
 use sui_types::base_types::{ObjectRef, SuiAddress};
 use sui_types::crypto::AccountKeyPair;
 use workload::*;
 
-#[derive(Debug)]
+pub type GroupID = u32;
+
+#[derive(Debug, Clone)]
 pub struct WorkloadParams {
+    pub group: GroupID,
     pub target_qps: u64,
     pub num_workers: u64,
     pub max_ops: u64,
+    pub duration: Interval,
 }
 
 #[derive(Debug)]

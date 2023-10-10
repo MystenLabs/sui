@@ -20,7 +20,7 @@ import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseSignAndExecuteTransactionBlockArgs = PartialBy<
 	SuiSignAndExecuteTransactionBlockInput,
-	'account'
+	'account' | 'chain'
 >;
 
 type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockOutput;
@@ -61,7 +61,7 @@ export function useSignAndExecuteTransactionBlock({
 			const signerAccount = signAndExecuteTransactionBlockArgs.account ?? currentAccount;
 			if (!signerAccount) {
 				throw new WalletNoAccountSelectedError(
-					'No wallet account is selected to sign the personal message with.',
+					'No wallet account is selected to sign and execute the transaction block with.',
 				);
 			}
 
@@ -75,6 +75,7 @@ export function useSignAndExecuteTransactionBlock({
 			return await walletFeature.signAndExecuteTransactionBlock({
 				...signAndExecuteTransactionBlockArgs,
 				account: signerAccount,
+				chain: signAndExecuteTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
 		},
 		...mutationOptions,

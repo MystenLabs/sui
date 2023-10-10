@@ -63,6 +63,7 @@ export function AutoLockSelector({ disabled }: AutoLockSelectorProps) {
 						disabled={disabled || !timerEnabled}
 						type="number"
 						{...register('autoLock.timer')}
+						data-testid="auto-lock-timer"
 					/>
 					<SelectField
 						disabled={disabled || !timerEnabled}

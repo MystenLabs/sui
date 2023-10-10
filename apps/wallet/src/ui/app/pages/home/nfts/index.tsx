@@ -13,6 +13,7 @@ import { useOnScreen } from '@mysten/core';
 import { useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';
 import AssetsOptionsMenu from './AssetsOptionsMenu';
 import NonVisualAssets from './NonVisualAssets';
 import VisualAssets from './VisualAssets';
@@ -47,6 +48,7 @@ function NftsPage() {
 		if (!filterType) return ownedAssets?.visual;
 		return ownedAssets?.[filterType as AssetFilterTypes] ?? [];
 	}, [ownedAssets, filterType]);
+	const { hiddenAssetIds } = useHiddenAssets();
 
 	if (isInitialLoading) {
 		return (
@@ -62,8 +64,8 @@ function NftsPage() {
 	];
 
 	return (
-		<div className="flex flex-1 flex-col flex-nowrap items-center gap-4">
-			<PageTitle title="Assets" after={<AssetsOptionsMenu />} />
+		<div className="flex min-h-full flex-col flex-nowrap items-center gap-4">
+			<PageTitle title="Assets" after={hiddenAssetIds.length ? <AssetsOptionsMenu /> : null} />
 			{!!ownedAssets?.other.length && (
 				<FiltersPortal firstLastMargin tags={tags} callback={handleFilterChange} />
 			)}
