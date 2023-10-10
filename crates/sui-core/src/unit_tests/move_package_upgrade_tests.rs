@@ -418,7 +418,7 @@ async fn test_upgrade_package_incorrect_digest() {
 async fn test_upgrade_package_compatibility_too_permissive() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             let cap = builder

@@ -1358,6 +1358,7 @@
                 "disable_invariant_violation_check_in_swap_loc": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "enable_effects_v2": false,
                 "enable_jwk_consensus_updates": false,
                 "end_of_epoch_transaction_supported": false,
                 "loaded_child_object_format": false,
