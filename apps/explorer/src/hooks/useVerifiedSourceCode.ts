@@ -15,7 +15,11 @@ type UseVerifiedSourceCodeResponse = {
 	error?: string;
 };
 
-const networksWithSourceCodeVerification: Network[] = [Network.TESTNET, Network.MAINNET];
+const networksWithSourceCodeVerification: Network[] = [
+	Network.DEVNET,
+	Network.TESTNET,
+	Network.MAINNET,
+];
 
 /**
  * Hook that retrieves the source code for verified modules.
@@ -30,7 +34,7 @@ export function useVerifiedSourceCode({ packageId, moduleName }: UseVerifiedSour
 				`http://source.mystenlabs.com/api?network=${network.toLowerCase()}&address=${packageId}&module=${moduleName}`,
 			);
 			if (!response.ok) {
-				throw new Error(`Encountered un-expected response: ${response.status}`);
+				throw new Error(`Encountered unexpected response: ${response.status}`);
 			}
 
 			const jsonResponse: UseVerifiedSourceCodeResponse = await response.json();
