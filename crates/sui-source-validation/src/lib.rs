@@ -193,7 +193,15 @@ impl<'a> BytecodeSourceVerifier<'a> {
                     .dependency_ids
                     .published
                     .values()
-                    .map(|id| **id),
+                    .cloned()
+                    .filter_map(|id| {
+                        if compiled_package.dependency_ids.on_chain.contains(&id) {
+                            // dependency is fetched from chain, no need to verify
+                            None
+                        } else {
+                            Some(*id)
+                        }
+                    }),
             );
         }
 

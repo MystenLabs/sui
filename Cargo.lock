@@ -11400,6 +11400,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-symbol-pool",
+ "petgraph 0.5.1",
  "serde-reflection",
  "sui-types",
  "sui-verifier-latest",

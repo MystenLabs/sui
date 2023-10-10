@@ -5,7 +5,7 @@
 extern crate move_ir_types;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
@@ -36,6 +36,7 @@ use move_package::{
     },
     package_hooks::PackageHooks,
     resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::DependencyKind,
     BuildConfig as MoveBuildConfig,
 };
 use move_package::{
@@ -43,6 +44,7 @@ use move_package::{
     source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
+use petgraph::prelude::DiGraphMap;
 use serde_reflection::Registry;
 use sui_types::{
     base_types::ObjectID,
@@ -76,6 +78,9 @@ pub struct CompiledPackage {
     pub dependency_ids: PackageDependencies,
     /// Path to the Move package (i.e., where the Move.toml file is)
     pub path: PathBuf,
+    /// The bytecode modules that this package depends on (both directly and transitively),
+    /// i.e. on-chain dependencies.
+    pub bytecode_deps: BTreeMap<ModuleId, CompiledModule>,
 }
 
 /// Wrapper around the core Move `BuildConfig` with some Sui-specific info
@@ -235,6 +240,36 @@ pub fn build_from_resolution_graph(
 ) -> SuiResult<CompiledPackage> {
     let (published_at, dependency_ids) = gather_published_ids(&resolution_graph);
 
+    // collect bytecode dependencies as these are not returned as part of core
+    // `CompiledPackage`
+    let mut bytecode_deps = BTreeMap::new();
+    for (name, pkg) in resolution_graph.graph.package_table.iter() {
+        if !matches!(pkg.kind, DependencyKind::OnChain(_)) {
+            continue;
+        }
+        let paths = resolution_graph.get_package(*name).get_bytecodes().unwrap();
+        for path in paths {
+            let bytes = std::fs::read(path.to_string()).map_err(|error| {
+                SuiError::ModuleDeserializationFailure {
+                    error: format!(
+                        "Failed to deserialize bytecode dependency {} module {}: {:?}",
+                        name, path, error
+                    ),
+                }
+            })?;
+            let module =
+                CompiledModule::deserialize_with_defaults(bytes.as_ref()).map_err(|error| {
+                    SuiError::ModuleDeserializationFailure {
+                        error: format!(
+                            "Failed to deserialize bytecode dependency {} module {}: {:?}",
+                            name, path, error
+                        ),
+                    }
+                })?;
+            bytecode_deps.insert(module.self_id(), module);
+        }
+    }
+
     let result = if print_diags_to_stderr {
         BuildConfig::compile_package(resolution_graph, lint, &mut std::io::stderr())
     } else {
@@ -262,11 +297,13 @@ pub fn build_from_resolution_graph(
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
+
     Ok(CompiledPackage {
         package,
         published_at,
         dependency_ids,
         path,
+        bytecode_deps,
     })
 }
 
@@ -274,6 +311,8 @@ impl CompiledPackage {
     /// Return all of the bytecode modules in this package (not including direct or transitive deps)
     /// Note: these are not topologically sorted by dependency--use `get_dependency_sorted_modules` to produce a list of modules suitable
     /// for publishing or static analysis
+    /// Note: modules returned don't include dependant modules that were passed in as
+    /// bytecode to the compiler (on-chain packages). These are collected in the `bytecode_deps` field.
     pub fn get_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.package.root_modules().map(|m| &m.unit.module)
     }
@@ -281,6 +320,8 @@ impl CompiledPackage {
     /// Return all of the bytecode modules in this package (not including direct or transitive deps)
     /// Note: these are not topologically sorted by dependency--use `get_dependency_sorted_modules` to produce a list of modules suitable
     /// for publishing or static analysis
+    /// Note: modules returned don't include dependant modules that were passed in as
+    /// bytecode to the compiler (on-chain packages). These are collected in the `bytecode_deps` field.
     pub fn into_modules(self) -> Vec<CompiledModule> {
         self.package
             .root_compiled_units
@@ -291,6 +332,8 @@ impl CompiledPackage {
 
     /// Return all of the bytecode modules that this package depends on (both directly and transitively)
     /// Note: these are not topologically sorted by dependency.
+    /// Note: modules returned don't include dependant modules that were passed in as
+    /// bytecode to the compiler (on-chain packages). These are collected in the `bytecode_deps` field.
     pub fn get_dependent_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.package
             .deps_compiled_units
@@ -300,6 +343,8 @@ impl CompiledPackage {
 
     /// Return all of the bytecode modules in this package and the modules of its direct and transitive dependencies.
     /// Note: these are not topologically sorted by dependency.
+    /// Note: modules returned don't include dependant modules that were passed in as
+    /// bytecode modules (instead of source) to the compiler.
     pub fn get_modules_and_deps(&self) -> impl Iterator<Item = &CompiledModule> {
         self.package.all_modules().map(|m| &m.unit.module)
     }
@@ -312,41 +357,30 @@ impl CompiledPackage {
         &self,
         with_unpublished_deps: bool,
     ) -> Vec<CompiledModule> {
-        let all_modules = self.package.all_modules_map();
-        let graph = all_modules.compute_dependency_graph();
-
-        // SAFETY: package built successfully
-        let modules = graph.compute_topological_order().unwrap();
-
         if with_unpublished_deps {
             // For each transitive dependent module, if they are not to be published, they must have
             // a non-zero address (meaning they are already published on-chain).
-            modules
-                .filter(|module| module.address() == &AccountAddress::ZERO)
-                .cloned()
-                .collect()
+            let modules = self
+                .package
+                .all_modules_map()
+                .iter_modules_owned()
+                .into_iter()
+                .filter(|m| m.address() == &AccountAddress::ZERO)
+                .collect::<Vec<_>>();
+            topo_sort_modules(modules)
         } else {
             // Collect all module IDs from the current package to be published (module names are not
             // sufficient as we may have modules with the same names in user code and in Sui
             // framework which would result in the latter being pulled into a set of modules to be
             // published).
-            let self_modules: HashSet<_> = self
-                .package
-                .root_modules_map()
-                .iter_modules()
-                .iter()
-                .map(|m| m.self_id())
-                .collect();
-
-            modules
-                .filter(|module| self_modules.contains(&module.self_id()))
-                .cloned()
-                .collect()
+            topo_sort_modules(self.get_modules().cloned().collect())
         }
     }
 
     /// Return the set of Object IDs corresponding to this package's transitive dependencies'
     /// original package IDs.
+    /// Note: IDs returned don't include IDs of dependant modules that were passed in as
+    /// bytecode modules (instead of source) to the compiler.
     pub fn get_dependency_original_package_ids(&self) -> Vec<ObjectID> {
         let mut ids: BTreeSet<_> = self
             .package
@@ -361,6 +395,7 @@ impl CompiledPackage {
         ids.into_iter().collect()
     }
 
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_package_digest(&self, with_unpublished_deps: bool) -> [u8; 32] {
         let hash_modules = true;
         MovePackage::compute_digest_for_modules_and_deps(
@@ -390,6 +425,7 @@ impl CompiledPackage {
             .collect()
     }
 
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_package_dependencies_hex(&self) -> Vec<String> {
         self.dependency_ids
             .published
@@ -399,24 +435,28 @@ impl CompiledPackage {
     }
 
     /// Get bytecode modules from DeepBook that are used by this package
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_deepbook_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == DEEPBOOK_ADDRESS)
     }
 
     /// Get bytecode modules from the Sui System that are used by this package
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_sui_system_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == SUI_SYSTEM_ADDRESS)
     }
 
     /// Get bytecode modules from the Sui Framework that are used by this package
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_sui_framework_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == SUI_FRAMEWORK_ADDRESS)
     }
 
     /// Get bytecode modules from the Move stdlib that are used by this package
+    /// Note: this doesn't take into account bytecode (on-chain) dependencies.
     pub fn get_stdlib_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == MOVE_STDLIB_ADDRESS)
@@ -622,6 +662,8 @@ pub struct PackageDependencies {
     pub unpublished: BTreeSet<Symbol>,
     /// Set of dependencies with invalid `published-at` addresses.
     pub invalid: BTreeMap<Symbol, String>,
+    /// Set of dependencies that were included as bytecode fetched from the chain.
+    pub on_chain: BTreeSet<ObjectID>,
 }
 
 #[derive(Debug)]
@@ -644,6 +686,7 @@ pub fn gather_published_ids(
     let mut unpublished = BTreeSet::new();
     let mut invalid = BTreeMap::new();
     let mut published_at = Err(PublishedAtError::NotPresent);
+    let mut on_chain = BTreeSet::new();
 
     for (name, package) in &resolution_graph.package_table {
         let property = published_at_property(package);
@@ -664,6 +707,16 @@ pub fn gather_published_ids(
                 invalid.insert(*name, value);
             }
         };
+
+        match resolution_graph.graph.package_table.get(name) {
+            Some(pkg) => match &pkg.kind {
+                DependencyKind::OnChain(info) => {
+                    on_chain.insert(ObjectID::from_hex_literal(&info.id).unwrap());
+                }
+                _ => (),
+            },
+            None => (),
+        }
     }
 
     (
@@ -672,6 +725,7 @@ pub fn gather_published_ids(
             published,
             unpublished,
             invalid,
+            on_chain,
         },
     )
 }
@@ -734,4 +788,37 @@ pub fn check_invalid_dependencies(invalid: &BTreeMap<Symbol, String>) -> Result<
     Err(SuiError::ModulePublishFailure {
         error: error_messages.join("\n"),
     })
+}
+
+// Sorts modules in topological order by dependency. Panics if there's a cycle.
+fn topo_sort_modules(modules: Vec<CompiledModule>) -> Vec<CompiledModule> {
+    let mut module_id_idx_map = HashMap::new();
+    let mut idx_module_map = HashMap::new();
+    for (i, m) in modules.into_iter().enumerate() {
+        if module_id_idx_map.insert(m.self_id(), i) != None {
+            panic!("Duplicate module found")
+        };
+        idx_module_map.insert(i, m);
+    }
+
+    let mut graph: DiGraphMap<usize, usize> = DiGraphMap::new();
+    for i in 0..idx_module_map.len() {
+        graph.add_node(i);
+    }
+
+    for (i, m) in idx_module_map.iter() {
+        for dep in m.immediate_dependencies() {
+            if let Some(j) = module_id_idx_map.get(&dep) {
+                graph.add_edge(*i, *j, 0);
+            }
+        }
+    }
+
+    match petgraph::algo::toposort(&graph, None) {
+        Err(_) => panic!("Circular dependency detected"),
+        Ok(ordered_idxs) => ordered_idxs
+            .into_iter()
+            .map(|idx| idx_module_map.remove(&idx).unwrap())
+            .collect(),
+    }
 }
