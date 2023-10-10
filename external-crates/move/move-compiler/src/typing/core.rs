@@ -315,7 +315,7 @@ impl<'env> Context<'env> {
 
     pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
         // should not fail, already checked in naming
-        let decl_loc = *self.locals.get_loc(&var).unwrap();
+        let decl_loc = *self.locals.get_loc(var).unwrap();
         let local = self.locals.get_mut(var).unwrap();
         local.used_mut = Some(loc);
         (decl_loc, local.mut_)

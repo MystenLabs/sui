@@ -2572,7 +2572,7 @@ fn unused_let_muts(context: &mut Context) {
         let Mutability::Mut(mut_loc) = mut_ else { continue };
         if used_mut.is_none() {
             let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
-            let mut_msg = format!("Consider removing the 'mut' declaration here");
+            let mut_msg = "Consider removing the 'mut' declaration here";
             context.env.add_diag(diag!(
                 UnusedItem::MutModifier,
                 (v.loc, decl_msg),
