@@ -6,9 +6,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
-use crate::checkpoints::{CheckpointServiceNotify, PendingCheckpoint, PendingCheckpointInfo};
-use std::cmp::Ordering;
-
+use crate::checkpoints::CheckpointServiceNotify;
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
@@ -23,11 +21,10 @@ use narwhal_test_utils::latest_protocol_version;
 use narwhal_types::{BatchAPI, Certificate, CertificateAPI, ConsensusOutput, HeaderAPI};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use sui_protocol_config::ConsensusTransactionOrdering;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
 use sui_types::storage::ObjectStore;
@@ -163,11 +160,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             return;
         }
 
-        let mut sequenced_transactions = Vec::new();
-        let mut end_of_publish_transactions = Vec::new();
-
-        let mut bytes = 0usize;
-
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
         let timestamp = consensus_output.sub_dag.commit_timestamp();
@@ -240,6 +232,8 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .consensus_committed_subdags
             .with_label_values(&[&leader_author.to_string()])
             .inc();
+
+        let mut bytes = 0usize;
         for (cert, batches) in consensus_output
             .sub_dag
             .certificates
@@ -301,9 +295,11 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                 }
             }
         }
+        self.metrics
+            .consensus_handler_processed_bytes
+            .inc_by(bytes as u64);
 
-        let mut roots = BTreeSet::new();
-
+        let mut all_transactions = Vec::new();
         {
             // We need a set here as well, since the processed_cache is a LRU cache and can drop
             // entries while we're iterating over the sequenced transactions.
@@ -312,10 +308,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             for (seq, (serialized, transaction, output_cert)) in
                 transactions.into_iter().enumerate()
             {
-                if let Some(digest) = transaction.executable_transaction_digest() {
-                    roots.insert(digest);
-                }
-
                 let index = ExecutionIndices {
                     last_committed_round: round,
                     sub_dag_index: consensus_output.sub_dag.sub_dag_index,
@@ -360,87 +352,23 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                     continue;
                 }
 
-                let Ok(verified_transaction) = self.epoch_store.verify_consensus_transaction(
-                    sequenced_transaction,
-                    &self.metrics.skipped_consensus_txns,
-                ) else {
-                    continue;
-                };
-
-                if verified_transaction.0.is_end_of_publish() {
-                    end_of_publish_transactions.push(verified_transaction);
-                } else {
-                    sequenced_transactions.push(verified_transaction);
-                }
+                all_transactions.push(sequenced_transaction);
             }
         }
 
-        // TODO: make the reordering algorithm richer and depend on object hotness as well.
-        // Order transactions based on their gas prices. System transactions without gas price
-        // are put to the beginning of the sequenced_transactions vector.
-        if matches!(
-            self.epoch_store
-                .protocol_config()
-                .consensus_transaction_ordering(),
-            ConsensusTransactionOrdering::ByGasPrice
-        ) {
-            let _scope = monitored_scope("HandleConsensusOutput::order_by_gas_price");
-            order_by_gas_price(&mut sequenced_transactions);
-        }
-
-        // (!) Should not add new transactions to sequenced_transactions beyond this point
-
-        self.metrics
-            .consensus_handler_processed_bytes
-            .inc_by(bytes as u64);
-
-        let transactions_to_schedule = {
-            let (transactions_to_schedule, consensus_commit_batch) = self
-                .epoch_store
-                .process_consensus_transactions_and_commit_boundary(
-                    &sequenced_transactions,
-                    end_of_publish_transactions,
-                    &self.last_consensus_stats,
-                    &self.checkpoint_service,
-                    &self.object_store,
-                )
-                .await
-                .expect("Unrecoverable error in consensus handler");
-
-            // The last block in this function notifies about new checkpoint if needed
-            let final_checkpoint_round = consensus_commit_batch.final_checkpoint_round();
-            let final_checkpoint = match final_checkpoint_round.map(|r| r.cmp(&round)) {
-                Some(Ordering::Less) => {
-                    debug!(
-                        "Not forming checkpoint for round {} above final checkpoint round {:?}",
-                        round, final_checkpoint_round
-                    );
-                    return;
-                }
-                Some(Ordering::Equal) => true,
-                Some(Ordering::Greater) => false,
-                None => false,
-            };
-            let checkpoint = PendingCheckpoint {
-                roots: roots.into_iter().collect(),
-                details: PendingCheckpointInfo {
-                    timestamp_ms: timestamp,
-                    last_of_epoch: final_checkpoint,
-                    commit_height: round,
-                },
-            };
-
-            consensus_commit_batch
-                .commit(checkpoint)
-                .expect("Failed to commit consensus commit batch");
-
-            if final_checkpoint {
-                info!(epoch=?self.epoch(), "Received 2f+1 EndOfPublish messages, notifying last checkpoint");
-                self.epoch_store.record_end_of_message_quorum_time_metric();
-            }
-
-            transactions_to_schedule
-        };
+        let transactions_to_schedule = self
+            .epoch_store
+            .process_consensus_transactions_and_commit_boundary(
+                all_transactions,
+                &self.last_consensus_stats,
+                &self.checkpoint_service,
+                &self.object_store,
+                round,
+                timestamp,
+                &self.metrics.skipped_consensus_txns,
+            )
+            .await
+            .expect("Unrecoverable error in consensus handler");
 
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
@@ -450,23 +378,6 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
     async fn last_executed_sub_dag_index(&self) -> u64 {
         self.last_consensus_stats.index.sub_dag_index
     }
-}
-
-fn order_by_gas_price(sequenced_transactions: &mut [VerifiedSequencedConsensusTransaction]) {
-    sequenced_transactions.sort_by_key(|txn| {
-        // Reverse order, so that transactions with higher gas price are put to the beginning.
-        std::cmp::Reverse({
-            match &txn.0.transaction {
-                SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                    tracking_id: _,
-                    kind: ConsensusTransactionKind::UserTransaction(cert),
-                }) => cert.gas_price(),
-                // Non-user transactions are considered to have gas price of MAX u64 and are put to the beginning.
-                // This way consensus commit prologue transactions will stay at the beginning.
-                _ => u64::MAX,
-            }
-        })
-    });
 }
 
 struct AsyncTransactionScheduler {
@@ -682,6 +593,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointServiceNoop;
     use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
+    use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -689,7 +601,8 @@ mod tests {
     };
     use prometheus::Registry;
     use shared_crypto::intent::Intent;
-    use sui_protocol_config::SupportedProtocolVersions;
+    use std::collections::BTreeSet;
+    use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
     use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
     use sui_types::committee::Committee;
     use sui_types::messages_consensus::{
@@ -851,7 +764,7 @@ mod tests {
     #[test]
     fn test_order_by_gas_price() {
         let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
-        order_by_gas_price(&mut v);
+        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
             extract(v),
             vec![
@@ -872,7 +785,7 @@ mod tests {
             cap_txn(1),
             user_txn(1000),
         ];
-        order_by_gas_price(&mut v);
+        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
             extract(v),
             vec![
@@ -895,7 +808,7 @@ mod tests {
             cap_txn(1),
             eop_txn(11),
         ];
-        order_by_gas_price(&mut v);
+        PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
         assert_eq!(
             extract(v),
             vec![
