@@ -224,7 +224,7 @@ The mutated object is the gas object used to pay for the transaction.
 You can call the function to create a color object:
 
 ```shell
-sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+sui client call --gas-budget <GAS-BUDGET-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 
 In the **Transaction Effects** portion of the output, you see an object included in the list of **Created Objects**:
