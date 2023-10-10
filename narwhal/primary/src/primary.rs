@@ -173,6 +173,7 @@ impl Primary {
         let synchronizer = Arc::new(Synchronizer::new(
             authority.id(),
             committee.clone(),
+            protocol_config.clone(),
             worker_cache.clone(),
             parameters.gc_depth,
             client.clone(),
@@ -441,6 +442,7 @@ impl Primary {
         let core_handle = Certifier::spawn(
             authority.id(),
             committee.clone(),
+            protocol_config.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
             signature_service,
@@ -469,6 +471,7 @@ impl Primary {
         let proposer_handle = Proposer::spawn(
             authority.id(),
             committee.clone(),
+            &protocol_config,
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,

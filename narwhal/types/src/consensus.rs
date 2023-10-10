@@ -39,7 +39,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for ConsensusOutput {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CommittedSubDag {
     /// The sequence of committed certificates.
     pub certificates: Vec<Certificate>,
@@ -449,7 +449,7 @@ mod tests {
     use indexmap::IndexMap;
     use std::collections::BTreeSet;
     use std::num::NonZeroUsize;
-    use test_utils::CommitteeFixture;
+    use test_utils::{latest_protocol_version, CommitteeFixture};
 
     #[test]
     fn test_zero_timestamp_in_sub_dag() {
@@ -467,8 +467,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // AND we initialise the sub dag via the "restore" way
         let sub_dag_round = CommittedSubDag {
@@ -503,8 +508,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // AND
         let sub_dag_round_2 = CommittedSubDag::new(
@@ -530,8 +540,13 @@ mod tests {
             .build()
             .unwrap();
 
-        let certificate =
-            Certificate::new_unsigned(&committee, Header::V1(header), Vec::new()).unwrap();
+        let certificate = Certificate::new_unsigned(
+            &latest_protocol_version(),
+            &committee,
+            Header::V1(header),
+            Vec::new(),
+        )
+        .unwrap();
 
         // WHEN create the sub dag based on the "previously committed" sub dag.
         let sub_dag_round_4 = CommittedSubDag::new(

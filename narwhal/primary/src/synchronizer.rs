@@ -26,6 +26,7 @@ use std::{
     time::Duration,
 };
 use storage::{CertificateStore, PayloadStore};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{
     sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
@@ -306,6 +307,7 @@ impl Synchronizer {
     pub fn new(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         gc_depth: Round,
         client: NetworkClient,
@@ -319,7 +321,7 @@ impl Synchronizer {
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
         let committee: &Committee = &committee;
-        let genesis = Self::make_genesis(committee);
+        let genesis = Self::make_genesis(&protocol_config, committee);
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
@@ -555,6 +557,7 @@ impl Synchronizer {
         let _scope = monitored_scope("Synchronizer::try_accept_certificate");
         self.process_certificate_internal(certificate, true, true)
             .await
+            .map(|_| ())
     }
 
     /// Tries to accept a certificate from certificate fetcher.
@@ -567,17 +570,18 @@ impl Synchronizer {
         let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificate");
         self.process_certificate_internal(certificate, false, false)
             .await
+            .map(|_| ())
     }
 
     /// Accepts a certificate produced by this primary. This is not expected to fail unless
     /// the primary is shutting down.
     pub async fn accept_own_certificate(&self, certificate: Certificate) -> DagResult<()> {
         // Process the new certificate.
-        match self
+        let certificate = match self
             .process_certificate_internal(certificate.clone(), false, false)
             .await
         {
-            Ok(()) => Ok(()),
+            Ok(processed_certificate) => Ok(processed_certificate),
             result @ Err(DagError::ShuttingDown) => result,
             Err(e) => panic!("Failed to process locally-created certificate: {e}"),
         }?;
@@ -621,16 +625,18 @@ impl Synchronizer {
         Ok(())
     }
 
-    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
-        Certificate::genesis(committee)
+    fn make_genesis(
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+    ) -> HashMap<CertificateDigest, Certificate> {
+        Certificate::genesis(protocol_config, committee)
             .into_iter()
             .map(|x| (x.digest(), x))
             .collect()
     }
 
     /// Checks if the certificate is valid and can potentially be accepted into the DAG.
-    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
-    pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+    pub fn sanitize_certificate(&self, certificate: Certificate) -> DagResult<Certificate> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -645,24 +651,24 @@ impl Synchronizer {
             DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
         );
         // Verify the certificate (and the embedded header).
-        certificate
-            .verify(&self.inner.committee, &self.inner.worker_cache)
-            .map_err(DagError::from)
+        certificate.verify(&self.inner.committee, &self.inner.worker_cache)
     }
 
+    // CertificateV2 maintains signature verification state. Therefore when this
+    // method is called with sanitize = true, the signature verification state may
+    // change which is why the updated certificate is returned.
     async fn process_certificate_internal(
         &self,
-        certificate: Certificate,
+        mut certificate: Certificate,
         sanitize: bool,
         early_suspend: bool,
-    ) -> DagResult<()> {
+    ) -> DagResult<Certificate> {
         let _scope = monitored_scope("Synchronizer::process_certificate_internal");
-
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
             self.inner.metrics.duplicate_certificates_processed.inc();
-            return Ok(());
+            return Ok(certificate);
         }
         // Ensure parents are checked if !early_suspend.
         // See comments above `try_accept_fetched_certificate()` for details.
@@ -677,8 +683,9 @@ impl Synchronizer {
                 return Err(DagError::Suspended(notify));
             }
         }
+
         if sanitize {
-            self.sanitize_certificate(&certificate)?;
+            certificate = self.sanitize_certificate(certificate)?;
         }
 
         debug!(
@@ -745,12 +752,13 @@ impl Synchronizer {
         let (sender, receiver) = oneshot::channel();
         self.inner
             .tx_certificate_acceptor
-            .send((certificate, sender, early_suspend))
+            .send((certificate.clone(), sender, early_suspend))
             .await
             .expect("Synchronizer should shut down before certificate acceptor task.");
         receiver
             .await
-            .expect("Synchronizer should shut down before certificate acceptor task.")
+            .expect("Synchronizer should shut down before certificate acceptor task.")?;
+        Ok(certificate)
     }
 
     /// This function checks if a certificate has all parents and can be accepted into storage.
@@ -1315,7 +1323,7 @@ mod tests {
             .build();
 
         let committee: Committee = fixture.committee();
-        let genesis = Certificate::genesis(&committee)
+        let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();

@@ -34,7 +34,7 @@ async fn test_recovery() {
 
     // Make certificates for rounds 1 and 2.
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();

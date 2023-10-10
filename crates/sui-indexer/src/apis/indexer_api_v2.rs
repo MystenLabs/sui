@@ -12,6 +12,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
 use sui_json_rpc::api::{cap_page_limit, IndexerApiServer};
+use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectResponse,
@@ -21,16 +22,21 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::DynamicFieldName;
+use sui_types::dynamic_field::{DynamicFieldName, Field};
 use sui_types::event::EventID;
 
 pub(crate) struct IndexerApiV2 {
     inner: IndexerReader,
+    name_service_config: NameServiceConfig,
 }
 
 impl IndexerApiV2 {
     pub fn new(inner: IndexerReader) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            // TODO allow configuring for other networks
+            name_service_config: Default::default(),
+        }
     }
 
     async fn get_owned_objects_internal(
@@ -187,7 +193,30 @@ impl IndexerApiServer for IndexerApiV2 {
     }
 
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
-        unimplemented!()
+        let domain = name.parse::<Domain>().map_err(|e| {
+            IndexerError::InvalidArgumentError(format!(
+                "Failed to parse NameService Domain with error: {:?}",
+                e
+            ))
+        })?;
+
+        let record_id = self.name_service_config.record_field_id(&domain);
+
+        let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
+            Some(o) => o,
+            None => return Ok(None),
+        };
+
+        let record = field_record_object
+            .to_rust::<Field<Domain, NameRecord>>()
+            .ok_or_else(|| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Malformed Object {record_id}"
+                ))
+            })?
+            .value;
+
+        Ok(record.target_address)
     }
 
     async fn resolve_name_service_names(
@@ -196,7 +225,37 @@ impl IndexerApiServer for IndexerApiV2 {
         cursor: Option<ObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
-        unimplemented!()
+        let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
+
+        let field_reverse_record_object = match self
+            .inner
+            .get_object_in_blocking_task(reverse_record_id)
+            .await?
+        {
+            Some(o) => o,
+            None => {
+                return Ok(Page {
+                    data: vec![],
+                    next_cursor: None,
+                    has_next_page: false,
+                })
+            }
+        };
+
+        let domain = field_reverse_record_object
+            .to_rust::<Field<SuiAddress, Domain>>()
+            .ok_or_else(|| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Malformed Object {reverse_record_id}"
+                ))
+            })?
+            .value;
+
+        Ok(Page {
+            data: vec![domain.to_string()],
+            next_cursor: None,
+            has_next_page: false,
+        })
     }
 }
 

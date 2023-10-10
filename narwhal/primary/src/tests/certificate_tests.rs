@@ -11,6 +11,7 @@ use rand::{
     SeedableRng,
 };
 use std::num::NonZeroUsize;
+use test_utils::latest_protocol_version;
 use test_utils::CommitteeFixture;
 use types::{Certificate, Vote, VoteAPI};
 
@@ -19,11 +20,19 @@ fn test_empty_certificate_verification() {
     let fixture = CommitteeFixture::builder().build();
 
     let committee = fixture.committee();
-    let header = fixture.header();
+    let header = fixture.header(&latest_protocol_version());
     // You should not be allowed to create a certificate that does not satisfying quorum requirements
-    assert!(Certificate::new_unverified(&committee, header.clone(), Vec::new()).is_err());
+    assert!(Certificate::new_unverified(
+        &latest_protocol_version(),
+        &committee,
+        header.clone(),
+        Vec::new()
+    )
+    .is_err());
 
-    let certificate = Certificate::new_unsigned(&committee, header, Vec::new()).unwrap();
+    let certificate =
+        Certificate::new_unsigned(&latest_protocol_version(), &committee, header, Vec::new())
+            .unwrap();
     assert!(certificate
         .verify(&committee, &fixture.worker_cache())
         .is_err());
@@ -33,7 +42,7 @@ fn test_empty_certificate_verification() {
 fn test_valid_certificate_verification() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let header = fixture.header();
+    let header = fixture.header(&latest_protocol_version());
 
     let mut signatures = Vec::new();
 
@@ -43,7 +52,9 @@ fn test_valid_certificate_verification() {
         signatures.push((vote.author(), vote.signature().clone()));
     }
 
-    let certificate = Certificate::new_unverified(&committee, header, signatures).unwrap();
+    let certificate =
+        Certificate::new_unverified(&latest_protocol_version(), &committee, header, signatures)
+            .unwrap();
 
     assert!(certificate
         .verify(&committee, &fixture.worker_cache())
@@ -54,7 +65,7 @@ fn test_valid_certificate_verification() {
 fn test_certificate_insufficient_signatures() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let header = fixture.header();
+    let header = fixture.header(&latest_protocol_version());
 
     let mut signatures = Vec::new();
 
@@ -64,9 +75,17 @@ fn test_certificate_insufficient_signatures() {
         signatures.push((vote.author(), vote.signature().clone()));
     }
 
-    assert!(Certificate::new_unverified(&committee, header.clone(), signatures.clone()).is_err());
+    assert!(Certificate::new_unverified(
+        &latest_protocol_version(),
+        &committee,
+        header.clone(),
+        signatures.clone()
+    )
+    .is_err());
 
-    let certificate = Certificate::new_unsigned(&committee, header, signatures).unwrap();
+    let certificate =
+        Certificate::new_unsigned(&latest_protocol_version(), &committee, header, signatures)
+            .unwrap();
 
     assert!(certificate
         .verify(&committee, &fixture.worker_cache())
@@ -77,7 +96,7 @@ fn test_certificate_insufficient_signatures() {
 fn test_certificate_validly_repeated_public_keys() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let header = fixture.header();
+    let header = fixture.header(&latest_protocol_version());
 
     let mut signatures = Vec::new();
 
@@ -89,7 +108,8 @@ fn test_certificate_validly_repeated_public_keys() {
         signatures.push((vote.author(), vote.signature().clone()));
     }
 
-    let certificate_res = Certificate::new_unverified(&committee, header, signatures);
+    let certificate_res =
+        Certificate::new_unverified(&latest_protocol_version(), &committee, header, signatures);
     assert!(certificate_res.is_ok());
     let certificate = certificate_res.unwrap();
 
@@ -102,7 +122,7 @@ fn test_certificate_validly_repeated_public_keys() {
 fn test_unknown_signature_in_certificate() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
-    let header = fixture.header();
+    let header = fixture.header(&latest_protocol_version());
 
     let mut signatures = Vec::new();
 
@@ -118,7 +138,13 @@ fn test_unknown_signature_in_certificate() {
     let vote = Vote::new_with_signer(&header, &malicious_id, &malicious_key);
     signatures.push((vote.author(), vote.signature().clone()));
 
-    assert!(Certificate::new_unverified(&committee, header, signatures).is_err());
+    assert!(Certificate::new_unverified(
+        &latest_protocol_version(),
+        &committee,
+        header,
+        signatures
+    )
+    .is_err());
 }
 
 proptest::proptest! {
@@ -130,7 +156,7 @@ proptest::proptest! {
             .committee_size(NonZeroUsize::new(committee_size).unwrap())
             .build();
         let committee = fixture.committee();
-        let header = fixture.header();
+        let header = fixture.header(&latest_protocol_version());
 
         let mut signatures = Vec::new();
 
@@ -141,7 +167,7 @@ proptest::proptest! {
             signatures.push((vote.author(), vote.signature().clone()));
         }
 
-        let certificate = Certificate::new_unverified(&committee, header, signatures).unwrap();
+        let certificate = Certificate::new_unverified(&latest_protocol_version(), &committee, header, signatures).unwrap();
 
         assert!(certificate
             .verify(&committee, &fixture.worker_cache())

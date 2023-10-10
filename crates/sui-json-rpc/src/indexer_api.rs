@@ -2,61 +2,48 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
+use async_trait::async_trait;
+use futures::Stream;
+use jsonrpsee::{
+    core::{error::SubscriptionClosed, RpcResult},
+    types::SubscriptionResult,
+    RpcModule, SubscriptionSink,
+};
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_core_types::language_storage::TypeTag;
+use mysten_metrics::spawn_monitored_task;
+use serde::Serialize;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
-
-use async_trait::async_trait;
-use futures::Stream;
-use jsonrpsee::core::error::SubscriptionClosed;
-use jsonrpsee::core::RpcResult;
-use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee::{RpcModule, SubscriptionSink};
-use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_core_types::account_address::AccountAddress;
-use serde::Serialize;
 use sui_json::SuiJsonValue;
-use sui_types::error::SuiObjectResponseError;
-use tracing::{debug, instrument, warn};
-
-use move_core_types::ident_str;
-use move_core_types::identifier::IdentStr;
-use move_core_types::language_storage::{StructTag, TypeTag};
-use mysten_metrics::spawn_monitored_task;
 use sui_json_rpc_types::{
-    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiMoveValue,
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiParsedMoveObject,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseQuery, TransactionBlocksPage,
-    TransactionFilter,
+    DynamicFieldPage, EventFilter, EventPage, ObjectsPage, Page, SuiObjectDataOptions,
+    SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseQuery, TransactionBlocksPage, TransactionFilter,
 };
 use sui_open_rpc::Module;
 use sui_storage::key_value_store::TransactionKeyValueStore;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::digests::TransactionDigest;
-use sui_types::dynamic_field::DynamicFieldName;
-use sui_types::event::EventID;
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-
-use crate::api::{
-    cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
-    QUERY_MAX_RESULT_LIMIT,
+use sui_types::{
+    base_types::{ObjectID, SuiAddress},
+    digests::TransactionDigest,
+    dynamic_field::{DynamicFieldName, Field},
+    error::SuiObjectResponseError,
+    event::EventID,
 };
-use crate::authority_state::StateRead;
-use crate::error::{Error, SuiRpcInputError};
-use crate::name_service::Domain;
-use crate::with_tracing;
-use crate::SuiRpcModule;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tracing::{debug, instrument, warn};
 
-const NAME_SERVICE_VALUE: &str = "value";
-const NAME_SERVICE_TARGET_ADDRESS: &str = "target_address";
-const NAME_SERVICE_DOMAIN_MODULE: &IdentStr = ident_str!("domain");
-const NAME_SERVICE_DOMAIN_STRUCT: &IdentStr = ident_str!("Domain");
-const NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS: &str =
-    "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0";
-const NAME_SERVICE_DEFAULT_REGISTRY: &str =
-    "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
-const NAME_SERVICE_DEFAULT_REVERSE_REGISTRY: &str =
-    "0x2fd099e17a292d2bc541df474f9fafa595653848cbabb2d7a4656ec786a1969f";
+use crate::{
+    api::{
+        cap_page_limit, validate_limit, IndexerApiServer, JsonRpcMetrics, ReadApiServer,
+        QUERY_MAX_RESULT_LIMIT,
+    },
+    authority_state::StateRead,
+    error::{Error, SuiRpcInputError},
+    name_service::{Domain, NameRecord, NameServiceConfig},
+    with_tracing, SuiRpcModule,
+};
 
 pub fn spawn_subscription<S, T>(
     mut sink: SubscriptionSink,
@@ -90,9 +77,7 @@ pub struct IndexerApi<R> {
     state: Arc<dyn StateRead>,
     read_api: R,
     transaction_kv_store: Arc<TransactionKeyValueStore>,
-    ns_package_addr: Option<SuiAddress>,
-    ns_registry_id: Option<ObjectID>,
-    ns_reverse_registry_id: Option<ObjectID>,
+    name_service_config: NameServiceConfig,
     pub metrics: Arc<JsonRpcMetrics>,
     subscription_semaphore: Arc<Semaphore>,
 }
@@ -102,9 +87,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
         state: Arc<AuthorityState>,
         read_api: R,
         transaction_kv_store: Arc<TransactionKeyValueStore>,
-        ns_package_addr: Option<SuiAddress>,
-        ns_registry_id: Option<ObjectID>,
-        ns_reverse_registry_id: Option<ObjectID>,
+        name_service_config: NameServiceConfig,
         metrics: Arc<JsonRpcMetrics>,
         max_subscriptions: Option<usize>,
     ) -> Self {
@@ -113,9 +96,7 @@ impl<R: ReadApiServer> IndexerApi<R> {
             state,
             transaction_kv_store,
             read_api,
-            ns_registry_id,
-            ns_package_addr,
-            ns_reverse_registry_id,
+            name_service_config,
             metrics,
             subscription_semaphore: Arc::new(Semaphore::new(max_subscriptions)),
         }
@@ -389,93 +370,26 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
     #[instrument(skip(self))]
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
         with_tracing!(async move {
-            let pkg_addr = match self.ns_package_addr {
-                Some(addr) => addr,
-                None => SuiAddress::from_str(NAME_SERVICE_DEFAULT_PACKAGE_ADDRESS)?,
-            };
-            let registry_id = match self.ns_registry_id {
-                Some(id) => id,
-                None => ObjectID::from_str(NAME_SERVICE_DEFAULT_REGISTRY).map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Parsing name service default registry ID failed with error: {:?}",
-                        e
-                    ))
-                })?,
-            };
-            let package_addr = AccountAddress::new(pkg_addr.to_inner());
-            let name_type_tag = TypeTag::Struct(Box::new(StructTag {
-                address: package_addr,
-                module: NAME_SERVICE_DOMAIN_MODULE.to_owned(),
-                name: NAME_SERVICE_DOMAIN_STRUCT.to_owned(),
-                type_params: vec![],
-            }));
             let domain = Domain::from_str(&name).map_err(|e| {
                 Error::UnexpectedError(format!(
                     "Failed to parse NameService Domain with error: {:?}",
                     e
                 ))
             })?;
-            let domain_bcs_value = bcs::to_bytes(&domain).map_err(|e| {
-                SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize name: {:?} with error: {:?}",
-                    domain, e
-                ))
-            })?;
-            let record_object_id_option = self
-                .state
-                .get_dynamic_field_object_id(registry_id, name_type_tag, &domain_bcs_value)
-                .map_err(|e| {
-                    SuiRpcInputError::GenericInvalid(format!(
-                        "Unable to lookup name in name service registry with error: {:?}",
-                        e
-                    ))
-                })?;
-            if let Some(record_object_id) = record_object_id_option {
-                let record_object_read =
-                    self.state.get_object_read(&record_object_id).map_err(|e| {
-                        Error::UnexpectedError(format!(
-                            "Failed to get object read of name with error {:?}",
-                            e
-                        ))
-                    })?;
-                let record_parsed_move_object =
-                    SuiParsedMoveObject::try_from_object_read(record_object_read)?;
-                // NOTE: "value" is the field name to get the address info
-                let address_info_move_value = record_parsed_move_object
-                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(
-                            "Cannot find value field in record Move struct".to_string(),
-                        )
-                    })?;
-                let address_info_move_struct = match address_info_move_value {
-                    SuiMoveValue::Struct(a) => Ok(a),
-                    _ => Err(Error::UnexpectedError(
-                        "value field is not found.".to_string(),
-                    )),
-                }?;
-                // NOTE: "target_address" is the field name to get the address
-                let address_str_move_value = address_info_move_struct
-                    .read_dynamic_field_value(NAME_SERVICE_TARGET_ADDRESS)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(format!(
-                            "Cannot find target_address field in address info Move struct: {:?}",
-                            address_info_move_struct
-                        ))
-                    })?;
-                let addr_opt = match &address_str_move_value {
-                    SuiMoveValue::Option(boxed_addr) => match **boxed_addr {
-                        Some(SuiMoveValue::Address(ref addr)) => Ok(Some(*addr)),
-                        _ => Ok(None),
-                    },
-                    _ => Err(Error::UnexpectedError(format!(
-                        "No SuiAddress found in: {:?}",
-                        address_str_move_value
-                    ))),
-                }?;
-                return Ok(addr_opt);
-            }
-            Ok(None)
+
+            let record_id = self.name_service_config.record_field_id(&domain);
+
+            let field_record_object = match self.state.get_object(&record_id).await? {
+                Some(o) => o,
+                None => return Ok(None),
+            };
+
+            let record = field_record_object
+                .to_rust::<Field<Domain, NameRecord>>()
+                .ok_or_else(|| Error::UnexpectedError(format!("Malformed Object {record_id}")))?
+                .value;
+
+            Ok(record.target_address)
         })
     }
 
@@ -487,107 +401,32 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
         _limit: Option<usize>,
     ) -> RpcResult<Page<String, ObjectID>> {
         with_tracing!(async move {
-            let reverse_registry_id = match self.ns_reverse_registry_id {
-                Some(id) => id,
-                None => ObjectID::from_str(NAME_SERVICE_DEFAULT_REVERSE_REGISTRY).map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Parsing name service default reverse registry ID failed with error: {:?}",
-                        e
-                    ))
-                })?,
-            };
+            let reverse_record_id = self.name_service_config.reverse_record_field_id(address);
 
-            let name_type_tag = TypeTag::Address;
-            let addr_bcs_value = bcs::to_bytes(&address).map_err(|e| {
-                SuiRpcInputError::GenericInvalid(format!(
-                    "Unable to serialize address: {:?} with error: {:?}",
-                    address, e
-                ))
-            })?;
-
-            let addr_object_id_opt = self
-                .state
-                .get_dynamic_field_object_id(reverse_registry_id, name_type_tag, &addr_bcs_value)
-                .map_err(|e| {
-                    Error::UnexpectedError(format!(
-                        "Read name service reverse dynamic field table failed with error: {:?}",
-                        e
-                    ))
-                })?;
-
-            if let Some(addr_object_id) = addr_object_id_opt {
-                let addr_object_read =
-                    self.state.get_object_read(&addr_object_id).map_err(|e| {
-                        warn!(
-                            "Failed to get object read of address {:?} with error: {:?}",
-                            addr_object_id, e
-                        );
-                        Error::UnexpectedError(format!(
-                            "Failed to get object read of address with err: {:?}",
-                            e
-                        ))
-                    })?;
-                let addr_parsed_move_object =
-                    SuiParsedMoveObject::try_from_object_read(addr_object_read)?;
-                let address_info_move_value = addr_parsed_move_object
-                    .read_dynamic_field_value(NAME_SERVICE_VALUE)
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(
-                            "Cannot find value field in record Move struct".to_string(),
-                        )
-                    })?;
-                let domain_info_move_struct = match address_info_move_value {
-                    SuiMoveValue::Struct(a) => Ok(a),
-                    _ => Err(Error::UnexpectedError(
-                        "value field is not found.".to_string(),
-                    )),
-                }?;
-                let labels_move_value = domain_info_move_struct
-                    .read_dynamic_field_value("labels")
-                    .ok_or_else(|| {
-                        Error::UnexpectedError(format!(
-                            "Cannot find labels field in address info Move struct: {:?}",
-                            domain_info_move_struct
-                        ))
-                    })?;
-                let primary_domain_opt = match labels_move_value {
-                    SuiMoveValue::Vector(labels) => {
-                        let label_strs: Vec<String> = labels
-                            .iter()
-                            .rev()
-                            .filter_map(|label| match label {
-                                SuiMoveValue::String(label_str) => Some(label_str.clone()),
-                                _ => None,
-                            })
-                            .collect();
-                        Ok(if label_strs.is_empty() {
-                            None
-                        } else {
-                            Some(label_strs.join("."))
+            let field_reverse_record_object =
+                match self.state.get_object(&reverse_record_id).await? {
+                    Some(o) => o,
+                    None => {
+                        return Ok(Page {
+                            data: vec![],
+                            next_cursor: None,
+                            has_next_page: false,
                         })
                     }
-                    _ => Err(Error::UnexpectedError(format!(
-                        "No string field for primary name is found in {:?}",
-                        labels_move_value
-                    ))),
-                }?;
+                };
 
-                Ok(Page {
-                    data: if let Some(primary_domain) = primary_domain_opt {
-                        vec![primary_domain]
-                    } else {
-                        vec![]
-                    },
-                    next_cursor: Some(addr_object_id),
-                    has_next_page: false,
-                })
-            } else {
-                Ok(Page {
-                    data: vec![],
-                    next_cursor: None,
-                    has_next_page: false,
-                })
-            }
+            let domain = field_reverse_record_object
+                .to_rust::<Field<SuiAddress, Domain>>()
+                .ok_or_else(|| {
+                    Error::UnexpectedError(format!("Malformed Object {reverse_record_id}"))
+                })?
+                .value;
+
+            Ok(Page {
+                data: vec![domain.to_string()],
+                next_cursor: None,
+                has_next_page: false,
+            })
         })
     }
 }
