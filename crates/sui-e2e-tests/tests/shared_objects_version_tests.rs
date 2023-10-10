@@ -8,7 +8,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
-use sui_types::object::{Object, Owner, OBJECT_START_VERSION};
+use sui_types::object::{Owner, OBJECT_START_VERSION};
 use sui_types::transaction::{CallArg, ObjectArg};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -128,7 +128,7 @@ impl TestEnvironment {
         &self,
         function: &'static str,
         arguments: Vec<CallArg>,
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let transaction = self
             .test_cluster
             .test_transaction_builder()
@@ -147,7 +147,7 @@ impl TestEnvironment {
     }
 
     async fn create_counter(&self) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self.move_call("create_counter", vec![]).await.unwrap();
+        let (fx, _) = self.move_call("create_counter", vec![]).await.unwrap();
         assert!(fx.status().is_ok());
 
         *fx.created()
@@ -157,7 +157,7 @@ impl TestEnvironment {
     }
 
     async fn create_shared_counter(&self) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call("create_shared_counter", vec![])
             .await
             .unwrap();
@@ -173,7 +173,7 @@ impl TestEnvironment {
         &self,
         counter: ObjectRef,
     ) -> Result<(ObjectRef, Owner), ExecutionFailureStatus> {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "share_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -193,7 +193,7 @@ impl TestEnvironment {
     }
 
     async fn increment_owned_counter(&self, counter: ObjectRef) -> (ObjectRef, Owner) {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(counter))],
@@ -212,7 +212,7 @@ impl TestEnvironment {
         counter: ObjectID,
         initial_shared_version: SequenceNumber,
     ) -> anyhow::Result<(ObjectRef, Owner)> {
-        let (fx, _, _) = self
+        let (fx, _) = self
             .move_call(
                 "increment_counter",
                 vec![CallArg::Object(ObjectArg::SharedObject {

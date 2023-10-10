@@ -19,7 +19,8 @@ use lru::LruCache;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
-use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutput, HeaderAPI};
+use narwhal_test_utils::latest_protocol_version;
+use narwhal_types::{BatchAPI, Certificate, CertificateAPI, ConsensusOutput, HeaderAPI};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -667,7 +668,7 @@ impl SequencedConsensusTransaction {
     pub fn new_test(transaction: ConsensusTransaction) -> Self {
         Self {
             transaction: SequencedConsensusTransactionKind::External(transaction),
-            certificate: Default::default(),
+            certificate: Arc::new(Certificate::default(&latest_protocol_version())),
             certificate_author: AuthorityName::ZERO,
             consensus_index: Default::default(),
         }
@@ -758,8 +759,13 @@ mod tests {
                 .build()
                 .unwrap();
 
-            let certificate =
-                Certificate::new_unsigned(&committee, Header::V1(header), vec![]).unwrap();
+            let certificate = Certificate::new_unsigned(
+                latest_protocol_config,
+                &committee,
+                Header::V1(header),
+                vec![],
+            )
+            .unwrap();
 
             certificates.push(certificate);
         }

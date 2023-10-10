@@ -25,7 +25,9 @@ use std::{
     time::Duration,
 };
 use storage::{NodeStorage, VoteDigestStore};
-use test_utils::{make_optimal_signed_certificates, temp_dir, CommitteeFixture};
+use test_utils::{
+    latest_protocol_version, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
+};
 use tokio::{sync::watch, time::timeout};
 use types::{
     now, Certificate, CertificateAPI, FetchCertificatesRequest, Header, HeaderAPI,
@@ -288,6 +290,7 @@ async fn test_request_vote_has_missing_parents() {
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -315,7 +318,7 @@ async fn test_request_vote_has_missing_parents() {
 
     // Make some mock certificates that are parents of our new header.
     let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -338,7 +341,7 @@ async fn test_request_vote_has_missing_parents() {
     // Create a test header.
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
@@ -455,6 +458,7 @@ async fn test_request_vote_accept_missing_parents() {
     let synchronizer = Arc::new(Synchronizer::new(
         target_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -482,7 +486,7 @@ async fn test_request_vote_accept_missing_parents() {
 
     // Make some mock certificates that are parents of our new header.
     let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -506,7 +510,7 @@ async fn test_request_vote_accept_missing_parents() {
     // Create a test header.
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .author(author_id)
             .round(3)
             .parents(round_2_certs.iter().map(|c| c.digest()).collect())
@@ -610,6 +614,7 @@ async fn test_request_vote_missing_batches() {
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -640,7 +645,7 @@ async fn test_request_vote_missing_batches() {
     for primary in fixture.authorities().filter(|a| a.id() != authority_id) {
         let header = Header::V1(
             primary
-                .header_builder(&fixture.committee())
+                .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
                     test_utils::fixture_batch_with_transactions(
                         10,
@@ -653,7 +658,7 @@ async fn test_request_vote_missing_batches() {
                 .unwrap(),
         );
 
-        let certificate = fixture.certificate(&header);
+        let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
@@ -664,7 +669,7 @@ async fn test_request_vote_missing_batches() {
     }
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
@@ -755,6 +760,7 @@ async fn test_request_vote_already_voted() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -786,7 +792,7 @@ async fn test_request_vote_already_voted() {
     for primary in fixture.authorities().filter(|a| a.id() != id) {
         let header = Header::V1(
             primary
-                .header_builder(&fixture.committee())
+                .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
                     test_utils::fixture_batch_with_transactions(
                         10,
@@ -799,7 +805,7 @@ async fn test_request_vote_already_voted() {
                 .unwrap(),
         );
 
-        let certificate = fixture.certificate(&header);
+        let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
@@ -831,7 +837,7 @@ async fn test_request_vote_already_voted() {
     // Verify Handler generates a Vote.
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
@@ -883,7 +889,7 @@ async fn test_request_vote_already_voted() {
     // Verify a different request for the same round receives an error.
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
@@ -943,6 +949,7 @@ async fn test_fetch_certificates_handler() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -968,16 +975,21 @@ async fn test_fetch_certificates_handler() {
         metrics: metrics.clone(),
     };
 
-    let mut current_round: Vec<_> = Certificate::genesis(&fixture.committee())
-        .into_iter()
-        .map(|cert| cert.header().clone())
-        .collect();
+    let mut current_round: Vec<_> =
+        Certificate::genesis(&latest_protocol_version(), &fixture.committee())
+            .into_iter()
+            .map(|cert| cert.header().clone())
+            .collect();
     let mut headers = vec![];
     let total_rounds = 4;
     for i in 0..total_rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| fixture.certificate(&header).digest())
+            .map(|header| {
+                fixture
+                    .certificate(&latest_protocol_version(), &header)
+                    .digest()
+            })
             .collect();
         (_, current_round) =
             fixture.headers_round(i, &parents, &test_utils::latest_protocol_version());
@@ -989,7 +1001,7 @@ async fn test_fetch_certificates_handler() {
     // Create certificates test data.
     let mut certificates = vec![];
     for header in headers.into_iter() {
-        certificates.push(fixture.certificate(&header));
+        certificates.push(fixture.certificate(&latest_protocol_version(), &header));
     }
     assert_eq!(certificates.len(), total_certificates);
     assert_eq!(16, total_certificates);
@@ -1114,6 +1126,7 @@ async fn test_request_vote_created_at_in_future() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -1144,7 +1157,7 @@ async fn test_request_vote_created_at_in_future() {
     for primary in fixture.authorities().filter(|a| a.id() != id) {
         let header = Header::V1(
             primary
-                .header_builder(&fixture.committee())
+                .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
                     test_utils::fixture_batch_with_transactions(
                         10,
@@ -1157,7 +1170,7 @@ async fn test_request_vote_created_at_in_future() {
                 .unwrap(),
         );
 
-        let certificate = fixture.certificate(&header);
+        let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
@@ -1193,7 +1206,7 @@ async fn test_request_vote_created_at_in_future() {
 
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
@@ -1231,7 +1244,7 @@ async fn test_request_vote_created_at_in_future() {
     let created_at = now() + 500;
 
     let test_header = author
-        .header_builder(&fixture.committee())
+        .header_builder(&latest_protocol_version(), &fixture.committee())
         .round(2)
         .parents(certificates.keys().cloned().collect())
         .with_payload_batch(
