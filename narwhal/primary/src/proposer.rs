@@ -215,7 +215,7 @@ impl Proposer {
 
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let header_digests = std::mem::take(&mut self.digests);
+        let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
         let system_messages = std::mem::take(&mut self.system_messages);
         let parents = std::mem::take(&mut self.last_parents);
 

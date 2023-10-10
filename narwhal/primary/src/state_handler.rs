@@ -19,6 +19,11 @@ use types::{
 type PkG = groups::bls12381::G2Element;
 type EncG = groups::bls12381::G2Element;
 
+#[cfg(test)]
+#[path = "tests/state_handler_tests.rs"]
+pub mod state_handler_tests;
+
+
 /// Updates Narwhal system state based on certificates received from consensus.
 pub struct StateHandler {
     authority_id: AuthorityIdentifier,
@@ -32,7 +37,7 @@ pub struct StateHandler {
     /// A channel to send system messages to the proposer.
     tx_system_messages: Sender<SystemMessage>,
 
-    /// If set, generates Narwhal system messages for random beacn
+    /// If set, generates Narwhal system messages for random beacon
     /// DKG and randomness generation.
     randomness_state: Option<RandomnessState>,
 
@@ -40,6 +45,7 @@ pub struct StateHandler {
 }
 
 // Internal state for randomness DKG and generation.
+// TODO: Write a brief protocol description.
 struct RandomnessState {
     party: dkg::Party<PkG, EncG>,
     messages: Vec<dkg::Message<PkG, EncG>>,
@@ -71,7 +77,7 @@ impl RandomnessState {
         let nodes = match nodes::Nodes::new(nodes) {
             Ok(nodes) => nodes,
             Err(err) => {
-                error!("Error while initializing random beacon state: {err:?}");
+                error!("Error while initializing random beacon Nodes: {err:?}");
                 return None;
             }
         };
@@ -92,7 +98,7 @@ impl RandomnessState {
         ) {
             Ok(party) => party,
             Err(err) => {
-                error!("Error while initializing random beacon state: {err:?}");
+                error!("Error while initializing random beacon Party: {err:?}");
                 return None;
             }
         };
@@ -242,6 +248,7 @@ impl StateHandler {
             }
             // Once all messages in the new commit are saved, advance the random
             // beacon protocol if possible.
+            // TODO: Implement/audit crash recovery for random beacon.
             randomness_state.advance(&self.tx_system_messages).await;
         }
     }
