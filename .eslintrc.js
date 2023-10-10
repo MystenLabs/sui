@@ -262,5 +262,11 @@ module.exports = {
 				'react-hooks/rules-of-hooks': 'off',
 			},
 		},
+		{
+			files: ['sdk/create-dapp/templates/**/*'],
+			rules: {
+				'header/header': 'off',
+			},
+		},
 	],
 };
