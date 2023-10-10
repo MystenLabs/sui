@@ -31,8 +31,6 @@
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "tsc --build",
-		"test": "pnpm test:typecheck",
-		"test:typecheck": "tsc -p ./test",
 		"prepublishOnly": "pnpm build",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
@@ -57,10 +55,6 @@
 		"@mysten/sui.js": "workspace:*",
 		"@types/node": "^20.4.2",
 		"enquirer": "^2.4.1"
-	},
-	"peerDependencies": {
-		"@tanstack/react-query": "^4.0.0",
-		"react": "*"
 	},
 	"sideEffects": false,
 	"bin": "./bin/index.js"
