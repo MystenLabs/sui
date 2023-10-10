@@ -62,8 +62,9 @@ export const UseCurrentWalletExample = withProviders(() => {
 	return (
 		<div style={{ padding: 20 }}>
 			<ConnectButton />
-			{!wallet && <div>No wallet connected</div>}
-			{wallet && (
+			{!wallet ? (
+				<div>No wallet connected</div>
+			) : (
 				<div>
 					<h2>Current wallet:</h2>
 					<div>Name: {wallet.name}</div>
