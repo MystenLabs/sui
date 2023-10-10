@@ -161,6 +161,7 @@ async fn fetch_certificates_basic() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         gc_depth,
         client,
@@ -205,7 +206,8 @@ async fn fetch_certificates_basic() {
     );
 
     // Generate headers and certificates in successive rounds
-    let genesis_certs: Vec<_> = Certificate::genesis(&fixture.committee());
+    let genesis_certs: Vec<_> =
+        Certificate::genesis(&latest_protocol_version(), &fixture.committee());
     for cert in genesis_certs.iter() {
         certificate_store
             .write(cert.clone())
@@ -221,7 +223,11 @@ async fn fetch_certificates_basic() {
     for i in 0..rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| fixture.certificate(&header).digest())
+            .map(|header| {
+                fixture
+                    .certificate(&latest_protocol_version(), &header)
+                    .digest()
+            })
             .collect();
         (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
         headers.extend(current_round.clone());
@@ -236,7 +242,7 @@ async fn fetch_certificates_basic() {
     // Create certificates test data.
     let mut certificates = vec![];
     for header in headers.into_iter() {
-        certificates.push(fixture.certificate(&header));
+        certificates.push(fixture.certificate(&latest_protocol_version(), &header));
     }
     assert_eq!(certificates.len(), total_certificates); // note genesis is not included
     assert_eq!(240, total_certificates);

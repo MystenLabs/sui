@@ -13,6 +13,7 @@ use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::num::NonZeroUsize;
+use test_utils::latest_protocol_version;
 use test_utils::CommitteeFixture;
 use tokio::sync::watch;
 use tokio::time::Duration;
@@ -44,7 +45,7 @@ async fn propose_header() {
     let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
-    let proposed_header = primary.header(&committee);
+    let proposed_header = primary.header(&latest_protocol_version(), &committee);
 
     // Set up network.
     let own_address = committee
@@ -103,6 +104,7 @@ async fn propose_header() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -119,6 +121,7 @@ async fn propose_header() {
     let _handle = Certifier::spawn(
         id,
         committee.clone(),
+        latest_protocol_version(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -159,7 +162,7 @@ async fn propose_header_failure() {
     let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
-    let proposed_header = primary.header(&committee);
+    let proposed_header = primary.header(&latest_protocol_version(), &committee);
 
     // Set up network.
     let own_address = committee
@@ -201,6 +204,7 @@ async fn propose_header_failure() {
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -217,6 +221,7 @@ async fn propose_header_failure() {
     let _handle = Certifier::spawn(
         authority_id,
         committee.clone(),
+        latest_protocol_version(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -278,7 +283,7 @@ async fn run_vote_aggregator_with_param(
     let (certificate_store, payload_store) = create_db_stores();
 
     // Create a fake header.
-    let proposed_header = primary.header(&committee);
+    let proposed_header = primary.header(&latest_protocol_version(), &committee);
 
     // Set up network.
     let own_address = committee
@@ -332,6 +337,7 @@ async fn run_vote_aggregator_with_param(
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -347,6 +353,7 @@ async fn run_vote_aggregator_with_param(
     let _handle = Certifier::spawn(
         id,
         committee.clone(),
+        latest_protocol_version(),
         certificate_store.clone(),
         synchronizer,
         signature_service,
@@ -401,6 +408,7 @@ async fn shutdown_core() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -431,6 +439,7 @@ async fn shutdown_core() {
     let handle = Certifier::spawn(
         id,
         committee.clone(),
+        latest_protocol_version(),
         certificate_store.clone(),
         synchronizer.clone(),
         signature_service.clone(),
