@@ -18,6 +18,7 @@ use crate::{
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
+        name_service::NameService,
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
@@ -1018,7 +1019,7 @@ impl PgManager {
         &self,
         name_service_config: &NameServiceConfig,
         address: SuiAddress,
-    ) -> Result<Option<Connection<String, String>>, Error> {
+    ) -> Result<Option<Connection<String, NameService>>, Error> {
         let reverse_record_id =
             name_service_config.reverse_record_field_id(NativeSuiAddress::from(address));
 
@@ -1037,9 +1038,10 @@ impl PgManager {
             .value;
 
         let mut connection = Connection::new(false, false);
-        connection
-            .edges
-            .push(Edge::new(domain.to_string(), domain.to_string()));
+        connection.edges.push(Edge::new(
+            domain.to_string(),
+            NameService(domain.to_string()),
+        ));
         Ok(Some(connection))
     }
 }

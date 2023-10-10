@@ -9,6 +9,7 @@ use crate::context_data::name_service::NameServiceConfig;
 use super::{
     balance::Balance,
     coin::Coin,
+    name_service::NameService,
     object::{Object, ObjectFilter},
     stake::Stake,
     sui_address::SuiAddress,
@@ -139,7 +140,7 @@ impl Address {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, String>>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await

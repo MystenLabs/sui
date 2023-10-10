@@ -12,6 +12,7 @@ use async_graphql::connection::Connection;
 use async_graphql::*;
 
 use super::address::Address;
+use super::name_service::NameService;
 
 #[derive(Interface)]
 #[graphql(
@@ -58,7 +59,7 @@ use super::address::Address;
     field(name = "default_name_service_name", ty = "Option<String>"),
     field(
         name = "name_service_connection",
-        ty = "Option<Connection<String, String>>",
+        ty = "Option<Connection<String, NameService>>",
         arg(name = "first", ty = "Option<u64>"),
         arg(name = "after", ty = "Option<String>"),
         arg(name = "last", ty = "Option<u64>"),
@@ -168,7 +169,7 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, String>>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await

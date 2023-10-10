@@ -6,6 +6,7 @@ use async_graphql::{connection::Connection, *};
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
@@ -172,7 +173,7 @@ impl Object {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Option<Connection<String, String>>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
             .await
