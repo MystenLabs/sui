@@ -245,6 +245,11 @@ pub struct AuthorityMetrics {
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 
     pub authenticator_state_update_failed: IntCounter,
+
+    /// Count of zklogin signatures
+    pub zklogin_sig_count: IntCounter,
+    /// Count of multisig signatures
+    pub multisig_sig_count: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -563,6 +568,18 @@ impl AuthorityMetrics {
             authenticator_state_update_failed: register_int_counter_with_registry!(
                 "authenticator_state_update_failed",
                 "Number of failed authenticator state updates",
+                registry,
+            )
+            .unwrap(),
+            zklogin_sig_count: register_int_counter_with_registry!(
+                "zklogin_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            multisig_sig_count: register_int_counter_with_registry!(
+                "multisig_sig_count",
+                "Count of zkLogin signatures",
                 registry,
             )
             .unwrap(),
@@ -3462,6 +3479,13 @@ impl AuthorityState {
         self.metrics
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
+
+        // count signature by scheme, for zklogin and multisig
+        if certificate.has_zklogin_sig() {
+            self.metrics.zklogin_sig_count.inc();
+        } else if certificate.has_upgraded_multisig() {
+            self.metrics.multisig_sig_count.inc();
+        }
 
         Ok(())
     }
