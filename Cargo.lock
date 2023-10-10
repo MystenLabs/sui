@@ -11449,6 +11449,7 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "uuid",
  "workspace-hack",
 ]
 
