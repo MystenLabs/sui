@@ -31,7 +31,6 @@ use sui_types::base_types::TransactionDigest;
 use sui_types::effects::{TransactionEffectsAPI, VerifiedCertifiedTransactionEffects};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::object::Object;
 use sui_types::quorum_driver_types::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     FinalizedEffects, QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse,
@@ -223,11 +222,7 @@ where
             Ok(Err(err)) => Err(err),
             Ok(Ok(response)) => {
                 good_response_metrics.inc();
-                let QuorumDriverResponse {
-                    effects_cert,
-                    objects,
-                    ..
-                } = response;
+                let QuorumDriverResponse { effects_cert, .. } = response;
                 if !wait_for_local_execution {
                     return Ok(ExecuteTransactionResponse::EffectsCert(Box::new((
                         FinalizedEffects::new_from_effects_cert(effects_cert.into()),
@@ -245,7 +240,6 @@ where
                     &self.validator_state,
                     &executable_tx,
                     &effects_cert,
-                    objects,
                     &self.metrics,
                 )
                 .await
@@ -312,7 +306,6 @@ where
         validator_state: &Arc<AuthorityState>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
-        objects: Vec<Object>,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
         let epoch_store = validator_state.load_epoch_store_one_call_per_task();
@@ -347,7 +340,6 @@ where
             validator_state.fullnode_execute_certificate_with_effects(
                 transaction,
                 effects_cert,
-                objects,
                 &epoch_store,
             ),
         )
@@ -391,14 +383,7 @@ where
     ) {
         loop {
             match effects_receiver.recv().await {
-                Ok(Ok((
-                    transaction,
-                    QuorumDriverResponse {
-                        effects_cert,
-                        objects,
-                        ..
-                    },
-                ))) => {
+                Ok(Ok((transaction, QuorumDriverResponse { effects_cert, .. }))) => {
                     let tx_digest = transaction.digest();
                     if let Err(err) = pending_transaction_log.finish_transaction(tx_digest) {
                         panic!(
@@ -436,7 +421,6 @@ where
                         &validator_state,
                         &executable_tx,
                         &effects_cert,
-                        objects,
                         &metrics,
                     )
                     .await;

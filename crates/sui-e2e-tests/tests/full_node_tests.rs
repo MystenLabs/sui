@@ -848,7 +848,6 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
-            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
@@ -877,7 +876,6 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
-            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
@@ -1273,10 +1271,8 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         QuorumDriverResponse {
             effects_cert: _certified_txn_effects,
             events: _txn_events,
-            objects,
         },
     ) = rx.recv().await.unwrap().unwrap();
-    assert!(objects.is_empty(), "{objects:?}");
     Ok(())
 }
 
