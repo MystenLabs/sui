@@ -27,7 +27,7 @@ You can also run the example and see output in ANSI color:
     cargo run --example easy-init
 
 ## Features
-- `jaeger` - this feature is enabled by default as it enables jaeger tracing
+- `otlp` - this feature is enabled by default as it enables otlp tracing
 - `json` - Bunyan formatter - JSON log output, optional
 - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 
@@ -45,21 +45,27 @@ This output can easily be fed to backends such as ElasticSearch for indexing, al
 
 NOTE: JSON output requires the `json` crate feature to be enabled.
 
-### Jaeger (seeing distributed traces)
+### OTLP
 
-To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do the following:
+#### Tracing locally:
 
-1. Run this to get a local Jaeger container: `docker run -d -p6831:6831/udp -p6832:6832/udp -p16686:16686 jaegertracing/all-in-one:latest`
-2. Set `enable_jaeger` config setting to true or set `TOKIO_JAEGER` env var
-3. Run your app
-4. Browse to `http://localhost:16686/` and select the service you configured using `service_name`
+1. In `docker/grafana-local` run `docker compose up` to start a local grafana instance.
+2. Set `TRACE_FILTER=<filter expression>` - for local use `TRACE_FILTER=sui=trace,info` is a good place to start.
+3. Start the sui-node or other process.
+4. Go to http://localhost:3000 (or [http://localhost:3000/ with traces already filtered to sui-node](http://localhost:3000/explore?panes=%7B%22iHz%22:%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22datasource%22:%7B%22type%22:%22tempo%22,%22uid%22:%22tempo%22%7D,%22queryType%22:%22traceqlSearch%22,%22limit%22:20,%22filters%22:%5B%7B%22id%22:%22service-name%22,%22tag%22:%22service.name%22,%22operator%22:%22%3D%22,%22scope%22:%22resource%22,%22value%22:%5B%22sui-node%22%5D,%22valueType%22:%22string%22%7D,%7B%22id%22:%22span-name%22,%22tag%22:%22name%22,%22operator%22:%22%3D%22,%22scope%22:%22span%22,%22value%22:%5B%5D,%22valueType%22:%22string%22%7D,%7B%22id%22:%224f3681c5%22,%22operator%22:%22%3D%22,%22scope%22:%22span%22%7D%5D%7D%5D,%22range%22:%7B%22from%22:%22now-5m%22,%22to%22:%22now%22%7D%7D%7D&schemaVersion=1&orgId=1)
+5. Select `Tempo` as the data source.
 
-NOTE: separate spans (which are not nested) are not connected as a single trace for now.
+#### Tracing in production:
 
-Jaeger subscriber is enabled by default but is protected by the jaeger feature flag.  If you'd like to leave
-out the Jaeger dependencies, you can turn off the default-features in your dependency:
+Because tracing is expensive, it is not enabled by default. To enable trace exporting on a production machine:
 
-    telemetry = { url = "...", default-features = false }
+1. Ensure the process was started with `TRACE_FILTER=off` - this enables the OTLP system but filters out all spans.
+
+2. Using the filter expression and duration of your choice, run:
+
+      $ curl -X POST 'http://127.0.0.1:1337/enable-tracing?filter=sui-node=trace,info&duration=10s'
+
+Tracing will automatically be disabled after the specified duration has elapsed, in order to avoid leaving tracing on unintentionally.
 
 ### Automatic Prometheus span latencies
 
@@ -68,13 +74,6 @@ a Prometheus histogram to track latencies for every span in your app, which is s
 span performance in production apps.
 
 Enabling this layer can only be done programmatically, by passing in a Prometheus registry to `TelemetryConfig`.
-
-### Span levels vs log levels
-
-What spans are included for Jaeger output, automatic span latencies, etc.?  These are controlled by
-the `span_level` config attribute, or the `TS_SPAN_LEVEL` environment variable.  Note that this is
-separate from `RUST_LOG`, so that you can separately control the logging verbosity from the level of
-spans that are to be recorded and traced.
 
 ### Live async inspection / Tokio Console
 
