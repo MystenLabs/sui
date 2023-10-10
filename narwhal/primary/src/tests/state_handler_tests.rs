@@ -2,7 +2,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use fastcrypto::{serde_helpers::ToFromByteArray, traits::{KeyPair, ToFromBytes}};
+use fastcrypto::{
+    serde_helpers::ToFromByteArray,
+    traits::{KeyPair, ToFromBytes},
+};
 use test_utils::CommitteeFixture;
 
 #[tokio::test]

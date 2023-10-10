@@ -23,7 +23,6 @@ type EncG = groups::bls12381::G2Element;
 #[path = "tests/state_handler_tests.rs"]
 pub mod state_handler_tests;
 
-
 /// Updates Narwhal system state based on certificates received from consensus.
 pub struct StateHandler {
     authority_id: AuthorityIdentifier,

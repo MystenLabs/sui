@@ -487,7 +487,6 @@ impl Primary {
             rx_committed_own_headers,
             node_metrics,
             leader_schedule,
-            protocol_config.narwhal_header_v2(),
         );
 
         let mut handles = vec![

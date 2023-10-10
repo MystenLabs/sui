@@ -47,7 +47,6 @@ async fn propose_empty() {
         rx_committed_own_headers,
         metrics,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        /* use_header_v2 */ false,
     );
 
     // Ensure the proposer makes a correct empty header.
@@ -100,7 +99,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         rx_committed_own_headers,
         metrics,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        /* use_header_v2 */ false,
     );
 
     // Send enough digests for the header payload.
@@ -226,7 +224,6 @@ async fn equivocation_protection() {
         rx_committed_own_headers,
         metrics,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        /* use_header_v2 */ false,
     );
 
     // Send enough digests for the header payload.
@@ -302,7 +299,6 @@ async fn equivocation_protection() {
         rx_committed_own_headers,
         metrics,
         LeaderSchedule::new(committee.clone(), LeaderSwapTable::default()),
-        /* use_header_v2 */ false,
     );
 
     // Send enough digests for the header payload.

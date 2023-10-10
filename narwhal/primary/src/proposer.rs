@@ -131,9 +131,9 @@ impl Proposer {
         rx_committed_own_headers: Receiver<(Round, Vec<Round>)>,
         metrics: Arc<PrimaryMetrics>,
         leader_schedule: LeaderSchedule,
-        use_header_v2: bool,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(protocol_config, &committee);
+        let use_header_v2 = protocol_config.narwhal_header_v2();
         spawn_logged_monitored_task!(
             async move {
                 Self {
