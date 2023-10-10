@@ -6,12 +6,12 @@ use async_graphql::{connection::Connection, *};
 
 use super::big_int::BigInt;
 use super::digest::Digest;
-use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
+use crate::context_data::name_service::NameServiceConfig;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
 use crate::types::base64::Base64;
 
@@ -167,12 +167,16 @@ impl Object {
 
     pub async fn name_service_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, NameService>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, String>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 }
 

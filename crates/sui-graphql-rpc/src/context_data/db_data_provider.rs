@@ -47,6 +47,7 @@ use sui_indexer::{
 };
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::{
+    base_types::SuiAddress as NativeSuiAddress,
     digests::ChainIdentifier,
     effects::TransactionEffects,
     messages_checkpoint::{
@@ -58,8 +59,12 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
+use sui_types::dynamic_field::Field;
 
-use super::DEFAULT_PAGE_SIZE;
+use super::{
+    name_service::{Domain, NameRecord, NameServiceConfig},
+    DEFAULT_PAGE_SIZE,
+};
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
@@ -983,6 +988,64 @@ impl PgManager {
         } else {
             Ok(None)
         }
+    }
+
+    pub(crate) async fn resolve_name_service_address(
+        &self,
+        name_service_config: &NameServiceConfig,
+        name: String,
+    ) -> Result<Option<Address>, Error> {
+        let domain = name.parse::<Domain>().map_err(|e| {
+            Error::Internal(format!(
+                "Failed to parse NameService Domain with error: {:?}",
+                e
+            ))
+        })?;
+
+        let record_id = name_service_config.record_field_id(&domain);
+
+        let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
+            Some(o) => o,
+            None => return Ok(None),
+        };
+
+        let record = field_record_object
+            .to_rust::<Field<Domain, NameRecord>>()
+            .ok_or_else(|| Error::Internal(format!("Malformed Object {record_id}")))?
+            .value;
+
+        Ok(record.target_address.map(|address| Address {
+            address: SuiAddress::from_array(address.to_inner()),
+        }))
+    }
+
+    pub(crate) async fn fetch_name_service_names(
+        &self,
+        name_service_config: &NameServiceConfig,
+        address: SuiAddress,
+    ) -> Result<Option<Connection<String, String>>, Error> {
+        let reverse_record_id =
+            name_service_config.reverse_record_field_id(NativeSuiAddress::from(address));
+
+        let field_reverse_record_object = match self
+            .inner
+            .get_object_in_blocking_task(reverse_record_id)
+            .await?
+        {
+            Some(o) => o,
+            None => return Ok(None),
+        };
+
+        let domain = field_reverse_record_object
+            .to_rust::<Field<SuiAddress, Domain>>()
+            .ok_or_else(|| Error::Internal(format!("Malformed Object {reverse_record_id}")))?
+            .value;
+
+        let mut connection = Connection::new(false, false);
+        connection
+            .edges
+            .push(Edge::new(domain.to_string(), domain.to_string()));
+        Ok(Some(connection))
     }
 }
 

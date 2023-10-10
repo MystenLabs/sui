@@ -15,7 +15,10 @@ use super::{
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager},
+    context_data::{
+        context_ext::DataProviderContextExt, db_data_provider::PgManager,
+        name_service::NameServiceConfig,
+    },
     error::{code, graphql_error, Error},
 };
 
@@ -186,5 +189,16 @@ impl Query {
         ctx.data_provider()
             .fetch_protocol_config(protocol_version)
             .await
+    }
+
+    async fn resolve_name_service_address(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<Address>> {
+        ctx.data_unchecked::<PgManager>()
+            .resolve_name_service_address(ctx.data_unchecked::<NameServiceConfig>(), name)
+            .await
+            .extend()
     }
 }

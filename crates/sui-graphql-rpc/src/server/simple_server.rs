@@ -4,6 +4,7 @@
 use crate::config::{ConnectionConfig, ServiceConfig};
 use crate::context_data::data_provider::DataProvider;
 use crate::context_data::db_data_provider::PgManager;
+use crate::context_data::name_service::NameServiceConfig;
 use crate::context_data::sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0};
 use crate::extensions::feature_gate::FeatureGate;
 use crate::extensions::logger::Logger;
@@ -37,6 +38,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
             e
         })
         .unwrap();
+    let name_service_config = NameServiceConfig::default();
 
     let prom_addr: SocketAddr = PROM_ADDR.parse().unwrap();
     let registry = start_prom(prom_addr);
@@ -52,6 +54,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_loader)
         .context_data(service_config)
         .context_data(pg_conn_pool)
+        .context_data(name_service_config)
         .context_data(Arc::new(metrics))
         .extension(QueryLimitsChecker::default())
         .extension(FeatureGate)
