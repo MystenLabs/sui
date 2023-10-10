@@ -166,6 +166,22 @@ module deepbook::clob_v2 {
         maker_rebates: u64
     }
 
+    /// Emitted only when a taker order is filled.
+    struct TakerBalanceChange<phantom BaseAsset, phantom QuoteAsset> has copy, store, drop {
+        /// object ID of the pool the order was placed on
+        pool_id: ID,
+        is_bid: bool,
+        client_order_id: u64,
+        /// owner ID of the `AccountCap` that filled the order
+        taker_address: address,
+        /// indicate whether the original_quantity is quoted in the base asset(true) or the quote asset(false)
+        base_or_quote: bool,
+        /// original quantity that user want to sell or buy
+        original_quantity: u64,
+        base_asset_quantity_changed: u64,
+        quote_asset_quantity_changed: u64,
+    }
+
     /// Emitted when user deposit asset to custodian
     struct DepositAsset<phantom Asset> has copy, store, drop {
         /// object id of the pool that asset deposit to
@@ -455,7 +471,8 @@ module deepbook::clob_v2 {
         ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
         assert!(quantity > 0, EInvalidQuantity);
-        assert!(coin::value(&quote_coin) >= quantity, EInsufficientQuoteCoin);
+        let quote_asset_original = coin::value(&quote_coin);
+        assert!(quote_asset_original >= quantity, EInsufficientQuoteCoin);
         let (base_asset_balance, quote_asset_balance) = match_bid_with_quote_quantity(
             pool,
             account_cap,
@@ -466,6 +483,16 @@ module deepbook::clob_v2 {
             coin::into_balance(quote_coin)
         );
         let val = balance::value(&base_asset_balance);
+        event::emit(TakerBalanceChange<BaseAsset, QuoteAsset>{
+            pool_id: *object::uid_as_inner(&pool.id),
+            is_bid: true,
+            client_order_id,
+            original_quantity: quantity,
+            base_or_quote: false,
+            taker_address: account_owner(account_cap),
+            base_asset_quantity_changed: val,
+            quote_asset_quantity_changed: quote_asset_original - balance::value(&quote_asset_balance)
+        });
         (coin::from_balance(base_asset_balance, ctx), coin::from_balance(quote_asset_balance, ctx), val)
     }
 
@@ -975,6 +1002,8 @@ module deepbook::clob_v2 {
         // Then iterate over the price levels in descending order until the market order is completely filled.
         assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
         assert!(quantity != 0, EInvalidQuantity);
+        let base_quantity_original = coin::value(&base_coin);
+        let quote_quantity_original = coin::value(&quote_coin);
         if (is_bid) {
             let (base_balance_filled, quote_balance_left) = match_bid(
                 pool,
@@ -1009,6 +1038,20 @@ module deepbook::clob_v2 {
                 coin::from_balance(quote_balance_filled, ctx),
             );
         };
+        let base_quantity_remaining = coin::value(&base_coin);
+        let quote_quantity_remaining = coin::value(&quote_coin);
+        event::emit(TakerBalanceChange<BaseAsset, QuoteAsset>{
+            pool_id: *object::uid_as_inner(&pool.id),
+            is_bid,
+            client_order_id,
+            taker_address: account_owner(account_cap),
+            base_or_quote: true,
+            original_quantity: quantity,
+            base_asset_quantity_changed: if (is_bid) { base_quantity_remaining - base_quantity_original}
+            else {base_quantity_original - base_quantity_remaining},
+            quote_asset_quantity_changed: if (is_bid) { quote_quantity_original - quote_quantity_remaining}
+            else {quote_quantity_remaining - quote_quantity_original},
+        });
         (base_coin, quote_coin)
     }
 
