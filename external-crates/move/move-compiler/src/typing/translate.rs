@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    core::{self, Context, Subst},
+    core::{self, Context, Local, Subst},
     expand, globals, infinite_instantiations, recursive_structs,
 };
 use crate::{
@@ -104,7 +104,7 @@ fn modules(
     }
 
     for (_, mident, mdef) in &typed_modules {
-        gen_unused_warnings(context, mident, mdef);
+        unused_module_members(context, mident, mdef);
     }
 
     typed_modules
@@ -255,6 +255,7 @@ fn function(
     expand::function_signature(context, &mut signature);
 
     let body = function_body(context, &acquires, n_body);
+    unused_let_muts(context);
     context.current_function = None;
     context.env.pop_warning_filter_scope();
     T::Function {
@@ -347,7 +348,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.return_type = Some(signature.clone());
 
     let mut value = exp_(context, nvalue);
-
+    unused_let_muts(context);
     subtype(
         context,
         signature.loc,
@@ -2559,11 +2560,31 @@ fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
 }
 
 //**************************************************************************************************
-// Module-wide warnings
+// Follow-up warnings
 //**************************************************************************************************
 
+/// Generates warnings for unused mut declerations
+/// Should be called at the end of functions/constants
+fn unused_let_muts(context: &mut Context) {
+    let locals = context.take_locals();
+    for (v, local) in locals {
+        let Local { mut_, used_mut, .. } = local;
+        let Mutability::Mut(mut_loc) = mut_ else { continue };
+        if used_mut.is_none() {
+            let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
+            let mut_msg = format!("Consider removing the 'mut' declaration here");
+            context.env.add_diag(diag!(
+                UnusedItem::MutModifier,
+                (v.loc, decl_msg),
+                (mut_loc, mut_msg)
+            ))
+        }
+    }
+}
+
 /// Generates warnings for unused (private) functions and unused constants.
-fn gen_unused_warnings(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
+/// Should be called after the whole program has been processed.
+fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and

@@ -53,10 +53,10 @@ enum LoopInfo_ {
     BreakType(Box<Type>),
 }
 
-struct Local {
-    mut_: Mutability,
-    ty: Type,
-    used_mut: Option<Loc>,
+pub struct Local {
+    pub mut_: Mutability,
+    pub ty: Type,
+    pub used_mut: Option<Loc>,
 }
 
 pub struct Context<'env> {
@@ -319,6 +319,10 @@ impl<'env> Context<'env> {
         let local = self.locals.get_mut(var).unwrap();
         local.used_mut = Some(loc);
         (decl_loc, local.mut_)
+    }
+
+    pub fn take_locals(&mut self) -> UniqueMap<Var, Local> {
+        std::mem::take(&mut self.locals)
     }
 
     pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
