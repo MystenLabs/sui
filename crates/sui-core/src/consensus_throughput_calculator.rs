@@ -123,6 +123,8 @@ pub struct ThroughputProfileEntry {
 struct ConsensusThroughputCalculatorInner {
     observations: VecDeque<(TimestampSecs, u64)>,
     total_transactions: u64,
+    /// The last timestamp that we considered as oldest to calculate the throughput over the observations window.
+    last_oldest_timestamp: Option<TimestampSecs>,
 }
 
 /// The ConsensusThroughputProfiler is responsible for assigning the right throughput profile by polling
@@ -209,15 +211,23 @@ impl ConsensusThroughputProfiler {
         timestamp: TimestampSecs,
     ) -> ThroughputProfileEntry {
         let last_profile = self.last_throughput_profile.load();
+
+        // skip any processing if provided timestamp is older than the last used one.
+        if timestamp < last_profile.timestamp {
+            return **last_profile;
+        }
+
         let profile = self.profile_ranges.resolve(throughput);
 
         let current_seconds_bucket = timestamp / self.throughput_profile_update_interval;
         let last_profile_seconds_bucket =
             last_profile.timestamp / self.throughput_profile_update_interval;
 
-        // update only when we have a new profile & minimum time has been passed since last update
+        // Update only when we have a new profile & minimum time has been passed since last update.
+        // We allow the edge case to update on the same bucket when a different profile has been
+        // computed for the exact same timestamp.
         let should_update_profile = if profile != last_profile.profile
-            && current_seconds_bucket > last_profile_seconds_bucket
+            && (current_seconds_bucket > last_profile_seconds_bucket || last_profile.timestamp == timestamp)
         {
             if profile < last_profile.profile {
                 // If new profile is smaller than previous one, then make sure the cool down threshold is respected.
@@ -315,14 +325,25 @@ impl ConsensusThroughputCalculator {
         // update total number of transactions in the observations list
         inner.total_transactions = inner.total_transactions.saturating_add(num_of_transactions);
 
-        // If we have more values on our window of max values, remove the last one, and update the num of transactions
-        // We also update the throughput profile when we have at least observations_window values in our observations.
-        if inner.observations.len() as u64 > self.observations_window {
-            let (last_element_ts, last_element_transactions) =
-                inner.observations.pop_back().unwrap();
-            inner.total_transactions = inner
-                .total_transactions
-                .saturating_sub(last_element_transactions);
+        // If we have more values on our window of max values, remove the last one, and calculate throughput.
+        // If we have the exact same values on our window of max values, then still calculate the throughput to ensure
+        // that we are taking into account the case where the last bucket gets updated because it falls into the same second.
+        if inner.observations.len() as u64 >= self.observations_window {
+            let last_element_ts = if inner.observations.len() as u64 == self.observations_window {
+                if let Some(ts) = inner.last_oldest_timestamp {
+                    ts
+                } else {
+                    warn!("Skip calculation - we still don't have enough elements to pop the last observation");
+                    return;
+                }
+            } else {
+                let (ts, txes) = inner.observations.pop_back().unwrap();
+                inner.total_transactions = inner.total_transactions.saturating_sub(txes);
+                ts
+            };
+
+            // update the last oldest timestamp
+            inner.last_oldest_timestamp = Some(last_element_ts);
 
             // get the first element's timestamp to calculate the transaction rate
             let (first_element_ts, _first_element_transactions) = inner
@@ -458,6 +479,13 @@ mod tests {
         calculator.add_transactions(5_000, 0);
 
         assert_eq!(calculator.current_throughput(), (250, 5));
+
+        // Updating further the last bucket with more transactions it keeps updating the throughput
+        calculator.add_transactions(5_000, 400);
+        assert_eq!(calculator.current_throughput(), (350, 5));
+
+        calculator.add_transactions(5_000, 300);
+        assert_eq!(calculator.current_throughput(), (425, 5));
     }
 
     #[test]
@@ -514,12 +542,17 @@ mod tests {
 
         assert_eq!(profiler.throughput_level(), (Low, 509));
 
-        // By adding now a few entries with lots of transactions will trigger a throughput profile update
-        // since the last one happened on timestamp 15_000ms.
-        calculator.add_transactions(21_000 as TimestampMs, 1_000);
-        calculator.add_transactions(22_000 as TimestampMs, 2_000);
-        calculator.add_transactions(23_000 as TimestampMs, 3_100);
-        assert_eq!(profiler.throughput_level(), (High, 2033));
+        // By adding a few entries with lots of transactions for the exact same last timestamp it will
+        // trigger a throughput profile update.
+        calculator.add_transactions(20_000 as TimestampMs, 4_000);
+        calculator.add_transactions(20_000 as TimestampMs, 4_000);
+        calculator.add_transactions(20_000 as TimestampMs, 4_000);
+        assert_eq!(profiler.throughput_level(), (High, 2400));
+
+        // no further updates will happen until the next 5sec bucket update.
+        calculator.add_transactions(22_000 as TimestampMs, 0);
+        calculator.add_transactions(23_000 as TimestampMs, 0);
+        assert_eq!(profiler.throughput_level(), (High, 2400));
     }
 
     #[test]
