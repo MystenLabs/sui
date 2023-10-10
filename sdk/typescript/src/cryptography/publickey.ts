@@ -48,13 +48,10 @@ export abstract class PublicKey {
 		return toB64(this.toRawBytes());
 	}
 
-	/**
-	 * @deprecated use toBase64 instead.
-	 *
-	 * Return the base-64 representation of the public key
-	 */
-	toString() {
-		return this.toBase64();
+	toString(): never {
+		throw new Error(
+			'`toString` is not implemented on public keys. Use `toBase64()` or `toRawBytes()` instead.',
+		);
 	}
 
 	/**
@@ -113,13 +110,6 @@ export abstract class PublicKey {
 		suiBytes.set(rawBytes, 1);
 
 		return suiBytes;
-	}
-
-	/**
-	 * @deprecated use `toRawBytes` instead.
-	 */
-	toBytes() {
-		return this.toRawBytes();
 	}
 
 	/**
