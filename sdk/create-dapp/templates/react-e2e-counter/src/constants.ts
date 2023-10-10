@@ -1,0 +1,2 @@
+export const PACKAGE_ID =
+  "0x224f49ba0ca915646c3e40bab06259ce1c27516f2873a01e560b43e3e2543ed2";

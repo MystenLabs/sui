@@ -22,7 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <Theme appearance="dark">
       <QueryClientProvider client={queryClient}>
         <SuiClientProvider networks={networks} defaultNetwork="devnet">
-          <WalletProvider>
+          <WalletProvider autoConnect>
             <App />
           </WalletProvider>
         </SuiClientProvider>

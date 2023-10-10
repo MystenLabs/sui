@@ -23,8 +23,8 @@ async function main() {
 					message: 'React Client dApp',
 				},
 				{
-					name: 'react-e2e-coinflip',
-					message: 'React end to end coinflip dApp',
+					name: 'react-e2e-counter',
+					message: 'React end to end counter dApp',
 				},
 			],
 		},
