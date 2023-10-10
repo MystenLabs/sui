@@ -995,12 +995,7 @@ impl PgManager {
         name_service_config: &NameServiceConfig,
         name: String,
     ) -> Result<Option<Address>, Error> {
-        let domain = name.parse::<Domain>().map_err(|e| {
-            Error::Internal(format!(
-                "Failed to parse NameService Domain with error: {:?}",
-                e
-            ))
-        })?;
+        let domain = name.parse::<Domain>()?;
 
         let record_id = name_service_config.record_field_id(&domain);
 
