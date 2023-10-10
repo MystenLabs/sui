@@ -52,8 +52,10 @@ impl<'a, 'b> Context<'a, 'b> {
         self.diags
     }
 
-    fn add_diags(&mut self, additional: Diagnostics) {
-        self.diags.extend(additional);
+    fn add_diags(&mut self, additional: Option<Diagnostics>) {
+        if let Some(ds) = additional {
+            self.diags.extend(ds);
+        }
     }
 }
 
@@ -125,7 +127,8 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         }
         C::IgnoreAndPop { exp: e, .. } => {
             let values = exp(context, e);
-            context.borrow_state.release_values(values);
+            let diags_opt = context.borrow_state.release_values(values);
+            context.add_diags(diags_opt);
         }
 
         C::Return { exp: e, .. } => {
@@ -153,7 +156,8 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
     use LValue_ as L;
     match l_ {
         L::Ignore => {
-            context.borrow_state.release_value(value);
+            let diag_opt = context.borrow_state.release_value(value);
+            context.add_diags(diag_opt.map(|d| d.into()));
         }
         L::Var(v, _) => {
             let diags = context.borrow_state.assign_local(*loc, v, value);
@@ -274,11 +278,11 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             // must check separately incase of using a local with an unassigned value
             if v1.is_ref() {
                 let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v1);
-                assert!(errors.is_empty(), "ICE eq freezing failed");
+                assert!(errors.is_none(), "ICE eq freezing failed");
             }
             if v2.is_ref() {
                 let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v2);
-                assert!(errors.is_empty(), "ICE eq freezing failed");
+                assert!(errors.is_none(), "ICE eq freezing failed");
             }
             svalue()
         }

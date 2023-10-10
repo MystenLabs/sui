@@ -55,6 +55,7 @@ pub struct Diagnostic {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
+#[must_use]
 pub struct Diagnostics {
     diagnostics: Vec<Diagnostic>,
     // diagnostics filtered in source code
@@ -617,6 +618,18 @@ impl From<Vec<Diagnostic>> for Diagnostics {
 impl From<Option<Diagnostic>> for Diagnostics {
     fn from(diagnostic_opt: Option<Diagnostic>) -> Self {
         Diagnostics::from(diagnostic_opt.map_or_else(Vec::new, |diag| vec![diag]))
+    }
+}
+
+impl From<Diagnostic> for Diagnostics {
+    fn from(diag: Diagnostic) -> Self {
+        let mut severity_count = BTreeMap::new();
+        *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
+        Self {
+            diagnostics: vec![diag],
+            filtered_source_diagnostics: vec![],
+            severity_count,
+        }
     }
 }
 
