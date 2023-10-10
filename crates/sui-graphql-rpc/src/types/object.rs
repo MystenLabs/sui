@@ -16,6 +16,7 @@ use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
 use crate::types::base64::Base64;
 use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
+use sui_types::move_package::MovePackage as NativeSuiMovePackage;
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -99,12 +100,8 @@ impl Object {
         if let Some(bcs) = &self.bcs {
             let bytes = bcs.0.as_slice();
 
-            // Need to deser using `sui_json_rpc_types::SuiRawMovePackage` because it uses custom serde
-            let package = bcs::from_bytes::<sui_json_rpc_types::SuiRawMovePackage>(bytes)
+            let package = bcs::from_bytes::<NativeSuiMovePackage>(bytes)
                 .map_err(|e| Error::from(format!("Failed to deserialize package: {}", e)))?;
-            let package = package
-                .to_move_package(u64::MAX)
-                .map_err(|e| Error::from(format!("Failed to convert package: {}", e)))?;
 
             Ok(Some(MovePackage {
                 native_object: NativeSuiObject::new_package_from_data(
