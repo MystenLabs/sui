@@ -189,7 +189,7 @@ export function decodeMultiSig(signature: string): SignaturePubkeyPair[] {
 }
 
 function toPkWeightPair(pair: PubkeyWeightPair): PubkeyEnumWeightPair {
-	let pk_bytes = Array.from(pair.pubKey.toBytes().map((x) => Number(x)));
+	let pk_bytes = Array.from(pair.pubKey.toRawBytes().map((x) => Number(x)));
 	switch (pair.pubKey.flag()) {
 		case SIGNATURE_SCHEME_TO_FLAG['Secp256k1']:
 			return {

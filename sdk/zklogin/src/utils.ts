@@ -4,8 +4,8 @@
 import { poseidonHash } from './poseidon.js';
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 32;
-const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
-const MAX_AUD_VALUE_LENGTH = 145;
+export const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
+export const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
 export function toBigIntBE(buffer: Buffer) {
@@ -35,6 +35,9 @@ export function chunkArray<T>(array: T[], chunk_size: number): T[][] {
 
 function bytesBEToBigInt(bytes: number[]): bigint {
 	const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
 	return BigInt('0x' + hex);
 }
 

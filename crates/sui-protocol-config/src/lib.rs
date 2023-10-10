@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 27;
+const MAX_PROTOCOL_VERSION: u64 = 28;
 
 // Record history of protocol version allocations here:
 //
@@ -292,6 +292,9 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_effects_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -945,6 +948,10 @@ impl ProtocolConfig {
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
     }
+
+    pub fn enable_effects_v2(&self) -> bool {
+        self.feature_flags.enable_effects_v2
+    }
 }
 
 #[cfg(not(msim))]
@@ -1507,10 +1514,17 @@ impl ProtocolConfig {
                     }
                 }
                 27 => {
+                    cfg.gas_model_version = Some(8);
+                }
+                28 => {
                     // zklogin::check_zklogin_id
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
+                    // Only enable effects v2 on devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_effects_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

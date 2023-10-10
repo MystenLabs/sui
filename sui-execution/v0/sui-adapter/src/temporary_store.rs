@@ -256,11 +256,9 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        let protocol_version = self.protocol_config.version;
         let inner = self.into_inner();
 
         let effects = TransactionEffects::new_from_execution_v1(
-            protocol_version,
             status,
             epoch,
             gas_cost_summary,
@@ -442,7 +440,7 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn estimate_effects_size_upperbound(&self) -> usize {
         // In the worst case, the number of deps is equal to the number of input objects
-        TransactionEffects::estimate_effects_size_upperbound(
+        TransactionEffects::estimate_effects_size_upperbound_v1(
             self.written.len(),
             self.mutable_input_refs.len(),
             self.deleted.len(),

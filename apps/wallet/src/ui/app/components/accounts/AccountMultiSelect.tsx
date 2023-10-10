@@ -61,24 +61,26 @@ export function AccountMultiSelectWithControls({
 				onChange={onChange}
 			/>
 
-			<Button
-				onClick={() => {
-					if (selectedAccountIds.length < accounts.length) {
-						// select all accounts if not all are selected
-						onChange(accounts.map((account) => account.id));
-					} else {
-						// deselect all accounts
-						onChange([]);
+			{accounts.length > 1 ? (
+				<Button
+					onClick={() => {
+						if (selectedAccountIds.length < accounts.length) {
+							// select all accounts if not all are selected
+							onChange(accounts.map((account) => account.id));
+						} else {
+							// deselect all accounts
+							onChange([]);
+						}
+					}}
+					variant="outline"
+					size="xs"
+					text={
+						selectedAccountIds.length < accounts.length
+							? 'Select All Accounts'
+							: 'Deselect All Accounts'
 					}
-				}}
-				variant="outline"
-				size="xs"
-				text={
-					selectedAccountIds.length < accounts.length
-						? 'Select All Accounts'
-						: 'Deselect All Accounts'
-				}
-			/>
+				/>
+			) : null}
 		</div>
 	);
 }

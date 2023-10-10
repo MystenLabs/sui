@@ -40,7 +40,7 @@ export abstract class BaseSigner {
 		const signature = toSerializedSignature({
 			signature: await this.sign(digest),
 			signatureScheme: this.getKeyScheme(),
-			pubKey: this.getPublicKey(),
+			publicKey: this.getPublicKey(),
 		});
 
 		return {
@@ -62,13 +62,6 @@ export abstract class BaseSigner {
 			bcs.vector(bcs.u8()).serialize(bytes).toBytes(),
 			IntentScope.PersonalMessage,
 		);
-	}
-
-	/**
-	 * @deprecated use `signPersonalMessage` instead
-	 */
-	async signMessage(bytes: Uint8Array) {
-		return this.signPersonalMessage(bytes);
 	}
 
 	toSuiAddress(): string {

@@ -40,7 +40,7 @@ use move_core_types::ident_str;
 // combinations of that. Some of these tests also check and validate locking behavior around
 // receiving object arguments as well.
 
-// Run the test twice -- once with agressive pruning enabled, and the other with it not enabled.
+// Run the test twice -- once with aggressive pruning enabled, and the other with it not enabled.
 macro_rules! transfer_test_runner {
     (gas_objects: $num:expr, $expr:expr) => {
         let runner = TestRunner::new_with_objects("tto", $num, false).await;
@@ -154,14 +154,12 @@ impl TestRunner {
                 .unwrap();
         }
 
-        let TransactionEffects::V1(fx) = &effects;
-
-        if let Some(updated_cap) = fx
+        if let Some(updated_cap) = effects
             .mutated()
-            .iter()
+            .into_iter()
             .find_map(|(cap, _)| (cap.0 == self.upgrade_cap.0).then_some(cap))
         {
-            self.upgrade_cap = *updated_cap;
+            self.upgrade_cap = updated_cap;
         }
 
         effects
@@ -191,14 +189,12 @@ impl TestRunner {
                 .unwrap();
         }
 
-        let TransactionEffects::V1(fx) = &effects;
-
-        if let Some(updated_cap) = fx
+        if let Some(updated_cap) = effects
             .mutated()
-            .iter()
+            .into_iter()
             .find_map(|(cap, _)| (cap.0 == self.upgrade_cap.0).then_some(cap))
         {
-            self.upgrade_cap = *updated_cap;
+            self.upgrade_cap = updated_cap;
         }
 
         effects
@@ -283,7 +279,7 @@ fn get_parent_and_child(
 #[tokio::test]
 async fn test_tto_transfer() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -298,7 +294,7 @@ async fn test_tto_transfer() {
         let transfer_digest = effects.transaction_digest();
 
         // No receive the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -340,7 +336,7 @@ async fn test_tto_transfer() {
 #[tokio::test]
 async fn test_tto_intersection_input_and_receiving_objects() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -399,7 +395,7 @@ async fn test_tto_intersection_input_and_receiving_objects() {
 #[tokio::test]
 async fn test_tto_invalid_receiving_arguments() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -508,7 +504,7 @@ async fn test_tto_invalid_receiving_arguments() {
 #[tokio::test]
 async fn test_tto_unused_receiver() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -521,7 +517,7 @@ async fn test_tto_unused_receiver() {
 
         let (parent, child) = get_parent_and_child(effects.created());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -564,7 +560,7 @@ async fn test_tto_unused_receiver() {
 #[tokio::test]
 async fn test_tto_pass_receiving_by_refs() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -577,7 +573,7 @@ async fn test_tto_pass_receiving_by_refs() {
 
         let (parent, child) = get_parent_and_child(effects.created());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -628,7 +624,7 @@ async fn test_tto_pass_receiving_by_refs() {
 #[tokio::test]
 async fn test_tto_delete() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -641,7 +637,7 @@ async fn test_tto_delete() {
 
         let (parent, child) = get_parent_and_child(effects.created());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -680,7 +676,7 @@ async fn test_tto_delete() {
 #[tokio::test]
 async fn test_tto_wrap() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -693,7 +689,7 @@ async fn test_tto_wrap() {
 
         let (parent, child) = get_parent_and_child(effects.created());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -733,7 +729,7 @@ async fn test_tto_wrap() {
 #[tokio::test]
 async fn test_tto_unwrap_transfer() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -747,7 +743,7 @@ async fn test_tto_unwrap_transfer() {
         let (parent, child) = get_parent_and_child(effects.created());
 
         // No receive the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -795,7 +791,7 @@ async fn test_tto_unwrap_transfer() {
 #[tokio::test]
 async fn test_tto_unwrap_delete() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -809,7 +805,7 @@ async fn test_tto_unwrap_delete() {
         let (parent, child) = get_parent_and_child(effects.created());
 
         // No receive the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -851,7 +847,7 @@ async fn test_tto_unwrap_delete() {
 #[tokio::test]
 async fn test_tto_unwrap_add_as_dynamic_field() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -865,7 +861,7 @@ async fn test_tto_unwrap_add_as_dynamic_field() {
         let (parent, child) = get_parent_and_child(effects.created());
 
         // No receive the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -922,7 +918,7 @@ async fn verify_tto_not_locked(
     aggressive_pruning: bool,
 ) -> (TransactionEffects, TransactionEffects) {
     let mut runner = TestRunner::new_with_objects("tto", 2, aggressive_pruning).await;
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             move_call! {
@@ -1054,7 +1050,7 @@ async fn test_tto_not_locked() {
 #[tokio::test]
 async fn test_tto_valid_dependencies() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1066,7 +1062,7 @@ async fn test_tto_valid_dependencies() {
             .await;
         let parent = effects.created()[0];
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1083,7 +1079,7 @@ async fn test_tto_valid_dependencies() {
         //    object solely because of the fact that we received it in this transaction.
         // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
         //    properly compute and update the lamport version that we should use for the transaction.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1104,7 +1100,7 @@ async fn test_tto_valid_dependencies() {
         let transfer_digest = effects.transaction_digest();
 
         // No receive the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1153,7 +1149,7 @@ async fn test_tto_valid_dependencies() {
 #[tokio::test]
 async fn test_tto_valid_dependencies_delete_on_receive() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1165,7 +1161,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
             .await;
         let parent = effects.created()[0];
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1182,7 +1178,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
         //    object solely because of the fact that we received it in this transaction.
         // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
         //    properly compute and update the lamport version that we should use for the transaction.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1203,7 +1199,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
         let transfer_digest = effects.transaction_digest();
 
         // No receive and delete the sent object
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1248,7 +1244,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
 #[tokio::test]
 async fn test_tto_dependencies_dont_receive() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1260,7 +1256,7 @@ async fn test_tto_dependencies_dont_receive() {
             .await;
         let parent = effects.created()[0];
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1277,7 +1273,7 @@ async fn test_tto_dependencies_dont_receive() {
         //    object solely because of the fact that we received it in this transaction.
         // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
         //    properly compute and update the lamport version that we should use for the transaction.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1302,7 +1298,7 @@ async fn test_tto_dependencies_dont_receive() {
         assert!(parent.0 .1.value() < child.0 .1.value());
 
         // Now dont receive the sent object but include it in the arguments for the PTB.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1345,7 +1341,7 @@ async fn test_tto_dependencies_dont_receive() {
 #[tokio::test]
 async fn test_tto_dependencies_dont_receive_but_abort() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1357,7 +1353,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
             .await;
         let parent = effects.created()[0];
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1374,7 +1370,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
         //    object solely because of the fact that we received it in this transaction.
         // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
         //    properly compute and update the lamport version that we should use for the transaction.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1396,7 +1392,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
 
         assert!(parent.0 .1.value() < child.0 .1.value());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1440,7 +1436,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
 #[tokio::test]
 async fn test_tto_dependencies_receive_and_abort() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1452,7 +1448,7 @@ async fn test_tto_dependencies_receive_and_abort() {
             .await;
         let parent = effects.created()[0];
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1469,7 +1465,7 @@ async fn test_tto_dependencies_receive_and_abort() {
         //    object solely because of the fact that we received it in this transaction.
         // 2. Since the gas coin is fresh it will have a smaller version, so this will test that we
         //    properly compute and update the lamport version that we should use for the transaction.
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1491,7 +1487,7 @@ async fn test_tto_dependencies_receive_and_abort() {
 
         assert!(parent.0 .1.value() < child.0 .1.value());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1535,7 +1531,7 @@ async fn test_tto_dependencies_receive_and_abort() {
 async fn receive_and_dof_interleave() {
     transfer_test_runner! {gas_objects: 3, |mut runner: TestRunner| async move {
         // step 1 & 2
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run_with_gas_object(
                 {
                     let mut builder = ProgrammableTransactionBuilder::new();
@@ -1621,7 +1617,7 @@ async fn receive_and_dof_interleave() {
 #[tokio::test]
 async fn test_have_deleted_owned_object() {
     transfer_test_runner! { |mut runner: TestRunner| async move {
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 move_call! {
@@ -1634,7 +1630,7 @@ async fn test_have_deleted_owned_object() {
 
         let (parent, child) = get_parent_and_child(effects.created());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(parent.0)).unwrap();
@@ -1654,7 +1650,7 @@ async fn test_have_deleted_owned_object() {
         assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&new_child.0.0, new_child.0.1, 0).unwrap());
         assert!(!runner.authority_state.database.have_deleted_owned_object_at_version_or_after(&new_child.0.0, child.0.1, 0).unwrap());
 
-        let TransactionEffects::V1(effects) = runner
+        let effects = runner
             .run({
                 let mut builder = ProgrammableTransactionBuilder::new();
                 let parent = builder.obj(ObjectArg::ImmOrOwnedObject(new_parent.0)).unwrap();

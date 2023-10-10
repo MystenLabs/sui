@@ -58,10 +58,8 @@ fn main() {
     config.supported_protocol_versions = Some(SupportedProtocolVersions::SYSTEM_DEFAULT);
 
     let runtimes = SuiRuntimes::new(&config);
-    let registry_service = {
-        let _enter = runtimes.metrics.enter();
-        mysten_metrics::start_prometheus_server(config.metrics_address)
-    };
+    let metrics_rt = runtimes.metrics.enter();
+    let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
     let prometheus_registry = registry_service.default_registry();
 
     // Initialize logging
@@ -72,6 +70,8 @@ fn main() {
         .with_env()
         .with_prom_registry(&prometheus_registry)
         .init();
+
+    drop(metrics_rt);
 
     info!("Sui Node version: {VERSION}");
     info!(

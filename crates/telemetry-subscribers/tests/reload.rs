@@ -18,10 +18,10 @@ fn reload() {
 
     info!("Should be able to see this");
     debug!("This won't be captured");
-    reload_handle.update("debug").unwrap();
+    reload_handle.update_log("debug").unwrap();
     debug!("Now you can see this!");
 
-    debug!("{}", reload_handle.get().unwrap());
+    debug!("{}", reload_handle.get_log().unwrap());
 
     drop(guard);
 

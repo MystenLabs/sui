@@ -30,7 +30,7 @@ use sui_types::transaction::{
     AuthenticatorStateUpdate, CertifiedTransaction, SenderSignedData, SharedInputObject,
     TransactionDataAPI, VerifiedCertificate, VerifiedSignedTransaction,
 };
-use tracing::{debug, error, error_span, info, trace, warn};
+use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::rocks::{
     default_db_options, DBBatch, DBMap, DBOptions, MetricConf, TypedStoreError,
 };
@@ -498,6 +498,7 @@ impl AuthorityEpochTables {
 pub(crate) const MUTEX_TABLE_SIZE: usize = 1024;
 
 impl AuthorityPerEpochStore {
+    #[instrument(name = "AuthorityPerEpochStore::new", level = "error", skip_all, fields(epoch = committee.epoch))]
     pub fn new(
         name: AuthorityName,
         committee: Arc<Committee>,
@@ -513,9 +514,6 @@ impl AuthorityPerEpochStore {
     ) -> Arc<Self> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
-
-        let span = error_span!("AuthorityPerEpochStore::new", ?epoch_id);
-        let _guard = span.enter();
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
@@ -798,6 +796,7 @@ impl AuthorityPerEpochStore {
             .map(|t| t.into()))
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn insert_tx_cert_and_effects_signature(
         &self,
         tx_digest: &TransactionDigest,
