@@ -2,7 +2,7 @@
 #
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
-FROM rust:1.70.0 AS builder
+FROM rust:1.73.0 AS builder
 ARG PROFILE=release
 ENV PROFILE=$PROFILE
 ARG GIT_REVISION
