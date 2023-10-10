@@ -16,7 +16,7 @@ use diesel::{
 };
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
-use itertools::any;
+use itertools::{any, Itertools};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
@@ -28,7 +28,7 @@ use sui_types::{
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
     move_package::MovePackage,
-    object::{Object, ObjectRead},
+    object::Object,
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
 
@@ -96,10 +96,11 @@ impl IndexerReader {
             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
-    pub async fn spawn_blocking<F, R>(&self, f: F) -> Result<R, IndexerError>
+    pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
     where
-        F: FnOnce(Self) -> Result<R, IndexerError> + Send + 'static,
+        F: FnOnce(Self) -> Result<R, E> + Send + 'static,
         R: Send + 'static,
+        E: Send + 'static,
     {
         let this = self.clone();
         let current_span = tracing::Span::current();
@@ -110,8 +111,7 @@ impl IndexerReader {
             f(this)
         })
         .await
-        .map_err(Into::into)
-        .and_then(std::convert::identity)
+        .expect("propagate any panics")
     }
 
     pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
@@ -284,6 +284,44 @@ impl IndexerReader {
         Ok(Some(epoch_info))
     }
 
+    fn get_epochs_from_db(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<StoredEpochInfo>, IndexerError> {
+        self.run_query(|conn| {
+            let mut boxed_query = epochs::table.into_boxed();
+            if let Some(cursor) = cursor {
+                if descending_order {
+                    boxed_query = boxed_query.filter(epochs::epoch.lt(cursor as i64));
+                } else {
+                    boxed_query = boxed_query.filter(epochs::epoch.gt(cursor as i64));
+                }
+            }
+            if descending_order {
+                boxed_query = boxed_query.order_by(epochs::epoch.desc());
+            } else {
+                boxed_query = boxed_query.order_by(epochs::epoch.asc());
+            }
+
+            boxed_query.limit(limit as i64).load(conn)
+        })
+    }
+
+    pub fn get_epochs(
+        &self,
+        cursor: Option<u64>,
+        limit: usize,
+        descending_order: bool,
+    ) -> Result<Vec<EpochInfo>, IndexerError> {
+        self.get_epochs_from_db(cursor, limit, descending_order)?
+            .into_iter()
+            .map(EpochInfo::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(Into::into)
+    }
+
     pub fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
         let system_state: SuiSystemStateSummary =
             sui_types::sui_system_state::get_sui_system_state(self)?
@@ -419,34 +457,59 @@ impl IndexerReader {
     pub async fn get_owned_objects_in_blocking_task(
         &self,
         address: SuiAddress,
+        object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> Result<Vec<ObjectRead>, IndexerError> {
-        self.spawn_blocking(move |this| this.get_owned_objects_impl(address, cursor, limit))
-            .await
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_owned_objects_impl(address, object_type, cursor, limit)
+        })
+        .await
     }
 
     fn get_owned_objects_impl(
         &self,
         address: SuiAddress,
+        object_type: Option<String>,
         cursor: Option<ObjectID>,
         limit: usize,
-    ) -> Result<Vec<ObjectRead>, IndexerError> {
-        let objects: Vec<StoredObject> = self.run_query(|conn| {
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.run_query(|conn| {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
                 .limit(limit as i64)
                 .into_boxed();
+            if let Some(object_type) = object_type {
+                query = query.filter(objects::dsl::object_type.eq(object_type));
+            }
+
             if let Some(object_cursor) = cursor {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
             query.load::<StoredObject>(conn)
-        })?;
-        objects
-            .into_iter()
-            .map(|object| object.try_into_object_read(self))
-            .collect::<Result<Vec<_>, _>>()
+        })
+    }
+
+    pub async fn multi_get_objects_in_blocking_task(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.spawn_blocking(move |this| this.multi_get_objects_impl(object_ids))
+            .await
+    }
+
+    fn multi_get_objects_impl(
+        &self,
+        object_ids: Vec<ObjectID>,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
+
+        self.run_query(|conn| {
+            objects::dsl::objects
+                .filter(objects::object_id.eq_any(object_ids))
+                .load::<StoredObject>(conn)
+        })
     }
 
     fn query_transaction_blocks_by_checkpoint_impl(

@@ -182,6 +182,7 @@ impl Query {
         ctx: &Context<'_>,
         protocol_version: Option<u64>,
     ) -> Result<ProtocolConfigs> {
+        // TODO: implement DB counterpart without using Sui SDK client
         ctx.data_provider()
             .fetch_protocol_config(protocol_version)
             .await

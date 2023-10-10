@@ -6,8 +6,8 @@ type Address implements ObjectOwner {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, relation: AddressTransactionBlockRelationship, filter: TransactionBlockFilter): TransactionBlockConnection
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -22,8 +22,9 @@ enum AddressTransactionBlockRelationship {
 }
 
 type Balance {
-	coinObjectCount: Int!
-	totalBalance: BigInt!
+	coinType: String
+	coinObjectCount: Int
+	totalBalance: BigInt
 }
 
 type BalanceConnection {
@@ -59,6 +60,14 @@ scalar Base64
 
 scalar BigInt
 
+
+type ChangeEpochTransaction {
+	timestamp: DateTime
+	storageCharge: BigInt
+	computationCharge: BigInt
+	storageRebate: BigInt
+	epoch: Epoch
+}
 
 type Checkpoint {
 	digest: String!
@@ -110,6 +119,8 @@ input CheckpointId {
 
 type Coin {
 	id: ID!
+	balance: BigInt
+	asMoveObject: MoveObject
 }
 
 type CoinConnection {
@@ -144,6 +155,12 @@ type CoinEdge {
 type CommitteeMember {
 	authorityName: String
 	stakeUnit: Int
+}
+
+type ConsensusCommitPrologueTransaction {
+	round: Int
+	timestamp: DateTime
+	epoch: Epoch
 }
 
 scalar DateTime
@@ -223,7 +240,40 @@ type GasInput {
 	gasBudget: BigInt
 }
 
+type GenesisTransaction {
+	objects: [SuiAddress!]
+}
 
+
+
+"""
+The contents of a Move Value, corresponding to the following recursive type:
+
+type MoveData =
+    { Address: SuiAddress }
+  | { UID:     SuiAddress }
+  | { Bool:    bool }
+  | { Number:  BigInt }
+  | { String:  string }
+  | { Vector:  [MoveData] }
+  | { Option:   MoveData? }
+  | { Struct:  [{ name: string, value: MoveData }] }
+
+"""
+scalar MoveData
+
+type MoveObject {
+	contents: MoveValue
+	hasPublicTransfer: Boolean
+	asObject: Object
+	asCoin: Coin
+	asStakedSui: StakedSui
+}
+
+type MoveValue {
+	bcs: Base64!
+	data: MoveData!
+}
 
 scalar NameService
 
@@ -266,8 +316,8 @@ type Object implements ObjectOwner {
 	owner: Owner
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -327,7 +377,7 @@ enum ObjectKind {
 interface ObjectOwner {
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
+	balance(type: String!): Balance
 	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
@@ -340,8 +390,8 @@ type Owner implements ObjectOwner {
 	asObject: Object
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
-	balance(type: String): Balance!
-	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection!
+	balance(type: String!): Balance
+	balanceConnection(first: Int, after: String, last: Int, before: String): BalanceConnection
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
@@ -475,6 +525,10 @@ type StakeSubsidy {
 	decreaseRate: Int
 }
 
+type StakedSui {
+	asMoveObject: MoveObject
+}
+
 type StorageFund {
 	totalObjectStorageRebates: BigInt
 	nonRefundableBalance: BigInt
@@ -499,6 +553,7 @@ type TransactionBlock {
 	sender: Address
 	bcs: Base64
 	gasInput: GasInput
+	kind: TransactionBlockKind
 	digest: String!
 	expiration: Epoch
 }
@@ -556,6 +611,8 @@ input TransactionBlockFilter {
 	changedObject: SuiAddress
 	transactionIds: [String!]
 }
+
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX

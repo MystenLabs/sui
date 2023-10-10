@@ -6,9 +6,12 @@ use crate::{context::Context, symbols::Symbols};
 use lsp_server::Request;
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
-use move_compiler::parser::{
-    keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
-    lexer::{Lexer, Tok},
+use move_compiler::{
+    editions::SyntaxEdition,
+    parser::{
+        keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
+        lexer::{Lexer, Tok},
+    },
 };
 use move_symbol_pool::Symbol;
 use std::{collections::HashSet, path::PathBuf};
@@ -70,7 +73,8 @@ fn builtins() -> Vec<CompletionItem> {
 /// the future, the server should be modified to return semantically valid completion items, not
 /// simple textual suggestions.
 fn identifiers(buffer: &str, symbols: &Symbols, path: &PathBuf) -> Vec<CompletionItem> {
-    let mut lexer = Lexer::new(buffer, FileHash::new(buffer));
+    // TODO thread through package configs
+    let mut lexer = Lexer::new(buffer, FileHash::new(buffer), SyntaxEdition::Legacy);
     if lexer.advance().is_err() {
         return vec![];
     }

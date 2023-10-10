@@ -6,10 +6,12 @@ use axum::{http::StatusCode, routing::get, Router};
 mod checkpoints;
 mod client;
 pub mod headers;
+mod node_state_getter;
 mod objects;
 
 pub use checkpoints::{CheckpointData, CheckpointTransaction};
 pub use client::Client;
+use node_state_getter::NodeStateGetter;
 
 async fn health_check() -> StatusCode {
     StatusCode::OK
@@ -48,7 +50,7 @@ where
     }
 }
 
-pub fn rest_router(state: std::sync::Arc<sui_core::authority::AuthorityState>) -> Router {
+pub fn rest_router(state: std::sync::Arc<dyn NodeStateGetter>) -> Router {
     Router::new()
         .route("/", get(health_check))
         .route(
@@ -73,7 +75,7 @@ pub fn rest_router(state: std::sync::Arc<sui_core::authority::AuthorityState>) -
 
 pub async fn start_service(
     socket_address: std::net::SocketAddr,
-    state: std::sync::Arc<sui_core::authority::AuthorityState>,
+    state: std::sync::Arc<dyn NodeStateGetter>,
 ) {
     let app = rest_router(state);
 

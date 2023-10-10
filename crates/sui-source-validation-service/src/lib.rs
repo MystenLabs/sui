@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::{ffi::OsString, fs, path::Path, process::Command};
 
 use anyhow::{anyhow, bail};
@@ -361,7 +361,10 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     Ok(lookup)
 }
 
-pub async fn watch_for_upgrades(config: &Config) -> anyhow::Result<()> {
+pub async fn watch_for_upgrades(
+    config: &Config,
+    _app_state: Arc<RwLock<AppState>>,
+) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
     for s in &config.packages {
         let packages = match s {
@@ -394,16 +397,19 @@ pub struct AppState {
     pub sources: NetworkLookup,
 }
 
-pub fn serve(app_state: AppState) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
+pub fn serve(
+    app_state: Arc<RwLock<AppState>>,
+) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
     let app = Router::new()
-        .route("/api", get(api_route).with_state(Arc::new(app_state)))
+        .route("/api", get(api_route))
         .layer(
             ServiceBuilder::new().layer(
                 tower_http::cors::CorsLayer::new()
                     .allow_methods([Method::GET])
                     .allow_origin(tower_http::cors::Any),
             ),
-        );
+        )
+        .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
     Ok(Server::from_tcp(listener)?.serve(app.into_make_service()))
 }
@@ -428,7 +434,7 @@ pub struct ErrorResponse {
 
 async fn api_route(
     headers: HeaderMap,
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<RwLock<AppState>>>,
     Query(Request {
         network,
         address,
@@ -474,6 +480,7 @@ async fn api_route(
 	)
     };
 
+    let app_state = app_state.read().unwrap();
     let source_result = app_state
         .sources
         .get(&network)

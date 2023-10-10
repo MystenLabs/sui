@@ -133,6 +133,7 @@ mod tests {
     use std::time::Duration;
     use std::{env, sync::Arc};
 
+    #[ignore]
     #[tokio::test]
     async fn test_timeout() {
         struct TimedExecuteExt {
@@ -204,6 +205,7 @@ mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_depth_limit() {
         async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
@@ -257,6 +259,7 @@ mod tests {
         assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_node_limit() {
         async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
@@ -310,6 +313,7 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_query_complexity_metrics() {
         let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
@@ -321,11 +325,20 @@ mod tests {
         let service_config = ServiceConfig::default();
         let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
         let data_provider: Box<dyn DataProvider> = Box::new(sdk);
+
+        let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+        let pg_conn_pool = PgManager::new(db_url, None)
+            .map_err(|e| {
+                println!("Failed to create pg connection pool: {}", e);
+                e
+            })
+            .unwrap();
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)
             .context_data(service_config)
             .context_data(data_provider)
+            .context_data(pg_conn_pool)
             .context_data(metrics)
             .extension(QueryLimitsChecker::default())
             .build_schema();

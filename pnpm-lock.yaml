@@ -1602,6 +1602,9 @@ importers:
       jose:
         specifier: ^4.14.4
         version: 4.14.4
+      jsonc-parser:
+        specifier: ^3.2.0
+        version: 3.2.0
       poseidon-lite:
         specifier: ^0.2.0
         version: 0.2.0
@@ -1618,6 +1621,9 @@ importers:
       typescript:
         specifier: ^5.1.6
         version: 5.1.6
+      vitest:
+        specifier: ^0.33.0
+        version: 0.33.0(@vitest/ui@0.33.0)(happy-dom@10.5.1)
 
 packages:
 

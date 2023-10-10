@@ -104,9 +104,9 @@ impl Node {
                 .map_err(HealthCheckError::Failure)
                 .tap_err(|e| error!("error connecting to {}: {e}", self.name().concise()))?;
 
-            let mut client = tonic_health::proto::health_client::HealthClient::new(channel);
+            let mut client = tonic_health::pb::health_client::HealthClient::new(channel);
             client
-                .check(tonic_health::proto::HealthCheckRequest::default())
+                .check(tonic_health::pb::HealthCheckRequest::default())
                 .await
                 .map_err(|e| HealthCheckError::Failure(e.into()))
                 .tap_err(|e| {

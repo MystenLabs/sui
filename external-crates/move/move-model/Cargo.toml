@@ -36,3 +36,7 @@ move-prover-test-utils = { path = "../move-prover/test-utils" }
 [[test]]
 name = "testsuite"
 harness = false
+
+[features]
+default = ["address32"]
+address32 = ["move-core-types/address32"]

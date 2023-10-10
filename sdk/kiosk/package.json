@@ -27,7 +27,7 @@
 		"build": "pnpm build:types && pnpm build:tsup",
 		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
 		"build:types": "tsc --build",
-		"test": "echo \"Error: no test specified\"",
+		"test": "echo 'No unit tests for kiosk SDK'",
 		"pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
 		"prepublishOnly": "pnpm build",
 		"prettier:check": "prettier -c --ignore-unknown .",
