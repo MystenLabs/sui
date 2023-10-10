@@ -6501,6 +6501,7 @@ dependencies = [
  "reqwest",
  "sui-macros",
  "sui-protocol-config",
+ "sui-types",
  "tap",
  "telemetry-subscribers",
  "tempfile",

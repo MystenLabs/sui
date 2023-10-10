@@ -799,7 +799,7 @@ pub struct ProtocolConfig {
     max_age_of_jwk_in_epochs: Option<u64>,
 
     /// === random beacon ===
-    
+
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
@@ -1540,7 +1540,7 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
-                  
+
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
                     // Only enable random beacon in devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {

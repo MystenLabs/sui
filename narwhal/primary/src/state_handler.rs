@@ -8,6 +8,7 @@ use fastcrypto_tbls::{dkg, nodes};
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::committee::VALIDITY_THRESHOLD;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -74,10 +75,10 @@ impl RandomnessState {
                 return None;
             }
         };
-        // TODO_DNS do we expect to want to vary this in the future? in which case it should be in protocl config
-        const DKG_THRESHOLD: u16 = 3_334; // f+1 of total 10,000 stake.
         let (nodes, t) = nodes.reduce(
-            DKG_THRESHOLD,
+            VALIDITY_THRESHOLD
+                .try_into()
+                .expect("VALIDITY_THRESHOLD should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
         );
         let party = match dkg::Party::<PkG, EncG>::new(
