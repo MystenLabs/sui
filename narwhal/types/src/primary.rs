@@ -369,6 +369,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
 }
 
 // Messages generated internally by Narwhal that are included in headers for sequencing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
 pub enum SystemMessage {
     DkgMessage(

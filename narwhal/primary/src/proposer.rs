@@ -215,9 +215,9 @@ impl Proposer {
 
         // Make a new header.
         let num_of_digests = self.digests.len().min(self.max_header_num_of_batches);
-        let header_digests: VecDeque<_> = self.digests.drain(..num_of_digests).collect();
-        let system_messages: Vec<_> = self.system_messages.drain(..).collect();
-        let parents: Vec<_> = self.last_parents.drain(..).collect();
+        let header_digests  = std::mem::take(&mut self.digests);
+        let system_messages = std::mem::take(&mut self.system_messages);
+        let parents = std::mem::take(&mut self.last_parents);
 
         // Here we check that the timestamp we will include in the header is consistent with the
         // parents, ie our current time is *after* the timestamp in all the included headers. If
