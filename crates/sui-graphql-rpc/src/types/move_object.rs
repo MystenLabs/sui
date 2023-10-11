@@ -4,14 +4,14 @@
 use super::move_value::MoveValue;
 use super::{coin::Coin, object::Object};
 use crate::context_data::db_data_provider::PgManager;
-use crate::types::staked_sui::StakedSui;
+use crate::types::stake::Stake;
 use async_graphql::Error;
 use async_graphql::*;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use sui_types::object::Object as NativeSuiObject;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct MoveObject {
     pub native_object: NativeSuiObject,
 }
@@ -68,11 +68,16 @@ impl MoveObject {
         })
     }
 
-    async fn as_staked_sui(&self) -> Option<StakedSui> {
+    async fn as_stake(&self) -> Option<Stake> {
         self.native_object.data.try_as_move().and_then(|x| {
             if x.type_().is_staked_sui() {
-                Some(StakedSui {
-                    move_obj: self.clone(),
+                Some(Stake {
+                    active_epoch_id: None,
+                    estimated_reward: None,
+                    principal: None,
+                    request_epoch_id: None,
+                    status: None,
+                    staked_sui_id: x.id(), // get the move object from the resolver
                 })
             } else {
                 None

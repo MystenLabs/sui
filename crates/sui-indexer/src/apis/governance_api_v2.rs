@@ -22,7 +22,7 @@ use sui_types::{
 };
 
 #[derive(Clone)]
-pub(crate) struct GovernanceReadApiV2 {
+pub struct GovernanceReadApiV2 {
     inner: IndexerReader,
 }
 
@@ -51,7 +51,7 @@ impl GovernanceReadApiV2 {
             .await
     }
 
-    async fn get_stakes_by_ids(
+    pub async fn get_stakes_by_ids(
         &self,
         ids: Vec<ObjectID>,
     ) -> Result<Vec<DelegatedStake>, IndexerError> {
