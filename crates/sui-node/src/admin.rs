@@ -13,7 +13,7 @@ use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use sui_types::error::SuiError;
-use telemetry_subscribers::Filters;
+use telemetry_subscribers::TracingHandle;
 use tracing::info;
 
 // Example commands:
@@ -59,13 +59,16 @@ const NODE_CONFIG: &str = "/node-config";
 
 struct AppState {
     node: Arc<SuiNode>,
-    filters: Filters,
+    tracing_handle: TracingHandle,
 }
 
-pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filters: Filters) {
-    let filter = filters.get_log().unwrap();
+pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, tracing_handle: TracingHandle) {
+    let filter = tracing_handle.get_log().unwrap();
 
-    let app_state = AppState { node, filters };
+    let app_state = AppState {
+        node,
+        tracing_handle,
+    };
 
     let app = Router::new()
         .route(LOGGING_ROUTE, get(get_filter))
@@ -102,19 +105,27 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filters: Filters) {
 struct EnableTracing {
     filter: String,
     duration: String,
+    trace_file: Option<String>,
 }
 
 async fn enable_tracing(
     State(state): State<Arc<AppState>>,
     query: Query<EnableTracing>,
 ) -> (StatusCode, String) {
-    let Query(EnableTracing { filter, duration }) = query;
+    let Query(EnableTracing {
+        filter,
+        duration,
+        trace_file,
+    }) = query;
 
     let Ok(duration) = parse_duration(&duration) else {
         return (StatusCode::BAD_REQUEST, "invalid duration".into());
     };
 
-    match state.filters.update_trace(filter, duration) {
+    match state
+        .tracing_handle
+        .update_trace(filter, trace_file, duration)
+    {
         Ok(()) => (
             StatusCode::OK,
             format!("tracing enabled for {:?}", duration),
@@ -124,7 +135,7 @@ async fn enable_tracing(
 }
 
 async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
-    state.filters.reset_trace();
+    state.tracing_handle.reset_trace();
     (
         StatusCode::OK,
         "tracing filter reset to TRACE_FILTER env var".into(),
@@ -132,7 +143,7 @@ async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, Strin
 }
 
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
-    match state.filters.get_log() {
+    match state.tracing_handle.get_log() {
         Ok(filter) => (StatusCode::OK, filter),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
@@ -142,7 +153,7 @@ async fn set_filter(
     State(state): State<Arc<AppState>>,
     new_filter: String,
 ) -> (StatusCode, String) {
-    match state.filters.update_log(&new_filter) {
+    match state.tracing_handle.update_log(&new_filter) {
         Ok(()) => {
             info!(filter =% new_filter, "Log filter updated");
             (StatusCode::OK, "".into())
