@@ -34,8 +34,8 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub checkpoint_sequence_number: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Array<diesel::pg::sql_types::Bytea>)]
-    pub senders: Vec<Vec<u8>>,
+    #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
+    pub senders: Vec<Option<Vec<u8>>>,
 
     #[diesel(sql_type = diesel::sql_types::Bytea)]
     pub package: Vec<u8>,
@@ -63,7 +63,7 @@ impl From<IndexedEvent> for StoredEvent {
             senders: event
                 .senders
                 .into_iter()
-                .map(|sender| sender.to_vec())
+                .map(|sender| Some(sender.to_vec()))
                 .collect(),
             package: event.package.to_vec(),
             module: event.module.clone(),
@@ -91,12 +91,19 @@ impl StoredEvent {
                 "Event senders should contain at least one address".to_string(),
             )
         })?;
-        let sender = SuiAddress::from_bytes(sender).map_err(|_e| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Failed to parse event sender address: {:?}",
-                sender
-            ))
-        })?;
+        let sender = match sender {
+            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to parse event sender address: {:?}",
+                    sender
+                ))
+            })?,
+            None => {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(
+                    "Event senders element should not be null".to_string(),
+                ))
+            }
+        };
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
 

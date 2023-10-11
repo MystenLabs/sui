@@ -23,7 +23,6 @@ pub struct TxDigest {
 #[diesel(table_name = tx_input_objects)]
 pub struct StoredTxInputObject {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
     pub object_id: Vec<u8>,
 }
 
@@ -31,7 +30,6 @@ pub struct StoredTxInputObject {
 #[diesel(table_name = tx_changed_objects)]
 pub struct StoredTxChangedObject {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
     pub object_id: Vec<u8>,
 }
 
@@ -39,7 +37,6 @@ pub struct StoredTxChangedObject {
 #[diesel(table_name = tx_senders)]
 pub struct StoredTxSenders {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
     pub sender: Vec<u8>,
 }
 
@@ -47,7 +44,6 @@ pub struct StoredTxSenders {
 #[diesel(table_name = tx_recipients)]
 pub struct StoredTxRecipients {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
     pub recipient: Vec<u8>,
 }
 
@@ -55,7 +51,6 @@ pub struct StoredTxRecipients {
 #[diesel(table_name = tx_calls)]
 pub struct StoredTxCalls {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
     pub package: Vec<u8>,
     pub module: String,
     pub func: String,
@@ -73,13 +68,11 @@ impl TxIndex {
         Vec<StoredTxCalls>,
     ) {
         let tx_sequence_number = self.tx_sequence_number as i64;
-        let checkpoint_sequence_number = self.checkpoint_sequence_number as i64;
         let tx_senders = self
             .senders
             .iter()
             .map(|s| StoredTxSenders {
                 tx_sequence_number,
-                checkpoint_sequence_number,
                 sender: s.to_vec(),
             })
             .collect();
@@ -88,7 +81,6 @@ impl TxIndex {
             .iter()
             .map(|s| StoredTxRecipients {
                 tx_sequence_number,
-                checkpoint_sequence_number,
                 recipient: s.to_vec(),
             })
             .collect();
@@ -97,7 +89,6 @@ impl TxIndex {
             .iter()
             .map(|o| StoredTxInputObject {
                 tx_sequence_number,
-                checkpoint_sequence_number,
                 object_id: bcs::to_bytes(&o).unwrap(),
             })
             .collect();
@@ -106,7 +97,6 @@ impl TxIndex {
             .iter()
             .map(|o| StoredTxChangedObject {
                 tx_sequence_number,
-                checkpoint_sequence_number,
                 object_id: bcs::to_bytes(&o).unwrap(),
             })
             .collect();
@@ -115,7 +105,6 @@ impl TxIndex {
             .iter()
             .map(|(p, m, f)| StoredTxCalls {
                 tx_sequence_number,
-                checkpoint_sequence_number,
                 package: p.to_vec(),
                 module: m.to_string(),
                 func: f.to_string(),

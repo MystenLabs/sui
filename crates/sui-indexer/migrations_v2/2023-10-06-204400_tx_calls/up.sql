@@ -1,7 +1,6 @@
 -- Your SQL goes here
 CREATE TABLE tx_calls (
     tx_sequence_number          BIGINT       NOT NULL,
-    checkpoint_sequence_number  BIGINT       NOT NULL,
     package                     BYTEA        NOT NULL,
     module                      TEXT         NOT NULL,
     func                        TEXT         NOT NULL,

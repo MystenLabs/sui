@@ -117,7 +117,6 @@ diesel::table! {
 diesel::table! {
     tx_calls (package, tx_sequence_number) {
         tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
         package -> Bytea,
         module -> Text,
         func -> Text,
@@ -127,7 +126,6 @@ diesel::table! {
 diesel::table! {
     tx_changed_objects (object_id, tx_sequence_number) {
         tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
         object_id -> Bytea,
     }
 }
@@ -151,7 +149,6 @@ diesel::table! {
 diesel::table! {
     tx_input_objects (object_id, tx_sequence_number) {
         tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
         object_id -> Bytea,
     }
 }
@@ -159,7 +156,6 @@ diesel::table! {
 diesel::table! {
     tx_recipients (recipient, tx_sequence_number) {
         tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
         recipient -> Bytea,
     }
 }
@@ -167,7 +163,6 @@ diesel::table! {
 diesel::table! {
     tx_senders (sender, tx_sequence_number) {
         tx_sequence_number -> Int8,
-        checkpoint_sequence_number -> Int8,
         sender -> Bytea,
     }
 }
