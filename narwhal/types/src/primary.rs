@@ -372,12 +372,16 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
 pub enum SystemMessage {
+    // DKG is used to generate keys for use in the random beacon protocol.
+    // `DkgMessage` is sent out at start-of-epoch to initiate the process.
     DkgMessage(
         fastcrypto_tbls::dkg::Message<
             <ThresholdBls12381MinSig as ThresholdBls>::Public,
             <ThresholdBls12381MinSig as ThresholdBls>::Public,
         >,
     ),
+    // `DkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
+    // `DkgMessages` have been received locally, to complete the key generation process.
     DkgConfirmation(
         fastcrypto_tbls::dkg::Confirmation<<ThresholdBls12381MinSig as ThresholdBls>::Public>,
     ),
