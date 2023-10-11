@@ -21,6 +21,7 @@ use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature},
     effects::TransactionEffects,
+    error::ExecutionError,
     gas_coin::MIST_PER_SUI,
     inner_temporary_store::InnerTemporaryStore,
     messages_checkpoint::{
