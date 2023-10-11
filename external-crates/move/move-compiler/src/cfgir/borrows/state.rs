@@ -218,7 +218,7 @@ impl BorrowState {
         let exps = self.id_to_exp.get(&id).unwrap();
         assert_eq!(exps.len(), 1);
         let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
-            &mut *RefCell::borrow_mut(&self.mutably_used);
+            &mut RefCell::borrow_mut(&self.mutably_used);
         for e in exps {
             let info = infos.get_mut(e).unwrap();
             assert!(info.param_name.is_none());
@@ -229,7 +229,7 @@ impl BorrowState {
     fn mark_mutably_used(&mut self, id: RefID) {
         let Some(exps) = self.id_to_exp.get(&id) else {return};
         let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
-            &mut *RefCell::borrow_mut(&self.mutably_used);
+            &mut RefCell::borrow_mut(&self.mutably_used);
         for e in exps {
             let info = infos.get_mut(e).unwrap();
             info.used_mutably = true;
@@ -238,15 +238,14 @@ impl BorrowState {
 
     fn new_exp(&mut self, loc: Loc, is_mut: bool) -> ExpBasedID {
         let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
-            &mut *RefCell::borrow_mut(&self.mutably_used);
+            &mut RefCell::borrow_mut(&self.mutably_used);
         let eid = self.next_eid;
-        let info = RefExpInfo {
+        infos.entry(eid).or_insert_with(|| RefExpInfo {
             loc,
             is_mut,
             used_mutably: false,
             param_name: None,
-        };
-        infos.insert(eid, info);
+        });
         self.next_eid.count += 1;
         eid
     }
