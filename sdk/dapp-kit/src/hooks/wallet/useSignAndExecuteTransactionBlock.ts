@@ -90,7 +90,7 @@ export function useSignAndExecuteTransactionBlock({
 			const walletFeature = currentWallet.features['sui:signTransactionBlock'];
 			if (!walletFeature) {
 				throw new WalletFeatureNotSupportedError(
-					"This wallet doesn't support the `signAndExecuteTransactionBlock` feature.",
+					"This wallet doesn't support the `signTransactionBlock` feature.",
 				);
 			}
 
