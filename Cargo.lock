@@ -2800,6 +2800,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "data-gen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bcs",
+ "bimap",
+ "clap",
+ "datatest-stable",
+ "fastcrypto",
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-stdlib",
+ "move-symbol-pool",
+ "move-transactional-test-runner",
+ "move-vm-runtime",
+ "msim",
+ "once_cell",
+ "rand 0.8.5",
+ "sui-core",
+ "sui-framework",
+ "sui-framework-snapshot",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-protocol-config",
+ "sui-rest-api",
+ "sui-storage",
+ "sui-swarm-config",
+ "sui-types",
+ "tempfile",
+ "tokio",
+ "workspace-hack",
+]
+
+[[package]]
 name = "data-transform"
 version = "0.1.0"
 dependencies = [
