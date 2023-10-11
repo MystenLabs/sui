@@ -9,10 +9,6 @@
       coinObjectCount
       totalBalance
     }
-    nameServiceConnection {
-      edges {
-        node
-      }
-    }
+    defaultNameServiceName
   }
 }
