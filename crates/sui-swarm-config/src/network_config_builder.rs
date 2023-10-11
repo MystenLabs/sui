@@ -204,7 +204,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 let port_offset = rng.next_u32() as u16;
 
                 keys.into_iter()
-                    .map(|authority_key| {
+                    .enumerate()
+                    .map(|(i, authority_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(authority_key)
                             .with_deterministic_ports(port_offset.wrapping_add(i as u16));
@@ -225,7 +226,8 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 keys.into_iter()
                     .zip(protocol_keys.into_iter())
-                    .map(|(account_key, protocol_key)| {
+                    .enumerate()
+                    .map(|(i, (account_key, protocol_key))| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
                             .with_deterministic_ports(port_offset.wrapping_add(i as u16))
