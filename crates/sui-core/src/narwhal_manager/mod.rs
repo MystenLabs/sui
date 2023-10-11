@@ -15,11 +15,11 @@ use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
-use sui_types::digests::ChainIdentifier;
 use std::path::PathBuf;
 use std::time::Instant;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::digests::ChainIdentifier;
 use tokio::sync::Mutex;
 
 #[derive(PartialEq)]
