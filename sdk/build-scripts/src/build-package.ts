@@ -1,4 +1,4 @@
-#! /usr/bin/env tsx
+#! /usr/bin/env bun
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { buildPackage } from './utils/buildPackage';

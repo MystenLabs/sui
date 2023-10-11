@@ -11,6 +11,9 @@ jobs:
       - uses: pnpm/action-setup@v2.4.0
         with:
           version: 8
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
       - name: Install Nodejs
         uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
         with:

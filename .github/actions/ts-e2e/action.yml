@@ -18,6 +18,10 @@ runs:
       with:
         version: 8
 
+    - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
     - name: Check s3 if binaries have been uploaded already
       continue-on-error: true
       id: check_s3

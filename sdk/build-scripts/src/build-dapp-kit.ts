@@ -1,4 +1,4 @@
-#! /usr/bin/env tsx
+#! /usr/bin/env bun
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import { vanillaExtractPlugin } from '@vanilla-extract/esbuild-plugin';
@@ -10,13 +10,13 @@ import { buildPackage } from './utils/buildPackage';
 buildPackage({
 	plugins: [
 		vanillaExtractPlugin({
-			async processCss(css) {
-				const result = await postcss([autoprefixer]).process(css, {
-					// Suppress source map warning
-					from: undefined,
-				});
-				return result.css;
-			},
+			// async processCss(css) {
+			// 	const result = await postcss([autoprefixer]).process(css, {
+			// 		// Suppress source map warning
+			// 		from: undefined,
+			// 	});
+			// 	return result.css;
+			// },
 		}),
 	],
 	packages: 'external',
