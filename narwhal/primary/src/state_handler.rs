@@ -113,6 +113,7 @@ impl RandomnessState {
 
     async fn start_dkg(&self, tx_system_messages: &Sender<SystemMessage>) {
         let msg = self.party.create_message(&mut rand::thread_rng());
+        info!("random beacon: sending DKG Message: {msg:?}");
         let _ = tx_system_messages
             .send(SystemMessage::DkgMessage(msg))
             .await;
@@ -145,6 +146,10 @@ impl RandomnessState {
         if self.shares.is_empty() && !self.processed_messages.is_empty() {
             match self.party.merge(&self.processed_messages) {
                 Ok((shares, conf)) => {
+                    info!(
+                        "random beacon: sending DKG Confirmation with {} complaints",
+                        conf.complaints.len()
+                    );
                     self.shares = shares;
                     let _ = tx_system_messages
                         .send(SystemMessage::DkgConfirmation(conf))
@@ -166,6 +171,10 @@ impl RandomnessState {
             ) {
                 Ok(shares) => {
                     self.dkg_output = Some(self.party.aggregate(&self.messages, shares));
+                    info!(
+                        "random beacon: DKG complete with Output {:?}",
+                        self.dkg_output
+                    );
                 }
                 Err(fastcrypto::error::FastCryptoError::InputTooShort(_)) => (), // wait for more input
                 Err(e) => error!("Error while processing randomness DKG confirmations: {e:?}"),
