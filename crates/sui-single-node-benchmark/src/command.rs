@@ -84,4 +84,6 @@ pub enum Component {
     /// and store the sequenced transactions into the store. It covers the consensus-independent
     /// portion of the code in consensus handler.
     ValidatorWithFakeConsensus,
+    /// Benchmark only validator signing compoment: `handle_transaction`.
+    TxnSigning,
 }

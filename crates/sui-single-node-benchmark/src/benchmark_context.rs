@@ -13,6 +13,7 @@ use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::effects::TransactionEffects;
+use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
 use tracing::info;
@@ -231,5 +232,24 @@ impl BenchmarkContext {
                 .collect();
             *gas_objects = Arc::new(refreshed_gas_objects);
         }
+    }
+
+    pub(crate) async fn validator_sign_transactions(
+        &self,
+        transactions: Vec<Transaction>,
+    ) -> Vec<HandleTransactionResponse> {
+        info!(
+            "Started signing {} transactions. You can now attach a profiler",
+            transactions.len(),
+        );
+        let tasks: FuturesUnordered<_> = transactions
+            .into_iter()
+            .map(|tx| {
+                let validator = self.validator();
+                tokio::spawn(async move { validator.sign_transaction(tx).await })
+            })
+            .collect();
+        let results: Vec<_> = tasks.collect().await;
+        results.into_iter().map(|r| r.unwrap()).collect()
     }
 }
