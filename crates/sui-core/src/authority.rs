@@ -245,6 +245,11 @@ pub struct AuthorityMetrics {
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 
     pub authenticator_state_update_failed: IntCounter,
+
+    /// Count of zklogin signatures
+    pub zklogin_sig_count: IntCounter,
+    /// Count of multisig signatures
+    pub multisig_sig_count: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -566,6 +571,18 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            zklogin_sig_count: register_int_counter_with_registry!(
+                "zklogin_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            multisig_sig_count: register_int_counter_with_registry!(
+                "multisig_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }
@@ -789,7 +806,6 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        _objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -3464,6 +3480,13 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
+        // count signature by scheme, for zklogin and multisig
+        if certificate.has_zklogin_sig() {
+            self.metrics.zklogin_sig_count.inc();
+        } else if certificate.has_upgraded_multisig() {
+            self.metrics.multisig_sig_count.inc();
+        }
+
         Ok(())
     }
 
@@ -4208,6 +4231,20 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         version: VersionNumber,
     ) -> SuiResult<Option<Object>> {
         self.database.get_object_by_key(&object_id, version)
+    }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        let res = self
+            .database
+            .deprecated_multi_get_transaction_checkpoint(digests)?;
+
+        Ok(res
+            .into_iter()
+            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+            .collect())
     }
 }
 

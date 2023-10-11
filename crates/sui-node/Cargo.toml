@@ -25,6 +25,7 @@ snap.workspace = true
 git-version.workspace = true
 const-str.workspace = true
 url.workspace = true
+humantime.workspace = true
 
 sui-archival.workspace = true
 sui-tls.workspace = true

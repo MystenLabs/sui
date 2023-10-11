@@ -1,0 +1,12 @@
+{
+	"useWallets": "useWallets",
+	"useAccounts": "useAccounts",
+	"useCurrentWallet": "useCurrentWallet",
+	"useCurrentAccount": "useCurrentAccount",
+	"useConnectWallet": "useConnectWallet",
+	"useDisconnectWallet": "useDisconnectWallet",
+	"useSwitchAccount": "useSwitchAccount",
+	"useSignPersonalMessage": "useSignPersonalMessage",
+	"useSignTransactionBlock": "useSignTransactionBlock",
+	"useSignAndExecuteTransactionBlock": "useSignAndExecuteTransactionBlock"
+}

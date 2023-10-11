@@ -6,7 +6,7 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -467,7 +467,7 @@ impl TestCluster {
     pub async fn execute_transaction_return_raw_effects(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let results = self
             .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
             .await?;
@@ -490,7 +490,7 @@ impl TestCluster {
         &self,
         tx: Transaction,
         pubkeys: &[AuthorityName],
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
         let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
         let replies = loop {
@@ -531,20 +531,17 @@ impl TestCluster {
         let replies = replies?;
         let mut all_effects = HashMap::new();
         let mut all_events = HashMap::new();
-        let mut all_objects = HashSet::new();
         for reply in replies {
             let effects = reply.signed_effects.into_data();
             all_effects.insert(effects.digest(), effects);
             all_events.insert(reply.events.digest(), reply.events);
-            all_objects.insert(reply.fastpath_input_objects);
+            // reply.fastpath_input_objects is unused.
         }
         assert_eq!(all_effects.len(), 1);
         assert_eq!(all_events.len(), 1);
-        assert_eq!(all_objects.len(), 1);
         Ok((
             all_effects.into_values().next().unwrap(),
             all_events.into_values().next().unwrap(),
-            all_objects.into_iter().next().unwrap(),
         ))
     }
 

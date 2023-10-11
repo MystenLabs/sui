@@ -62,7 +62,6 @@ describe('Secp256k1PublicKey', () => {
 		let pub_key_base64 = toB64(pub_key);
 		const key = new Secp256k1PublicKey(pub_key_base64);
 		expect(key.toBase64()).toEqual(pub_key_base64);
-		expect(key.toString()).toEqual(pub_key_base64);
 	});
 
 	it('toBuffer', () => {

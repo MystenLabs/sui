@@ -3,7 +3,6 @@
 
 import { TransactionBlock } from '../builder/index.js';
 import type { SuiClient } from '../client/index.js';
-import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import { getObjectReference } from '../types/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { SUI_SYSTEM_ADDRESS } from './framework.js';
@@ -31,7 +30,7 @@ export class SuiSystemStateUtil {
 	 * @param gasBudget omittable only for DevInspect mode
 	 */
 	public static async newRequestAddStakeTxn(
-		client: JsonRpcProvider | SuiClient,
+		client: SuiClient,
 		coins: string[],
 		amount: bigint,
 		validatorAddress: string,

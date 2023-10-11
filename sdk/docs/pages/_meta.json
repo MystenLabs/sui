@@ -3,14 +3,9 @@
 		"title": "TypeScript SDK",
 		"type": "page"
 	},
-	"wallet-kit": {
-		"title": "Wallet Kit",
-		"type": "page"
-	},
 	"dapp-kit": {
 		"title": "dApp Kit",
-		"type": "page",
-		"display": "hidden"
+		"type": "page"
 	},
 	"kiosk": {
 		"title": "Kiosk SDK",
@@ -18,6 +13,10 @@
 	},
 	"bcs": {
 		"title": "BCS",
+		"type": "page"
+	},
+	"wallet-kit": {
+		"title": "Wallet Kit",
 		"type": "page"
 	}
 }

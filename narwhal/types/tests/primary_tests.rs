@@ -9,7 +9,7 @@ use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
-use test_utils::{AuthorityFixture, CommitteeFixture};
+use test_utils::{latest_protocol_version, AuthorityFixture, CommitteeFixture};
 
 #[tokio::test]
 async fn test_certificate_singers_are_ordered() {
@@ -47,7 +47,13 @@ async fn test_certificate_singers_are_ordered() {
     votes.shuffle(&mut OsRng);
 
     // Create a certificate
-    let certificate = Certificate::new_unverified(&committee, Header::V1(header), votes).unwrap();
+    let certificate = Certificate::new_unverified(
+        &latest_protocol_version(),
+        &committee,
+        Header::V1(header),
+        votes,
+    )
+    .unwrap();
 
     let (stake, signers) = certificate.signed_by(&committee);
 

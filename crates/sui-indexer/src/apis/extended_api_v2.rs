@@ -72,7 +72,10 @@ impl ExtendedApiServer for ExtendedApiV2 {
         cursor: Option<CheckpointedObjectID>,
         limit: Option<usize>,
     ) -> RpcResult<QueryObjectsPage> {
-        unimplemented!()
+        Err(jsonrpsee::types::error::CallError::Custom(
+            jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
+        )
+        .into())
     }
 
     async fn get_network_metrics(&self) -> RpcResult<NetworkMetrics> {
