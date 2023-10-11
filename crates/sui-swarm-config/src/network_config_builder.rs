@@ -20,6 +20,9 @@ pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
+    /// Indicates that a committee should be deterministically generated, useing the provided rng
+    /// as a source of randomness as well as generating deterministic network port information.
+    Deterministic(NonZeroUsize),
 }
 
 pub type SupportedProtocolVersionsCallback = Arc<
@@ -83,6 +86,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
         self.committee = CommitteeConfig::Size(committee_size);
+        self
+    }
+
+    pub fn deterministic_committee_size(mut self, committee_size: NonZeroUsize) -> Self {
+        self.committee = CommitteeConfig::Deterministic(committee_size);
         self
     }
 
@@ -231,6 +239,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         builder.build(&mut rng)
                     })
                     .collect::<Vec<_>>()
+            }
+            CommitteeConfig::Deterministic(size) => {
+                let mut configs = vec![];
+                for i in 0..size.into() {
+                    let port_offset = 8000 + i * 10;
+                    let mut builder = ValidatorGenesisConfigBuilder::new()
+                        .with_ip("127.0.0.1".to_owned())
+                        .with_deterministic_ports(port_offset as u16);
+                    if let Some(rgp) = self.reference_gas_price {
+                        builder = builder.with_gas_price(rgp);
+                    }
+                    configs.push(builder.build(&mut rng));
+                }
+                configs
             }
         };
 

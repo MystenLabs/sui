@@ -10,6 +10,8 @@
 //!
 //! [`Simulacrum`]: crate::Simulacrum
 
+use std::num::NonZeroUsize;
+
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
@@ -91,6 +93,7 @@ where
         let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
             .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .build();
         let keystore = KeyStore::from_newtork_config(&config);
         let store = InMemoryStore::new(&config.genesis);
@@ -358,6 +361,7 @@ impl<'a> CommitteeWithKeys<'a> {
 mod tests {
     use std::time::Duration;
 
+    use rand::{rngs::StdRng, SeedableRng};
     use shared_crypto::intent::Intent;
     use sui_types::{
         base_types::SuiAddress,
@@ -368,6 +372,36 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn deterministic_genesis() {
+        let rng = StdRng::from_seed([9; 32]);
+        let chain1 = Simulacrum::new_with_rng(rng);
+        let genesis_checkpoint_digest1 = chain1
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest();
+
+        let rng = StdRng::from_seed([9; 32]);
+        let chain2 = Simulacrum::new_with_rng(rng);
+        let genesis_checkpoint_digest2 = chain2
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest();
+
+        assert_eq!(genesis_checkpoint_digest1, genesis_checkpoint_digest2);
+
+        // Ensure the committees are different when using different seeds
+        let rng = StdRng::from_seed([0; 32]);
+        let chain3 = Simulacrum::new_with_rng(rng);
+
+        assert_ne!(
+            chain1.store().get_committee_by_epoch(0),
+            chain3.store().get_committee_by_epoch(0),
+        );
+    }
 
     #[test]
     fn simple() {
