@@ -15,6 +15,7 @@ use std::num::NonZeroUsize;
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
     base_types::SuiAddress,
@@ -96,21 +97,21 @@ where
             .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .build();
-        Self::new_with_network_config(&config)
+        Self::new_with_network_config(&config, rng)
     }
 
-    pub fn new_with_network_config(config: &NetworkConfig) -> Self {
+    pub fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
         let keystore = KeyStore::from_newtork_config(config);
         let store = InMemoryStore::new(&config.genesis);
         let checkpoint_builder = CheckpointBuilder::new(config.genesis.checkpoint());
 
-        let genesis = config.genesis;
+        let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
 
         Self {
             rng,
             keystore,
-            genesis,
+            genesis: genesis.clone(),
             store,
             checkpoint_builder,
             epoch_state,
