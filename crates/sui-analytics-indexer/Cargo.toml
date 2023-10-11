@@ -29,9 +29,11 @@ tokio-stream.workspace = true
 url.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
-
+parquet.workspace = true
+arrow-array.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
+sui-analytics-indexer-derive.workspace = true
 sui-indexer.workspace = true
 sui-types.workspace = true
 telemetry-subscribers.workspace = true

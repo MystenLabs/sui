@@ -37,6 +37,7 @@ use crate::tables::{
     TransactionObjectEntry,
 };
 use crate::writers::csv_writer::CSVWriter;
+use crate::writers::parquet_writer::ParquetWriter;
 use crate::writers::AnalyticsWriter;
 
 pub mod analytics_metrics;
@@ -112,12 +113,14 @@ pub struct AnalyticsIndexerConfig {
 #[repr(u8)]
 pub enum FileFormat {
     CSV = 0,
+    PARQUET = 1,
 }
 
 impl FileFormat {
     pub fn file_suffix(&self) -> &str {
         match self {
             FileFormat::CSV => "csv",
+            FileFormat::PARQUET => "parquet",
         }
     }
 }
@@ -176,6 +179,43 @@ impl FileType {
     }
 }
 
+pub enum ParquetValue {
+    U64(u64),
+    Str(String),
+    OptionU64(Option<u64>),
+    OptionStr(Option<String>),
+}
+
+impl From<u64> for ParquetValue {
+    fn from(value: u64) -> Self {
+        Self::U64(value)
+    }
+}
+
+impl From<String> for ParquetValue {
+    fn from(value: String) -> Self {
+        Self::Str(value)
+    }
+}
+
+impl From<Option<u64>> for ParquetValue {
+    fn from(value: Option<u64>) -> Self {
+        Self::OptionU64(value)
+    }
+}
+
+impl From<Option<String>> for ParquetValue {
+    fn from(value: Option<String>) -> Self {
+        Self::OptionStr(value)
+    }
+}
+
+pub trait ParquetSchema {
+    fn schema() -> Vec<String>;
+
+    fn get_column(&self, idx: usize) -> ParquetValue;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FileMetadata {
     pub file_type: FileType,
@@ -227,7 +267,7 @@ impl Handler for Processor {
 }
 
 impl Processor {
-    pub async fn new<S: Serialize + 'static>(
+    pub async fn new<S: Serialize + ParquetSchema + 'static>(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
         starting_checkpoint_seq_num: CheckpointSequenceNumber,
@@ -433,13 +473,18 @@ pub async fn make_move_call_processor(
     .await
 }
 
-pub fn make_writer<S: Serialize>(
+pub fn make_writer<S: Serialize + ParquetSchema>(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
     starting_checkpoint_seq_num: u64,
 ) -> Result<Box<dyn AnalyticsWriter<S>>> {
     Ok(match config.file_format {
         FileFormat::CSV => Box::new(CSVWriter::new(
+            &config.checkpoint_dir,
+            file_type,
+            starting_checkpoint_seq_num,
+        )?),
+        FileFormat::PARQUET => Box::new(ParquetWriter::new(
             &config.checkpoint_dir,
             file_type,
             starting_checkpoint_seq_num,
