@@ -1290,6 +1290,15 @@ importers:
 
   sdk/docs:
     dependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../dapp-kit
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../typescript
+      '@tanstack/react-query':
+        specifier: ^4.29.25
+        version: 4.29.25(react-dom@18.2.0)(react@18.2.0)
       '@types/node':
         specifier: ^20.4.2
         version: 20.4.2
@@ -1308,6 +1317,10 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.2.0(react@18.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
 
   sdk/kiosk:
     dependencies:
