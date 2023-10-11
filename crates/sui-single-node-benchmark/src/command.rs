@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Parser, ValueEnum};
+use strum_macros::EnumIter;
 
 #[derive(Parser)]
 #[command(
@@ -68,13 +69,19 @@ pub enum Command {
     },
 }
 
-#[derive(Copy, Clone, ValueEnum)]
+#[derive(Copy, Clone, EnumIter, ValueEnum)]
 pub enum Component {
     /// Baseline includes the execution and storage layer only.
     Baseline,
     /// On top of Baseline, this schedules transactions through the transaction manager.
     WithTxManager,
     /// This goes through the `handle_certificate` entry point on authority_server, which includes
-    /// certificate verification, transaction manager, as well as a noop consensus layer.
-    ValidatorService,
+    /// certificate verification, transaction manager, as well as a noop consensus layer. The noop
+    /// consensus layer does absolutely nothing when receiving a transaction in consensus.
+    ValidatorWithoutConsensus,
+    /// Similar to ValidatorWithNoopConsensus, but the consensus layer contains a fake consensus
+    /// protocol that basically sequences transactions in order. It then verify the transaction
+    /// and store the sequenced transactions into the store. It covers the consensus-independent
+    /// portion of the code in consensus handler.
+    ValidatorWithFakeConsensus,
 }

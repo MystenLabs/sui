@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
+use crate::mock_consensus::ConsensusMode;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::TxGenerator;
 use futures::stream::FuturesUnordered;
@@ -68,7 +69,11 @@ impl BenchmarkContext {
         genesis_gas_objects.push(admin_gas_object);
 
         info!("Initializing validator");
-        let validator = SingleValidator::new(&genesis_gas_objects).await;
+        let consensus_mode = match benchmark_component {
+            Component::ValidatorWithFakeConsensus => ConsensusMode::DirectSequencing,
+            _ => ConsensusMode::Noop,
+        };
+        let validator = SingleValidator::new(&genesis_gas_objects, consensus_mode).await;
 
         Self {
             validator,
