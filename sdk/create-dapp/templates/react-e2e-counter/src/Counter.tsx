@@ -1,6 +1,7 @@
 import {
   useCurrentAccount,
   useSignAndExecuteTransactionBlock,
+  useSuiClient,
   useSuiClientQuery,
 } from "@mysten/dapp-kit";
 import { SuiObjectData } from "@mysten/sui.js/client";
@@ -9,6 +10,7 @@ import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { PACKAGE_ID } from "./constants";
 
 export function Counter({ id }: { id: string }) {
+  const client = useSuiClient();
   const currentAccount = useCurrentAccount();
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
   const { data, isLoading, error, refetch } = useSuiClientQuery("getObject", {
@@ -43,7 +45,11 @@ export function Counter({ id }: { id: string }) {
         },
       },
       {
-        onSuccess: () => refetch(),
+        onSuccess: (tx) => {
+          client.waitForTransactionBlock({ digest: tx.digest }).then(() => {
+            refetch();
+          });
+        },
       },
     );
   };

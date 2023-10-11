@@ -1,13 +1,17 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Container } from "@radix-ui/themes";
 import { PACKAGE_ID } from "./constants";
-import { useSignAndExecuteTransactionBlock } from "@mysten/dapp-kit";
+import {
+  useSignAndExecuteTransactionBlock,
+  useSuiClient,
+} from "@mysten/dapp-kit";
 
 export function CreateCounter({
   onCreated,
 }: {
   onCreated: (id: string) => void;
 }) {
+  const client = useSuiClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
 
   return (
@@ -41,11 +45,17 @@ export function CreateCounter({
       },
       {
         onSuccess: (tx) => {
-          const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+          client
+            .waitForTransactionBlock({
+              digest: tx.digest,
+            })
+            .then(() => {
+              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
 
-          if (objectId) {
-            onCreated(objectId);
-          }
+              if (objectId) {
+                onCreated(objectId);
+              }
+            });
         },
       },
     );
