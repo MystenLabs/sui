@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
@@ -186,5 +187,16 @@ impl Query {
         ctx.data_provider()
             .fetch_protocol_config(protocol_version)
             .await
+    }
+
+    async fn resolve_name_service_address(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<Address>> {
+        ctx.data_unchecked::<PgManager>()
+            .resolve_name_service_address(ctx.data_unchecked::<NameServiceConfig>(), name)
+            .await
+            .extend()
     }
 }

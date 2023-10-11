@@ -116,8 +116,19 @@ impl Default for NameServiceConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
-pub struct DomainParseError;
+#[derive(thiserror::Error, Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub enum DomainParseError {
+    #[error("String length: {0} exceeds maximum allowed length: {1}")]
+    ExceedsMaxLength(usize, usize),
+    #[error("String length: {0} outside of valid range: [{1}, {2}]")]
+    InvalidLength(usize, usize, usize),
+    #[error("Hyphens are not allowed as the first or last character")]
+    InvalidHyphens,
+    #[error("Only lowercase letters, numbers, and hyphens are allowed")]
+    InvalidUnderscore,
+    #[error("Domain must contain at least one label")]
+    LabelsEmpty,
+}
 
 impl FromStr for Domain {
     type Err = DomainParseError;
@@ -127,7 +138,10 @@ impl FromStr for Domain {
         const MAX_DOMAIN_LENGTH: usize = 200;
 
         if s.len() > MAX_DOMAIN_LENGTH {
-            return Err(DomainParseError);
+            return Err(DomainParseError::ExceedsMaxLength(
+                s.len(),
+                MAX_DOMAIN_LENGTH,
+            ));
         }
 
         let labels = s
@@ -137,7 +151,7 @@ impl FromStr for Domain {
             .collect::<Result<Vec<_>, Self::Err>>()?;
 
         if labels.is_empty() {
-            return Err(DomainParseError);
+            return Err(DomainParseError::LabelsEmpty);
         }
 
         let labels = labels.into_iter().map(ToOwned::to_owned).collect();
@@ -153,7 +167,11 @@ fn validate_label(label: &str) -> Result<&str, DomainParseError> {
     let len = bytes.len();
 
     if !(MIN_LABEL_LENGTH..=MAX_LABEL_LENGTH).contains(&len) {
-        return Err(DomainParseError);
+        return Err(DomainParseError::InvalidLength(
+            len,
+            MIN_LABEL_LENGTH,
+            MAX_LABEL_LENGTH,
+        ));
     }
 
     for (i, character) in bytes.iter().enumerate() {
@@ -165,7 +183,10 @@ fn validate_label(label: &str) -> Result<&str, DomainParseError> {
         };
 
         if !is_valid_character {
-            return Err(DomainParseError);
+            match character {
+                b'-' => return Err(DomainParseError::InvalidHyphens),
+                _ => return Err(DomainParseError::InvalidUnderscore),
+            }
         };
     }
     Ok(label)

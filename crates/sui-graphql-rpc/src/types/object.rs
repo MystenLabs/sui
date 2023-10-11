@@ -3,6 +3,7 @@
 
 use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
 use super::digest::Digest;
@@ -39,7 +40,7 @@ pub(crate) enum ObjectKind {
     Immutable,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Default)]
 pub(crate) struct ObjectFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
@@ -183,17 +184,21 @@ impl Object {
         unimplemented!()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, NameService>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         unimplemented!()
     }
 }

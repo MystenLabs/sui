@@ -17,6 +17,7 @@ use std::default::Default;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
 
@@ -37,6 +38,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
             e
         })
         .unwrap();
+    let name_service_config = NameServiceConfig::default();
 
     let prom_addr: SocketAddr = PROM_ADDR.parse().unwrap();
     let registry = start_prom(prom_addr);
@@ -52,6 +54,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_loader)
         .context_data(service_config)
         .context_data(pg_conn_pool)
+        .context_data(name_service_config)
         .context_data(Arc::new(metrics))
         .extension(QueryLimitsChecker::default())
         .extension(FeatureGate)
