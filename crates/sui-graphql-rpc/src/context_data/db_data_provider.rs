@@ -19,12 +19,18 @@ use crate::{
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
+        safe_mode::SafeMode,
+        stake_subsidy::StakeSubsidy,
+        storage_fund::StorageFund,
         sui_address::SuiAddress,
+        sui_system_state_summary::SuiSystemStateSummary,
+        system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
             ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
             TransactionBlockKind,
         },
+        validator_set::ValidatorSet,
     },
 };
 use async_graphql::{
@@ -56,6 +62,9 @@ use sui_sdk::types::{
     },
     move_package::MovePackage as SuiMovePackage,
     object::{Data, Object as SuiObject},
+    sui_system_state::sui_system_state_summary::{
+        SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
+    },
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
@@ -63,6 +72,8 @@ use sui_sdk::types::{
 use sui_types::dynamic_field::Field;
 
 use super::DEFAULT_PAGE_SIZE;
+
+use super::sui_sdk_data_provider::convert_to_validators;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
@@ -628,17 +639,22 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_latest_epoch(&self) -> Result<Epoch, Error> {
-        self.get_epoch(None)
+        let result = self
+            .get_epoch(None)
             .await?
-            .map(Epoch::from)
-            .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))
+            .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
+
+        Epoch::try_from(result)
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
+        self.get_epoch(Some(epoch_id))
+            .await?
+            .map(Epoch::try_from)
+            .transpose()
     }
 
     // To be used in scenarios where epoch is expected to exist
@@ -783,6 +799,21 @@ impl PgManager {
         let stored_obj = self.get_obj(address, version).await?;
 
         stored_obj.map(Object::try_from).transpose()
+    }
+
+    pub(crate) async fn fetch_move_obj(
+        &self,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<MoveObject>, Error> {
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj = self.get_obj(address, version).await?;
+        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
+        let move_object = sui_object.map(|o| MoveObject { native_object: o });
+
+        Ok(move_object)
     }
 
     pub(crate) async fn fetch_owned_objs(
@@ -1010,6 +1041,16 @@ impl PgManager {
 
         Ok(Some(domain.to_string()))
     }
+
+    pub(crate) async fn fetch_latest_sui_system_state(
+        &self,
+    ) -> Result<SuiSystemStateSummary, Error> {
+        let result = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_sui_system_state())
+            .await?;
+        SuiSystemStateSummary::try_from(result)
+    }
 }
 
 impl TryFrom<StoredCheckpoint> for Checkpoint {
@@ -1199,20 +1240,121 @@ impl TryFrom<StoredObject> for Object {
     }
 }
 
-impl From<StoredEpochInfo> for Epoch {
-    fn from(e: StoredEpochInfo) -> Self {
-        Self {
+impl TryFrom<StoredEpochInfo> for Epoch {
+    type Error = Error;
+    fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
+        let validators: Vec<SuiValidatorSummary> = e
+            .validators
+            .into_iter()
+            .flatten()
+            .map(|v| {
+                bcs::from_bytes(&v).map_err(|e| {
+                    Error::Internal(format!(
+                        "Can't convert validator into Validator. Error: {e}",
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        let active_validators = convert_to_validators(validators, None);
+
+        let validator_set = ValidatorSet {
+            total_stake: e.new_total_stake.map(|s| BigInt::from(s as u64)),
+            active_validators: Some(active_validators),
+            ..Default::default()
+        };
+
+        Ok(Self {
             epoch_id: e.epoch as u64,
-            system_state_version: None,
-            protocol_configs: None,
+            protocol_version: e.protocol_version as u64,
             reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
-            system_parameters: None,
-            stake_subsidy: None,
-            validator_set: None,
-            storage_fund: None,
-            safe_mode: None,
-            start_timestamp: None,
-        }
+            validator_set: Some(validator_set),
+            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
+            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
+        })
+    }
+}
+
+impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
+    type Error = Error;
+    fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
+        let active_validators =
+            convert_to_validators(system_state.active_validators.clone(), Some(&system_state));
+
+        let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
+            Error::Internal(format!(
+                "Cannot convert start timestamp u64 ({}) of system state into i64 required by DateTime",
+                system_state.epoch_start_timestamp_ms
+            ))
+        })?;
+
+        let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
+            Error::Internal(format!(
+                "Cannot convert start timestamp ({}) of system state into a DateTime",
+                start_timestamp
+            ))
+        })?;
+
+        Ok(SuiSystemStateSummary {
+            epoch_id: system_state.epoch,
+            system_state_version: Some(BigInt::from(system_state.system_state_version)),
+            reference_gas_price: Some(BigInt::from(system_state.reference_gas_price)),
+            system_parameters: Some(SystemParameters {
+                duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
+                stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
+                min_validator_count: Some(system_state.max_validator_count),
+                max_validator_count: Some(system_state.max_validator_count),
+                min_validator_joining_stake: Some(BigInt::from(
+                    system_state.min_validator_joining_stake,
+                )),
+                validator_low_stake_threshold: Some(BigInt::from(
+                    system_state.validator_low_stake_threshold,
+                )),
+                validator_very_low_stake_threshold: Some(BigInt::from(
+                    system_state.validator_very_low_stake_threshold,
+                )),
+                validator_low_stake_grace_period: Some(BigInt::from(
+                    system_state.validator_low_stake_grace_period,
+                )),
+            }),
+            stake_subsidy: Some(StakeSubsidy {
+                balance: Some(BigInt::from(system_state.stake_subsidy_balance)),
+                distribution_counter: Some(system_state.stake_subsidy_distribution_counter),
+                current_distribution_amount: Some(BigInt::from(
+                    system_state.stake_subsidy_current_distribution_amount,
+                )),
+                period_length: Some(system_state.stake_subsidy_period_length),
+                decrease_rate: Some(system_state.stake_subsidy_decrease_rate as u64),
+            }),
+            validator_set: Some(ValidatorSet {
+                total_stake: Some(BigInt::from(system_state.total_stake)),
+                active_validators: Some(active_validators),
+                pending_removals: Some(system_state.pending_removals.clone()),
+                pending_active_validators_size: Some(system_state.pending_active_validators_size),
+                stake_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
+                inactive_pools_size: Some(system_state.inactive_pools_size),
+                validator_candidates_size: Some(system_state.validator_candidates_size),
+            }),
+            storage_fund: Some(StorageFund {
+                total_object_storage_rebates: Some(BigInt::from(
+                    system_state.storage_fund_total_object_storage_rebates,
+                )),
+                non_refundable_balance: Some(BigInt::from(
+                    system_state.storage_fund_non_refundable_balance,
+                )),
+            }),
+            safe_mode: Some(SafeMode {
+                enabled: Some(system_state.safe_mode),
+                gas_summary: Some(GasCostSummary {
+                    computation_cost: system_state.safe_mode_computation_rewards,
+                    storage_cost: system_state.safe_mode_storage_rewards,
+                    storage_rebate: system_state.safe_mode_storage_rebates,
+                    non_refundable_storage_fee: system_state.safe_mode_non_refundable_storage_fee,
+                }),
+            }),
+            protocol_version: system_state.protocol_version,
+            start_timestamp: Some(start_timestamp),
+        })
     }
 }
 
@@ -1265,6 +1407,7 @@ impl From<GenesisObject> for SuiAddress {
         }
     }
 }
+
 impl TryFrom<StoredObject> for Coin {
     type Error = Error;
 

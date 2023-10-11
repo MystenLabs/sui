@@ -1,26 +1,8 @@
-# Latest epoch
 {
-  epoch {
-    epochId, referenceGasPrice
-  }
-}
-
-# Data for a particular epoch
-{
-  epoch(id:124) {
-    epochId, referenceGasPrice
-  }
-}
-
-# Selecting all fields for epoch 100
-{
-  epoch(id: 100){
-    protocolConfigs {
-      protocolVersion
-    }
+  latestSuiSystemState {
+    systemStateVersion
     referenceGasPrice
     startTimestamp
-    endTimestamp
     validatorSet {
       totalStake
       pendingActiveValidatorsSize
