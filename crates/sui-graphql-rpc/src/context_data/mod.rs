@@ -4,7 +4,6 @@
 pub(crate) mod context_ext;
 pub(crate) mod data_provider;
 pub(crate) mod db_data_provider;
-pub(crate) mod name_service;
 pub(crate) mod sui_sdk_data_provider;
 
 pub const DEFAULT_PAGE_SIZE: u64 = 10;

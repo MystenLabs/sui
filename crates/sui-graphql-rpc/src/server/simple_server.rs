@@ -4,7 +4,6 @@
 use crate::config::{ConnectionConfig, ServiceConfig};
 use crate::context_data::data_provider::DataProvider;
 use crate::context_data::db_data_provider::PgManager;
-use crate::context_data::name_service::NameServiceConfig;
 use crate::context_data::sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0};
 use crate::extensions::feature_gate::FeatureGate;
 use crate::extensions::logger::Logger;
@@ -18,6 +17,7 @@ use std::default::Default;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
 

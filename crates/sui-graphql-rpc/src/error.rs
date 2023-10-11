@@ -4,8 +4,9 @@
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
+use sui_json_rpc::name_service::DomainParseError;
 
-use crate::context_data::{db_data_provider::DbValidationError, name_service::DomainParseError};
+use crate::context_data::db_data_provider::DbValidationError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.

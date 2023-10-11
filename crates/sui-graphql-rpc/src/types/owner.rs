@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::context_data::db_data_provider::PgManager;
-use crate::context_data::name_service::NameServiceConfig;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::*;
@@ -10,6 +9,7 @@ use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::Connection;
 use async_graphql::*;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::address::Address;
 use super::name_service::NameService;

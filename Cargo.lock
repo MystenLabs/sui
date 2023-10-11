@@ -10480,6 +10480,7 @@ dependencies = [
  "serde_with",
  "serde_yaml 0.8.26",
  "sui-indexer",
+ "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-types",

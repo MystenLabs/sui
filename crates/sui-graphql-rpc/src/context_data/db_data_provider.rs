@@ -45,6 +45,7 @@ use sui_indexer::{
     schema_v2::{checkpoints, epochs, objects, packages, transactions, tx_indices},
     PgConnectionPoolConfig,
 };
+use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -61,10 +62,7 @@ use sui_sdk::types::{
 };
 use sui_types::dynamic_field::Field;
 
-use super::{
-    name_service::{Domain, NameRecord, NameServiceConfig},
-    DEFAULT_PAGE_SIZE,
-};
+use super::DEFAULT_PAGE_SIZE;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
@@ -495,15 +493,8 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-        name_service_name: bool,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let mut query = objects::dsl::objects.into_boxed();
-
-        if name_service_name {
-            query = query.filter(
-                objects::dsl::df_object_type.eq("0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::name_record::NameRecord".to_string())
-            );
-        }
 
         if let Some(filter) = filter {
             if let Some(object_ids) = filter.object_ids {
@@ -849,7 +840,7 @@ impl PgManager {
             self.validate_obj_filter(filter)?;
         }
         let objects = self
-            .multi_get_objs(first, after, last, before, filter, false)
+            .multi_get_objs(first, after, last, before, filter)
             .await?;
 
         if let Some((stored_objs, has_next_page)) = objects {

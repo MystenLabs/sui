@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
@@ -15,10 +16,7 @@ use super::{
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{
-        context_ext::DataProviderContextExt, db_data_provider::PgManager,
-        name_service::NameServiceConfig,
-    },
+    context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager},
     error::{code, graphql_error, Error},
 };
 
