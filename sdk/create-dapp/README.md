@@ -19,7 +19,7 @@ The following templates are available:
   wallet
 - `react-e2e-counter`: An end to end Example with move code and UI for a simple counter app
 
-The examples are based off the Vite typescript starter project, and pre-configure a few things for
+The examples are based off the Vite TypeScript starter project, and pre-configure a few things for
 you including:
 
 - [React](https://react.dev/)
