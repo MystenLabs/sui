@@ -750,6 +750,18 @@ impl HeaderV2 {
                 .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
         }
 
+        // Ensure system messages are valid.
+        for m in self.system_messages.iter() {
+            match m {
+                SystemMessage::DkgMessage(msg) => {
+                    ensure!(msg.sender == self.author.0, DagError::InvalidSystemMessage);
+                }
+                SystemMessage::DkgConfirmation(conf) => {
+                    ensure!(conf.sender == self.author.0, DagError::InvalidSystemMessage);
+                }
+            }
+        }
+
         Ok(())
     }
 }
