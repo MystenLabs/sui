@@ -38,7 +38,7 @@ pub(crate) enum ObjectKind {
     Immutable,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Default)]
 pub(crate) struct ObjectFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
@@ -162,8 +162,11 @@ impl Object {
         unimplemented!()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
@@ -174,10 +177,7 @@ impl Object {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, NameService>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
-            .await
-            .extend()
+        unimplemented!()
     }
 }
 

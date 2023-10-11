@@ -18,7 +18,6 @@ use crate::{
         epoch::Epoch,
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
-        name_service::NameService,
         object::{Object, ObjectFilter, ObjectKind},
         sui_address::SuiAddress,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
@@ -496,8 +495,15 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
+        name_service_name: bool,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let mut query = objects::dsl::objects.into_boxed();
+
+        if name_service_name {
+            query = query.filter(
+                objects::dsl::df_object_type.eq("0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::name_record::NameRecord".to_string())
+            );
+        }
 
         if let Some(filter) = filter {
             if let Some(object_ids) = filter.object_ids {
@@ -843,7 +849,7 @@ impl PgManager {
             self.validate_obj_filter(filter)?;
         }
         let objects = self
-            .multi_get_objs(first, after, last, before, filter)
+            .multi_get_objs(first, after, last, before, filter, false)
             .await?;
 
         if let Some((stored_objs, has_next_page)) = objects {
@@ -1000,6 +1006,12 @@ impl PgManager {
 
         let record_id = name_service_config.record_field_id(&domain);
 
+        tracing::info!(
+            "Resolving name service address for domain: {domain} with record id: {record_id}",
+            domain = domain,
+            record_id = record_id,
+        );
+
         let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
             Some(o) => o,
             None => return Ok(None),
@@ -1015,11 +1027,11 @@ impl PgManager {
         }))
     }
 
-    pub(crate) async fn fetch_name_service_names(
+    pub(crate) async fn default_name_service_name(
         &self,
         name_service_config: &NameServiceConfig,
         address: SuiAddress,
-    ) -> Result<Option<Connection<String, NameService>>, Error> {
+    ) -> Result<Option<String>, Error> {
         let reverse_record_id =
             name_service_config.reverse_record_field_id(NativeSuiAddress::from(address));
 
@@ -1037,12 +1049,7 @@ impl PgManager {
             .ok_or_else(|| Error::Internal(format!("Malformed Object {reverse_record_id}")))?
             .value;
 
-        let mut connection = Connection::new(false, false);
-        connection.edges.push(Edge::new(
-            domain.to_string(),
-            NameService(domain.to_string()),
-        ));
-        Ok(Some(connection))
+        Ok(Some(domain.to_string()))
     }
 }
 

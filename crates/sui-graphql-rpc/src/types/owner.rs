@@ -158,8 +158,11 @@ impl Owner {
         unimplemented!()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
@@ -170,9 +173,6 @@ impl Owner {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, NameService>>> {
-        ctx.data_unchecked::<PgManager>()
-            .fetch_name_service_names(ctx.data_unchecked::<NameServiceConfig>(), self.address)
-            .await
-            .extend()
+        unimplemented!()
     }
 }
