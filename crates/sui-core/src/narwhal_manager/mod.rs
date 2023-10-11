@@ -15,6 +15,7 @@ use narwhal_node::worker_node::WorkerNodes;
 use narwhal_node::{CertificateStoreCacheMetrics, NodeStorage};
 use narwhal_worker::TransactionValidator;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
+use sui_types::digests::ChainIdentifier;
 use std::path::PathBuf;
 use std::time::Instant;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
@@ -124,6 +125,7 @@ impl NarwhalManager {
     pub async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
+        chain: ChainIdentifier,
         protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         execution_state: StateInitializer,
@@ -168,6 +170,7 @@ impl NarwhalManager {
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
                     committee.clone(),
+                    narwhal_config::ChainIdentifier::new(*chain.as_bytes()),
                     protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),

@@ -35,7 +35,6 @@ types = { path = "../types", package = "narwhal-types" }
 storage = { path = "../storage", package = "narwhal-storage" }
 store = { path = "../../crates/typed-store", package = "typed-store" }
 sui-macros.workspace = true
-sui-types.workspace = true
 mysten-network.workspace = true
 sui-protocol-config.workspace = true
 

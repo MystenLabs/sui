@@ -1,14 +1,13 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{AuthorityIdentifier, Committee};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee};
 use crypto::RandomnessPrivateKey;
 use fastcrypto::groups;
 use fastcrypto_tbls::{dkg, nodes};
 use mysten_metrics::metered_channel::{Receiver, Sender};
 use mysten_metrics::spawn_logged_monitored_task;
 use sui_protocol_config::ProtocolConfig;
-use sui_types::committee::VALIDITY_THRESHOLD;
 use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -56,7 +55,8 @@ struct RandomnessState {
 
 impl RandomnessState {
     fn try_new(
-        protocol_config: ProtocolConfig,
+        chain: &ChainIdentifier,
+        protocol_config: &ProtocolConfig,
         committee: Committee,
         private_key: RandomnessPrivateKey,
     ) -> Option<Self> {
@@ -82,9 +82,10 @@ impl RandomnessState {
             }
         };
         let (nodes, t) = nodes.reduce(
-            VALIDITY_THRESHOLD
+            committee
+                .validity_threshold()
                 .try_into()
-                .expect("VALIDITY_THRESHOLD should fit in u16"),
+                .expect("validity threshold should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
         );
         let party = match dkg::Party::<PkG, EncG>::new(
@@ -92,7 +93,7 @@ impl RandomnessState {
             nodes,
             t.into(),
             fastcrypto_tbls::random_oracle::RandomOracle::new(
-                format!("dkg {}", committee.epoch()).as_str(),
+                format!("dkg {:x?} {}", chain.as_bytes(), committee.epoch()).as_str(),
             ),
             &mut rand::thread_rng(),
         ) {
@@ -190,7 +191,8 @@ impl RandomnessState {
 impl StateHandler {
     #[must_use]
     pub fn spawn(
-        protocol_config: ProtocolConfig,
+        chain: &ChainIdentifier,
+        protocol_config: &ProtocolConfig,
         authority_id: AuthorityIdentifier,
         committee: Committee,
         rx_committed_certificates: Receiver<(Round, Vec<Certificate>)>,
@@ -200,23 +202,23 @@ impl StateHandler {
         randomness_private_key: RandomnessPrivateKey,
         network: anemo::Network,
     ) -> JoinHandle<()> {
+        let state_handler = Self {
+            authority_id,
+            rx_committed_certificates,
+            rx_shutdown,
+            tx_committed_own_headers,
+            tx_system_messages,
+            randomness_state: RandomnessState::try_new(
+                chain,
+                protocol_config,
+                committee,
+                randomness_private_key,
+            ),
+            network,
+        };
         spawn_logged_monitored_task!(
             async move {
-                Self {
-                    authority_id,
-                    rx_committed_certificates,
-                    rx_shutdown,
-                    tx_committed_own_headers,
-                    tx_system_messages,
-                    randomness_state: RandomnessState::try_new(
-                        protocol_config,
-                        committee,
-                        randomness_private_key,
-                    ),
-                    network,
-                }
-                .run()
-                .await;
+                state_handler.run().await;
             },
             "StateHandlerTask"
         )

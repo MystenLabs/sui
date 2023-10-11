@@ -32,6 +32,21 @@ pub mod utils;
 /// The epoch number.
 pub type Epoch = u64;
 
+// Opaque bytes uniquely identifying the current chain. Analogue of the
+// type in `sui-types` crate.
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct ChainIdentifier([u8; 32]);
+
+impl ChainIdentifier {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Node {0} is not in the committee")]

@@ -31,7 +31,7 @@ async fn start_dkg() {
         .expect("should work to convert BLS key to Scalar"),
     );
     let randomness_state =
-        RandomnessState::try_new(protocol_config, committee, randomness_private_key).unwrap();
+        RandomnessState::try_new(ChainIdentifer::new([0; 32]), &protocol_config, committee, randomness_private_key).unwrap();
 
     let (tx_system_messages, mut rx_system_messages) = test_utils::test_channel!(1);
     randomness_state.start_dkg(&tx_system_messages).await;

@@ -22,7 +22,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache};
+use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, ChainIdentifier};
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
@@ -91,6 +91,7 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
+        chain_identifier: ChainIdentifier,
         protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
@@ -499,7 +500,8 @@ impl Primary {
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
-            protocol_config,
+            &chain_identifier,
+            &protocol_config,
             authority.id(),
             committee,
             rx_committed_certificates,
