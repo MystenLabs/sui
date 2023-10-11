@@ -896,6 +896,7 @@ mod simtests {
     use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNoop};
     use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
     use crate::test_utils::{test_certificates, test_gas_objects};
+    use futures::FutureExt;
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -906,6 +907,7 @@ mod simtests {
     use std::collections::BTreeSet;
     use std::panic;
     use std::panic::AssertUnwindSafe;
+    use sui_macros::register_fail_points;
     use sui_macros::sim_test;
     use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
     use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
@@ -916,9 +918,7 @@ mod simtests {
     use sui_types::transaction::{
         CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
     };
-    use sui_macros::register_fail_points;
     use typed_store::TypedStoreError;
-    use futures::FutureExt;
 
     /// Tests that the processing of the consensus output commit is atomic and essentially either all
     /// transactions are processed/stored or nothing. This is particularly important for the consensus
@@ -1007,33 +1007,37 @@ mod simtests {
         };
 
         // Register a fail point in order to fail when trying to write the consensus output to db.
-        register_fail_points(
-            &[
-                "batch-write-before",
-            ],
-            move || {
-                panic!("Crashing when writing to db");
-            },
-        );
+        register_fail_points(&["batch-write-before"], move || {
+            panic!("Crashing when writing to db");
+        });
 
         // AND processing the consensus output - make sure that we catch the panic so test can continue.
         let result = async move {
-            AssertUnwindSafe(consensus_handler
-                .handle_consensus_output(consensus_output.clone())).catch_unwind().await
-        }.await;
-
+            AssertUnwindSafe(consensus_handler.handle_consensus_output(consensus_output.clone()))
+                .catch_unwind()
+                .await
+        }
+        .await;
 
         assert!(result.is_err());
 
         // And ensure that nothing has been written to the messages db table
         for transaction in transactions.iter() {
-            assert!(!epoch_store.is_tx_cert_consensus_message_processed(transaction).unwrap());
+            assert!(!epoch_store
+                .is_tx_cert_consensus_message_processed(transaction)
+                .unwrap());
         }
 
         // And nothing has been written to the checkpoints table
-        assert!(epoch_store.get_pending_checkpoint(&leader_round).unwrap().is_none());
+        assert!(epoch_store
+            .get_pending_checkpoint(&leader_round)
+            .unwrap()
+            .is_none());
 
         // And nothing has been written to the consensus stats table
-        assert_eq!(epoch_store.get_last_consensus_stats().unwrap(), ExecutionIndicesWithStats::default());
+        assert_eq!(
+            epoch_store.get_last_consensus_stats().unwrap(),
+            ExecutionIndicesWithStats::default()
+        );
     }
 }
