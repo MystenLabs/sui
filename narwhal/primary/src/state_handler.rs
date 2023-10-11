@@ -61,6 +61,7 @@ impl RandomnessState {
         private_key: RandomnessPrivateKey,
     ) -> Option<Self> {
         if !protocol_config.random_beacon() {
+            info!("random beacon: disabled");
             return None;
         }
 
@@ -101,6 +102,7 @@ impl RandomnessState {
                 return None;
             }
         };
+        info!("random beacon: state initialized");
         Some(Self {
             party,
             messages: Vec::new(),
