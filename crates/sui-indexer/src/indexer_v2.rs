@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::apis::IndexerApiV2;
+use crate::apis::{IndexerApiV2, TransactionBuilderApiV2};
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
@@ -103,6 +103,7 @@ pub async fn build_json_rpc_server(
     // TODO: Register modules here
 
     builder.register_module(IndexerApiV2::new(reader.clone()))?;
+    builder.register_module(TransactionBuilderApiV2::new(reader.clone()))?;
     // builder.register_module()...
 
     let default_socket_addr: SocketAddr = SocketAddr::new(
