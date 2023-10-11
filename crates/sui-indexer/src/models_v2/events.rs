@@ -91,12 +91,19 @@ impl StoredEvent {
                 "Event senders should contain at least one address".to_string(),
             )
         })?;
-        let sender = SuiAddress::from_bytes(sender).map_err(|_e| {
-            IndexerError::PersistentStorageDataCorruptionError(format!(
-                "Failed to parse event sender address: {:?}",
-                sender
-            ))
-        })?;
+        let sender = match sender {
+            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Failed to parse event sender address: {:?}",
+                    sender
+                ))
+            })?,
+            None => {
+                return Err(IndexerError::PersistentStorageDataCorruptionError(
+                    "Event senders element should not be null".to_string(),
+                ))
+            }
+        };
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
 

@@ -729,7 +729,7 @@ impl IndexerReader {
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                // Need to de-amibguize the tx_sequence_number column
+                // Need to remove ambiguities for tx_sequence_number column
                 let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
                     if is_descending {
                         format!(
@@ -971,7 +971,7 @@ impl IndexerReader {
         };
 
         let query = if let EventFilter::Sender(sender) = &filter {
-            // Need to de-amibguize the tx_sequence_number column
+            // Need to remove ambiguities for tx_sequence_number column
             let cursor_clause = if descending_order {
                 format!("(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
             } else {
