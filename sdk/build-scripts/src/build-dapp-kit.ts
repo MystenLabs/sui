@@ -14,7 +14,15 @@ buildPackage({
 			async processCss(css) {
 				const result = await postcss([
 					autoprefixer,
-					prefixSelector({ prefix: '[data-dapp-kit]' }),
+					prefixSelector({
+						prefix: '[data-dapp-kit]',
+						transform: (prefix, selector, prefixedSelector) => {
+							// Our prefix is applied to all top-level elements rendered to the DOM, so we want
+							// our transform to apply to the top-level element itself and all of its children
+							// Example: [data-dapp-kit].ConnectModal, [data-dapp-kit] .ConnectModal
+							return `${prefix}${selector}, ${prefixedSelector}`;
+						},
+					}),
 				]).process(css, {
 					// Suppress source map warning
 					from: undefined,
