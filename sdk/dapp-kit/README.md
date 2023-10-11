@@ -53,7 +53,7 @@ function App() {
 					<YourApp />
 				</WalletProvider>
 			</SuiClientProvider>
-		</QueryClient>
+		</QueryClientProvider>
 	);
 }
 ```
