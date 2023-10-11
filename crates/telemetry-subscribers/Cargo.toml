@@ -8,6 +8,10 @@ repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
 publish = false
 
+[[bin]]
+name = "import-trace"
+path = "src/bin/import_trace.rs"
+
 [dependencies]
 console-subscriber = { workspace = true, optional = true }
 crossterm.workspace = true
@@ -20,12 +24,22 @@ workspace-hack.workspace = true
 opentelemetry = { version = "0.20.0", features = ["rt-tokio"], optional = true }
 opentelemetry-otlp = { version = "0.13.0", features = ["grpc-tonic"], optional = true }
 tracing-opentelemetry = { version = "0.21.0", optional = true }
+opentelemetry-proto = { version = "0.3", optional = true }
 tokio.workspace = true
+futures.workspace = true
+clap.workspace = true
+bytes.workspace = true
+bytes-varint = { version = "1" }
+
+# must use same version as opentelemetry for tonic and prost, so we can't use from
+# workspace
+tonic = { version = "0.9" }
+prost = "0.11.9"
 
 [features]
 default = ["otlp"]
 tokio-console = ["console-subscriber"]
-otlp = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-otlp"]
+otlp = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-otlp", "opentelemetry-proto"]
 
 [dev-dependencies]
 camino.workspace = true
