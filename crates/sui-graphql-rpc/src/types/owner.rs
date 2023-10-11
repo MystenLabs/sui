@@ -9,6 +9,7 @@ use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
 use async_graphql::connection::Connection;
 use async_graphql::*;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::address::Address;
 use super::name_service::NameService;
@@ -157,17 +158,21 @@ impl Owner {
         unimplemented!()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, NameService>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         unimplemented!()
     }
 }
