@@ -7,9 +7,9 @@ license = "Apache-2.0"
 
 [dependencies]
 move-core-types.workspace = true
-sui-core.workspace = true
+sui-core = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
-sui-types.workspace = true
+sui-types = { workspace = true, features = ["test-utils"] }
 
 async-trait.workspace = true
 bcs.workspace = true
