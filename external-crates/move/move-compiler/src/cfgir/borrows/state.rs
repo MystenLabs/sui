@@ -1046,7 +1046,7 @@ impl BorrowState {
             // metadata gathered
             mutably_used: _,
             next_eid: _,
-            id_to_exp: _,
+            id_to_exp: self_id_to_exp,
         } = self;
         let BorrowState {
             locals: other_locals,
@@ -1057,7 +1057,7 @@ impl BorrowState {
             // metadata gathered
             mutably_used: _,
             next_eid: _,
-            id_to_exp: _,
+            id_to_exp: other_id_to_exp,
         } = other;
         assert!(self_next == other_next, "ICE canonicalization failed");
         assert!(
@@ -1068,7 +1068,14 @@ impl BorrowState {
             self_prev_had_errors == other_prev_had_errors,
             "ICE previous errors flag changed"
         );
-        self_locals == other_locals && self_borrows.leq(other_borrows)
+        self_locals == other_locals
+            && self_borrows.leq(other_borrows)
+            && other_id_to_exp.iter().all(|(id, other_eids)| {
+                self_id_to_exp
+                    .get(id)
+                    .map(|self_eids| other_eids.is_subset(self_eids))
+                    .unwrap_or(false)
+            })
     }
 }
 
