@@ -6,27 +6,18 @@ import {
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Flex, Heading, Text } from "@radix-ui/themes";
-import { useQueryClient } from "@tanstack/react-query";
 import { PACKAGE_ID } from "./constants";
 
 export function Counter({ id }: { id: string }) {
   const currentAccount = useCurrentAccount();
-  const queryClient = useQueryClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
-  const queryKey = ["getObject", id];
-  const { data, isLoading, error } = useSuiClientQuery(
-    "getObject",
-    {
-      id,
-      options: {
-        showContent: true,
-        showOwner: true,
-      },
+  const { data, isLoading, error, refetch } = useSuiClientQuery("getObject", {
+    id,
+    options: {
+      showContent: true,
+      showOwner: true,
     },
-    {
-      queryKey,
-    },
-  );
+  });
 
   const executeMoveCall = (method: "increment" | "reset") => {
     const txb = new TransactionBlock();
@@ -45,7 +36,6 @@ export function Counter({ id }: { id: string }) {
 
     signAndExecute(
       {
-        requestType: "WaitForEffectsCert",
         transactionBlock: txb,
         options: {
           showEffects: true,
@@ -53,7 +43,7 @@ export function Counter({ id }: { id: string }) {
         },
       },
       {
-        onSuccess: () => queryClient.invalidateQueries(queryKey),
+        onSuccess: () => refetch(),
       },
     );
   };
