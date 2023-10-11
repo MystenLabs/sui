@@ -320,7 +320,7 @@ impl ConsensusThroughputCalculator {
 
             // Not very likely, but if transactions refer to same second we add to the last element.
             if timestamp_secs == *front_ts {
-                *transactions += num_of_transactions
+                *transactions = transactions.saturating_add(num_of_transactions);
             } else {
                 inner
                     .observations
