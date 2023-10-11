@@ -528,6 +528,7 @@ impl CheckpointStore {
         )?;
 
         let contents = full_contents.into_checkpoint_contents();
+        assert_eq!(&checkpoint.content_digest, contents.digest());
 
         batch.insert_batch(&self.checkpoint_content, [(contents.digest(), &contents)])?;
 
