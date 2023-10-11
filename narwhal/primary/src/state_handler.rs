@@ -157,6 +157,7 @@ impl RandomnessState {
                         .send(SystemMessage::DkgConfirmation(conf))
                         .await;
                 }
+                // TODO: change to a more-specific error.
                 Err(fastcrypto::error::FastCryptoError::InputTooShort(_)) => (), // wait for more input
                 Err(e) => error!("Error while merging randomness DKG messages: {e:?}"),
             }
@@ -178,6 +179,7 @@ impl RandomnessState {
                         self.dkg_output
                     );
                 }
+                // TODO: change to a more-specific error.
                 Err(fastcrypto::error::FastCryptoError::InputTooShort(_)) => (), // wait for more input
                 Err(e) => error!("Error while processing randomness DKG confirmations: {e:?}"),
             }
