@@ -1160,7 +1160,7 @@ importers:
         specifier: ^0.17.6
         version: 0.17.6
       postcss:
-        specifier: ^8.4.29
+        specifier: ^8.4.26
         version: 8.4.31
       postcss-prefix-selector:
         specifier: ^1.16.0
