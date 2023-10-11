@@ -155,8 +155,8 @@ async fn benchmark_transaction_signing(ctx: &BenchmarkContext, transactions: Vec
     ctx.validator_sign_transactions(transactions).await;
     let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
     info!(
-        "Transaction signing finished in {}s, TPS={}",
+        "Transaction signing finished in {}s, TPS={}.",
         elapsed,
-        tx_count as f64 / elapsed
+        tx_count as f64 / elapsed,
     );
 }

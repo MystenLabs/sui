@@ -151,14 +151,8 @@ impl SingleValidator {
     }
 
     pub async fn sign_transaction(&self, transaction: Transaction) -> HandleTransactionResponse {
-        let result = self
-            .get_validator()
-            .handle_transaction(
-                &self.epoch_store,
-                VerifiedTransaction::new_unchecked(transaction),
-            )
+        self.validator_service
+            .handle_transaction_for_testing(transaction)
             .await
-            .unwrap();
-        result
     }
 }

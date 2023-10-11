@@ -248,6 +248,16 @@ impl ValidatorService {
             .into_inner()
     }
 
+    pub async fn handle_transaction_for_testing(
+        &self,
+        transaction: Transaction,
+    ) -> HandleTransactionResponse {
+        self.transaction(tonic::Request::new(transaction))
+            .await
+            .unwrap()
+            .into_inner()
+    }
+
     async fn handle_transaction(
         self,
         request: tonic::Request<Transaction>,
