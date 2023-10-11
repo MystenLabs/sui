@@ -10533,6 +10533,7 @@ dependencies = [
  "sui-rest-api",
  "sui-sdk",
  "sui-test-transaction-builder",
+ "sui-transaction-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers",

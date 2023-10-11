@@ -35,7 +35,7 @@ impl GovernanceReadApiV2 {
         Self { inner }
     }
 
-    async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
+    pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
         match self
             .inner
             .spawn_blocking(move |this| this.get_epoch_info(epoch))
