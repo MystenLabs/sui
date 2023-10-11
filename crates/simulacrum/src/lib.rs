@@ -95,7 +95,11 @@ where
             .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .build();
-        let keystore = KeyStore::from_newtork_config(&config);
+        Self::new_with_network_config(&config)
+    }
+
+    pub fn new_with_network_config(config: &NetworkConfig) -> Self {
+        let keystore = KeyStore::from_newtork_config(config);
         let store = InMemoryStore::new(&config.genesis);
         let checkpoint_builder = CheckpointBuilder::new(config.genesis.checkpoint());
 
@@ -126,11 +130,20 @@ impl<R> Simulacrum<R> {
     /// If the above checks are successful then the transaction is immediately executed, enqueued
     /// to be included in the next checkpoint (the next time `create_checkpoint` is called) and the
     /// corresponding TransactionEffects are returned.
-    pub fn execute_transaction(&mut self, transaction: Transaction) -> Result<TransactionEffects> {
-        // This only supports traditional authenticators and not zklogin
+    pub fn execute_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<TransactionEffects> {
+        Ok(self.execute_txn_impl(transaction)?.0)
+    }
+
+    pub fn execute_txn_impl(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction.verify(&VerifyParams::default())?;
 
-        let (inner_temporary_store, effects, _execution_error_opt) = self
+        let (inner_temporary_store, effects, execution_error_opt) = self
             .epoch_state
             .execute_transaction(&self.store, &self.deny_config, &transaction)?;
 
@@ -148,8 +161,7 @@ impl<R> Simulacrum<R> {
         // Insert into checkpoint builder
         self.checkpoint_builder
             .push_transaction(transaction, effects.clone());
-
-        Ok(effects)
+        Ok((effects, execution_error_opt.err()))
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
