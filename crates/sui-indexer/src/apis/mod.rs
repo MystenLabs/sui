@@ -10,6 +10,7 @@ pub(crate) use indexer_api_v2::IndexerApiV2;
 pub(crate) use move_utils::MoveUtilsApi;
 pub(crate) use move_utils_v2::MoveUtilsApiV2;
 pub(crate) use read_api::ReadApi;
+pub(crate) use read_api_v2::ReadApiV2;
 pub(crate) use transaction_builder_api::TransactionBuilderApi;
 pub(crate) use transaction_builder_api_v2::TransactionBuilderApiV2;
 pub(crate) use write_api::WriteApi;
