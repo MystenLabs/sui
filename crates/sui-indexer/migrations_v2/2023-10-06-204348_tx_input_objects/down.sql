@@ -1,2 +1,2 @@
 -- This file should undo anything in `up.sql`
-DROP TABLE IF EXISTS tx_indices;
+DROP TABLE IF EXISTS tx_input_objects;

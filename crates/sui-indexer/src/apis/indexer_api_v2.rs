@@ -121,7 +121,7 @@ impl IndexerApiServer for IndexerApiV2 {
                 query.options.unwrap_or_default(),
                 cursor,
                 limit + 1,
-                descending_order.unwrap_or(true),
+                descending_order.unwrap_or(false),
             )
             .await
             .map_err(|e: IndexerError| anyhow::anyhow!(e))?;
