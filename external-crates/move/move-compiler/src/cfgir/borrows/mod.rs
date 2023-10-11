@@ -6,13 +6,17 @@ mod state;
 
 use super::absint::*;
 use crate::{
+    diag,
     diagnostics::Diagnostics,
-    hlir::ast::*,
+    hlir::{
+        ast::*,
+        translate::{display_var, DisplayVar},
+    },
     parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
 use state::{Value, *};
-use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 //**************************************************************************************************
 // Entry and trait bindings
@@ -20,6 +24,7 @@ use std::collections::BTreeMap;
 
 struct BorrowSafety {
     local_numbers: UniqueMap<Var, usize>,
+    mutably_used: RefExpInfoMap,
 }
 
 impl BorrowSafety {
@@ -28,7 +33,10 @@ impl BorrowSafety {
         for (idx, (v, _)) in local_types.key_cloned_iter().enumerate() {
             local_numbers.add(v, idx).unwrap();
         }
-        Self { local_numbers }
+        Self {
+            local_numbers,
+            mutably_used: Rc::new(RefCell::new(BTreeMap::new())),
+        }
     }
 }
 
@@ -52,10 +60,8 @@ impl<'a, 'b> Context<'a, 'b> {
         self.diags
     }
 
-    fn add_diags(&mut self, additional: Option<Diagnostics>) {
-        if let Some(ds) = additional {
-            self.diags.extend(ds);
-        }
+    fn add_diags(&mut self, additional: Diagnostics) {
+        self.diags.extend(additional);
     }
 }
 
@@ -65,10 +71,11 @@ impl TransferFunctions for BorrowSafety {
     fn execute(
         &mut self,
         pre: &mut Self::State,
-        _lbl: Label,
-        _idx: usize,
+        lbl: Label,
+        idx: usize,
         cmd: &Command,
     ) -> Diagnostics {
+        pre.start_command(lbl, idx);
         let mut context = Context::new(self, pre);
         command(&mut context, cmd);
         context
@@ -92,15 +99,50 @@ pub fn verify(
         ..
     } = context;
     let acquires = *acquires;
+    let mut safety = BorrowSafety::new(locals);
+
     // check for existing errors
     let has_errors = compilation_env.has_errors();
-    let mut initial_state = BorrowState::initial(locals, acquires.clone(), has_errors);
+    let mut initial_state = BorrowState::initial(
+        locals,
+        safety.mutably_used.clone(),
+        acquires.clone(),
+        has_errors,
+    );
     initial_state.bind_arguments(&signature.parameters);
-    let mut safety = BorrowSafety::new(locals);
     initial_state.canonicalize_locals(&safety.local_numbers);
     let (final_state, ds) = safety.analyze_function(cfg, initial_state);
     compilation_env.add_diags(ds);
+    unused_mut_borrows(compilation_env, safety.mutably_used);
     final_state
+}
+
+fn unused_mut_borrows(compilation_env: &mut CompilationEnv, mutably_used: RefExpInfoMap) {
+    for info in RefCell::borrow(&mutably_used).values() {
+        let RefExpInfo {
+            loc,
+            is_mut,
+            used_mutably,
+            param_name,
+        } = info;
+        if *is_mut && !*used_mutably {
+            let msg = "Mutable reference is never used mutably, \
+            consider switching to an imutable reference '&' instead";
+            let mut diag = diag!(UnusedItem::MutReference, (*loc, msg));
+            let display_param = param_name
+                .as_ref()
+                .map(|v| (v.loc(), display_var(v.value())));
+            if let Some((param_loc, DisplayVar::Orig(v))) = display_param {
+                let param_msg = format!(
+                    "For parameters, this can be silenced by prefixing \
+                    the name with an underscore, e.g. '_{v}'"
+                );
+                diag.add_secondary_label((param_loc, param_msg))
+            }
+
+            compilation_env.add_diag(diag)
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -127,8 +169,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         }
         C::IgnoreAndPop { exp: e, .. } => {
             let values = exp(context, e);
-            let diags_opt = context.borrow_state.release_values(values);
-            context.add_diags(diags_opt);
+            context.borrow_state.release_values(values);
         }
 
         C::Return { exp: e, .. } => {
@@ -156,8 +197,7 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
     use LValue_ as L;
     match l_ {
         L::Ignore => {
-            let diag_opt = context.borrow_state.release_value(value);
-            context.add_diags(diag_opt.map(|d| d.into()));
+            context.borrow_state.release_value(value);
         }
         L::Var(v, _) => {
             let diags = context.borrow_state.assign_local(*loc, v, value);
@@ -278,11 +318,11 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             // must check separately incase of using a local with an unassigned value
             if v1.is_ref() {
                 let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v1);
-                assert!(errors.is_none(), "ICE eq freezing failed");
+                assert!(errors.is_empty(), "ICE eq freezing failed");
             }
             if v2.is_ref() {
                 let (errors, _) = context.borrow_state.dereference(e1.exp.loc, v2);
-                assert!(errors.is_none(), "ICE eq freezing failed");
+                assert!(errors.is_empty(), "ICE eq freezing failed");
             }
             svalue()
         }
