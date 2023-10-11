@@ -24,18 +24,20 @@ use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes,
-    NetworkKeyPair, SuiKeyPair,
+    deterministic_random_account_key, generate_proof_of_possession, get_key_pair, AccountKeyPair,
+    AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
 use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
-    CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::create_fake_transaction;
 use sui_types::utils::to_sender_signed_transaction;
+use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, ObjectRef, SuiAddress, TransactionDigest},
     committee::Committee,
@@ -48,6 +50,84 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Fixture: a few test gas objects.
+pub fn test_gas_objects() -> Vec<Object> {
+    thread_local! {
+        static GAS_OBJECTS: Vec<Object> = (0..4)
+            .map(|_| {
+                let gas_object_id = ObjectID::random();
+                let (owner, _) = deterministic_random_account_key();
+                Object::with_id_owner_for_testing(gas_object_id, owner)
+            })
+            .collect();
+    }
+
+    GAS_OBJECTS.with(|v| v.clone())
+}
+
+/// Fixture: a few test certificates containing a shared object.
+pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
+    let (sender, keypair) = deterministic_random_account_key();
+    let rgp = epoch_store.reference_gas_price();
+
+    let mut certificates = Vec::new();
+    let shared_object = Object::shared_for_testing();
+    let shared_object_arg = ObjectArg::SharedObject {
+        id: shared_object.id(),
+        initial_shared_version: shared_object.version(),
+        mutable: true,
+    };
+    for gas_object in test_gas_objects() {
+        // Object digest may be different in genesis than originally generated.
+        let gas_object = authority
+            .get_object(&gas_object.id())
+            .await
+            .unwrap()
+            .unwrap();
+        // Make a sample transaction.
+        let module = "object_basics";
+        let function = "create";
+
+        let data = TransactionData::new_move_call(
+            sender,
+            SUI_FRAMEWORK_PACKAGE_ID,
+            ident_str!(module).to_owned(),
+            ident_str!(function).to_owned(),
+            /* type_args */ vec![],
+            gas_object.compute_object_reference(),
+            /* args */
+            vec![
+                CallArg::Object(shared_object_arg),
+                CallArg::Pure(16u64.to_le_bytes().to_vec()),
+                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+            ],
+            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+            rgp,
+        )
+        .unwrap();
+
+        let transaction = authority
+            .verify_transaction(to_sender_signed_transaction(data, &keypair))
+            .unwrap();
+
+        // Submit the transaction and assemble a certificate.
+        let response = authority
+            .handle_transaction(&epoch_store, transaction.clone())
+            .await
+            .unwrap();
+        let vote = response.status.into_signed_for_testing();
+        let certificate = CertifiedTransaction::new(
+            transaction.into_message(),
+            vec![vote.clone()],
+            &authority.clone_committee_for_testing(),
+        )
+        .unwrap();
+        certificates.push(certificate);
+    }
+    certificates
+}
 
 pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,

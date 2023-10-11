@@ -169,8 +169,8 @@ impl SuiTxValidatorMetrics {
 mod tests {
     use crate::{
         checkpoints::CheckpointServiceNoop,
-        consensus_adapter::consensus_tests::{test_certificates, test_gas_objects},
         consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics},
+        test_utils::{test_certificates, test_gas_objects},
     };
 
     use narwhal_test_utils::latest_protocol_version;

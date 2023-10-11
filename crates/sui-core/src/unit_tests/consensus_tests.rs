@@ -5,101 +5,15 @@ use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_handler::SequencedConsensusTransaction;
-use move_core_types::{account_address::AccountAddress, ident_str};
+use crate::test_utils::{test_certificates, test_gas_objects};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
-use sui_types::crypto::deterministic_random_account_key;
 use sui_types::multiaddr::Multiaddr;
-use sui_types::transaction::TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS;
-use sui_types::utils::to_sender_signed_transaction;
-use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::{
-    base_types::ObjectID,
-    object::Object,
-    transaction::{CallArg, CertifiedTransaction, ObjectArg, TransactionData},
-};
+use sui_types::object::Object;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::{Receiver, Sender};
-
-/// Fixture: a few test gas objects.
-pub fn test_gas_objects() -> Vec<Object> {
-    thread_local! {
-        static GAS_OBJECTS: Vec<Object> = (0..4)
-            .map(|_| {
-                let gas_object_id = ObjectID::random();
-                let (owner, _) = deterministic_random_account_key();
-                Object::with_id_owner_for_testing(gas_object_id, owner)
-            })
-            .collect();
-    }
-
-    GAS_OBJECTS.with(|v| v.clone())
-}
-
-/// Fixture: a few test certificates containing a shared object.
-pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
-    let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let (sender, keypair) = deterministic_random_account_key();
-    let rgp = epoch_store.reference_gas_price();
-
-    let mut certificates = Vec::new();
-    let shared_object = Object::shared_for_testing();
-    let shared_object_arg = ObjectArg::SharedObject {
-        id: shared_object.id(),
-        initial_shared_version: shared_object.version(),
-        mutable: true,
-    };
-    for gas_object in test_gas_objects() {
-        // Object digest may be different in genesis than originally generated.
-        let gas_object = authority
-            .get_object(&gas_object.id())
-            .await
-            .unwrap()
-            .unwrap();
-        // Make a sample transaction.
-        let module = "object_basics";
-        let function = "create";
-
-        let data = TransactionData::new_move_call(
-            sender,
-            SUI_FRAMEWORK_PACKAGE_ID,
-            ident_str!(module).to_owned(),
-            ident_str!(function).to_owned(),
-            /* type_args */ vec![],
-            gas_object.compute_object_reference(),
-            /* args */
-            vec![
-                CallArg::Object(shared_object_arg),
-                CallArg::Pure(16u64.to_le_bytes().to_vec()),
-                CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
-            ],
-            rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-            rgp,
-        )
-        .unwrap();
-
-        let transaction = authority
-            .verify_transaction(to_sender_signed_transaction(data, &keypair))
-            .unwrap();
-
-        // Submit the transaction and assemble a certificate.
-        let response = authority
-            .handle_transaction(&epoch_store, transaction.clone())
-            .await
-            .unwrap();
-        let vote = response.status.into_signed_for_testing();
-        let certificate = CertifiedTransaction::new(
-            transaction.into_message(),
-            vec![vote.clone()],
-            &authority.clone_committee_for_testing(),
-        )
-        .unwrap();
-        certificates.push(certificate);
-    }
-    certificates
-}
 
 #[tokio::test]
 async fn submit_transaction_to_consensus_adapter() {

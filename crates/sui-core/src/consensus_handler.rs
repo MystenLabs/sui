@@ -592,8 +592,8 @@ mod tests {
     use crate::authority::authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI};
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointServiceNoop;
-    use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
     use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
+    use crate::test_utils::{test_certificates, test_gas_objects};
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
@@ -884,5 +884,156 @@ mod tests {
             kind,
             tracking_id: Default::default(),
         })
+    }
+}
+
+#[cfg(msim)]
+mod simtests {
+    use super::*;
+
+    use crate::authority::authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI};
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::checkpoints::{CheckpointCommitHeight, CheckpointServiceNoop};
+    use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
+    use crate::test_utils::{test_certificates, test_gas_objects};
+    use narwhal_config::AuthorityIdentifier;
+    use narwhal_test_utils::latest_protocol_version;
+    use narwhal_types::{
+        Batch, Certificate, CommittedSubDag, Header, HeaderV1Builder, ReputationScores,
+    };
+    use prometheus::Registry;
+    use shared_crypto::intent::Intent;
+    use std::collections::BTreeSet;
+    use std::panic;
+    use std::panic::AssertUnwindSafe;
+    use sui_macros::sim_test;
+    use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
+    use sui_types::base_types::{random_object_ref, AuthorityName, SuiAddress};
+    use sui_types::committee::Committee;
+    use sui_types::messages_consensus::ConsensusTransaction;
+    use sui_types::object::Object;
+    use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+    use sui_types::transaction::{
+        CertifiedTransaction, SenderSignedData, TransactionData, TransactionDataAPI,
+    };
+    use sui_macros::register_fail_points;
+    use typed_store::TypedStoreError;
+    use futures::FutureExt;
+
+    /// Tests that the processing of the consensus output commit is atomic and essentially either all
+    /// transactions are processed/stored or nothing. This is particularly important for the consensus
+    /// recovery which assumes that it can safely restore output after the last stored sub dag index.
+    #[sim_test]
+    async fn test_consensus_handler_atomic() {
+        // GIVEN
+        let mut objects = test_gas_objects();
+        objects.push(Object::shared_for_testing());
+
+        let latest_protocol_config = &latest_protocol_version();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .with_objects(objects.clone())
+                .build();
+
+        let state = TestAuthorityBuilder::new()
+            .with_network_config(&network_config)
+            .build()
+            .await;
+
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let new_epoch_start_state = epoch_store.epoch_start_state();
+        let committee = new_epoch_start_state.get_narwhal_committee();
+
+        let mut consensus_handler = ConsensusHandler::new(
+            epoch_store.clone(),
+            Arc::new(CheckpointServiceNoop {}),
+            state.transaction_manager().clone(),
+            state.db(),
+            Arc::new(ArcSwap::default()),
+            committee.clone(),
+            Arc::new(AuthorityMetrics::new(&Registry::new())),
+        );
+
+        // AND
+        // Create test transactions
+        let transactions = test_certificates(&state).await;
+        let leader_round = 5;
+        let mut certificates = Vec::new();
+        let mut batches = Vec::new();
+
+        for transaction in transactions.iter() {
+            let transaction_bytes: Vec<u8> = bcs::to_bytes(
+                &ConsensusTransaction::new_certificate_message(&state.name, transaction.clone()),
+            )
+            .unwrap();
+
+            let batch = Batch::new(vec![transaction_bytes], latest_protocol_config);
+
+            batches.push(vec![batch.clone()]);
+
+            // AND make batch as part of a commit
+            let header = HeaderV1Builder::default()
+                .author(AuthorityIdentifier(0))
+                .round(leader_round)
+                .epoch(0)
+                .parents(BTreeSet::new())
+                .with_payload_batch(batch.clone(), 0, 0)
+                .build()
+                .unwrap();
+
+            let certificate = Certificate::new_unsigned(
+                latest_protocol_config,
+                &committee,
+                Header::V1(header),
+                vec![],
+            )
+            .unwrap();
+
+            certificates.push(certificate);
+        }
+
+        // AND create the consensus output
+        let commit_round = 10;
+        let consensus_output = ConsensusOutput {
+            sub_dag: Arc::new(CommittedSubDag::new(
+                certificates.clone(),
+                certificates[0].clone(),
+                commit_round,
+                ReputationScores::default(),
+                None,
+            )),
+            batches,
+        };
+
+        // Register a fail point in order to fail when trying to write the consensus output to db.
+        register_fail_points(
+            &[
+                "batch-write-before",
+            ],
+            move || {
+                panic!("Crashing when writing to db");
+            },
+        );
+
+        // AND processing the consensus output - make sure that we catch the panic so test can continue.
+        let result = async move {
+            AssertUnwindSafe(consensus_handler
+                .handle_consensus_output(consensus_output.clone())).catch_unwind().await
+        }.await;
+
+
+        assert!(result.is_err());
+
+        // And ensure that nothing has been written to the messages db table
+        for transaction in transactions.iter() {
+            assert!(!epoch_store.is_tx_cert_consensus_message_processed(transaction).unwrap());
+        }
+
+        // And nothing has been written to the checkpoints table
+        assert!(epoch_store.get_pending_checkpoint(&leader_round).unwrap().is_none());
+
+        // And nothing has been written to the consensus stats table
+        assert_eq!(epoch_store.get_last_consensus_stats().unwrap(), ExecutionIndicesWithStats::default());
     }
 }
