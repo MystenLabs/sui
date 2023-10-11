@@ -54,14 +54,15 @@ export function Counter({ id }: { id: string }) {
 
   if (!data.data) return <Text>Not found</Text>;
 
-  const ownedByCurrentAccount = getOwner(data.data) === currentAccount?.address;
+  const ownedByCurrentAccount =
+    getCounterFields(data.data)?.owner === currentAccount?.address;
 
   return (
     <>
       <Heading size="3">Counter {id}</Heading>
 
       <Flex direction="column" gap="2">
-        <Text>Count: {getCount(data.data!)}</Text>
+        <Text>Count: {getCounterFields(data.data)?.value}</Text>
         <Flex direction="row" gap="2">
           <Button onClick={() => executeMoveCall("increment")}>
             Increment
@@ -74,19 +75,10 @@ export function Counter({ id }: { id: string }) {
     </>
   );
 }
-
-function getCount(data: SuiObjectData) {
-  if (data.content?.dataType !== "moveObject") {
-    return 0;
-  }
-
-  return (data.content.fields as Record<string, number>).value;
-}
-
-function getOwner(data: SuiObjectData) {
+function getCounterFields(data: SuiObjectData) {
   if (data.content?.dataType !== "moveObject") {
     return null;
   }
 
-  return (data.content.fields as Record<string, string>).owner;
+  return data.content.fields as { value: number; owner: string };
 }
