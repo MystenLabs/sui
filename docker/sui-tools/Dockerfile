@@ -3,7 +3,6 @@
 # Copy in all crates, Cargo.toml and Cargo.lock unmodified,
 # and build the application.
 FROM rust:1.73-bullseye AS builder
-FROM debian:bullseye-slim
 ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
