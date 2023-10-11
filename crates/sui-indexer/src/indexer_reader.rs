@@ -7,12 +7,13 @@ use crate::{
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
         epoch::StoredEpochInfo,
+        events::StoredEvent,
         objects::{ObjectRefColumn, StoredObject},
         packages::StoredPackage,
         transactions::StoredTransaction,
         tx_indices::TxSequenceNumber,
     },
-    schema_v2::{checkpoints, display, epochs, objects, packages, transactions},
+    schema_v2::{checkpoints, display, epochs, events, objects, packages, transactions},
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
@@ -28,7 +29,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
-use sui_json_rpc_types::{CheckpointId, EpochInfo, SuiTransactionBlockResponse, TransactionFilter};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
+};
+use sui_types::event::EventID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -542,6 +546,19 @@ impl IndexerReader {
         })
     }
 
+    pub async fn query_events_in_blocking_task(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        self.spawn_blocking(move |this| {
+            this.query_events_impl(filter, cursor, limit, descending_order)
+        })
+        .await
+    }
+
     pub async fn multi_get_objects_in_blocking_task(
         &self,
         object_ids: Vec<ObjectID>,
@@ -712,7 +729,7 @@ impl IndexerReader {
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                // Need to de-amibguize the tx_sequence_number column
+                // Need to remove ambiguities for tx_sequence_number column
                 let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
                     if is_descending {
                         format!(
@@ -876,6 +893,180 @@ impl IndexerReader {
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    fn query_events_by_tx_digest_query(
+        &self,
+        tx_digest: TransactionDigest,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<String> {
+        let cursor = if let Some(cursor) = cursor {
+            if cursor.tx_digest != tx_digest {
+                return Err(IndexerError::InvalidArgumentError(
+                    "Cursor tx_digest does not match the tx_digest in the query.".into(),
+                ));
+            }
+            if descending_order {
+                format!("e.{EVENT_SEQUENCE_NUMBER_STR} < {}", cursor.event_seq)
+            } else {
+                format!("e.{EVENT_SEQUENCE_NUMBER_STR} > {}", cursor.event_seq)
+            }
+        } else if descending_order {
+            format!("e.{EVENT_SEQUENCE_NUMBER_STR} <= {}", i64::MAX)
+        } else {
+            format!("e.{EVENT_SEQUENCE_NUMBER_STR} >= {}", 0)
+        };
+
+        let order_clause = if descending_order { "DESC" } else { "ASC" };
+        Ok(format!(
+            "SELECT * \
+            FROM EVENTS e \
+            JOIN TRANSACTIONS t \
+            ON t.tx_sequence_number = e.tx_sequence_number \
+            AND t.transaction_digest = '\\x{}'::bytea \
+            WHERE {cursor} \
+            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
+            LIMIT {limit}
+            ",
+            Hex::encode(tx_digest.into_inner()),
+        ))
+    }
+
+    fn query_events_impl(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        let (tx_seq, event_seq) = if let Some(cursor) = cursor.clone() {
+            let EventID {
+                tx_digest,
+                event_seq,
+            } = cursor;
+            (
+                self.run_query(|conn| {
+                    transactions::dsl::transactions
+                        .select(transactions::tx_sequence_number)
+                        .filter(
+                            transactions::dsl::transaction_digest
+                                .eq(tx_digest.into_inner().to_vec()),
+                        )
+                        .first::<i64>(conn)
+                })?,
+                event_seq,
+            )
+        } else if descending_order {
+            let max_tx_seq: i64 = self.run_query(|conn| {
+                events::dsl::events
+                    .select(events::tx_sequence_number)
+                    .order(events::dsl::tx_sequence_number.desc())
+                    .first::<i64>(conn)
+            })?;
+            (max_tx_seq + 1, 0)
+        } else {
+            (-1, 0)
+        };
+
+        let query = if let EventFilter::Sender(sender) = &filter {
+            // Need to remove ambiguities for tx_sequence_number column
+            let cursor_clause = if descending_order {
+                format!("(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+            } else {
+                format!("(e.{TX_SEQUENCE_NUMBER_STR} > {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+            };
+            let order_clause = if descending_order {
+                format!("e.{TX_SEQUENCE_NUMBER_STR} DESC, e.{EVENT_SEQUENCE_NUMBER_STR} DESC")
+            } else {
+                format!("e.{TX_SEQUENCE_NUMBER_STR} ASC, e.{EVENT_SEQUENCE_NUMBER_STR} ASC")
+            };
+            format!(
+                "( \
+                    SELECT *
+                    FROM tx_senders s
+                    JOIN events e
+                    ON e.tx_sequence_number = s.tx_sequence_number
+                    AND s.sender = '\\x{}'::bytea
+                    WHERE {} \
+                    ORDER BY {} \
+                    LIMIT {}
+                )",
+                Hex::encode(sender.to_vec()),
+                cursor_clause,
+                order_clause,
+                limit,
+            )
+        } else if let EventFilter::Transaction(tx_digest) = filter {
+            self.query_events_by_tx_digest_query(tx_digest, cursor, limit, descending_order)?
+        } else {
+            let main_where_clause = match filter {
+                EventFilter::Package(package_id) => {
+                    format!("package = '\\x{}'::bytea", package_id.to_hex())
+                }
+                EventFilter::MoveModule { package, module } => {
+                    format!(
+                        "package = '\\x{}'::bytea AND module = '{}'",
+                        package.to_hex(),
+                        module,
+                    )
+                }
+                EventFilter::MoveEventType(struct_tag) => {
+                    format!("event_type = '{}'", struct_tag)
+                }
+                EventFilter::MoveEventModule { package, module } => {
+                    let package_module_prefix = format!("{}::{}", package.to_hex_literal(), module);
+                    format!("event_type LIKE '{package_module_prefix}::%'")
+                }
+                EventFilter::Sender(_) => {
+                    // Processed above
+                    unreachable!()
+                }
+                EventFilter::Transaction(_) => {
+                    // Processed above
+                    unreachable!()
+                }
+                EventFilter::MoveEventField { .. }
+                | EventFilter::All(_)
+                | EventFilter::Any(_)
+                | EventFilter::And(_, _)
+                | EventFilter::Or(_, _)
+                | EventFilter::TimeRange { .. } => {
+                    return Err(IndexerError::NotSupportedError(
+                        "This type of EventFilter is not supported.".into(),
+                    ));
+                }
+            };
+
+            let cursor_clause = if descending_order {
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+            } else {
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+            };
+            let order_clause = if descending_order {
+                format!("{TX_SEQUENCE_NUMBER_STR} DESC, {EVENT_SEQUENCE_NUMBER_STR} DESC")
+            } else {
+                format!("{TX_SEQUENCE_NUMBER_STR} ASC, {EVENT_SEQUENCE_NUMBER_STR} ASC")
+            };
+
+            format!(
+                "
+                    SELECT * FROM events \
+                    WHERE {} {} \
+                    ORDER BY {} \
+                    LIMIT {}
+                ",
+                main_where_clause, cursor_clause, order_clause, limit,
+            )
+        };
+        tracing::debug!("query events: {}", query);
+        let stored_events =
+            self.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))?;
+        stored_events
+            .into_iter()
+            .map(|se| se.try_into_sui_event(self))
+            .collect()
     }
 
     pub async fn get_transaction_events_in_blocking_task(
