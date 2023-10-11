@@ -4,6 +4,7 @@
 import { vanillaExtractPlugin } from '@vanilla-extract/esbuild-plugin';
 import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
+import prefixSelector from 'postcss-prefix-selector';
 
 import { buildPackage } from './utils/buildPackage';
 
@@ -11,7 +12,10 @@ buildPackage({
 	plugins: [
 		vanillaExtractPlugin({
 			async processCss(css) {
-				const result = await postcss([autoprefixer]).process(css, {
+				const result = await postcss([
+					autoprefixer,
+					prefixSelector({ prefix: '[data-dapp-kit]' }),
+				]).process(css, {
 					// Suppress source map warning
 					from: undefined,
 				});
