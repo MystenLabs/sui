@@ -1,8 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{schema_v2::tx_indices, types_v2::TxIndex};
+use crate::{
+    schema_v2::{tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders},
+    types_v2::TxIndex,
+};
 use diesel::prelude::*;
+
+#[derive(QueryableByName)]
+pub struct TxSequenceNumber {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub tx_sequence_number: i64,
+}
 
 #[derive(QueryableByName)]
 pub struct TxDigest {
@@ -11,55 +20,102 @@ pub struct TxDigest {
 }
 
 #[derive(Queryable, Insertable, Debug, Clone, Default)]
-#[diesel(table_name = tx_indices)]
-pub struct StoredTxIndex {
+#[diesel(table_name = tx_input_objects)]
+pub struct StoredTxInputObject {
     pub tx_sequence_number: i64,
-    pub checkpoint_sequence_number: i64,
-    pub transaction_digest: Vec<u8>,
-    pub input_objects: Vec<Option<Vec<u8>>>,
-    pub changed_objects: Vec<Option<Vec<u8>>>,
-    pub senders: Vec<Option<Vec<u8>>>,
-    pub payers: Vec<Option<Vec<u8>>>,
-    pub recipients: Vec<Option<Vec<u8>>>,
-    pub packages: Vec<Option<Vec<u8>>>,
-    pub package_modules: Vec<Option<String>>,
-    pub package_module_functions: Vec<Option<String>>,
+    pub object_id: Vec<u8>,
 }
 
-impl From<TxIndex> for StoredTxIndex {
-    fn from(tx: TxIndex) -> Self {
-        StoredTxIndex {
-            tx_sequence_number: tx.tx_sequence_number as i64,
-            checkpoint_sequence_number: tx.checkpoint_sequence_number as i64,
-            transaction_digest: tx.transaction_digest.into_inner().to_vec(),
-            input_objects: tx
-                .input_objects
-                .iter()
-                .map(|o| Some(bcs::to_bytes(&o).unwrap()))
-                .collect(),
-            changed_objects: tx
-                .changed_objects
-                .iter()
-                .map(|o| Some(bcs::to_bytes(&o).unwrap()))
-                .collect(),
-            payers: tx.payers.iter().map(|s| Some(s.to_vec())).collect(),
-            senders: tx.senders.iter().map(|s| Some(s.to_vec())).collect(),
-            recipients: tx.recipients.iter().map(|r| Some(r.to_vec())).collect(),
-            packages: tx
-                .move_calls
-                .iter()
-                .map(|(p, _m, _f)| Some(p.to_vec()))
-                .collect(),
-            package_modules: tx
-                .move_calls
-                .iter()
-                .map(|(p, m, _f)| Some(format!("{}::{}", p, m)))
-                .collect(),
-            package_module_functions: tx
-                .move_calls
-                .iter()
-                .map(|(p, m, f)| Some(format!("{}::{}::{}", p, m, f)))
-                .collect(),
-        }
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = tx_changed_objects)]
+pub struct StoredTxChangedObject {
+    pub tx_sequence_number: i64,
+    pub object_id: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = tx_senders)]
+pub struct StoredTxSenders {
+    pub tx_sequence_number: i64,
+    pub sender: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = tx_recipients)]
+pub struct StoredTxRecipients {
+    pub tx_sequence_number: i64,
+    pub recipient: Vec<u8>,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = tx_calls)]
+pub struct StoredTxCalls {
+    pub tx_sequence_number: i64,
+    pub package: Vec<u8>,
+    pub module: String,
+    pub func: String,
+}
+
+#[allow(clippy::type_complexity)]
+impl TxIndex {
+    pub fn split(
+        self: TxIndex,
+    ) -> (
+        Vec<StoredTxSenders>,
+        Vec<StoredTxRecipients>,
+        Vec<StoredTxInputObject>,
+        Vec<StoredTxChangedObject>,
+        Vec<StoredTxCalls>,
+    ) {
+        let tx_sequence_number = self.tx_sequence_number as i64;
+        let tx_senders = self
+            .senders
+            .iter()
+            .map(|s| StoredTxSenders {
+                tx_sequence_number,
+                sender: s.to_vec(),
+            })
+            .collect();
+        let tx_recipients = self
+            .recipients
+            .iter()
+            .map(|s| StoredTxRecipients {
+                tx_sequence_number,
+                recipient: s.to_vec(),
+            })
+            .collect();
+        let tx_input_objects = self
+            .input_objects
+            .iter()
+            .map(|o| StoredTxInputObject {
+                tx_sequence_number,
+                object_id: bcs::to_bytes(&o).unwrap(),
+            })
+            .collect();
+        let tx_changed_objects = self
+            .changed_objects
+            .iter()
+            .map(|o| StoredTxChangedObject {
+                tx_sequence_number,
+                object_id: bcs::to_bytes(&o).unwrap(),
+            })
+            .collect();
+        let tx_calls = self
+            .move_calls
+            .iter()
+            .map(|(p, m, f)| StoredTxCalls {
+                tx_sequence_number,
+                package: p.to_vec(),
+                module: m.to_string(),
+                func: f.to_string(),
+            })
+            .collect();
+        (
+            tx_senders,
+            tx_recipients,
+            tx_input_objects,
+            tx_changed_objects,
+            tx_calls,
+        )
     }
 }
