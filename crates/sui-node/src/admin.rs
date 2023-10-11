@@ -8,11 +8,12 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use humantime::parse_duration;
 use serde::Deserialize;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use sui_types::error::SuiError;
-use telemetry_subscribers::FilterHandle;
+use telemetry_subscribers::Filters;
 use tracing::info;
 
 // Example commands:
@@ -37,8 +38,19 @@ use tracing::info;
 // View the node config (private keys will be masked):
 //
 //   $ curl 'http://127.0.0.1:1337/node-config'
+//
+// Set a time-limited tracing config. After the duration expires, tracing will be disabled
+// automatically.
+//
+//   $ curl -X POST 'http://127.0.0.1:1337/enable-tracing?filter=info&duration=10s'
+//
+// Reset tracing to the TRACE_FILTER env var.
+//
+//   $ curl -X POST 'http://127.0.0.1:1337/reset-tracing'
 
 const LOGGING_ROUTE: &str = "/logging";
+const TRACING_ROUTE: &str = "/enable-tracing";
+const TRACING_RESET_ROUTE: &str = "/reset-tracing";
 const SET_BUFFER_STAKE_ROUTE: &str = "/set-override-buffer-stake";
 const CLEAR_BUFFER_STAKE_ROUTE: &str = "/clear-override-buffer-stake";
 const FORCE_CLOSE_EPOCH: &str = "/force-close-epoch";
@@ -47,16 +59,13 @@ const NODE_CONFIG: &str = "/node-config";
 
 struct AppState {
     node: Arc<SuiNode>,
-    filter_handle: FilterHandle,
+    filters: Filters,
 }
 
-pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: FilterHandle) {
-    let filter = filter_handle.get().unwrap();
+pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filters: Filters) {
+    let filter = filters.get_log().unwrap();
 
-    let app_state = AppState {
-        node,
-        filter_handle,
-    };
+    let app_state = AppState { node, filters };
 
     let app = Router::new()
         .route(LOGGING_ROUTE, get(get_filter))
@@ -72,6 +81,8 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: Filt
             post(clear_override_protocol_upgrade_buffer_stake),
         )
         .route(FORCE_CLOSE_EPOCH, post(force_close_epoch))
+        .route(TRACING_ROUTE, post(enable_tracing))
+        .route(TRACING_RESET_ROUTE, post(reset_tracing))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -87,8 +98,41 @@ pub async fn run_admin_server(node: Arc<SuiNode>, port: u16, filter_handle: Filt
         .unwrap()
 }
 
+#[derive(Deserialize)]
+struct EnableTracing {
+    filter: String,
+    duration: String,
+}
+
+async fn enable_tracing(
+    State(state): State<Arc<AppState>>,
+    query: Query<EnableTracing>,
+) -> (StatusCode, String) {
+    let Query(EnableTracing { filter, duration }) = query;
+
+    let Ok(duration) = parse_duration(&duration) else {
+        return (StatusCode::BAD_REQUEST, "invalid duration".into());
+    };
+
+    match state.filters.update_trace(filter, duration) {
+        Ok(()) => (
+            StatusCode::OK,
+            format!("tracing enabled for {:?}", duration),
+        ),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+    }
+}
+
+async fn reset_tracing(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    state.filters.reset_trace();
+    (
+        StatusCode::OK,
+        "tracing filter reset to TRACE_FILTER env var".into(),
+    )
+}
+
 async fn get_filter(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
-    match state.filter_handle.get() {
+    match state.filters.get_log() {
         Ok(filter) => (StatusCode::OK, filter),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
     }
@@ -98,7 +142,7 @@ async fn set_filter(
     State(state): State<Arc<AppState>>,
     new_filter: String,
 ) -> (StatusCode, String) {
-    match state.filter_handle.update(&new_filter) {
+    match state.filters.update_log(&new_filter) {
         Ok(()) => {
             info!(filter =% new_filter, "Log filter updated");
             (StatusCode::OK, "".into())

@@ -1,0 +1,51 @@
+import { UseCurrentWalletExample } from '../../../examples/wallet-hooks';
+
+# `useCurrentWallet`
+
+The `useCurrentWallet` hook retrieves the wallet that is currently connected to the dApp, if one
+exists.
+
+```ts
+import { ConnectButton, useCurrentWallet } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const wallet = useCurrentWallet();
+
+	return (
+		<div>
+			<ConnectButton />
+			{!wallet ? (
+				<div>No wallet connected</div>
+			) : (
+				<div>
+					<h2>Current wallet:</h2>
+					<div>Name: {wallet.name}</div>
+					<div>
+						Accounts:
+						<ul>
+							{wallet.accounts.map((account) => (
+								<li key={account.address}>- {account.address}</li>
+							))}
+						</ul>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+```
+
+## Example
+
+<UseCurrentWalletExample />
+
+## Wallet properties
+
+- `name` - The name of the wallet
+- `version` - The version of the wallet as a string
+- `icon` - A data URL of the wallet icon as an SVG
+- `accounts` - An array of accounts that are available in the wallet
+- `features` - An object with all the
+  [wallet-standard](https://github.com/wallet-standard/wallet-standard) features implemented by the
+  wallet
+- `chains` - An array of chain identifiers that the wallet supports

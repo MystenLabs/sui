@@ -63,7 +63,6 @@ describe('Ed25519PublicKey', () => {
 	it('toBase64', () => {
 		const key = new Ed25519PublicKey(VALID_KEY_BASE64);
 		expect(key.toBase64()).toEqual(VALID_KEY_BASE64);
-		expect(key.toString()).toEqual(VALID_KEY_BASE64);
 	});
 
 	it('toBuffer', () => {

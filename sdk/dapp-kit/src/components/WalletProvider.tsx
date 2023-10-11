@@ -44,7 +44,7 @@ type WalletProviderProps = {
 
 const SUI_WALLET_NAME = 'Sui Wallet';
 
-const DEFUALT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
+const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
 const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[] = [
 	'sui:signTransactionBlock',
@@ -54,7 +54,7 @@ export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
 	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
 	storage = localStorage,
-	storageKey = DEFUALT_STORAGE_KEY,
+	storageKey = DEFAULT_STORAGE_KEY,
 	enableUnsafeBurner = false,
 	autoConnect = false,
 	theme = lightTheme,

@@ -6,6 +6,7 @@ use async_graphql::{connection::Connection, *};
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::move_package::MovePackage;
 use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
@@ -14,7 +15,8 @@ use super::{
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
 use crate::types::base64::Base64;
-
+use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
+use sui_types::move_package::MovePackage as NativeSuiMovePackage;
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -92,6 +94,26 @@ impl Object {
 
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
+    }
+
+    async fn as_move_package(&self) -> Result<Option<MovePackage>> {
+        if let Some(bcs) = &self.bcs {
+            let bytes = bcs.0.as_slice();
+
+            let package = bcs::from_bytes::<NativeSuiMovePackage>(bytes)
+                .map_err(|e| Error::from(format!("Failed to deserialize package: {}", e)))?;
+
+            Ok(Some(MovePackage {
+                native_object: NativeSuiObject::new_package_from_data(
+                    NativeSuiObjectData::Package(package),
+                    self.previous_transaction
+                        .map(|x| NativeSuiTransactionDigest::new(x.into_array()))
+                        .ok_or(Error::new("Object must have a previous transaction digest"))?,
+                ),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     // =========== Owner interface methods =============

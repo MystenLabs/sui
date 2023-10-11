@@ -99,7 +99,7 @@ impl Loader<Digest> for SuiClientLoader {
 impl DataProvider for SuiClient {
     async fn fetch_obj(&self, address: SuiAddress, version: Option<u64>) -> Result<Option<Object>> {
         let oid: NativeObjectID = address.into_array().as_slice().try_into()?;
-        let opts = SuiObjectDataOptions::full_content();
+        let opts = SuiObjectDataOptions::full_content().with_bcs();
 
         let g = match version {
             Some(v) => match self

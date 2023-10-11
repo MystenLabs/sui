@@ -308,27 +308,21 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority
+    let certs = authority
         .epoch_store_for_testing()
-        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
-    {
-        let certs = authority
-            .epoch_store_for_testing()
-            .process_consensus_transactions_for_tests(
-                vec![transaction],
-                &Arc::new(CheckpointServiceNoop {}),
-                authority.db(),
-            )
-            .await
-            .unwrap();
+        .process_consensus_transactions_for_tests(
+            vec![transaction],
+            &Arc::new(CheckpointServiceNoop {}),
+            authority.db(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap();
 
-        authority
-            .transaction_manager()
-            .enqueue(certs, &authority.epoch_store_for_testing())
-            .unwrap();
-    } else {
-        warn!("Failed to verify certificate: {:?}", cert);
-    }
+    authority
+        .transaction_manager()
+        .enqueue(certs, &authority.epoch_store_for_testing())
+        .unwrap();
 }
 
 pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
@@ -336,24 +330,18 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority
+    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+    // This allows testing cert execution independently.
+    authority
         .epoch_store_for_testing()
-        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
-    {
-        // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
-        // This allows testing cert execution independently.
-        authority
-            .epoch_store_for_testing()
-            .process_consensus_transactions_for_tests(
-                vec![transaction],
-                &Arc::new(CheckpointServiceNoop {}),
-                &authority.db(),
-            )
-            .await
-            .unwrap();
-    } else {
-        warn!("Failed to verify certificate: {:?}", cert);
-    }
+        .process_consensus_transactions_for_tests(
+            vec![transaction],
+            &Arc::new(CheckpointServiceNoop {}),
+            &authority.db(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap();
 }
 
 pub fn build_test_modules_with_dep_addr(

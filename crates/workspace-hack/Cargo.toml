@@ -275,7 +275,7 @@ funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
-futures-executor = { version = "0.3", default-features = false, features = ["std"] }
+futures-executor = { version = "0.3" }
 futures-io = { version = "0.3", features = ["unstable"] }
 futures-lite = { version = "1" }
 futures-sink = { version = "0.3" }
@@ -463,7 +463,14 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.13" }
+opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic", "traces"] }
+opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
+opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
+opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
 option-ext = { version = "0.2", default-features = false }
+ordered-float = { version = "3" }
 ouroboros = { version = "0.17" }
 outref = { version = "0.5", default-features = false }
 overload = { version = "0.1", default-features = false }
@@ -517,7 +524,8 @@ prometheus = { version = "0.13" }
 prometheus-http-query = { version = "0.6", default-features = false, features = ["rustls-tls"] }
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
-prost = { version = "0.12" }
+prost-5ef9efb8ec2df382 = { package = "prost", version = "0.12" }
+prost-a6292c17cd707f01 = { package = "prost", version = "0.11" }
 prost-types = { version = "0.12" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 quanta = { version = "0.11" }
@@ -677,7 +685,8 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.10", features = ["tls"] }
+tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
+tonic-93f6ce9d446188ac = { package = "tonic", version = "0.10", features = ["tls"] }
 tonic-health = { version = "0.10" }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.3", features = ["full"] }
@@ -687,6 +696,8 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-appender = { version = "0.2", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
+tracing-log = { version = "0.1", default-features = false }
+tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
@@ -1050,7 +1061,7 @@ funty = { version = "1", default-features = false }
 futures = { version = "0.3", features = ["bilock", "unstable"] }
 futures-channel = { version = "0.3", features = ["sink", "unstable"] }
 futures-core = { version = "0.3", features = ["unstable"] }
-futures-executor = { version = "0.3", default-features = false, features = ["std"] }
+futures-executor = { version = "0.3" }
 futures-io = { version = "0.3", features = ["unstable"] }
 futures-lite = { version = "1" }
 futures-macro = { version = "0.3", default-features = false }
@@ -1259,7 +1270,14 @@ oid-registry = { version = "0.6", features = ["crypto", "x509"] }
 once_cell = { version = "1" }
 oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
+opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.13" }
+opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic", "traces"] }
+opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
+opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
+opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
 option-ext = { version = "0.2", default-features = false }
+ordered-float = { version = "3" }
 ouroboros = { version = "0.17" }
 ouroboros_macro = { version = "0.17", default-features = false, features = ["std"] }
 outref = { version = "0.5", default-features = false }
@@ -1335,9 +1353,11 @@ prometheus-http-query = { version = "0.6", default-features = false, features = 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db", default-features = false }
 proptest = { version = "1" }
 proptest-derive = { version = "0.3", default-features = false }
-prost = { version = "0.12" }
+prost-5ef9efb8ec2df382 = { package = "prost", version = "0.12" }
+prost-a6292c17cd707f01 = { package = "prost", version = "0.11" }
 prost-build = { version = "0.12" }
-prost-derive = { version = "0.12", default-features = false }
+prost-derive-5ef9efb8ec2df382 = { package = "prost-derive", version = "0.12", default-features = false }
+prost-derive-a6292c17cd707f01 = { package = "prost-derive", version = "0.11", default-features = false }
 prost-types = { version = "0.12" }
 protobuf = { version = "2", default-features = false, features = ["with-bytes"] }
 quanta = { version = "0.11" }
@@ -1523,7 +1543,8 @@ toml_datetime-d8f496e17d97b5cb = { package = "toml_datetime", version = "0.5", d
 toml_edit-3575ec1268b04181 = { package = "toml_edit", version = "0.15" }
 toml_edit-582f2526e08bb6a0 = { package = "toml_edit", version = "0.14", features = ["easy"] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
-tonic = { version = "0.10", features = ["tls"] }
+tonic-274715c4dabd11b0 = { package = "tonic", version = "0.9" }
+tonic-93f6ce9d446188ac = { package = "tonic", version = "0.10", features = ["tls"] }
 tonic-build = { version = "0.10" }
 tonic-health = { version = "0.10" }
 toolchain_find = { version = "0.2", default-features = false }
@@ -1536,6 +1557,8 @@ tracing-appender = { version = "0.2", default-features = false }
 tracing-attributes = { version = "0.1", default-features = false }
 tracing-core = { version = "0.1" }
 tracing-error = { version = "0.2" }
+tracing-log = { version = "0.1", default-features = false }
+tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
 tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }

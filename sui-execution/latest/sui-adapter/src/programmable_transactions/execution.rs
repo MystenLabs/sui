@@ -61,6 +61,7 @@ mod checked {
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
+    use tracing::instrument;
 
     use crate::adapter::substitute_package_id;
     use crate::programmable_transactions::context::*;
@@ -113,6 +114,7 @@ mod checked {
     }
 
     /// Execute a single command
+    #[instrument(level = "trace", skip_all)]
     fn execute_command<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,

@@ -45,7 +45,7 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
 
     let struct_name = &ast.ident;
     let data = &ast.data;
-    let mut seen_types = std::collections::HashSet::new();
+    let mut inner_types = vec![];
 
     let tokens = match data {
         Data::Struct(data_struct) => match &data_struct.fields {
@@ -132,10 +132,10 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
                         };
 
                         // Track all the types seen
-                        if seen_types.contains(&inner_type) {
+                        if inner_types.contains(&inner_type) {
                             None
                         } else {
-                            seen_types.insert(inner_type.clone());
+                            inner_types.push(inner_type.clone());
                             Some(quote! {
                                #inner_type
                             })
@@ -156,7 +156,6 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
         (Vec<_>, (Vec<_>, Vec<_>)),
         (Vec<_>, Vec<_>),
     ) = tokens.unzip();
-    let inner_types = Vec::from_iter(seen_types);
     let output = quote! {
         // For each getter, expand it out into a function in the impl block
         impl #struct_name {
