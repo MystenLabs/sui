@@ -997,12 +997,6 @@ impl PgManager {
 
         let record_id = name_service_config.record_field_id(&domain);
 
-        tracing::info!(
-            "Resolving name service address for domain: {domain} with record id: {record_id}",
-            domain = domain,
-            record_id = record_id,
-        );
-
         let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
             Some(o) => o,
             None => return Ok(None),
