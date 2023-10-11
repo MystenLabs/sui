@@ -59,14 +59,14 @@ export function hashASCIIStrToField(str: string, maxSize: number) {
 }
 
 export function genAddressSeed(
-	salt: bigint,
+	salt: string | bigint,
 	name: string,
 	value: string,
 	aud: string,
 	max_name_length = MAX_KEY_CLAIM_NAME_LENGTH,
 	max_value_length = MAX_KEY_CLAIM_VALUE_LENGTH,
 	max_aud_length = MAX_AUD_VALUE_LENGTH,
-) {
+): bigint {
 	return poseidonHash([
 		hashASCIIStrToField(name, max_name_length),
 		hashASCIIStrToField(value, max_value_length),
