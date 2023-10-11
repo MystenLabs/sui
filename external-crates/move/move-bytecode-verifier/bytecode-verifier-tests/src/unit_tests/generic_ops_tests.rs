@@ -36,14 +36,14 @@ fn make_module() -> CompiledModule {
         address_identifiers: vec![
             AccountAddress::ZERO, // Module address
         ],
-        struct_handles: vec![
-            StructHandle {
+        declared_type_handles: vec![
+            DeclaredTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(1),
                 abilities: AbilitySet::PRIMITIVES,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DeclaredTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(2),
                 abilities: AbilitySet::PRIMITIVES,
@@ -52,13 +52,13 @@ fn make_module() -> CompiledModule {
                     is_phantom: false,
                 }],
             },
-            StructHandle {
+            DeclaredTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(3),
                 abilities: AbilitySet::EMPTY | Ability::Key,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DeclaredTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(4),
                 abilities: AbilitySet::EMPTY | Ability::Key,
@@ -71,7 +71,7 @@ fn make_module() -> CompiledModule {
         struct_defs: vec![
             // struct S { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(0),
+                struct_handle: DeclaredTypeHandleIndex(0),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::U64),
@@ -79,7 +79,7 @@ fn make_module() -> CompiledModule {
             },
             // struct GS<T> { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(1),
+                struct_handle: DeclaredTypeHandleIndex(1),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),
@@ -87,7 +87,7 @@ fn make_module() -> CompiledModule {
             },
             // struct R has key { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(2),
+                struct_handle: DeclaredTypeHandleIndex(2),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::U64),
@@ -95,7 +95,7 @@ fn make_module() -> CompiledModule {
             },
             // struct GR<T> has key { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(3),
+                struct_handle: DeclaredTypeHandleIndex(3),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(5),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),

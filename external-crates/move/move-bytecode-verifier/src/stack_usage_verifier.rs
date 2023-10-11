@@ -121,7 +121,8 @@ impl<'a> StackUsageVerifier<'a> {
             | Bytecode::BrTrue(_)
             | Bytecode::BrFalse(_)
             | Bytecode::StLoc(_)
-            | Bytecode::Abort => (1, 0),
+            | Bytecode::Abort
+            | Bytecode::VariantSwitch(_) => (1, 0),
 
             // Instructions that push, but don't pop
             Bytecode::LdU8(_)
@@ -262,6 +263,40 @@ impl<'a> StackUsageVerifier<'a> {
                     StructFieldInformation::Native => 0,
                     StructFieldInformation::Declared(fields) => fields.len(),
                 };
+                (1, field_count as u64)
+            }
+
+            // Pack performs `num_fields` pops and one push
+            Bytecode::PackVariant(eidx, vtag) => {
+                let variant_definition = self.resolver.variant_def_at(*eidx, *vtag)?;
+                let field_count = variant_definition.fields.len();
+                (field_count as u64, 1)
+            }
+            Bytecode::PackVariantGeneric(edii, vtag) => {
+                let enum_def_instantiation = self.resolver.enum_instantiation_at(*edii)?;
+                let variant_definition = self
+                    .resolver
+                    .variant_def_at(enum_def_instantiation.def, *vtag)?;
+                let field_count = variant_definition.fields.len();
+                (field_count as u64, 1)
+            }
+
+            // Pack performs one pop and `num_fields` pushes
+            Bytecode::UnpackVariant(eidx, vtag)
+            | Bytecode::UnpackVariantImmRef(eidx, vtag)
+            | Bytecode::UnpackVariantMutRef(eidx, vtag) => {
+                let variant_definition = self.resolver.variant_def_at(*eidx, *vtag)?;
+                let field_count = variant_definition.fields.len();
+                (1, field_count as u64)
+            }
+            Bytecode::UnpackVariantGeneric(edii, vtag)
+            | Bytecode::UnpackVariantGenericImmRef(edii, vtag)
+            | Bytecode::UnpackVariantGenericMutRef(edii, vtag) => {
+                let enum_def_instantiation = self.resolver.enum_instantiation_at(*edii)?;
+                let variant_definition = self
+                    .resolver
+                    .variant_def_at(enum_def_instantiation.def, *vtag)?;
+                let field_count = variant_definition.fields.len();
                 (1, field_count as u64)
             }
         })

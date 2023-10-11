@@ -61,7 +61,7 @@ fn test_function_handle_type_instantiation() {
 #[test]
 fn test_struct_handle_type_instantiation() {
     let mut m = basic_test_module();
-    m.struct_handles.push(StructHandle {
+    m.declared_type_handles.push(DeclaredTypeHandle {
         module: ModuleHandleIndex::new(0),
         name: IdentifierIndex::new(0),
         abilities: AbilitySet::ALL,
@@ -87,7 +87,7 @@ fn test_struct_handle_type_instantiation() {
     );
 
     let mut s = basic_test_script();
-    s.struct_handles.push(StructHandle {
+    s.declared_type_handles.push(DeclaredTypeHandle {
         module: ModuleHandleIndex::new(0),
         name: IdentifierIndex::new(0),
         abilities: AbilitySet::ALL,
@@ -171,7 +171,7 @@ fn big_vec_unpacks() {
     const N_TYPE_PARAMS: usize = 16;
     let mut st = SignatureToken::Vector(Box::new(SignatureToken::U8));
     let type_params = vec![st; N_TYPE_PARAMS];
-    st = SignatureToken::StructInstantiation(StructHandleIndex(0), type_params);
+    st = SignatureToken::DeclaredTypeInstantiation(DeclaredTypeHandleIndex(0), type_params);
     const N_VEC_PUSH: u16 = 1000;
     let mut code = vec![];
     // 1. CopyLoc:     ...         -> ... st
@@ -200,7 +200,7 @@ fn big_vec_unpacks() {
             address: AddressIdentifierIndex(0),
             name: IdentifierIndex(0),
         }],
-        struct_handles: vec![StructHandle {
+        declared_type_handles: vec![DeclaredTypeHandle {
             module: ModuleHandleIndex(0),
             name: IdentifierIndex(1),
             abilities: AbilitySet::ALL,
@@ -227,7 +227,7 @@ fn big_vec_unpacks() {
         constant_pool: vec![],
         metadata: vec![],
         struct_defs: vec![StructDefinition {
-            struct_handle: StructHandleIndex(0),
+            struct_handle: DeclaredTypeHandleIndex(0),
             field_information: StructFieldInformation::Native,
         }],
         function_defs: vec![FunctionDefinition {
@@ -814,14 +814,14 @@ fn multi_struct(module: &mut CompiledModule, count: usize) {
         module
             .identifiers
             .push(Identifier::new(format!("A_{}", i)).unwrap());
-        module.struct_handles.push(StructHandle {
+        module.declared_type_handles.push(DeclaredTypeHandle {
             module: module.self_module_handle_idx,
             name: IdentifierIndex((module.identifiers.len() - 1) as u16),
             abilities: AbilitySet::EMPTY,
             type_parameters: vec![],
         });
         module.struct_defs.push(StructDefinition {
-            struct_handle: StructHandleIndex((module.struct_handles.len() - 1) as u16),
+            struct_handle: DeclaredTypeHandleIndex((module.declared_type_handles.len() - 1) as u16),
             field_information: StructFieldInformation::Declared(vec![]),
         });
     }

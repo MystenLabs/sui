@@ -31,7 +31,7 @@ impl<'a> LimitsVerifier<'a> {
         };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_declared_type_handles(config)?;
         limit_check.verify_type_nodes(config)?;
         limit_check.verify_identifiers(config)?;
         limit_check.verify_definitions(config)
@@ -49,16 +49,16 @@ impl<'a> LimitsVerifier<'a> {
             resolver: BinaryIndexedView::Script(script),
         };
         limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
+        limit_check.verify_declared_type_handles(config)?;
         limit_check.verify_type_nodes(config)
     }
 
-    fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
+    fn verify_declared_type_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
-            for (idx, struct_handle) in self.resolver.struct_handles().iter().enumerate() {
+            for (idx, struct_handle) in self.resolver.declared_type_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
-                        .at_index(IndexKind::StructHandle, idx as u16));
+                        .at_index(IndexKind::DeclaredTypeHandle, idx as u16));
                 }
             }
         }
@@ -125,9 +125,8 @@ impl<'a> LimitsVerifier<'a> {
                 // Notice that the preorder traversal will iterate all type instantiations, so we
                 // why we can ignore them below.
                 match t {
-                    SignatureToken::Struct(..) | SignatureToken::StructInstantiation(..) => {
-                        size += STRUCT_SIZE_WEIGHT
-                    }
+                    SignatureToken::DeclaredType(..)
+                    | SignatureToken::DeclaredTypeInstantiation(..) => size += STRUCT_SIZE_WEIGHT,
                     SignatureToken::TypeParameter(..) => size += PARAM_SIZE_WEIGHT,
                     _ => size += 1,
                 }

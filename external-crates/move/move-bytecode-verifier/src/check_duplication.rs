@@ -13,9 +13,9 @@ use move_binary_format::{
     access::{ModuleAccess, ScriptAccess},
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
-        CompiledModule, CompiledScript, Constant, FunctionHandle, FunctionHandleIndex,
-        FunctionInstantiation, ModuleHandle, Signature, StructFieldInformation, StructHandle,
-        StructHandleIndex, TableIndex,
+        CompiledModule, CompiledScript, Constant, DeclaredTypeHandle, DeclaredTypeHandleIndex,
+        FunctionHandle, FunctionHandleIndex, FunctionInstantiation, ModuleHandle, Signature,
+        StructFieldInformation, TableIndex,
     },
     IndexKind,
 };
@@ -40,7 +40,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_signatures(module.signatures())?;
         Self::check_module_handles(module.module_handles())?;
         Self::check_module_handles(module.friend_decls())?;
-        Self::check_struct_handles(module.struct_handles())?;
+        Self::check_declared_type_handles(module.declared_type_handles())?;
         Self::check_function_handles(module.function_handles())?;
         Self::check_function_instantiations(module.function_instantiations())?;
 
@@ -62,7 +62,7 @@ impl<'a> DuplicationChecker<'a> {
         Self::check_constants(script.constant_pool())?;
         Self::check_signatures(script.signatures())?;
         Self::check_module_handles(script.module_handles())?;
-        Self::check_struct_handles(script.struct_handles())?;
+        Self::check_declared_type_handles(script.declared_type_handles())?;
         Self::check_function_handles(script.function_handles())?;
         Self::check_function_instantiations(script.function_instantiations())
     }
@@ -123,11 +123,15 @@ impl<'a> DuplicationChecker<'a> {
     }
 
     // StructHandles - module and name define uniqueness
-    fn check_struct_handles(struct_handles: &[StructHandle]) -> PartialVMResult<()> {
-        match Self::first_duplicate_element(struct_handles.iter().map(|x| (x.module, x.name))) {
+    fn check_declared_type_handles(
+        declared_type_handles: &[DeclaredTypeHandle],
+    ) -> PartialVMResult<()> {
+        match Self::first_duplicate_element(
+            declared_type_handles.iter().map(|x| (x.module, x.name)),
+        ) {
             Some(idx) => Err(verification_error(
                 StatusCode::DUPLICATE_ELEMENT,
-                IndexKind::StructHandle,
+                IndexKind::DeclaredTypeHandle,
                 idx,
             )),
             None => Ok(()),
@@ -230,7 +234,8 @@ impl<'a> DuplicationChecker<'a> {
         }
         // Check that each struct definition is pointing to the self module
         if let Some(idx) = self.module.struct_defs().iter().position(|x| {
-            self.module.struct_handle_at(x.struct_handle).module != self.module.self_handle_idx()
+            self.module.declared_type_handle_at(x.struct_handle).module
+                != self.module.self_handle_idx()
         }) {
             return Err(verification_error(
                 StatusCode::INVALID_MODULE_HANDLE,
@@ -239,20 +244,20 @@ impl<'a> DuplicationChecker<'a> {
             ));
         }
         // Check that each struct handle in self module is implemented (has a declaration)
-        let implemented_struct_handles: HashSet<StructHandleIndex> = self
+        let implemented_declared_type_handles: HashSet<DeclaredTypeHandleIndex> = self
             .module
             .struct_defs()
             .iter()
             .map(|x| x.struct_handle)
             .collect();
-        if let Some(idx) = (0..self.module.struct_handles().len()).position(|x| {
-            let y = StructHandleIndex::new(x as u16);
-            self.module.struct_handle_at(y).module == self.module.self_handle_idx()
-                && !implemented_struct_handles.contains(&y)
+        if let Some(idx) = (0..self.module.declared_type_handles().len()).position(|x| {
+            let y = DeclaredTypeHandleIndex::new(x as u16);
+            self.module.declared_type_handle_at(y).module == self.module.self_handle_idx()
+                && !implemented_declared_type_handles.contains(&y)
         }) {
             return Err(verification_error(
                 StatusCode::UNIMPLEMENTED_HANDLE,
-                IndexKind::StructHandle,
+                IndexKind::DeclaredTypeHandle,
                 idx as TableIndex,
             ));
         }

@@ -624,6 +624,11 @@ pub enum StatusCode {
     PROGRAM_TOO_COMPLEX = 1130,
 
     ENUM_TAG_MISMATCH = 1131,
+    ENUM_SWITCH_BAD_OPERAND = 1132,
+    ENUM_TYPE_MISMATCH = 1133,
+    DUPLICATE_ENUM_SWITCH_TAG = 1134,
+    PARTIAL_ENUM_SWITCH = 1135,
+    VARIANT_FIELDS_ALREADY_BORROWED_MUTABLE = 1136,
 
     // These are errors that the VM might raise if a violation of internal
     // invariants takes place.

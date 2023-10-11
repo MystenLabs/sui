@@ -476,6 +476,17 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         VecSwap
                     ),
 
+                    // TODO(tzakian)[enums] Fill this in later
+                    PackVariant(_, _) => todo!(),
+                    PackVariantGeneric(_, _) => todo!(),
+                    UnpackVariant(_, _) => todo!(),
+                    UnpackVariantImmRef(_, _) => todo!(),
+                    UnpackVariantMutRef(_, _) => todo!(),
+                    UnpackVariantGeneric(_, _) => todo!(),
+                    UnpackVariantGenericImmRef(_, _) => todo!(),
+                    UnpackVariantGenericMutRef(_, _) => todo!(),
+                    VariantSwitch(_) => todo!(),
+
                     // List out the other options explicitly so there's a compile error if a new
                     // bytecode gets added.
                     FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_)
@@ -535,7 +546,16 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecPushBack(_)
         | VecPopBack(_)
         | VecUnpack(..)
-        | VecSwap(_) => true,
+        | VecSwap(_)
+        | PackVariant(_, _)
+        | PackVariantGeneric(_, _)
+        | UnpackVariant(_, _)
+        | UnpackVariantImmRef(_, _)
+        | UnpackVariantMutRef(_, _)
+        | UnpackVariantGeneric(_, _)
+        | UnpackVariantGenericImmRef(_, _)
+        | UnpackVariantGenericMutRef(_, _)
+        | VariantSwitch(_) => true,
 
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.
