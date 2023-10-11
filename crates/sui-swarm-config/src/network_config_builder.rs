@@ -201,11 +201,13 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 // tests call `make_tx_certs_and_signed_effects`, which locally forges a cert using
                 // this same committee.
                 let (_, keys) = Committee::new_simple_test_committee_of_size(size.into());
+                let port_offset = rng.next_u32() as u16;
 
                 keys.into_iter()
                     .map(|authority_key| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
-                            .with_protocol_key_pair(authority_key);
+                            .with_protocol_key_pair(authority_key)
+                            .with_deterministic_ports(port_offset.wrapping_add(i as u16));
                         if let Some(rgp) = self.reference_gas_price {
                             builder = builder.with_gas_price(rgp);
                         }
@@ -219,11 +221,14 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             CommitteeConfig::AccountKeys(keys) => {
                 // See above re fixed protocol keys
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
+                let port_offset = rng.next_u32() as u16;
+
                 keys.into_iter()
                     .zip(protocol_keys.into_iter())
                     .map(|(account_key, protocol_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
+                            .with_deterministic_ports(port_offset.wrapping_add(i as u16))
                             .with_account_key_pair(account_key);
                         if let Some(rgp) = self.reference_gas_price {
                             builder = builder.with_gas_price(rgp);
