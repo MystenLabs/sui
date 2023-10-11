@@ -59,12 +59,7 @@ function MyComponent() {
 
 - `transactionBlock`: The transaction block to sign
 - `chain`: The chain identifier to sign the transaction block should be signed for
-- `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
-  should return the response. Default to be `WaitForLocalExecution`
-- `options`:
-  - `showBalanceChanges`: Whether to show balance_changes. Default to be False
-  - `showEffects`: Whether to show transaction effects. Default to be False
-  - `showEvents`: Whether to show transaction events. Default to be False
-  - `showInput`: Whether to show transaction input data. Default to be False
-  - `showObjectChanges`: Whether to show object_changes. Default to be False
-  - `showRawInput`: Whether to show bcs-encoded transaction input data
+
+In addition to these options, you can also pass any options that are accepted by the
+[SuiClient.signAndExecuteTransactionBlock](http://localhost:3000/typescript/sui-client#signandexecutetransactionblock)
+method.
