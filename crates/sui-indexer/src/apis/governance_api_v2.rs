@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
 
 use crate::{errors::IndexerError, indexer_reader::IndexerReader};
