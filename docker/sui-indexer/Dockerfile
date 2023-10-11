@@ -22,7 +22,7 @@ FROM debian:bullseye-slim AS runtime
 WORKDIR "$WORKDIR/sui"
 COPY --from=builder /sui/target/release/sui-indexer /usr/local/bin
 # sui-indexer needs postgres libpq5 and ca-certificates
-RUN apt update && apt install -y libpq5 ca-certificates
+RUN apt update && apt install -y libpq5 ca-certificates libpq-dev
 
 ARG BUILD_DATE
 ARG GIT_REVISION

@@ -7,7 +7,7 @@ ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
-RUN apt-get update && apt-get install -y cmake clang
+RUN apt-get update && apt-get install -y cmake clang libpq5 libpq-dev
 
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
