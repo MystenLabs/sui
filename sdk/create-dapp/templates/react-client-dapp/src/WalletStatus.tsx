@@ -8,12 +8,14 @@ export function WalletStatus() {
   return (
     <Container my="2">
       <Heading mb="2">Wallet Status</Heading>
-      {!account && <Text>Wallet not connected</Text>}
-      {account && (
+
+      {account ? (
         <Flex direction="column">
           <Text>Wallet connected</Text>
           <Text>Address: {account.address}</Text>
         </Flex>
+      ) : (
+        <Text>Wallet not connected</Text>
       )}
       <OwnedObjects />
     </Container>

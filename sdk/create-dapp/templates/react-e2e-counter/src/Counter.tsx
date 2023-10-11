@@ -6,18 +6,27 @@ import {
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Flex, Heading, Text } from "@radix-ui/themes";
+import { useQueryClient } from "@tanstack/react-query";
 import { PACKAGE_ID } from "./constants";
 
 export function Counter({ id }: { id: string }) {
   const currentAccount = useCurrentAccount();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransactionBlock({});
-  const { data, isLoading, error, refetch } = useSuiClientQuery("getObject", {
-    id,
-    options: {
-      showContent: true,
-      showOwner: true,
+  const queryClient = useQueryClient();
+  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
+  const queryKey = ["getObject", id];
+  const { data, isLoading, error } = useSuiClientQuery(
+    "getObject",
+    {
+      id,
+      options: {
+        showContent: true,
+        showOwner: true,
+      },
     },
-  });
+    {
+      queryKey,
+    },
+  );
 
   const executeMoveCall = (method: "increment" | "reset") => {
     const txb = new TransactionBlock();
@@ -34,16 +43,19 @@ export function Counter({ id }: { id: string }) {
       });
     }
 
-    signAndExecute({
-      requestType: "WaitForEffectsCert",
-      transactionBlock: txb,
-      options: {
-        showEffects: true,
-        showObjectChanges: true,
+    signAndExecute(
+      {
+        requestType: "WaitForEffectsCert",
+        transactionBlock: txb,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
       },
-    }).then(() => {
-      refetch();
-    });
+      {
+        onSuccess: () => queryClient.invalidateQueries(queryKey),
+      },
+    );
   };
 
   if (isLoading) return <Text>Loading...</Text>;

@@ -1,6 +1,5 @@
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Container } from "@radix-ui/themes";
-import { useCallback } from "react";
 import { PACKAGE_ID } from "./constants";
 import {
   useSignAndExecuteTransactionBlock,
@@ -13,35 +12,7 @@ export function CreateCounter({
   onCreated: (id: string) => void;
 }) {
   const suiClient = useSuiClient();
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransactionBlock({});
-
-  const create = useCallback(() => {
-    const txb = new TransactionBlock();
-
-    txb.moveCall({
-      arguments: [],
-      target: `${PACKAGE_ID}::counter::create`,
-    });
-
-    signAndExecute({
-      requestType: "WaitForEffectsCert",
-      transactionBlock: txb,
-      options: {
-        showEffects: true,
-        showObjectChanges: true,
-      },
-    }).then(async (tx) => {
-      await suiClient.waitForTransactionBlock({
-        digest: tx.digest,
-      });
-
-      const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-
-      if (objectId) {
-        onCreated(objectId);
-      }
-    });
-  }, [onCreated, signAndExecute, suiClient]);
+  const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
 
   return (
     <Container>
@@ -55,4 +26,39 @@ export function CreateCounter({
       </Button>
     </Container>
   );
+
+  function create() {
+    const txb = new TransactionBlock();
+
+    txb.moveCall({
+      arguments: [],
+      target: `${PACKAGE_ID}::counter::create`,
+    });
+
+    signAndExecute(
+      {
+        requestType: "WaitForEffectsCert",
+        transactionBlock: txb,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
+      },
+      {
+        onSuccess: (tx) => {
+          suiClient
+            .waitForTransactionBlock({
+              digest: tx.digest,
+            })
+            .then(() => {
+              const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+
+              if (objectId) {
+                onCreated(objectId);
+              }
+            });
+        },
+      },
+    );
+  }
 }

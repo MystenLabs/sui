@@ -676,7 +676,7 @@
 ### Minor Changes
 
 - e0b173b9e: Standardize Ed25519KeyPair key derivation with SLIP10
-- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the Typescript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
+- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the TypeScript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
 - 03e6b552b: Add util function to get coin balances
 - 4575c0a02: Fix type definition of SuiMoveNormalizedType
 - ccf7f148d: Added generic signAndExecuteTransaction method to the SDK, which can be used with any supported type of transaction.

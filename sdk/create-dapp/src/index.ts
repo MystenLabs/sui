@@ -16,15 +16,15 @@ async function main() {
 		{
 			type: 'select',
 			name: 'template',
-			message: 'Select a template',
+			message: 'Which started template would you like to use?',
 			choices: [
 				{
 					name: 'react-client-dapp',
-					message: 'React Client dApp',
+					hint: 'React Client dApp that reads data from wallet and the blockchain',
 				},
 				{
 					name: 'react-e2e-counter',
-					message: 'React end to end counter dApp',
+					hint: 'React dApp with a move smart contract that implements a distributed counter',
 				},
 			],
 		},
