@@ -1,0 +1,39 @@
+---
+title: Contribute to Documentations
+sidebar_label: Docs Contribution
+slug: /contribution-process
+---
+
+# Overview
+
+As open source software, Sui depends on community contributions. This page covers the process for contributing to Sui's documentation.
+
+In order to make changes to the documentation, you can do so directly via forking and cloning the repository to your local machine and making changes from your preferred IDE of choice, or by the web interface on GitHub. This guide will cover both scenarios. All changes to the documentation must follow the style guide (hyperlink), as well as the review process and information on the editors throughout the process.
+
+## Set Up Local Environment {#local-environment}
+
+Cloning the documentation locally is recommended when you are creating larger, more significant changes to the docs.
+
+1. Click the fork button in the upper-right of the docs' [GitHub repository](https://github.com/sui-foundation/sui-docs) to create a copy of the documentation. This copy is known as a fork, and you are free to create any changes in your fork.
+1. Clone this repo locally via clicking the green `< > Code` button and copy the HTTPS link to your forked repo. Then in your directory enter `git clone https://github.com/github-username/sui-docs.git`, replacing `github-username` with your actual GitHub username.
+1. Install [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) if you have not already, to ensure that your formatting is consistent.
+1. Once you have made all your changes, first rebase locally from `main` (`git rebase main`), create a local commit (`git commit -m “message”`) and then push all your changes to your forked repository (`git push`).
+1. To view your changes via `localhost`, enter `yarn` into a terminal at the root directory to build the project, then `yarn start` to view the changes on `localhost` to ensure that the website works as intended. To learn more `yarn`, including how to install it if you have not yet already done so, see here.
+
+## For Beginners {#for-beginners}
+
+Editing the documentation via GitHub's web interface is recommended if you are not familiar with working in an IDE, or for smaller changes.
+
+Before making any changes, you will have to fork this repository and make any edits in your own fork first. To fork the repo, click the `Fork` button in the upper-right of the docs' [GitHub repository](https://github.com/sui-foundation/sui-docs) to create a copy of the documentation.
+
+**Add New Page**
+
+Navigate to the `docs` directory, then navigate to the appropriate subdirectory and click the `Add file` button in the top-right. Select `create new file` to create a new file and edit it directly on GitHub's web interface.
+
+**Change Existing Page**
+
+To change an existing page, navigate to the file you want to edit, click on the pencil icon in the top-right, and edit your changes there.
+
+## Review Process {#review-process}
+
+When you are all done creating your changes in your own fork (either locally or via the web interface), submit a PR to the [original documentation repository](https://github.com/sui-foundation/sui-docs). When you do so, you should be able to view the deployment on Vercel and double-check that everything is the way you want it to be. Note that for every unique commit in a PR, a new preview will be generated on Vercel. A reviewer will then take responsibility for providing clear and actionable feedback to your PR. As the owner of the pull request, it is your responsibility to modify your pull request to address the feedback that has been provided to you by the reviewer. Keep in mind that you may receive feedback from multiple reviewers. Once a reviewer has approved your PR it will be merged into `main` and your contributions will be made public for all to see!
