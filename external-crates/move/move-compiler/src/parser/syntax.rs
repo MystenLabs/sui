@@ -287,11 +287,23 @@ where
 // Parse an identifier:
 //      Identifier = <IdentifierValue>
 fn parse_identifier(context: &mut Context) -> Result<Name, Box<Diagnostic>> {
-    if context.tokens.peek() != Tok::Identifier {
-        return Err(unexpected_token_error(context.tokens, "an identifier"));
-    }
+    if matches!(
+        context.tokens.peek(),
+        Tok::Identifier | Tok::RestrictedIdentifier
+    ) {}
+    let id: Symbol = match context.tokens.peek() {
+        Tok::Identifier => context.tokens.content().into(),
+        Tok::RestrictedIdentifier => {
+            // peel off backticks ``
+            let content = context.tokens.content();
+            let peeled = &content[1..content.len() - 1];
+            peeled.into()
+        }
+        _ => {
+            return Err(unexpected_token_error(context.tokens, "an identifier"));
+        }
+    };
     let start_loc = context.tokens.start_loc();
-    let id = context.tokens.content().into();
     context.tokens.advance()?;
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, id))
@@ -329,7 +341,7 @@ fn parse_leading_name_access_<'a, F: FnOnce() -> &'a str>(
     item_description: F,
 ) -> Result<LeadingNameAccess, Box<Diagnostic>> {
     match context.tokens.peek() {
-        Tok::Identifier => {
+        Tok::RestrictedIdentifier | Tok::Identifier => {
             let loc = current_token_loc(context.tokens);
             let n = parse_identifier(context)?;
             Ok(sp(loc, LeadingNameAccess_::Name(n)))
@@ -659,7 +671,10 @@ fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnost
 //          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> ")"
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
-    if context.tokens.peek() == Tok::Identifier {
+    if matches!(
+        context.tokens.peek(),
+        Tok::Identifier | Tok::RestrictedIdentifier
+    ) {
         let next_tok = context.tokens.lookahead()?;
         if !matches!(
             next_tok,
@@ -995,7 +1010,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
             Exp_::Vector(vec_loc, tys_opt, args)
         }
 
-        Tok::Identifier => parse_name_exp(context)?,
+        Tok::Identifier | Tok::RestrictedIdentifier => parse_name_exp(context)?,
 
         Tok::NumValue => {
             // Check if this is a ModuleIdent (in a ModuleAccess).
@@ -1284,6 +1299,7 @@ fn at_start_of_exp(context: &mut Context) -> bool {
             | Tok::NumTypedValue
             | Tok::ByteStringValue
             | Tok::Identifier
+            | Tok::RestrictedIdentifier
             | Tok::AtSign
             | Tok::Copy
             | Tok::Move
@@ -1477,8 +1493,9 @@ fn parse_unary_exp(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
         Tok::Amp => {
             context.tokens.advance()?;
+            let is_mut = match_token(context.tokens, Tok::Mut)?;
             let e = parse_unary_exp(context)?;
-            Exp_::Borrow(false, Box::new(e))
+            Exp_::Borrow(is_mut, Box::new(e))
         }
         Tok::Star => {
             context.tokens.advance()?;
@@ -1796,8 +1813,9 @@ fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
         }
         Tok::Amp => {
             context.tokens.advance()?;
+            let is_mut = match_token(context.tokens, Tok::Mut)?;
             let t = parse_type(context)?;
-            Type_::Ref(false, Box::new(t))
+            Type_::Ref(is_mut, Box::new(t))
         }
         Tok::AmpMut => {
             context.tokens.advance()?;
@@ -2866,7 +2884,7 @@ fn parse_spec_block(
             let type_parameters = parse_optional_type_parameters(context)?;
             SpecBlockTarget_::Schema(name, type_parameters)
         }
-        Tok::Identifier => {
+        Tok::RestrictedIdentifier | Tok::Identifier => {
             let name = parse_identifier(context)?;
             let signature = parse_spec_target_signature_opt(&name.loc, context)?;
             SpecBlockTarget_::Member(name, signature)
@@ -3543,7 +3561,8 @@ pub fn parse_file_string(
     input: &str,
     package: Option<Symbol>,
 ) -> Result<(Vec<Definition>, MatchedFileCommentMap), Diagnostics> {
-    let mut tokens = Lexer::new(input, file_hash);
+    let edition = env.syntax_edition(package);
+    let mut tokens = Lexer::new(input, file_hash, edition);
     match tokens.advance() {
         Err(err) => Err(Diagnostics::from(vec![*err])),
         Ok(..) => Ok(()),

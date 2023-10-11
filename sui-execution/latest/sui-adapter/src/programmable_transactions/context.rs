@@ -69,6 +69,7 @@ mod checked {
         execution_mode::ExecutionMode,
         execution_status::CommandArgumentError,
     };
+    use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
     pub struct ExecutionContext<'vm, 'state, 'a> {
@@ -121,6 +122,7 @@ mod checked {
     }
 
     impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
+        #[instrument(name = "ExecutionContext::new", level = "trace", skip_all)]
         pub fn new(
             protocol_config: &'a ProtocolConfig,
             metrics: Arc<LimitsMetrics>,

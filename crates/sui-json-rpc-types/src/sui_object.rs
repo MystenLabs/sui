@@ -26,7 +26,7 @@ use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectInfo, ObjectRef, ObjectType, SequenceNumber, SuiAddress,
     TransactionDigest,
 };
-use sui_types::error::{SuiObjectResponseError, UserInputError, UserInputResult};
+use sui_types::error::{ExecutionError, SuiObjectResponseError, UserInputError, UserInputResult};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{MovePackage, TypeOrigin, UpgradeInfo};
@@ -992,6 +992,22 @@ impl From<MovePackage> for SuiRawMovePackage {
             type_origin_table: p.type_origin_table().clone(),
             linkage_table: p.linkage_table().clone(),
         }
+    }
+}
+
+impl SuiRawMovePackage {
+    pub fn to_move_package(
+        &self,
+        max_move_package_size: u64,
+    ) -> Result<MovePackage, ExecutionError> {
+        MovePackage::new(
+            self.id,
+            self.version,
+            self.module_map.clone(),
+            max_move_package_size,
+            self.type_origin_table.clone(),
+            self.linkage_table.clone(),
+        )
     }
 }
 

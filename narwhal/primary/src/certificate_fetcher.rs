@@ -447,13 +447,14 @@ async fn process_certificates_helper(
             // Use threads dedicated to computation heavy work.
             spawn_blocking(move || {
                 let now = Instant::now();
-                for c in &certs {
-                    sync.sanitize_certificate(c)?;
+                let mut sanitized_certs = Vec::new();
+                for c in certs {
+                    sanitized_certs.push(sync.sanitize_certificate(c)?);
                 }
                 metrics
                     .certificate_fetcher_total_verification_us
                     .inc_by(now.elapsed().as_micros() as u64);
-                Ok::<Vec<Certificate>, DagError>(certs)
+                Ok::<Vec<Certificate>, DagError>(sanitized_certs)
             })
         })
         .collect_vec();

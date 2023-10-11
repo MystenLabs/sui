@@ -80,7 +80,7 @@ export abstract class Account<
 		return toSerializedSignature({
 			signature,
 			signatureScheme,
-			pubKey: pubkey,
+			publicKey: pubkey,
 		});
 	}
 

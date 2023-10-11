@@ -4,6 +4,7 @@
 use async_trait::async_trait;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sui_types::base_types::{ObjectID, SequenceNumber};
@@ -12,6 +13,7 @@ use sui_types::object::ObjectRead;
 use crate::errors::IndexerError;
 use crate::handlers::{EpochToCommit, TransactionObjectChangesToCommit};
 
+use crate::models_v2::display::StoredDisplay;
 use crate::types_v2::{
     IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex,
 };
@@ -49,6 +51,10 @@ pub trait IndexerStoreV2 {
     async fn persist_tx_indices(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError>;
 
     async fn persist_events(&self, events: Vec<IndexedEvent>) -> Result<(), IndexerError>;
+    async fn persist_displays(
+        &self,
+        display_updates: BTreeMap<String, StoredDisplay>,
+    ) -> Result<(), IndexerError>;
 
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError>;
 

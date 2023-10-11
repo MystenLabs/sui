@@ -7,13 +7,12 @@ import type { SuiClient } from '../client/index.js';
 import type { Keypair } from '../cryptography/keypair.js';
 import { toSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
-import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
 import { SignerWithProvider } from './signer-with-provider.js';
 
 export class RawSigner extends SignerWithProvider {
 	private readonly keypair: Keypair;
 
-	constructor(keypair: Keypair, client: JsonRpcProvider | SuiClient) {
+	constructor(keypair: Keypair, client: SuiClient) {
 		super(client);
 		this.keypair = keypair;
 	}
@@ -31,11 +30,11 @@ export class RawSigner extends SignerWithProvider {
 		return toSerializedSignature({
 			signatureScheme,
 			signature,
-			pubKey: pubkey,
+			publicKey: pubkey,
 		});
 	}
 
-	connect(client: SuiClient | JsonRpcProvider): SignerWithProvider {
+	connect(client: SuiClient): SignerWithProvider {
 		return new RawSigner(this.keypair, client);
 	}
 }

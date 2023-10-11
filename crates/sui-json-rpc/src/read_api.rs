@@ -252,22 +252,17 @@ impl ReadApi {
             }
         }
 
-        let state = self.state.clone();
-        let digests_clone = digests.clone();
-        // TODO: this is reading from a deprecated DB. The replacement DB however
-        // is in the epoch store, and thus we risk breaking the read API for txes
-        // from old epochs. Should be migrated once we have indexer support, or
-        // when we can tolerate returning None for old txes.
-        let checkpoint_seq_list =
-            state
-            .deprecated_multi_get_transaction_checkpoint(&digests_clone)
+        let checkpoint_seq_list = self
+            .transaction_kv_store
+            .multi_get_transaction_checkpoint(&digests)
+            .await
             .tap_err(
-                |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
+                |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
         {
-            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
+            cache_entry.checkpoint_seq = seq;
         }
 
         let unique_checkpoint_numbers = temp_response
@@ -371,7 +366,8 @@ impl ReadApi {
             }
         }
 
-        let object_cache = ObjectProviderCache::new(self.state.clone());
+        let object_cache =
+            ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
         if opts.show_balance_changes {
             let mut results = vec![];
             for resp in temp_response.values() {
@@ -781,7 +777,8 @@ impl ReadApiServer for ReadApi {
                 }
             }
 
-            let object_cache = ObjectProviderCache::new(self.state.clone());
+            let object_cache =
+                ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
             if opts.show_balance_changes {
                 if let Some(effects) = &temp_response.effects {
                     let balance_changes = get_balance_changes_from_effect(
@@ -1140,7 +1137,7 @@ async fn get_display_object_by_type(
     }
 }
 
-fn get_object_type_and_struct(
+pub fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
 ) -> Result<Option<(StructTag, MoveStruct)>, ObjectDisplayError> {

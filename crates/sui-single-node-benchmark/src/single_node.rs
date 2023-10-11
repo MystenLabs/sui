@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
+use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
@@ -9,16 +10,15 @@ use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use sui_core::consensus_adapter::{
-    ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics, SubmitToConsensus,
+    ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::Committee;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction,
@@ -32,28 +32,15 @@ pub struct SingleValidator {
 }
 
 impl SingleValidator {
-    pub async fn new(genesis_objects: &[Object]) -> Self {
+    pub(crate) async fn new(genesis_objects: &[Object], consensus_mode: ConsensusMode) -> Self {
         let validator = TestAuthorityBuilder::new()
             .disable_indexer()
             .with_starting_objects(genesis_objects)
             .build()
             .await;
         let epoch_store = validator.epoch_store_for_testing().clone();
-        struct SubmitNoop {}
-
-        #[async_trait::async_trait]
-        impl SubmitToConsensus for SubmitNoop {
-            async fn submit_to_consensus(
-                &self,
-                _transaction: &ConsensusTransaction,
-                _epoch_store: &Arc<AuthorityPerEpochStore>,
-            ) -> SuiResult {
-                Ok(())
-            }
-        }
-
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
-            Box::new(SubmitNoop {}),
+            Box::new(MockConsensusClient::new(validator.clone(), consensus_mode)),
             validator.name,
             Box::new(Arc::new(ConnectionMonitorStatusForTests {})),
             100_000,
@@ -129,6 +116,7 @@ impl SingleValidator {
         cert: CertifiedTransaction,
         component: Component,
     ) -> TransactionEffects {
+        assert!(!matches!(component, Component::TxnSigning));
         let effects = match component {
             Component::Baseline => {
                 let cert = VerifiedExecutableTransaction::new_from_certificate(
@@ -149,15 +137,22 @@ impl SingleValidator {
                     .into_inner()
                     .into_data()
             }
-            Component::ValidatorService => {
+            Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
                 let response = self
                     .validator_service
                     .execute_certificate_for_testing(cert)
                     .await;
                 response.signed_effects.into_data()
             }
+            Component::TxnSigning => unreachable!(),
         };
         assert!(effects.status().is_ok());
         effects
+    }
+
+    pub async fn sign_transaction(&self, transaction: Transaction) -> HandleTransactionResponse {
+        self.validator_service
+            .handle_transaction_for_testing(transaction)
+            .await
     }
 }

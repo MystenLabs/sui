@@ -24,6 +24,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    display (object_type) {
+        object_type -> Text,
+        id -> Bytea,
+        version -> Int2,
+        bcs -> Bytea,
+    }
+}
+
+diesel::table! {
     epochs (epoch) {
         epoch -> Int8,
         validators -> Array<Nullable<Bytea>>,
@@ -72,6 +81,7 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
         serialized_object -> Bytea,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -122,6 +132,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
+    display,
     epochs,
     events,
     objects,

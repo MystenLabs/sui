@@ -234,8 +234,8 @@ Because generating a ZK proof can be resource-intensive and potentially slow on 
 
 There are two options:  
 1. Call the Mysten Labs-maintained proving service
-1. Run proving service in your backend using the provided Docker images. 
-### Call Mysten-Labs proving service
+1. Run the proving service in your backend using the provided Docker images. 
+### Call the Mysten Labs-maintained proving service
 
 If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
@@ -293,7 +293,7 @@ export type PartialZkLoginSignature = Omit<
 const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 ````
 
-### Running your own proving service
+### Run the proving service in your backend
 
 1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
 
@@ -303,7 +303,7 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 curl -O https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey
 ```
 
-   1. To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
+   - To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
 
 1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
 
@@ -330,8 +330,8 @@ docker run \
 1. Expose the `prover-fe` service appropriately and keep the prover service internal.
 
 1. To call the proving service, the following two endpoints are supported:
-   1. `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`
-   1. `/v1`: The request and response are the same as the Mysten Labs maintained service
+   - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
+   - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
 A few things to note:
 
@@ -386,16 +386,6 @@ Finally, execute the transaction.
    signature: zkLoginSignature,
 });
   ```
-
-## Add sponsored transaction support
-
-This is optional, but it enhances user experience by allowing zkLogin address holders to skip acquiring SUI prior to transaction initiation.
-
-Coming Soon
-
-## Example integration
-
-Coming Soon
 
 # How zkLogin Works
 
@@ -673,3 +663,11 @@ The key differentiators that zkLogin brings to Sui are:
 3. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
 
 4. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
+
+## There are errors when submitting the zkLogin signature, how do I debug?
+
+The following command runs the same signature verify function that is used in Sui validators. You can examine a zkLogin signature with its transaction bytes (both in Base64) to validate. `$EPOCH` is the current epoch of the network and it should be smaller than the max_epoch specified in the signature.
+
+```bash
+$SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --tx-bytes $TX_BYTES --provider Google --curr-epoch $EPOCH
+```

@@ -14,6 +14,7 @@ pub(crate) use write_api::WriteApi;
 mod coin_api;
 mod coin_api_v2;
 mod extended_api;
+mod extended_api_v2;
 mod governance_api;
 mod governance_api_v2;
 mod indexer_api;
