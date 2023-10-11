@@ -106,14 +106,14 @@ pub(crate) trait InterpreterInterface {
 
 impl InterpreterInterface for Interpreter {
     fn get_stack_len(&self) -> usize {
-        self.get_stack_len()
+        self.operand_stack.value.len()
     }
     fn get_internal_state(&self) -> ExecutionState {
-        self.get_internal_state()
+        self.get_stack_frames(usize::MAX)
     }
 
     fn set_location(&self, err: PartialVMError) -> VMError {
-        self.set_location(err)
+        err.finish(self.call_stack.current_location())
     }
 
     fn maybe_core_dump(&self, err: VMError, frame: &Frame) -> VMError {
@@ -1041,10 +1041,6 @@ impl Interpreter {
             .collect();
         ExecutionState::new(stack_trace)
     }
-
-    pub fn get_stack_len(&self) -> usize {
-        self.operand_stack.get_stack_len()
-    }
 }
 
 // TODO Determine stack size limits based on gas limit
@@ -1106,10 +1102,6 @@ impl Stack {
                 .with_message("Failed to get last n arguments on the argument stack".to_string()));
         }
         Ok(self.value[(self.value.len() - n)..].iter())
-    }
-
-    fn get_stack_len(&self) -> usize {
-        self.value.len()
     }
 }
 
