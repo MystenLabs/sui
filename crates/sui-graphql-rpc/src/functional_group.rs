@@ -137,7 +137,6 @@ mod tests {
             ("Query", "coinMetadata"),
             ("Query", "moveCallMetrics"),
             ("Query", "networkMetrics"),
-            ("Query", "resolveNameServiceAddress"),
             ("Subscription", "events"),
             ("Subscription", "transactions"),
         ]);
