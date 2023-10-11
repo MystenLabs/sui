@@ -1,0 +1,164 @@
+import React, { useState } from "react";
+import { getRef } from '../index';
+
+const processObject = (obj, info) => {
+    
+    info.properties = [];
+    //console.log(schemaObj.properties)
+    if (typeof obj.properties !== 'undefined'){
+        Object.keys(obj.properties).forEach((prop) => {
+            let type = obj.properties[prop].type || undefined;
+            
+            if (type){
+                console.log("Yep")
+            } else {
+                if (obj.properties[prop].anyOf){
+                    console.log("Oh, yeah")
+                }
+            }
+            info.properties.push([prop, obj.required && obj.required.includes(prop), type]) ;
+            
+        })
+    }
+    
+}
+
+
+
+const getDefault = (prop) => {
+    if (typeof prop.default !== 'undefined'){
+        return prop.default === null ? "null" : (prop.default ? "true" : "false" )
+    }
+    return true;
+}
+
+
+
+export const PropTable = (props) => {
+
+    const { method, properties } = props;
+
+    const getType = (prop) => {
+        const property = schemaObj.properties[prop];
+        if (property.type){
+            return property.type;
+        }
+        if (property.anyOf){
+            let result = [];
+            property.anyOf.map((p) => {
+                
+                if (p['$ref']) {
+                    result.push(p['$ref'].substring(p['$ref'].lastIndexOf('/') + 1, p['$ref'].length));
+                }
+                if (p['type']){
+                    result.push(p.type);
+                }
+            })
+            return result.join("|");
+        }
+    }
+    
+    return (
+        <>
+        <p><span className="font-bold">{method}</span> properties</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>
+                        Name
+                    </th>
+                    <th>
+                        Req?
+                    </th>
+                    <th>
+                        Type
+                    </th>
+                    <th>
+                        Default
+                    </th>
+                    <th>
+                        Description
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                {properties.properties && Object.keys(properties.properties).map((prop) => {
+                    return (
+                    <tr>
+                        <td><code>{prop}</code></td>
+                        <td>{schemaObj.required && schemaObj.required.includes[prop] ? "Yes" : "No"}</td>
+                        <td>{getType(prop)}</td>
+                        <td>{getDefault(schemaObj.properties[prop])}</td>
+                        <td>{schemaObj.properties[prop].description}</td>
+                    </tr>
+                    )
+                })}
+                {properties.anyOf && properties.anyOf.map((prop) => {
+                    let ref;
+                    if (prop['$ref']){
+                        ref = getRef(prop['$ref']);
+                        console.log(ref.name)
+                        console.log(ref.schema)
+                    }
+                })}
+            </tbody>
+        </table>
+        </>
+    )
+}
+
+const TypeDef = (props) => {
+
+    const {schema, schemas} = props;
+    const schemaObj = schemas[schema];
+
+    let ref="";
+    let info = {};
+    let infoDesc = "";
+
+    info.title = schema;
+
+    if (schemaObj['$ref']){
+        ref = schemaObj['$ref'].substring(schemaObj['$ref'].lastIndexOf('/') + 1, schemaObj['$ref'].length);
+        info.type = ref;
+
+        if (schemas[ref].description){
+            infoDesc = schemas[ref].description;
+            info.ref = {...info.ref, description: schemas[ref].description};
+        }
+        if (schemas[ref].type){
+            info.ref = {...info.ref, type: schemas[ref].type};
+        }
+    } 
+
+    if (schemaObj.type) {
+        const t = schemaObj.type.charAt(0).toUpperCase() + schemaObj.type.slice(1);
+
+        if (t == "Object"){
+            
+            processObject(schemaObj, info)
+            ///info = {...info, properties: Object.keys(schemaObj.properties)};
+            //info = {...info, required: schemaObj.properties.required}
+        }
+    }
+
+    
+try {
+    return (
+        <div className="border text-sm border-solid p-4 mx-8 rounded-lg">
+            {info.title && info.type && <p className="m-0 font-bold">{info.title}&lt;{info.type}&gt;</p>}
+            {info.ref && info.ref.type && <p className="m-0">Type: {info.ref.type}</p>}
+            {info.ref && info.type && !info.ref.type && <p className="m-0">Type: {info.type}</p>}
+            {info.ref && info.ref.description && <p className="m-0">Description: {info.ref.description}</p>}
+            <PropTable method={schema} properties={schemaObj}></PropTable>
+        </div>
+)} catch {
+    return (
+        <div className="border text-sm border-solid p-4 w-1/2 ml-8">
+            <p>Error</p>
+        </div>
+    )
+    }
+}
+
+export default TypeDef;

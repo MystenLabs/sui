@@ -1,0 +1,167 @@
+import React, { useState } from "react";
+import _ from "lodash";
+import { getRef } from "../index";
+
+const TypeDef = (props) => {
+  const { schema, schemas } = props;
+  const schemaObj = schemas[schema];
+  let refs = [{ title: schema, ...schemaObj }];
+
+  const collectRefs = (obj) => {
+    for (const [key, value] of Object.entries(obj)) {
+      if (value && Array.isArray(value)) {
+        for (let x = 0; x < value.length; x++) {
+          collectRefs(value[x]);
+        }
+      } else if (value && typeof value === "object") {
+        collectRefs(value);
+      }
+      if (key == "$ref")
+        refs.push({ title: getRef(value), ...schemas[getRef(value)] });
+    }
+  };
+
+  collectRefs(schemaObj);
+
+  const anyOf = (anyof) => {
+    let result = [];
+
+    anyof.map((item) => {
+      if (item["$ref"]) {
+        result.push(getRef(item["$ref"]));
+      }
+      if (item.type) {
+        if (item.type === null) {
+          result.push["null"];
+        } else {
+          result.push(item.type);
+        }
+      }
+    });
+    return result.join(" | ");
+  };
+
+  const OneOf = (props) => {
+    const {oneof} = props;
+    return oneof.map((one, idx) => {
+        if (one.type && one.enum){
+            return (
+                <table key={idx}>
+                    <thead>
+                        <th>Type</th>
+                        <th>Enum values</th>
+                    </thead>
+                    <tbody>
+                        <td>{one.type}</td>
+                        <td>{one.enum}</td>
+                    </tbody>
+                </table>
+            )
+        } else {
+            return <p>Not a string enum</p>
+        }
+    })
+  }
+
+  const PropTable = (props) => {
+    const { properties } = props;
+
+    return (
+      <div>
+        <p className="font-bold">Properties</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.keys(properties).map((prop, idx) => {
+              return (
+                <tr key={idx}>
+                  <td>
+                    <code>{prop}</code>
+                  </td>
+                  <td>
+                    {properties[prop].type || properties[prop]["$ref"]}
+                    {properties[prop].anyOf && anyOf(properties[prop].anyOf)}
+                  </td>
+                  <td>
+                    {properties[prop].default === null ? (
+                      <code>null</code>
+                    ) : properties[prop].default ? (
+                      <code>{properties[prop].default}</code>
+                    ) : (
+                      <></>
+                    )}
+                  </td>
+                  <td>{properties[prop].description}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  if (typeof schemaObj["$ref"] !== "undefined") {
+    return (
+      <div>
+        <p>
+          {schema}
+          <span className="font-bold">&lt;{getRef(schemaObj["$ref"])}&gt;</span>
+        </p>
+        <TypeDef schema={getRef(schemaObj["$ref"])} schemas={schemas} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {refs.map((curObj, idx) => {
+        return (
+          <div key={idx}>
+            <p className="text-lg font-bold mb-0 mt-8">{curObj.title}</p>
+            <hr className="mt-0" />
+            {curObj.oneOf && <OneOf oneof={curObj.oneOf}/>}
+            {!curObj.oneOf && 
+                <table>
+                <thead>
+                    <tr>
+                    <th>Type</th>
+                    <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                    {curObj.type && (
+                        <td>
+                        {curObj.type.charAt(0).toUpperCase() +
+                            curObj.type.slice(1)}
+                        </td>
+                    )}
+                    {curObj.allOf && curObj.allOf[0]["$ref"] && (
+                        <td>
+                            {getRef(curObj.allOf[0]["$ref"])}
+                        </td>
+                    )}
+                    <td>{curObj.description && curObj.description}</td>
+                    </tr>
+                </tbody>
+                </table>
+            }
+            {curObj.properties && (
+              <PropTable properties={curObj.properties}></PropTable>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+export default TypeDef;
