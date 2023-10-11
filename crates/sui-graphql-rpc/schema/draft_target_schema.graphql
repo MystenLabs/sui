@@ -485,8 +485,8 @@ type SuiSystemStateSummary {
 
 type ProtocolConfigs {
   protocolVersion: Int!
-  featureFlags: [ProtocolConfigFeatureFlag]
-  configs: [ProtocolConfigAttr]
+  featureFlags: [ProtocolConfigFeatureFlag!]!
+  configs: [ProtocolConfigAttr!]!
   config(key: String!): ProtocolConfigAttr
   featureFlag(key: String!): ProtocolConfigFeatureFlag
 }

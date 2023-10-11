@@ -15,28 +15,16 @@ pub(crate) struct ProtocolConfigFeatureFlag {
     pub value: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct ProtocolConfigs {
     pub protocol_version: u64,
     pub feature_flags: Vec<ProtocolConfigFeatureFlag>,
     pub configs: Vec<ProtocolConfigAttr>,
 }
 
-#[Object]
+#[ComplexObject]
 impl ProtocolConfigs {
-    async fn protocol_version(&self) -> Result<u64> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        Ok(self.protocol_version)
-    }
-
-    async fn feature_flags(&self) -> Result<Option<Vec<ProtocolConfigFeatureFlag>>> {
-        Ok(Some(self.feature_flags.clone()))
-    }
-
-    async fn configs(&self) -> Result<Option<Vec<ProtocolConfigAttr>>> {
-        Ok(Some(self.configs.clone()))
-    }
-
     async fn config(&self, key: String) -> Result<Option<ProtocolConfigAttr>> {
         match self.configs.iter().find(|config| config.key == key) {
             Some(config) => Ok(Some(config.clone())),

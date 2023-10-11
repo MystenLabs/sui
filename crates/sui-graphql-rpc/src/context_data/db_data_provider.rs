@@ -1041,7 +1041,7 @@ impl PgManager {
 
         Ok(Some(domain.to_string()))
     }
-    
+
     pub(crate) async fn fetch_latest_sui_system_state(
         &self,
     ) -> Result<SuiSystemStateSummary, Error> {

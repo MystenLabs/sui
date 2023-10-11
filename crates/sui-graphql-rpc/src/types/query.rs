@@ -200,7 +200,7 @@ impl Query {
             .await
             .extend()
     }
-    
+
     async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
         ctx.data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
