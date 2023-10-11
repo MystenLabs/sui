@@ -1,5 +1,6 @@
 {
 	"index": "Sui dApp Kit Quick Start",
+	"create-dapp": "@mysten/create-dapp",
 	"sui-client-provider": "SuiClientProvider",
 	"rpc-hooks": "RPC Hooks",
 	"wallet-provider": "WalletProvider",
