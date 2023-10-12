@@ -118,7 +118,7 @@ fn network_config_snapshot_matches() {
         .rng(rng)
         .build();
     // TODO: Inject static temp path and port numbers, instead of clearing them.
-    for mut validator_config in &mut network_config.validator_configs {
+    for validator_config in &mut network_config.validator_configs {
         validator_config.db_path = PathBuf::from("/tmp/foo/");
         validator_config.network_address = Multiaddr::empty();
         let fake_socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 1);

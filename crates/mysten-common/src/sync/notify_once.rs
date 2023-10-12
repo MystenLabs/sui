@@ -35,7 +35,9 @@ impl NotifyOnce {
     /// This method returns errors if called more then once
     #[allow(clippy::result_unit_err)]
     pub fn notify(&self) -> Result<(), ()> {
-        let Some(notify) = self.notify.lock().take() else { return Err(()) };
+        let Some(notify) = self.notify.lock().take() else {
+            return Err(());
+        };
         // At this point all `register` either registered with current notify,
         // or will be returning immediately
         notify.notify_waiters();

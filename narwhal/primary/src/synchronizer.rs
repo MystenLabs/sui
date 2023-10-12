@@ -113,9 +113,10 @@ impl Inner {
             .lock()
             .entry(certificate.round())
             .or_insert_with(|| Box::new(CertificatesAggregator::new()))
-            .append(certificate.clone(), &self.committee) else {
-                return Ok(());
-            };
+            .append(certificate.clone(), &self.committee)
+        else {
+            return Ok(());
+        };
         // Send it to the `Proposer`.
         self.tx_parents
             .send((parents, certificate.round(), certificate.epoch()))
@@ -395,7 +396,9 @@ impl Synchronizer {
                 const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
                 let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
                 loop {
-                    let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
+                    let Ok(result) =
+                        timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await
+                    else {
                         // When consensus commit has not happened for 30s, it is possible that no new
                         // certificate is received by this primary or created in the network, so
                         // fetching should definitely be started.
@@ -404,7 +407,12 @@ impl Synchronizer {
                             debug!("Synchronizer is shutting down.");
                             return;
                         };
-                        if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
+                        if inner
+                            .tx_certificate_fetcher
+                            .send(CertificateFetcherCommand::Kick)
+                            .await
+                            .is_err()
+                        {
                             debug!("Synchronizer is shutting down.");
                             return;
                         }
@@ -460,7 +468,9 @@ impl Synchronizer {
         spawn_logged_monitored_task!(
             async move {
                 loop {
-                    let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
+                    let Some((certificate, result_sender, early_suspend)) =
+                        rx_certificate_acceptor.recv().await
+                    else {
                         debug!("Synchronizer is shutting down.");
                         return;
                     };

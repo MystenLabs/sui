@@ -185,7 +185,7 @@ async fn handle_remote_clients_transactions() {
         worker_cache.clone(),
         latest_protocol_version(),
         parameters,
-        TrivialTransactionValidator::default(),
+        TrivialTransactionValidator,
         client.clone(),
         batch_store,
         metrics,
@@ -304,7 +304,7 @@ async fn handle_local_clients_transactions() {
         worker_cache.clone(),
         latest_protocol_version(),
         parameters,
-        TrivialTransactionValidator::default(),
+        TrivialTransactionValidator,
         client.clone(),
         batch_store,
         metrics,
@@ -445,7 +445,7 @@ async fn get_network_peers_from_admin_server() {
         worker_cache.clone(),
         latest_protocol_version(),
         worker_1_parameters.clone(),
-        TrivialTransactionValidator::default(),
+        TrivialTransactionValidator,
         client_1.clone(),
         store.batch_store.clone(),
         metrics_1.clone(),
@@ -493,7 +493,7 @@ async fn get_network_peers_from_admin_server() {
     assert_eq!(1, resp.len());
 
     // Assert peer ids are correct
-    let expected_peer_ids = vec![&primary_1_peer_id];
+    let expected_peer_ids = [&primary_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     let authority_2 = fixture.authorities().nth(1).unwrap();
@@ -560,7 +560,7 @@ async fn get_network_peers_from_admin_server() {
         worker_cache.clone(),
         latest_protocol_version(),
         worker_2_parameters.clone(),
-        TrivialTransactionValidator::default(),
+        TrivialTransactionValidator,
         client_2,
         store.batch_store,
         metrics_2.clone(),
@@ -609,7 +609,7 @@ async fn get_network_peers_from_admin_server() {
     assert_eq!(3, resp.len());
 
     // Assert peer ids are correct
-    let expected_peer_ids = vec![&primary_1_peer_id, &primary_2_peer_id, &worker_2_peer_id];
+    let expected_peer_ids = [&primary_1_peer_id, &primary_2_peer_id, &worker_2_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Test getting all connected peers for worker 2 (worker at index 0 for primary 2)
@@ -630,7 +630,7 @@ async fn get_network_peers_from_admin_server() {
     assert_eq!(3, resp.len());
 
     // Assert peer ids are correct
-    let expected_peer_ids = vec![&primary_1_peer_id, &primary_2_peer_id, &worker_1_peer_id];
+    let expected_peer_ids = [&primary_1_peer_id, &primary_2_peer_id, &worker_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Assert network connectivity metrics are also set as expected

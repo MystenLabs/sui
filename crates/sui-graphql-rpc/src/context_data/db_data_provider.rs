@@ -107,7 +107,7 @@ impl PgManager {
         config: Option<PgConnectionPoolConfig>,
     ) -> Result<Self, Error> {
         // TODO (wlmyng): support config
-        let mut config = config.unwrap_or(PgConnectionPoolConfig::default());
+        let mut config = config.unwrap_or_default();
         config.set_pool_size(30);
         let inner = IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(e.to_string()))?;

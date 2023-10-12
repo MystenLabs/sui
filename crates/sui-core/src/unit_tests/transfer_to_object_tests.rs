@@ -44,14 +44,18 @@ use move_core_types::ident_str;
 macro_rules! transfer_test_runner {
     (gas_objects: $num:expr, $expr:expr) => {
         let runner = TestRunner::new_with_objects("tto", $num, false).await;
+        #[allow(clippy::redundant_closure_call)]
         $expr(runner).await;
         let runner = TestRunner::new_with_objects("tto", $num, true).await;
+        #[allow(clippy::redundant_closure_call)]
         $expr(runner).await;
     };
     ($expr:expr) => {
         let runner = TestRunner::new("tto", false).await;
+        #[allow(clippy::redundant_closure_call)]
         $expr(runner).await;
         let runner = TestRunner::new("tto", true).await;
+        #[allow(clippy::redundant_closure_call)]
         $expr(runner).await;
     };
 }

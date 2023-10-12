@@ -1160,7 +1160,7 @@ impl CheckpointBuilder {
             let effects = self.effects_store.multi_get_executed_effects(&pending)?;
             let effects = effects
                 .into_iter()
-                .zip(pending.into_iter())
+                .zip(pending)
                 .map(|(opt, digest)| match opt {
                     Some(x) => x,
                     None => panic!(
@@ -1250,7 +1250,12 @@ impl CheckpointAggregator {
                 }
                 current
             } else {
-                let Some(summary) = self.epoch_store.get_built_checkpoint_summary(next_to_certify)? else { return Ok(result); };
+                let Some(summary) = self
+                    .epoch_store
+                    .get_built_checkpoint_summary(next_to_certify)?
+                else {
+                    return Ok(result);
+                };
                 self.current = Some(CheckpointSignatureAggregator {
                     next_index: 0,
                     digest: summary.digest(),

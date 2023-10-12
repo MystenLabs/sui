@@ -1135,7 +1135,7 @@ impl IndexerReader {
             .map(StoredObject::try_into_expectant_dynamic_field_info)
             .collect::<Result<Vec<_>, _>>()?;
 
-        for mut df in dynamic_fields.iter_mut() {
+        for df in dynamic_fields.iter_mut() {
             if let Some(obj_ref) = object_refs.get(&df.object_id) {
                 df.version = obj_ref.1;
                 df.digest = obj_ref.2;
