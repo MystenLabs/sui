@@ -4,7 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
-use crate::{TransactionalAdapterTestable, ValidatorWithFullnode};
+use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
@@ -115,7 +115,7 @@ pub struct SuiTestAdapter<'a> {
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
-    pub(crate) executor: Box<dyn TransactionalAdapterTestable>,
+    pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
 pub(crate) struct StagedPackage {

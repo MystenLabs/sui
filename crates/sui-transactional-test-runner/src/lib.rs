@@ -49,43 +49,33 @@ pub struct ValidatorWithFullnode {
 #[allow(unused_variables)]
 /// TODO: better name?
 #[async_trait::async_trait]
-pub trait TransactionalAdapterTestable: Send + Sync + ObjectStore {
+pub trait TransactionalAdapter: Send + Sync + ObjectStore {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)>;
 
-    async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint> {
-        unimplemented!("create_checkpoint not supported")
-    }
+    async fn create_checkpoint(&mut self) -> anyhow::Result<VerifiedCheckpoint>;
 
     async fn advance_clock(
         &mut self,
         duration: std::time::Duration,
-    ) -> anyhow::Result<TransactionEffects> {
-        unimplemented!("advance_clock not supported")
-    }
+    ) -> anyhow::Result<TransactionEffects>;
 
-    async fn advance_epoch(&mut self) -> anyhow::Result<()> {
-        unimplemented!("advance_epoch not supported")
-    }
+    async fn advance_epoch(&mut self) -> anyhow::Result<()>;
 
     async fn request_gas(
         &mut self,
         address: SuiAddress,
         amount: u64,
-    ) -> anyhow::Result<TransactionEffects> {
-        unimplemented!("request_gas not supported")
-    }
+    ) -> anyhow::Result<TransactionEffects>;
 
     async fn dev_inspect_transaction_block(
         &self,
         sender: SuiAddress,
         transaction_kind: TransactionKind,
         gas_price: Option<u64>,
-    ) -> SuiResult<DevInspectResults> {
-        unimplemented!("dev_inspect_transaction_block not supported")
-    }
+    ) -> SuiResult<DevInspectResults>;
 
     async fn query_events(
         &self,
@@ -94,13 +84,11 @@ pub trait TransactionalAdapterTestable: Send + Sync + ObjectStore {
         cursor: Option<EventID>,
         limit: usize,
         descending: bool,
-    ) -> SuiResult<Vec<SuiEvent>> {
-        unimplemented!("query_events not supported")
-    }
+    ) -> SuiResult<Vec<SuiEvent>>;
 }
 
 #[async_trait::async_trait]
-impl TransactionalAdapterTestable for ValidatorWithFullnode {
+impl TransactionalAdapter for ValidatorWithFullnode {
     async fn execute_txn(
         &mut self,
         transaction: Transaction,
