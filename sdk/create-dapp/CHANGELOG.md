@@ -1,5 +1,11 @@
 # @mysten/create-dapp
 
+## 0.0.2
+
+### Patch Changes
+
+- 49e04b2e4: Fix dependency mapping
+
 ## 0.0.1
 
 ### Patch Changes
