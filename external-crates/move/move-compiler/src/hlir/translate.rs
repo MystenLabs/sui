@@ -795,6 +795,8 @@ fn value(
             };
             let cond_value = value(context, block, Some(&tbool(eloc)), econd);
             let code_value = value(context, block, None, ecode);
+            let cond_value = maybe_bind_exp(context, block, cond_value);
+            let code_value = maybe_bind_exp(context, block, code_value);
             if let (Some(cond), Some(code)) = (cond_value, code_value) {
                 let if_block = make_block!();
                 let else_block = make_block!(make_command(eloc, C::Abort(code)));
