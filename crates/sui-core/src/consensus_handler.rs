@@ -36,7 +36,7 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, trace_span};
 
 pub struct ConsensusHandler<T, C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -136,7 +136,7 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
     for ConsensusHandler<T, C>
 {
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
+    #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
 
@@ -245,6 +245,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .iter()
             .zip(consensus_output.batches.iter())
         {
+            let span = trace_span!("process_consensus_cert");
+            let _guard = span.enter();
+
             assert_eq!(cert.header().payload().len(), batches.len());
             let author = cert.header().author();
             let num_certs = self
@@ -257,6 +260,9 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
                 .set(num_certs as i64);
             let output_cert = Arc::new(cert.clone());
             for batch in batches {
+                let span = trace_span!("process_consensus_batch");
+                let _guard = span.enter();
+
                 assert!(output_cert.header().payload().contains_key(&batch.digest()));
                 self.metrics.consensus_handler_processed_batches.inc();
                 for serialized_transaction in batch.transactions() {
