@@ -11,9 +11,8 @@ use rand::{
     SeedableRng,
 };
 use std::num::NonZeroUsize;
-use test_utils::latest_protocol_version;
-use test_utils::CommitteeFixture;
-use types::{Certificate, Vote, VoteAPI};
+use test_utils::{get_protocol_config, latest_protocol_version, CommitteeFixture};
+use types::{Certificate, CertificateAPI, SignatureVerificationState, Vote, VoteAPI};
 
 #[test]
 fn test_empty_certificate_verification() {
@@ -39,7 +38,31 @@ fn test_empty_certificate_verification() {
 }
 
 #[test]
-fn test_valid_certificate_verification() {
+fn test_valid_certificate_v1_verification() {
+    let fixture = CommitteeFixture::builder().build();
+    let cert_v1_protocol_config = get_protocol_config(27);
+    let committee = fixture.committee();
+    let header = fixture.header(&cert_v1_protocol_config);
+
+    let mut signatures = Vec::new();
+
+    // 3 Signers satisfies the 2F + 1 signed stake requirement
+    for authority in fixture.authorities().take(3) {
+        let vote = authority.vote(&header);
+        signatures.push((vote.author(), vote.signature().clone()));
+    }
+
+    let certificate =
+        Certificate::new_unverified(&cert_v1_protocol_config, &committee, header, signatures)
+            .unwrap();
+
+    assert!(certificate
+        .verify(&committee, &fixture.worker_cache())
+        .is_ok());
+}
+
+#[test]
+fn test_valid_certificate_v2_verification() {
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let header = fixture.header(&latest_protocol_version());
@@ -56,9 +79,13 @@ fn test_valid_certificate_verification() {
         Certificate::new_unverified(&latest_protocol_version(), &committee, header, signatures)
             .unwrap();
 
-    assert!(certificate
-        .verify(&committee, &fixture.worker_cache())
-        .is_ok());
+    let verified_certificate = certificate.verify(&committee, &fixture.worker_cache());
+
+    assert!(verified_certificate.is_ok());
+    assert!(matches!(
+        verified_certificate.unwrap().signature_verification_state(),
+        SignatureVerificationState::VerifiedDirectly(_)
+    ));
 }
 
 #[test]

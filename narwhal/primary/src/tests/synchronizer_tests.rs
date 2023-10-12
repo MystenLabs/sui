@@ -24,7 +24,10 @@ use test_utils::{
     CommitteeFixture,
 };
 use tokio::sync::watch;
-use types::{error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round};
+use types::{
+    error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round,
+    SignatureVerificationState,
+};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -900,9 +903,35 @@ async fn gc_suspended_certificates() {
     );
 
     // Re-insertion of missing certificate as fetched certificates should be suspended too.
-    for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
+    for (idx, cert) in certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4]
+        .iter()
+        .enumerate()
+    {
+        let mut verified_cert = cert.clone();
+        // Simulate CertificateV2 fetched certificate leaf only verification
+        if (idx + NUM_AUTHORITIES * 2) < NUM_AUTHORITIES * 3 {
+            // Round 3 certs are parents of round 4 certs, so we mark them as verified indirectly
+            verified_cert.set_signature_verification_state(
+                SignatureVerificationState::VerifiedIndirectly(
+                    verified_cert
+                        .aggregated_signature()
+                        .expect("Invalid Signature")
+                        .clone(),
+                ),
+            )
+        } else {
+            // Round 4 certs are leaf certs in this case and are verified directly
+            verified_cert.set_signature_verification_state(
+                SignatureVerificationState::VerifiedDirectly(
+                    verified_cert
+                        .aggregated_signature()
+                        .expect("Invalid Signature")
+                        .clone(),
+                ),
+            )
+        }
         match synchronizer
-            .try_accept_fetched_certificate(cert.clone())
+            .try_accept_fetched_certificate(verified_cert)
             .await
         {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
