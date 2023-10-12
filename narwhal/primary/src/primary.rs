@@ -22,7 +22,7 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache, ChainIdentifier};
+use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};

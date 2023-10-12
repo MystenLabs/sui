@@ -13,6 +13,8 @@ use narwhal_test_utils::latest_protocol_version;
 use narwhal_types::{BatchAPI, ConsensusOutput, TransactionProto, TransactionsClient};
 use narwhal_worker::TrivialTransactionValidator;
 use prometheus::Registry;
+use sui_types::digests::ChainIdentifier;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
@@ -135,6 +137,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                ChainIdentifier::from(CheckpointDigest::default()),
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,
@@ -197,6 +200,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                ChainIdentifier::from(CheckpointDigest::default()),
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,

@@ -3,7 +3,7 @@
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
-use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache, ChainIdentifier};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};

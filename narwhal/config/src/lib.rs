@@ -42,6 +42,10 @@ impl ChainIdentifier {
         Self(bytes)
     }
 
+    pub fn unknown() -> Self {
+        Self([0; 32])
+    }
+
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }

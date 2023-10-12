@@ -141,7 +141,18 @@ impl fmt::UpperHex for Digest {
 
 /// Representation of a network's identifier by the genesis checkpoint's digest
 #[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
 )]
 pub struct ChainIdentifier(CheckpointDigest);
 
