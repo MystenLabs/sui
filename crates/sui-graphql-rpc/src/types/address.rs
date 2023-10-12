@@ -9,6 +9,7 @@ use crate::context_data::db_data_provider::PgManager;
 use super::{
     balance::Balance,
     coin::Coin,
+    dynamic_field::{DynamicField, DynamicFieldFilter},
     name_service::NameService,
     object::{Object, ObjectFilter},
     stake::Stake,
@@ -153,6 +154,18 @@ impl Address {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, NameService>>> {
+        unimplemented!()
+    }
+
+    pub async fn dynamic_field_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: Option<DynamicFieldFilter>,
+    ) -> Result<Option<Connection<String, DynamicField>>> {
         unimplemented!()
     }
 }

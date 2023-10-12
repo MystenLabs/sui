@@ -23,7 +23,7 @@ pub(crate) struct MoveObject {
 #[Object]
 impl MoveObject {
     // TODO: This depends on having a module resolver so make more efficient
-    async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, Error> {
+    pub async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, Error> {
         let resolver = ctx.data_unchecked::<PgManager>();
 
         if let Some(struct_tag) = self.native_object.data.struct_tag() {

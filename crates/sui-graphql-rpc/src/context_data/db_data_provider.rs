@@ -13,6 +13,7 @@ use crate::{
         committee_member::CommitteeMember,
         date_time::DateTime,
         digest::Digest,
+        dynamic_field::{DynamicField, DynamicFieldFilter},
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
         event::{Event, EventFilter},
@@ -21,6 +22,7 @@ use crate::{
         move_object::MoveObject,
         move_package::MovePackage,
         move_type::MoveType,
+        move_value::MoveValue,
         object::{Object, ObjectFilter, ObjectKind},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -46,7 +48,7 @@ use async_graphql::{
 };
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
-    RunQueryDsl,
+    RunQueryDsl, TextExpressionMethods,
 };
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::{language_storage::StructTag, value::MoveTypeLayout};
@@ -84,10 +86,13 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::{base_types::MoveObjectType, governance::StakedSui, TypeTag};
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
-    Identifier,
+    base_types::{MoveObjectType, ObjectID},
+    digests::TransactionDigest,
+    dynamic_field::{DynamicFieldType as SuiDynamicFieldType, Field},
+    event::EventID,
+    governance::StakedSui,
+    Identifier, TypeTag,
 };
 
 use super::DEFAULT_PAGE_SIZE;
@@ -599,11 +604,16 @@ impl PgManager {
             if let Some(owner) = filter.owner {
                 query = query
                     .filter(objects::dsl::owner_id.eq(owner.into_vec()))
-                    .filter(objects::dsl::owner_type.between(1, 2));
+                    .filter(objects::dsl::owner_type.eq(2)); // TODO: differentiate between address and object owner
+                                                             // .filter(objects::dsl::owner_type.between(1, 2));
             }
 
             if let Some(object_type) = filter.ty {
-                query = query.filter(objects::dsl::object_type.eq(object_type));
+                if object_type.contains('%') {
+                    query = query.filter(objects::dsl::object_type.like(object_type));
+                } else {
+                    query = query.filter(objects::dsl::object_type.eq(object_type));
+                }
             }
         }
 
@@ -1376,6 +1386,73 @@ impl PgManager {
         } else {
             Err(Error::InvalidFilter)
         }
+    }
+
+    pub(crate) async fn fetch_dynamic_fields(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        address: SuiAddress,
+        filter: Option<DynamicFieldFilter>,
+    ) -> Result<Option<Connection<String, DynamicField>>, Error> {
+        let name_type = filter
+            .and_then(|f| f.name_type)
+            .map(|t| format!("0x2::dynamic_field::Field<%{}%", t));
+
+        let filter = ObjectFilter {
+            owner: Some(address),
+            ty: name_type,
+            ..Default::default()
+        };
+
+        let objs = self
+            .multi_get_objs(first, after, last, before, Some(filter))
+            .await?;
+
+        self.inner
+            .spawn_blocking(move |this| {
+                if let Some((stored_objs, has_next_page)) = objs {
+                    let mut connection = Connection::new(false, has_next_page);
+
+                    for stored_obj in stored_objs {
+                        let dynamic_field =
+                            stored_obj.try_into_expectant_dynamic_field_info(&this)?;
+                        let is_dof = match dynamic_field.type_ {
+                            SuiDynamicFieldType::DynamicField => false,
+                            SuiDynamicFieldType::DynamicObject => true,
+                        };
+
+                        let layout =
+                            move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(
+                                &dynamic_field.name.type_,
+                                &this,
+                            )
+                            .map_err(|e| {
+                                Error::Internal(format!(
+                                    "Failed to build layout from type tag: {e}"
+                                ))
+                            })?;
+                        connection.edges.push(Edge::new(
+                            SuiAddress::from_array(**dynamic_field.object_id).to_string(),
+                            DynamicField {
+                                name: Some(MoveValue::new(
+                                    dynamic_field.name.type_.to_string(),
+                                    layout,
+                                    Base64::from(dynamic_field.bcs_name),
+                                )),
+                                id: SuiAddress::from_array(**dynamic_field.object_id),
+                                is_dof,
+                            },
+                        ));
+                    }
+
+                    return Ok(Some(connection));
+                }
+                Ok(None)
+            })
+            .await
     }
 }
 
