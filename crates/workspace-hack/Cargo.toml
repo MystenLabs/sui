@@ -140,6 +140,7 @@ bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
 bytes-utils = { version = "0.1" }
+bytes-varint = { version = "1", default-features = false }
 cached = { version = "0.43" }
 cached_proc_macro_types = { version = "0.1", default-features = false }
 camino = { version = "1", default-features = false, features = ["serde1"] }
@@ -465,7 +466,7 @@ oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
 opentelemetry-otlp = { version = "0.13" }
-opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic", "traces"] }
+opentelemetry-proto = { version = "0.3", features = ["gen-tonic", "traces"] }
 opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
 opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
 opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }
@@ -899,6 +900,7 @@ bytemuck = { version = "1", default-features = false }
 byteorder = { version = "1", features = ["i128"] }
 bytes = { version = "1", features = ["serde"] }
 bytes-utils = { version = "0.1" }
+bytes-varint = { version = "1", default-features = false }
 cached = { version = "0.43" }
 cached_proc_macro = { version = "0.16", default-features = false }
 cached_proc_macro_types = { version = "0.1", default-features = false }
@@ -1272,7 +1274,7 @@ oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 opentelemetry = { version = "0.20", features = ["metrics", "rt-tokio"] }
 opentelemetry-otlp = { version = "0.13" }
-opentelemetry-proto = { version = "0.3", default-features = false, features = ["gen-tonic", "traces"] }
+opentelemetry-proto = { version = "0.3", features = ["gen-tonic", "traces"] }
 opentelemetry-semantic-conventions = { version = "0.12", default-features = false }
 opentelemetry_api = { version = "0.20", features = ["logs", "metrics"] }
 opentelemetry_sdk = { version = "0.20", features = ["logs", "metrics", "rt-tokio"] }

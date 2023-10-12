@@ -1810,6 +1810,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytes-varint"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54c1820c7c366b9d26c47143e1604454105a59969aade54e4f695d96acc8332f"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "bzip2-sys"
 version = "0.1.11+1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11990,14 +11999,21 @@ dependencies = [
 name = "telemetry-subscribers"
 version = "0.2.0"
 dependencies = [
+ "bytes",
+ "bytes-varint",
  "camino",
+ "clap",
  "console-subscriber",
  "crossterm 0.25.0",
+ "futures",
  "once_cell",
  "opentelemetry",
  "opentelemetry-otlp",
+ "opentelemetry-proto",
  "prometheus",
+ "prost 0.11.9",
  "tokio",
+ "tonic 0.9.2",
  "tracing",
  "tracing-appender",
  "tracing-opentelemetry",
@@ -13746,6 +13762,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "bytes-utils",
+ "bytes-varint",
  "cached",
  "cached_proc_macro",
  "cached_proc_macro_types",

@@ -70,6 +70,10 @@ pub fn run(args: Args) -> crate::Result<()> {
             // TODO spend the time to de-dup these direct dependencies
             "serde_yaml".to_owned(),
             "syn".to_owned(),
+            // Our opentelemetry integration requires that we use the same version of these packages
+            // as the opentelemetry crates.
+            "prost".to_owned(),
+            "tonic".to_owned(),
         ],
     };
 
