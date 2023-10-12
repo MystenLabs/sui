@@ -4,6 +4,7 @@ packages:
   - 'dapps/**'
   - '!**/dist/**'
   - '!**/.next/**'
+  - '!sdk/create-dapp/templates'
   - '!sdk/typescript/*/**'
   - '!sdk/typescript/scripts'
   - '!sdk/typescript/builder'
