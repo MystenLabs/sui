@@ -28,8 +28,9 @@ async fn main() {
             port,
             host,
             config,
+            db_url,
         } => {
-            let conn = ConnectionConfig::new(port, host, rpc_url);
+            let conn = ConnectionConfig::new(port, host, rpc_url, db_url);
             let service_config = service_config(config);
 
             println!("Starting server...");
