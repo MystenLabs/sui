@@ -46,6 +46,7 @@ impl From<Level> for usize {
     }
 }
 
+#[derive(Debug)]
 pub struct ThroughputProfileRanges {
     /// Holds the throughput profiles by the throughput range (upper_throughput, cool_down_threshold)
     profiles: BTreeMap<u64, ThroughputProfile>,
@@ -191,6 +192,8 @@ impl ConsensusThroughputProfiler {
             (0..=30).contains(&throughput_profile_cool_down_threshold),
             "Out of bounds provided cool down threshold offset"
         );
+
+        debug!("Profile ranges used: {:?}", profile_ranges);
 
         Self {
             throughput_profile_update_interval,
