@@ -21,11 +21,12 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
 
-pub async fn start_example_server(conn: ConnectionConfig, service_config: ServiceConfig) {
+pub async fn start_example_server(conn: ConnectionConfig, service_config: Option<ServiceConfig>) {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
         .init();
 
+    let service_config = service_config.unwrap_or_default();
     let sui_sdk_client_v0 = sui_sdk_client_v0(&conn.rpc_url).await;
     let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
@@ -38,7 +39,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
             e
         })
         .unwrap();
-    let name_service_config = NameServiceConfig::default();
+    let name_service_config: NameServiceConfig = NameServiceConfig::default();
 
     let prom_addr: SocketAddr = PROM_ADDR.parse().unwrap();
     let registry = start_prom(prom_addr);

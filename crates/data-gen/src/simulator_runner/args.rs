@@ -11,14 +11,14 @@ use move_core_types::u256::U256;
 use move_core_types::value::{MoveStruct, MoveValue};
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::tasks::SyntaxChoice;
+use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::storage::ObjectStore;
 use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
-use crate::simulator_runner::test_adapter::{FakeID, SuiTestAdapter};
+use crate::simulator_runner::test_adapter::{DataGenAdapter, FakeID};
 
 pub const SUI_ARGS_LONG: &str = "sui-args";
 
@@ -84,8 +84,6 @@ pub struct ProgrammableTransactionCommand {
     pub gas_budget: Option<u64>,
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
-    #[clap(long = "dev-inspect")]
-    pub dev_inspect: bool,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
@@ -277,16 +275,20 @@ impl SuiValue {
     fn resolve_object(
         fake_id: FakeID,
         version: Option<SequenceNumber>,
-        test_adapter: &SuiTestAdapter,
+        test_adapter: &DataGenAdapter,
     ) -> anyhow::Result<Object> {
         let id = match test_adapter.fake_to_real_object_id(fake_id) {
             Some(id) => id,
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
         };
         let obj_res = if let Some(v) = version {
-            test_adapter.validator.database.get_object_by_key(&id, v)
+            test_adapter.executor.store().get_object_by_key(&id, v)
         } else {
-            test_adapter.validator.database.get_object(&id)
+            Ok(test_adapter
+                .executor
+                .store()
+                .get_object(&id)
+                .map(|x| x.clone()))
         };
         let obj = match obj_res {
             Ok(Some(obj)) => obj,
@@ -298,7 +300,7 @@ impl SuiValue {
     fn receiving_arg(
         fake_id: FakeID,
         version: Option<SequenceNumber>,
-        test_adapter: &SuiTestAdapter,
+        test_adapter: &DataGenAdapter,
     ) -> anyhow::Result<ObjectArg> {
         let obj = Self::resolve_object(fake_id, version, test_adapter)?;
         Ok(ObjectArg::Receiving(obj.compute_object_reference()))
@@ -307,7 +309,7 @@ impl SuiValue {
     fn object_arg(
         fake_id: FakeID,
         version: Option<SequenceNumber>,
-        test_adapter: &SuiTestAdapter,
+        test_adapter: &DataGenAdapter,
     ) -> anyhow::Result<ObjectArg> {
         let obj = Self::resolve_object(fake_id, version, test_adapter)?;
         let id = obj.id();
@@ -326,7 +328,7 @@ impl SuiValue {
         }
     }
 
-    pub(crate) fn into_call_arg(self, test_adapter: &SuiTestAdapter) -> anyhow::Result<CallArg> {
+    pub(crate) fn into_call_arg(self, test_adapter: &DataGenAdapter) -> anyhow::Result<CallArg> {
         Ok(match self {
             SuiValue::Object(fake_id, version) => {
                 CallArg::Object(Self::object_arg(fake_id, version, test_adapter)?)
@@ -349,7 +351,7 @@ impl SuiValue {
     pub(crate) fn into_argument(
         self,
         builder: &mut ProgrammableTransactionBuilder,
-        test_adapter: &SuiTestAdapter,
+        test_adapter: &DataGenAdapter,
     ) -> anyhow::Result<Argument> {
         match self {
             SuiValue::ObjVec(vec) => builder.make_obj_vec(

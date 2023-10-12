@@ -120,13 +120,12 @@ impl NodeStateGetter for AuthorityState {
     }
 }
 
-impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
+impl NodeStateGetter for simulacrum::InMemoryStore {
     fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> SuiResult<VerifiedCheckpoint> {
-        self.store()
-            .get_checkpoint_by_sequence_number(sequence_number)
+        self.get_checkpoint_by_sequence_number(sequence_number)
             .cloned()
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::VerifiedCheckpointNotFound(sequence_number),
@@ -135,7 +134,6 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
 
     fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
         Ok(self
-            .store()
             .get_highest_checkpint()
             .map(|checkpoint| *checkpoint.sequence_number())
             .unwrap_or(0))
@@ -145,8 +143,7 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
         &self,
         content_digest: CheckpointContentsDigest,
     ) -> SuiResult<CheckpointContents> {
-        self.store()
-            .get_checkpoint_contents(&content_digest)
+        self.get_checkpoint_contents(&content_digest)
             .cloned()
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::CheckpointContentsNotFound(content_digest),
@@ -159,7 +156,7 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
     ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
         Ok(tx_digests
             .iter()
-            .map(|digest| self.store().get_transaction(digest).cloned())
+            .map(|digest| self.get_transaction(digest).cloned())
             .collect())
     }
 
@@ -169,7 +166,7 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(digests
             .iter()
-            .map(|digest| self.store().get_transaction_effects(digest).cloned())
+            .map(|digest| self.get_transaction_effects(digest).cloned())
             .collect())
     }
 
@@ -179,7 +176,7 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         Ok(event_digests
             .iter()
-            .map(|digest| self.store().get_transaction_events(digest).cloned())
+            .map(|digest| self.get_transaction_events(digest).cloned())
             .collect())
     }
 
@@ -189,7 +186,7 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
     ) -> Result<Vec<Option<Object>>, SuiError> {
         object_keys
             .iter()
-            .map(|key| ObjectStore::get_object_by_key(&self.store(), &key.0, key.1))
+            .map(|key| ObjectStore::get_object_by_key(&self, &key.0, key.1))
             .collect::<Result<Vec<_>, SuiError>>()
     }
 
@@ -198,13 +195,10 @@ impl<T: Sync + Send> NodeStateGetter for simulacrum::Simulacrum<T> {
         object_id: &ObjectID,
         version: VersionNumber,
     ) -> Result<Option<Object>, SuiError> {
-        Ok(self
-            .store()
-            .get_object_at_version(object_id, version)
-            .cloned())
+        Ok(self.get_object_at_version(object_id, version).cloned())
     }
 
     fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&self.store(), object_id)
+        ObjectStore::get_object(&self, object_id)
     }
 }

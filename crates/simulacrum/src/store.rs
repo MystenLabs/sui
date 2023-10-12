@@ -25,7 +25,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct InMemoryStore {
     // Checkpoint data
     checkpoints: BTreeMap<CheckpointSequenceNumber, VerifiedCheckpoint>,

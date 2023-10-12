@@ -30,10 +30,13 @@ move-transactional-test-runner.workspace = true
 move-stdlib = { path = "../../external-crates/move/move-stdlib" }
 move-vm-runtime = { path = "../../external-crates/move/move-vm/runtime" }
 
+simulacrum.workspace = true
+sui-indexer.workspace = true
 sui-rest-api.workspace = true
 sui-swarm-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-framework.workspace = true
+sui-graphql-rpc.workspace = true
 sui-protocol-config.workspace = true
 sui-types = { workspace = true, features = ["test-utils"]}
 sui-json-rpc-types.workspace = true

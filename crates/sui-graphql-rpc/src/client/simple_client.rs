@@ -50,7 +50,7 @@ impl SimpleClient {
 async fn test_client() {
     let mut handles = vec![];
     handles.push(tokio::spawn(async move {
-        start_example_server(ConnectionConfig::default(), ServiceConfig::default()).await;
+        start_example_server(ConnectionConfig::default(), None).await;
     }));
     // Wait for server to start
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;

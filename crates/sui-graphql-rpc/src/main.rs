@@ -33,7 +33,7 @@ async fn main() {
             let service_config = service_config(config);
 
             println!("Starting server...");
-            start_example_server(conn, service_config).await;
+            start_example_server(conn, Some(service_config)).await;
         }
     }
 }

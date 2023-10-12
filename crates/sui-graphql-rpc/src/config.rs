@@ -42,6 +42,15 @@ pub struct Limits {
     pub(crate) max_query_nodes: u32,
 }
 
+impl Limits {
+    pub fn new(max_query_depth: u32, max_query_nodes: u32) -> Self {
+        Self {
+            max_query_depth,
+            max_query_nodes,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct Experiments {
