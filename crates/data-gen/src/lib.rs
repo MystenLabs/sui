@@ -83,10 +83,16 @@ async fn wait_until_next_checkpoint(store: &sui_indexer::store::PgIndexerStore) 
 }
 
 async fn start_graphql_server(db_url: String, server_bind_address: SocketAddr) {
-    let srv = start_example_server(
-        ConnectionConfig::new(Some(server_bind_address.port()), (server_bind_address.ip().to_string()), db_url, , None),
+    start_example_server(
+        ConnectionConfig::new(
+            Some(server_bind_address.port()),
+            Some(server_bind_address.ip().to_string()),
+            Some(db_url),
+            None,
+        ),
         None,
-    );
+    )
+    .await;
 }
 
 async fn get_graphql_client(graphql_server_address: SocketAddr) -> SimpleClient {

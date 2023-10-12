@@ -733,8 +733,7 @@ impl<'a> MoveTestAdapter<'a> for DataGenAdapter<'a> {
                 let before_upgrade = {
                     // not binding `m` separately results in some strange async capture error
                     let m = &mut self.compiled_state.named_address_mapping;
-                    let Some(before) = m.insert(package.clone(), zero)
-                    else {
+                    let Some(before) = m.insert(package.clone(), zero) else {
                         panic!("Unbound package '{package}' for upgrade");
                     };
                     before
@@ -749,8 +748,14 @@ impl<'a> MoveTestAdapter<'a> for DataGenAdapter<'a> {
                 for dep in dependencies.iter() {
                     let named_address_mapping = &mut self.compiled_state.named_address_mapping;
                     let dep = &Symbol::from(dep.as_str());
-                    let Some(orig_package) = self.package_upgrade_mapping.get(dep) else { continue };
-                    let Some(orig_package_address) = named_address_mapping.insert(orig_package.to_string(), zero) else { continue };
+                    let Some(orig_package) = self.package_upgrade_mapping.get(dep) else {
+                        continue;
+                    };
+                    let Some(orig_package_address) =
+                        named_address_mapping.insert(orig_package.to_string(), zero)
+                    else {
+                        continue;
+                    };
                     original_package_addrs.push((*orig_package, orig_package_address));
                     let dep_address = named_address_mapping
                         .insert(dep.to_string(), orig_package_address)
@@ -1076,7 +1081,7 @@ impl<'a> DataGenAdapter<'a> {
             .value
             .contains_shared_object();
         let effects = self.executor.execute_transaction(transaction)?;
-        let digest = effects.transaction_digest();
+        let _digest = effects.transaction_digest();
         // todo: capture exec error here
         let error_opt: Option<ExecutionError> = None;
         let mut created_ids: Vec<_> = effects
@@ -1393,8 +1398,8 @@ impl<'a> DataGenAdapter<'a> {
             .into_iter()
             .map(|d| {
                 let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
-                bail!("There is no published module address corresponding to name address {d}");
-            };
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
                 let id: ObjectID = addr.into_inner().into();
                 Ok(id)
             })
