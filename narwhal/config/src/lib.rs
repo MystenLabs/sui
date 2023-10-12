@@ -115,6 +115,8 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
+// TODO: This actually represents voting power (out of 10,000) and not amount staked.
+// Consider renaming to `VotingPower`.
 pub type Stake = u64;
 pub type WorkerId = u32;
 
