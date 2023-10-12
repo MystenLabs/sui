@@ -20,6 +20,7 @@ use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, value::MoveValue};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use petgraph::{algo::toposort as petgraph_toposort, graphmap::DiGraphMap};
 use std::{
     collections::{BTreeMap, BTreeSet},
     mem,
@@ -198,7 +199,7 @@ fn module(
     } = mdef;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, Some(module_ident), name, c));
+    let constants = constants(context, Some(module_ident), hconstants);
     let functions = hfunctions.map(|name, f| function(context, Some(module_ident), name, f));
     context.env.pop_warning_filter_scope();
     (
@@ -238,7 +239,7 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
         function: hfunction,
     } = hscript;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = hconstants.map(|name, c| constant(context, None, name, c));
+    let constants = constants(context, None, hconstants);
     let function = function(context, None, function_name, hfunction);
     context.env.pop_warning_filter_scope();
     G::Script {
@@ -256,8 +257,152 @@ fn script(context: &mut Context, hscript: H::Script) -> G::Script {
 // Functions
 //**************************************************************************************************
 
+fn constants(
+    context: &mut Context,
+    module: Option<ModuleIdent>,
+    mut consts: UniqueMap<ConstantName, H::Constant>,
+) -> UniqueMap<ConstantName, G::Constant> {
+    let mut graph = DiGraphMap::new();
+    for (name, constant) in consts.clone() {
+        let deps = dependent_constants(&constant);
+        if deps.is_empty() {
+            graph.add_node(name);
+        } else {
+            for dep in deps {
+                graph.add_edge(name, dep, ());
+            }
+        }
+    }
+
+    let mut out_map = UniqueMap::new();
+    let mut sorted = petgraph_toposort(&graph, None);
+
+    while let Err(cycles) = sorted {
+        let mut nodes_to_remove = BTreeSet::new();
+        let mut work_queue = vec![cycles.node_id()];
+        while let Some(node) = work_queue.pop() {
+            if !nodes_to_remove.contains(&node) {
+                for neighbor in graph.neighbors_directed(node, petgraph::Direction::Incoming) {
+                    work_queue.push(neighbor);
+                }
+                nodes_to_remove.insert(node);
+            }
+        }
+        for node in nodes_to_remove {
+            context.env.add_diag(diag!(
+                BytecodeGeneration::UnfoldableConstant,
+                (
+                    *consts.get_loc(&node).unwrap(),
+                    "Constant involved in constant cycle"
+                )
+            ));
+            graph.remove_node(node);
+        }
+        sorted = petgraph_toposort(&graph, None);
+    }
+
+    if let Ok(ordered_ids) = sorted {
+        let mut constant_values = UniqueMap::new();
+        for constant_name in ordered_ids.into_iter().rev() {
+            let cdef = consts.remove(&constant_name).unwrap();
+            let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
+            out_map
+                .add(constant_name, new_cdef)
+                .expect("ICE constant name collision");
+        }
+
+        out_map
+    } else {
+        unreachable!()
+    }
+}
+
+fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
+    fn dep_exp(exp: &H::Exp) -> BTreeSet<ConstantName> {
+        use H::UnannotatedExp_ as E;
+        match &exp.exp.value {
+            E::UnresolvedError
+            | E::Unreachable
+            | E::Unit { .. }
+            | E::Value(_)
+            | E::Move { .. }
+            | E::Copy { .. } => BTreeSet::new(),
+            E::UnaryExp(_, rhs) => dep_exp(rhs),
+            E::BinopExp(lhs, _, rhs) => {
+                let mut lefts = dep_exp(lhs);
+                lefts.append(&mut dep_exp(rhs));
+                lefts
+            }
+            E::Cast(base, _) => dep_exp(base),
+            E::Vector(_, _, _, args) | E::Multiple(args) => {
+                let mut result = BTreeSet::new();
+                for arg in args {
+                    result.append(&mut dep_exp(arg));
+                }
+                result
+            }
+            E::Constant(c) => BTreeSet::from([*c]),
+            _ => panic!("ICE typing should have rejected exp in const"),
+        }
+    }
+
+    fn dep_cmd(command: &H::Command_) -> BTreeSet<ConstantName> {
+        use H::Command_ as C;
+        match command {
+            C::IgnoreAndPop { exp, .. } => dep_exp(exp),
+            C::Return { exp, .. } => dep_exp(exp),
+            C::Break => BTreeSet::new(),
+            C::Continue => BTreeSet::new(),
+            C::Abort(_) => BTreeSet::new(),
+            C::Assign(_, _) => BTreeSet::new(),
+            C::Mutate(_, _) => BTreeSet::new(),
+            C::Jump { .. } => BTreeSet::new(),
+            C::JumpIf { .. } => BTreeSet::new(),
+        }
+    }
+
+    fn dep_stmt(stmt: &H::Statement_) -> BTreeSet<ConstantName> {
+        use H::Statement_ as S;
+        match stmt {
+            S::Command(cmd) => dep_cmd(&cmd.value),
+            S::IfElse {
+                cond,
+                if_block,
+                else_block,
+            } => {
+                let mut result = dep_exp(cond);
+                result.append(&mut dep_block(if_block));
+                result.append(&mut dep_block(else_block));
+                result
+            }
+            S::While {
+                cond: (cond_block, cond_exp),
+                block,
+            } => {
+                let mut result = dep_block(cond_block);
+                result.append(&mut dep_exp(cond_exp));
+                result.append(&mut dep_block(block));
+                result
+            }
+            S::Loop { block, .. } => dep_block(block),
+        }
+    }
+
+    fn dep_block(block: &H::Block) -> BTreeSet<ConstantName> {
+        let mut constants = BTreeSet::new();
+        for entry in block {
+            constants.append(&mut dep_stmt(&entry.value));
+        }
+        constants
+    }
+
+    let (_, block) = &constant.value;
+    dep_block(block)
+}
+
 fn constant(
     context: &mut Context,
+    constant_values: &mut UniqueMap<ConstantName, Value>,
     module: Option<ModuleIdent>,
     name: ConstantName,
     c: H::Constant,
@@ -272,8 +417,28 @@ fn constant(
     } = c;
 
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let final_value = constant_(context, module, name, loc, signature.clone(), locals, block);
-    let value = final_value.and_then(move_value_from_exp);
+    let final_value = constant_(
+        context,
+        constant_values,
+        module,
+        name,
+        loc,
+        signature.clone(),
+        locals,
+        block,
+    );
+    let value = match final_value {
+        Some(H::Exp {
+            exp: sp!(_, H::UnannotatedExp_::Value(value)),
+            ..
+        }) => {
+            constant_values
+                .add(name, value.clone())
+                .expect("ICE constant name collision");
+            Some(move_value_from_value(value))
+        }
+        _ => None,
+    };
 
     context.env.pop_warning_filter_scope();
     G::Constant {
@@ -291,6 +456,7 @@ const CANNOT_FOLD: &str =
 
 fn constant_(
     context: &mut Context,
+    constant_values: &UniqueMap<ConstantName, Value>,
     module: Option<ModuleIdent>,
     name: ConstantName,
     full_loc: Loc,
@@ -332,7 +498,7 @@ fn constant_(
         "{}",
         ICE_MSG
     );
-    cfgir::optimize(&fake_signature, &locals, &mut cfg);
+    cfgir::optimize(&fake_signature, &locals, constant_values, &mut cfg);
 
     if blocks.len() != 1 {
         context.env.add_diag(diag!(
@@ -373,14 +539,6 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
             BytecodeGeneration::UnfoldableConstant,
             (e.exp.loc, CANNOT_FOLD)
         )),
-    }
-}
-
-fn move_value_from_exp(e: H::Exp) -> Option<MoveValue> {
-    use H::UnannotatedExp_ as E;
-    match e.exp.value {
-        E::Value(v) => Some(move_value_from_value(v)),
-        _ => None,
     }
 }
 
@@ -480,7 +638,7 @@ fn function_body(
             cfgir::refine_inference_and_verify(context.env, &function_context, &mut cfg);
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
-                cfgir::optimize(signature, &locals, &mut cfg);
+                cfgir::optimize(signature, &locals, &UniqueMap::new(), &mut cfg);
             }
 
             let block_info = block_info

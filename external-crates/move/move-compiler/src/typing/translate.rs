@@ -378,6 +378,7 @@ mod check_valid_constant {
     use crate::{
         diag,
         diagnostics::codes::DiagnosticCode,
+        editions::FeatureGate::ConstInConst,
         naming::ast::{Type, Type_},
         shared::*,
         typing::{
@@ -485,6 +486,15 @@ mod check_valid_constant {
                 return;
             }
 
+            // NB: module scoping is checked during constant type creation, so we don't need to
+            // relitigate here.
+            E::Constant(_, _) => {
+                context
+                    .env
+                    .check_feature(ConstInConst, context.current_package(), *loc);
+                return;
+            }
+
             //*****************************************
             // Invalid cases
             //*****************************************
@@ -541,7 +551,6 @@ mod check_valid_constant {
                 }
                 "Structs are"
             }
-            E::Constant(_, _) => "Other constants are",
         };
         context.env.add_diag(diag!(
             TypeSafety::UnsupportedConstant,
