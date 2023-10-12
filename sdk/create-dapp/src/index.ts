@@ -6,35 +6,49 @@
 import { existsSync, statSync } from 'fs';
 import { mkdir, readdir, readFile, writeFile } from 'fs/promises';
 import { relative, resolve } from 'path';
+import { parseArgs } from 'util';
 import { prompt } from 'enquirer';
+
+const { values: args } = parseArgs({
+	options: {
+		template: {
+			type: 'string',
+			default: '',
+			short: 't',
+		},
+	},
+});
 
 async function main() {
 	const results = await prompt<{
 		template: string;
 		dAppName: string;
-	}>([
-		{
-			type: 'select',
-			name: 'template',
-			message: 'Which started template would you like to use?',
-			choices: [
-				{
-					name: 'react-client-dapp',
-					hint: 'React Client dApp that reads data from wallet and the blockchain',
-				},
-				{
-					name: 'react-e2e-counter',
-					hint: 'React dApp with a move smart contract that implements a distributed counter',
-				},
-			],
-		},
-		{
-			type: 'input',
-			name: 'dAppName',
-			message: 'What is the name of your dApp? (this will be used as the directory name)',
-			initial: 'my-first-sui-dapp',
-		},
-	]);
+	}>(
+		[
+			{
+				type: 'select',
+				name: 'template',
+				message: 'Which starter template would you like to use?',
+				choices: [
+					{
+						name: 'react-client-dapp',
+						hint: 'React Client dApp that reads data from wallet and the blockchain',
+					},
+					{
+						name: 'react-e2e-counter',
+						hint: 'React dApp with a move smart contract that implements a distributed counter',
+					},
+				],
+			},
+			{
+				type: 'input',
+
+				name: 'dAppName',
+				message: 'What is the name of your dApp? (this will be used as the directory name)',
+				initial: 'my-first-sui-dapp',
+			},
+		].filter((question) => !args[question.name as 'template']),
+	);
 
 	const outDir = resolve(process.cwd(), results.dAppName);
 
@@ -42,7 +56,7 @@ async function main() {
 		throw new Error(`Directory ${outDir} already exists`);
 	}
 
-	const files = await collectFiles(results.template, results.dAppName);
+	const files = await collectFiles(results.template ?? args.template, results.dAppName);
 	await writeFiles(files, outDir);
 }
 
@@ -57,7 +71,7 @@ async function collectFiles(template: string, dAppName: string) {
 	}>();
 
 	if (!statSync(templateDir).isDirectory()) {
-		throw new Error(`Template directory ${templateDir} could not be found`);
+		throw new Error(`Template ${templateDir} could not be found`);
 	}
 
 	await addDir(templateDir);
