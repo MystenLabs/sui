@@ -54,6 +54,9 @@ struct RandomnessState {
 }
 
 impl RandomnessState {
+    // Returns None in case of invalid input or other failure to initialize DKG.
+    // In this case, narwhal will continue to function normally and simpluy not run
+    // the random beacon protocol during the current epoch.
     fn try_new(
         chain: &ChainIdentifier,
         protocol_config: &ProtocolConfig,
