@@ -12,7 +12,7 @@ currently active network.
 
 ```tsx
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { type SuiClientOptions } from '@mysten/sui.js';
+import { type SuiClientOptions } from '@mysten/sui.js/client';
 
 // Config options for the networks you want to connect to
 const networks = {
@@ -45,8 +45,8 @@ function App() {
 ## Using the SuiClientProvider as a controlled component
 
 ```tsx
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { type SuiClientOptions } from '@mysten/sui.js';
+import { SuiClientProvider } from '@mysten/dapp-kit';
+import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { useState } from 'react';
 
 // Config options for the networks you want to connect to
@@ -75,8 +75,8 @@ function App() {
 ## Customizing how the SuiClient is created
 
 ```tsx
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { SuiClient, SuiHTTPTransport, type SuiClientOptions } from '@mysten/sui.js';
+import { SuiClientProvider } from '@mysten/dapp-kit';
+import { SuiClient, SuiHTTPTransport, type SuiClientOptions } from '@mysten/sui.js/client';
 
 // Config options for the networks you want to connect to
 const networks = {
