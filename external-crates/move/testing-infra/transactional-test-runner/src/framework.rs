@@ -678,7 +678,7 @@ pub fn compile_ir_script(
 pub async fn handle_actual_output<'a, Adapter>(
     path: &Path,
     fully_compiled_program_opt: Option<&'a FullyCompiledProgram>,
-) -> Result<String, Box<dyn std::error::Error>>
+) -> Result<(String, Adapter), Box<dyn std::error::Error>>
 where
     Adapter: MoveTestAdapter<'a>,
     Adapter::ExtraInitArgs: Debug,
@@ -735,7 +735,7 @@ where
     for task in tasks {
         handle_known_task(&mut output, &mut adapter, task).await;
     }
-    Ok(output)
+    Ok((output, adapter))
 }
 
 pub async fn run_test_impl<'a, Adapter>(
@@ -751,7 +751,7 @@ where
     Adapter::Subcommand: Debug,
 {
     let output = handle_actual_output::<Adapter>(path, fully_compiled_program_opt).await?;
-    handle_expected_output(path, output)?;
+    handle_expected_output(path, output.0)?;
     Ok(())
 }
 
