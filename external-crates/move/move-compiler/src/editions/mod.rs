@@ -32,6 +32,7 @@ pub enum FeatureGate {
     StructTypeVisibility,
     DotCall,
     PositionalFields,
+    LetMut,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -105,6 +106,7 @@ const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
     FeatureGate::StructTypeVisibility,
     FeatureGate::DotCall,
     FeatureGate::PositionalFields,
+    FeatureGate::LetMut,
 ];
 
 impl Edition {
@@ -185,6 +187,7 @@ impl FeatureGate {
             FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
             FeatureGate::DotCall => "Method syntax is",
             FeatureGate::PositionalFields => "Positional fields are",
+            FeatureGate::LetMut => "'mut' variable modifiers are",
         }
     }
 }

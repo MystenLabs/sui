@@ -13,7 +13,7 @@ use crate::{
     },
     parser::ast::{
         self as P, Ability, ConstantName, Field, FieldBindings, FunctionName, ModuleName,
-        StructName, Var,
+        Mutability, StructName, Var,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -1675,9 +1675,9 @@ fn function_signature(
         .shadow_for_type_parameters(type_parameters.iter().map(|(name, _)| name));
     let parameters = pparams
         .into_iter()
-        .map(|(v, t)| (v, type_(context, t)))
+        .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
-    for (v, _) in &parameters {
+    for (_, v, _) in &parameters {
         check_valid_local_name(context, v)
     }
     let return_type = type_(context, pret_ty);
@@ -2618,9 +2618,10 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     use E::LValue_ as EL;
     use P::Bind_ as PB;
     let b_ = match pb_ {
-        PB::Var(v) => {
+        PB::Var(pmut, v) => {
+            let emut = mutability(context, v.loc(), pmut);
             check_valid_local_name(context, &v);
-            EL::Var(sp(loc, E::ModuleAccess_::Name(v.0)), None)
+            EL::Var(emut, sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, ptys_opt, pfields) => {
             let tn = name_access_chain(context, Access::ApplyNamed, *ptn)?;
@@ -2732,7 +2733,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 }
                 _ => {
                     let tys_opt = optional_types(context, ptys_opt);
-                    EL::Var(en, tys_opt)
+                    EL::Var(None, en, tys_opt)
                 }
             }
         }
@@ -2782,6 +2783,21 @@ fn assign_unpack_fields(
         "assignment binding",
         afields,
     ))
+}
+
+fn mutability(context: &mut Context, loc: Loc, pmut: Mutability) -> Mutability {
+    let supports_let_mut = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::LetMut);
+    match pmut {
+        Some(loc) => {
+            assert!(supports_let_mut, "ICE mut should not parse without let mut");
+            Some(loc)
+        }
+        None if supports_let_mut => None,
+        // without let mut enabled, all locals are mutable and do not need the annotation
+        None => Some(loc),
+    }
 }
 
 //**************************************************************************************************
@@ -2944,10 +2960,10 @@ fn unbound_names_binds_with_range(
 fn unbound_names_bind(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
     use E::LValue_ as EL;
     match l_ {
-        EL::Var(sp!(_, E::ModuleAccess_::Name(n)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
             unbound.remove(n);
         }
-        EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
         EL::Unpack(_, _, efields) => match efields {
@@ -2970,10 +2986,10 @@ fn unbound_names_assigns(unbound: &mut BTreeSet<Name>, sp!(_, ls_): &E::LValueLi
 fn unbound_names_assign(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
     use E::LValue_ as EL;
     match l_ {
-        EL::Var(sp!(_, E::ModuleAccess_::Name(n)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
             unbound.insert(*n);
         }
-        EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
         EL::Unpack(_, _, efields) => match efields {

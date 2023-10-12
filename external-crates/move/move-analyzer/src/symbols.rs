@@ -879,12 +879,12 @@ impl Symbolicator {
                 fun.signature
                     .parameters
                     .iter()
-                    .map(|(n, _)| n.value.name)
+                    .map(|(_, n, _)| n.value.name)
                     .collect(),
                 fun.signature
                     .parameters
                     .iter()
-                    .map(|(_, t)| t.clone())
+                    .map(|(_, _, t)| t.clone())
                     .collect(),
                 fun.signature.return_type.clone(),
                 fun.acquires
@@ -1091,7 +1091,7 @@ impl Symbolicator {
         // function body)
         let mut scope = OrdMap::new();
 
-        for (pname, ptype) in &fun.signature.parameters {
+        for (_, pname, ptype) in &fun.signature.parameters {
             self.add_type_id_use_def(ptype, references, use_defs);
 
             // add definition of the parameter
