@@ -587,12 +587,7 @@ impl Interpreter {
         ty_args: Vec<Type>,
     ) -> PartialVMResult<()> {
         let return_values = self.call_native_return_values(
-            resolver,
-            data_store,
-            gas_meter,
-            extensions,
-            function.clone(),
-            &ty_args,
+            resolver, data_store, gas_meter, extensions, function, &ty_args,
         )?;
         // Put return values on the top of the operand stack, where the caller will find them.
         // This is one of only two times the operand stack is shared across call stack frames; the other is in handling
