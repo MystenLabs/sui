@@ -6,11 +6,11 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes, Fields,
-        Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, SpecId, Value, Value_,
-        Visibility,
+        Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_, Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
+        ENTRY_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -1029,7 +1029,9 @@ impl AstDebug for FunctionSignature {
         type_parameters.ast_debug(w);
         w.write("(");
         w.comma(parameters, |w, (mut_, v, st)| {
-            mut_.ast_debug(w);
+            if mut_.is_some() {
+                w.write("mut ");
+            }
             v.ast_debug(w);
             w.write(": ");
             st.ast_debug(w);
@@ -1465,7 +1467,9 @@ impl AstDebug for LValue_ {
                 var,
                 unused_binding,
             } => {
-                mut_.ast_debug(w);
+                if mut_.is_some() {
+                    w.write("mut ");
+                }
                 var.ast_debug(w);
                 if *unused_binding {
                     w.write("#unused");

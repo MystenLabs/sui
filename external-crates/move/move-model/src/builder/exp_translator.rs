@@ -455,7 +455,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// enters them into the environment. Returns a vector for representing them in the target AST.
     pub fn analyze_and_add_params(
         &mut self,
-        params: &[(EA::Mutability, PA::Var, EA::Type)],
+        params: &[(PA::Mutability, PA::Var, EA::Type)],
         for_move_fun: bool,
     ) -> Vec<(Symbol, Type)> {
         params

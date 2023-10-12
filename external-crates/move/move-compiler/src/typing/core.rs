@@ -5,13 +5,12 @@
 use crate::{
     debug_display, diag,
     diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::Mutability,
     expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
         TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
     },
-    parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
+    parser::ast::{Ability_, ConstantName, Field, FunctionName, Mutability, StructName},
     shared::{program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -64,6 +63,7 @@ pub struct Context<'env> {
     pub env: &'env mut CompilationEnv,
 
     use_funs: Vec<UseFunsScope>,
+    pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
@@ -133,6 +133,7 @@ impl<'env> Context<'env> {
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
+            current_package: None,
             current_module: None,
             current_function: None,
             current_script_constants: None,

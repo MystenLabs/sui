@@ -9,10 +9,10 @@ use super::{
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::Flavor,
+    editions::{FeatureGate, Flavor},
     expansion::ast::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
-        ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
+        ModuleIdent, ModuleIdent_, Value_, Visibility,
     },
     naming::ast::{self as N, TParam, TParamID, Type, TypeName_, Type_},
     parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName, UnaryOp_},
@@ -116,8 +116,8 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_script_constants.is_none());
+    assert!(context.current_package.is_none());
 
-    context.current_module = Some(ident);
     let N::ModuleDefinition {
         loc,
         warning_filter,
@@ -131,6 +131,8 @@ fn module(
         constants: nconstants,
         spec_dependencies,
     } = mdef;
+    context.current_module = Some(ident);
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     structs
@@ -140,6 +142,7 @@ fn module(
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
+    context.current_package = None;
     context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
@@ -174,6 +177,7 @@ fn scripts(
 
 fn script(context: &mut Context, nscript: N::Script) -> T::Script {
     assert!(context.current_script_constants.is_none());
+    assert!(context.current_package.is_none());
     context.current_module = None;
     let N::Script {
         warning_filter,
@@ -186,12 +190,14 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         function: nfunction,
         spec_dependencies,
     } = nscript;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
+    context.current_package = None;
     context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     T::Script {
@@ -1881,19 +1887,16 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
 
 fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
     let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
-    match mut_ {
-        Mutability::Mut(_) | Mutability::NotApplicable => (),
-        Mutability::Imm => {
-            let v = &v.value.name;
-            let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
-            let decl_msg =
-                format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
-            context.env.add_diag(diag!(
-                TypeSafety::InvalidImmVariableUsage,
-                (eloc, usage_msg),
-                (decl_loc, decl_msg),
-            ))
-        }
+    if mut_.is_none() {
+        let v = &v.value.name;
+        let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
+        let decl_msg =
+            format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
+        context.env.add_diag(diag!(
+            TypeSafety::InvalidImmVariableUsage,
+            (eloc, usage_msg),
+            (decl_loc, decl_msg),
+        ))
     }
 }
 
@@ -2567,9 +2570,15 @@ fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
 /// Should be called at the end of functions/constants
 fn unused_let_muts(context: &mut Context) {
     let locals = context.take_locals();
+    let supports_let_mut = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::LetMut);
+    if !supports_let_mut {
+        return;
+    }
     for (v, local) in locals {
         let Local { mut_, used_mut, .. } = local;
-        let Mutability::Mut(mut_loc) = mut_ else { continue };
+        let Some(mut_loc) = mut_ else { continue };
         if used_mut.is_none() {
             let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
             let mut_msg = "Consider removing the 'mut' declaration here";

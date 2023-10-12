@@ -8,11 +8,11 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Mutability, Visibility},
+    expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, StructName},
+    parser::ast::{Ability_, FunctionName, Mutability, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
         program_info::TypingProgramInfo,
