@@ -15,8 +15,12 @@ use crate::{
         digest::Digest,
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
+        event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
+        move_module::MoveModuleId,
         move_object::MoveObject,
+        move_package::MovePackage,
+        move_type::MoveType,
         object::{Object, ObjectFilter, ObjectKind},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -44,6 +48,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
+use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -58,7 +63,7 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::ProtocolConfigResponse;
+use sui_json_rpc_types::{ProtocolConfigResponse, SuiTransactionBlockEffects, EventFilter as RpcEventFilter};
 use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
@@ -77,8 +82,11 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::dynamic_field::Field;
 use sui_types::{base_types::MoveObjectType, governance::StakedSui};
+use sui_types::{
+    base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
+    Identifier,
+};
 
 use super::DEFAULT_PAGE_SIZE;
 
@@ -633,6 +641,10 @@ impl PgManager {
         Ok(sequence_number)
     }
 
+    pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
+        EventID::try_from(cursor).map_err(|e| Error::Internal("Make this client error".to_string()))
+    }
+
     pub(crate) fn validate_package_dependencies(
         &self,
         package: Option<&SuiAddress>,
@@ -858,6 +870,21 @@ impl PgManager {
         let move_object = sui_object.map(|o| MoveObject { native_object: o });
 
         Ok(move_object)
+    }
+
+    pub(crate) async fn fetch_move_package(
+        &self,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<MovePackage>, Error> {
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj = self.get_obj(address, version).await?;
+        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
+        let move_package = sui_object.map(|o| MovePackage { native_object: o });
+
+        Ok(move_package)
     }
 
     pub(crate) async fn fetch_owned_objs(
@@ -1200,6 +1227,116 @@ impl PgManager {
             Ok(Some(connection))
         } else {
             Ok(None)
+        }
+    }
+
+    pub(crate) async fn fetch_events(
+        &self,
+        address: SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: EventFilter,
+    ) -> Result<Option<Connection<String, Event>>, Error> {
+        let mut event_filter: Option<RpcEventFilter> = None;
+
+        if let Some(sender) = filter.sender {
+            let sender = NativeSuiAddress::from_bytes(sender.into_array())
+                .map_err(|e| Error::Internal("make this client error".to_string()))?;
+            event_filter = Some(RpcEventFilter::Sender(sender));
+        } else if let Some(digest) = filter.transaction_digest {
+            let digest = TransactionDigest::from_str(&digest)
+                .map_err(|e| Error::Internal("make this client error".to_string()))?;
+            event_filter = Some(RpcEventFilter::Transaction(digest));
+        } else if let (emitting_package, emitting_module) =
+            (filter.emitting_package, filter.emitting_module)
+        {
+            match (emitting_package, emitting_module) {
+                (Some(package), Some(module)) => {
+                    let package = ObjectID::from_bytes(&package.into_array())
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    let module = Identifier::from_str(&module)
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    event_filter = Some(RpcEventFilter::MoveModule { package, module });
+                }
+                (Some(package), None) => {
+                    let package = ObjectID::from_bytes(&package.into_array())
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    event_filter = Some(RpcEventFilter::Package(package));
+                }
+                (None, Some(_)) => {
+                    return Err(Error::Internal("make this client error".to_string()));
+                }
+                _ => {}
+            }
+        } else if let (event_package, event_module, event_type) =
+            (filter.event_package, filter.event_module, filter.event_type)
+        {
+            match (event_package, event_module, event_type) {
+                (Some(package), Some(module), None) => {
+                    let package = ObjectID::from_bytes(&package.into_array())
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    let module = Identifier::from_str(&module)
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    event_filter = Some(RpcEventFilter::MoveModule { package, module });
+                }
+                (Some(package), None, None) => {
+                    let package = ObjectID::from_bytes(&package.into_array())
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    event_filter = Some(RpcEventFilter::Package(package));
+                }
+                (None, None, Some(event_type)) => {
+                    let event_type = StructTag::from_str(&event_type)
+                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
+                    event_filter = Some(RpcEventFilter::MoveEventType(event_type));
+                }
+                _ => {}
+            }
+        }
+
+        let descending_order = before.is_some();
+        let limit = first.or(last).unwrap_or(10) as usize;
+        let cursor = after
+            .or(before)
+            .map(|c| self.parse_event_cursor(c))
+            .transpose()?;
+        if let Some(event_filter) = event_filter {
+            let results = self
+                .inner
+                .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
+                .await?;
+
+            let has_next_page = results.len() > limit;
+
+            let mut connection = Connection::new(false, has_next_page);
+            connection.edges.extend(results.into_iter().filter_map(|e| {
+                let cursor = String::from(e.id);
+                let event = Event {
+                    id: ID::from(cursor.clone()),
+                    sending_module_id: MoveModuleId {
+                        package: SuiAddress::from_array(**e.package_id),
+                        name: e.transaction_module.to_string(),
+                    },
+                    event_type: MoveType {
+                        repr: e.type_.to_string(),
+                    },
+                    senders: vec![SuiAddress::from_array(e.sender.to_inner())],
+                    timestamp: e
+                        .timestamp_ms
+                        .map(|t| DateTime::from_ms(t as i64))
+                        .flatten(),
+                    json: e.parsed_json.to_string(),
+                    bcs: Base64::from(e.bcs),
+                };
+
+                Some(Edge::new(cursor, event))
+            }));
+            Ok(Some(connection))
+        } else {
+            return Err(Error::Internal(
+                "Please provide at least one filter".to_string(),
+            ));
         }
     }
 }
