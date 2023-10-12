@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::{Parameters, ChainIdentifier};
+use config::{ChainIdentifier, Parameters};
 use fastcrypto::traits::KeyPair;
 use mysten_metrics::RegistryService;
 use narwhal_node::execution_state::SimpleExecutionState;

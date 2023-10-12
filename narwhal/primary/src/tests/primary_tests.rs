@@ -7,7 +7,7 @@ use crate::{
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
-use config::{AuthorityIdentifier, Committee, Parameters, ChainIdentifier};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters};
 use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
