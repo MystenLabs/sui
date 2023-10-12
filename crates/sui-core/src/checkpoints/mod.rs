@@ -389,7 +389,7 @@ impl CheckpointStore {
     // Called by consensus (ConsensusAggregator).
     // Different from `insert_verified_checkpoint`, it does not touch
     // the highest_verified_checkpoint watermark such that state sync
-    // will have a chance to process this checkpoint and perfom some
+    // will have a chance to process this checkpoint and perform some
     // state-sync only things.
     pub fn insert_certified_checkpoint(
         &self,
@@ -1017,11 +1017,10 @@ impl CheckpointBuilder {
                 None
             };
 
-            let contents =
-                CheckpointContents::new_with_causally_ordered_transactions_and_signatures(
-                    effects.iter().map(TransactionEffects::execution_digests),
-                    signatures,
-                );
+            let contents = CheckpointContents::new_with_digests_and_signatures(
+                effects.iter().map(TransactionEffects::execution_digests),
+                signatures,
+            );
 
             let num_txns = contents.size() as u64;
 
