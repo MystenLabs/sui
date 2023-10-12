@@ -28,7 +28,7 @@ async function main() {
 			{
 				type: 'select',
 				name: 'template',
-				message: 'Which started template would you like to use?',
+				message: 'Which starter template would you like to use?',
 				choices: [
 					{
 						name: 'react-client-dapp',
