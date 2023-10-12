@@ -127,8 +127,5 @@ async function getDependencyVersions() {
 		dependencies: Record<string, string>;
 	};
 
-	return {
-		'@mysten/dapp-kit': content.dependencies['@mysten/dapp-kit'],
-		'@mysten/sui.js': content.dependencies['@mysten/dapp-kit'],
-	};
+	return content.dependencies;
 }
