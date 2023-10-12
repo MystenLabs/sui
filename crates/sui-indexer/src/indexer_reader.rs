@@ -32,7 +32,6 @@ use std::{
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
 };
-use sui_types::event::EventID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -42,6 +41,7 @@ use sui_types::{
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
+use sui_types::{dynamic_field::DynamicFieldName, event::EventID};
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
@@ -1095,18 +1095,7 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<DynamicFieldInfo>, IndexerError> {
-        let objects: Vec<StoredObject> = self.run_query(|conn| {
-            let mut query = objects::dsl::objects
-                .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
-                .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
-                .order(objects::dsl::object_id.asc())
-                .limit(limit as i64)
-                .into_boxed();
-            if let Some(object_cursor) = cursor {
-                query = query.filter(objects::dsl::object_id.ge(object_cursor.to_vec()));
-            }
-            query.load::<StoredObject>(conn)
-        })?;
+        let objects = self.get_dynamic_fields_raw(parent_object_id, cursor, limit)?;
 
         if any(objects.iter(), |o| o.df_object_id.is_none()) {
             return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -1114,6 +1103,7 @@ impl IndexerReader {
                 parent_object_id
             )));
         }
+
         // for Dynamic field objects, df_object_id != object_id, we need another look up
         // to get the version and digests.
         // TODO: simply store df_object_version and df_object_digest as well?
@@ -1132,7 +1122,7 @@ impl IndexerReader {
         let object_refs = self.get_object_refs(dfo_ids)?;
         let mut dynamic_fields = objects
             .into_iter()
-            .map(StoredObject::try_into_expectant_dynamic_field_info)
+            .map(|object| object.try_into_expectant_dynamic_field_info(self))
             .collect::<Result<Vec<_>, _>>()?;
 
         for df in dynamic_fields.iter_mut() {
@@ -1143,6 +1133,51 @@ impl IndexerReader {
         }
 
         Ok(dynamic_fields)
+    }
+
+    pub async fn get_dynamic_fields_raw_in_blocking_task(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        self.spawn_blocking(move |this| {
+            this.get_dynamic_fields_raw(parent_object_id, cursor, limit)
+        })
+        .await
+    }
+
+    fn get_dynamic_fields_raw(
+        &self,
+        parent_object_id: ObjectID,
+        cursor: Option<ObjectID>,
+        limit: usize,
+    ) -> Result<Vec<StoredObject>, IndexerError> {
+        let objects: Vec<StoredObject> = self.run_query(|conn| {
+            let mut query = objects::dsl::objects
+                .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
+                .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
+                .order(objects::dsl::object_id.asc())
+                .limit(limit as i64)
+                .into_boxed();
+            if let Some(object_cursor) = cursor {
+                query = query.filter(objects::dsl::object_id.ge(object_cursor.to_vec()));
+            }
+            query.load::<StoredObject>(conn)
+        })?;
+
+        Ok(objects)
+    }
+
+    pub fn bcs_name_from_dynamic_field_name(
+        &self,
+        name: &DynamicFieldName,
+    ) -> Result<Vec<u8>, IndexerError> {
+        let layout =
+            move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(&name.type_, self)?;
+        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
+        let name_bcs_value = sui_json_value.to_bcs_bytes(&layout)?;
+        Ok(name_bcs_value)
     }
 
     fn get_object_refs(
