@@ -9,6 +9,7 @@ use std::{
 };
 
 use async_trait::async_trait;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use lru::LruCache;
 use move_binary_format::{
     access::ModuleAccess,

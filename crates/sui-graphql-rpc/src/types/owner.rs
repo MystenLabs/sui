@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::address::Address;
+use super::dynamic_field::DynamicField;
 use super::stake::Stake;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
@@ -65,6 +66,14 @@ use sui_json_rpc::name_service::NameServiceConfig;
     //     arg(name = "last", ty = "Option<u64>"),
     //     arg(name = "before", ty = "Option<String>")
     // )
+    field(
+        name = "dynamic_field_connection",
+        ty = "Option<Connection<String, DynamicField>>",
+        arg(name = "first", ty = "Option<u64>"),
+        arg(name = "after", ty = "Option<String>"),
+        arg(name = "last", ty = "Option<u64>"),
+        arg(name = "before", ty = "Option<String>"),
+    )
 )]
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub(crate) enum ObjectOwner {
@@ -187,4 +196,18 @@ impl Owner {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    pub async fn dynamic_field_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, DynamicField>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_fields(first, after, last, before, self.address)
+            .await
+            .extend()
+    }
 }
