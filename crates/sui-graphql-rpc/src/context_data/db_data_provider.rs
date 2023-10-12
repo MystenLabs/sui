@@ -623,26 +623,26 @@ impl PgManager {
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid transaction cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("tx".to_string()))?;
         Ok(tx_sequence_number)
     }
 
     pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let checkpoint_sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid object cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("obj".to_string()))?;
         Ok(checkpoint_sequence_number)
     }
 
     pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid checkpoint cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("checkpoint".to_string()))?;
         Ok(sequence_number)
     }
 
     pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
-        EventID::try_from(cursor).map_err(|e| Error::Internal("Make this client error".to_string()))
+        EventID::try_from(cursor).map_err(|_| Error::InvalidCursor("event".to_string()))
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -1239,61 +1239,41 @@ impl PgManager {
         before: Option<String>,
         filter: EventFilter,
     ) -> Result<Option<Connection<String, Event>>, Error> {
-        let mut event_filter: Option<RpcEventFilter> = None;
-
-        if let Some(sender) = filter.sender {
+        let event_filter: Result<RpcEventFilter, Error> = if let Some(sender) = filter.sender {
             let sender = NativeSuiAddress::from_bytes(sender.into_array())
-                .map_err(|e| Error::Internal("make this client error".to_string()))?;
-            event_filter = Some(RpcEventFilter::Sender(sender));
+                .map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::Sender(sender))
         } else if let Some(digest) = filter.transaction_digest {
-            let digest = TransactionDigest::from_str(&digest)
-                .map_err(|e| Error::Internal("make this client error".to_string()))?;
-            event_filter = Some(RpcEventFilter::Transaction(digest));
-        } else if let (emitting_package, emitting_module) =
-            (filter.emitting_package, filter.emitting_module)
-        {
-            match (emitting_package, emitting_module) {
-                (Some(package), Some(module)) => {
-                    let package = ObjectID::from_bytes(&package.into_array())
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    let module = Identifier::from_str(&module)
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    event_filter = Some(RpcEventFilter::MoveModule { package, module });
-                }
-                (Some(package), None) => {
-                    let package = ObjectID::from_bytes(&package.into_array())
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    event_filter = Some(RpcEventFilter::Package(package));
-                }
-                (None, Some(_)) => {
-                    return Err(Error::Internal("make this client error".to_string()));
-                }
-                _ => {}
+            let digest = TransactionDigest::from_str(&digest).map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::Transaction(digest))
+        } else if let Some(package) = filter.emitting_package {
+            if let Some(module) = filter.emitting_module {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::MoveModule { package, module })
+            } else {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::Package(package))
             }
-        } else if let (event_package, event_module, event_type) =
-            (filter.event_package, filter.event_module, filter.event_type)
-        {
-            match (event_package, event_module, event_type) {
-                (Some(package), Some(module), None) => {
-                    let package = ObjectID::from_bytes(&package.into_array())
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    let module = Identifier::from_str(&module)
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    event_filter = Some(RpcEventFilter::MoveModule { package, module });
-                }
-                (Some(package), None, None) => {
-                    let package = ObjectID::from_bytes(&package.into_array())
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    event_filter = Some(RpcEventFilter::Package(package));
-                }
-                (None, None, Some(event_type)) => {
-                    let event_type = StructTag::from_str(&event_type)
-                        .map_err(|e| Error::Internal("make this client error".to_string()))?;
-                    event_filter = Some(RpcEventFilter::MoveEventType(event_type));
-                }
-                _ => {}
+        } else if let Some(event_type) = filter.event_type {
+            let event_type = StructTag::from_str(&event_type).map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::MoveEventType(event_type))
+        } else if let Some(package) = filter.event_package {
+            if let Some(module) = filter.event_module {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::MoveModule { package, module })
+            } else {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::Package(package))
             }
-        }
+        } else {
+            return Err(Error::InvalidFilter);
+        };
 
         let descending_order = before.is_some();
         let limit = first.or(last).unwrap_or(10) as usize;
@@ -1301,7 +1281,7 @@ impl PgManager {
             .or(before)
             .map(|c| self.parse_event_cursor(c))
             .transpose()?;
-        if let Some(event_filter) = event_filter {
+        if let Ok(event_filter) = event_filter {
             let results = self
                 .inner
                 .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
@@ -1310,33 +1290,30 @@ impl PgManager {
             let has_next_page = results.len() > limit;
 
             let mut connection = Connection::new(false, has_next_page);
-            connection.edges.extend(results.into_iter().filter_map(|e| {
+            connection.edges.extend(results.into_iter().map(|e| {
                 let cursor = String::from(e.id);
                 let event = Event {
                     id: ID::from(cursor.clone()),
-                    sending_module_id: MoveModuleId {
+                    sending_module_id: Some(MoveModuleId {
                         package: SuiAddress::from_array(**e.package_id),
                         name: e.transaction_module.to_string(),
-                    },
-                    event_type: MoveType {
+                    }),
+                    event_type: Some(MoveType {
                         repr: e.type_.to_string(),
-                    },
-                    senders: vec![SuiAddress::from_array(e.sender.to_inner())],
-                    timestamp: e
-                        .timestamp_ms
-                        .map(|t| DateTime::from_ms(t as i64))
-                        .flatten(),
-                    json: e.parsed_json.to_string(),
-                    bcs: Base64::from(e.bcs),
+                    }),
+                    senders: Some(vec![Address {
+                        address: SuiAddress::from_array(e.sender.to_inner()),
+                    }]),
+                    timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
+                    json: Some(e.parsed_json.to_string()),
+                    bcs: Some(Base64::from(e.bcs)),
                 };
 
-                Some(Edge::new(cursor, event))
+                Edge::new(cursor, event)
             }));
             Ok(Some(connection))
         } else {
-            return Err(Error::Internal(
-                "Please provide at least one filter".to_string(),
-            ));
+            Err(Error::InvalidFilter)
         }
     }
 }

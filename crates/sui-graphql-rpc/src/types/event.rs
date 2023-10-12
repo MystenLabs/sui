@@ -4,19 +4,19 @@
 use async_graphql::*;
 
 use super::{
-    base64::Base64, date_time::DateTime, move_module::MoveModuleId, move_type::MoveType,
-    sui_address::SuiAddress,
+    address::Address, base64::Base64, date_time::DateTime, move_module::MoveModuleId,
+    move_type::MoveType, sui_address::SuiAddress,
 };
 
 #[derive(SimpleObject)]
 pub(crate) struct Event {
     pub id: ID,
-    pub sending_module_id: MoveModuleId, // Module that the event was emitted by
-    pub event_type: MoveType,
-    pub senders: Vec<SuiAddress>,
+    pub sending_module_id: Option<MoveModuleId>, // Module that the event was emitted by
+    pub event_type: Option<MoveType>,
+    pub senders: Option<Vec<Address>>,
     pub timestamp: Option<DateTime>,
-    pub json: String,
-    pub bcs: Base64,
+    pub json: Option<String>,
+    pub bcs: Option<Base64>,
 }
 
 #[derive(InputObject)]
