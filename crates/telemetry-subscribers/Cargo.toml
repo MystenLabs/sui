@@ -8,10 +8,6 @@ repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
 publish = false
 
-[[bin]]
-name = "import-trace"
-path = "src/bin/import_trace.rs"
-
 [dependencies]
 console-subscriber = { workspace = true, optional = true }
 crossterm.workspace = true
