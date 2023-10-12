@@ -19,7 +19,7 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use narwhal_config::Committee;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_test_utils::latest_protocol_version;
-use narwhal_types::{BatchAPI, Certificate, CertificateAPI, ConsensusOutput, HeaderAPI, TimestampMs};
+use narwhal_types::{BatchAPI, Certificate, CertificateAPI, ConsensusOutput, HeaderAPI};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -602,8 +602,6 @@ mod tests {
     use crate::checkpoints::CheckpointServiceNoop;
     use crate::consensus_adapter::consensus_tests::{test_certificates, test_gas_objects};
     use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
-    use crate::consensus_handler::TrafficProfile::{High, Low};
-    use crate::consensus_throughput_calculator::TrafficProfileRanges;
     use narwhal_config::AuthorityIdentifier;
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{
