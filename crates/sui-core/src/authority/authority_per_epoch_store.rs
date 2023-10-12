@@ -1952,6 +1952,7 @@ impl AuthorityPerEpochStore {
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
     #[instrument(level = "debug", skip_all)]
+    #[allow(clippy::type_complexity)]
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
