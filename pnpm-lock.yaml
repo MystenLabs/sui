@@ -144,7 +144,7 @@ importers:
         specifier: ^3.9.0
         version: 3.9.0(vite@4.4.4)
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       tailwindcss:
         specifier: ^3.3.3
@@ -400,7 +400,7 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       start-server-and-test:
         specifier: ^2.0.0
@@ -846,7 +846,7 @@ importers:
         specifier: ^7.1.0
         version: 7.1.0
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       postcss-loader:
         specifier: ^7.3.3
@@ -952,7 +952,7 @@ importers:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.31)
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       tailwindcss:
         specifier: ^3.3.3
@@ -1061,7 +1061,7 @@ importers:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.31)
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       tailwindcss:
         specifier: ^3.3.3
@@ -1107,7 +1107,7 @@ importers:
         specifier: ^10.4.14
         version: 10.4.14(postcss@8.4.31)
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       tailwindcss:
         specifier: ^3.3.3
@@ -1160,7 +1160,7 @@ importers:
         specifier: ^0.17.6
         version: 0.17.6
       postcss:
-        specifier: ^8.4.26
+        specifier: ^8.4.31
         version: 8.4.31
       postcss-prefix-selector:
         specifier: ^1.16.0
