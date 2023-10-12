@@ -1650,7 +1650,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         let expected_user_count = param_count - args.len();
         if let Some(types) = user_args {
             let n = types.len();
-            args.extend(types.into_iter());
+            args.extend(types);
             if n != expected_user_count {
                 (
                     args,

@@ -722,7 +722,9 @@ async fn deliver_certificate_not_found_parents() {
     // and we should fail
     assert!(!parents_available);
 
-    let CertificateFetcherCommand::Ancestors(certificate)  = rx_certificate_fetcher.recv().await.unwrap() else {
+    let CertificateFetcherCommand::Ancestors(certificate) =
+        rx_certificate_fetcher.recv().await.unwrap()
+    else {
         panic!("Expected CertificateFetcherCommand::Ancestors");
     };
 

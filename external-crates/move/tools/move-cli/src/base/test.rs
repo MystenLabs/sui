@@ -27,7 +27,7 @@ use std::{
 #[cfg(target_family = "windows")]
 use std::os::windows::process::ExitStatusExt;
 // if unix
-#[cfg(any(target_family = "unix"))]
+#[cfg(target_family = "unix")]
 use std::os::unix::prelude::ExitStatusExt;
 // if not windows nor unix
 #[cfg(not(any(target_family = "windows", target_family = "unix")))]

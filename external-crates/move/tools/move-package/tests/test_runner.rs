@@ -110,7 +110,10 @@ impl Test<'_> {
 
     fn output(&self) -> anyhow::Result<String> {
         let Some(ext) = self.expected.extension().and_then(OsStr::to_str) else {
-            bail!("Unexpected snapshot file extension: {:?}", self.expected.extension());
+            bail!(
+                "Unexpected snapshot file extension: {:?}",
+                self.expected.extension()
+            );
         };
 
         let out_path = self.output_dir.path().to_path_buf();

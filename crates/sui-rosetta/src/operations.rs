@@ -64,7 +64,7 @@ impl IntoIterator for Operations {
 
 impl Operations {
     pub fn new(mut ops: Vec<Operation>) -> Self {
-        for (index, mut op) in ops.iter_mut().enumerate() {
+        for (index, op) in ops.iter_mut().enumerate() {
             op.operation_identifier = (index as u64).into()
         }
         Self(ops)
@@ -169,7 +169,9 @@ impl Operations {
         };
 
         let OperationMetadata::Stake { validator } = metadata else {
-            return Err(Error::InvalidInput("Cannot find delegation info from metadata.".into()))
+            return Err(Error::InvalidInput(
+                "Cannot find delegation info from metadata.".into(),
+            ));
         };
 
         Ok(InternalOperation::Stake {
@@ -199,7 +201,9 @@ impl Operations {
 
         let stake_ids = if let Some(metadata) = op.metadata {
             let OperationMetadata::WithdrawStake { stake_ids } = metadata else {
-                return Err(Error::InvalidInput("Cannot find withdraw stake info from metadata.".into()))
+                return Err(Error::InvalidInput(
+                    "Cannot find withdraw stake info from metadata.".into(),
+                ));
             };
             stake_ids
         } else {

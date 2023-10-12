@@ -120,7 +120,7 @@ async fn test_get_network_peers_from_admin_server() {
         worker_cache.clone(),
         test_utils::latest_protocol_version(),
         worker_1_parameters.clone(),
-        TrivialTransactionValidator::default(),
+        TrivialTransactionValidator,
         client_1,
         store.batch_store,
         metrics_1,
@@ -236,7 +236,7 @@ async fn test_get_network_peers_from_admin_server() {
     assert_eq!(2, resp.len());
 
     // Assert peer ids are correct
-    let expected_peer_ids = vec![&primary_2_peer_id, &worker_1_peer_id];
+    let expected_peer_ids = [&primary_2_peer_id, &worker_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 
     // Test getting all connected peers for primary 2
@@ -256,7 +256,7 @@ async fn test_get_network_peers_from_admin_server() {
     assert_eq!(2, resp.len());
 
     // Assert peer ids are correct
-    let expected_peer_ids = vec![&primary_1_peer_id, &worker_1_peer_id];
+    let expected_peer_ids = [&primary_1_peer_id, &worker_1_peer_id];
     assert!(expected_peer_ids.iter().all(|e| resp.contains(e)));
 }
 

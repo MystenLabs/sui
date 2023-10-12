@@ -76,8 +76,11 @@ pub async fn expect_valid_public_key<B>(
     let Some(peer) = allower.get(tls_connect_info.public_key().unwrap()) else {
         error!("node with unknown pub key tried to connect");
         MIDDLEWARE_OPS
-        .with_label_values(&["expect_valid_public_key", "unknown-validator-connection-attempt"])
-        .inc();
+            .with_label_values(&[
+                "expect_valid_public_key",
+                "unknown-validator-connection-attempt",
+            ])
+            .inc();
         return Err((StatusCode::FORBIDDEN, "unknown clients are not allowed"));
     };
     request.extensions_mut().insert(peer);

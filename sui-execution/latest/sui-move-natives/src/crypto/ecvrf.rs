@@ -82,11 +82,13 @@ pub fn ecvrf_verify(
         return Ok(NativeResult::err(cost, INVALID_ECVRF_HASH_LENGTH));
     };
 
-    let Ok(public_key) = bcs::from_bytes::<ECVRFPublicKey>(public_key_bytes.as_bytes_ref().as_slice())  else {
+    let Ok(public_key) =
+        bcs::from_bytes::<ECVRFPublicKey>(public_key_bytes.as_bytes_ref().as_slice())
+    else {
         return Ok(NativeResult::err(cost, INVALID_ECVRF_PUBLIC_KEY));
     };
 
-    let Ok(proof) = bcs::from_bytes::<ECVRFProof>(proof_bytes.as_bytes_ref().as_slice())  else {
+    let Ok(proof) = bcs::from_bytes::<ECVRFProof>(proof_bytes.as_bytes_ref().as_slice()) else {
         return Ok(NativeResult::err(cost, INVALID_ECVRF_PROOF));
     };
 

@@ -1296,7 +1296,13 @@ impl AuthorityPerEpochStore {
         let mut result = Vec::with_capacity(digests.len());
         for (signatures, digest) in signatures.into_iter().zip(digests.iter()) {
             let Some(signatures) = signatures else {
-                return Err(SuiError::from(format!("Can not find user signature for checkpoint for transaction {:?}", digest).as_str()));
+                return Err(SuiError::from(
+                    format!(
+                        "Can not find user signature for checkpoint for transaction {:?}",
+                        digest
+                    )
+                    .as_str(),
+                ));
             };
             result.push(signatures);
         }

@@ -274,8 +274,7 @@ impl<'env> Context<'env> {
         match ma_ {
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
             EN::ModuleAccess(m, n) => {
-                let Some(module_type) = self.resolve_module_type(nloc, &m, &n)
-                else {
+                let Some(module_type) = self.resolve_module_type(nloc, &m, &n) else {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
                 };

@@ -69,7 +69,7 @@ async fn simple_primary_worker_node_start_stop() {
             worker_cache,
             client,
             &store,
-            TrivialTransactionValidator::default(),
+            TrivialTransactionValidator,
         )
         .await
         .unwrap();

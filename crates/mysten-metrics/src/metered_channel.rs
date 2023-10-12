@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{
 #[path = "tests/metered_channel_tests.rs"]
 mod metered_channel_tests;
 
-/// An [`mpsc::Sender`](tokio::sync::mpsc::Sender) with an [`IntGauge`]
+/// An [`mpsc::Sender`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Sender<T> {
@@ -34,7 +34,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-/// An [`mpsc::Receiver`](tokio::sync::mpsc::Receiver) with an [`IntGauge`]
+/// An [`mpsc::Receiver`] with an [`IntGauge`]
 /// counting the number of currently queued items.
 #[derive(Debug)]
 pub struct Receiver<T> {

@@ -131,16 +131,10 @@ pub fn hash_type_and_key(
         _ => return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE)),
     };
     let Some(k_bytes) = k.simple_serialize(&k_layout) else {
-        return Ok(NativeResult::err(
-            cost,
-            E_BCS_SERIALIZATION_FAILURE,
-        ))
+        return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
     let Ok(id) = derive_dynamic_field_id(parent, &k_tag, &k_bytes) else {
-        return Ok(NativeResult::err(
-            cost,
-            E_BCS_SERIALIZATION_FAILURE,
-        ));
+        return Ok(NativeResult::err(cost, E_BCS_SERIALIZATION_FAILURE));
     };
 
     Ok(NativeResult::ok(cost, smallvec![Value::address(id.into())]))
@@ -512,10 +506,10 @@ fn get_tag_and_layouts(
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     Ok(Some((*tag, layout, annotated_layout)))
 }

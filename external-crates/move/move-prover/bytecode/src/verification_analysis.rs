@@ -371,7 +371,7 @@ impl VerificationAnalysisProcessor {
         targets: &mut FunctionTargetsHolder,
     ) {
         // TODO(mengxu): re-check the treatment of fixedpoint here
-        let mut info = data
+        let info = data
             .annotations
             .get_or_default_mut::<VerificationInfo>(true);
         if !info.verified {

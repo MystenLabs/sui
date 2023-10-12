@@ -12,6 +12,7 @@ use super::{
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
+    sui_system_state_summary::SuiSystemStateSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
@@ -196,6 +197,13 @@ impl Query {
     ) -> Result<Option<Address>> {
         ctx.data_unchecked::<PgManager>()
             .resolve_name_service_address(ctx.data_unchecked::<NameServiceConfig>(), name)
+            .await
+            .extend()
+    }
+
+    async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_latest_sui_system_state()
             .await
             .extend()
     }

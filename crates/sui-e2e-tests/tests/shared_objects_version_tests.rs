@@ -29,7 +29,10 @@ async fn objects_transitioning_to_shared_remember_their_previous_version() {
     assert_ne!(counter.1, OBJECT_START_VERSION);
 
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -42,7 +45,10 @@ async fn shared_object_owner_doesnt_change_on_write() {
 
     let (inc_counter, _) = env.increment_owned_counter(counter).await;
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(inc_counter).await.unwrap_err() else { panic!() };
+        env.share_counter(inc_counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -55,7 +61,10 @@ async fn initial_shared_version_mismatch_start_version() {
 
     let (counter, _) = env.increment_owned_counter(counter).await;
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);
@@ -67,7 +76,10 @@ async fn initial_shared_version_mismatch_current_version() {
     let (counter, _) = env.create_counter().await;
 
     let ExecutionFailureStatus::MoveAbort(location, code) =
-        env.share_counter(counter).await.unwrap_err() else { panic!() };
+        env.share_counter(counter).await.unwrap_err()
+    else {
+        panic!()
+    };
     assert_eq!(location.module.address(), &SUI_FRAMEWORK_ADDRESS);
     assert_eq!(location.module.name().as_str(), "transfer");
     assert_eq!(code, 0 /* ESharedNonNewObject */);

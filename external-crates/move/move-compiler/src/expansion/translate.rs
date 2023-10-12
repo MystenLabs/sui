@@ -504,7 +504,6 @@ fn module_(
             .add_diag(diag!(Declarations::InvalidName, (name.loc(), msg)));
     }
 
-    let name = name;
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 

@@ -33,7 +33,7 @@ pub fn create_one_time_witness(
     let type_layout = context.type_to_type_layout(&ty)?;
 
     let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
-        return Ok(NativeResult::err(InternalGas::new(1), 0))
+        return Ok(NativeResult::err(InternalGas::new(1), 0));
     };
 
     if is_otw_struct(&struct_layout, &type_tag) {

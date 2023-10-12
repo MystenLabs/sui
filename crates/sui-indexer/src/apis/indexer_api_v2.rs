@@ -144,7 +144,24 @@ impl IndexerApiServer for IndexerApiV2 {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<EventPage> {
-        unimplemented!()
+        let limit = cap_page_limit(limit);
+        if limit == 0 {
+            return Ok(EventPage::empty());
+        }
+        let descending_order = descending_order.unwrap_or(false);
+        let mut results = self
+            .inner
+            .query_events_in_blocking_task(query, cursor, limit + 1, descending_order)
+            .await?;
+
+        let has_next_page = results.len() > limit;
+        results.truncate(limit);
+        let next_cursor = results.last().map(|o| o.id.clone());
+        Ok(Page {
+            data: results,
+            next_cursor,
+            has_next_page,
+        })
     }
 
     async fn get_dynamic_fields(
