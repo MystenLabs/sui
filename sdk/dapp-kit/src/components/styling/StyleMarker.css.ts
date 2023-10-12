@@ -5,7 +5,7 @@ import { globalStyle } from '@vanilla-extract/css';
 
 import { themeVars } from '../../themes/themeContract.js';
 
-globalStyle(':where(*)'), {
+globalStyle(':where(*)', {
 	boxSizing: 'border-box',
 	color: themeVars.colors.body,
 	fontFamily: themeVars.typography.fontFamily,
@@ -16,7 +16,7 @@ globalStyle(':where(*)'), {
 	letterSpacing: themeVars.typography.letterSpacing,
 });
 
-globalStyle(':where(button)'), {
+globalStyle(':where(button)', {
 	appearance: 'none',
 	backgroundColor: 'transparent',
 	fontSize: 'inherit',
@@ -29,21 +29,20 @@ globalStyle(':where(button)'), {
 	margin: 0,
 });
 
-globalStyle(':where(a)'), {
+globalStyle(':where(a)', {
 	textDecoration: 'none',
 	color: 'inherit',
 	outline: 'none',
 });
 
-globalStyle(':where(ol, ul)'), {
+globalStyle(':where(ol, ul)', {
 	listStyle: 'none',
 	margin: 0,
 	padding: 0,
 });
 
-globalStyle(':where(h1, h2, h3, h4, h5, h6)'), {
+globalStyle(':where(h1, h2, h3, h4, h5, h6)', {
 	fontSize: 'inherit',
 	fontWeight: 'inherit',
 	margin: 0,
 });
-
