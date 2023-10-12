@@ -1,5 +1,17 @@
 # @mysten/sui.js
 
+## 0.44.0
+
+### Minor Changes
+
+- 11cf4e68b: Remove deprecated methods.
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+  - @mysten/bcs@0.8.1
+
 ## 0.43.3
 
 ### Patch Changes

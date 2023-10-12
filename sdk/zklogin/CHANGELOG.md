@@ -1,5 +1,20 @@
 # @mysten/zklogin
 
+## 0.2.0
+
+### Minor Changes
+
+- d80a6ed62: Remove toBigIntBE, expose new `getExtendedEphemeralPublicKey` method. Methods now return base64-encoded strings instead of bigints.
+
+### Patch Changes
+
+- 067d464f4: Introduce precise key-value pair parsing that matches the circuit
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/sui.js@0.44.0
+  - @mysten/bcs@0.8.1
+
 ## 0.1.8
 
 ### Patch Changes
