@@ -855,11 +855,15 @@ pub fn make_method_call_type(
         });
         // if we found a function with the method name, it must have the wrong type
         if let Some((m, finfo)) = finfo_opt {
-            let (first_ty_loc, first_ty) =
-                match finfo.signature.parameters.first().map(|(_, _, t)| t.clone()) {
-                    None => (finfo.defined_loc, None),
-                    Some(t) => (t.loc, Some(t)),
-                };
+            let (first_ty_loc, first_ty) = match finfo
+                .signature
+                .parameters
+                .first()
+                .map(|(_, _, t)| t.clone())
+            {
+                None => (finfo.defined_loc, None),
+                Some(t) => (t.loc, Some(t)),
+            };
             let arg_msg = match first_ty {
                 Some(ty) => {
                     let tys_str = error_format(&ty, &Subst::empty());
