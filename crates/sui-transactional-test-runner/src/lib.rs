@@ -138,7 +138,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
 
     async fn advance_clock(
         &mut self,
-        duration: std::time::Duration,
+        _duration: std::time::Duration,
     ) -> anyhow::Result<TransactionEffects> {
         unimplemented!("advance_clock not supported")
     }
@@ -149,30 +149,10 @@ impl TransactionalAdapter for ValidatorWithFullnode {
 
     async fn request_gas(
         &mut self,
-        address: SuiAddress,
-        amount: u64,
+        _address: SuiAddress,
+        _amount: u64,
     ) -> anyhow::Result<TransactionEffects> {
         unimplemented!("request_gas not supported")
-    }
-
-    async fn dev_inspect_transaction_block(
-        &self,
-        sender: SuiAddress,
-        transaction_kind: TransactionKind,
-        gas_price: Option<u64>,
-    ) -> SuiResult<DevInspectResults> {
-        unimplemented!("dev_inspect_transaction_block not supported")
-    }
-
-    async fn query_events(
-        &self,
-        query: EventFilter,
-        // If `Some`, the query will start from the next item after the specified cursor
-        cursor: Option<EventID>,
-        limit: usize,
-        descending: bool,
-    ) -> SuiResult<Vec<SuiEvent>> {
-        unimplemented!("query_events not supported")
     }
 }
 
