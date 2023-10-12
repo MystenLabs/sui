@@ -2,4 +2,4 @@
 '@mysten/dapp-kit': minor
 ---
 
-Fix issue where CSS was being overriden by application code
+Fix issue where CSS was being overridden by application code
