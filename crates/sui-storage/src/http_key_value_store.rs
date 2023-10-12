@@ -27,7 +27,7 @@ use sui_types::{
     transaction::Transaction,
 };
 use tap::TapFallible;
-use tracing::{error, info, trace, warn};
+use tracing::{error, info, instrument, trace, warn};
 use url::Url;
 
 use crate::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
@@ -257,6 +257,7 @@ where
 
 #[async_trait]
 impl TransactionKeyValueStoreTrait for HttpKVStore {
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get(
         &self,
         transactions: &[TransactionDigest],
@@ -324,6 +325,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         Ok((txn_results, fx_results, events_results))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get_checkpoints(
         &self,
         checkpoint_summaries: &[CheckpointSequenceNumber],
@@ -421,6 +423,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         ))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn deprecated_get_transaction_checkpoint(
         &self,
         digest: TransactionDigest,
@@ -431,6 +434,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
         })
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -442,6 +446,7 @@ impl TransactionKeyValueStoreTrait for HttpKVStore {
             .map(|maybe| maybe.and_then(|bytes| deser::<_, Object>(&key, bytes.as_ref())))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
