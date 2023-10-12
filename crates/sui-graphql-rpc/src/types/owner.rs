@@ -3,6 +3,7 @@
 
 use super::address::Address;
 use super::dynamic_field::DynamicField;
+use super::dynamic_field::DynamicFieldName;
 use super::stake::StakedSui;
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
@@ -67,6 +68,14 @@ use sui_json_rpc::name_service::NameServiceConfig;
     //     arg(name = "before", ty = "Option<String>")
     // )
     field(
+<<<<<<< HEAD
+=======
+        name = "dynamic_field",
+        ty = "Option<DynamicField>",
+        arg(name = "dynamic_field_name", ty = "DynamicFieldName")
+    ),
+    field(
+>>>>>>> 05930e71e1 (move dynamicFieldConnection implementation to ObjectOwner interface, implement for owner and object)
         name = "dynamic_field_connection",
         ty = "Option<Connection<String, DynamicField>>",
         arg(name = "first", ty = "Option<u64>"),
@@ -199,6 +208,17 @@ impl Owner {
     // ) -> Result<Option<Connection<String, NameService>>> {
     //     unimplemented!()
     // }
+
+    pub async fn dynamic_field(
+        &self,
+        ctx: &Context<'_>,
+        dynamic_field_name: DynamicFieldName,
+    ) -> Result<Option<DynamicField>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_dynamic_field_object(self.address, dynamic_field_name)
+            .await
+            .extend()
+    }
 
     pub async fn dynamic_field_connection(
         &self,

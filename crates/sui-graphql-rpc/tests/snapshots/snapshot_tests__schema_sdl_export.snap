@@ -23,6 +23,7 @@ type Address implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -237,7 +238,14 @@ type ConsensusCommitPrologueTransaction {
 scalar DateTime
 
 type DynamicField {
+	"""
+	The string type, data, and serialized value of the DynamicField's 'name' field.
+	This field is used to uniquely identify a child of the parent object.
+	"""
 	name: MoveValue
+	"""
+	The actual data stored in the dynamic field.
+	"""
 	value: DynamicFieldValue
 }
 
@@ -268,6 +276,19 @@ type DynamicFieldEdge {
 	A cursor for use in pagination
 	"""
 	cursor: String!
+}
+
+input DynamicFieldName {
+	"""
+	The string type of the DynamicField's 'name' field.
+	This may be the string representation of a Move primitive like 'u64',
+	or a struct type like 0x2::kiosk::Listing.
+	"""
+	type: String!
+	"""
+	The base64 encoded bcs serialization of the DynamicField's 'name' field.
+	"""
+	bcs: Base64!
 }
 
 union DynamicFieldValue = MoveObject | MoveValue
@@ -647,7 +668,7 @@ type MoveValue {
 	data: MoveData!
 	"""
 	Representation of a Move value in JSON, where:
-	
+
 	- Addresses and UIDs are represented in canonical form, as JSON strings.
 	- Bools are represented by JSON boolean literals.
 	- u8, u16, and u32 are represented as JSON numbers.
@@ -655,7 +676,7 @@ type MoveValue {
 	- Vectors are represented by JSON arrays.
 	- Structs are represented by JSON objects.
 	- Empty optional values are represented by `null`.
-	
+
 	This form is offered as a less verbose convenience in cases where the layout of the type is
 	known by the client.
 	"""
@@ -729,6 +750,7 @@ type Object implements ObjectOwner {
 	The domain that a user address has explicitly configured as their default domain
 	"""
 	defaultNameServiceName: String
+	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -797,6 +819,7 @@ interface ObjectOwner {
 	coinConnection(first: Int, after: String, last: Int, before: String, type: String): CoinConnection
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -818,6 +841,7 @@ type Owner implements ObjectOwner {
 	"""
 	stakedSuiConnection(first: Int, after: String, last: Int, before: String): StakedSuiConnection
 	defaultNameServiceName: String
+	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
 	dynamicFieldConnection(first: Int, after: String, last: Int, before: String): DynamicFieldConnection
 }
 
@@ -1099,7 +1123,7 @@ type StorageFund {
 	totalObjectStorageRebates: BigInt
 	"""
 	The portion of the storage fund that will never be refunded through storage rebates.
-	
+
 	The system maintains an invariant that the sum of all storage fees into the storage fund is
 	equal to the sum of of all storage rebates out, the total storage rebates remaining, and the
 	non-refundable balance.
@@ -1401,4 +1425,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-

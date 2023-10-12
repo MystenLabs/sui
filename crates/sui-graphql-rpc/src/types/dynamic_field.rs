@@ -37,6 +37,8 @@ pub(crate) struct DynamicFieldName {
 
 #[Object]
 impl DynamicField {
+    /// The string type, data, and serialized value of the DynamicField's 'name' field.
+    /// This field is used to uniquely identify a child of the parent object.
     async fn name(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
         let resolver: &Resolver<PackageCache> = ctx
             .data()
@@ -78,6 +80,7 @@ impl DynamicField {
         )))
     }
 
+    /// The actual data stored in the dynamic field.
     async fn value(&self, ctx: &Context<'_>) -> Result<Option<DynamicFieldValue>> {
         if self.df_kind == DynamicFieldType::DynamicObject {
             let obj = ctx

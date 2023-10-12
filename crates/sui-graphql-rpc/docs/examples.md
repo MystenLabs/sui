@@ -37,8 +37,9 @@
 #### &emsp;&emsp;[Filter Owner](#655351)
 #### &emsp;&emsp;[Object Connection](#655352)
 ### [Owner](#11)
-#### &emsp;&emsp;[Dynamic Field Connection](#720885)
-#### &emsp;&emsp;[Owner](#720886)
+#### &emsp;&emsp;[Dynamic Field](#720885)
+#### &emsp;&emsp;[Dynamic Field Connection](#720886)
+#### &emsp;&emsp;[Owner](#720887)
 ### [Protocol Configs](#12)
 #### &emsp;&emsp;[Key Value](#786420)
 #### &emsp;&emsp;[Key Value Feature Flag](#786421)
@@ -840,6 +841,59 @@
 ## <a id=11></a>
 ## Owner
 ### <a id=720885></a>
+### Dynamic Field
+####  Selects a dynamic field child of the parent object
+
+><pre>fragment DynamicFieldValueSelection on DynamicFieldValue {
+>  ... on MoveValue {
+>    type {
+>      repr
+>    }
+>    data
+>  }
+>  ... on MoveObject {
+>    hasPublicTransfer
+>    contents {
+>      type {
+>        repr
+>      }
+>      data
+>    }
+>  }
+>}
+>
+>fragment DynamicFieldNameSelection on MoveValue {
+>  type {
+>    repr
+>  }
+>  data
+>  bcs
+>}
+>
+>fragment DynamicFieldSelect on DynamicField {
+>  name {
+>    ...DynamicFieldNameSelection
+>  }
+>  value {
+>    ...DynamicFieldValueSelection
+>  }
+>}
+>
+># Selects a dynamic field child of the parent object
+>query DynamicField {
+>  object(
+>    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+>  ) {
+>    dynamicField(dynamicFieldName: {
+>      type: "0x2::kiosk::Listing",
+>      bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1VhfwA"
+>    }){
+>      ...DynamicFieldSelect
+>    }
+>  }
+>}</pre>
+
+### <a id=720886></a>
 ### Dynamic Field Connection
 ####  defines a fragment for selecting fields from value matching either MoveValue or MoveObject
 ####  a query that selects the name and value of the first dynamic field of the owner address
@@ -891,7 +945,11 @@
 >  }
 >}</pre>
 
+<<<<<<< HEAD
 ### <a id=720886></a>
+=======
+### <a id=720887></a>
+>>>>>>> 05930e71e1 (move dynamicFieldConnection implementation to ObjectOwner interface, implement for owner and object)
 ### Owner
 
 ><pre>{
@@ -1468,4 +1526,3 @@
 >    }
 >  }
 >}</pre>
-
