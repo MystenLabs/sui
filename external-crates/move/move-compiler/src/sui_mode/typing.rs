@@ -208,7 +208,9 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         return;
     };
 
-    let StructFields::Defined(fields) = fields else { return };
+    let StructFields::Defined(fields) = fields else {
+        return;
+    };
     let invalid_first_field = if fields.is_empty() {
         // no fields
         Some(name.loc())
@@ -586,10 +588,10 @@ fn entry_signature(
 
 fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
     let Type_::Ref(is_mut, inner_ty) = last_param_ty_ else {
-        return TxContextKind::None
+        return TxContextKind::None;
     };
     let Type_::Apply(_, sp!(_, inner_name), _) = &inner_ty.value else {
-        return TxContextKind::None
+        return TxContextKind::None;
     };
     if inner_name.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME) {
         if *is_mut {

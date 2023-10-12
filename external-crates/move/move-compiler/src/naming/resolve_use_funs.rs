@@ -195,13 +195,12 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             function: (target_m, target_f),
             kind: ekind,
         } = implicit;
-        let Some((target_f,tn)) = is_valid_method(context, &target_m, target_f) else {
+        let Some((target_f, tn)) = is_valid_method(context, &target_m, target_f) else {
             if matches!(ekind, E::ImplicitUseFunKind::UseAlias { used: false }) {
                 let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
-                context.env.add_diag(diag!(
-                    UnusedItem::Alias,
-                    (method.loc, msg),
-                ))
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::Alias, (method.loc, msg),))
             }
             continue;
         };

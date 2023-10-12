@@ -619,9 +619,8 @@ impl DependencyGraph {
                     continue;
                 };
                 // graph g has a package with name pkg_name
-                let Some(( existing_graph, existing_pkg, existing_is_external)) =
-                    existing_pkg_info else
-                {
+                let Some((existing_graph, existing_pkg, existing_is_external)) = existing_pkg_info
+                else {
                     // first time this package was encountered
                     existing_pkg_info = Some((&graph_info.g, pkg, graph_info.is_external));
                     continue;
@@ -1234,7 +1233,7 @@ impl DependencyGraph {
             .filter(|scc| scc.len() != 1 || self.package_graph.contains_edge(scc[0], scc[0]));
 
         let Some(scc) = cyclic_components.next() else {
-            return Ok(())
+            return Ok(());
         };
 
         // Duplicate start of the node at end for display
@@ -1395,7 +1394,7 @@ impl<'a> fmt::Display for SubstTOML<'a> {
         let mut substs = self.0.iter();
 
         let Some((addr, subst)) = substs.next() else {
-            return f.write_str("{}")
+            return f.write_str("{}");
         };
 
         f.write_str("{ ")?;

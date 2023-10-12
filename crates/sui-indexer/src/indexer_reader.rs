@@ -7,12 +7,13 @@ use crate::{
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
         epoch::StoredEpochInfo,
+        events::StoredEvent,
         objects::{ObjectRefColumn, StoredObject},
         packages::StoredPackage,
         transactions::StoredTransaction,
-        tx_indices::TxDigest,
+        tx_indices::TxSequenceNumber,
     },
-    schema_v2::{checkpoints, display, epochs, objects, packages, transactions},
+    schema_v2::{checkpoints, display, epochs, events, objects, packages, transactions},
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
@@ -28,7 +29,10 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
-use sui_json_rpc_types::{CheckpointId, EpochInfo, SuiTransactionBlockResponse, TransactionFilter};
+use sui_json_rpc_types::{
+    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
+};
+use sui_types::event::EventID;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -41,6 +45,7 @@ use sui_types::{
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
+pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
 #[derive(Clone)]
 pub struct IndexerReader {
@@ -483,15 +488,25 @@ impl IndexerReader {
             .collect::<IndexerResult<Vec<_>>>()
     }
 
-    fn multi_get_transactions_with_digest_bytes(
+    fn multi_get_transactions_with_sequence_numbers(
         &self,
-        digests: Vec<Vec<u8>>,
+        tx_sequence_numbers: Vec<i64>,
+        // Some(true) for desc, Some(false) for asc, None for undefined order
+        is_descending: Option<bool>,
     ) -> Result<Vec<StoredTransaction>, IndexerError> {
-        self.run_query(|conn| {
-            transactions::table
-                .filter(transactions::transaction_digest.eq_any(digests))
-                .load::<StoredTransaction>(conn)
-        })
+        let mut query = transactions::table
+            .filter(transactions::tx_sequence_number.eq_any(tx_sequence_numbers))
+            .into_boxed();
+        match is_descending {
+            Some(true) => {
+                query = query.order(transactions::dsl::tx_sequence_number.desc());
+            }
+            Some(false) => {
+                query = query.order(transactions::dsl::tx_sequence_number.asc());
+            }
+            None => (),
+        }
+        self.run_query(|conn| query.load::<StoredTransaction>(conn))
     }
 
     pub async fn get_owned_objects_in_blocking_task(
@@ -529,6 +544,19 @@ impl IndexerReader {
             }
             query.load::<StoredObject>(conn)
         })
+    }
+
+    pub async fn query_events_in_blocking_task(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        self.spawn_blocking(move |this| {
+            this.query_events_impl(filter, cursor, limit, descending_order)
+        })
+        .await
     }
 
     pub async fn multi_get_objects_in_blocking_task(
@@ -616,8 +644,17 @@ impl IndexerReader {
         } else {
             None
         };
-
-        let main_where_clause = match filter {
+        let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
+            if is_descending {
+                format!("AND {TX_SEQUENCE_NUMBER_STR} < {}", cursor_tx_seq)
+            } else {
+                format!("AND {TX_SEQUENCE_NUMBER_STR} > {}", cursor_tx_seq)
+            }
+        } else {
+            "".to_string()
+        };
+        let order_str = if is_descending { "DESC" } else { "ASC" };
+        let (table_name, main_where_clause) = match filter {
             // Processed above
             Some(TransactionFilter::Checkpoint(seq)) => {
                 return self.query_transaction_blocks_by_checkpoint_impl(
@@ -633,58 +670,128 @@ impl IndexerReader {
                 package,
                 module,
                 function,
-            }) => match (module, function) {
-                (Some(module), Some(function)) => {
-                    let package_module_function = format!("{}::{}::{}", package, module, function);
-                    format!(
-                        "package_module_functions @> ARRAY['{}']",
-                        package_module_function
-                    )
+            }) => {
+                let package = Hex::encode(package.to_vec());
+                match (module, function) {
+                    (Some(module), Some(function)) => (
+                        "tx_calls".into(),
+                        format!(
+                            "package = '\\x{}'::bytea AND module = '{}' AND func = '{}'",
+                            package, module, function
+                        ),
+                    ),
+                    (Some(module), None) => (
+                        "tx_calls".into(),
+                        format!(
+                            "package = '\\x{}'::bytea AND module = '{}'",
+                            package, module
+                        ),
+                    ),
+                    (None, Some(_)) => {
+                        return Err(IndexerError::InvalidArgumentError(
+                            "Function cannot be present wihtout Module.".into(),
+                        ));
+                    }
+                    (None, None) => (
+                        "tx_calls".into(),
+                        format!("package = '\\x{}'::bytea", package),
+                    ),
                 }
-                (Some(module), None) => {
-                    let package_module = format!("{}::{}", package, module);
-                    format!("package_modules @> ARRAY['{}']", package_module)
-                }
-                (None, Some(_)) => {
-                    return Err(IndexerError::InvalidArgumentError(
-                        "Function can be present wihtout Module.".into(),
-                    ));
-                }
-                (None, None) => {
-                    let package = Hex::encode(package.to_vec());
-                    format!("packages @> ARRAY['\\x{}'::bytea]", package)
-                }
-            },
+            }
             Some(TransactionFilter::InputObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
-                format!("input_objects @> ARRAY['\\x{}'::bytea]", object_id)
+                (
+                    "tx_input_objects".into(),
+                    format!("object_id = '\\x{}'::bytea", object_id),
+                )
             }
             Some(TransactionFilter::ChangedObject(object_id)) => {
                 let object_id = Hex::encode(object_id.to_vec());
-                format!("changed_objects @> ARRAY['\\x{}'::bytea]", object_id)
+                (
+                    "tx_changed_objects".into(),
+                    format!("object_id = '\\x{}'::bytea", object_id),
+                )
             }
             Some(TransactionFilter::FromAddress(from_address)) => {
                 let from_address = Hex::encode(from_address.to_vec());
-                format!("senders @> ARRAY['\\x{}'::bytea]", from_address)
+                (
+                    "tx_senders".into(),
+                    format!("sender = '\\x{}'::bytea", from_address),
+                )
             }
             Some(TransactionFilter::ToAddress(to_address)) => {
                 let to_address = Hex::encode(to_address.to_vec());
-                format!("recipients @> ARRAY['\\x{}'::bytea]", to_address)
+                (
+                    "tx_recipients".into(),
+                    format!("recipient = '\\x{}'::bytea", to_address),
+                )
             }
             Some(TransactionFilter::FromAndToAddress { from, to }) => {
                 let from_address = Hex::encode(from.to_vec());
                 let to_address = Hex::encode(to.to_vec());
-                format!(
-                    "(senders @> ARRAY['\\x{}'::bytea] AND recipients @> ARRAY['\\x{}'::bytea])",
-                    from_address, to_address
-                )
+                // Need to remove ambiguities for tx_sequence_number column
+                let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
+                    if is_descending {
+                        format!(
+                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} < {}",
+                            cursor_tx_seq
+                        )
+                    } else {
+                        format!(
+                            "AND tx_senders.{TX_SEQUENCE_NUMBER_STR} > {}",
+                            cursor_tx_seq
+                        )
+                    }
+                } else {
+                    "".to_string()
+                };
+                let inner_query = format!(
+                    "(SELECT tx_senders.{TX_SEQUENCE_NUMBER_STR} \
+                    FROM tx_senders \
+                    JOIN tx_recipients \
+                    ON tx_senders.{TX_SEQUENCE_NUMBER_STR} = tx_recipients.{TX_SEQUENCE_NUMBER_STR} \
+                    WHERE tx_senders.sender = '\\x{}'::BYTEA \
+                    AND tx_recipients.recipient = '\\x{}'::BYTEA \
+                    {} \
+                    ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
+                    LIMIT {}) AS inner_query
+                    ",
+                    from_address,
+                    to_address,
+                    cursor_clause,
+                    order_str,
+                    limit,
+                );
+                (inner_query, "1 = 1".into())
             }
             Some(TransactionFilter::FromOrToAddress { addr }) => {
                 let address = Hex::encode(addr.to_vec());
-                format!(
-                    "(senders @> ARRAY['\\x{}'::bytea] OR recipients @> ARRAY['\\x{}'::bytea])",
-                    address, address
-                )
+                let inner_query = format!(
+                    "( \
+                        ( \
+                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_senders \
+                            WHERE sender = '\\x{}'::BYTEA {} \
+                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
+                            LIMIT {} \
+                        ) \
+                        UNION \
+                        ( \
+                            SELECT {TX_SEQUENCE_NUMBER_STR} FROM tx_recipients \
+                            WHERE recipient = '\\x{}'::BYTEA {} \
+                            ORDER BY {TX_SEQUENCE_NUMBER_STR} {} \
+                            LIMIT {} \
+                        ) \
+                    ) AS combined",
+                    address,
+                    cursor_clause,
+                    order_str,
+                    limit,
+                    address,
+                    cursor_clause,
+                    order_str,
+                    limit,
+                );
+                (inner_query, "1 = 1".into())
             }
             Some(
                 TransactionFilter::TransactionKind(_) | TransactionFilter::TransactionKindIn(_),
@@ -695,35 +802,32 @@ impl IndexerReader {
             }
             None => {
                 // apply no filter
-                "1 = 1".into()
+                ("transactions".into(), "1 = 1".into())
             }
         };
-        let cursor_clause = if let Some(cursor_tx_seq) = cursor_tx_seq {
-            if is_descending {
-                format!("AND {TX_SEQUENCE_NUMBER_STR} <= {}", cursor_tx_seq)
-            } else {
-                format!("AND {TX_SEQUENCE_NUMBER_STR} >= {}", cursor_tx_seq)
-            }
-        } else {
-            "".to_string()
-        };
+
         let query = format!(
-            "SELECT {TRANSACTION_DIGEST_STR} FROM tx_indices WHERE {} {} ORDER BY {TX_SEQUENCE_NUMBER_STR} {} LIMIT {}",
+            "SELECT {TX_SEQUENCE_NUMBER_STR} FROM {} WHERE {} {} ORDER BY {TX_SEQUENCE_NUMBER_STR} {} LIMIT {}",
+            table_name,
             main_where_clause,
             cursor_clause,
-            if is_descending { "DESC" } else { "ASC" },
+            order_str,
             limit,
         );
 
-        tracing::debug!("query_transaction_blocks: {}", query);
+        tracing::debug!("query transaction blocks: {}", query);
 
-        let tx_digests = self
-            .run_query(|conn| diesel::sql_query(query.clone()).load::<TxDigest>(conn))?
+        let tx_sequence_numbers = self
+            .run_query(|conn| diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn))?
             .into_iter()
-            .map(|td| td.transaction_digest)
+            .map(|tsn| tsn.tx_sequence_number)
             .collect::<Vec<_>>();
 
-        self.multi_get_transaction_block_response_by_digest_bytes(tx_digests, options)
+        self.multi_get_transaction_block_response_by_sequence_numbers(
+            tx_sequence_numbers,
+            options,
+            Some(is_descending),
+        )
     }
 
     fn multi_get_transaction_block_response_impl(
@@ -735,12 +839,15 @@ impl IndexerReader {
         self.stored_transaction_to_transaction_block(stored_txes, options)
     }
 
-    fn multi_get_transaction_block_response_by_digest_bytes(
+    fn multi_get_transaction_block_response_by_sequence_numbers(
         &self,
-        digests: Vec<Vec<u8>>,
+        tx_sequence_numbers: Vec<i64>,
         options: sui_json_rpc_types::SuiTransactionBlockResponseOptions,
+        // Some(true) for desc, Some(false) for asc, None for undefined order
+        is_descending: Option<bool>,
     ) -> Result<Vec<sui_json_rpc_types::SuiTransactionBlockResponse>, IndexerError> {
-        let stored_txes = self.multi_get_transactions_with_digest_bytes(digests)?;
+        let stored_txes: Vec<StoredTransaction> =
+            self.multi_get_transactions_with_sequence_numbers(tx_sequence_numbers, is_descending)?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
     }
 
@@ -786,6 +893,180 @@ impl IndexerReader {
             })
             .collect::<Result<Vec<_>, _>>()
             .map_err(Into::into)
+    }
+
+    fn query_events_by_tx_digest_query(
+        &self,
+        tx_digest: TransactionDigest,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<String> {
+        let cursor = if let Some(cursor) = cursor {
+            if cursor.tx_digest != tx_digest {
+                return Err(IndexerError::InvalidArgumentError(
+                    "Cursor tx_digest does not match the tx_digest in the query.".into(),
+                ));
+            }
+            if descending_order {
+                format!("e.{EVENT_SEQUENCE_NUMBER_STR} < {}", cursor.event_seq)
+            } else {
+                format!("e.{EVENT_SEQUENCE_NUMBER_STR} > {}", cursor.event_seq)
+            }
+        } else if descending_order {
+            format!("e.{EVENT_SEQUENCE_NUMBER_STR} <= {}", i64::MAX)
+        } else {
+            format!("e.{EVENT_SEQUENCE_NUMBER_STR} >= {}", 0)
+        };
+
+        let order_clause = if descending_order { "DESC" } else { "ASC" };
+        Ok(format!(
+            "SELECT * \
+            FROM EVENTS e \
+            JOIN TRANSACTIONS t \
+            ON t.tx_sequence_number = e.tx_sequence_number \
+            AND t.transaction_digest = '\\x{}'::bytea \
+            WHERE {cursor} \
+            ORDER BY e.{EVENT_SEQUENCE_NUMBER_STR} {order_clause} \
+            LIMIT {limit}
+            ",
+            Hex::encode(tx_digest.into_inner()),
+        ))
+    }
+
+    fn query_events_impl(
+        &self,
+        filter: EventFilter,
+        cursor: Option<EventID>,
+        limit: usize,
+        descending_order: bool,
+    ) -> IndexerResult<Vec<SuiEvent>> {
+        let (tx_seq, event_seq) = if let Some(cursor) = cursor.clone() {
+            let EventID {
+                tx_digest,
+                event_seq,
+            } = cursor;
+            (
+                self.run_query(|conn| {
+                    transactions::dsl::transactions
+                        .select(transactions::tx_sequence_number)
+                        .filter(
+                            transactions::dsl::transaction_digest
+                                .eq(tx_digest.into_inner().to_vec()),
+                        )
+                        .first::<i64>(conn)
+                })?,
+                event_seq,
+            )
+        } else if descending_order {
+            let max_tx_seq: i64 = self.run_query(|conn| {
+                events::dsl::events
+                    .select(events::tx_sequence_number)
+                    .order(events::dsl::tx_sequence_number.desc())
+                    .first::<i64>(conn)
+            })?;
+            (max_tx_seq + 1, 0)
+        } else {
+            (-1, 0)
+        };
+
+        let query = if let EventFilter::Sender(sender) = &filter {
+            // Need to remove ambiguities for tx_sequence_number column
+            let cursor_clause = if descending_order {
+                format!("(e.{TX_SEQUENCE_NUMBER_STR} < {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+            } else {
+                format!("(e.{TX_SEQUENCE_NUMBER_STR} > {} OR (e.{TX_SEQUENCE_NUMBER_STR} = {} AND e.{EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+            };
+            let order_clause = if descending_order {
+                format!("e.{TX_SEQUENCE_NUMBER_STR} DESC, e.{EVENT_SEQUENCE_NUMBER_STR} DESC")
+            } else {
+                format!("e.{TX_SEQUENCE_NUMBER_STR} ASC, e.{EVENT_SEQUENCE_NUMBER_STR} ASC")
+            };
+            format!(
+                "( \
+                    SELECT *
+                    FROM tx_senders s
+                    JOIN events e
+                    ON e.tx_sequence_number = s.tx_sequence_number
+                    AND s.sender = '\\x{}'::bytea
+                    WHERE {} \
+                    ORDER BY {} \
+                    LIMIT {}
+                )",
+                Hex::encode(sender.to_vec()),
+                cursor_clause,
+                order_clause,
+                limit,
+            )
+        } else if let EventFilter::Transaction(tx_digest) = filter {
+            self.query_events_by_tx_digest_query(tx_digest, cursor, limit, descending_order)?
+        } else {
+            let main_where_clause = match filter {
+                EventFilter::Package(package_id) => {
+                    format!("package = '\\x{}'::bytea", package_id.to_hex())
+                }
+                EventFilter::MoveModule { package, module } => {
+                    format!(
+                        "package = '\\x{}'::bytea AND module = '{}'",
+                        package.to_hex(),
+                        module,
+                    )
+                }
+                EventFilter::MoveEventType(struct_tag) => {
+                    format!("event_type = '{}'", struct_tag)
+                }
+                EventFilter::MoveEventModule { package, module } => {
+                    let package_module_prefix = format!("{}::{}", package.to_hex_literal(), module);
+                    format!("event_type LIKE '{package_module_prefix}::%'")
+                }
+                EventFilter::Sender(_) => {
+                    // Processed above
+                    unreachable!()
+                }
+                EventFilter::Transaction(_) => {
+                    // Processed above
+                    unreachable!()
+                }
+                EventFilter::MoveEventField { .. }
+                | EventFilter::All(_)
+                | EventFilter::Any(_)
+                | EventFilter::And(_, _)
+                | EventFilter::Or(_, _)
+                | EventFilter::TimeRange { .. } => {
+                    return Err(IndexerError::NotSupportedError(
+                        "This type of EventFilter is not supported.".into(),
+                    ));
+                }
+            };
+
+            let cursor_clause = if descending_order {
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} < {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} < {}))", tx_seq, tx_seq, event_seq)
+            } else {
+                format!("AND ({TX_SEQUENCE_NUMBER_STR} > {} OR ({TX_SEQUENCE_NUMBER_STR} = {} AND {EVENT_SEQUENCE_NUMBER_STR} > {}))", tx_seq, tx_seq, event_seq)
+            };
+            let order_clause = if descending_order {
+                format!("{TX_SEQUENCE_NUMBER_STR} DESC, {EVENT_SEQUENCE_NUMBER_STR} DESC")
+            } else {
+                format!("{TX_SEQUENCE_NUMBER_STR} ASC, {EVENT_SEQUENCE_NUMBER_STR} ASC")
+            };
+
+            format!(
+                "
+                    SELECT * FROM events \
+                    WHERE {} {} \
+                    ORDER BY {} \
+                    LIMIT {}
+                ",
+                main_where_clause, cursor_clause, order_clause, limit,
+            )
+        };
+        tracing::debug!("query events: {}", query);
+        let stored_events =
+            self.run_query(|conn| diesel::sql_query(query).load::<StoredEvent>(conn))?;
+        stored_events
+            .into_iter()
+            .map(|se| se.try_into_sui_event(self))
+            .collect()
     }
 
     pub async fn get_transaction_events_in_blocking_task(
@@ -854,7 +1135,7 @@ impl IndexerReader {
             .map(StoredObject::try_into_expectant_dynamic_field_info)
             .collect::<Result<Vec<_>, _>>()?;
 
-        for mut df in dynamic_fields.iter_mut() {
+        for df in dynamic_fields.iter_mut() {
             if let Some(obj_ref) = object_refs.get(&df.object_id) {
                 df.version = obj_ref.1;
                 df.digest = obj_ref.2;

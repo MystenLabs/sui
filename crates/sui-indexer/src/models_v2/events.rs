@@ -10,6 +10,7 @@ use move_core_types::value::MoveStruct;
 
 use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::object::{MoveObject, ObjectFormatOptions};
 use sui_types::parse_sui_struct_tag;
@@ -18,18 +19,37 @@ use crate::errors::IndexerError;
 use crate::schema_v2::events;
 use crate::types_v2::IndexedEvent;
 
-#[derive(Queryable, Insertable, Debug, Clone)]
+#[derive(QueryableByName, Insertable, Debug, Clone)]
 #[diesel(table_name = events)]
 pub struct StoredEvent {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub tx_sequence_number: i64,
+
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub event_sequence_number: i64,
+
+    #[diesel(sql_type = diesel::sql_types::Bytea)]
     pub transaction_digest: Vec<u8>,
+
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub checkpoint_sequence_number: i64,
+
+    #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
+
+    #[diesel(sql_type = diesel::sql_types::Bytea)]
     pub package: Vec<u8>,
+
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub module: String,
+
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub event_type: String,
+
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
+
+    #[diesel(sql_type = diesel::sql_types::Bytea)]
     pub bcs: Vec<u8>,
 }
 
@@ -95,12 +115,13 @@ impl StoredEvent {
         let move_object = MoveStruct::simple_deserialize(&self.bcs, &layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let parsed_json = SuiMoveStruct::from(move_object).to_json_value();
-        let tx_digest = bcs::from_bytes(&self.transaction_digest).map_err(|e| {
-            IndexerError::SerdeError(format!(
-                "Failed to parse transaction digest: {:?}, error: {}",
-                self.transaction_digest, e
-            ))
-        })?;
+        let tx_digest =
+            TransactionDigest::try_from(self.transaction_digest.as_slice()).map_err(|e| {
+                IndexerError::SerdeError(format!(
+                    "Failed to parse transaction digest: {:?}, error: {}",
+                    self.transaction_digest, e
+                ))
+            })?;
         Ok(SuiEvent {
             id: EventID {
                 tx_digest,

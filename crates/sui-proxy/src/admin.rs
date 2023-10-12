@@ -209,8 +209,12 @@ pub fn create_server_cert_default_allow(
 pub fn create_server_cert_enforce_peer(
     peer_config: PeerValidationConfig,
 ) -> Result<(ServerConfig, Option<SuiNodeProvider>), sui_tls::rustls::Error> {
-    let (Some(certificate_path), Some(private_key_path)) = (peer_config.certificate_file, peer_config.private_key) else {
-        return Err(sui_tls::rustls::Error::General("missing certs to initialize server".into()));
+    let (Some(certificate_path), Some(private_key_path)) =
+        (peer_config.certificate_file, peer_config.private_key)
+    else {
+        return Err(sui_tls::rustls::Error::General(
+            "missing certs to initialize server".into(),
+        ));
     };
     let allower = SuiNodeProvider::new(peer_config.url, peer_config.interval);
     allower.poll_peer_list();

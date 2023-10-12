@@ -356,7 +356,7 @@ impl IndexStore {
                         obj_id, input_coins, digest
                     )
                 });
-                let map = balance_changes.entry(*owner).or_insert(HashMap::new());
+                let map = balance_changes.entry(*owner).or_default();
                 let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
                     num_coins: 0,
                     balance: 0
@@ -398,7 +398,7 @@ impl IndexStore {
                     obj_id, written_coins, digest
                 )
             });
-            let map = balance_changes.entry(*owner).or_insert(HashMap::new());
+            let map = balance_changes.entry(*owner).or_default();
             let entry = map.entry(coin_type_tag.clone()).or_insert(TotalBalance {
                 num_coins: 0,
                 balance: 0

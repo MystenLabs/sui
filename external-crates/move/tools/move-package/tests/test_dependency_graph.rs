@@ -129,7 +129,7 @@ fn lock_file_missing_dependency() {
         pkg,
         Symbol::from("Root"),
         &mut File::open(&commit).expect("Opening empty lock file"),
-        None
+        None,
     ) else {
         panic!("Expected reading dependencies to fail.");
     };
@@ -330,7 +330,7 @@ fn merge_detached() {
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
-        &BTreeMap::new()
+        &BTreeMap::new(),
     ) else {
         panic!("Inner's root is not part of outer's graph, so this should fail");
     };
@@ -365,7 +365,7 @@ fn merge_after_calculating_always_deps() {
         dep_graphs,
         &DependencyKind::default(),
         &BTreeMap::new(),
-        &BTreeMap::new()
+        &BTreeMap::new(),
     ) else {
         panic!("Outer's always deps have already been calculated so this should fail");
     };
@@ -515,7 +515,7 @@ fn merge_overlapping_different_deps() {
         dep_graphs,
         &DependencyKind::default(),
         dependencies,
-        &BTreeMap::new()
+        &BTreeMap::new(),
     ) else {
         panic!("Outer and inner mention package A which has different dependencies in both.");
     };

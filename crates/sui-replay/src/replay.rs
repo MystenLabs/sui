@@ -1019,7 +1019,9 @@ impl LocalExec {
             return Ok(Some(obj.clone()));
         }
 
-        let Some(o) =  self.download_latest_object(obj_id)? else { return Ok(None) };
+        let Some(o) = self.download_latest_object(obj_id)? else {
+            return Ok(None);
+        };
 
         if o.is_package() {
             assert!(
@@ -1808,7 +1810,10 @@ impl ResourceResolver for LocalExec {
         ) -> SuiResult<Option<Vec<u8>>> {
             // If package not present fetch it from the network or some remote location
             let Some(object) = self_.get_or_download_object(
-                &ObjectID::from(*address),false /* we expect a Move obj*/)? else {
+                &ObjectID::from(*address),
+                false, /* we expect a Move obj*/
+            )?
+            else {
                 return Ok(None);
             };
 

@@ -22,10 +22,12 @@
 		"build": "tsc --build"
 	},
 	"devDependencies": {
+		"@types/postcss-prefix-selector": "^1.16.1",
 		"@vanilla-extract/esbuild-plugin": "^2.3.0",
 		"autoprefixer": "^10.4.14",
 		"esbuild": "^0.17.6",
-		"postcss": "^8.4.26",
+		"postcss": "^8.4.31",
+		"postcss-prefix-selector": "^1.16.0",
 		"typescript": "^5.1.6"
 	},
 	"dependencies": {

@@ -512,8 +512,9 @@ async fn test_per_object_overload() {
         .unwrap();
     let (shared_counter_ref, owner) = create_counter_effects.created()[0];
     let Owner::Shared {
-        initial_shared_version: shared_counter_initial_version
-    } = owner else {
+        initial_shared_version: shared_counter_initial_version,
+    } = owner
+    else {
         panic!("Not a shared object! {:?} {:?}", shared_counter_ref, owner);
     };
 

@@ -465,7 +465,7 @@ impl WorkerNodeDetails {
                 self.worker_cache.clone(),
                 client,
                 &worker_store,
-                TrivialTransactionValidator::default(),
+                TrivialTransactionValidator,
                 None,
             )
             .await
@@ -512,6 +512,7 @@ struct AuthorityDetailsInternal {
     workers: HashMap<WorkerId, WorkerNodeDetails>,
 }
 
+#[allow(clippy::arc_with_non_send_sync)]
 impl AuthorityDetails {
     pub fn new(
         id: usize,
