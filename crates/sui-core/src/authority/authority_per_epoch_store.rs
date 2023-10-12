@@ -1795,6 +1795,7 @@ impl AuthorityPerEpochStore {
         self.db_batch()
     }
 
+    #[instrument(level = "debug", skip_all)]
     pub(crate) async fn process_consensus_transactions_and_commit_boundary<
         'a,
         C: CheckpointServiceNotify,
@@ -1940,6 +1941,8 @@ impl AuthorityPerEpochStore {
     /// - Verify and initialize the state to execute the certificates.
     ///   Return VerifiedCertificates for each executable certificate
     /// - Or update the state for checkpoint or epoch change protocol.
+    #[instrument(level = "debug", skip_all)]
+    #[allow(clippy::type_complexity)]
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
@@ -2090,6 +2093,7 @@ impl AuthorityPerEpochStore {
         Ok(ret)
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         batch: &mut DBBatch,
