@@ -3,7 +3,7 @@
 
 import { expect, test } from './fixtures';
 
-test.only('do storage migration', async ({ page, extensionUrl }) => {
+test('do storage migration', async ({ page, extensionUrl }) => {
 	await page.goto(extensionUrl);
 	await page.evaluate(async () => {
 		(globalThis as any).chrome.storage.local.set({
