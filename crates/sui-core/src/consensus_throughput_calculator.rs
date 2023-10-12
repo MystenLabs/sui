@@ -185,12 +185,12 @@ impl ConsensusThroughputProfiler {
         Self {
             throughput_profile_update_interval,
             throughput_profile_cool_down_threshold,
-            profile_ranges: Default::default(),
             last_throughput_profile: ArcSwap::from_pointee(ThroughputProfileEntry {
                 profile: profile_ranges.highest_profile(),
                 timestamp: 0,
                 throughput: 0,
             }), // assume high throughput so the node is more conservative on bootstrap
+            profile_ranges,
             metrics,
             calculator,
         }
