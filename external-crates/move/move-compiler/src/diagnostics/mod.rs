@@ -161,7 +161,9 @@ fn render_diagnostics(
     file_mapping: &FileMapping,
     diags: Diagnostics,
 ) {
-    let Diagnostics(Some(mut diags)) = diags else { return };
+    let Diagnostics(Some(mut diags)) = diags else {
+        return;
+    };
     diags.diagnostics.sort_by(|e1, e2| {
         let loc1: &Loc = &e1.primary_label.0;
         let loc2: &Loc = &e2.primary_label.0;
@@ -275,7 +277,10 @@ impl Diagnostics {
             diagnostics,
             filtered_source_diagnostics: _,
             severity_count,
-        })) = other else { return };
+        })) = other
+        else {
+            return;
+        };
         if self.0.is_none() {
             self.0 = Some(Diagnostics_::default())
         }
@@ -320,7 +325,9 @@ impl Diagnostics {
     }
 
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
-        let Self(Some(inner)) = self else { return false };
+        let Self(Some(inner)) = self else {
+            return false;
+        };
         inner
             .diagnostics
             .iter()
@@ -331,7 +338,9 @@ impl Diagnostics {
     /// have a given prefix (first value returned) and how many different categories of diags were
     /// filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
-        let Self(Some(inner)) = self else { return (0,0) };
+        let Self(Some(inner)) = self else {
+            return (0, 0);
+        };
         let mut filtered_diags_num = 0;
         let mut filtered_categories = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {

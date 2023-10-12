@@ -227,7 +227,9 @@ impl BorrowState {
     }
 
     fn mark_mutably_used(&mut self, id: RefID) {
-        let Some(exps) = self.id_to_exp.get(&id) else {return};
+        let Some(exps) = self.id_to_exp.get(&id) else {
+            return;
+        };
         let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
             &mut RefCell::borrow_mut(&self.mutably_used);
         for e in exps {
