@@ -15,6 +15,7 @@ use std::num::NonZeroUsize;
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
+use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::{
@@ -28,6 +29,7 @@ use sui_types::{
     messages_checkpoint::{
         CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
     },
+    object::Object,
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
@@ -100,7 +102,22 @@ where
         Self::new_with_network_config(&config, rng)
     }
 
-    pub fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
+    pub fn new_with_protocol_version_and_objects(
+        mut rng: R,
+        protocol_version: ProtocolVersion,
+        objects: Vec<Object>,
+    ) -> Self {
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(1)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
+            .with_objects(objects)
+            .build();
+        Self::new_with_network_config(&config, rng)
+    }
+
+    fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
         let keystore = KeyStore::from_newtork_config(config);
         let store = InMemoryStore::new(&config.genesis);
         let checkpoint_builder = CheckpointBuilder::new(config.genesis.checkpoint());
@@ -133,13 +150,6 @@ impl<R> Simulacrum<R> {
     /// to be included in the next checkpoint (the next time `create_checkpoint` is called) and the
     /// corresponding TransactionEffects are returned.
     pub fn execute_transaction(
-        &mut self,
-        transaction: Transaction,
-    ) -> anyhow::Result<TransactionEffects> {
-        Ok(self.execute_txn_impl(transaction)?.0)
-    }
-
-    pub fn execute_txn_impl(
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
@@ -191,6 +201,7 @@ impl<R> Simulacrum<R> {
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())
             .expect("advancing the clock cannot fail")
+            .0
     }
 
     /// Advances the epoch.
@@ -315,7 +326,7 @@ impl<R> Simulacrum<R> {
             vec![key],
         );
 
-        self.execute_transaction(tx)
+        self.execute_transaction(tx).map(|x| x.0)
     }
 }
 
@@ -486,7 +497,7 @@ mod tests {
         let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
         let tx = Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![key]);
 
-        let effects = sim.execute_transaction(tx).unwrap();
+        let effects = sim.execute_transaction(tx).unwrap().0;
         let gas_summary = effects.gas_cost_summary();
         let gas_paid = gas_summary.net_gas_usage();
 
