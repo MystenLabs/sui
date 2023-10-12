@@ -381,8 +381,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
     use T::UnannotatedExp_ as E;
 
     let T::Exp {
-        ty,
-        exp: sp!(eloc, e_),
+        exp: sp!(eloc, e_), ..
     } = e;
 
     macro_rules! value_report {
@@ -405,16 +404,14 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 context.report_value_error(test_control_flow);
                 return already_reported(*eloc);
             };
-            if !matches!(ty, sp!(_, N::Type_::Unit)) {
-                if let (Some(cflow), Some(aflow)) = (value(context, conseq), value(context, alt)) {
-                    if cflow.value == aflow.value {
-                        context.report_value_error(sp(*eloc, cflow.value));
-                    } else {
-                        context.report_value_error(cflow);
-                        context.report_value_error(aflow);
-                    }
-                    return already_reported(*eloc);
+            if let (Some(cflow), Some(aflow)) = (value(context, conseq), value(context, alt)) {
+                if cflow.value == aflow.value {
+                    context.report_value_error(sp(*eloc, cflow.value));
+                } else {
+                    context.report_value_error(cflow);
+                    context.report_value_error(aflow);
                 }
+                return already_reported(*eloc);
             }
             None
         }
@@ -434,7 +431,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
 
         E::ExpList(_) => {
             use T::UnannotatedExp_ as TE;
-            if let TE::ExpList(ref items) = e.exp.value {
+            if let TE::ExpList(items) = &e.exp.value {
                 for item in items {
                     match item {
                         T::ExpListItem::Single(exp, _) => {
