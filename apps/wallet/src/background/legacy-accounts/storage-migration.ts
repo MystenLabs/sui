@@ -51,7 +51,7 @@ export function clearStatus() {
 	statusCache = null;
 }
 
-export async function makeMnemonicAccounts(password: string, vault: LegacyVault) {
+async function makeMnemonicAccounts(password: string, vault: LegacyVault) {
 	const currentMnemonicIndex = (await getFromLocalStorage<number>('last_account_index', 0)) || 0;
 	const mnemonicSource = await MnemonicAccountSource.createNew({
 		password,

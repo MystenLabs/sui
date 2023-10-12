@@ -13,11 +13,9 @@ import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/s
 
 import { getFromLocalStorage } from '../storage-utils';
 
-export const LATEST_VAULT_VERSION = 2;
+type StoredData = string | { v: 1 | 2; data: string };
 
-export type StoredData = string | { v: 1 | 2; data: string };
-
-export type V2DecryptedDataType = {
+type V2DecryptedDataType = {
 	entropy: string;
 	importedKeypairs: ExportedKeypair[];
 	qredoTokens?: Record<string, string>;

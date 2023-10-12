@@ -37,7 +37,7 @@ export async function getPendingRequest(requestIdentity: QredoConnectIdentity | 
 	);
 }
 
-export async function storePendingRequest(request: QredoConnectPendingRequest) {
+async function storePendingRequest(request: QredoConnectPendingRequest) {
 	const allPendingRequests = await getAllPendingRequests();
 	const existingIndex = allPendingRequests.findIndex((aRequest) => aRequest.id === request.id);
 	if (existingIndex >= 0) {
