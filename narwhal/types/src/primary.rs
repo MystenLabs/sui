@@ -1251,7 +1251,7 @@ pub enum SignatureVerificationState {
     VerifiedDirectly(AggregateSignatureBytes),
     // This state occurs when the cert was a parent of another fetched certificate
     // that was verified directly, then this certificate is verified indirectly.
-    VerifiedIndirectly,
+    VerifiedIndirectly(AggregateSignatureBytes),
     // This state occurs only for genesis certificates which always has valid
     // signatures bytes but the bytes are garbage so we don't mark them as verified.
     Genesis,
@@ -1282,9 +1282,9 @@ impl CertificateAPI for CertificateV2 {
         match &self.signature_verification_state {
             SignatureVerificationState::VerifiedDirectly(bytes)
             | SignatureVerificationState::Unverified(bytes)
+            | SignatureVerificationState::VerifiedIndirectly(bytes)
             | SignatureVerificationState::Unsigned(bytes) => Some(bytes),
-            SignatureVerificationState::VerifiedIndirectly
-            | SignatureVerificationState::Genesis => None,
+            SignatureVerificationState::Genesis => None,
         }
     }
 
@@ -1493,7 +1493,7 @@ impl CertificateV2 {
 
     fn verify_signature(mut self, pks: Vec<PublicKey>) -> DagResult<Certificate> {
         let aggregrate_signature_bytes = match self.signature_verification_state {
-            SignatureVerificationState::VerifiedIndirectly
+            SignatureVerificationState::VerifiedIndirectly(_)
             | SignatureVerificationState::VerifiedDirectly(_)
             | SignatureVerificationState::Genesis => return Ok(Certificate::V2(self)),
             SignatureVerificationState::Unverified(ref bytes) => bytes,

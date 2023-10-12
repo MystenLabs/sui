@@ -65,9 +65,8 @@ use types::{
     now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
     FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SignatureVerificationState, Vote, VoteInfoAPI, WorkerOthersBatchMessage, WorkerOwnBatchMessage,
-    WorkerToPrimary, WorkerToPrimaryServer,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
+    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
 #[cfg(any(test))]
@@ -979,23 +978,6 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .map_err(|e| anemo::rpc::Status::from_error(Box::new(e)))?
             {
                 Some(cert) => {
-                    if self.protocol_config.narwhal_certificate_v2() {
-                        // We only serve certificates that have we have verified
-                        // directly
-                        if !matches!(
-                            cert.signature_verification_state(),
-                            SignatureVerificationState::VerifiedDirectly(_)
-                        ) {
-                            warn!(
-                                "Certificate {:?} was requested but was not served because it had {:?} signature state.",
-                                cert.digest(), cert.signature_verification_state()
-                            );
-                            self.metrics
-                                .indirectly_verified_certificates_not_served
-                                .inc();
-                            continue;
-                        }
-                    }
                     response.certificates.push(cert);
                     let next_round =
                         self.find_next_round(*origin, round, skip_rounds.get(origin).unwrap())?;

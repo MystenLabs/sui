@@ -99,6 +99,7 @@ impl VotesAggregator {
                     return Ok(None);
                 }
                 Ok(_) => {
+                    // TODO: Move this block and the AggregateSignature verification into Certificate
                     if self.protocol_config.narwhal_certificate_v2() {
                         cert.set_signature_verification_state(
                             SignatureVerificationState::VerifiedDirectly(

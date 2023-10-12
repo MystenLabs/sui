@@ -332,8 +332,6 @@ pub struct PrimaryMetrics {
     pub fetched_certificates_verified_directly: IntCounter,
     // Total number of fetched certificates verified indirectly.
     pub fetched_certificates_verified_indirectly: IntCounter,
-    /// Total number of indirectly verifed certificates that were not served.
-    pub indirectly_verified_certificates_not_served: IntCounter,
 }
 
 impl PrimaryMetrics {
@@ -527,11 +525,6 @@ impl PrimaryMetrics {
             fetched_certificates_verified_indirectly: register_int_counter_with_registry!(
                 "fetched_certificates_verified_indirectly",
                 "Total number of fetched certificates verified indirectly.",
-                registry
-            ).unwrap(),
-            indirectly_verified_certificates_not_served: register_int_counter_with_registry!(
-                "indirectly_verified_certificates_not_served",
-                "Total number of indirectly verified certificates that were not served.",
                 registry
             ).unwrap(),
         }

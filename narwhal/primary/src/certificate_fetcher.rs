@@ -572,7 +572,11 @@ async fn process_certificates_v2_helper(
         if !all_parents.contains(&c.digest()) {
             leaf_certs.push((idx, c.clone()));
         } else {
-            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly)
+            c.set_signature_verification_state(SignatureVerificationState::VerifiedIndirectly(
+                c.aggregated_signature()
+                    .ok_or(DagError::InvalidSignature)?
+                    .clone(),
+            ))
         }
     }
     let leaves_count = leaf_certs.len() as u64;

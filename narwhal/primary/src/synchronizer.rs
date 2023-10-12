@@ -172,7 +172,7 @@ impl Inner {
             && !matches!(
                 certificate.signature_verification_state(),
                 SignatureVerificationState::VerifiedDirectly(_)
-                    | SignatureVerificationState::VerifiedIndirectly
+                    | SignatureVerificationState::VerifiedIndirectly(_)
                     | SignatureVerificationState::Genesis
             )
         {
@@ -359,7 +359,7 @@ impl Synchronizer {
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
-            protocol_config,
+            protocol_config: protocol_config.clone(),
             worker_cache,
             gc_depth,
             gc_round: AtomicU64::new(gc_round),
@@ -482,6 +482,17 @@ impl Synchronizer {
                         debug!("Synchronizer is shutting down.");
                         return;
                     };
+
+                    if protocol_config.narwhal_certificate_v2() {
+                        assert!(
+                            matches!(
+                                certificate.signature_verification_state(),
+                                SignatureVerificationState::VerifiedDirectly(_)
+                                | SignatureVerificationState::VerifiedIndirectly(_)
+                            ),
+                        "Never accept certificates that have not been verified either directly or indirectly.");
+                    }
+
                     let Some(inner) = weak_inner.upgrade() else {
                         debug!("Synchronizer is shutting down.");
                         return;

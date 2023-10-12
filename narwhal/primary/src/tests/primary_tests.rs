@@ -1202,9 +1202,8 @@ async fn test_fetch_certificates_v2_handler() {
         for j in 0..=i {
             let mut cert = certificates[i + j * total_authorities].clone();
             assert_eq!(&cert.header().author(), authorities.last().unwrap());
-            if i != 0 {
-                // Manually writing the certificates to store so we can consider them verified
-                // directly
+            if i == 3 && j == 3 {
+                // Simulating only 1 directly verified certificate (Auth 3 Round 4) being stored.
                 cert.set_signature_verification_state(
                     SignatureVerificationState::VerifiedDirectly(
                         cert.aggregated_signature()
@@ -1215,7 +1214,11 @@ async fn test_fetch_certificates_v2_handler() {
             } else {
                 // Simulating some indirectly verified certificates being stored.
                 cert.set_signature_verification_state(
-                    SignatureVerificationState::VerifiedIndirectly,
+                    SignatureVerificationState::VerifiedIndirectly(
+                        cert.aggregated_signature()
+                            .expect("Invalid Signature")
+                            .clone(),
+                    ),
                 );
             }
             certificate_store
@@ -1230,7 +1233,7 @@ async fn test_fetch_certificates_v2_handler() {
             0,
             vec![vec![], vec![], vec![], vec![]],
             20,
-            vec![1, 1, 1, 2, 2, 2, 3, 3, 4],
+            vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4],
         ),
         (
             0,
@@ -1242,7 +1245,7 @@ async fn test_fetch_certificates_v2_handler() {
             0,
             vec![vec![], vec![], vec![1], vec![1]],
             20,
-            vec![1, 2, 2, 2, 3, 3, 4],
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
         ),
         (
             1,

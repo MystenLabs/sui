@@ -91,7 +91,7 @@ async fn verify_certificates_v2_in_store(
             if let Ok(Some(cert)) = certificate_store.read(certificates[i].digest()) {
                 match cert.signature_verification_state() {
                     SignatureVerificationState::VerifiedDirectly(_) => verified_directly += 1,
-                    SignatureVerificationState::VerifiedIndirectly => verified_indirectly += 1,
+                    SignatureVerificationState::VerifiedIndirectly(_) => verified_indirectly += 1,
                     _ => panic!(
                         "Found unexpected stored signature state {:?}",
                         cert.signature_verification_state()
