@@ -1185,6 +1185,17 @@ module deepbook::clob_v2 {
             base_quantity_filled = balance::value(&base_balance_filled);
             quote_quantity_filled = quote_quantity_original - balance::value(&quote_balance_left);
 
+            event::emit(TakerBalanceChange<BaseAsset, QuoteAsset>{
+                pool_id: *object::uid_as_inner(&pool.id),
+                is_bid,
+                client_order_id,
+                taker_address: account_owner(account_cap),
+                base_or_quote: true,
+                original_quantity: quantity,
+                base_asset_quantity_changed: base_quantity_filled,
+                quote_asset_quantity_changed: quote_quantity_filled,
+            });
+
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
                 owner,
@@ -1212,6 +1223,17 @@ module deepbook::clob_v2 {
 
             base_quantity_filled = quantity - balance::value(&base_balance_left);
             quote_quantity_filled = balance::value(&quote_balance_filled);
+
+            event::emit(TakerBalanceChange<BaseAsset, QuoteAsset>{
+                pool_id: *object::uid_as_inner(&pool.id),
+                is_bid,
+                client_order_id,
+                taker_address: account_owner(account_cap),
+                base_or_quote: true,
+                original_quantity: quantity,
+                base_asset_quantity_changed: base_quantity_filled,
+                quote_asset_quantity_changed: quote_quantity_filled,
+            });
 
             custodian::increase_user_available_balance<BaseAsset>(
                 &mut pool.base_custodian,
