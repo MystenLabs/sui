@@ -32,6 +32,7 @@ use crate::{
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
             TransactionBlockKind,
         },
+        transaction_signature::TransactionSignature,
         validator_set::ValidatorSet,
     },
 };
@@ -1256,6 +1257,16 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         };
 
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
+        let signatures = sender_signed_data
+            .tx_signatures()
+            .iter()
+            .map(|s| {
+                Some(TransactionSignature {
+                    base64_sig: Base64::from(s.as_ref()),
+                })
+            })
+            .collect::<Vec<_>>();
+
         Ok(Self {
             digest,
             effects,
@@ -1264,6 +1275,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             gas_input: Some(gas_input),
             epoch_id,
             kind: Some(kind),
+            signatures: Some(signatures),
         })
     }
 }
