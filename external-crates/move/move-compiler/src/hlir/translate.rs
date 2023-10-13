@@ -755,6 +755,9 @@ fn value(
     expected_type: Option<&H::Type>,
     e: T::Exp,
 ) -> Option<H::Exp> {
+    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
+    use T::UnannotatedExp_ as E;
+
     // we pull outthese cases because it's easier to process them without destructuring `e` first.
     if is_statement(&e) {
         let result = if is_unit_statement(&e) {
@@ -769,8 +772,6 @@ fn value(
         return process_binops(context, block, out_type, e);
     }
 
-    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
-    use T::UnannotatedExp_ as E;
     let T::Exp {
         ty: ref in_type,
         exp: sp!(eloc, e_),
@@ -1396,22 +1397,22 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) -> bool {
         // FIXME(cgswords): we can't optimize because almost all of these throw. We have to do the
         // "honest" work here, even though it's thrown away. Consider emitting a warning about
         // these and/or weaking guarantees in Move 2024.
-        e_ @ E::Vector(_, _, _, _)
-        | e_ @ E::Dereference(_)
-        | e_ @ E::UnaryExp(_, _)
-        | e_ @ E::BinopExp(_, _, _, _)
-        | e_ @ E::Pack(_, _, _, _)
-        | e_ @ E::ExpList(_)
-        | e_ @ E::Borrow(_, _, _)
-        | e_ @ E::TempBorrow(_, _)
-        | e_ @ E::Cast(_, _)
-        | e_ @ E::Annotate(_, _)
-        | e_ @ E::BorrowLocal(_, _)
-        | e_ @ E::Constant(_, _)
-        | e_ @ E::Move { .. }
-        | e_ @ E::Copy { .. }
-        | e_ @ E::Spec(..)
-        | e_ @ E::UnresolvedError => value_statement(context, block, make_exp(e_)),
+        e_ @ (E::Vector(_, _, _, _)
+        | E::Dereference(_)
+        | E::UnaryExp(_, _)
+        | E::BinopExp(_, _, _, _)
+        | E::Pack(_, _, _, _)
+        | E::ExpList(_)
+        | E::Borrow(_, _, _)
+        | E::TempBorrow(_, _)
+        | E::Cast(_, _)
+        | E::Annotate(_, _)
+        | E::BorrowLocal(_, _)
+        | E::Constant(_, _)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::Spec(..)
+        | E::UnresolvedError) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => false,
 
