@@ -1,44 +1,34 @@
-module 1::m {
-    fun main() {
+module 0x42::m {
+    fun t0() {
         loop ();
     }
-}
 
-module 2::m {
-    fun main() {
+    fun t1() {
         { (loop (): ()) };
     }
-}
 
-module 3::m {
-    fun main() {
+    fun t2() {
         loop {
             let x = 0;
             0 + x + 0;
         };
     }
-}
 
-module 4::m {
-    fun main() {
+    fun t3() {
         loop {
             // TODO can probably improve this message,
             // but its different than the normal trailing case
             let _: u64 = if (true) break else break;
         }
     }
-}
 
-module 5::m {
-    fun main() {
+    fun t4() {
         loop {
             break;
         }
     }
-}
 
-module 6::m {
-    fun main(cond: bool) {
+    fun t5(cond: bool) {
         loop {
             if (cond) {
                 break;
@@ -47,26 +37,20 @@ module 6::m {
             }
         }
     }
-}
 
-module 7::m {
-    fun main(cond: bool) {
+    fun t6(cond: bool) {
         loop {
             if (cond) continue else break;
         }
     }
-}
 
-module 8::m {
-    fun main(cond: bool) {
+    fun t7(cond: bool) {
         loop {
             if (cond) abort 0 else return;
         }
     }
-}
 
-module 9::m {
-    fun main(cond: bool) {
+    fun t8(cond: bool) {
         let x;
         loop {
             if (cond) {
@@ -79,10 +63,8 @@ module 9::m {
         };
         x;
     }
-}
 
-module 10::m {
-    fun main(cond: bool) {
+    fun t9(cond: bool) {
         loop {
             if (cond) {
                 break;
@@ -91,10 +73,8 @@ module 10::m {
             };
         }
     }
-}
 
-module 11::m {
-    fun main(cond: bool) {
+    fun t10(cond: bool) {
         loop {
             if (cond) {
                 return;
