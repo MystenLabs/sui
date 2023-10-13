@@ -1601,10 +1601,8 @@ impl TryFrom<StoredObject> for Coin {
     }
 }
 
-impl TryFrom<SuiStake> for Stake {
-    type Error = Error;
-
-    fn try_from(value: SuiStake) -> Result<Self, Self::Error> {
+impl From<SuiStake> for Stake {
+    fn from(value: SuiStake) -> Stake {
         let mut reward = None;
         let status = match value.status {
             sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
@@ -1620,14 +1618,14 @@ impl TryFrom<SuiStake> for Stake {
         let principal = value.principal;
         let staked_sui_id = value.staked_sui_id;
 
-        Ok(Self {
+        Self {
             active_epoch_id,
             estimated_reward,
             principal: Some(BigInt::from(principal)),
             request_epoch_id,
             status: Some(status),
             staked_sui_id,
-        })
+        }
     }
 }
 
