@@ -91,6 +91,7 @@ impl RandomnessState {
                 .expect("validity threshold should fit in u16"),
             protocol_config.random_beacon_reduction_allowed_delta(),
         );
+        let total_weight = nodes.n();
         let party = match dkg::Party::<PkG, EncG>::new(
             private_key,
             nodes,
@@ -106,7 +107,7 @@ impl RandomnessState {
                 return None;
             }
         };
-        info!("random beacon: state initialized");
+        info!("random beacon: state initialized with total_weight={total_weight}, t={t}");
         Some(Self {
             party,
             messages: Vec::new(),
