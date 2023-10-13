@@ -3,7 +3,7 @@
 
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
-import { useDeepBookClient } from '_shared/deepBook/context';
+import { useDeepBookContext } from '_shared/deepBook/context';
 import { roundFloat } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
@@ -28,7 +28,7 @@ export enum Coins {
 	TBTC = 'TBTC',
 }
 
-export const mainnetDeepBook = {
+export const mainnetDeepBook: Record<string, Record<string, any>> = {
 	pools: {
 		SUI_USDC_1: '0x18d871e3c3da99046dfc0d3de612c5d88859bc03b8f0568bd127d0e70dbc58be',
 		SUI_USDC_2: '0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7',
@@ -45,16 +45,12 @@ export const mainnetDeepBook = {
 	},
 };
 
-export function useMainnetPools() {
-	return mainnetDeepBook.pools;
-}
-
-export function useMainnetCoinsMap() {
-	return mainnetDeepBook.coinsMap;
+export function useDeepBookConfigs() {
+	return mainnetDeepBook;
 }
 
 export function useRecognizedCoins() {
-	const coinsMap = useMainnetCoinsMap();
+	const coinsMap = useDeepBookConfigs().coinsMap;
 	return Object.values(coinsMap);
 }
 
@@ -72,7 +68,7 @@ export function getUSDCurrency(amount: number | null) {
 }
 
 export function useDeepbookPools() {
-	const deepBookClient = useDeepBookClient();
+	const deepBookClient = useDeepBookContext().client;
 
 	return useQuery({
 		queryKey: [DEEPBOOK_KEY, 'get-all-pools'],
@@ -80,10 +76,7 @@ export function useDeepbookPools() {
 	});
 }
 
-async function getPriceForPool(
-	poolName: keyof (typeof mainnetDeepBook)['pools'],
-	deepBookClient: DeepBookClient,
-) {
+async function getPriceForPool(poolName: string, deepBookClient: DeepBookClient) {
 	const { bestBidPrice, bestAskPrice } = await deepBookClient.getMarketPrice(
 		mainnetDeepBook.pools[poolName],
 	);
@@ -100,7 +93,7 @@ async function getDeepBookPriceForCoin(coin: Coins, deepbookClient: DeepBookClie
 		return 1n;
 	}
 
-	const poolName1 = `${coin}_USDC_1` as keyof (typeof mainnetDeepBook)['pools'];
+	const poolName1 = `${coin}_USDC_1`;
 	const poolName2 = coin === Coins.SUI ? 'SUI_USDC_2' : null;
 
 	const promises = [getPriceForPool(poolName1, deepbookClient)];
@@ -118,7 +111,7 @@ async function getDeepBookPriceForCoin(coin: Coins, deepbookClient: DeepBookClie
 }
 
 function useDeepbookPricesInUSD(coins: Coins[]) {
-	const deepBookClient = useDeepBookClient();
+	const deepBookClient = useDeepBookContext().client;
 	return useQuery({
 		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', coins],
 		queryFn: async () => {
@@ -285,7 +278,7 @@ export async function getPlaceMarketOrderTxn({
 
 	const validBalance = formatBalanceToLotSize(balance, SUI_USDC_LOT_SIZE);
 
-	return await deepBookClient.placeMarketOrder(
+	const txn = await deepBookClient.placeMarketOrder(
 		accountCap,
 		poolId,
 		BigInt(validBalance),
@@ -296,6 +289,12 @@ export async function getPlaceMarketOrderTxn({
 		address,
 		txb,
 	);
+
+	if (!accountCapId) {
+		txn.transferObjects([accountCap], address);
+	}
+
+	return txn;
 }
 
 export function useGetEstimate({
@@ -319,7 +318,7 @@ export function useGetEstimate({
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address;
-	const deepBookClient = useDeepBookClient();
+	const deepBookClient = useDeepBookContext().client;
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps

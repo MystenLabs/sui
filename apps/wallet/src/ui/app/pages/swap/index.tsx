@@ -8,6 +8,7 @@ import BottomMenuLayout, { Content, Menu } from '_app/shared/bottom-menu-layout'
 import { Button } from '_app/shared/ButtonUI';
 import { Form } from '_app/shared/forms/Form';
 import { InputWithActionButton } from '_app/shared/InputWithAction';
+import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
@@ -20,16 +21,11 @@ import {
 	USDC_DECIMALS,
 	useBalanceConversion,
 	useCoinsReFetchingConfig,
+	useDeepBookConfigs,
 	useGetEstimate,
-	useMainnetCoinsMap,
-	useMainnetPools,
 	useSortedCoinsByCategories,
 } from '_hooks';
-import {
-	DeepBookContextProvider,
-	useDeepBookAccountCapId,
-	useDeepBookClient,
-} from '_shared/deepBook/context';
+import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
 import { useFormatCoin, useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
@@ -63,17 +59,17 @@ function getSwapPageAtcText(
 
 export function SwapPageContent() {
 	const queryClient = useQueryClient();
-	const mainnetPools = useMainnetPools();
+	const mainnetPools = useDeepBookConfigs().pools;
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const activeAccount = useActiveAccount();
 	const signer = useSigner(activeAccount);
 	const activeAccountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const coinsMap = useMainnetCoinsMap();
-	const deepBookClient = useDeepBookClient();
+	const coinsMap = useDeepBookConfigs().coinsMap;
+	const deepBookClient = useDeepBookContext().client;
 
-	const accountCapId = useDeepBookAccountCapId();
+	const accountCapId = useDeepBookContext().accountCapId;
 
 	const activeCoinType = searchParams.get('type');
 	const isAsk = activeCoinType === SUI_TYPE_ARG;
@@ -212,13 +208,19 @@ export function SwapPageContent() {
 		control,
 	});
 
-	const { rawValue: rawInputConversionAmount, averagePrice: averagePriceConversionAmount } =
-		useBalanceConversion(
-			new BigNumber(amount),
-			isAsk ? Coins.SUI : Coins.USDC,
-			isAsk ? Coins.USDC : Coins.SUI,
-			isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
-		);
+	const { rawValue: rawInputSuiUsdc, averagePrice: averagePriceSuiUsdc } = useBalanceConversion(
+		new BigNumber(amount),
+		Coins.SUI,
+		Coins.USDC,
+		-SUI_CONVERSION_RATE,
+	);
+
+	const { rawValue: rawInputUsdcSui } = useBalanceConversion(
+		new BigNumber(amount),
+		Coins.USDC,
+		Coins.SUI,
+		SUI_CONVERSION_RATE,
+	);
 
 	const atcText = useMemo(() => {
 		if (isAsk) {
@@ -227,10 +229,10 @@ export function SwapPageContent() {
 		return getSwapPageAtcText(quoteCoinSymbol, baseCoinType, coinsMap);
 	}, [isAsk, baseCoinSymbol, baseCoinType, coinsMap, quoteCoinSymbol, quoteCoinType]);
 
-	const baseBalance = new BigNumber(isAsk ? amount || 0 : rawInputConversionAmount || 0)
+	const baseBalance = new BigNumber(isAsk ? amount || 0 : rawInputUsdcSui || 0)
 		.shiftedBy(SUI_DECIMALS)
 		.toString();
-	const quoteBalance = new BigNumber(isAsk ? rawInputConversionAmount || 0 : amount || 0)
+	const quoteBalance = new BigNumber(isAsk ? rawInputSuiUsdc || 0 : amount || 0)
 		.shiftedBy(USDC_DECIMALS)
 		.toString();
 
@@ -259,7 +261,7 @@ export function SwapPageContent() {
 			const txn = dataFromEstimate?.txn;
 			const isSlippageAcceptable = await isExceedingSlippageTolerance({
 				slipPercentage: formData.allowedMaxSlippagePercentage,
-				averagePrice: averagePriceConversionAmount,
+				averagePrice: averagePriceSuiUsdc.shiftedBy(SUI_CONVERSION_RATE),
 				poolId: mainnetPools.SUI_USDC_2,
 				deepBookClient,
 				isAsk,
@@ -352,23 +354,28 @@ export function SwapPageContent() {
 										<div className="ml-3">
 											<div className="text-bodySmall font-medium text-hero-darkest/40">
 												{isPayAll ? '~ ' : ''}
-												{getUSDCurrency(
-													activeCoinType === SUI_TYPE_ARG
-														? rawInputConversionAmount
-														: Number(amount),
-												)}
+												{getUSDCurrency(isAsk ? rawInputSuiUsdc : Number(amount))}
 											</div>
 										</div>
 									)}
 								</div>
 
-								<div className="flex my-4 gap-3 items-center">
-									<div className="bg-gray-45 h-px w-full" />
+								<ButtonOrLink
+									className="group flex my-4 gap-3 items-center w-full bg-transparent border-none cursor-pointer"
+									onClick={() => {
+										navigate(
+											`/swap?${new URLSearchParams({
+												type: activeCoinType === SUI_TYPE_ARG ? coinsMap.USDC : SUI_TYPE_ARG,
+											}).toString()}`,
+										);
+									}}
+								>
+									<div className="bg-gray-45 h-px w-full group-hover:bg-hero-dark" />
 									<div className="h-3 w-3">
-										<ArrowDown12 className="text-steel" />
+										<ArrowDown12 className="text-steel group-hover:text-hero-dark" />
 									</div>
-									<div className="bg-gray-45 h-px w-full" />
-								</div>
+									<div className="bg-gray-45 h-px w-full group-hover:bg-hero-dark" />
+								</ButtonOrLink>
 
 								<ToAssetSection
 									activeCoinType={activeCoinType}

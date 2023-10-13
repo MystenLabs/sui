@@ -104,7 +104,7 @@ export function TokenRow({
 	return (
 		<Tag
 			className={clsx(
-				'flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent border-transparent',
+				'group flex py-3 pl-1.5 pr-2 rounded hover:bg-sui/10 items-center bg-transparent border-transparent',
 				onClick && 'hover:cursor-pointer',
 			)}
 			onClick={onClick}
@@ -117,7 +117,7 @@ export function TokenRow({
 					</Text>
 
 					{renderActions ? (
-						<div className="flex gap-2.5 items-center">
+						<div className="group-hover:visible invisible gap-2.5 items-center flex">
 							<TokenRowButton
 								coinBalance={coinBalance}
 								to={`/send?${params.toString()}`}

@@ -25,14 +25,6 @@ export function useDeepBookContext() {
 	return context;
 }
 
-export function useDeepBookClient() {
-	return useDeepBookContext().client;
-}
-
-export function useDeepBookAccountCapId() {
-	return useDeepBookContext().accountCapId;
-}
-
 export function DeepBookContextProvider({ children }: DeepBookContextProviderProps) {
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
@@ -46,10 +38,12 @@ export function DeepBookContextProvider({ children }: DeepBookContextProviderPro
 		1,
 	);
 
-	const objectContent = data?.pages?.[0]?.data?.[0]?.data?.content;
-	const objectFields = objectContent?.dataType === 'moveObject' ? objectContent?.fields : null;
+	const accountCapId = useMemo(() => {
+		const objectContent = data?.pages?.[0]?.data?.[0]?.data?.content;
+		const objectFields = objectContent?.dataType === 'moveObject' ? objectContent?.fields : null;
 
-	const accountCapId = (objectFields as Record<string, string | number | object>)?.owner as string;
+		return (objectFields as Record<string, string | number | object>)?.owner as string;
+	}, [data?.pages]);
 
 	const deepBookClient = useMemo(() => {
 		return new DeepBookClient(suiClient, accountCapId);

@@ -8,7 +8,7 @@ import {
 	SUI_CONVERSION_RATE,
 	USDC_DECIMALS,
 	useBalanceConversion,
-	useMainnetCoinsMap,
+	useDeepBookConfigs,
 	useRecognizedCoins,
 } from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
@@ -37,7 +37,7 @@ export function ToAssetSection({
 	activeCoinType: string | null;
 	balanceChanges: BalanceChange[];
 }) {
-	const coinsMap = useMainnetCoinsMap();
+	const coinsMap = useDeepBookConfigs().coinsMap;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
 	const recognizedCoins = useRecognizedCoins();

@@ -8,7 +8,8 @@ import {
 } from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
-import { useCoinMetadata } from '@mysten/core';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { useCoinMetadata, useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
@@ -43,6 +44,8 @@ export function GasFeeSection({
 		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	);
 
+	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
+
 	const formattedEstimatedFees = getUSDCurrency(rawValue);
 
 	return (
@@ -71,7 +74,7 @@ export function GasFeeSection({
 				}
 			>
 				<Text variant="bodySmall" weight="medium" color="steel-darker">
-					{totalGas && isValid ? parseFloat(totalGas).toLocaleString() : '--'}
+					{totalGas && isValid ? `${gas} ${symbol}` : '--'}
 				</Text>
 			</DescriptionItem>
 		</div>

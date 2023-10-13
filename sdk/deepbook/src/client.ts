@@ -154,7 +154,7 @@ export class DeepBookClient {
 	 * @description: Create Account Cap
 	 * @param txb
 	 */
-	createAccountCap(txb: TransactionBlock = new TransactionBlock()) {
+	createAccountCap(txb: TransactionBlock) {
 		let [cap] = txb.moveCall({
 			typeArguments: [],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_account`,
@@ -362,9 +362,6 @@ export class DeepBookClient {
 		const recipient = this.#checkAddress(recipientAddress);
 		txb.transferObjects([base_coin_ret], recipient);
 		txb.transferObjects([quote_coin_ret], recipient);
-		if (typeof accountCap !== 'string') {
-			txb.transferObjects([accountCap], recipient);
-		}
 
 		return txb;
 	}
