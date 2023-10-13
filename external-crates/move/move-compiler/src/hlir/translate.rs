@@ -327,7 +327,7 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(v, tty)| {
+        .map(|(_, v, tty)| {
             let ty = single_type(context, tty);
             context.bind_local(v, ty.clone());
             (translate_var(v), ty)

@@ -7,7 +7,7 @@ import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import {
 	generateNonce,
 	generateRandomness,
-	toBigIntBE,
+	getExtendedEphemeralPublicKey,
 	type getZkLoginSignature,
 } from '@mysten/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
@@ -157,9 +157,7 @@ export async function createPartialZkLoginSignature({
 		},
 		body: JSON.stringify({
 			jwt,
-			extendedEphemeralPublicKey: toBigIntBE(
-				Buffer.from(ephemeralPublicKey.toSuiBytes()),
-			).toString(),
+			extendedEphemeralPublicKey: getExtendedEphemeralPublicKey(ephemeralPublicKey),
 			maxEpoch,
 			jwtRandomness: jwtRandomness.toString(),
 			salt: userSalt.toString(),

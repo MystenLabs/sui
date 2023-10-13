@@ -374,7 +374,7 @@ pub struct KeyStore {
 }
 
 impl KeyStore {
-    pub fn from_newtork_config(
+    pub fn from_network_config(
         network_config: &sui_swarm_config::network_config::NetworkConfig,
     ) -> Self {
         use fastcrypto::traits::KeyPair;

@@ -25,6 +25,10 @@ enum AddressTransactionBlockRelationship {
 	PAID
 }
 
+type AuthenticatorStateUpdate {
+	value: String!
+}
+
 type Balance {
 	coinType: String
 	coinObjectCount: Int
@@ -174,6 +178,10 @@ type EndOfEpochData {
 	nextProtocolVersion: Int
 }
 
+type EndOfEpochTransaction {
+	value: String!
+}
+
 type Epoch {
 	epochId: Int!
 	referenceGasPrice: BigInt
@@ -235,7 +243,7 @@ type GasEffects {
 
 type GasInput {
 	gasSponsor: Address
-	gasPayment: [Object!]
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
 	gasPrice: BigInt
 	gasBudget: BigInt
 }
@@ -460,6 +468,10 @@ type PageInfo {
 	endCursor: String
 }
 
+type ProgrammableTransaction {
+	value: String!
+}
+
 type ProtocolConfigAttr {
 	key: String!
 	value: String!
@@ -609,6 +621,7 @@ type TransactionBlock {
 	bcs: Base64
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	signatures: [TransactionSignature]
 	digest: String!
 	expiration: Epoch
 }
@@ -667,11 +680,15 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX
 	PROGRAMMABLE_TX
+}
+
+type TransactionSignature {
+	base64Sig: Base64!
 }
 
 type Validator {
@@ -727,3 +744,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+

@@ -19,6 +19,7 @@ use crate::{
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
+        protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
         stake_subsidy::StakeSubsidy,
         storage_fund::StorageFund,
@@ -27,9 +28,11 @@ use crate::{
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
-            ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
+            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
+            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
             TransactionBlockKind,
         },
+        transaction_signature::TransactionSignature,
         validator_set::ValidatorSet,
     },
 };
@@ -38,8 +41,8 @@ use async_graphql::{
     ID,
 };
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
-    QueryDsl, RunQueryDsl,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
+    RunQueryDsl,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -48,11 +51,15 @@ use sui_indexer::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
         packages::StoredPackage, transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, objects, packages, transactions, tx_indices},
+    schema_v2::{
+        checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
+        tx_input_objects, tx_recipients, tx_senders,
+    },
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::{ProtocolConfigResponse, SuiTransactionBlockEffects};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
     digests::ChainIdentifier,
@@ -224,6 +231,20 @@ impl PgManager {
             .await
     }
 
+    async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
+        let result = self
+            .get_checkpoint(None, Some(0))
+            .await?
+            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
+
+        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
+            Error::Internal(format!(
+                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
+            ))
+        })?;
+        Ok(ChainIdentifier::from(digest))
+    }
+
     async fn multi_get_coins(
         &self,
         address: Vec<u8>,
@@ -336,12 +357,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
-        let mut query =
-            transactions::dsl::transactions
-                .inner_join(tx_indices::dsl::tx_indices.on(
-                    transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
-                ))
-                .into_boxed();
+        let mut query = transactions::dsl::transactions.into_boxed();
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -381,55 +397,86 @@ impl PgManager {
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
-            // Filters for tx_indices table
+            // Queries on foreign tables
             match (filter.package, filter.module, filter.function) {
                 (Some(p), None, None) => {
-                    query = query.filter(
-                        tx_indices::dsl::packages.contains(vec![Some(p.into_array().to_vec())]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), None) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_modules
-                            .contains(vec![Some(format!("{}::{}", p, m))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), Some(f)) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_module_functions
-                            .contains(vec![Some(format!("{}::{}::{}", p, m, f))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .filter(tx_calls::dsl::func.eq(f))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 _ => {}
             }
-            // sign and sent are indexed the same
-            let mut senders = Vec::new();
+
             if let Some(signer) = filter.sign_address {
-                senders.push(signer.into_vec());
+                if let Some(sender) = filter.sent_address {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(
+                            tx_senders::dsl::sender
+                                .eq(signer.into_vec())
+                                .or(tx_senders::dsl::sender.eq(sender.into_vec())),
+                        )
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                } else {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(tx_senders::dsl::sender.eq(signer.into_vec()))
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                }
+            } else if let Some(sender) = filter.sent_address {
+                let subquery = tx_senders::dsl::tx_senders
+                    .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
+                    .select(tx_senders::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if let Some(sender) = filter.sent_address {
-                senders.push(sender.into_vec());
+            if let Some(recipient) = filter.recv_address {
+                let subquery = tx_recipients::dsl::tx_recipients
+                    .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
+                    .select(tx_recipients::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if !senders.is_empty() {
-                query = query.filter(tx_indices::dsl::senders.contains(senders));
-            }
-            if let Some(receiver) = filter.recv_address {
-                query =
-                    query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
-            }
-            if let Some(paid_address) = filter.paid_address {
-                query =
-                    query.filter(tx_indices::dsl::payers.contains(vec![paid_address.into_vec()]));
+            if filter.paid_address.is_some() {
+                return Err(Error::Internal(
+                    "Paid address filter not supported".to_string(),
+                ));
             }
 
             if let Some(input_object) = filter.input_object {
-                query = query
-                    .filter(tx_indices::dsl::input_objects.contains(vec![input_object.into_vec()]));
+                let subquery = tx_input_objects::dsl::tx_input_objects
+                    .filter(tx_input_objects::dsl::object_id.eq(input_object.into_vec()))
+                    .select(tx_input_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
             if let Some(changed_object) = filter.changed_object {
-                query = query.filter(
-                    tx_indices::dsl::changed_objects.contains(vec![changed_object.into_vec()]),
-                );
+                let subquery = tx_changed_objects::dsl::tx_changed_objects
+                    .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
+                    .select(tx_changed_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
         };
 
@@ -699,17 +746,8 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
-        let result = self
-            .get_checkpoint(None, Some(0))
-            .await?
-            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
-
-        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
-            Error::Internal(format!(
-                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
-            ))
-        })?;
-        Ok(ChainIdentifier::from(digest).to_string())
+        let result = self.get_chain_identifier().await?;
+        Ok(result.to_string())
     }
 
     pub(crate) async fn fetch_txs_for_address(
@@ -1051,6 +1089,50 @@ impl PgManager {
             .await?;
         SuiSystemStateSummary::try_from(result)
     }
+
+    pub(crate) async fn fetch_protocol_configs(
+        &self,
+        protocol_version: Option<u64>,
+    ) -> Result<ProtocolConfigs, Error> {
+        let chain = self.get_chain_identifier().await?.chain();
+        let version: ProtocolVersion = if let Some(version) = protocol_version {
+            (version).into()
+        } else {
+            (self.fetch_latest_epoch().await?.protocol_version).into()
+        };
+
+        let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
+            .ok_or(Error::ProtocolVersionUnsupported(
+                ProtocolVersion::MIN.as_u64(),
+                ProtocolVersion::MAX.as_u64(),
+            ))
+            .map(ProtocolConfigResponse::from)?;
+
+        Ok(ProtocolConfigs {
+            configs: cfg
+                .attributes
+                .into_iter()
+                .map(|(k, v)| ProtocolConfigAttr {
+                    key: k,
+                    // TODO:  what to return when value is None? nothing?
+                    // TODO: do we want to return type info separately?
+                    value: match v {
+                        Some(q) => format!("{:?}", q),
+                        None => "".to_string(),
+                    },
+                })
+                .collect(),
+            feature_flags: cfg
+                .feature_flags
+                .into_iter()
+                .map(|x| ProtocolConfigFeatureFlag {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect(),
+            protocol_version: cfg.protocol_version.as_u64(),
+        })
+    }
 }
 
 impl TryFrom<StoredCheckpoint> for Checkpoint {
@@ -1175,6 +1257,16 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         };
 
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
+        let signatures = sender_signed_data
+            .tx_signatures()
+            .iter()
+            .map(|s| {
+                Some(TransactionSignature {
+                    base64_sig: Base64::from(s.as_ref()),
+                })
+            })
+            .collect::<Vec<_>>();
+
         Ok(Self {
             digest,
             effects,
@@ -1183,6 +1275,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             gas_input: Some(gas_input),
             epoch_id,
             kind: Some(kind),
+            signatures: Some(signatures),
         })
     }
 }
@@ -1391,7 +1484,26 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => unimplemented!(),
+            // TODO: flesh out type
+            TransactionKind::ProgrammableTransaction(pt) => {
+                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                    value: format!("{:?}", pt),
+                })
+            }
+            // TODO: flesh out type
+            TransactionKind::AuthenticatorStateUpdate(asu) => {
+                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
+                    AuthenticatorStateUpdate {
+                        value: format!("{:?}", asu),
+                    },
+                )
+            }
+            // TODO: flesh out type
+            TransactionKind::EndOfEpochTransaction(et) => {
+                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
+                    value: format!("{:?}", et),
+                })
+            }
         }
     }
 }

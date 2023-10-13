@@ -51,6 +51,7 @@ impl ScalarType for SuiAddress {
 }
 
 impl SuiAddress {
+    #[allow(dead_code)]
     pub fn into_array(self) -> [u8; SUI_ADDRESS_LENGTH] {
         self.0
     }
