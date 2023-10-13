@@ -18,6 +18,11 @@ pub enum Command {
         #[clap(short, long)]
         file: Option<PathBuf>,
     },
+    FromConfig {
+        /// Path to TOML file containing configuration for server.
+        #[clap(short, long)]
+        path: PathBuf,
+    },
     StartServer {
         /// URL of the RPC server for data fetching
         #[clap(short, long)]
