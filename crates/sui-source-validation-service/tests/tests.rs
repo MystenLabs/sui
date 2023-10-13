@@ -93,7 +93,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
-    tokio::spawn(async move { watch_for_upgrades(&config, app_state, Some(tx)).await });
+    tokio::spawn(async move { watch_for_upgrades(config.packages, app_state, Some(tx)).await });
 
     // Set up to upgrade package.
     let package = effects
