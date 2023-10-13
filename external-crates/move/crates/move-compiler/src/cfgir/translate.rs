@@ -6,14 +6,14 @@ use crate::{
     cfgir::{
         self,
         ast::{self as G, BasicBlock, BasicBlocks, BlockInfo},
-        cfg::{build_dead_code_error, ImmForwardCFG, MutForwardCFG},
+        cfg::{ImmForwardCFG, MutForwardCFG},
     },
     diag,
     diagnostics::Diagnostics,
     expansion::ast::{AbilitySet, ModuleIdent},
     hlir::ast::{self as H, Label, Value, Value_, Var},
     parser::ast::{ConstantName, FunctionName, StructName},
-    shared::{unique_map::UniqueMap, CompilationEnv},
+    shared::{ast_debug::AstDebug, unique_map::UniqueMap, CompilationEnv},
     FullyCompiledProgram,
 };
 use cfgir::ast::LoopInfo;
@@ -32,6 +32,8 @@ use std::{
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
+
+const DEBUG_PRINT: bool = false;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -613,14 +615,26 @@ fn function_body(
     let b_ = match tb_ {
         HB::Native => GB::Native,
         HB::Defined { locals, body } => {
+            if DEBUG_PRINT {
+                println!("-----------------------------------------------------------------------");
+                println!("Processing {:?}", name);
+                body.print_verbose();
+            }
+
             let blocks = block(context, body);
             let (start, mut blocks, block_info) = finalize_blocks(context, blocks);
             context.clear_block_state();
-
             let binfo = block_info.iter().map(|(lbl, info)| (lbl, info));
+            if DEBUG_PRINT {
+                println!("-------------------------------");
+                blocks.print_verbose();
+            }
             let (mut cfg, infinite_loop_starts, diags) =
                 MutForwardCFG::new(start, &mut blocks, binfo);
             context.env.add_diags(diags);
+            if DEBUG_PRINT {
+                println!("-- cfg built ------------------");
+            }
 
             let function_context = super::CFGContext {
                 module,
@@ -675,7 +689,6 @@ fn block_(context: &mut Context, stmts: H::Block) -> (BasicBlock, BlockList) {
         blocks = new_blocks.into_iter().chain(blocks.into_iter()).collect();
         current_block = new_current;
     }
-
     (current_block, blocks)
 }
 
@@ -726,7 +739,7 @@ fn finalize_blocks(
         block_info.push((label_map[lbl], info));
     }
 
-    let block_map: BasicBlocks = BTreeMap::from_iter(blocks.into_iter());
+    let block_map: BasicBlocks = BTreeMap::from_iter(blocks);
     let (out_label, out_blocks) = G::remap_labels(&label_map, start_label, block_map);
     (out_label, out_blocks, block_info)
 }
@@ -767,9 +780,9 @@ fn statement(
 
             let new_blocks = [(true_label, true_entry_block)]
                 .into_iter()
-                .chain(true_blocks.into_iter())
+                .chain(true_blocks)
                 .chain([(false_label, false_entry_block)])
-                .chain(false_blocks.into_iter())
+                .chain(false_blocks)
                 .chain([(phi_label, current_block)])
                 .collect::<BlockList>();
 
@@ -806,9 +819,9 @@ fn statement(
 
             let new_blocks = [(start_label, initial_test_block)]
                 .into_iter()
-                .chain(test_blocks.into_iter())
+                .chain(test_blocks)
                 .chain([(body_label, body_entry_block)])
-                .chain(body_blocks.into_iter())
+                .chain(body_blocks)
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
@@ -831,7 +844,7 @@ fn statement(
 
             let new_blocks = [(start_label, body_entry_block)]
                 .into_iter()
-                .chain(body_blocks.into_iter())
+                .chain(body_blocks)
                 .chain([(end_label, current_block)])
                 .collect::<BlockList>();
 
@@ -839,25 +852,16 @@ fn statement(
         }
         S::Command(sp!(cloc, C::Break)) => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
             let break_jump = make_jump(cloc, context.loop_env.as_ref().unwrap().end_label, true);
             (VecDeque::from([break_jump]), vec![])
         }
         S::Command(sp!(cloc, C::Continue)) => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
-            (
-                VecDeque::from([make_jump(
-                    cloc,
-                    context.loop_env.as_ref().unwrap().start_label,
-                    true,
-                )]),
-                vec![],
-            )
+            let jump = make_jump(cloc, context.loop_env.as_ref().unwrap().start_label, true);
+            (VecDeque::from([jump]), vec![])
         }
         S::Command(cmd) if cmd.value.is_terminal() => {
             // Discard the current block because it's dead code.
-            dead_code_error(context, &current_block);
             (VecDeque::from([cmd]), vec![])
         }
         S::Command(cmd) => {
@@ -868,19 +872,18 @@ fn statement(
 }
 
 fn with_last(mut block: H::Block, sp!(loc, cmd): H::Command) -> H::Block {
-    let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
-    block.push_back(stmt);
-    block
+    match block.iter().last() {
+        Some(sp!(_, H::Statement_::Command(cmd))) if cmd.value.is_hlir_terminal() => block,
+        _ => {
+            let stmt = sp(loc, H::Statement_::Command(sp(loc, cmd)));
+            block.push_back(stmt);
+            block
+        }
+    }
 }
 
 fn make_jump(loc: Loc, target: Label, from_user: bool) -> H::Command {
     sp(loc, H::Command_::Jump { target, from_user })
-}
-
-fn dead_code_error(context: &mut Context, block: &BasicBlock) {
-    if let Some(diag) = build_dead_code_error(block) {
-        context.env.add_diag(diag)
-    }
 }
 
 //**************************************************************************************************
