@@ -617,6 +617,7 @@ type TransactionBlock {
 	bcs: Base64
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	signatures: [String]
 	digest: String!
 	expiration: Epoch
 }

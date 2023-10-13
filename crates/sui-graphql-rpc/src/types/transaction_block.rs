@@ -33,6 +33,7 @@ pub(crate) struct TransactionBlock {
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
+    pub signatures: Option<Vec<Option<String>>>,
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {
@@ -50,7 +51,8 @@ impl From<SuiTransactionBlockResponse> for TransactionBlock {
             bcs: Some(Base64::from(&tx_block.raw_transaction)),
             gas_input,
             epoch_id: None,
-            kind: None, // TODO (stefan) fix this
+            kind: None,
+            signatures: None,
         }
     }
 }

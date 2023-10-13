@@ -1256,6 +1256,12 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         };
 
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
+        let signatures = sender_signed_data
+            .tx_signatures()
+            .iter()
+            .map(|s| Some(fastcrypto::encoding::Base64::from_bytes(s.as_ref()).encoded()))
+            .collect::<Vec<_>>();
+
         Ok(Self {
             digest,
             effects,
@@ -1264,6 +1270,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             gas_input: Some(gas_input),
             epoch_id,
             kind: Some(kind),
+            signatures: Some(signatures),
         })
     }
 }
