@@ -28,8 +28,9 @@ use crate::{
         system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
-            ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
-            ProgrammableTransaction, TransactionBlockKind,
+            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
+            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
+            TransactionBlockKind,
         },
         validator_set::ValidatorSet,
     },
@@ -1471,9 +1472,26 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
-                value: "ProgrammableTransactionBlock".to_string(),
-            }),
+            // TODO: flesh out type
+            TransactionKind::ProgrammableTransaction(pt) => {
+                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                    value: format!("{:?}", pt),
+                })
+            }
+            // TODO: flesh out type
+            TransactionKind::AuthenticatorStateUpdate(asu) => {
+                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
+                    AuthenticatorStateUpdate {
+                        value: format!("{:?}", asu),
+                    },
+                )
+            }
+            // TODO: flesh out type
+            TransactionKind::EndOfEpochTransaction(et) => {
+                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
+                    value: format!("{:?}", et),
+                })
+            }
         }
     }
 }

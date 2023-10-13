@@ -21,6 +21,10 @@ enum AddressTransactionBlockRelationship {
 	PAID
 }
 
+type AuthenticatorStateUpdate {
+	value: String!
+}
+
 type Balance {
 	coinType: String
 	coinObjectCount: Int
@@ -168,6 +172,10 @@ scalar DateTime
 type EndOfEpochData {
 	newCommittee: [CommitteeMember!]
 	nextProtocolVersion: Int
+}
+
+type EndOfEpochTransaction {
+	value: String!
 }
 
 type Epoch {
@@ -667,7 +675,7 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX
