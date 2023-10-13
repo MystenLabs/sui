@@ -20,7 +20,10 @@ use cfgir::ast::LoopInfo;
 use move_core_types::{account_address::AccountAddress as MoveAddress, value::MoveValue};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use petgraph::{algo::toposort as petgraph_toposort, graphmap::DiGraphMap};
+use petgraph::{
+    algo::{kosaraju_scc as petgraph_scc, toposort as petgraph_toposort},
+    graphmap::DiGraphMap,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     mem,
@@ -262,63 +265,96 @@ fn constants(
     module: Option<ModuleIdent>,
     mut consts: UniqueMap<ConstantName, H::Constant>,
 ) -> UniqueMap<ConstantName, G::Constant> {
+    // Traverse the constants and compute the dependency graph between constants: if one mentions
+    // another, an edge is added between them.
     let mut graph = DiGraphMap::new();
-    for (name, constant) in consts.clone() {
-        let deps = dependent_constants(&constant);
+    for (name, constant) in consts.key_cloned_iter() {
+        let deps = dependent_constants(constant);
         if deps.is_empty() {
             graph.add_node(name);
         } else {
             for dep in deps {
-                graph.add_edge(name, dep, ());
+                graph.add_edge(dep, name, ());
             }
         }
     }
 
-    let mut out_map = UniqueMap::new();
-    let mut sorted = petgraph_toposort(&graph, None);
-
-    while let Err(cycles) = sorted {
-        let mut nodes_to_remove = BTreeSet::new();
-        let mut work_queue = vec![cycles.node_id()];
-        while let Some(node) = work_queue.pop() {
-            if !nodes_to_remove.contains(&node) {
-                for neighbor in graph.neighbors_directed(node, petgraph::Direction::Incoming) {
-                    work_queue.push(neighbor);
-                }
-                nodes_to_remove.insert(node);
+    // report any cycles we find
+    let sccs = petgraph_scc(&graph);
+    let mut cycle_nodes = BTreeSet::new();
+    for scc in sccs {
+        if scc.len() > 1 {
+            let names = scc
+                .iter()
+                .map(|x| x.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            for name in scc {
+                context.env.add_diag(diag!(
+                    BytecodeGeneration::UnfoldableConstant,
+                    (
+                        *consts.get_loc(&name).unwrap(),
+                        format!(
+                            "Constant definiiton forms a circular dependency involving {}",
+                            names
+                        )
+                    )
+                ));
+                cycle_nodes.insert(name);
             }
         }
-        for node in nodes_to_remove {
+    }
+    // report any node that relies on a node in a cycle but is not iself part of that cycle
+    for cycle_node in cycle_nodes.iter() {
+        // petgraph retains edges for nodes that have been deleted, so we ensure the node is not
+        // part of a cyclle _and_ it's still in the graph
+        let neighbors: Vec<_> = graph
+            .neighbors(*cycle_node)
+            .filter(|node| !cycle_nodes.contains(node) && graph.contains_node(*node))
+            .collect();
+        for node in neighbors {
             context.env.add_diag(diag!(
                 BytecodeGeneration::UnfoldableConstant,
                 (
                     *consts.get_loc(&node).unwrap(),
-                    "Constant involved in constant cycle"
+                    format!(
+                        "Constant uses constant {}, which has a circular dependency",
+                        cycle_node
+                    )
                 )
             ));
             graph.remove_node(node);
         }
-        sorted = petgraph_toposort(&graph, None);
+        graph.remove_node(*cycle_node);
     }
 
-    if let Ok(ordered_ids) = sorted {
-        let mut constant_values = UniqueMap::new();
-        for constant_name in ordered_ids.into_iter().rev() {
-            let cdef = consts.remove(&constant_name).unwrap();
-            let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
-            out_map
-                .add(constant_name, new_cdef)
-                .expect("ICE constant name collision");
-        }
+    // Finally, iterate the remaining constants in dependency order, inlining them into each other
+    // via the constant folding optimizer as we process them.
 
+    // petgraph will include nodes in the toposort that only appear in an edge, even if that node
+    // has been removed from the graph, so we filter down to only the remaining nodes
+    let remaining_nodes: BTreeSet<_> = graph.nodes().collect();
+    let sorted: Vec<_> = petgraph_toposort(&graph, None)
+        .expect("ICE concstant cycles not removed")
+        .into_iter()
+        .filter(|node| remaining_nodes.contains(node))
+        .collect();
+
+    let mut out_map = UniqueMap::new();
+    let mut constant_values = UniqueMap::new();
+    for constant_name in sorted.into_iter() {
+        let cdef = consts.remove(&constant_name).unwrap();
+        let new_cdef = constant(context, &mut constant_values, module, constant_name, cdef);
         out_map
-    } else {
-        unreachable!()
+            .add(constant_name, new_cdef)
+            .expect("ICE constant name collision");
     }
+
+    out_map
 }
 
 fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
-    fn dep_exp(exp: &H::Exp) -> BTreeSet<ConstantName> {
+    fn dep_exp(set: &mut BTreeSet<ConstantName>, exp: &H::Exp) {
         use H::UnannotatedExp_ as E;
         match &exp.exp.value {
             E::UnresolvedError
@@ -326,78 +362,74 @@ fn dependent_constants(constant: &H::Constant) -> BTreeSet<ConstantName> {
             | E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
-            | E::Copy { .. } => BTreeSet::new(),
-            E::UnaryExp(_, rhs) => dep_exp(rhs),
+            | E::Copy { .. } => (),
+            E::UnaryExp(_, rhs) => dep_exp(set, rhs),
             E::BinopExp(lhs, _, rhs) => {
-                let mut lefts = dep_exp(lhs);
-                lefts.append(&mut dep_exp(rhs));
-                lefts
+                dep_exp(set, lhs);
+                dep_exp(set, rhs)
             }
-            E::Cast(base, _) => dep_exp(base),
+            E::Cast(base, _) => dep_exp(set, base),
             E::Vector(_, _, _, args) | E::Multiple(args) => {
-                let mut result = BTreeSet::new();
                 for arg in args {
-                    result.append(&mut dep_exp(arg));
+                    dep_exp(set, arg);
                 }
-                result
             }
-            E::Constant(c) => BTreeSet::from([*c]),
+            E::Constant(c) => {
+                set.insert(*c);
+            }
             _ => panic!("ICE typing should have rejected exp in const"),
         }
     }
 
-    fn dep_cmd(command: &H::Command_) -> BTreeSet<ConstantName> {
+    fn dep_cmd(set: &mut BTreeSet<ConstantName>, command: &H::Command_) {
         use H::Command_ as C;
         match command {
-            C::IgnoreAndPop { exp, .. } => dep_exp(exp),
-            C::Return { exp, .. } => dep_exp(exp),
-            C::Break => BTreeSet::new(),
-            C::Continue => BTreeSet::new(),
-            C::Abort(_) => BTreeSet::new(),
-            C::Assign(_, _) => BTreeSet::new(),
-            C::Mutate(_, _) => BTreeSet::new(),
-            C::Jump { .. } => BTreeSet::new(),
-            C::JumpIf { .. } => BTreeSet::new(),
+            C::IgnoreAndPop { exp, .. } => dep_exp(set, exp),
+            C::Return { exp, .. } => dep_exp(set, exp),
+            C::Abort(exp) | C::Assign(_, exp) => dep_exp(set, exp),
+            C::Mutate(lhs, rhs) => {
+                dep_exp(set, lhs);
+                dep_exp(set, rhs)
+            }
+            C::Break | C::Continue | C::Jump { .. } | C::JumpIf { .. } => (),
         }
     }
 
-    fn dep_stmt(stmt: &H::Statement_) -> BTreeSet<ConstantName> {
+    fn dep_stmt(set: &mut BTreeSet<ConstantName>, stmt: &H::Statement_) {
         use H::Statement_ as S;
         match stmt {
-            S::Command(cmd) => dep_cmd(&cmd.value),
+            S::Command(cmd) => dep_cmd(set, &cmd.value),
             S::IfElse {
                 cond,
                 if_block,
                 else_block,
             } => {
-                let mut result = dep_exp(cond);
-                result.append(&mut dep_block(if_block));
-                result.append(&mut dep_block(else_block));
-                result
+                dep_exp(set, cond);
+                dep_block(set, if_block);
+                dep_block(set, else_block)
             }
             S::While {
                 cond: (cond_block, cond_exp),
                 block,
             } => {
-                let mut result = dep_block(cond_block);
-                result.append(&mut dep_exp(cond_exp));
-                result.append(&mut dep_block(block));
-                result
+                dep_block(set, cond_block);
+                dep_exp(set, cond_exp);
+                dep_block(set, block)
             }
-            S::Loop { block, .. } => dep_block(block),
+            S::Loop { block, .. } => dep_block(set, block),
         }
     }
 
-    fn dep_block(block: &H::Block) -> BTreeSet<ConstantName> {
-        let mut constants = BTreeSet::new();
+    fn dep_block(set: &mut BTreeSet<ConstantName>, block: &H::Block) {
         for entry in block {
-            constants.append(&mut dep_stmt(&entry.value));
+            dep_stmt(set, &entry.value);
         }
-        constants
     }
 
+    let mut output = BTreeSet::new();
     let (_, block) = &constant.value;
-    dep_block(block)
+    dep_block(&mut output, block);
+    output
 }
 
 fn constant(

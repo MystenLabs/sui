@@ -2,29 +2,53 @@ error[E08001]: cannot compute constant value
   ┌─ tests/move_2024/typing/const_in_const_circular.move:3:11
   │
 3 │     const C0: u64 = C1 + 1;
-  │           ^^ Constant involved in constant cycle
+  │           ^^ Constant definiiton forms a circular dependency involving C1, C0, C2
 
 error[E08001]: cannot compute constant value
   ┌─ tests/move_2024/typing/const_in_const_circular.move:4:11
   │
 4 │     const C1: u64 = C2 + 1;
-  │           ^^ Constant involved in constant cycle
+  │           ^^ Constant definiiton forms a circular dependency involving C1, C0, C2
 
 error[E08001]: cannot compute constant value
   ┌─ tests/move_2024/typing/const_in_const_circular.move:5:11
   │
 5 │     const C2: u64 = C0 + 1;
-  │           ^^ Constant involved in constant cycle
+  │           ^^ Constant definiiton forms a circular dependency involving C1, C0, C2
 
 error[E08001]: cannot compute constant value
   ┌─ tests/move_2024/typing/const_in_const_circular.move:6:11
   │
 6 │     const C3: u64 = C1 + 1;
-  │           ^^ Constant involved in constant cycle
+  │           ^^ Constant uses constant C1, which has a circular dependency
 
 error[E08001]: cannot compute constant value
   ┌─ tests/move_2024/typing/const_in_const_circular.move:8:11
   │
 8 │     const C5: u64 = C1 + C4;
-  │           ^^ Constant involved in constant cycle
+  │           ^^ Constant uses constant C1, which has a circular dependency
+
+error[E08001]: cannot compute constant value
+  ┌─ tests/move_2024/typing/const_in_const_circular.move:9:11
+  │
+9 │     const C6: u64 = C7 + 1;
+  │           ^^ Constant definiiton forms a circular dependency involving C7, C6, C8
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/typing/const_in_const_circular.move:10:11
+   │
+10 │     const C7: u64 = C8 + 1;
+   │           ^^ Constant definiiton forms a circular dependency involving C7, C6, C8
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/typing/const_in_const_circular.move:11:11
+   │
+11 │     const C8: u64 = C6 + 1;
+   │           ^^ Constant definiiton forms a circular dependency involving C7, C6, C8
+
+error[E08001]: cannot compute constant value
+   ┌─ tests/move_2024/typing/const_in_const_circular.move:12:11
+   │
+12 │     const C9: u64 = C0 + C6;
+   │           ^^ Constant uses constant C0, which has a circular dependency
 
