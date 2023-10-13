@@ -143,6 +143,15 @@ impl RandomnessState {
     }
 
     fn add_confirmation(&mut self, conf: dkg::Confirmation<EncG>) {
+        if self.shares.is_empty() {
+            // We should never see a `Confirmation` before we've sent our `Message` because
+            // DKG messages are processed in consensus order.
+            return;
+        }
+        if self.dkg_output.is_some() {
+            // Once we have completed DKG, no more `Confirmation`s are needed.
+            return;
+        }
         self.confirmations.push(conf)
     }
 
@@ -263,11 +272,10 @@ impl StateHandler {
                         }
                     }
                 }
+                // Advance the random beacon protocol if possible after each certificate.
+                // TODO: Implement/audit crash recovery for random beacon.
+                randomness_state.advance(&self.tx_system_messages).await;
             }
-            // Once all messages in the new commit are saved, advance the random
-            // beacon protocol if possible.
-            // TODO: Implement/audit crash recovery for random beacon.
-            randomness_state.advance(&self.tx_system_messages).await;
         }
     }
 
