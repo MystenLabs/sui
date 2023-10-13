@@ -68,6 +68,7 @@ impl MoveObject {
         })
     }
 
+    // TODO implement this
     async fn as_stake(&self) -> Option<Stake> {
         self.native_object.data.try_as_move().and_then(|x| {
             if x.type_().is_staked_sui() {
