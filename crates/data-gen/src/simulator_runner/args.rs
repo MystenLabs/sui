@@ -20,7 +20,7 @@ use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
 use crate::simulator_runner::test_adapter::{DataGenAdapter, FakeID};
 
-pub const SUI_ARGS_LONG: &str = "sui-args";
+pub const _SUI_ARGS_LONG: &str = "sui-args";
 
 #[derive(Debug, clap::Parser)]
 pub struct SuiRunArgs {
@@ -287,8 +287,7 @@ impl SuiValue {
             Ok(test_adapter
                 .executor
                 .store()
-                .get_object(&id)
-                .map(|x| x.clone()))
+                .get_object(&id).cloned())
         };
         let obj = match obj_res {
             Ok(Some(obj)) => obj,

@@ -143,11 +143,11 @@ static GENESIS_PROTOCOL_CONSTANTS: Lazy<ProtocolConfig> =
 struct Genesis {
     pub objects: Vec<Object>,
     pub packages: Vec<Object>,
-    pub modules: Vec<Vec<CompiledModule>>,
+    pub _modules: Vec<Vec<CompiledModule>>,
 }
 
-pub fn clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
-    GENESIS.modules.clone()
+pub fn _clone_genesis_compiled_modules() -> Vec<Vec<CompiledModule>> {
+    GENESIS._modules.clone()
 }
 
 pub fn clone_genesis_objects() -> Vec<Object> {
@@ -170,7 +170,7 @@ fn create_genesis_module_objects() -> Genesis {
     Genesis {
         objects: vec![create_clock()],
         packages: BuiltInFramework::genesis_objects().collect(),
-        modules: BuiltInFramework::iter_system_packages()
+        _modules: BuiltInFramework::iter_system_packages()
             .map(|p| p.modules())
             .collect(),
     }
@@ -357,6 +357,15 @@ impl<'a> MoveTestAdapter<'a> for DataGenAdapter<'a> {
         } else {
             Some(output)
         };
+
+        let addr: std::net::SocketAddr = format!("{}:{}", url, port).parse().unwrap();
+        sui_rest_api::start_service(
+            addr,
+            std::sync::Arc::new(test_adapter.executor.store()),
+            Some("/rest".to_owned()),
+        )
+        .await;
+
         (test_adapter, output)
     }
 
@@ -575,9 +584,7 @@ impl<'a> MoveTestAdapter<'a> for DataGenAdapter<'a> {
                 self.executor.advance_epoch();
                 Ok(None)
             }
-            SuiSubcommand::AdvanceClock(AdvanceClockCommand {
-                duration_ns: duration_ns,
-            }) => {
+            SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
                 self.executor
                     .advance_clock(Duration::from_nanos(duration_ns));
                 Ok(None)
@@ -1180,7 +1187,7 @@ impl<'a> DataGenAdapter<'a> {
         let obj_res = if let Some(v) = version {
             self.executor.store().get_object_by_key(id, v)
         } else {
-            Ok(self.executor.store().get_object(id).map(|x| x.clone()))
+            Ok(self.executor.store().get_object(id).cloned())
         };
         match obj_res {
             Ok(Some(obj)) => Ok(obj),

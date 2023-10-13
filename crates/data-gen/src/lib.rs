@@ -29,7 +29,7 @@ fn testx() {
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
 pub async fn run_test(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let output = handle_actual_output::<DataGenAdapter>(path, Some(&*PRE_COMPILED)).await?;
+    let (output, adapter) = handle_actual_output::<DataGenAdapter>(path, Some(&*PRE_COMPILED)).await?;
     Ok(())
 }
 
