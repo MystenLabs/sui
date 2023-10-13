@@ -533,6 +533,37 @@ module sui_system::sui_system {
         sui_system_state_inner::active_validator_addresses(self)
     }
 
+    /// Returns the total amount staked with `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::validator_stake_amount(self, validator_addr)
+    }
+
+    /// Returns the commission rate of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_commission_rate(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        sui_system_state_inner::validator_commission_rate(load_system_state(wrapper), validator_addr)
+    }
+
+    /// Returns the voting power of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_voting_power(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        sui_system_state_inner::validator_voting_power(load_system_state(wrapper), validator_addr)
+    }
+
+    /// Returns the gas price of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public fun validator_gas_price(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
+        sui_system_state_inner::validator_gas_price(load_system_state(wrapper), validator_addr)
+    }
+
+    /// Returns all the validators who are currently reporting `addr`
+    public fun get_reporters_of(wrapper: &mut SuiSystemState, addr: address): VecSet<address> {
+        let self = load_system_state(wrapper);
+        sui_system_state_inner::get_reporters_of(self, addr)
+    }
+
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
     /// 1. Add storage charge to the storage fund.
@@ -611,14 +642,6 @@ module sui_system::sui_system {
     }
 
     #[test_only]
-    /// Returns the total amount staked with `validator_addr`.
-    /// Aborts if `validator_addr` is not an active validator.
-    public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::validator_stake_amount(self, validator_addr)
-    }
-
-    #[test_only]
     /// Returns the staking pool id of a given validator.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_staking_pool_id(wrapper: &mut SuiSystemState, validator_addr: address): ID {
@@ -631,13 +654,6 @@ module sui_system::sui_system {
     public fun validator_staking_pool_mappings(wrapper: &mut SuiSystemState): &Table<ID, address> {
         let self = load_system_state(wrapper);
         sui_system_state_inner::validator_staking_pool_mappings(self)
-    }
-
-    #[test_only]
-    /// Returns all the validators who are currently reporting `addr`
-    public fun get_reporters_of(wrapper: &mut SuiSystemState, addr: address): VecSet<address> {
-        let self = load_system_state(wrapper);
-        sui_system_state_inner::get_reporters_of(self, addr)
     }
 
     #[test_only]

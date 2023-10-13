@@ -1008,6 +1008,24 @@ module sui_system::sui_system_state_inner {
         validator_set::validator_total_stake_amount(&self.validators, validator_addr)
     }
 
+    /// Returns the commission rate of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public(friend) fun validator_commission_rate(self: &SuiSystemStateInnerV2, validator_addr: address): u64 {
+        validator_set::validator_commission_rate(&self.validators, validator_addr)
+    }
+
+    /// Returns the voting power of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public(friend) fun validator_voting_power(self: &SuiSystemStateInnerV2, validator_addr: address): u64 {
+        validator_set::validator_voting_power(&self.validators, validator_addr)
+    }
+
+    /// Returns the gas price of a `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public(friend) fun validator_gas_price(self: &SuiSystemStateInnerV2, validator_addr: address): u64 {
+        validator_set::validator_gas_price(&self.validators, validator_addr)
+    }
+
     /// Returns the staking pool id of a given validator.
     /// Aborts if `validator_addr` is not an active validator.
     public(friend) fun validator_staking_pool_id(self: &SuiSystemStateInnerV2, validator_addr: address): ID {

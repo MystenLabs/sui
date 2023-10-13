@@ -548,6 +548,18 @@ module sui_system::validator_set {
         validator::stake_amount(validator)
     }
 
+    public fun validator_commission_rate(self: &ValidatorSet, validator_address: address): u64 {
+        validator::commission_rate(get_validator_ref(&self.active_validators, validator_address))
+    }
+
+    public fun validator_voting_power(self: &ValidatorSet, validator_address: address): u64 {
+        validator::voting_power(get_validator_ref(&self.active_validators, validator_address))
+    }
+
+    public fun validator_gas_price(self: &ValidatorSet, validator_address: address): u64 {
+        validator::gas_price(get_validator_ref(&self.active_validators, validator_address))
+    }
+
     public fun validator_staking_pool_id(self: &ValidatorSet, validator_address: address): ID {
         let validator = get_validator_ref(&self.active_validators, validator_address);
         validator::staking_pool_id(validator)
