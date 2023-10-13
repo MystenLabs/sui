@@ -1604,6 +1604,9 @@ impl ProtocolConfig {
     pub fn set_receive_object_for_testing(&mut self, val: bool) {
         self.feature_flags.receive_objects = val
     }
+    pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
+        self.feature_flags.narwhal_certificate_v2 = val
+    }
 }
 
 type OverrideFn = dyn Fn(ProtocolVersion, ProtocolConfig) -> ProtocolConfig + Send;
