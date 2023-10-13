@@ -338,7 +338,7 @@ async fn run(
                     worker_cache,
                     client,
                     &store,
-                    TrivialTransactionValidator::default(),
+                    TrivialTransactionValidator,
                     None,
                 )
                 .await?;

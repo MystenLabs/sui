@@ -259,7 +259,7 @@ impl ProtocolMetrics for SuiProtocol {
             .validator_config_info
             .expect("No validator in genesis")
             .iter()
-            .zip(instances.into_iter())
+            .zip(instances)
             .map(|(config, instance)| {
                 let path = format!(
                     "{}:{}{}",

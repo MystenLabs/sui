@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
-
 use crate::{
     error::Error,
     types::{
@@ -19,12 +18,22 @@ use crate::{
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
+        protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
+        safe_mode::SafeMode,
+        stake::{Stake, StakeStatus},
+        stake_subsidy::StakeSubsidy,
+        storage_fund::StorageFund,
         sui_address::SuiAddress,
+        sui_system_state_summary::SuiSystemStateSummary,
+        system_parameters::SystemParameters,
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
-            ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
+            AuthenticatorStateUpdate, ChangeEpochTransaction, ConsensusCommitPrologueTransaction,
+            EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
             TransactionBlockKind,
         },
+        transaction_signature::TransactionSignature,
+        validator_set::ValidatorSet,
     },
 };
 use async_graphql::{
@@ -32,8 +41,8 @@ use async_graphql::{
     ID,
 };
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
-    QueryDsl, RunQueryDsl,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
+    RunQueryDsl,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -42,11 +51,18 @@ use sui_indexer::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
         packages::StoredPackage, transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, objects, packages, transactions, tx_indices},
+    schema_v2::{
+        checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
+        tx_input_objects, tx_recipients, tx_senders,
+    },
     PgConnectionPoolConfig,
 };
-use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
+use sui_json_rpc_types::ProtocolConfigResponse;
+use sui_json_rpc_types::{Stake as SuiStake, SuiTransactionBlockEffects};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
+    base_types::SuiAddress as NativeSuiAddress,
     digests::ChainIdentifier,
     effects::TransactionEffects,
     messages_checkpoint::{
@@ -54,12 +70,19 @@ use sui_sdk::types::{
     },
     move_package::MovePackage as SuiMovePackage,
     object::{Data, Object as SuiObject},
+    sui_system_state::sui_system_state_summary::{
+        SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
+    },
     transaction::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
+use sui_types::dynamic_field::Field;
+use sui_types::{base_types::MoveObjectType, governance::StakedSui};
 
 use super::DEFAULT_PAGE_SIZE;
+
+use super::sui_sdk_data_provider::convert_to_validators;
 
 #[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum DbValidationError {
@@ -93,7 +116,7 @@ impl PgManager {
         config: Option<PgConnectionPoolConfig>,
     ) -> Result<Self, Error> {
         // TODO (wlmyng): support config
-        let mut config = config.unwrap_or(PgConnectionPoolConfig::default());
+        let mut config = config.unwrap_or_default();
         config.set_pool_size(30);
         let inner = IndexerReader::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(e.to_string()))?;
@@ -210,6 +233,20 @@ impl PgManager {
             .await
     }
 
+    async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
+        let result = self
+            .get_checkpoint(None, Some(0))
+            .await?
+            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
+
+        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
+            Error::Internal(format!(
+                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
+            ))
+        })?;
+        Ok(ChainIdentifier::from(digest))
+    }
+
     async fn multi_get_coins(
         &self,
         address: Vec<u8>,
@@ -322,12 +359,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
-        let mut query =
-            transactions::dsl::transactions
-                .inner_join(tx_indices::dsl::tx_indices.on(
-                    transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
-                ))
-                .into_boxed();
+        let mut query = transactions::dsl::transactions.into_boxed();
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -367,55 +399,86 @@ impl PgManager {
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
-            // Filters for tx_indices table
+            // Queries on foreign tables
             match (filter.package, filter.module, filter.function) {
                 (Some(p), None, None) => {
-                    query = query.filter(
-                        tx_indices::dsl::packages.contains(vec![Some(p.into_array().to_vec())]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), None) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_modules
-                            .contains(vec![Some(format!("{}::{}", p, m))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), Some(f)) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_module_functions
-                            .contains(vec![Some(format!("{}::{}::{}", p, m, f))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .filter(tx_calls::dsl::func.eq(f))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 _ => {}
             }
-            // sign and sent are indexed the same
-            let mut senders = Vec::new();
+
             if let Some(signer) = filter.sign_address {
-                senders.push(signer.into_vec());
+                if let Some(sender) = filter.sent_address {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(
+                            tx_senders::dsl::sender
+                                .eq(signer.into_vec())
+                                .or(tx_senders::dsl::sender.eq(sender.into_vec())),
+                        )
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                } else {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(tx_senders::dsl::sender.eq(signer.into_vec()))
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                }
+            } else if let Some(sender) = filter.sent_address {
+                let subquery = tx_senders::dsl::tx_senders
+                    .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
+                    .select(tx_senders::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if let Some(sender) = filter.sent_address {
-                senders.push(sender.into_vec());
+            if let Some(recipient) = filter.recv_address {
+                let subquery = tx_recipients::dsl::tx_recipients
+                    .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
+                    .select(tx_recipients::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if !senders.is_empty() {
-                query = query.filter(tx_indices::dsl::senders.contains(senders));
-            }
-            if let Some(receiver) = filter.recv_address {
-                query =
-                    query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
-            }
-            if let Some(paid_address) = filter.paid_address {
-                query =
-                    query.filter(tx_indices::dsl::payers.contains(vec![paid_address.into_vec()]));
+            if filter.paid_address.is_some() {
+                return Err(Error::Internal(
+                    "Paid address filter not supported".to_string(),
+                ));
             }
 
             if let Some(input_object) = filter.input_object {
-                query = query
-                    .filter(tx_indices::dsl::input_objects.contains(vec![input_object.into_vec()]));
+                let subquery = tx_input_objects::dsl::tx_input_objects
+                    .filter(tx_input_objects::dsl::object_id.eq(input_object.into_vec()))
+                    .select(tx_input_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
             if let Some(changed_object) = filter.changed_object {
-                query = query.filter(
-                    tx_indices::dsl::changed_objects.contains(vec![changed_object.into_vec()]),
-                );
+                let subquery = tx_changed_objects::dsl::tx_changed_objects
+                    .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
+                    .select(tx_changed_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
         };
 
@@ -509,6 +572,10 @@ impl PgManager {
                 query = query
                     .filter(objects::dsl::owner_id.eq(owner.into_vec()))
                     .filter(objects::dsl::owner_type.between(1, 2));
+            }
+
+            if let Some(object_type) = filter.ty {
+                query = query.filter(objects::dsl::object_type.eq(object_type));
             }
         }
 
@@ -615,32 +682,6 @@ impl PgManager {
         Ok(())
     }
 
-    pub(crate) fn validate_cursor_pagination(
-        &self,
-        first: &Option<u64>,
-        after: &Option<String>,
-        last: &Option<u64>,
-        before: &Option<String>,
-    ) -> Result<(), Error> {
-        if first.is_some() && before.is_some() {
-            return Err(DbValidationError::FirstAfter.into());
-        }
-
-        if last.is_some() && after.is_some() {
-            return Err(DbValidationError::LastBefore.into());
-        }
-
-        if before.is_some() && after.is_some() {
-            return Err(Error::CursorNoBeforeAfter);
-        }
-
-        if first.is_some() && last.is_some() {
-            return Err(Error::CursorNoFirstLast);
-        }
-
-        Ok(())
-    }
-
     pub(crate) async fn fetch_tx(&self, digest: &str) -> Result<Option<TransactionBlock>, Error> {
         let digest = Digest::from_str(digest)?.into_vec();
 
@@ -651,17 +692,22 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_latest_epoch(&self) -> Result<Epoch, Error> {
-        self.get_epoch(None)
+        let result = self
+            .get_epoch(None)
             .await?
-            .map(Epoch::from)
-            .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))
+            .ok_or_else(|| Error::Internal("Latest epoch not found".to_string()))?;
+
+        Epoch::try_from(result)
     }
 
     // To be used in scenarios where epoch may not exist, such as when epoch_id is provided by caller
     pub(crate) async fn fetch_epoch(&self, epoch_id: u64) -> Result<Option<Epoch>, Error> {
         let epoch_id = i64::try_from(epoch_id)
             .map_err(|_| Error::Internal("Failed to convert epoch id to i64".to_string()))?;
-        Ok(self.get_epoch(Some(epoch_id)).await?.map(Epoch::from))
+        self.get_epoch(Some(epoch_id))
+            .await?
+            .map(Epoch::try_from)
+            .transpose()
     }
 
     // To be used in scenarios where epoch is expected to exist
@@ -706,17 +752,8 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
-        let result = self
-            .get_checkpoint(None, Some(0))
-            .await?
-            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
-
-        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
-            Error::Internal(format!(
-                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
-            ))
-        })?;
-        Ok(ChainIdentifier::from(digest).to_string())
+        let result = self.get_chain_identifier().await?;
+        Ok(result.to_string())
     }
 
     pub(crate) async fn fetch_txs_for_address(
@@ -757,7 +794,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<Connection<String, TransactionBlock>>, Error> {
-        self.validate_cursor_pagination(&first, &after, &last, &before)?;
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
             self.validate_tx_block_filter(filter)?;
         }
@@ -808,6 +845,21 @@ impl PgManager {
         stored_obj.map(Object::try_from).transpose()
     }
 
+    pub(crate) async fn fetch_move_obj(
+        &self,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<MoveObject>, Error> {
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj = self.get_obj(address, version).await?;
+        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
+        let move_object = sui_object.map(|o| MoveObject { native_object: o });
+
+        Ok(move_object)
+    }
+
     pub(crate) async fn fetch_owned_objs(
         &self,
         first: Option<u64>,
@@ -832,7 +884,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<ObjectFilter>,
     ) -> Result<Option<Connection<String, Object>>, Error> {
-        self.validate_cursor_pagination(&first, &after, &last, &before)?;
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         if let Some(filter) = &filter {
             self.validate_obj_filter(filter)?;
         }
@@ -864,7 +916,7 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
-        self.validate_cursor_pagination(&first, &after, &last, &before)?;
+        validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
             .multi_get_checkpoints(first, after, last, before)
             .await?;
@@ -979,6 +1031,170 @@ impl PgManager {
                         .ok()
                         .map(|obj| Edge::new(cursor, obj))
                 }));
+            Ok(Some(connection))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) async fn resolve_name_service_address(
+        &self,
+        name_service_config: &NameServiceConfig,
+        name: String,
+    ) -> Result<Option<Address>, Error> {
+        let domain = name.parse::<Domain>()?;
+
+        let record_id = name_service_config.record_field_id(&domain);
+
+        let field_record_object = match self.inner.get_object_in_blocking_task(record_id).await? {
+            Some(o) => o,
+            None => return Ok(None),
+        };
+
+        let record = field_record_object
+            .to_rust::<Field<Domain, NameRecord>>()
+            .ok_or_else(|| Error::Internal(format!("Malformed Object {record_id}")))?
+            .value;
+
+        Ok(record.target_address.map(|address| Address {
+            address: SuiAddress::from_array(address.to_inner()),
+        }))
+    }
+
+    pub(crate) async fn default_name_service_name(
+        &self,
+        name_service_config: &NameServiceConfig,
+        address: SuiAddress,
+    ) -> Result<Option<String>, Error> {
+        let reverse_record_id =
+            name_service_config.reverse_record_field_id(NativeSuiAddress::from(address));
+
+        let field_reverse_record_object = match self
+            .inner
+            .get_object_in_blocking_task(reverse_record_id)
+            .await?
+        {
+            Some(o) => o,
+            None => return Ok(None),
+        };
+
+        let domain = field_reverse_record_object
+            .to_rust::<Field<SuiAddress, Domain>>()
+            .ok_or_else(|| Error::Internal(format!("Malformed Object {reverse_record_id}")))?
+            .value;
+
+        Ok(Some(domain.to_string()))
+    }
+
+    pub(crate) async fn fetch_latest_sui_system_state(
+        &self,
+    ) -> Result<SuiSystemStateSummary, Error> {
+        let result = self
+            .inner
+            .spawn_blocking(|this| this.get_latest_sui_system_state())
+            .await?;
+        SuiSystemStateSummary::try_from(result)
+    }
+
+    pub(crate) async fn fetch_protocol_configs(
+        &self,
+        protocol_version: Option<u64>,
+    ) -> Result<ProtocolConfigs, Error> {
+        let chain = self.get_chain_identifier().await?.chain();
+        let version: ProtocolVersion = if let Some(version) = protocol_version {
+            (version).into()
+        } else {
+            (self.fetch_latest_epoch().await?.protocol_version).into()
+        };
+
+        let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
+            .ok_or(Error::ProtocolVersionUnsupported(
+                ProtocolVersion::MIN.as_u64(),
+                ProtocolVersion::MAX.as_u64(),
+            ))
+            .map(ProtocolConfigResponse::from)?;
+
+        Ok(ProtocolConfigs {
+            configs: cfg
+                .attributes
+                .into_iter()
+                .map(|(k, v)| ProtocolConfigAttr {
+                    key: k,
+                    // TODO:  what to return when value is None? nothing?
+                    // TODO: do we want to return type info separately?
+                    value: match v {
+                        Some(q) => format!("{:?}", q),
+                        None => "".to_string(),
+                    },
+                })
+                .collect(),
+            feature_flags: cfg
+                .feature_flags
+                .into_iter()
+                .map(|x| ProtocolConfigFeatureFlag {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect(),
+            protocol_version: cfg.protocol_version.as_u64(),
+        })
+    }
+
+    //TODO this does not compute estimated reward because of some perf issues
+    // to be revisited once we figure out what's going on there
+    pub(crate) async fn fetch_staked_sui(
+        &self,
+        address: SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, Stake>>, Error> {
+        let obj_filter = ObjectFilter {
+            package: None,
+            module: None,
+            ty: Some(MoveObjectType::staked_sui().to_string()),
+            owner: Some(address),
+            object_ids: None,
+            object_keys: None,
+        };
+        let system_state = self.fetch_latest_sui_system_state().await?;
+        let current_epoch_id = system_state.epoch_id;
+        let objs = self
+            .multi_get_objs(first, after, last, before, Some(obj_filter))
+            .await?;
+
+        if let Some((stored_objs, has_next_page)) = objs {
+            let mut connection = Connection::new(false, has_next_page);
+
+            let mut edges = vec![];
+
+            for stored_obj in stored_objs {
+                let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
+                    Error::Internal("Error converting from StoredObject to Object".to_string())
+                })?;
+                let stake_object = StakedSui::try_from(&object).map_err(|_| {
+                    Error::Internal("Error converting from Object to StakedSui".to_string())
+                })?;
+
+                // TODO this only does active / pending stake status, but not unstaked
+                let status = if current_epoch_id >= stake_object.activation_epoch() {
+                    Some(StakeStatus::Active)
+                } else {
+                    Some(StakeStatus::Pending)
+                };
+                let stake = Stake {
+                    active_epoch_id: Some(stake_object.activation_epoch()),
+                    estimated_reward: None, // TODO once we have a good working governance API, we should fix this
+                    principal: Some(BigInt::from(stake_object.principal())),
+                    request_epoch_id: Some(stake_object.activation_epoch() - 1),
+                    status,
+                    staked_sui_id: stake_object.id(),
+                };
+                let cursor = stake.staked_sui_id.to_string();
+                edges.push(Edge::new(cursor, stake));
+            }
+            connection.edges.extend(edges);
             Ok(Some(connection))
         } else {
             Ok(None)
@@ -1108,6 +1324,16 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         };
 
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
+        let signatures = sender_signed_data
+            .tx_signatures()
+            .iter()
+            .map(|s| {
+                Some(TransactionSignature {
+                    base64_sig: Base64::from(s.as_ref()),
+                })
+            })
+            .collect::<Vec<_>>();
+
         Ok(Self {
             digest,
             effects,
@@ -1116,6 +1342,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             gas_input: Some(gas_input),
             epoch_id,
             kind: Some(kind),
+            signatures: Some(signatures),
         })
     }
 }
@@ -1173,20 +1400,121 @@ impl TryFrom<StoredObject> for Object {
     }
 }
 
-impl From<StoredEpochInfo> for Epoch {
-    fn from(e: StoredEpochInfo) -> Self {
-        Self {
+impl TryFrom<StoredEpochInfo> for Epoch {
+    type Error = Error;
+    fn try_from(e: StoredEpochInfo) -> Result<Self, Self::Error> {
+        let validators: Vec<SuiValidatorSummary> = e
+            .validators
+            .into_iter()
+            .flatten()
+            .map(|v| {
+                bcs::from_bytes(&v).map_err(|e| {
+                    Error::Internal(format!(
+                        "Can't convert validator into Validator. Error: {e}",
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        let active_validators = convert_to_validators(validators, None);
+
+        let validator_set = ValidatorSet {
+            total_stake: e.new_total_stake.map(|s| BigInt::from(s as u64)),
+            active_validators: Some(active_validators),
+            ..Default::default()
+        };
+
+        Ok(Self {
             epoch_id: e.epoch as u64,
-            system_state_version: None,
-            protocol_configs: None,
+            protocol_version: e.protocol_version as u64,
             reference_gas_price: Some(BigInt::from(e.reference_gas_price as u64)),
-            system_parameters: None,
-            stake_subsidy: None,
-            validator_set: None,
-            storage_fund: None,
-            safe_mode: None,
-            start_timestamp: None,
-        }
+            validator_set: Some(validator_set),
+            start_timestamp: DateTime::from_ms(e.epoch_start_timestamp),
+            end_timestamp: e.epoch_end_timestamp.and_then(DateTime::from_ms),
+        })
+    }
+}
+
+impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
+    type Error = Error;
+    fn try_from(system_state: NativeSuiSystemStateSummary) -> Result<Self, Self::Error> {
+        let active_validators =
+            convert_to_validators(system_state.active_validators.clone(), Some(&system_state));
+
+        let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
+            Error::Internal(format!(
+                "Cannot convert start timestamp u64 ({}) of system state into i64 required by DateTime",
+                system_state.epoch_start_timestamp_ms
+            ))
+        })?;
+
+        let start_timestamp = DateTime::from_ms(start_timestamp).ok_or_else(|| {
+            Error::Internal(format!(
+                "Cannot convert start timestamp ({}) of system state into a DateTime",
+                start_timestamp
+            ))
+        })?;
+
+        Ok(SuiSystemStateSummary {
+            epoch_id: system_state.epoch,
+            system_state_version: Some(BigInt::from(system_state.system_state_version)),
+            reference_gas_price: Some(BigInt::from(system_state.reference_gas_price)),
+            system_parameters: Some(SystemParameters {
+                duration_ms: Some(BigInt::from(system_state.epoch_duration_ms)),
+                stake_subsidy_start_epoch: Some(system_state.stake_subsidy_start_epoch),
+                min_validator_count: Some(system_state.max_validator_count),
+                max_validator_count: Some(system_state.max_validator_count),
+                min_validator_joining_stake: Some(BigInt::from(
+                    system_state.min_validator_joining_stake,
+                )),
+                validator_low_stake_threshold: Some(BigInt::from(
+                    system_state.validator_low_stake_threshold,
+                )),
+                validator_very_low_stake_threshold: Some(BigInt::from(
+                    system_state.validator_very_low_stake_threshold,
+                )),
+                validator_low_stake_grace_period: Some(BigInt::from(
+                    system_state.validator_low_stake_grace_period,
+                )),
+            }),
+            stake_subsidy: Some(StakeSubsidy {
+                balance: Some(BigInt::from(system_state.stake_subsidy_balance)),
+                distribution_counter: Some(system_state.stake_subsidy_distribution_counter),
+                current_distribution_amount: Some(BigInt::from(
+                    system_state.stake_subsidy_current_distribution_amount,
+                )),
+                period_length: Some(system_state.stake_subsidy_period_length),
+                decrease_rate: Some(system_state.stake_subsidy_decrease_rate as u64),
+            }),
+            validator_set: Some(ValidatorSet {
+                total_stake: Some(BigInt::from(system_state.total_stake)),
+                active_validators: Some(active_validators),
+                pending_removals: Some(system_state.pending_removals.clone()),
+                pending_active_validators_size: Some(system_state.pending_active_validators_size),
+                stake_pool_mappings_size: Some(system_state.staking_pool_mappings_size),
+                inactive_pools_size: Some(system_state.inactive_pools_size),
+                validator_candidates_size: Some(system_state.validator_candidates_size),
+            }),
+            storage_fund: Some(StorageFund {
+                total_object_storage_rebates: Some(BigInt::from(
+                    system_state.storage_fund_total_object_storage_rebates,
+                )),
+                non_refundable_balance: Some(BigInt::from(
+                    system_state.storage_fund_non_refundable_balance,
+                )),
+            }),
+            safe_mode: Some(SafeMode {
+                enabled: Some(system_state.safe_mode),
+                gas_summary: Some(GasCostSummary {
+                    computation_cost: system_state.safe_mode_computation_rewards,
+                    storage_cost: system_state.safe_mode_storage_rewards,
+                    storage_rebate: system_state.safe_mode_storage_rebates,
+                    non_refundable_storage_fee: system_state.safe_mode_non_refundable_storage_fee,
+                }),
+            }),
+            protocol_version: system_state.protocol_version,
+            start_timestamp: Some(start_timestamp),
+        })
     }
 }
 
@@ -1223,7 +1551,26 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => unimplemented!(),
+            // TODO: flesh out type
+            TransactionKind::ProgrammableTransaction(pt) => {
+                TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                    value: format!("{:?}", pt),
+                })
+            }
+            // TODO: flesh out type
+            TransactionKind::AuthenticatorStateUpdate(asu) => {
+                TransactionBlockKind::AuthenticatorStateUpdateTransaction(
+                    AuthenticatorStateUpdate {
+                        value: format!("{:?}", asu),
+                    },
+                )
+            }
+            // TODO: flesh out type
+            TransactionKind::EndOfEpochTransaction(et) => {
+                TransactionBlockKind::EndOfEpochTransaction(EndOfEpochTransaction {
+                    value: format!("{:?}", et),
+                })
+            }
         }
     }
 }
@@ -1239,6 +1586,7 @@ impl From<GenesisObject> for SuiAddress {
         }
     }
 }
+
 impl TryFrom<StoredObject> for Coin {
     type Error = Error;
 
@@ -1259,4 +1607,58 @@ impl TryFrom<StoredObject> for Coin {
             move_obj: MoveObject { native_object },
         })
     }
+}
+
+impl From<SuiStake> for Stake {
+    fn from(value: SuiStake) -> Stake {
+        let mut reward = None;
+        let status = match value.status {
+            sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
+            sui_json_rpc_types::StakeStatus::Active { estimated_reward } => {
+                reward = Some(estimated_reward);
+                StakeStatus::Active
+            }
+            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
+        };
+        let estimated_reward = reward.map(BigInt::from);
+        let active_epoch_id = Some(value.stake_active_epoch);
+        let request_epoch_id = Some(value.stake_request_epoch);
+        let principal = value.principal;
+        let staked_sui_id = value.staked_sui_id;
+
+        Self {
+            active_epoch_id,
+            estimated_reward,
+            principal: Some(BigInt::from(principal)),
+            request_epoch_id,
+            status: Some(status),
+            staked_sui_id,
+        }
+    }
+}
+
+/// TODO: enfroce limits on first and last
+pub(crate) fn validate_cursor_pagination(
+    first: &Option<u64>,
+    after: &Option<String>,
+    last: &Option<u64>,
+    before: &Option<String>,
+) -> Result<(), Error> {
+    if first.is_some() && before.is_some() {
+        return Err(DbValidationError::FirstAfter.into());
+    }
+
+    if last.is_some() && after.is_some() {
+        return Err(DbValidationError::LastBefore.into());
+    }
+
+    if before.is_some() && after.is_some() {
+        return Err(Error::CursorNoBeforeAfter);
+    }
+
+    if first.is_some() && last.is_some() {
+        return Err(Error::CursorNoFirstLast);
+    }
+
+    Ok(())
 }

@@ -142,7 +142,7 @@ impl StressTestRunner {
                 .programmable(pt)
                 .build(),
         );
-        let (effects, _, _) = self
+        let (effects, _) = self
             .test_cluster
             .execute_transaction_return_raw_effects(transaction)
             .await

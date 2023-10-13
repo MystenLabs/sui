@@ -43,7 +43,6 @@ use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
 use sui_types::transaction::TransactionData;
-use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
@@ -340,9 +339,10 @@ pub struct ZkLoginSignAndExecuteTx {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ZkLoginSigVerifyResponse {
-    parsed: ZkLoginAuthenticator,
+    tx_data: Option<String>,
+    parsed: Option<String>,
+    jwks: Option<String>,
     res: Option<SuiResult>,
-    jwks: Option<Vec<(JwkId, JWK)>>,
 }
 
 #[derive(Serialize)]
@@ -844,7 +844,8 @@ impl KeyToolCommand {
                     GenericSignature::ZkLoginAuthenticator(zk) => {
                         if tx_bytes.is_none() || provider.is_none() || curr_epoch.is_none() {
                             return Ok(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
-                                parsed: zk,
+                                tx_data: None,
+                                parsed: Some(serde_json::to_string(&zk)?),
                                 res: None,
                                 jwks: None,
                             }));
@@ -878,9 +879,10 @@ impl KeyToolCommand {
                             &aux_verify_data,
                         );
                         CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
-                            parsed: zk,
+                            tx_data: Some(serde_json::to_string(&tx_data)?),
+                            parsed: Some(serde_json::to_string(&zk)?),
+                            jwks: Some(serde_json::to_string(&jwks)?),
                             res: Some(res),
-                            jwks: Some(jwks),
                         })
                     }
                     _ => CommandOutput::Error("Not a zkLogin signature".to_string()),

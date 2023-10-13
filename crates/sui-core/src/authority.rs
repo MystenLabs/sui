@@ -238,6 +238,8 @@ pub struct AuthorityMetrics {
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_certificates: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
+    pub consensus_calculated_throughput: IntGauge,
+    pub consensus_calculated_throughput_profile: IntGauge,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -245,6 +247,11 @@ pub struct AuthorityMetrics {
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 
     pub authenticator_state_update_failed: IntCounter,
+
+    /// Count of zklogin signatures
+    pub zklogin_sig_count: IntCounter,
+    /// Count of multisig signatures
+    pub multisig_sig_count: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -566,6 +573,28 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            zklogin_sig_count: register_int_counter_with_registry!(
+                "zklogin_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            multisig_sig_count: register_int_counter_with_registry!(
+                "multisig_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            consensus_calculated_throughput: register_int_gauge_with_registry!(
+                "consensus_calculated_throughput",
+                "The calculated throughput from consensus output. Result is calculated based on unique transactions.",
+                registry,
+            ).unwrap(),
+            consensus_calculated_throughput_profile: register_int_gauge_with_registry!(
+                "consensus_calculated_throughput_profile",
+                "The current active calculated throughput profile",
+                registry
+            ).unwrap()
         }
     }
 }
@@ -789,7 +818,6 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        _objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -1654,8 +1682,10 @@ impl AuthorityState {
                     );
                     assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(new_object, written, module_resolver)
-                        .expect("try_create_dynamic_field_info should not fail.") else {
+                    let Some(df_info) = self
+                        .try_create_dynamic_field_info(new_object, written, module_resolver)
+                        .expect("try_create_dynamic_field_info should not fail.")
+                    else {
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -2093,8 +2123,8 @@ impl AuthorityState {
         genesis_objects: &[Object],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let Some(index_store) = &self.indexes else{
-            return Ok(())
+        let Some(index_store) = &self.indexes else {
+            return Ok(());
         };
         if !index_store.is_empty() {
             return Ok(());
@@ -2110,7 +2140,12 @@ impl AuthorityState {
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(o, &BTreeMap::new(), epoch_store.module_cache())? else{
+                    let Some(info) = self.try_create_dynamic_field_info(
+                        o,
+                        &BTreeMap::new(),
+                        epoch_store.module_cache(),
+                    )?
+                    else {
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
@@ -2516,7 +2551,9 @@ impl AuthorityState {
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedCheckpoint>> {
         let checkpoint = self.get_transaction_checkpoint_sequence(digest, epoch_store)?;
-        let Some(checkpoint) = checkpoint else { return Ok(None); };
+        let Some(checkpoint) = checkpoint else {
+            return Ok(None);
+        };
         let checkpoint = self
             .checkpoint_store
             .get_checkpoint_by_sequence_number(checkpoint)?;
@@ -2524,7 +2561,9 @@ impl AuthorityState {
     }
 
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        let Some((object_key, store_object)) = self.database.get_latest_object_or_tombstone(*object_id)? else {
+        let Some((object_key, store_object)) =
+            self.database.get_latest_object_or_tombstone(*object_id)?
+        else {
             return Ok(ObjectRead::NotExists(*object_id));
         };
         if let Some(object_ref) = self
@@ -2592,7 +2631,10 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever existed by getting its latest data
-        let Some(obj_ref) = self.database.get_latest_object_ref_or_tombstone(*object_id)? else {
+        let Some(obj_ref) = self
+            .database
+            .get_latest_object_ref_or_tombstone(*object_id)?
+        else {
             return Ok(PastObjectRead::ObjectNotExists(*object_id));
         };
 
@@ -3464,6 +3506,13 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
+        // count signature by scheme, for zklogin and multisig
+        if certificate.has_zklogin_sig() {
+            self.metrics.zklogin_sig_count.inc();
+        } else if certificate.has_upgraded_multisig() {
+            self.metrics.multisig_sig_count.inc();
+        }
+
         Ok(())
     }
 
@@ -3603,7 +3652,9 @@ impl AuthorityState {
                 system_package.dependencies().to_vec(),
                 max_binary_format_version,
                 no_extraneous_module_bytes,
-            ).await else {
+            )
+            .await
+            else {
                 return vec![];
             };
             results.push(obj_ref);
@@ -3885,11 +3936,14 @@ impl AuthorityState {
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
-        let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
-            next_epoch_system_packages.clone(),
-            config.move_binary_format_version(),
-            config.no_extraneous_module_bytes(),
-        ).await else {
+        let Some(next_epoch_system_package_bytes) = self
+            .get_system_package_bytes(
+                next_epoch_system_packages.clone(),
+                config.move_binary_format_version(),
+                config.no_extraneous_module_bytes(),
+            )
+            .await
+        else {
             error!(
                 "upgraded system packages {:?} are not locally available, cannot create \
                 ChangeEpochTx. validator binary must be upgraded to the correct version!",
@@ -3903,7 +3957,9 @@ impl AuthorityState {
             //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
             //   and most likely shut down in the new epoch (this validator likely doesn't support
             //   the new protocol version, or else it should have had the packages.)
-            return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
+            return Err(anyhow!(
+                "missing system packages: cannot form ChangeEpochTx"
+            ));
         };
 
         let tx = if epoch_store

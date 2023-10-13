@@ -73,7 +73,8 @@ pub(crate) async fn check_version_middleware<B>(
                     code::BAD_REQUEST,
                     format!("Failed to parse {VERSION_HEADER}: Not a UTF8 string."),
                 ),
-            ).into_response();
+            )
+                .into_response();
         };
 
         let Some((year, month)) = parse_version(req_version) else {
@@ -86,7 +87,8 @@ pub(crate) async fn check_version_middleware<B>(
                          <YEAR>.<MONTH> version.",
                     ),
                 ),
-            ).into_response();
+            )
+                .into_response();
         };
 
         if year != RPC_VERSION_YEAR || month != RPC_VERSION_MONTH {

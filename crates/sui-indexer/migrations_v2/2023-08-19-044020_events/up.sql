@@ -18,7 +18,7 @@ CREATE TABLE events
     PRIMARY KEY(tx_sequence_number, event_sequence_number)
 );
 
-CREATE INDEX events_senders ON events USING GIN(senders);
-CREATE INDEX events_package_module ON events (package, module);
-CREATE INDEX events_event_type ON events (event_type);
+CREATE INDEX events_package ON events (package, tx_sequence_number, event_sequence_number);
+CREATE INDEX events_package_module ON events (package, module, tx_sequence_number, event_sequence_number);
+CREATE INDEX events_event_type ON events (event_type text_pattern_ops, tx_sequence_number, event_sequence_number);
 CREATE INDEX events_checkpoint_sequence_number ON events (checkpoint_sequence_number);

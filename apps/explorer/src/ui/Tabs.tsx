@@ -84,10 +84,12 @@ const TabsList = forwardRef<
 const TabsTrigger = forwardRef<
 	ElementRef<typeof TabsPrimitive.Trigger>,
 	ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger>
->((props, ref) => {
+>(({ className, ...props }, ref) => {
 	const size = useContext(TabSizeContext);
 
-	return <TabsPrimitive.Trigger ref={ref} className={tabStyles({ size })} {...props} />;
+	return (
+		<TabsPrimitive.Trigger ref={ref} className={clsx(tabStyles({ size }), className)} {...props} />
+	);
 });
 
 const TabsContent = forwardRef<

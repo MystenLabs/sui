@@ -754,8 +754,14 @@ fn visit_function(
         acquires,
         body,
     } = fdef;
-    let G::FunctionBody_::Defined { locals, start, blocks, block_info } = &body.value else {
-        return
+    let G::FunctionBody_::Defined {
+        locals,
+        start,
+        blocks,
+        block_info,
+    } = &body.value
+    else {
+        return;
     };
     context.env.add_warning_filter_scope(warning_filter.clone());
     let (cfg, infinite_loop_starts) = ImmForwardCFG::new(*start, blocks, block_info.iter());

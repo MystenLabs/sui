@@ -21,3 +21,5 @@ export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/useSuiClientInfiniteQuery.js';
 export * from './themes/lightTheme.js';
 export * from './types.js';
+
+export type { Theme, ThemeVars, DynamicTheme } from './themes/themeContract.js';

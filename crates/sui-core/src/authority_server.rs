@@ -248,6 +248,16 @@ impl ValidatorService {
             .into_inner()
     }
 
+    pub async fn handle_transaction_for_testing(
+        &self,
+        transaction: Transaction,
+    ) -> HandleTransactionResponse {
+        self.transaction(tonic::Request::new(transaction))
+            .await
+            .unwrap()
+            .into_inner()
+    }
+
     async fn handle_transaction(
         self,
         request: tonic::Request<Transaction>,
@@ -366,7 +376,7 @@ impl ValidatorService {
             return Ok(Some(HandleCertificateResponseV2 {
                 signed_effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects: vec![], // fastpath is unused for now
+                fastpath_input_objects: vec![], // unused field
             }));
         }
 
@@ -447,7 +457,7 @@ impl ValidatorService {
         Ok(Some(HandleCertificateResponseV2 {
             signed_effects: effects.into_inner(),
             events,
-            fastpath_input_objects: vec![], // fastpath is unused for now
+            fastpath_input_objects: vec![], // unused field
         }))
     }
 }

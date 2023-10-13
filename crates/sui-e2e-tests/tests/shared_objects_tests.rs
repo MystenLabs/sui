@@ -14,7 +14,6 @@ use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::ObjectInfoRequest;
 use sui_types::transaction::{CallArg, ObjectArg};
-use sui_types::SUI_CLOCK_OBJECT_ID;
 use test_cluster::TestClusterBuilder;
 
 /// Send a simple shared object transaction to Sui and ensures the client gets back a response.
@@ -206,21 +205,11 @@ async fn access_clock_object_test() {
     let start = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    let (effects, events, objects) = test_cluster
+    let (effects, events) = test_cluster
         .execute_transaction_return_raw_effects(transaction)
         .await
         .unwrap();
     assert!(effects.status().is_ok());
-
-    assert_eq!(
-        objects.first().unwrap().compute_object_reference(),
-        effects
-            .input_shared_objects()
-            .into_iter()
-            .find(|((id, _, _), _)| id == &SUI_CLOCK_OBJECT_ID)
-            .map(|(obj_ref, _)| obj_ref)
-            .unwrap()
-    );
 
     let finish = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -292,7 +281,7 @@ async fn shared_object_sync() {
             position_submit_certificate(&committee, name, create_counter_transaction.digest()) > 0
         });
 
-    let (effects, _, _) = test_cluster
+    let (effects, _) = test_cluster
         .submit_transaction_to_validators(create_counter_transaction.clone(), &slow_validators)
         .await
         .unwrap();
@@ -334,7 +323,7 @@ async fn shared_object_sync() {
     );
 
     // Let's submit the transaction to the original set of validators, except the first.
-    let (effects, _, _) = test_cluster
+    let (effects, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction.clone(), &validators[1..])
         .await
         .unwrap();
@@ -342,7 +331,7 @@ async fn shared_object_sync() {
 
     // Submit transactions to the out-of-date authority.
     // It will succeed because we share owned object certificates through narwhal
-    let (effects, _, _) = test_cluster
+    let (effects, _) = test_cluster
         .submit_transaction_to_validators(increment_counter_transaction, &validators[0..1])
         .await
         .unwrap();

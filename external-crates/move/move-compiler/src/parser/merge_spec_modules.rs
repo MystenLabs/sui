@@ -154,8 +154,8 @@ fn merge_spec_module(
             is_spec_module,
         } = spec_module;
         assert!(is_spec_module);
-        m.attributes.extend(attributes.into_iter());
-        m.members.extend(members.into_iter());
+        m.attributes.extend(attributes);
+        m.members.extend(members);
     }
 }
 

@@ -3,9 +3,11 @@
 
 use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::move_package::MovePackage;
 use super::name_service::NameService;
 use super::{
     balance::Balance, coin::Coin, owner::Owner, stake::Stake, sui_address::SuiAddress,
@@ -14,7 +16,8 @@ use super::{
 use crate::context_data::db_data_provider::PgManager;
 use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
 use crate::types::base64::Base64;
-
+use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
+use sui_types::move_package::MovePackage as NativeSuiMovePackage;
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -37,7 +40,7 @@ pub(crate) enum ObjectKind {
     Immutable,
 }
 
-#[derive(InputObject)]
+#[derive(InputObject, Default)]
 pub(crate) struct ObjectFilter {
     pub package: Option<SuiAddress>,
     pub module: Option<String>,
@@ -54,6 +57,7 @@ pub(crate) struct ObjectKey {
     version: u64,
 }
 
+#[allow(clippy::diverging_sub_expression)]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
@@ -92,6 +96,26 @@ impl Object {
 
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
+    }
+
+    async fn as_move_package(&self) -> Result<Option<MovePackage>> {
+        if let Some(bcs) = &self.bcs {
+            let bytes = bcs.0.as_slice();
+
+            let package = bcs::from_bytes::<NativeSuiMovePackage>(bytes)
+                .map_err(|e| Error::from(format!("Failed to deserialize package: {}", e)))?;
+
+            Ok(Some(MovePackage {
+                native_object: NativeSuiObject::new_package_from_data(
+                    NativeSuiObjectData::Package(package),
+                    self.previous_transaction
+                        .map(|x| NativeSuiTransactionDigest::new(x.into_array()))
+                        .ok_or(Error::new("Object must have a previous transaction digest"))?,
+                ),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     // =========== Owner interface methods =============
@@ -153,25 +177,33 @@ impl Object {
 
     pub async fn stake_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Stake>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, Stake>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_staked_sui(self.address, first, after, last, before)
+            .await
+            .extend()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, NameService>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         unimplemented!()
     }
 }

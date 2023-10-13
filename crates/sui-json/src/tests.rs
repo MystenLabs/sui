@@ -560,7 +560,7 @@ fn test_basic_args_linter_top_level() {
     let addr = json!(format!("{address}"));
 
     // They have to be ordered
-    let args = vec![value, addr]
+    let args = [value, addr]
         .iter()
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
@@ -596,7 +596,7 @@ fn test_basic_args_linter_top_level() {
     let addr = json!(format!("{address}"));
 
     // They have to be ordered
-    let args = vec![object_id, addr]
+    let args = [object_id, addr]
         .iter()
         .map(|q| SuiJsonValue::new(q.clone()).unwrap())
         .collect();
