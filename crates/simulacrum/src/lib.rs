@@ -16,6 +16,7 @@ use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
+use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::AuthorityName;
@@ -28,7 +29,6 @@ use sui_types::{
     gas_coin::MIST_PER_SUI,
     inner_temporary_store::InnerTemporaryStore,
     messages_checkpoint::{EndOfEpochData, VerifiedCheckpoint},
-    object::Object,
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
@@ -100,17 +100,18 @@ where
         Self::new_with_network_config(&config, rng)
     }
 
-    pub fn new_with_protocol_version_and_objects(
+    pub fn new_with_protocol_version_and_accounts(
         mut rng: R,
+        chain_start_timestamp_ms: u64,
         protocol_version: ProtocolVersion,
-        objects: Vec<Object>,
+        account_configs: Vec<AccountConfig>,
     ) -> Self {
         let config = ConfigBuilder::new_with_temp_dir()
             .rng(&mut rng)
-            .with_chain_start_timestamp_ms(1)
+            .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .with_protocol_version(protocol_version)
-            .with_objects(objects)
+            .with_accounts(account_configs)
             .build();
         Self::new_with_network_config(&config, rng)
     }
