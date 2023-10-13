@@ -59,7 +59,7 @@ use sui_indexer::{
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc_types::ProtocolConfigResponse;
-use sui_json_rpc_types::{Stake as SuiStake, SuiTransactionBlockEffects};
+use sui_json_rpc_types::SuiTransactionBlockEffects;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -1177,20 +1177,22 @@ impl PgManager {
                     Error::Internal("Error converting from Object to StakedSui".to_string())
                 })?;
 
-                // TODO this only does active / pending stake status, but not unstaked
+                // TODO this only does active / pending stake status, but not unstaked,
+                // unstaked does not really make sense here, fullnode tracks deleted objects
                 let status = if current_epoch_id >= stake_object.activation_epoch() {
-                    Some(StakeStatus::Active)
+                    StakeStatus::Active
                 } else {
-                    Some(StakeStatus::Pending)
+                    StakeStatus::Pending
                 };
                 let stake = Stake {
                     active_epoch_id: Some(stake_object.activation_epoch()),
                     estimated_reward: None, // TODO once we have a good working governance API, we should fix this
                     principal: Some(BigInt::from(stake_object.principal())),
-                    request_epoch_id: Some(stake_object.activation_epoch() - 1),
-                    status,
+                    request_epoch_id: Some(stake_object.activation_epoch().saturating_sub(1)),
+                    status: Some(status),
                     staked_sui_id: stake_object.id(),
                 };
+
                 let cursor = stake.staked_sui_id.to_string();
                 edges.push(Edge::new(cursor, stake));
             }
@@ -1606,34 +1608,6 @@ impl TryFrom<StoredObject> for Coin {
             balance,
             move_obj: MoveObject { native_object },
         })
-    }
-}
-
-impl From<SuiStake> for Stake {
-    fn from(value: SuiStake) -> Stake {
-        let mut reward = None;
-        let status = match value.status {
-            sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
-            sui_json_rpc_types::StakeStatus::Active { estimated_reward } => {
-                reward = Some(estimated_reward);
-                StakeStatus::Active
-            }
-            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
-        };
-        let estimated_reward = reward.map(BigInt::from);
-        let active_epoch_id = Some(value.stake_active_epoch);
-        let request_epoch_id = Some(value.stake_request_epoch);
-        let principal = value.principal;
-        let staked_sui_id = value.staked_sui_id;
-
-        Self {
-            active_epoch_id,
-            estimated_reward,
-            principal: Some(BigInt::from(principal)),
-            request_epoch_id,
-            status: Some(status),
-            staked_sui_id,
-        }
     }
 }
 
