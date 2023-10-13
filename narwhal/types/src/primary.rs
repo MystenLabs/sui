@@ -1251,7 +1251,7 @@ pub enum SignatureVerificationState {
     VerifiedDirectly(AggregateSignatureBytes),
     // This state occurs when the cert was a parent of another fetched certificate
     // that was verified directly, then this certificate is verified indirectly.
-    VerifiedIndirectly,
+    VerifiedIndirectly(AggregateSignatureBytes),
     // This state occurs only for genesis certificates which always has valid
     // signatures bytes but the bytes are garbage so we don't mark them as verified.
     Genesis,
@@ -1282,9 +1282,9 @@ impl CertificateAPI for CertificateV2 {
         match &self.signature_verification_state {
             SignatureVerificationState::VerifiedDirectly(bytes)
             | SignatureVerificationState::Unverified(bytes)
+            | SignatureVerificationState::VerifiedIndirectly(bytes)
             | SignatureVerificationState::Unsigned(bytes) => Some(bytes),
-            SignatureVerificationState::VerifiedIndirectly
-            | SignatureVerificationState::Genesis => None,
+            SignatureVerificationState::Genesis => None,
         }
     }
 
@@ -1413,7 +1413,7 @@ impl CertificateV2 {
 
         let aggregate_signature_bytes = AggregateSignatureBytes::from(&aggregated_signature);
 
-        let aggregate_signature_verification_state = if !check_stake {
+        let signature_verification_state = if !check_stake {
             SignatureVerificationState::Unsigned(aggregate_signature_bytes)
         } else {
             SignatureVerificationState::Unverified(aggregate_signature_bytes)
@@ -1421,7 +1421,7 @@ impl CertificateV2 {
 
         Ok(Certificate::V2(CertificateV2 {
             header,
-            signature_verification_state: aggregate_signature_verification_state,
+            signature_verification_state,
             signed_authorities,
             metadata: Metadata::default(),
         }))
@@ -1493,7 +1493,7 @@ impl CertificateV2 {
 
     fn verify_signature(mut self, pks: Vec<PublicKey>) -> DagResult<Certificate> {
         let aggregrate_signature_bytes = match self.signature_verification_state {
-            SignatureVerificationState::VerifiedIndirectly
+            SignatureVerificationState::VerifiedIndirectly(_)
             | SignatureVerificationState::VerifiedDirectly(_)
             | SignatureVerificationState::Genesis => return Ok(Certificate::V2(self)),
             SignatureVerificationState::Unverified(ref bytes) => bytes,
@@ -1526,6 +1526,51 @@ impl CertificateV2 {
     pub fn origin(&self) -> AuthorityIdentifier {
         self.header.author()
     }
+}
+
+// Certificate version is validated against network protocol version. If CertificateV2
+// is being used then the cert will also be marked as Unverifed as this certificate
+// is assumed to be received from the network. This SignatureVerificationState is
+// why the modified certificate is being returned.
+pub fn validate_received_certificate_version(
+    mut certificate: Certificate,
+    protocol_config: &ProtocolConfig,
+) -> anyhow::Result<Certificate> {
+    // If network has advanced to using version 28, which sets narwhal_certificate_v2
+    // to true, we will start using CertificateV2 locally and so we will only accept
+    // CertificateV2 from the network. Otherwise CertificateV1 is used.
+    match certificate {
+        Certificate::V1(_) => {
+            // CertificateV1 does not have a concept of aggregated signature state
+            // so there is nothing to reset.
+            if protocol_config.narwhal_certificate_v2() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received CertificateV1 {certificate:?} but network is at {:?} and this certificate version is no longer supported",
+                    protocol_config.version
+                )));
+            }
+        }
+        Certificate::V2(_) => {
+            if !protocol_config.narwhal_certificate_v2() {
+                return Err(anyhow::anyhow!(format!(
+                    "Received CertificateV2 {certificate:?} but network is at {:?} and this certificate version is not supported yet",
+                    protocol_config.version
+                )));
+            } else {
+                // CertificateV2 was received from the network so we need to mark
+                // certificate aggregated signature state as unverified.
+                certificate.set_signature_verification_state(
+                    SignatureVerificationState::Unverified(
+                        certificate
+                            .aggregated_signature()
+                            .ok_or(anyhow::anyhow!("Invalid signature"))?
+                            .clone(),
+                    ),
+                );
+            }
+        }
+    };
+    Ok(certificate)
 }
 
 #[derive(

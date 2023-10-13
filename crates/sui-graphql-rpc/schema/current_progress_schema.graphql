@@ -172,15 +172,11 @@ type EndOfEpochData {
 
 type Epoch {
 	epochId: Int!
-	systemStateVersion: BigInt
-	protocolConfigs: ProtocolConfigs
 	referenceGasPrice: BigInt
-	systemParameters: SystemParameters
-	stakeSubsidy: StakeSubsidy
 	validatorSet: ValidatorSet
-	storageFund: StorageFund
-	safeMode: SafeMode
 	startTimestamp: DateTime
+	endTimestamp: DateTime
+	protocolConfigs: ProtocolConfigs
 }
 
 enum ExecutionStatus {
@@ -471,9 +467,9 @@ type ProtocolConfigFeatureFlag {
 }
 
 type ProtocolConfigs {
-	configs: [ProtocolConfigAttr!]
-	featureFlags: [ProtocolConfigFeatureFlag!]
 	protocolVersion: Int!
+	featureFlags: [ProtocolConfigFeatureFlag!]!
+	configs: [ProtocolConfigAttr!]!
 	config(key: String!): ProtocolConfigAttr
 	featureFlag(key: String!): ProtocolConfigFeatureFlag
 }
@@ -499,6 +495,7 @@ type Query {
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	resolveNameServiceAddress(name: String!): Address
+	latestSuiSystemState: SuiSystemStateSummary!
 }
 
 type SafeMode {
@@ -577,6 +574,19 @@ type StorageFund {
 
 
 scalar SuiAddress
+
+type SuiSystemStateSummary {
+	systemStateVersion: BigInt
+	referenceGasPrice: BigInt
+	systemParameters: SystemParameters
+	stakeSubsidy: StakeSubsidy
+	validatorSet: ValidatorSet
+	storageFund: StorageFund
+	safeMode: SafeMode
+	startTimestamp: DateTime
+	epoch: Epoch
+	protocolConfigs: ProtocolConfigs
+}
 
 type SystemParameters {
 	durationMs: BigInt
@@ -682,6 +692,11 @@ type Validator {
 	nextEpochStake: BigInt
 	nextEpochGasPrice: BigInt
 	nextEpochCommissionRate: Int
+	atRisk: Int
+	reportRecords: [SuiAddress!]
+	operationCap: MoveObject
+	stakingPool: MoveObject
+	exchangeRates: MoveObject
 }
 
 type ValidatorCredentials {

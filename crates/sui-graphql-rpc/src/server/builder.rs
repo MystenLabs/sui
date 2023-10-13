@@ -2,7 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    extensions::query_limits_checker::ShowUsage,
+    config::ServerConfig,
+    context_data::{
+        data_provider::DataProvider,
+        db_data_provider::PgManager,
+        sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0},
+    },
+    extensions::{
+        feature_gate::FeatureGate,
+        logger::Logger,
+        query_limits_checker::{QueryLimitsChecker, ShowUsage},
+        timeout::Timeout,
+    },
+    metrics::RequestMetrics,
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
@@ -17,15 +29,76 @@ use axum::{
 use axum::{headers::Header, Router};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Server as HyperServer;
-use std::{any::Any, net::SocketAddr};
+use std::{any::Any, net::SocketAddr, sync::Arc};
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
 }
 
+#[allow(dead_code)]
 impl Server {
     pub async fn run(self) {
         self.server.await.unwrap();
+    }
+
+    pub async fn from_yaml_config(path: &str) -> Self {
+        let config = ServerConfig::from_yaml(path);
+        Self::from_config(&config).await
+    }
+
+    pub async fn from_config(config: &ServerConfig) -> Self {
+        let mut builder =
+            ServerBuilder::new(config.connection.port, config.connection.host.clone());
+
+        // TODO: remove rpc 1.0 dependency once DB work done
+        let sui_sdk_client_v0 = sui_sdk_client_v0(&config.connection.rpc_url).await;
+        let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
+        let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
+
+        let name_service_config = config.name_service.clone();
+        let pg_conn_pool = PgManager::new(config.connection.db_url.clone(), None)
+            .map_err(|e| {
+                println!("Failed to create pg connection pool: {}", e);
+                e
+            })
+            .unwrap();
+
+        let prom_addr: SocketAddr = format!(
+            "{}:{}",
+            config.connection.prom_url, config.connection.prom_port
+        )
+        .parse()
+        .unwrap();
+        let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
+        println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
+        let registry = registry_service.default_registry();
+
+        let metrics = RequestMetrics::new(&registry);
+
+        builder = builder
+            .max_query_depth(config.service.limits.max_query_depth)
+            .max_query_nodes(config.service.limits.max_query_nodes)
+            .context_data(data_provider)
+            .context_data(data_loader)
+            .context_data(pg_conn_pool)
+            .context_data(name_service_config)
+            .context_data(Arc::new(metrics))
+            .context_data(config.clone());
+
+        if config.internal_features.feature_gate {
+            builder = builder.extension(FeatureGate);
+        }
+        if config.internal_features.logger {
+            builder = builder.extension(Logger::default());
+        }
+        if config.internal_features.query_limits_checker {
+            builder = builder.extension(QueryLimitsChecker::default());
+        }
+        if config.internal_features.query_timeout {
+            builder = builder.extension(Timeout::default());
+        }
+
+        builder.build()
     }
 }
 

@@ -1226,7 +1226,9 @@ impl SuiProgrammableTransactionBlock {
             match command {
                 Command::MoveCall(c) => {
                     let id = ModuleId::new(c.package.into(), c.module.clone());
-                    let Some(types) = get_signature_types(id, c.function.as_ident_str(), module_cache) else {
+                    let Some(types) =
+                        get_signature_types(id, c.function.as_ident_str(), module_cache)
+                    else {
                         return result_types;
                     };
                     for (arg, type_) in c.arguments.iter().zip(types) {

@@ -4,7 +4,7 @@
 use crate::command::Component;
 use crate::mock_consensus::ConsensusMode;
 use crate::single_node::SingleValidator;
-use crate::tx_generator::TxGenerator;
+use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
 use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::object::Object;
 use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
@@ -133,6 +133,50 @@ impl BenchmarkContext {
             .await
     }
 
+    /// In order to benchmark transactions that can read dynamic fields, we must first create
+    /// a root object with dynamic fields for each account address.
+    pub(crate) async fn preparing_dynamic_fields(
+        &mut self,
+        move_package: ObjectID,
+        num_dynamic_fields: u64,
+    ) -> HashMap<SuiAddress, ObjectRef> {
+        if num_dynamic_fields == 0 {
+            return HashMap::new();
+        }
+
+        info!("Preparing root object with dynamic fields");
+        let root_object_create_transactions = self
+            .generate_transactions(Arc::new(RootObjectCreateTxGenerator::new(
+                move_package,
+                num_dynamic_fields,
+            )))
+            .await;
+        let results = self
+            .execute_transactions_immediately(root_object_create_transactions)
+            .await;
+        let mut root_objects = HashMap::new();
+        let mut new_gas_objects = HashMap::new();
+        for effects in results {
+            let (owner, root_object) = effects
+                .created()
+                .into_iter()
+                .filter_map(|(oref, owner)| {
+                    owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|owner| (owner, oref))
+                })
+                .next()
+                .unwrap();
+            let gas_object = effects.gas_object().0;
+            root_objects.insert(owner, root_object);
+            new_gas_objects.insert(gas_object.0, gas_object);
+        }
+        self.refresh_gas_objects(new_gas_objects);
+        info!("Finished preparing root object with dynamic fields");
+        root_objects
+    }
+
     pub(crate) async fn generate_transactions(
         &self,
         tx_generator: Arc<dyn TxGenerator>,
@@ -199,7 +243,7 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn execute_transactions_immediately(
+    async fn execute_transactions_immediately(
         &self,
         transactions: Vec<Transaction>,
     ) -> Vec<TransactionEffects> {
@@ -214,10 +258,7 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) fn refresh_gas_objects(
-        &mut self,
-        mut new_gas_objects: HashMap<ObjectID, ObjectRef>,
-    ) {
+    fn refresh_gas_objects(&mut self, mut new_gas_objects: HashMap<ObjectID, ObjectRef>) {
         info!("Refreshing gas objects");
         for gas_objects in self.gas_object_refs.iter_mut() {
             let refreshed_gas_objects: Vec<_> = gas_objects

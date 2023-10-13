@@ -454,8 +454,8 @@ impl Builder {
                     .iter()
                     .find(|(_k, (o, s))| {
                         let Owner::AddressOwner(owner) = &o.owner else {
-                        panic!("gas object owner must be address owner");
-                    };
+                            panic!("gas object owner must be address owner");
+                        };
                         *owner == allocation.recipient_address
                             && s.principal() == allocation.amount_mist
                             && s.pool_id() == staking_pool_id
@@ -960,7 +960,7 @@ fn process_package(
     }
     let loaded_dependencies: Vec<_> = dependencies
         .iter()
-        .zip(dependency_objects.into_iter())
+        .zip(dependency_objects)
         .filter_map(|(dependency, object)| {
             Some((
                 InputObjectKind::MovePackage(*dependency),

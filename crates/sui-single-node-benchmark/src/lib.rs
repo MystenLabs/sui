@@ -7,3 +7,4 @@ pub mod execution;
 pub(crate) mod mock_consensus;
 pub(crate) mod single_node;
 pub(crate) mod tx_generator;
+pub mod workload;

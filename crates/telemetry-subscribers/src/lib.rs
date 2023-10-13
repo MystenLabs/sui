@@ -3,7 +3,15 @@
 
 use crossterm::tty::IsTty;
 use once_cell::sync::Lazy;
+use opentelemetry::sdk::{
+    self, runtime,
+    trace::{BatchSpanProcessor, TracerProvider},
+    Resource,
+};
+use opentelemetry::trace::TracerProvider as _;
+use opentelemetry_otlp::WithExportConfig;
 use span_latency_prom::PrometheusSpanLatencyLayer;
+use std::path::PathBuf;
 use std::time::Duration;
 use std::{
     env,
@@ -24,6 +32,9 @@ use tracing_subscriber::{
     reload, EnvFilter, Layer, Registry,
 };
 
+use crate::file_exporter::{CachedOpenFile, FileExporter};
+
+mod file_exporter;
 pub mod span_latency_prom;
 
 /// Alias for a type-erased error type.
@@ -63,12 +74,20 @@ pub struct TelemetryConfig {
 #[allow(dead_code)]
 pub struct TelemetryGuards {
     worker_guard: WorkerGuard,
+    provider: Option<TracerProvider>,
 }
 
 impl TelemetryGuards {
-    fn new(config: TelemetryConfig, worker_guard: WorkerGuard) -> Self {
+    fn new(
+        config: TelemetryConfig,
+        worker_guard: WorkerGuard,
+        provider: Option<TracerProvider>,
+    ) -> Self {
         set_global_telemetry_config(config);
-        Self { worker_guard }
+        Self {
+            worker_guard,
+            provider,
+        }
     }
 }
 
@@ -95,12 +114,13 @@ impl FilterHandle {
     }
 }
 
-pub struct Filters {
+pub struct TracingHandle {
     log: FilterHandle,
     trace: Option<FilterHandle>,
+    file_output: CachedOpenFile,
 }
 
-impl Filters {
+impl TracingHandle {
     pub fn update_log<S: AsRef<str>>(&self, directives: S) -> Result<(), BoxError> {
         self.log.update(directives)
     }
@@ -112,8 +132,14 @@ impl Filters {
     pub fn update_trace<S: AsRef<str>>(
         &self,
         directives: S,
+        trace_file: Option<String>,
         duration: Duration,
     ) -> Result<(), BoxError> {
+        if let Some(trace_file) = trace_file {
+            let trace_path = PathBuf::from_str(&trace_file)?;
+            self.file_output.update_path(trace_path)?;
+        }
+
         if let Some(trace) = &self.trace {
             let res = trace.update(directives);
             // after duration is elapsed, reset to the env setting
@@ -130,6 +156,10 @@ impl Filters {
             info!("tracing not enabled, ignoring update");
             Ok(())
         }
+    }
+
+    pub fn clear_file_output(&self) {
+        self.file_output.clear_path();
     }
 
     pub fn reset_trace(&self) {
@@ -299,7 +329,7 @@ impl TelemetryConfig {
         self
     }
 
-    pub fn init(self) -> (TelemetryGuards, Filters) {
+    pub fn init(self) -> (TelemetryGuards, TracingHandle) {
         let config = self;
         let config_clone = config.clone();
 
@@ -338,28 +368,49 @@ impl TelemetryConfig {
         }
 
         let mut trace_filter_handle = None;
+        let mut file_output = CachedOpenFile::new::<&str>(None).unwrap();
+        let mut provider = None;
         if config.enable_otlp_tracing {
-            use opentelemetry::sdk::{self, Resource};
-            use opentelemetry_otlp::WithExportConfig;
+            let trace_file = env::var("TRACE_FILE").ok();
 
-            let endpoint =
-                env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://localhost:4317".to_string());
+            let config = sdk::trace::config().with_resource(Resource::new(vec![
+                opentelemetry::KeyValue::new("service.name", "sui-node"),
+            ]));
 
-            let tracer = opentelemetry_otlp::new_pipeline()
-                .tracing()
-                .with_exporter(
-                    opentelemetry_otlp::new_exporter()
-                        .tonic()
-                        .with_endpoint(endpoint),
-                )
-                .with_trace_config(sdk::trace::config().with_resource(Resource::new(vec![
-                    opentelemetry::KeyValue::new("service.name", "sui-node"),
-                ])))
-                .install_batch(sdk::runtime::Tokio)
-                .expect("Could not create async Tracer");
+            // We can either do file output or OTLP, but not both. tracing-opentelemetry
+            // only supports a single tracer at a time.
+            let telemetry = if let Some(trace_file) = trace_file {
+                let exporter =
+                    FileExporter::new(Some(trace_file.into())).expect("Failed to create exporter");
+                file_output = exporter.cached_open_file.clone();
+                let processor = BatchSpanProcessor::builder(exporter, runtime::Tokio).build();
 
-            // Create a tracing subscriber with the configured tracer
-            let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+                let p = TracerProvider::builder()
+                    .with_config(config)
+                    .with_span_processor(processor)
+                    .build();
+
+                let tracer = p.tracer("sui-node");
+                provider = Some(p);
+
+                tracing_opentelemetry::layer().with_tracer(tracer)
+            } else {
+                let endpoint = env::var("OTLP_ENDPOINT")
+                    .unwrap_or_else(|_| "http://localhost:4317".to_string());
+
+                let tracer = opentelemetry_otlp::new_pipeline()
+                    .tracing()
+                    .with_exporter(
+                        opentelemetry_otlp::new_exporter()
+                            .tonic()
+                            .with_endpoint(endpoint),
+                    )
+                    .with_trace_config(config)
+                    .install_batch(sdk::runtime::Tokio)
+                    .expect("Could not create async Tracer");
+
+                tracing_opentelemetry::layer().with_tracer(tracer)
+            };
 
             // Enable Trace Contexts for tying spans together
             opentelemetry::global::set_text_map_propagator(
@@ -410,13 +461,14 @@ impl TelemetryConfig {
 
         // The guard must be returned and kept in the main fn of the app, as when it's dropped then the output
         // gets flushed and closed. If this is dropped too early then no output will appear!
-        let guards = TelemetryGuards::new(config_clone, worker_guard);
+        let guards = TelemetryGuards::new(config_clone, worker_guard, provider);
 
         (
             guards,
-            Filters {
+            TracingHandle {
                 log: log_filter_handle,
                 trace: trace_filter_handle,
+                file_output,
             },
         )
     }

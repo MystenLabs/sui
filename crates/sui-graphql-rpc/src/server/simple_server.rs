@@ -14,7 +14,6 @@ use crate::server::builder::ServerBuilder;
 
 use prometheus::Registry;
 use std::default::Default;
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_json_rpc::name_service::NameServiceConfig;
@@ -31,7 +30,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
     // TODO (wlmyng): Allow users to choose which data sources to back graphql
-    let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+    let db_url = conn.db_url;
     let pg_conn_pool = PgManager::new(db_url, None)
         .map_err(|e| {
             println!("Failed to create pg connection pool: {}", e);

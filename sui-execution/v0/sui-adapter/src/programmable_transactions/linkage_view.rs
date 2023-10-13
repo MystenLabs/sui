@@ -161,15 +161,11 @@ impl<'state> LinkageView<'state> {
         } in context.type_origin_table()
         {
             let Ok(module_name) = Identifier::from_str(module_name) else {
-                invariant_violation!(
-                    "Module name isn't an identifier: {module_name}"
-                );
+                invariant_violation!("Module name isn't an identifier: {module_name}");
             };
 
             let Ok(struct_name) = Identifier::from_str(struct_name) else {
-                invariant_violation!(
-                    "Struct name isn't an identifier: {struct_name}"
-                );
+                invariant_violation!("Struct name isn't an identifier: {struct_name}");
             };
 
             let runtime_id = ModuleId::new(runtime_id, module_name);
@@ -274,7 +270,8 @@ impl<'state> LinkageResolver for LinkageView<'state> {
         let Some(upgrade) = linkage.link_table.get(&runtime_id) else {
             invariant_violation!(
                 "Missing linkage for {runtime_id} in context {}, runtime_id is {}",
-                linkage.storage_id, linkage.runtime_id
+                linkage.storage_id,
+                linkage.runtime_id
             );
         };
 
@@ -306,9 +303,7 @@ impl<'state> LinkageResolver for LinkageView<'state> {
 
         let storage_id = ObjectID::from(*self.relocate(runtime_id)?.address());
         let Some(package) = self.resolver.get_package(&storage_id)? else {
-            invariant_violation!(
-                "Missing dependent package in store: {storage_id}",
-            )
+            invariant_violation!("Missing dependent package in store: {storage_id}",)
         };
 
         for TypeOrigin {

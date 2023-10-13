@@ -10,7 +10,7 @@ public struct Y has copy, drop { x: X }
 public fun bump(self: &mut X) { self.count = self.count + 1 }
 public fun count(self: &X): u64 { self.count }
 
-public fun owned(x: X, y: Y) {
+public fun owned(mut x: X, mut y: Y) {
     assert!(x.count() == 0, 0);
     assert!(y.x.count() == 0, 0);
     x.bump();
@@ -33,8 +33,8 @@ public fun test() {
     let y = Y { x };
     owned(x, y);
 
-    let x = X { count: 0 };
-    let y = Y { x };
+    let mut x = X { count: 0 };
+    let mut y = Y { x };
     mut_ref(&mut x, &mut y);
 }
 

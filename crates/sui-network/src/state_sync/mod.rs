@@ -826,7 +826,9 @@ async fn get_latest_from_peer(
     if !info.on_same_chain_as_us {
         return;
     }
-    let Some((highest_checkpoint, low_watermark)) = query_peer_for_latest_info(&mut client, timeout).await else {
+    let Some((highest_checkpoint, low_watermark)) =
+        query_peer_for_latest_info(&mut client, timeout).await
+    else {
         return;
     };
     peer_heights
@@ -1290,9 +1292,13 @@ where
         PeerCheckpointRequestType::Content,
     )
     .with_checkpoint(*checkpoint.sequence_number());
-    let Some(contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await else {
+    let Some(contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await
+    else {
         // Delay completion in case of error so we don't hammer the network with retries.
-        let duration = peer_heights.read().unwrap().wait_interval_when_no_peer_to_sync_content();
+        let duration = peer_heights
+            .read()
+            .unwrap()
+            .wait_interval_when_no_peer_to_sync_content();
         tokio::time::sleep(duration).await;
         return Err(checkpoint);
     };

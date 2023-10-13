@@ -6,7 +6,7 @@
 //! The word simulacrum is latin for "likeness, semblance", it is also a spell in D&D which creates
 //! a copy of a creature which then follows the player's commands and wishes. As such this crate
 //! provides the [`Simulacrum`] type which is a implementation or instantiation of a sui
-//! blockcahin, one which doesn't do anything unless acted upon.
+//! blockchain, one which doesn't do anything unless acted upon.
 //!
 //! [`Simulacrum`]: crate::Simulacrum
 
@@ -18,28 +18,26 @@ use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::base_types::AuthorityName;
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
-    crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature},
     effects::TransactionEffects,
     error::ExecutionError,
     gas_coin::MIST_PER_SUI,
     inner_temporary_store::InnerTemporaryStore,
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
-    },
+    messages_checkpoint::{EndOfEpochData, VerifiedCheckpoint},
     object::Object,
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
 
-use self::checkpoint_builder::CheckpointBuilder;
 use self::epoch_state::EpochState;
 pub use self::store::InMemoryStore;
 use self::store::KeyStore;
+use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 
-mod checkpoint_builder;
 mod epoch_state;
 mod store;
 
@@ -58,7 +56,7 @@ pub struct Simulacrum<R = OsRng> {
     #[allow(unused)]
     genesis: genesis::Genesis,
     store: InMemoryStore,
-    checkpoint_builder: CheckpointBuilder,
+    checkpoint_builder: MockCheckpointBuilder,
 
     // Epoch specific data
     epoch_state: EpochState,
@@ -118,9 +116,9 @@ where
     }
 
     fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
-        let keystore = KeyStore::from_newtork_config(config);
+        let keystore = KeyStore::from_network_config(config);
         let store = InMemoryStore::new(&config.genesis);
-        let checkpoint_builder = CheckpointBuilder::new(config.genesis.checkpoint());
+        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
 
         let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
@@ -343,42 +341,18 @@ impl<'a> CommitteeWithKeys<'a> {
         }
     }
 
-    pub fn committee(&self) -> &Committee {
-        self.committee
-    }
-
     pub fn keystore(&self) -> &KeyStore {
         self.keystore
     }
+}
 
-    fn create_certified_checkpoint(&self, checkpoint: CheckpointSummary) -> VerifiedCheckpoint {
-        let signatures = self
-            .committee()
-            .voting_rights
-            .iter()
-            .map(|(name, _)| {
-                let intent_msg = shared_crypto::intent::IntentMessage::new(
-                    shared_crypto::intent::Intent::sui_app(
-                        shared_crypto::intent::IntentScope::CheckpointSummary,
-                    ),
-                    &checkpoint,
-                );
-                let key = self.keystore().validator(name).unwrap();
-                let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, key);
-                AuthoritySignInfo {
-                    epoch: checkpoint.epoch,
-                    authority: *name,
-                    signature,
-                }
-            })
-            .collect();
+impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
+    fn get_validator_key(&self, name: &AuthorityName) -> &AuthorityKeyPair {
+        self.keystore.validator(name).unwrap()
+    }
 
-        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
-            .unwrap()
-            .verify(self.committee())
-            .unwrap();
-
-        checkpoint
+    fn get_committee(&self) -> &Committee {
+        self.committee
     }
 }
 

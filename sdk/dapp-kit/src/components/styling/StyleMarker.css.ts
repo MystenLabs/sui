@@ -3,10 +3,9 @@
 
 import { globalStyle } from '@vanilla-extract/css';
 
-import { styleDataAttributeSelector } from '../../constants/styleDataAttribute.js';
 import { themeVars } from '../../themes/themeContract.js';
 
-globalStyle(createScopedSelector('*'), {
+globalStyle(':where(*)', {
 	boxSizing: 'border-box',
 	color: themeVars.colors.body,
 	fontFamily: themeVars.typography.fontFamily,
@@ -17,7 +16,7 @@ globalStyle(createScopedSelector('*'), {
 	letterSpacing: themeVars.typography.letterSpacing,
 });
 
-globalStyle(createScopedSelector('button'), {
+globalStyle(':where(button)', {
 	appearance: 'none',
 	backgroundColor: 'transparent',
 	fontSize: 'inherit',
@@ -30,24 +29,20 @@ globalStyle(createScopedSelector('button'), {
 	margin: 0,
 });
 
-globalStyle(createScopedSelector('a'), {
+globalStyle(':where(a)', {
 	textDecoration: 'none',
 	color: 'inherit',
 	outline: 'none',
 });
 
-globalStyle(createScopedSelector('ol, ul'), {
+globalStyle(':where(ol, ul)', {
 	listStyle: 'none',
 	margin: 0,
 	padding: 0,
 });
 
-globalStyle(createScopedSelector('h1, h2, h3, h4, h5, h6'), {
+globalStyle(':where(h1, h2, h3, h4, h5, h6)', {
 	fontSize: 'inherit',
 	fontWeight: 'inherit',
 	margin: 0,
 });
-
-function createScopedSelector(selector: string) {
-	return `${styleDataAttributeSelector}:where(${selector}), ${styleDataAttributeSelector} :where(${selector})`;
-}

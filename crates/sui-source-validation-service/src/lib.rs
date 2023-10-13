@@ -472,12 +472,12 @@ async fn api_route(
 
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
-	let error = format!("Invalid hex address {address}");
-	return (
-	    StatusCode::BAD_REQUEST,
-	    headers,
-	    Json(ErrorResponse { error }).into_response()
-	)
+        let error = format!("Invalid hex address {address}");
+        return (
+            StatusCode::BAD_REQUEST,
+            headers,
+            Json(ErrorResponse { error }).into_response(),
+        );
     };
 
     let app_state = app_state.read().unwrap();

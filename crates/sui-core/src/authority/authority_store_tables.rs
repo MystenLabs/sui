@@ -154,10 +154,12 @@ impl AuthorityPerpetualTables {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<Object> {
-        let Ok(iter) = self.objects
+        let Ok(iter) = self
+            .objects
             .range_iter(ObjectKey::min_for_id(&object_id)..=ObjectKey::max_for_id(&object_id))
-            .skip_prior_to(&ObjectKey(object_id, version))else {
-            return None
+            .skip_prior_to(&ObjectKey(object_id, version))
+        else {
+            return None;
         };
         iter.reverse()
             .next()
@@ -186,7 +188,9 @@ impl AuthorityPerpetualTables {
         object_key: &ObjectKey,
         store_object: StoreObjectWrapper,
     ) -> Result<Option<Object>, SuiError> {
-        let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {return Ok(None)};
+        let StoreObject::Value(store_object) = store_object.migrate().into_inner() else {
+            return Ok(None);
+        };
         Ok(Some(self.construct_object(object_key, store_object)?))
     }
 

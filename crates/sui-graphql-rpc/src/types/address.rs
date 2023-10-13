@@ -29,6 +29,7 @@ pub(crate) enum AddressTransactionBlockRelationship {
     Paid, // Transactions that were paid for by this address
 }
 
+#[allow(clippy::diverging_sub_expression)]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]

@@ -146,7 +146,7 @@ async fn batch_request_gas(
             Json(BatchFaucetResponse::from(FaucetError::Internal(
                 "Input Error.".to_string(),
             ))),
-        )
+        );
     };
 
     if state.config.batch_enabled {

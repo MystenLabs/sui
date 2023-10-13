@@ -200,8 +200,8 @@ async fn run_upgrade(
     .await?;
 
     let SuiClientCommandResult::Upgrade(response) = resp else {
-            unreachable!("Invalid upgrade response");
-        };
+        unreachable!("Invalid upgrade response");
+    };
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
     assert!(effects.status.is_ok());
     Ok(())
