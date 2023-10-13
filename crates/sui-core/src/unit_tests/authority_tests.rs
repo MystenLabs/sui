@@ -1482,10 +1482,14 @@ async fn test_handle_transfer_transaction_ok() {
     );
 
     // Check the final state of the locks
-    let Some(envelope) = authority_state.get_transaction_lock(
-        &(object_id, before_object_version, object.digest()),
-        &authority_state.epoch_store_for_testing(),
-    ).await.unwrap() else {
+    let Some(envelope) = authority_state
+        .get_transaction_lock(
+            &(object_id, before_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing(),
+        )
+        .await
+        .unwrap()
+    else {
         panic!("No verified envelope for transaction");
     };
 
@@ -3064,7 +3068,10 @@ async fn test_invalid_mutable_clock_parameter() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let transaction = authority_state.verify_transaction(transaction).unwrap();
 
-    let Err(e) = authority_state.handle_transaction(&epoch_store, transaction).await else {
+    let Err(e) = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await
+    else {
         panic!("Expected handling transaction to fail");
     };
 
@@ -4234,6 +4241,23 @@ pub async fn execute_programmable_transaction_with_shared(
         gas_unit,
     )
     .await
+}
+
+pub async fn build_programmable_transaction(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    pt: ProgrammableTransaction,
+    gas_unit: u64,
+) -> SuiResult<Transaction> {
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object_ref = gas_object.unwrap().compute_object_reference();
+    let data =
+        TransactionData::new_programmable(*sender, vec![gas_object_ref], pt, rgp * gas_unit, rgp);
+
+    Ok(to_sender_signed_transaction(data, sender_key))
 }
 
 async fn execute_programmable_transaction_(

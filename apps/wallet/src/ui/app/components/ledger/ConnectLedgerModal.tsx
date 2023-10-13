@@ -1,14 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState } from 'react';
-
-import { Link } from '../../shared/Link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { useSuiLedgerClient } from '_src/ui/app/components/ledger/SuiLedgerClientProvider';
 import { Button } from '_src/ui/app/shared/ButtonUI';
-import { ModalDialog } from '_src/ui/app/shared/ModalDialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from '_src/ui/app/shared/Dialog';
 import { Text } from '_src/ui/app/shared/text';
+import { useState } from 'react';
+
+import { Link } from '../../shared/Link';
 
 type ConnectLedgerModalProps = {
 	onClose: () => void;
@@ -33,11 +39,18 @@ export function ConnectLedgerModal({ onClose, onConfirm, onError }: ConnectLedge
 	};
 
 	return (
-		<ModalDialog
-			isOpen
-			title="Connect Ledger Wallet"
-			onClose={onClose}
-			body={
+		<Dialog
+			open
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose();
+				}
+			}}
+		>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Connect Ledger Wallet</DialogTitle>
+				</DialogHeader>
 				<div className="flex flex-col items-center">
 					<div className="mt-4.5">
 						<LedgerLogo />
@@ -63,20 +76,20 @@ export function ConnectLedgerModal({ onClose, onConfirm, onError }: ConnectLedge
 						</div>
 					</div>
 				</div>
-			}
-			footer={
-				<div className="w-full flex flex-row self-center gap-3">
-					<Button variant="outline" size="tall" text="Cancel" onClick={onClose} />
-					<Button
-						variant="outline"
-						size="tall"
-						text="Continue"
-						onClick={onContinueClick}
-						loading={isConnectingToLedger}
-					/>
-				</div>
-			}
-		/>
+				<DialogFooter>
+					<div className="w-full flex flex-row self-center gap-3">
+						<Button variant="outline" size="tall" text="Cancel" onClick={onClose} />
+						<Button
+							variant="outline"
+							size="tall"
+							text="Continue"
+							onClick={onContinueClick}
+							loading={isConnectingToLedger}
+						/>
+					</div>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 

@@ -2,25 +2,27 @@
 title: About zkLogin
 ---
 
-zkLogin is a Sui primitive that lets wallets and apps link Sui objects with an OAuth credential—enabling users to perform transactions using both the credential and attached objects.
+zkLogin is a Sui primitive that lets users send transactions from a Sui address using an OAuth credential, without publicly linking the two.
 
-zkLogin eliminates the need for users to handle private keys or recall mnemonics/passwords in wallets. By guiding users through the OAuth flow, an zkLogin address is generated, enabling any associated objects to execute transactions on-chain.
+zkLogin is designed with the following goals in mind:
 
-zkLogin is designed with the following principles in mind:
+1. **Simple Onboarding**: zkLogin allows users to transact on Sui using the familiar OAuth login flow, eliminating the friction of handling cryptographic keys or remembering mnemonics.
 
-1. **Simple Onboarding**: With the familiar OAuth login flow, zkLogin enables users to easily create a Sui wallet and engage with Sui—eliminating the need for cryptographic key management.
+1. **Self-Custody**: A zkLogin transaction requires user approval via the standard OAuth login process--the OAuth provider cannot transact on the user's behalf.
 
-1. **Fully Self-Custodial**: A zkLogin transaction requires user approval within the OAuth login process, preventing unilateral fund movement from a zkLogin wallet—even by the OAuth provider.
+1. **Secure**: zkLogin is a two-factor authentication scheme: sending a transaction requires both a credential from a recent OAuth login and a salt not managed by the OAuth provider. An attacker who compromises an OAuth account cannot transact from the user's corresponding Sui address unless they separately compromise the salt.
 
-1. **Privacy-Focused**: Zero knowledge proofs prevent third parties from linking Sui addresses and OAuth identifiers.
+1. **Private**: Zero knowledge proofs prevent third parties from linking a Sui address with its corresponding OAuth identifier.
 
-1. **Natively Supported**: zkLogin is a protocol-level signature scheme, benefiting from [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). Unlike smart contract-based alternatives, it will smoothly integrate with sponsored transactions and MultiSig.
+1. **Optional Verified Identity**: However, a user can *opt in* to verify the OAuth identifier that was used to derive a particular Sui address. This serves as the foundation for a verifiable on-chain identity layer.
 
-1. **Foundation for the Identity Layer**: In the future, zkLogin can serve as an opt-in identity layer for users on-chain.
+1. **Accessible**: zkLogin is one of several native Sui signature schemes thanks to Sui's [crypto agility](https://docs.sui.io/devnet/learn/cryptography/sui-signatures). It smoothly integrates with other powerful Sui primitives like sponsored transactions and multisig.
 
-Are you a builder who wants to integrate with zkLogin into your wallet or application? Dive into our [Integration guide](#integration-guide).
+1. **Built with Rigor**. The [code](https://github.com/sui-foundation/zklogin-circuit) for zkLogin is open source and has been independently [audited](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) by two firms specializing in zero knowledge. The public zkLogin ceremony for creating the common reference string attracted contributions from more than 100 participants.
 
-If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies an zkLogin transaction, see [this section](#how-zklogin-works).
+Are you a builder who wants to integrate zkLogin into your application or wallet? Dive into our [Integration guide](#integration-guide).
+
+If you want to understand how zkLogin works, including how the zero-knowledge proof is generated, and how Sui verifies a zkLogin transaction, see [this section](#how-zklogin-works).
 
 If you are curious about the security model and the privacy considerations of zkLogin, visit this [page](#security-and-privacy).
 
@@ -28,7 +30,7 @@ More questions? See [this page](#faq).
 
 ## OpenID providers
 
-The following tables lists the OpenID providers and that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
+The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
 | Provider     | Can support? | Comments |
 | ------------ | ----------   | -------- |
@@ -73,29 +75,16 @@ npm install @mysten/zklogin
 
 Sui currently supports Google, Facebook, and Twitch. More OpenID-compatible providers will be enabled in the future.
 
-In Devnet and Testnet, a dev-use only client ID is provided below. These URLs can be used with the `redirect_uri` set to `https://zklogin-dev-redirect.vercel.app/api/auth`, which will use the `state` parameter to issue a redirect to your application.
-
-| Provider | Dev-Use Only Client ID |
-| ----------- | ----------- |
-| Google | 25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com |
-| Facebook | 233307156352917 |
-| Twitch | rs1bh065i9ya4ydvifixl4kss0uhpt |
-
-
-For example, the following TypeScript code can be used in Devnet and Testnet to construct a login URL for testing.
+For example, the following TypeScript code can be used to construct a login URL for testing.
 
 ```typescript
 const REDIRECT_URI = '<YOUR_SITE_URL>';
 
 const params = new URLSearchParams({
-   // When using the provided test client ID + redirect site, the redirect_uri needs to be provided in the state.
-   state: new URLSearchParams({
-      redirect_uri: REDIRECT_URI
-   }).toString(),
-   // Test Client ID for devnet / testnet:
-   client_id: '25769832374-famecqrhe2gkebt5fvqms2263046lj96.apps.googleusercontent.com',
-   redirect_uri: 'https://zklogin-dev-redirect.vercel.app/api/auth',
-   respond_type: 'id_token',
+   // See below for how to configure client ID and redirect URL
+   client_id: $CLIENT_ID,
+   redirect_uri: $REDIRECT_URL,
+   response_type: 'id_token',
    scope: 'openid',
    // See below for details about generation of the nonce
    nonce: nonce,
@@ -104,7 +93,7 @@ const params = new URLSearchParams({
 const loginURL = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 ```
 
-In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
+You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL`) with each provider as follows:
 
 ### Google
 
@@ -159,10 +148,11 @@ In Mainnet, you must configure the client ID (`$CLIENT_ID`) and redirect URL (`$
 ```typescript
 import { generateNonce, generateRandomness } from '@mysten/zklogin';
 
-const suiClient = await getActiveNetworkSuiClient();
+const FULLNODE_URL = 'https://fullnode.devnet.sui.io'; // replace with the RPC URL you want to use
+const suiClient = new SuiClient({ url: FULLNODE_URL });
 const { epoch, epochDurationMs, epochStartTimestampMs } = await suiClient.getLatestSuiSystemState();
 
-const maxEpoch = epoch + 2; // this means the ephemeral key will be active for 2 epochs from now. 
+const maxEpoch = Number(epoch) + 2; // this means the ephemeral key will be active for 2 epochs from now.
 const ephemeralKeyPair = new Ed25519Keypair();
 const randomness = generateRandomness();
 const nonce = generateNonce(ephemeralKeyPair.getPublicKey(), maxEpoch, randomness);
@@ -176,20 +166,50 @@ The OAuth URL can be constructed with `$CLIENT_ID`, `$REDIRECT_URL` and `$Nonce`
 | Facebook | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token` |
 | Twitch | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` |
 
+
+## Decoding JWT
+
+Upon successful redirection the ID Provider will attach the JWT token as a URL parameter (Using the Google Flow as an example)
+
+```
+http://host/auth#state=redirect_url_______&id_token=tokenPartA.tokenPartB.tokenPartC_______&authuser=0&prompt=none
+```
+
+The `id_token` param is actually the JWT token in encoded format. You can validate the correctness of the encoded token
+and investigate its structure by pasting it in the [jwt.io](jwt.io) website.
+
+To decode the JWT you can use a library like: `jwt_decode:` and map the response to the provided type `JwtPayload`:
+
+```typescript
+
+const decodedJwt = jwt_decode(encodedJWT) as JwtPayload;
+
+export interface JwtPayload {
+   iss?: string;  
+   sub?: string;  //Subject ID
+   aud?: string[] | string;
+   exp?: number;
+   nbf?: number;
+   iat?: number;
+   jti?: string;
+}
+```
+
+
 ## User Salt Management
 
 User salt is used when computing the zkLogin Sui address (see [definition](#address-definition)). There are several options for the application to maintain the user salt:
 1. Client Side:
-   - Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
-   - Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
+   - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
+   - Option 2: Browser or Mobile Storage: Ensure proper workflows to prevent users from losing wallet access during device or browser changes. One approach is to email the salt during new wallet setup.
 2. Backend service that exposes an endpoint that returns a unique salt for each user consistently.
-   - Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
-   - Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
+   - Option 3: Store a mapping from user identifier (e.g. `sub`) to user salt in a conventional database (e.g. `user` or `password` table). The salt is unique per user.
+   - Option 4: Implement a service that keeps a master seed value, and derive a user salt with key derivation by validating and parsing the JWT token. For example, use `HKDF(ikm = seed, salt = iss || aud, info = sub)` defined [here](https://github.com/MystenLabs/fastcrypto/blob/e6161f9279510e89bd9e9089a09edc018b30fbfe/fastcrypto/src/hmac.rs#L121). Note that this option does not allow any rotation on master seed or change in client ID (i.e. aud), otherwise a different user address will be derived and will result in loss of funds.
 
-Here is an example of a backend service request and response. Note that only valid tokens with the dev-only client IDs can be used.
+Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you wish to use the Mysten ran salt server, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
 ```bash
-curl -X POST http://salt.api-devnet.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
+curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
 
 Response: {"salt":"129390038577185583942388216820280642146"}
 ```
@@ -203,7 +223,7 @@ Once the OAuth flow completes, the JWT token can be found in the redirect URL. A
 ```typescript
 import { jwtToAddress } from '@mysten/zklogin';
 
-const address = jwtToAddress(jwt, userSalt)
+const zkLoginUserAddress = jwtToAddress(jwt, userSalt)
 ```
 
 ## Get the Zero-Knowledge Proof
@@ -212,27 +232,124 @@ A ZK proof is required for each ephemeral KeyPair refresh upon expiry. Otherwise
 
 Because generating a ZK proof can be resource-intensive and potentially slow on the client side, it's advised that wallets utilize a backend service endpoint dedicated to ZK proof generation.
 
-Here's an example request and response for the Mysten Labs-maintained proving service (the endpoint is currently experimental and only available in devnet).
+There are two options:  
+1. Call the Mysten Labs-maintained proving service
+1. Run the proving service in your backend using the provided Docker images. 
+### Call the Mysten Labs-maintained proving service
 
-Note that only valid JWT token authenticated with dev-only client ID is supported. If you wish to use the above endpoint for the ZK Proving Service, please contact us for whitelisting your registered client ID.
+If you wish to use the Mysten ran ZK Proving Service, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
+
+You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
 ```bash
-curl -X POST http://prover-devnet.mystenlabs.com:8080/zkp -H 'Content-Type: application/json' -d '{"jwt":"$JWT_TOKEN","extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544","maxEpoch":"10","jwtRandomness":"100681567828351849884072155819400689117","salt":"248191903847969014646285995941615069143","keyClaimName":"sub"}'
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
+"maxEpoch":"10", \
+"jwtRandomness":"100681567828351849884072155819400689117", \
+"salt":"248191903847969014646285995941615069143", \
+"keyClaimName":"sub" \
+}'
 
-Response: 
+curl -X POST https://prover.mystenlabs.com/v1 -H 'Content-Type: application/json' \
+-d '{"jwt":"$JWT_TOKEN", \
+"extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
+"maxEpoch":"10", \
+"jwtRandomness":"S76Qi8c/SZlmmotnFMr13Q==", \
+"salt":"urgFnwIxJ++Ooswtf0Nn1w==", \
+"keyClaimName":"sub" \
+}'
 
-`{"proofPoints":{"a":["17267520948013237176538401967633949796808964318007586959472021003187557716854","14650660244262428784196747165683760208919070184766586754097510948934669736103","1"],"b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443","10547097602625638823059992458926868829066244356588080322181801706465994418281"],["12744153306027049365027606189549081708414309055722206371798414155740784907883","17883388059920040098415197241200663975335711492591606641576557652282627716838"],["1","0"]],"c":["14769767061575837119226231519343805418804298487906870764117230269550212315249","19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},"issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw","indexMod4":2},"headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
+Response:
+
+`{"proofPoints":{
+  "a":["17267520948013237176538401967633949796808964318007586959472021003187557716854",
+      "14650660244262428784196747165683760208919070184766586754097510948934669736103",
+      "1"],
+  "b":[["21139310988334827550539224708307701217878230950292201561482099688321320348443",
+  "10547097602625638823059992458926868829066244356588080322181801706465994418281"],
+  ["12744153306027049365027606189549081708414309055722206371798414155740784907883",
+  "17883388059920040098415197241200663975335711492591606641576557652282627716838"],
+  ["1","0"]],
+  
+  "c":["14769767061575837119226231519343805418804298487906870764117230269550212315249",
+  "19108054814174425469923382354535700312637807408963428646825944966509611405530","1"]},
+  
+  "issBase64Details":{"value":"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw", "indexMod4": 2 },
+  "headerBase64":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ"}`
 ```
+
+To avoid possible CORS errors in Frontend apps, it is suggested to delegate this call to a backend service.
+
+The response can be mapped to the inputs parameter type of `getZkLoginSignature` of zkLogin SDK. 
+
+ ```typescript
+ const proofResponse = await post('/your-internal-api/zkp/get', zkpRequestPayload);
+
+export type PartialZkLoginSignature = Omit<
+	Parameters<typeof getZkLoginSignature>['0']['inputs'],
+	'addressSeed'
+>;
+const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
+````
+
+### Run the proving service in your backend
+
+1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
+
+1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated.
+
+```bash
+curl -O https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey
+```
+
+   - To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
+
+1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
+
+```bash
+docker run \
+  -e ZKEY=/app/binaries/zkLogin.zkey \
+  -e WITNESS_BINARIES=/app/binaries \
+  -v <path_to_zkLogin.zkey>:/app/binaries/zkLogin.zkey \
+  -p PORT1:8080 \
+  <prover-image>
+```
+
+1. Run `prover-fe` at `PORT2`:
+
+```bash
+docker run \
+    -e PROVER_URI='http://localhost:PORT1/input' \
+    -e NODE_ENV=production \
+    -e DEBUG=zkLogin:info,jwks \
+    -p PORT2:8080 \
+    <prover-fe-image>
+```
+
+1. Expose the `prover-fe` service appropriately and keep the prover service internal.
+
+1. To call the proving service, the following two endpoints are supported:
+   - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
+   - `/v1`: The request and response are the same as the Mysten Labs maintained service.
+
+A few things to note:
+
+1. If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
+
+1. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).
+First, sign the transaction bytes with the ephemeral private key. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs).Make sure that the transaction `sender ` is also defined.
   ```typescript
-  const ephemeralKeyPair = new Ed25519Keypair();
+ const ephemeralKeyPair = new Ed25519Keypair();
 
 const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
 const txb = new TransactionBlock();
+
+txb.setSender(zkLoginUserAddress);
 
 const { bytes, signature: userSignature } = await txb.sign({
    client,
@@ -240,34 +357,35 @@ const { bytes, signature: userSignature } = await txb.sign({
 });
   ```
 
-Next, serialize the zkLogin signature by combining the ZK proof and the ephemeral signature.
-  ```typescript
-  import { getZkSignature } from "@mysten/zklogin";
+Next, generate an Address Seed by combining `userSalt`, `sub` (subject ID) and `aud` (audience).
 
-const zkSignature = getZkSignature({
-   inputs,
+Set the address Seed and the partial ZkLogin Signature to be the `inputs` param.
+
+You can now serialize the zkLogin signature by combining the ZK proof (`inputs`),
+the `maxEpoch` and the ephemeral signature (`userSignature`).
+
+```typescript
+import { genAddressSeed, getZkLoginSignature } from "@mysten/zklogin";
+
+const addressSeed : string = genAddressSeed(BigInt(userSalt!), "sub", decodedJwt.sub, decodedJwt.aud).toString();
+
+const zkLoginSignature : SerializedSignature = getZkLoginSignature({
+   inputs: {
+      ...partialZkLoginSignature,
+      addressSeed
+   },
    maxEpoch,
    userSignature,
 });
-  ```
+```
 
 Finally, execute the transaction.
   ```typescript
   client.executeTransactionBlock({
    transactionBlock: bytes,
-   signature: zkSignature,
+   signature: zkLoginSignature,
 });
   ```
-
-## Add sponsored transaction support
-
-This is optional, but it enhances user experience by allowing zkLogin address holders to skip acquiring SUI prior to transaction initiation.
-
-Coming Soon
-
-## Example integration
-
-Coming Soon
 
 # How zkLogin Works
 
@@ -383,56 +501,31 @@ We call the claim used to derive a users' address as the "key claim" e.g., sub o
 
 ## Ceremony
 
-Through zero-knowledge proof, we hide sensitive credentials during proof generation while verifying user information on the blockchain. This involves treating the JWT as a private witness within a circuit that internally validates both the OAuth provider's RSA signature in the JWT token and the expected user information.
+In order to preserve privacy of the OAuth artifacts, a zero-knowledge proof of possession of the artifacts is provided. zkLogin employs the Groth16 zkSNARK to instantiate the zero-knowledge proofs, as it is the most efficient general-purpose zkSNARK in terms of proof size and verification efficiency. 
 
-The non-interactive ZK proofs (NIZK) share a public, universal common reference string (CRS) for all users. Traditional NIZK applications require a trusted setup, involving trusted parties, distributed ceremonies, or inefficient transparent methods. Leveraging the Groth16 zkSNARK system, we benefit from compact proofs and efficient verifiers, with a one-time setup cost. Therefore, we establish a common CRS through a one-time ceremony accessible to everyone.
+However, Groth16 needs a computation-specific Common Reference String (CRS) to be setup by a trusted party. With zkLogin expected to ensure the safe-keeping of high value transactions and the integrity of critical smart contracts, we cannot base the security of the system on the honesty of a single entity. Hence, to generate the CRS for the zkLogin circuit, it is vital to run a protocol which bases its security on the assumed honesty of a small fraction of a large number of parties.
 
-### What is The Ceremony?
+### What is the ceremony?
 
-The ceremony's objective is to compute a public common reference string (CRS). Achieving this involves using the circuit description and confidentially-generated random numbers for sampling. Although these random numbers are not needed in the subsequent protocols, if they are leaked, the security of the protocols will be compromised. Therefore, we need to trust the setup process in two crucial ways: (1) ensuring a faithful sampling process, and (2) securely discarding the confidential random numbers.
+The Sui zkLogin ceremony is essentially a cryptographic multi-party computation (MPC) performed by a diverse group of participants to generate this CRS. We follow the MPC protocol [MMORPG](https://eprint.iacr.org/2017/1050.pdf) described by Bowe, Gabizon and Miers. The protocol roughly proceeds in 2 phases. The first phase results in a series of powers of a secret quantity tau in the exponent of an elliptic curve element. Since this phase is circuit-agnostic, we adopted the result of the existing community contributed [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master). Our ceremony was the second phase, which is specific to the zkLogin circuit.
 
-We adopt a distributed setup process  instead of relying on a single central party to adhere to the requirements. Through a distributed protocol involving numerous parties, we ensure the setup affords the intended security and privacy assurances. Even if only one party follows the protocol honestly, the final setup remains reliable. Refer to [this page](https://sui.io/zklogin) for more details.
+The MMORPG protocol is a sequential protocol, which allows an indefinite number of parties to participate in sequence, without the need of any prior synchronization or ordering. Each party needs to download the output of the previous party, generate entropy of its own and then layer it on top of the received result, producing its own contribution, which is then relayed to the next party. The protocol guarantees security, if at least one of the the participants follows the protocol faithfully, generates strong entropy and discards it reliably.
 
-### Who is participating?
+### How was the ceremony performed?
 
-The following groups are invited to participate:
+We sent invitations to 100+ people with diverse backgrounds and affiliations: Sui validators, cryptographers, web3 experts, world-renowned academicians, and business leaders. We planned the ceremony to take place on the dates September 12-18, 2023, but allowed participants to join when they wanted with no fixed slots. 
 
-1. Experts: People who work in Web3, cryptography, and distributed systems, and who have possibly participated in similar ceremonies.
-2. Validators: Entities that have already participated in securing the Sui Network.
+Since the MPC is sequential, each contributor needed to wait till the previous contributor finished in order to receive the previous contribution, follow the MPC steps and produce their own contribution. Due to this structure, we provisioned a queue where participants waited, while those who joined before them finished. To authenticate participants, we sent a unique activation code to each of them. The activation code was the secret key of a signing key pair, which had a dual purpose: it allowed the coordination server to associate the participant's email with the contribution, and to verify the contribution with the corresponding public key.
 
-The ceremony's security guarantees that among the participants, at least one adheres to the protocol and handles entropy safely. With several participants, the likelihood of this outcome is elevated.
+Participants had two options to contribute: through a browser or a docker. The browser option was more user-friendly for contributors to participate as everything happens in the browser. The Docker option required Docker setup but is more transparent—the Dockerfile and contributor source code are open-sourced and the whole process is verifiable. Moreover, the browser option utilizes [snarkjs](https://github.com/iden3/snarkjs) while the Docker option utilizes [Kobi's implementation](https://github.com/iseriohn/phase2-bn254). This provided software variety and contributors could choose to contribute by whichever method they trust. In addition, participants could generate entropy via entering random text or making random cursor movements.
 
-### What exactly happens during the contribution?
-
-Contributions to the ceremony are made one-by-one in sequence, with participants forming a queue. A participant joins the queue upon entering the invitation code in their browser. The coordinator server then assigns each participant a position according to their queue entry.
-
-When a participant is at the head of the queue, they have an option to choose to contribute within the browser or with Docker. Opting for the browser is the simplest method as all processes run in the background; the Docker choice demands command line execution with dependencies.
-
-Throughout the contribution process, whether through browser interaction or running the Docker command, a series of events take place:
-
-1. The latest contribution file is fetched from the coordinator server.
-
-1. The file's integrity is verified within the browser.
-
-1. An entropy is input.
-
-1. The previous contribution is downloaded and the contribution code is executed.
-
-1. The contribution hash is signed.
-
-1. The contribution is uploaded to the coordinator server.
-
-Once the coordinator server confirms the accurately computed uploaded contribution and verifies the signed hash, it stores the latest contribution on-disk. Then, it advances to the next participant in the queue, who repeats the same steps. This cycle continues until the queue is empty.
-
-If for any reason, the participant at the head of the queue did not finish uploading the verified contribution in time, the coordinator discards the participant and moves on to the next one in the queue. Note that throughout the time, the coordinator does not have access to any private information about the contribution.
-
-We encourage the participant to use an entropy that is easy to discard, like using the mouse-moving option that contains high entropy. As long as one participant safely disposes of their entropy, we consider the resulting CRS is trustworthy.
+The zkLogin [circuit](https://github.com/sui-foundation/zklogin-circuit) and the ceremony client [code](https://github.com/sui-foundation/zk-ceremony-client) were made open source and the links were made available to the participants to review before the ceremony, if they chose to do so. In addition, we also posted developer [docs](https://docs.sui.io/build/zk_login) and an audit [report](https://github.com/sui-foundation/security-audits/blob/main/zksecurity_zklogin-circuits.pdf) on the circuit from zkSecurity. We adopted [challenge #0081](https://pse-trusted-setup-ppot.s3.eu-central-1.amazonaws.com/challenge_0081) (resulting from 80 community contributions) from [perpetual powers of tau](https://github.com/privacy-scaling-explorations/perpetualpowersoftau/tree/master/0080_carter_response) in phase 1, which is circuit agnostic. We applied the output of the [Drand](http://drand.love) random beacon at epoch #3298000 to remove bias. For phase 2, our ceremony had 111 contributions, 82 from browser and 29 from docker. Finally, we applied the output of the Drand random beacon at epoch #3320606 to remove bias from contributions. All intermediate files can be reproduced following instructions [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase1/README.md) for phase 1 and [here](https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/README.md) for phase 2.
 
 ## Finalization
 
-Once all contributions are concluded, the ultimate CRS and a verification script will be made available for public examination. The Sui Foundation will run the verification to ensure the integrity of the ceremony and we also invite anyone to verify the same.
+The final CRS along with the transcript of contribution of every participant is available in a public repository. Contributors received both the hash of the previous contribution they were working on and the resulting hash after their contribution, displayed on-screen and sent via email. They can compare these hashes with the transcripts publicly available on the ceremony site. In addition, anyone is able to check that the hashes are computed correctly and each contribution is properly incorporated in the finalized parameters.
 
-Eventually, the final CRS will be used to generate the proving key and verifying key. The proving key will be used to generate zero knowledge proof for ZkLogin, stored with the ZK proving service. The verifying key will be deployed as part of the validator software that is used to verify the zkLogin transaction on Sui.
+Eventually, the final CRS was used to generate the proving key and verifying key. The proving key is used to generate zero knowledge proof for zkLogin, stored with the ZK proving service. The verifying key was [deployed](https://github.com/MystenLabs/sui/pull/13822) as part of the validator software (protocol version 25 in [release 1.10.1](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.10.1)) that is used to verify the zkLogin transaction on Sui.
 
 ## Security and Privacy
 
@@ -477,7 +570,7 @@ zkLogin can support providers that work with OpenID Connect built on top of the 
 
 Traditional private key wallets demand users to consistently recall mnemonics and passphrases, necessitating secure storage to prevent fund loss from private key compromise.
 
-On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting ephemeral keys alone does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
+On the other hand, a zkLogin wallet only requires an ephemeral private key storage with session expiry and the OAuth login flow with expiry. Forgetting an ephemeral key does not result in loss of funds, because a user can always sign in again to generate a new ephemeral key and a new ZK proof.
 
 ## How is zkLogin different from MPC or Multisig wallets?
 
@@ -485,9 +578,17 @@ Multi-Party Computation (MPC) and Multisig wallets rely on multiple keys or dist
 
 zkLogin does not split any individual private keys, but ephemeral private keys are registered using a fresh nonce when the user authenticates with the OAuth provider. The primary advantage of zkLogin is that the user does not need to manage any persistent private key anywhere, not even with any private keys management techniques like MPC or Multisig.
 
-Interestingly though, a zkLogin address automatically simulates a 2-of-2 setting, where the first part is user's OAuth account and the second is user's salt.
+You can think of zkLogin as a 2FA scheme for an address, where the first part is user's OAuth account and the second is the user's salt.
 
 Furthermore, because Sui native supports Multisig wallets, one can always include one or more zkLogin signers inside a Multisig wallet for additional security, such as using the zkLogin part as 2FA in k-of-N settings.
+
+## If my OAuth account is compromised, what happens to my zkLogin address?
+
+Because zkLogin is a 2FA system, an attacker that has compromised your OAuth account cannot access your zkLogin address unless they have separately compromised your salt.
+
+## If I lose access to my OAuth account, do I lose access to my zkLogin address?
+
+Yes. You must be able to log into your OAuth account and produce a current JWT in order to use zkLogin.
 
 ## Does losing my OAuth credential mean the loss of funds in the zkLogin wallet?
 
@@ -497,9 +598,9 @@ In the unfortunate event where user's OAuth credentials get compromised, an adve
 It's also important to highlight that due to the fact that zkLogin addresses do not expose any information about the user's identity or wallet used, targeted attacks by just monitoring the blockchain are more difficult.
 Finally, on the unfortunate event where one loses access to their OAuth account permanently, access to that wallet is lost. But if recovery from a lost OAuth account is desired, a good suggestion for wallet providers is to support the native Sui Multisig functionality and add a backup method. Note that it's even possible to have a Multisig wallet that all signers are using zkLogin, i.e. an 1-of-2 Multisig zkLogin wallet where the first part is Google and the second Facebook OAuth, respectively.
 
-## Can I convert or merge a traditional private key wallet into a zkLogin one?
+## Can I convert or merge a traditional private key wallet into a zkLogin one, or vice versa?
 
-No. The zkLogin wallet address is derived differently compared to a private key address. Currently, the zkLogin wallet lacks portability, necessitating asset transfers between a zkLogin wallet and a traditional one.
+No. The zkLogin wallet address is derived differently compared to a private key address.
 
 ## Will my zkLogin address ever change?
 
@@ -531,15 +632,7 @@ No. Proof generation is only required when ephemeral KeyPair expires. Since the 
 
 ## Does zkLogin work on mobile?
 
-zkLogin is a a Sui native primitive and not a privilege of a particular wallet provider, and thus it can be integrated to any wallet provider, including mobile wallets.
-
-## Can I run my own ZK Proving Service?
-
-Yes, you can choose to run the server binary on premise and generate ZK proofs yourself instead of calling a provider. Please contact us for more instructions.
-
-## What RPC providers support the ZK Proving Service?
-
-The application can currently call the Mysten Labs-maintained ZK Proving Service. Please reach out to whitelist the application's registered client ID to use the service.
+zkLogin is a Sui native primitive and not a feature of a particular application or wallet. It can be used by any Sui developer, including on mobile.
 
 ## Is account recovery possible if the user loses the OAuth credentials?
 
@@ -570,3 +663,11 @@ The key differentiators that zkLogin brings to Sui are:
 3. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
 
 4. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
+
+## There are errors when submitting the zkLogin signature, how do I debug?
+
+The following command runs the same signature verify function that is used in Sui validators. You can examine a zkLogin signature with its transaction bytes (both in Base64) to validate. `$EPOCH` is the current epoch of the network and it should be smaller than the max_epoch specified in the signature.
+
+```bash
+$SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --tx-bytes $TX_BYTES --provider Google --curr-epoch $EPOCH
+```

@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type Wallet } from '_src/shared/qredo-api';
+
+import { QredoAccountSource } from '../account-sources/QredoAccountSource';
 import {
 	Account,
-	type SerializedAccount,
 	type PasswordUnlockableAccount,
+	type SerializedAccount,
 	type SerializedUIAccount,
 } from './Account';
-import { QredoAccountSource } from '../account-sources/QredoAccountSource';
-import { type Wallet } from '_src/shared/qredo-api';
 
 export interface QredoSerializedAccount extends SerializedAccount, Wallet {
 	type: 'qredo';
@@ -55,7 +56,10 @@ export class QredoAccount
 		await this.onLocked(allowRead);
 	}
 
-	async passwordUnlock(password: string): Promise<void> {
+	async passwordUnlock(password?: string): Promise<void> {
+		if (!password) {
+			throw new Error('Missing password to unlock the account');
+		}
 		await (await this.#getQredoSource()).unlock(password);
 		await this.setEphemeralValue({ unlocked: true });
 		await this.onUnlocked();

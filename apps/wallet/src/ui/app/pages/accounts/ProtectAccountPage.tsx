@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
+import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,10 +13,8 @@ import Loading from '../../components/loading';
 import { useAccounts } from '../../hooks/useAccounts';
 import { autoLockDataToMinutes } from '../../hooks/useAutoLockMinutes';
 import { useAutoLockMinutesMutation } from '../../hooks/useAutoLockMinutesMutation';
-import { type CreateType, useCreateAccountsMutation } from '../../hooks/useCreateAccountMutation';
+import { useCreateAccountsMutation, type CreateType } from '../../hooks/useCreateAccountMutation';
 import { Heading } from '../../shared/heading';
-import { Text } from '_app/shared/text';
-import { isMnemonicSerializedUiAccount } from '_src/background/accounts/MnemonicAccount';
 
 const allowedAccountTypes: CreateType[] = [
 	'new-mnemonic',
@@ -78,6 +78,7 @@ export function ProtectAccountPage() {
 	if (!isAllowedAccountType(accountType)) {
 		return <Navigate to="/" replace />;
 	}
+
 	return (
 		<div className="rounded-20 bg-sui-lightest shadow-wallet-content flex flex-col items-center px-6 py-10 overflow-auto w-popup-width max-h-popup-height min-h-popup-minimum h-screen">
 			<Loading loading={showVerifyPasswordView === null}>

@@ -4,7 +4,7 @@
 import { styled } from './stitches';
 import { Title } from './utils/Dialog';
 import { SuiIcon } from './utils/icons';
-import { Truncate, Panel } from './utils/ui';
+import { Panel, Truncate } from './utils/ui';
 import { useWalletKit } from './WalletKitContext';
 
 const Container = styled(Panel, {

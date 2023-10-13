@@ -34,6 +34,7 @@ use crate::authority::{
     move_integration_tests::build_and_publish_test_package_with_upgrade_cap, AuthorityState,
 };
 
+#[macro_export]
 macro_rules! move_call {
     {$builder:expr, ($addr:expr)::$module_name:ident::$func:ident($($args:expr),* $(,)?)} => {
         $builder.programmable_move_call(
@@ -115,10 +116,6 @@ struct UpgradeStateRunner {
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
         telemetry_subscribers::init_for_testing();
-        let _dont_remove = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_package_upgrades_for_testing(true);
-            config
-        });
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -421,7 +418,7 @@ async fn test_upgrade_package_incorrect_digest() {
 async fn test_upgrade_package_compatibility_too_permissive() {
     let mut runner = UpgradeStateRunner::new("move_upgrade/base").await;
 
-    let TransactionEffects::V1(effects) = runner
+    let effects = runner
         .run({
             let mut builder = ProgrammableTransactionBuilder::new();
             let cap = builder

@@ -3,8 +3,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { type z } from 'zod';
-import { useBackgroundClient } from './useBackgroundClient';
+
 import { type zodSchema } from '../components/accounts/AutoLockSelector';
+import { useBackgroundClient } from './useBackgroundClient';
 
 export type AutoLockInterval = z.infer<typeof zodSchema>['autoLock']['interval'];
 export const autoLockMinutesQueryKey = ['get auto-lock minutes'];

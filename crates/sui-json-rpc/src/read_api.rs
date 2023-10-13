@@ -252,22 +252,17 @@ impl ReadApi {
             }
         }
 
-        let state = self.state.clone();
-        let digests_clone = digests.clone();
-        // TODO: this is reading from a deprecated DB. The replacement DB however
-        // is in the epoch store, and thus we risk breaking the read API for txes
-        // from old epochs. Should be migrated once we have indexer support, or
-        // when we can tolerate returning None for old txes.
-        let checkpoint_seq_list =
-            state
-            .deprecated_multi_get_transaction_checkpoint(&digests_clone)
+        let checkpoint_seq_list = self
+            .transaction_kv_store
+            .multi_get_transaction_checkpoint(&digests)
+            .await
             .tap_err(
-                |err| debug!(digests=?digests_clone, "Failed to multi get checkpoint sequence number: {:?}", err))?;
+                |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
             .zip(checkpoint_seq_list.into_iter())
         {
-            cache_entry.checkpoint_seq = seq.map(|(_, seq)| seq);
+            cache_entry.checkpoint_seq = seq;
         }
 
         let unique_checkpoint_numbers = temp_response
@@ -371,7 +366,8 @@ impl ReadApi {
             }
         }
 
-        let object_cache = ObjectProviderCache::new(self.state.clone());
+        let object_cache =
+            ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
         if opts.show_balance_changes {
             let mut results = vec![];
             for resp in temp_response.values() {
@@ -781,7 +777,8 @@ impl ReadApiServer for ReadApi {
                 }
             }
 
-            let object_cache = ObjectProviderCache::new(self.state.clone());
+            let object_cache =
+                ObjectProviderCache::new((self.state.clone(), self.transaction_kv_store.clone()));
             if opts.show_balance_changes {
                 if let Some(effects) = &temp_response.effects {
                     let balance_changes = get_balance_changes_from_effect(
@@ -1099,8 +1096,12 @@ async fn get_display_fields(
     original_object: &Object,
     original_layout: &Option<MoveStructLayout>,
 ) -> Result<DisplayFieldsResponse, ObjectDisplayError> {
-    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)? else {
-        return Ok(DisplayFieldsResponse { data: None, error: None });
+    let Some((object_type, layout)) = get_object_type_and_struct(original_object, original_layout)?
+    else {
+        return Ok(DisplayFieldsResponse {
+            data: None,
+            error: None,
+        });
     };
     if let Some(display_object) =
         get_display_object_by_type(kv_store, fullnode_api, &object_type).await?
@@ -1140,7 +1141,7 @@ async fn get_display_object_by_type(
     }
 }
 
-fn get_object_type_and_struct(
+pub fn get_object_type_and_struct(
     o: &Object,
     layout: &Option<MoveStructLayout>,
 ) -> Result<Option<(StructTag, MoveStruct)>, ObjectDisplayError> {
@@ -1241,10 +1242,10 @@ fn get_value_from_move_struct(
 ) -> Result<String, Error> {
     let parts: Vec<&str> = var_name.split('.').collect();
     if parts.is_empty() {
-        return Err(anyhow!("Display template value cannot be empty"))?;
+        Err(anyhow!("Display template value cannot be empty"))?;
     }
     if parts.len() > MAX_DISPLAY_NESTED_LEVEL {
-        return Err(anyhow!(
+        Err(anyhow!(
             "Display template value nested depth cannot exist {}",
             MAX_DISPLAY_NESTED_LEVEL
         ))?;
@@ -1260,13 +1261,13 @@ fn get_value_from_move_struct(
                     if let Some(value) = fields.get(part) {
                         current_value = value;
                     } else {
-                        return Err(anyhow!(
+                        Err(anyhow!(
                             "Field value {} cannot be found in struct",
                             var_name
                         ))?;
                     }
                 } else {
-                    return Err(Error::UnexpectedError(format!(
+                    Err(Error::UnexpectedError(format!(
                         "Unexpected move struct type for field {}",
                         var_name
                     )))?;

@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+axum.workspace = true
 tracing.workspace = true
 scopeguard.workspace = true
 prometheus.workspace = true
@@ -21,3 +21,4 @@ futures.workspace = true
 async-trait.workspace = true
 
 prometheus-closure-metric.workspace = true
+workspace-hack.workspace = true

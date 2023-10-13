@@ -5,9 +5,11 @@ use clap::Parser;
 use tracing::{error, info};
 
 use sui_indexer::errors::IndexerError;
+use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
 use sui_indexer::store::PgIndexerStore;
+use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
 use sui_indexer::{get_pg_pool_connection, new_pg_connection_pool, Indexer, IndexerConfig};
 
@@ -32,6 +34,9 @@ async fn main() -> Result<(), IndexerError> {
         indexer_config.rpc_client_url.as_str(),
     )?;
     let indexer_metrics = IndexerMetrics::new(&registry);
+
+    mysten_metrics::init_metrics(&registry);
+
     let db_url = indexer_config.get_db_url().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed parsing database url with error {:?}",
@@ -73,7 +78,7 @@ async fn main() -> Result<(), IndexerError> {
             );
             e
         })?;
-        reset_database(&mut conn, /* drop_all */ true).map_err(|e| {
+        reset_database(&mut conn, /* drop_all */ true, indexer_config.use_v2).map_err(|e| {
             let db_err_msg = format!(
                 "Failed resetting database with url: {:?} and error: {:?}",
                 db_url, e
@@ -82,7 +87,16 @@ async fn main() -> Result<(), IndexerError> {
             IndexerError::PostgresResetError(db_err_msg)
         })?;
     }
-    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
+    if indexer_config.use_v2 {
+        info!("Use v2");
+        if indexer_config.fullnode_sync_worker {
+            let store = PgIndexerStoreV2::new(blocking_cp, indexer_metrics.clone());
+            return IndexerV2::start_writer(&indexer_config, store, indexer_metrics).await;
+        } else {
+            return IndexerV2::start_reader(&indexer_config, &registry, db_url).await;
+        }
+    }
 
+    let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
     Indexer::start(&indexer_config, &registry, store, indexer_metrics, None).await
 }

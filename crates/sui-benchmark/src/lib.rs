@@ -368,7 +368,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
-                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
@@ -857,6 +856,9 @@ impl From<CallArg> for BenchMoveCallArg {
                     initial_shared_version,
                     mutable,
                 } => BenchMoveCallArg::Shared((id, initial_shared_version, mutable)),
+                ObjectArg::Receiving(_) => {
+                    unimplemented!("Receiving is not supported for benchmarks")
+                }
             },
         }
     }

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-
 import type { RefObject } from 'react';
 
 type Event = MouseEvent | TouchEvent;

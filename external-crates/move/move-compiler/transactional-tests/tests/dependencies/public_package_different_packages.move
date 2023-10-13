@@ -1,8 +1,8 @@
-//#init --edition 2024.alpha
+//# init --edition 2024.alpha
 
 //# publish
 module 0x42::X {
-    struct T has drop {}
+    public struct T has drop {}
     public(package) fun new(): T {
         T {}
     }

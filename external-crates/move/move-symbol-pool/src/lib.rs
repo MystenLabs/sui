@@ -78,6 +78,7 @@ static_symbols!(
     "share_object",
     "event",
     "emit",
+    "Receiving",
 );
 
 /// The global, unique cache of strings.

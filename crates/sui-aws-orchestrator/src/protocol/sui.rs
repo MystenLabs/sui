@@ -259,13 +259,13 @@ impl ProtocolMetrics for SuiProtocol {
             .validator_config_info
             .expect("No validator in genesis")
             .iter()
-            .zip(instances.into_iter())
+            .zip(instances)
             .map(|(config, instance)| {
                 let path = format!(
                     "{}:{}{}",
                     instance.main_ip,
                     config.metrics_address.port(),
-                    sui_node::metrics::METRICS_ROUTE
+                    mysten_metrics::METRICS_ROUTE
                 );
                 (instance, path)
             })
@@ -283,7 +283,7 @@ impl ProtocolMetrics for SuiProtocol {
                     "{}:{}{}",
                     instance.main_ip,
                     Self::CLIENT_METRICS_PORT,
-                    sui_node::metrics::METRICS_ROUTE
+                    mysten_metrics::METRICS_ROUTE
                 );
                 (instance, path)
             })

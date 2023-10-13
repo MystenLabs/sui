@@ -8,7 +8,6 @@ mod checked {
 
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
-    use once_cell::sync::Lazy;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -34,13 +33,13 @@ mod checked {
     use sui_types::committee::EpochId;
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
+    use sui_types::execution::is_certificate_denied;
     use sui_types::execution_status::ExecutionStatus;
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::messages_consensus::ConsensusCommitPrologue;
     use sui_types::storage::BackingStore;
-    use sui_types::storage::WriteKind;
     #[cfg(msim)]
     use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
@@ -57,37 +56,6 @@ mod checked {
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
         SUI_SYSTEM_PACKAGE_ID,
     };
-
-    /// If a transaction digest shows up in this list, when executing such transaction,
-    /// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
-    /// gas smashing). Because this list is not gated by protocol version, there are a few important
-    /// criteria for adding a digest to this list:
-    /// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
-    /// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction,
-    /// we must make sure the transaction is already in this list. Otherwise nodes running the newer version
-    /// without these transactions in the list will generate forked result.
-    /// Below is a scenario of when we need to use this list:
-    /// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
-    /// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
-    /// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the transaction digest
-    /// to this list as well asap, and ship this binary to all fullnodes, so that they can sync past this transaction.
-    /// 4. We then can start fixing the issue, and ship the fix to all nodes.
-    /// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
-    /// node that sync from genesis will fork on this transaction. We may be able to remove it once
-    /// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
-    pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
-        static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> =
-            Lazy::new(|| HashSet::from([]));
-        Lazy::force(&DENIED_CERTIFICATES)
-    }
-
-    fn is_certificate_denied(
-        transaction_digest: &TransactionDigest,
-        certificate_deny_set: &HashSet<TransactionDigest>,
-    ) -> bool {
-        certificate_deny_set.contains(transaction_digest)
-            || get_denied_certificates().contains(transaction_digest)
-    }
 
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -111,9 +79,15 @@ mod checked {
         Result<Mode::ExecutionResults, ExecutionError>,
     ) {
         let shared_object_refs = input_objects.filter_shared_objects();
+        let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let mut temporary_store =
-            TemporaryStore::new(store, input_objects, transaction_digest, protocol_config);
+        let mut temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            receiving_objects,
+            transaction_digest,
+            protocol_config,
+        );
 
         let mut gas_charger =
             GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
@@ -205,7 +179,7 @@ mod checked {
         let (inner, effects) = temporary_store.into_effects(
             shared_object_refs,
             &transaction_digest,
-            transaction_dependencies.into_iter().collect(),
+            transaction_dependencies,
             gas_cost_summary,
             status,
             &mut gas_charger,
@@ -223,8 +197,13 @@ mod checked {
         input_objects: InputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
-        let mut temporary_store =
-            TemporaryStore::new(store, input_objects, tx_context.digest(), protocol_config);
+        let mut temporary_store = TemporaryStore::new(
+            store,
+            input_objects,
+            vec![],
+            tx_context.digest(),
+            protocol_config,
+        );
         let mut gas_charger = GasCharger::new_unmetered(tx_context.digest());
         programmable_transactions::execution::execute::<execution_mode::Genesis>(
             protocol_config,
@@ -494,6 +473,7 @@ mod checked {
         Ok(())
     }
 
+    #[instrument(level = "debug", skip_all)]
     fn execution_loop<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         transaction_kind: TransactionKind,
@@ -503,7 +483,7 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
-        match transaction_kind {
+        let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
                 let builder = ProgrammableTransactionBuilder::new();
                 advance_epoch(
@@ -532,7 +512,7 @@ mod checked {
                                 previous_transaction: tx_ctx.digest(),
                                 storage_rebate: 0,
                             };
-                            temporary_store.write_object(object, WriteKind::Create);
+                            temporary_store.create_object(object);
                         }
                     }
                 }
@@ -608,7 +588,9 @@ mod checked {
                 )?;
                 Ok(Mode::empty_results())
             }
-        }
+        }?;
+        temporary_store.check_execution_results_consistency()?;
+        Ok(result)
     }
 
     fn mint_epoch_rewards_in_pt(
@@ -866,7 +848,7 @@ mod checked {
                     .decrement_version();
 
                 // upgrade of a previously existing framework module
-                temporary_store.write_object(new_package, WriteKind::Mutate);
+                temporary_store.upgrade_system_package(new_package);
             }
         }
 

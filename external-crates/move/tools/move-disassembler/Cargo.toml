@@ -19,6 +19,7 @@ move-binary-format = { path = "../../move-binary-format" }
 move-coverage = { path = "../move-coverage" }
 move-compiler = { path = "../../move-compiler" }
 
+bcs.workspace = true
 clap.workspace = true
 hex = "0.4.3"
 

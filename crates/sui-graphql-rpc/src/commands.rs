@@ -18,6 +18,11 @@ pub enum Command {
         #[clap(short, long)]
         file: Option<PathBuf>,
     },
+    FromConfig {
+        /// Path to TOML file containing configuration for server.
+        #[clap(short, long)]
+        path: PathBuf,
+    },
     StartServer {
         /// URL of the RPC server for data fetching
         #[clap(short, long)]
@@ -28,6 +33,16 @@ pub enum Command {
         /// Host to bind the server to
         #[clap(long)]
         host: Option<String>,
+        /// DB URL to connect to
+        #[clap(short = 'd', long)]
+        db_url: Option<String>,
+        /// Port to bind the prom server to
+        #[clap(short = 'r', long)]
+        prom_port: Option<u16>,
+        /// Host to bind the prom server to
+        #[clap(short = 's', long)]
+        prom_host: Option<String>,
+
         /// Path to TOML file containing configuration for service.
         #[clap(short, long)]
         config: Option<PathBuf>,

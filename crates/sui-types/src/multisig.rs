@@ -78,7 +78,17 @@ impl AuthenticatorTrait for MultiSig {
     fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
         Ok(())
     }
-
+    fn verify_uncached_checks<T>(
+        &self,
+        _value: &IntentMessage<T>,
+        _author: SuiAddress,
+        _aux_verify_data: &VerifyParams,
+    ) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        Ok(())
+    }
     fn verify_claims<T>(
         &self,
         value: &IntentMessage<T>,
@@ -356,7 +366,7 @@ impl MultiSigPublicKey {
             });
         }
         Ok(MultiSigPublicKey {
-            pk_map: pks.into_iter().zip(weights.into_iter()).collect(),
+            pk_map: pks.into_iter().zip(weights).collect(),
             threshold,
         })
     }

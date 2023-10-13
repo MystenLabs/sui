@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    expansion::ast::{ModuleIdent, ModuleIdent_},
-    parser::ast::ModuleName,
+    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
+    parser::ast::{self as P, ModuleName},
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
 use move_ir_types::location::*;
@@ -32,6 +32,20 @@ pub struct AliasMap {
 }
 
 pub struct OldAliasMap(Option<AliasMap>);
+
+pub struct ParserExplicitUseFun {
+    pub loc: Loc,
+    pub attributes: E::Attributes,
+    pub is_public: Option<Loc>,
+    pub function: Box<P::NameAccessChain>,
+    pub ty: Box<P::NameAccessChain>,
+    pub method: Name,
+}
+
+pub struct UseFunsBuilder {
+    pub explicit: Vec<ParserExplicitUseFun>,
+    pub implicit: UniqueMap<Name, E::ImplicitUseFunCandidate>,
+}
 
 impl AliasSet {
     pub fn new() -> Self {
@@ -273,6 +287,15 @@ impl OldAliasMap {
         match &self.0 {
             None => true,
             Some(aliases) => aliases.is_empty(),
+        }
+    }
+}
+
+impl UseFunsBuilder {
+    pub fn new() -> Self {
+        Self {
+            explicit: vec![],
+            implicit: UniqueMap::new(),
         }
     }
 }

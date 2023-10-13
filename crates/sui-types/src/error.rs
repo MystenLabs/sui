@@ -245,6 +245,9 @@ pub enum UserInputError {
         max_publish_commands: u64,
         publish_count: u64,
     },
+
+    #[error("Immutable parameter provided, mutable parameter expected.")]
+    MutableParameterExpected { object_id: ObjectID },
 }
 
 #[derive(
@@ -316,8 +319,11 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
-    #[error("Required Signature from {signer} is absent.")]
-    SignerSignatureAbsent { signer: String },
+    #[error("Required Signature from {expected} is absent {:?}.", actual)]
+    SignerSignatureAbsent {
+        expected: String,
+        actual: Vec<String>,
+    },
     #[error("Expect {actual} signer signatures but got {expected}.")]
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
@@ -381,6 +387,9 @@ pub enum SuiError {
     InvalidAddress,
     #[error("Invalid transaction digest.")]
     InvalidTransactionDigest,
+
+    #[error("Invalid digest length. Expected {expected}, got {actual}")]
+    InvalidDigestLength { expected: usize, actual: usize },
 
     #[error("Unexpected message.")]
     UnexpectedMessage,

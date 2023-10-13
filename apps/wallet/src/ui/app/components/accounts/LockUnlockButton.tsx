@@ -3,6 +3,7 @@
 
 import { LockLocked16, LockUnlocked16 } from '@mysten/icons';
 import { type ComponentPropsWithoutRef } from 'react';
+
 import { Tooltip } from '../../shared/tooltip';
 import LoadingIndicator from '../loading/LoadingIndicator';
 
@@ -17,6 +18,7 @@ export function LockUnlockButton({ isLocked, onClick, isLoading }: LockUnlockBut
 			<button
 				className="appearance-none bg-transparent border-none cursor-pointer text-steel hover:text-hero-dark ml-auto flex items-center justify-center"
 				onClick={onClick}
+				data-testid={isLocked ? 'unlock-account-button' : 'lock-account-button'}
 			>
 				{isLoading ? (
 					<LoadingIndicator />

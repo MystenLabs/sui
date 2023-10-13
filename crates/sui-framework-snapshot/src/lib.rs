@@ -6,6 +6,9 @@ use std::collections::BTreeMap;
 use std::{fs, io::Read, path::PathBuf};
 use sui_framework::SystemPackage;
 use sui_types::base_types::ObjectID;
+use sui_types::{
+    DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+};
 
 pub type SnapshotManifest = BTreeMap<u64, SingleSnapshot>;
 
@@ -16,6 +19,13 @@ pub struct SingleSnapshot {
     /// List of file names (also identical to object ID) of the bytecode package files.
     package_ids: Vec<ObjectID>,
 }
+
+const SYSTEM_PACKAGE_PUBLISH_ORDER: &[ObjectID] = &[
+    MOVE_STDLIB_PACKAGE_ID,
+    SUI_FRAMEWORK_PACKAGE_ID,
+    SUI_SYSTEM_PACKAGE_ID,
+    DEEPBOOK_PACKAGE_ID,
+];
 
 pub fn load_bytecode_snapshot_manifest() -> SnapshotManifest {
     let Ok(bytes) = fs::read(manifest_path()) else {
@@ -44,7 +54,7 @@ pub fn update_bytecode_snapshot_manifest(git_revision: &str, version: u64, files
 pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<SystemPackage>> {
     let mut snapshot_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     snapshot_path.extend(["bytecode_snapshot", protocol_version.to_string().as_str()]);
-    let snapshot_objects: anyhow::Result<Vec<_>> = fs::read_dir(&snapshot_path)?
+    let mut snapshots: BTreeMap<ObjectID, SystemPackage> = fs::read_dir(&snapshot_path)?
         .flatten()
         .map(|entry| {
             let file_name = entry.file_name().to_str().unwrap().to_string();
@@ -52,10 +62,19 @@ pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<Syste
             let mut buffer = Vec::new();
             file.read_to_end(&mut buffer)?;
             let package: SystemPackage = bcs::from_bytes(&buffer)?;
-            Ok(package)
+            Ok((*package.id(), package))
         })
-        .collect();
-    snapshot_objects
+        .collect::<anyhow::Result<_>>()?;
+
+    // system packages need to be restored in a specific order
+    assert!(snapshots.len() <= SYSTEM_PACKAGE_PUBLISH_ORDER.len());
+    let mut snapshot_objects = Vec::new();
+    for package_id in SYSTEM_PACKAGE_PUBLISH_ORDER {
+        if let Some(object) = snapshots.remove(package_id) {
+            snapshot_objects.push(object);
+        }
+    }
+    Ok(snapshot_objects)
 }
 
 fn manifest_path() -> PathBuf {

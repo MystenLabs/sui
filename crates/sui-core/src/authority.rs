@@ -41,20 +41,19 @@ use std::{
 };
 use sui_config::node::StateDebugDumpConfig;
 use sui_config::NodeConfig;
+use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tap::{TapFallible, TapOptional};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::oneshot;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, instrument, trace, warn, Instrument};
 
+use self::authority_store::ExecutionLockWriteGuard;
 use self::authority_store_pruner::AuthorityStorePruningMetrics;
 pub use authority_notify_read::EffectsNotifyRead;
 pub use authority_store::{AuthorityStore, ResolverWrapper, UpdateType};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use narwhal_config::{
-    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
-    WorkerId as ConsensusWorkerId,
-};
+
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{Intent, IntentScope};
 use sui_archival::reader::ArchiveReaderBalancer;
@@ -76,10 +75,9 @@ use sui_storage::indexes::{CoinInfo, ObjectIndexChanges};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
 use sui_storage::IndexStore;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::committee::{EpochId, ProtocolVersion};
-use sui_types::crypto::{
-    default_hash, AuthorityKeyPair, AuthoritySignInfo, NetworkKeyPair, Signer,
-};
+use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType};
@@ -133,6 +131,7 @@ use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
 use crate::checkpoints::CheckpointStore;
+use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_driver::execution_process;
 use crate::module_cache_metrics::ResolverMetrics;
@@ -177,21 +176,6 @@ pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
 
 pub static CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
-
-pub type ReconfigConsensusMessage = (
-    AuthorityKeyPair,
-    NetworkKeyPair,
-    ConsensusCommittee,
-    Vec<(ConsensusWorkerId, NetworkKeyPair)>,
-    ConsensusWorkerCache,
-);
-
-pub type VerifiedTransactionBatch = Vec<(
-    VerifiedTransaction,
-    TransactionEffects,
-    TransactionEvents,
-    Option<(EpochId, CheckpointSequenceNumber)>,
-)>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -252,7 +236,10 @@ pub struct AuthorityMetrics {
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
-    pub consensus_committed_certificates: IntCounterVec,
+    pub consensus_committed_certificates: IntGaugeVec,
+    pub consensus_committed_user_transactions: IntGaugeVec,
+    pub consensus_calculated_throughput: IntGauge,
+    pub consensus_calculated_throughput_profile: IntGauge,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -260,6 +247,11 @@ pub struct AuthorityMetrics {
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
 
     pub authenticator_state_update_failed: IntCounter,
+
+    /// Count of zklogin signatures
+    pub zklogin_sig_count: IntCounter,
+    /// Count of multisig signatures
+    pub multisig_sig_count: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -554,22 +546,25 @@ impl AuthorityMetrics {
                 "scores from consensus for each authority",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
-            consensus_committed_certificates: register_int_counter_vec_with_registry!(
+            ).unwrap(),
+            consensus_committed_certificates: register_int_gauge_vec_with_registry!(
                 "consensus_committed_certificates",
                 "Number of committed certificates, sliced by author",
                 &["authority"],
                 registry,
-            )
-                .unwrap(),
+            ).unwrap(),
+            consensus_committed_user_transactions: register_int_gauge_vec_with_registry!(
+                "consensus_committed_user_transactions",
+                "Number of committed user transactions, sliced by submitter",
+                &["authority"],
+                registry,
+            ).unwrap(),
             limits_metrics: Arc::new(LimitsMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             authenticator_state_update_failed: register_int_counter_with_registry!(
@@ -578,6 +573,28 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            zklogin_sig_count: register_int_counter_with_registry!(
+                "zklogin_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            multisig_sig_count: register_int_counter_with_registry!(
+                "multisig_sig_count",
+                "Count of zkLogin signatures",
+                registry,
+            )
+            .unwrap(),
+            consensus_calculated_throughput: register_int_gauge_with_registry!(
+                "consensus_calculated_throughput",
+                "The calculated throughput from consensus output. Result is calculated based on unique transactions.",
+                registry,
+            ).unwrap(),
+            consensus_calculated_throughput_profile: register_int_gauge_with_registry!(
+                "consensus_calculated_throughput_profile",
+                "The current active calculated throughput profile",
+                registry
+            ).unwrap()
         }
     }
 }
@@ -686,7 +703,9 @@ impl AuthorityState {
             &self.database,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
-            &transaction.data().intent_message().value,
+            epoch_store.epoch(),
+            transaction.data().transaction_data(),
+            transaction.tx_signatures(),
             &self.transaction_deny_config,
             &self.metrics.bytecode_verifier_metrics,
         )?;
@@ -774,6 +793,16 @@ impl AuthorityState {
         }
     }
 
+    pub(crate) fn check_system_overload(
+        &self,
+        consensus_adapter: &Arc<ConsensusAdapter>,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
+        self.transaction_manager.check_execution_overload(tx_data)?;
+        consensus_adapter.check_consensus_overload()?;
+        Ok(())
+    }
+
     /// Executes a transaction that's known to have correct effects.
     /// For such transaction, we don't have to wait for consensus to set shared object
     /// locks because we already know the shared object versions based on the effects.
@@ -789,7 +818,6 @@ impl AuthorityState {
         // this function, in order to prevent a byzantine validator from
         // giving us incorrect effects.
         effects: &VerifiedCertifiedTransactionEffects,
-        _objects: Vec<Object>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
@@ -1086,6 +1114,28 @@ impl AuthorityState {
             }
             debug_assert!(execution_error_opt.is_none());
             epoch_store.update_authenticator_state(auth_state);
+
+            // double check that the signature verifier always matches the authenticator state
+            if cfg!(debug_assertions) {
+                let authenticator_state = get_authenticator_state(&self.database)
+                    .expect("Read cannot fail")
+                    .expect("Authenticator state must exist");
+
+                let mut sys_jwks: Vec<_> = authenticator_state
+                    .active_jwks
+                    .into_iter()
+                    .map(|jwk| (jwk.jwk_id, jwk.jwk))
+                    .collect();
+                let mut active_jwks: Vec<_> = epoch_store
+                    .signature_verifier
+                    .get_jwks()
+                    .into_iter()
+                    .collect();
+                sys_jwks.sort();
+                active_jwks.sort();
+
+                assert_eq!(sys_jwks, active_jwks);
+            }
         }
 
         Ok((effects, execution_error_opt))
@@ -1112,7 +1162,16 @@ impl AuthorityState {
         let output_keys: Vec<_> = inner_temporary_store
             .written
             .iter()
-            .map(|(id, obj)| InputKey(*id, (!obj.is_package()).then_some(obj.version())))
+            .map(|(id, obj)| {
+                if obj.is_package() {
+                    InputKey::Package { id: *id }
+                } else {
+                    InputKey::VersionedObject {
+                        id: *id,
+                        version: obj.version(),
+                    }
+                }
+            })
             .collect();
 
         self.commit_certificate(inner_temporary_store, certificate, effects, epoch_store)
@@ -1267,6 +1326,7 @@ impl AuthorityState {
                     &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
+                    epoch_store.epoch(),
                     &transaction,
                     gas_object,
                     &self.metrics.bytecode_verifier_metrics,
@@ -1279,7 +1339,9 @@ impl AuthorityState {
                     &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
+                    epoch_store.epoch(),
                     &transaction,
+                    &[],
                     &self.transaction_deny_config,
                     &self.metrics.bytecode_verifier_metrics,
                 )?,
@@ -1495,7 +1557,7 @@ impl AuthorityState {
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
         module_resolver: &impl GetModule,
-        loaded_child_objects: &BTreeMap<ObjectID, SequenceNumber>,
+        loaded_child_objects: &BTreeMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     ) -> SuiResult<u64> {
         let changes = self
             .process_object_index(effects, written, module_resolver)
@@ -1620,8 +1682,10 @@ impl AuthorityState {
                     );
                     assert_eq!(new_object.version(), oref.1, "tx_digest={:?} error processing object owner index, object {:?} from written has mismatched version. Actual: {}, expected: {}", tx_digest, id, new_object.version(), oref.1);
 
-                    let Some(df_info) = self.try_create_dynamic_field_info(new_object, written, module_resolver)
-                        .expect("try_create_dynamic_field_info should not fail.") else {
+                    let Some(df_info) = self
+                        .try_create_dynamic_field_info(new_object, written, module_resolver)
+                        .expect("try_create_dynamic_field_info should not fail.")
+                    else {
                         // Skip indexing for non dynamic field objects.
                         continue;
                     };
@@ -1753,7 +1817,7 @@ impl AuthorityState {
                     tx_coins,
                     written,
                     &module_resolver,
-                    &inner_temporary_store.loaded_child_objects,
+                    &inner_temporary_store.loaded_runtime_objects,
                 )
                 .await
                 .tap_ok(|_| self.metrics.post_processing_total_tx_indexed.inc())
@@ -2038,13 +2102,29 @@ impl AuthorityState {
             .enqueue_certificates(certs, epoch_store)
     }
 
+    // NB: This must only be called at time of reconfiguration. We take the execution lock write
+    // guard as an argument to ensure that this is the case.
+    fn clear_object_per_epoch_marker_table(
+        &self,
+        _execution_guard: &ExecutionLockWriteGuard<'_>,
+    ) -> SuiResult<()> {
+        // We can safely delete all entries in the per epoch marker table since this is only called
+        // at epoch boundaries (during reconfiguration). Therefore any entries that currently
+        // exist can be removed. Because of this we can use the `schedule_delete_all` method.
+        Ok(self
+            .database
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .schedule_delete_all()?)
+    }
+
     fn create_owner_index_if_empty(
         &self,
         genesis_objects: &[Object],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        let Some(index_store) = &self.indexes else{
-            return Ok(())
+        let Some(index_store) = &self.indexes else {
+            return Ok(());
         };
         if !index_store.is_empty() {
             return Ok(());
@@ -2060,7 +2140,12 @@ impl AuthorityState {
                 )),
                 Owner::ObjectOwner(object_id) => {
                     let id = o.id();
-                    let Some(info) = self.try_create_dynamic_field_info(o, &BTreeMap::new(), epoch_store.module_cache())? else{
+                    let Some(info) = self.try_create_dynamic_field_info(
+                        o,
+                        &BTreeMap::new(),
+                        epoch_store.module_cache(),
+                    )?
+                    else {
                         continue;
                     };
                     new_dynamic_fields.push(((ObjectID::from(object_id), id), info));
@@ -2111,6 +2196,7 @@ impl AuthorityState {
                 .epoch_start_state()
                 .protocol_version(),
         );
+        self.clear_object_per_epoch_marker_table(&execution_lock)?;
         self.db()
             .set_epoch_start_configuration(&epoch_start_configuration)
             .await?;
@@ -2465,7 +2551,9 @@ impl AuthorityState {
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedCheckpoint>> {
         let checkpoint = self.get_transaction_checkpoint_sequence(digest, epoch_store)?;
-        let Some(checkpoint) = checkpoint else { return Ok(None); };
+        let Some(checkpoint) = checkpoint else {
+            return Ok(None);
+        };
         let checkpoint = self
             .checkpoint_store
             .get_checkpoint_by_sequence_number(checkpoint)?;
@@ -2473,7 +2561,9 @@ impl AuthorityState {
     }
 
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
-        let Some((object_key, store_object)) = self.database.get_latest_object_or_tombstone(*object_id)? else {
+        let Some((object_key, store_object)) =
+            self.database.get_latest_object_or_tombstone(*object_id)?
+        else {
             return Ok(ObjectRead::NotExists(*object_id));
         };
         if let Some(object_ref) = self
@@ -2541,7 +2631,10 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever existed by getting its latest data
-        let Some(obj_ref) = self.database.get_latest_object_ref_or_tombstone(*object_id)? else {
+        let Some(obj_ref) = self
+            .database
+            .get_latest_object_ref_or_tombstone(*object_id)?
+        else {
             return Ok(PastObjectRead::ObjectNotExists(*object_id));
         };
 
@@ -3413,6 +3506,13 @@ impl AuthorityState {
             .pending_notify_read
             .set(self.database.executed_effects_notify_read.num_pending() as i64);
 
+        // count signature by scheme, for zklogin and multisig
+        if certificate.has_zklogin_sig() {
+            self.metrics.zklogin_sig_count.inc();
+        } else if certificate.has_upgraded_multisig() {
+            self.metrics.multisig_sig_count.inc();
+        }
+
         Ok(())
     }
 
@@ -3552,7 +3652,9 @@ impl AuthorityState {
                 system_package.dependencies().to_vec(),
                 max_binary_format_version,
                 no_extraneous_module_bytes,
-            ).await else {
+            )
+            .await
+            else {
                 return vec![];
             };
             results.push(obj_ref);
@@ -3834,11 +3936,14 @@ impl AuthorityState {
         // since system packages are created during the current epoch, they should abide by the
         // rules of the current epoch, including the current epoch's max Move binary format version
         let config = epoch_store.protocol_config();
-        let Some(next_epoch_system_package_bytes) = self.get_system_package_bytes(
-            next_epoch_system_packages.clone(),
-            config.move_binary_format_version(),
-            config.no_extraneous_module_bytes(),
-        ).await else {
+        let Some(next_epoch_system_package_bytes) = self
+            .get_system_package_bytes(
+                next_epoch_system_packages.clone(),
+                config.move_binary_format_version(),
+                config.no_extraneous_module_bytes(),
+            )
+            .await
+        else {
             error!(
                 "upgraded system packages {:?} are not locally available, cannot create \
                 ChangeEpochTx. validator binary must be upgraded to the correct version!",
@@ -3852,7 +3957,9 @@ impl AuthorityState {
             //   state sync, and execute it. This will upgrade the framework packages, reconfigure,
             //   and most likely shut down in the new epoch (this validator likely doesn't support
             //   the new protocol version, or else it should have had the packages.)
-            return Err(anyhow!("missing system packages: cannot form ChangeEpochTx"));
+            return Err(anyhow!(
+                "missing system packages: cannot form ChangeEpochTx"
+            ));
         };
 
         let tx = if epoch_store
@@ -4150,6 +4257,28 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
             .deprecated_get_transaction_checkpoint(&digest)
             .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
     }
+
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        version: VersionNumber,
+    ) -> SuiResult<Option<Object>> {
+        self.database.get_object_by_key(&object_id, version)
+    }
+
+    async fn multi_get_transaction_checkpoint(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>> {
+        let res = self
+            .database
+            .deprecated_multi_get_transaction_checkpoint(digests)?;
+
+        Ok(res
+            .into_iter()
+            .map(|maybe| maybe.map(|(_epoch, checkpoint)| checkpoint))
+            .collect())
+    }
 }
 
 #[cfg(msim)]
@@ -4322,8 +4451,8 @@ impl NodeStateDump {
         // Record all loaded child objects
         // Child objects which are read but not mutated are not tracked anywhere else
         let mut loaded_child_objects = Vec::new();
-        for (id, ver) in &inner_temporary_store.loaded_child_objects {
-            if let Some(w) = authority_store.get_object_by_key(id, *ver)? {
+        for (id, meta) in &inner_temporary_store.loaded_runtime_objects {
+            if let Some(w) = authority_store.get_object_by_key(id, meta.version)? {
                 loaded_child_objects.push(w)
             }
         }

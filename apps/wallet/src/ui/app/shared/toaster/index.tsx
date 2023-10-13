@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useMenuIsOpen } from '_components/menu/hooks';
+import { useAppSelector } from '_hooks';
+import { getNavIsVisible } from '_redux/slices/app';
 import cl from 'classnames';
 import { Toaster as ToasterLib } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import { Portal } from '../Portal';
-import { useMenuIsOpen } from '_components/menu/hooks';
-import { useAppSelector } from '_hooks';
-import { getNavIsVisible } from '_redux/slices/app';
 
 export type ToasterProps = {
 	bottomNavEnabled?: boolean;
@@ -27,7 +27,7 @@ export function Toaster({ bottomNavEnabled = false }: ToasterProps) {
 			<ToasterLib
 				containerClassName={cl(
 					'!absolute !z-[99999] transition-all',
-					includeBottomNavSpace && 'mb-[var(--sizing-navigation-placeholder-height)]',
+					includeBottomNavSpace && 'mb-nav-height',
 					includeExtraBottomNavSpace && '!bottom-10',
 				)}
 				position="bottom-center"

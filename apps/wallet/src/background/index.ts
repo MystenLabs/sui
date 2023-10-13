@@ -1,25 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { lte, coerce } from 'semver';
+import { openInNewTab } from '_shared/utils';
+import { growthbook, setAttributes } from '_src/shared/experimentation/features';
+import { coerce, lte } from 'semver';
 import Browser from 'webextension-polyfill';
 
-import Alarms, { cleanUpAlarmName, autoLockAlarmName } from './Alarms';
-import NetworkEnv from './NetworkEnv';
-import Permissions from './Permissions';
-import Transactions from './Transactions';
 import { lockAllAccountSources } from './account-sources';
 import { accountSourcesEvents } from './account-sources/events';
 import { getAccountsStatusData, getAllAccounts, lockAllAccounts } from './accounts';
 import { accountsEvents } from './accounts/events';
+import Alarms, { autoLockAlarmName, cleanUpAlarmName } from './Alarms';
 import { Connections } from './connections';
-import Keyring from './keyring';
+import NetworkEnv from './NetworkEnv';
+import Permissions from './Permissions';
 import * as Qredo from './qredo';
 import { initSentry } from './sentry';
-import { isSessionStorageSupported } from './storage-utils';
-import { openInNewTab } from '_shared/utils';
-import { MSG_CONNECT } from '_src/content-script/keep-bg-alive';
-import { growthbook, setAttributes } from '_src/shared/experimentation/features';
+import Transactions from './Transactions';
 
 growthbook.loadFeatures().catch(() => {
 	// silence the error
@@ -113,22 +110,6 @@ Browser.alarms.onAlarm.addListener((alarm) => {
 	}
 });
 
-if (!isSessionStorageSupported()) {
-	Keyring.on('lockedStatusUpdate', async (isLocked) => {
-		if (!isLocked) {
-			const allTabs = await Browser.tabs.query({});
-			for (const aTab of allTabs) {
-				if (aTab.id) {
-					try {
-						await Browser.tabs.sendMessage(aTab.id, MSG_CONNECT);
-					} catch (e) {
-						// not all tabs have the cs installed
-					}
-				}
-			}
-		}
-	});
-}
 NetworkEnv.getActiveNetwork().then(async ({ env, customRpcUrl }) => {
 	setAttributes({
 		apiEnv: env,

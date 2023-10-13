@@ -1,25 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-	SuiTransactionBlockResponse,
-	SuiObjectData,
+	SuiClient,
 	SuiObjectChangeCreated,
+	SuiObjectData,
+	SuiTransactionBlockResponse,
 } from '../../src/client';
-import { SUI_SYSTEM_STATE_OBJECT_ID, normalizeSuiObjectId } from '../../src/utils';
 import type { Keypair } from '../../src/cryptography';
+import { normalizeSuiObjectId, SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 import {
-	DEFAULT_RECIPIENT,
 	DEFAULT_GAS_BUDGET,
+	DEFAULT_RECIPIENT,
+	publishPackage,
 	setup,
 	TestToolbox,
-	publishPackage,
 	upgradePackage,
 } from './utils/setup';
-import { SuiClient } from '../../src/client';
-import {} from '../../src/builder/TransactionBlockData';
+
+import '../../src/builder/TransactionBlockData';
+
+import { bcs } from '../../src/bcs';
 import { TransactionBlock } from '../../src/builder';
 
 export const SUI_CLOCK_OBJECT_ID = normalizeSuiObjectId('0x6');
@@ -51,8 +54,10 @@ describe('Transaction Builders', () => {
 		const tx = new TransactionBlock();
 		const coin_0 = coins[0].data as SuiObjectData;
 
-		const coin = tx.splitCoins(tx.object(coin_0.objectId), [tx.pure(DEFAULT_GAS_BUDGET * 2)]);
-		tx.transferObjects([coin], tx.pure(toolbox.address()));
+		const coin = tx.splitCoins(tx.object(coin_0.objectId), [
+			bcs.u64().serialize(DEFAULT_GAS_BUDGET * 2),
+		]);
+		tx.transferObjects([coin], toolbox.address());
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
@@ -61,7 +66,7 @@ describe('Transaction Builders', () => {
 		const coin_0 = coins[0].data as SuiObjectData;
 		const coin_1 = coins[1].data as SuiObjectData;
 		const tx = new TransactionBlock();
-		tx.mergeCoins(tx.object(coin_0.objectId), [tx.object(coin_1.objectId)]);
+		tx.mergeCoins(coin_0.objectId, [coin_1.objectId]);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
@@ -72,7 +77,7 @@ describe('Transaction Builders', () => {
 		tx.moveCall({
 			target: '0x2::pay::split',
 			typeArguments: ['0x2::sui::SUI'],
-			arguments: [tx.object(coin_0.objectId), tx.pure(DEFAULT_GAS_BUDGET * 2)],
+			arguments: [tx.object(coin_0.objectId), tx.pure.u64(DEFAULT_GAS_BUDGET * 2)],
 		});
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
@@ -91,7 +96,7 @@ describe('Transaction Builders', () => {
 				arguments: [
 					tx.object(SUI_SYSTEM_STATE_OBJECT_ID),
 					tx.object(coin_2.objectId),
-					tx.pure(validatorAddress),
+					tx.pure.address(validatorAddress),
 				],
 			});
 
@@ -105,14 +110,14 @@ describe('Transaction Builders', () => {
 
 	it('SplitCoins from gas object + TransferObjects', async () => {
 		const tx = new TransactionBlock();
-		const coin = tx.splitCoins(tx.gas, [tx.pure(1)]);
-		tx.transferObjects([coin], tx.pure(DEFAULT_RECIPIENT));
+		const coin = tx.splitCoins(tx.gas, [1]);
+		tx.transferObjects([coin], DEFAULT_RECIPIENT);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
 	it('TransferObjects gas object', async () => {
 		const tx = new TransactionBlock();
-		tx.transferObjects([tx.gas], tx.pure(DEFAULT_RECIPIENT));
+		tx.transferObjects([tx.gas], DEFAULT_RECIPIENT);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 
@@ -121,7 +126,7 @@ describe('Transaction Builders', () => {
 		const tx = new TransactionBlock();
 		const coin_0 = coins[2].data as SuiObjectData;
 
-		tx.transferObjects([tx.object(coin_0.objectId)], tx.pure(DEFAULT_RECIPIENT));
+		tx.transferObjects([coin_0.objectId], DEFAULT_RECIPIENT);
 		await validateTransaction(toolbox.client, toolbox.keypair, tx);
 	});
 

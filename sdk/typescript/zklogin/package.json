@@ -1,0 +1,6 @@
+{
+	"private": true,
+	"import": "../dist/esm/zklogin/index.js",
+	"main": "../dist/cjs/zklogin/index.js",
+	"sideEffects": false
+}

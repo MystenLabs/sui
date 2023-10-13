@@ -116,7 +116,7 @@ impl StateSnapshotUploader {
     async fn upload_state_snapshot_to_object_store(&self, missing_epochs: Vec<u64>) -> Result<()> {
         let last_missing_epoch = missing_epochs.last().cloned().unwrap_or(0);
         let local_checkpoints_by_epoch =
-            find_all_dirs_with_epoch_prefix(&self.db_checkpoint_store).await?;
+            find_all_dirs_with_epoch_prefix(&self.db_checkpoint_store, None).await?;
         let mut dirs: Vec<_> = local_checkpoints_by_epoch.iter().collect();
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
         for (epoch, db_path) in dirs {
@@ -134,7 +134,7 @@ impl StateSnapshotUploader {
                     &path_to_filesystem(self.db_checkpoint_path.clone(), &db_path.child("store"))?,
                     None,
                 ));
-                state_snapshot_writer.write(db).await?;
+                state_snapshot_writer.write(*epoch, db).await?;
                 info!("State snapshot creation successful for epoch: {}", *epoch);
                 // Drop marker in the output directory that upload completed successfully
                 let bytes = Bytes::from_static(b"success");

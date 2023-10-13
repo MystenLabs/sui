@@ -71,6 +71,7 @@ module sui_system::validator_set {
         extra_fields: Bag,
     }
 
+    #[allow(unused_field)]
     /// Event containing staking and rewards related information of
     /// each validator, emitted during epoch advancement.
     struct ValidatorEpochInfoEvent has copy, drop {
@@ -128,6 +129,7 @@ module sui_system::validator_set {
 
     // Errors
     const ENonValidatorInReportRecords: u64 = 0;
+    #[allow(unused_const)]
     const EInvalidStakeAdjustmentAmount: u64 = 1;
     const EDuplicateValidator: u64 = 2;
     const ENoPoolFound: u64 = 3;

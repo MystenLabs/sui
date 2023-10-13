@@ -65,7 +65,7 @@ async fn test_consensus_recovery_with_bullshark_with_config(config: ProtocolConf
 
     // AND make certificates for rounds 1 to 7 (inclusive)
     let ids: Vec<_> = fixture.authorities().map(|a| a.id()).collect();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -507,7 +507,13 @@ async fn test_leader_schedule_from_store() {
         scores.add_score(id, score as u64);
     }
 
-    let sub_dag = CommittedSubDag::new(vec![], Certificate::default(), 0, scores, None);
+    let sub_dag = CommittedSubDag::new(
+        vec![],
+        Certificate::default(&latest_protocol_version()),
+        0,
+        scores,
+        None,
+    );
 
     store
         .write_consensus_state(&HashMap::new(), &sub_dag)

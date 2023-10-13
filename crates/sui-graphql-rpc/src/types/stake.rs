@@ -5,6 +5,7 @@ use async_graphql::*;
 
 pub(crate) struct Stake;
 
+#[allow(clippy::diverging_sub_expression)]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]

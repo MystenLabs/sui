@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ampli } from '_src/shared/analytics/ampli';
+import { Collapsible } from '_src/ui/app/shared/collapse';
 import { Filter16, Plus12 } from '@mysten/icons';
 import * as ToggleGroup from '@radix-ui/react-toggle-group';
 import cn from 'classnames';
 import { useMemo } from 'react';
-import { AccountListItem } from './AccountListItem';
-import { FooterLink } from './FooterLink';
+
 import { getAccountBackgroundByType } from '../../helpers/accounts';
 import { useAccountGroups } from '../../hooks/useAccountGroups';
 import { useActiveAccount } from '../../hooks/useActiveAccount';
 import { useBackgroundClient } from '../../hooks/useBackgroundClient';
 import { Heading } from '../../shared/heading';
-
-import { ampli } from '_src/shared/analytics/ampli';
-import { Collapsible } from '_src/ui/app/shared/collapse';
+import { AccountListItem } from './AccountListItem';
+import { FooterLink } from './FooterLink';
 
 export function AccountsList() {
 	const accountGroups = useAccountGroups();
@@ -60,7 +60,7 @@ export function AccountsList() {
 					<Collapsible title="Current" defaultOpen shade="darker">
 						<ToggleGroup.Item asChild value={activeAccount.id}>
 							<div>
-								<AccountListItem account={activeAccount} editable />
+								<AccountListItem account={activeAccount} editable showLock />
 							</div>
 						</ToggleGroup.Item>
 					</Collapsible>
@@ -72,7 +72,7 @@ export function AccountsList() {
 									return (
 										<ToggleGroup.Item asChild key={account.id} value={account.id}>
 											<div>
-												<AccountListItem account={account} />
+												<AccountListItem account={account} showLock />
 											</div>
 										</ToggleGroup.Item>
 									);

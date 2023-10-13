@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useFeature } from '@growthbook/growthbook-react';
-import ExternalLink from '../external-link';
 import { ampli } from '_src/shared/analytics/ampli';
 import { FEATURES } from '_src/shared/experimentation/features';
+import { useFeature } from '@growthbook/growthbook-react';
+
+import ExternalLink from '../external-link';
 
 export type BannerProps = {
 	enabled: boolean;
@@ -26,7 +27,7 @@ export function AppsPageBanner() {
 					href={AppsBannerConfig.value?.bannerUrl}
 					onClick={() => ampli.clickedBullsharkQuestsCta({ sourceFlow: 'Banner - Apps tab' })}
 				>
-					<img src={AppsBannerConfig.value?.imageUrl} alt="Apps Banner" />
+					<img className="w-full" src={AppsBannerConfig.value?.imageUrl} alt="Apps Banner" />
 				</ExternalLink>
 			)}
 		</div>

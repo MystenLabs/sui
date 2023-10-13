@@ -12,7 +12,7 @@ use move_compiler::{
     command_line::compiler::move_check_for_errors,
     diagnostics::*,
     editions::{Edition, Flavor},
-    shared::{Flags, NumericalAddress, PackageConfig},
+    shared::{Flags, NumericalAddress, PackageConfig, PackagePaths},
     Compiler, PASS_PARSER,
 };
 
@@ -30,12 +30,12 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
     let mut mapping = vec![
         ("std", "0x1"),
         ("sui", "0x2"),
-        ("M", "0x1"),
-        ("A", "0x42"),
+        ("M", "0x40"),
+        ("A", "0x41"),
         ("B", "0x42"),
         ("K", "0x19"),
-        ("a", "0x42"),
-        ("b", "0x42"),
+        ("a", "0x44"),
+        ("b", "0x45"),
         ("k", "0x19"),
     ];
     if flavor == Flavor::Sui {
@@ -161,15 +161,24 @@ pub fn run_test(
     default_config: PackageConfig,
 ) -> anyhow::Result<()> {
     let targets: Vec<String> = vec![path.to_str().unwrap().to_owned()];
+    let named_address_map = default_testing_addresses(default_config.flavor);
+    let deps = vec![PackagePaths {
+        name: Some(("stdlib".into(), PackageConfig::default())),
+        paths: move_stdlib::move_stdlib_files(),
+        named_address_map: named_address_map.clone(),
+    }];
+    let targets = vec![PackagePaths {
+        name: None,
+        paths: targets,
+        named_address_map,
+    }];
 
-    let (files, comments_and_compiler_res) = Compiler::from_files(
-        targets,
-        move_stdlib::move_stdlib_files(),
-        default_testing_addresses(default_config.flavor),
-    )
-    .set_flags(flags)
-    .set_default_config(default_config)
-    .run::<PASS_PARSER>()?;
+    let flags = flags.set_sources_shadow_deps(true);
+    let (files, comments_and_compiler_res) = Compiler::from_package_paths(targets, deps)
+        .unwrap()
+        .set_flags(flags)
+        .set_default_config(default_config)
+        .run::<PASS_PARSER>()?;
     let diags = move_check_for_errors(comments_and_compiler_res);
 
     let has_diags = !diags.is_empty();

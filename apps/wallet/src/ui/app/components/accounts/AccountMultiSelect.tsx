@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import * as ToggleGroup from '@radix-ui/react-toggle-group';
-
-import { useState } from 'react';
-import { AccountMultiSelectItem } from './AccountMultiSelectItem';
-import { Button } from '../../shared/ButtonUI';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
+import * as ToggleGroup from '@radix-ui/react-toggle-group';
+import { useState } from 'react';
+
+import { Button } from '../../shared/ButtonUI';
+import { AccountMultiSelectItem } from './AccountMultiSelectItem';
 
 type AccountMultiSelectProps = {
 	accounts: SerializedUIAccount[];
@@ -61,24 +61,26 @@ export function AccountMultiSelectWithControls({
 				onChange={onChange}
 			/>
 
-			<Button
-				onClick={() => {
-					if (selectedAccountIds.length < accounts.length) {
-						// select all accounts if not all are selected
-						onChange(accounts.map((account) => account.id));
-					} else {
-						// deselect all accounts
-						onChange([]);
+			{accounts.length > 1 ? (
+				<Button
+					onClick={() => {
+						if (selectedAccountIds.length < accounts.length) {
+							// select all accounts if not all are selected
+							onChange(accounts.map((account) => account.id));
+						} else {
+							// deselect all accounts
+							onChange([]);
+						}
+					}}
+					variant="outline"
+					size="xs"
+					text={
+						selectedAccountIds.length < accounts.length
+							? 'Select All Accounts'
+							: 'Deselect All Accounts'
 					}
-				}}
-				variant="outline"
-				size="xs"
-				text={
-					selectedAccountIds.length < accounts.length
-						? 'Select All Accounts'
-						: 'Deselect All Accounts'
-				}
-			/>
+				/>
+			) : null}
 		</div>
 	);
 }

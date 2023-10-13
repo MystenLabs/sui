@@ -26,12 +26,14 @@ use std::{
     time::Duration,
 };
 use storage::{CertificateStore, PayloadStore};
+use sui_protocol_config::ProtocolConfig;
 use tokio::{
     sync::{broadcast, oneshot, watch, MutexGuard},
     task::JoinSet,
     time::{sleep, timeout},
 };
 use tracing::{debug, error, instrument, trace, warn};
+use types::SignatureVerificationState;
 use types::{
     ensure,
     error::{AcceptNotification, DagError, DagResult},
@@ -58,6 +60,7 @@ struct Inner {
     authority_id: AuthorityIdentifier,
     /// Committee of the current epoch.
     committee: Committee,
+    protocol_config: ProtocolConfig,
     /// The worker information cache.
     worker_cache: WorkerCache,
     /// The depth of the garbage collector.
@@ -112,9 +115,10 @@ impl Inner {
             .lock()
             .entry(certificate.round())
             .or_insert_with(|| Box::new(CertificatesAggregator::new()))
-            .append(certificate.clone(), &self.committee) else {
-                return Ok(());
-            };
+            .append(certificate.clone(), &self.committee)
+        else {
+            return Ok(());
+        };
         // Send it to the `Proposer`.
         self.tx_parents
             .send((parents, certificate.round(), certificate.epoch()))
@@ -163,6 +167,21 @@ impl Inner {
                     panic!("Parent {digest:?} not found for {certificate:?}!")
                 }
             }
+        }
+
+        if self.protocol_config.narwhal_certificate_v2()
+            && !matches!(
+                certificate.signature_verification_state(),
+                SignatureVerificationState::VerifiedDirectly(_)
+                    | SignatureVerificationState::VerifiedIndirectly(_)
+                    | SignatureVerificationState::Genesis
+            )
+        {
+            panic!(
+                "Attempting to write cert {:?} with invalid signature state {:?} to store",
+                certificate.digest(),
+                certificate.signature_verification_state()
+            );
         }
 
         // Store the certificate and make it available as parent to other certificates.
@@ -306,6 +325,7 @@ impl Synchronizer {
     pub fn new(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         gc_depth: Round,
         client: NetworkClient,
@@ -319,7 +339,7 @@ impl Synchronizer {
         primary_channel_metrics: &PrimaryChannelMetrics,
     ) -> Self {
         let committee: &Committee = &committee;
-        let genesis = Self::make_genesis(committee);
+        let genesis = Self::make_genesis(&protocol_config, committee);
         let highest_processed_round = certificate_store.highest_round_number();
         let highest_created_certificate = certificate_store.last_round(authority_id).unwrap();
         let gc_round = rx_consensus_round_updates.borrow().gc_round;
@@ -340,6 +360,7 @@ impl Synchronizer {
         let inner = Arc::new(Inner {
             authority_id,
             committee: committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache,
             gc_depth,
             gc_round: AtomicU64::new(gc_round),
@@ -393,7 +414,9 @@ impl Synchronizer {
                 const FETCH_TRIGGER_TIMEOUT: Duration = Duration::from_secs(30);
                 let mut rx_consensus_round_updates = rx_consensus_round_updates.clone();
                 loop {
-                    let Ok(result) = timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await else {
+                    let Ok(result) =
+                        timeout(FETCH_TRIGGER_TIMEOUT, rx_consensus_round_updates.changed()).await
+                    else {
                         // When consensus commit has not happened for 30s, it is possible that no new
                         // certificate is received by this primary or created in the network, so
                         // fetching should definitely be started.
@@ -402,7 +425,12 @@ impl Synchronizer {
                             debug!("Synchronizer is shutting down.");
                             return;
                         };
-                        if inner.tx_certificate_fetcher.send(CertificateFetcherCommand::Kick).await.is_err() {
+                        if inner
+                            .tx_certificate_fetcher
+                            .send(CertificateFetcherCommand::Kick)
+                            .await
+                            .is_err()
+                        {
                             debug!("Synchronizer is shutting down.");
                             return;
                         }
@@ -458,10 +486,23 @@ impl Synchronizer {
         spawn_logged_monitored_task!(
             async move {
                 loop {
-                    let Some((certificate, result_sender, early_suspend)) = rx_certificate_acceptor.recv().await else {
+                    let Some((certificate, result_sender, early_suspend)) =
+                        rx_certificate_acceptor.recv().await
+                    else {
                         debug!("Synchronizer is shutting down.");
                         return;
                     };
+
+                    if protocol_config.narwhal_certificate_v2() {
+                        assert!(
+                            matches!(
+                                certificate.signature_verification_state(),
+                                SignatureVerificationState::VerifiedDirectly(_)
+                                | SignatureVerificationState::VerifiedIndirectly(_)
+                            ),
+                        "Never accept certificates that have not been verified either directly or indirectly.");
+                    }
+
                     let Some(inner) = weak_inner.upgrade() else {
                         debug!("Synchronizer is shutting down.");
                         return;
@@ -555,6 +596,7 @@ impl Synchronizer {
         let _scope = monitored_scope("Synchronizer::try_accept_certificate");
         self.process_certificate_internal(certificate, true, true)
             .await
+            .map(|_| ())
     }
 
     /// Tries to accept a certificate from certificate fetcher.
@@ -567,17 +609,18 @@ impl Synchronizer {
         let _scope = monitored_scope("Synchronizer::try_accept_fetched_certificate");
         self.process_certificate_internal(certificate, false, false)
             .await
+            .map(|_| ())
     }
 
     /// Accepts a certificate produced by this primary. This is not expected to fail unless
     /// the primary is shutting down.
     pub async fn accept_own_certificate(&self, certificate: Certificate) -> DagResult<()> {
         // Process the new certificate.
-        match self
+        let certificate = match self
             .process_certificate_internal(certificate.clone(), false, false)
             .await
         {
-            Ok(()) => Ok(()),
+            Ok(processed_certificate) => Ok(processed_certificate),
             result @ Err(DagError::ShuttingDown) => result,
             Err(e) => panic!("Failed to process locally-created certificate: {e}"),
         }?;
@@ -621,16 +664,18 @@ impl Synchronizer {
         Ok(())
     }
 
-    fn make_genesis(committee: &Committee) -> HashMap<CertificateDigest, Certificate> {
-        Certificate::genesis(committee)
+    fn make_genesis(
+        protocol_config: &ProtocolConfig,
+        committee: &Committee,
+    ) -> HashMap<CertificateDigest, Certificate> {
+        Certificate::genesis(protocol_config, committee)
             .into_iter()
             .map(|x| (x.digest(), x))
             .collect()
     }
 
     /// Checks if the certificate is valid and can potentially be accepted into the DAG.
-    // TODO: produce a different type after sanitize, e.g. VerifiedCertificate.
-    pub fn sanitize_certificate(&self, certificate: &Certificate) -> DagResult<()> {
+    pub fn sanitize_certificate(&self, certificate: Certificate) -> DagResult<Certificate> {
         ensure!(
             self.inner.committee.epoch() == certificate.epoch(),
             DagError::InvalidEpoch {
@@ -645,24 +690,24 @@ impl Synchronizer {
             DagError::TooOld(certificate.digest().into(), certificate.round(), gc_round)
         );
         // Verify the certificate (and the embedded header).
-        certificate
-            .verify(&self.inner.committee, &self.inner.worker_cache)
-            .map_err(DagError::from)
+        certificate.verify(&self.inner.committee, &self.inner.worker_cache)
     }
 
+    // CertificateV2 maintains signature verification state. Therefore when this
+    // method is called with sanitize = true, the signature verification state may
+    // change which is why the updated certificate is returned.
     async fn process_certificate_internal(
         &self,
-        certificate: Certificate,
+        mut certificate: Certificate,
         sanitize: bool,
         early_suspend: bool,
-    ) -> DagResult<()> {
+    ) -> DagResult<Certificate> {
         let _scope = monitored_scope("Synchronizer::process_certificate_internal");
-
         let digest = certificate.digest();
         if self.inner.certificate_store.contains(&digest)? {
             trace!("Certificate {digest:?} has already been processed. Skip processing.");
             self.inner.metrics.duplicate_certificates_processed.inc();
-            return Ok(());
+            return Ok(certificate);
         }
         // Ensure parents are checked if !early_suspend.
         // See comments above `try_accept_fetched_certificate()` for details.
@@ -677,8 +722,9 @@ impl Synchronizer {
                 return Err(DagError::Suspended(notify));
             }
         }
+
         if sanitize {
-            self.sanitize_certificate(&certificate)?;
+            certificate = self.sanitize_certificate(certificate)?;
         }
 
         debug!(
@@ -745,12 +791,13 @@ impl Synchronizer {
         let (sender, receiver) = oneshot::channel();
         self.inner
             .tx_certificate_acceptor
-            .send((certificate, sender, early_suspend))
+            .send((certificate.clone(), sender, early_suspend))
             .await
             .expect("Synchronizer should shut down before certificate acceptor task.");
         receiver
             .await
-            .expect("Synchronizer should shut down before certificate acceptor task.")
+            .expect("Synchronizer should shut down before certificate acceptor task.")?;
+        Ok(certificate)
     }
 
     /// This function checks if a certificate has all parents and can be accepted into storage.
@@ -1315,7 +1362,7 @@ mod tests {
             .build();
 
         let committee: Committee = fixture.committee();
-        let genesis = Certificate::genesis(&committee)
+        let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();

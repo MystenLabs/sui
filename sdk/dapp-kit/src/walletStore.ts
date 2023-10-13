@@ -4,14 +4,16 @@
 import type { Wallet, WalletAccount, WalletWithRequiredFeatures } from '@mysten/wallet-standard';
 import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
+		connectedAccounts: readonly WalletAccount[],
 		selectedAccount: WalletAccount | null,
 	) => void;
+	updateWalletAccounts: (accounts: readonly WalletAccount[]) => void;
 	setWalletDisconnected: () => void;
 	setWalletRegistered: (updatedWallets: WalletWithRequiredFeatures[]) => void;
 	setWalletUnregistered: (
@@ -24,6 +26,7 @@ export type WalletStore = ReturnType<typeof createWalletStore>;
 
 export type StoreState = {
 	wallets: WalletWithRequiredFeatures[];
+	accounts: readonly WalletAccount[];
 	currentWallet: WalletWithRequiredFeatures | null;
 	currentAccount: WalletAccount | null;
 	lastConnectedAccountAddress: string | null;
@@ -41,40 +44,44 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 		persist(
 			(set, get) => ({
 				wallets,
+				accounts: [],
 				currentWallet: null,
 				currentAccount: null,
 				lastConnectedAccountAddress: null,
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
-				setWalletConnected: (wallet, selectedAccount) => {
+				setWalletConnected(wallet, connectedAccounts, selectedAccount) {
 					set(() => ({
+						accounts: connectedAccounts,
 						currentWallet: wallet,
 						currentAccount: selectedAccount,
 						lastConnectedWalletName: wallet.name,
 						lastConnectedAccountAddress: selectedAccount?.address,
 					}));
 				},
-				setWalletDisconnected: () => {
+				setWalletDisconnected() {
 					set(() => ({
+						accounts: [],
 						currentWallet: null,
 						currentAccount: null,
 						lastConnectedWalletName: null,
 						lastConnectedAccountAddress: null,
 					}));
 				},
-				setAccountSwitched: (selectedAccount) => {
+				setAccountSwitched(selectedAccount) {
 					set(() => ({
 						currentAccount: selectedAccount,
 						lastConnectedAccountAddress: selectedAccount.address,
 					}));
 				},
-				setWalletRegistered: (updatedWallets) => {
+				setWalletRegistered(updatedWallets) {
 					set(() => ({ wallets: updatedWallets }));
 				},
-				setWalletUnregistered: (updatedWallets, unregisteredWallet) => {
+				setWalletUnregistered(updatedWallets, unregisteredWallet) {
 					if (unregisteredWallet === get().currentWallet) {
 						set(() => ({
 							wallets: updatedWallets,
+							accounts: [],
 							currentWallet: null,
 							currentAccount: null,
 							lastConnectedWalletName: null,
@@ -83,6 +90,17 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 					} else {
 						set(() => ({ wallets: updatedWallets }));
 					}
+				},
+				updateWalletAccounts(accounts) {
+					const currentAccount = get().currentAccount;
+					const isCurrentAccountStillAuthorized = currentAccount
+						? accounts.some(({ address }) => address === currentAccount.address)
+						: false;
+
+					set(() => ({
+						accounts,
+						currentAccount: isCurrentAccountStillAuthorized ? currentAccount : accounts[0],
+					}));
 				},
 			}),
 			{

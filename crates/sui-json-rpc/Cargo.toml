@@ -46,10 +46,10 @@ sui-protocol-config.workspace = true
 sui-json-rpc-types.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 shared-crypto.workspace = true
 typed-store.workspace = true
 cached.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

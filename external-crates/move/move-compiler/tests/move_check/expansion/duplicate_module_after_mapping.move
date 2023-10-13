@@ -1,13 +1,13 @@
 // Duplicate modules need to be checked with respect to name=>value mapping
 
 // Both modules named
-module A::M {}
-module B::M {}
+module K::M1 {}
+module k::M1 {}
 
 // Anon, named
-module 0x1::M {}
-module M::M {}
+module 0x40::M2 {}
+module M::M2 {}
 
 // Named, Anon
-module K::M {}
-module 0x19::M {}
+module K::M3 {}
+module 0x19::M3 {}

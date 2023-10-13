@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getKioskIdFromOwnerCap, isKioskOwnerToken } from '@mysten/core';
-import { EyeClose16 } from '@mysten/icons';
-import { type SuiObjectData } from '@mysten/sui.js/client';
-import { Link } from 'react-router-dom';
-import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';
 import { ErrorBoundary } from '_components/error-boundary';
 import { ampli } from '_src/shared/analytics/ampli';
 import { NFTDisplayCard } from '_src/ui/app/components/nft-display';
 import { Button } from '_src/ui/app/shared/ButtonUI';
+import { getKioskIdFromOwnerCap, isKioskOwnerToken } from '@mysten/core';
+import { EyeClose16 } from '@mysten/icons';
+import { type SuiObjectData } from '@mysten/sui.js/client';
+import { Link } from 'react-router-dom';
+
+import { useHiddenAssets } from '../hidden-assets/HiddenAssetsProvider';
 
 export default function VisualAssets({ items }: { items: SuiObjectData[] }) {
 	const { hideAsset } = useHiddenAssets();
 	return (
-		<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4 mb-5">
+		<div className="grid w-full grid-cols-2 gap-x-3.5 gap-y-4">
 			{items.map((object) => (
 				<Link
 					to={

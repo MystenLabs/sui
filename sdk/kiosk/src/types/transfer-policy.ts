@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ObjectOwner } from '@mysten/sui.js/client';
+import { type ObjectOwner } from '@mysten/sui.js/client';
+import { TransactionObjectArgument, type TransactionBlock } from '@mysten/sui.js/transactions';
+
+import { ObjectArgument } from '.';
 
 /** The Transfer Policy module. */
 export const TRANSFER_POLICY_MODULE = '0x2::transfer_policy';
@@ -12,11 +15,23 @@ export const TRANSFER_POLICY_CREATED_EVENT = `${TRANSFER_POLICY_MODULE}::Transfe
 /** The Transfer Policy Type */
 export const TRANSFER_POLICY_TYPE = `${TRANSFER_POLICY_MODULE}::TransferPolicy`;
 
+/** The Transfer Policy Cap Type */
+export const TRANSFER_POLICY_CAP_TYPE = `${TRANSFER_POLICY_MODULE}::TransferPolicyCap`;
+
 /** The Kiosk Lock Rule */
 export const KIOSK_LOCK_RULE = 'kiosk_lock_rule::Rule';
 
 /** The Royalty rule */
 export const ROYALTY_RULE = 'royalty_rule::Rule';
+
+/**
+ * The Transfer Policy Cap in a consumable way.
+ */
+export type TransferPolicyCap = {
+	policyId: string;
+	policyCapId: string;
+	type: string;
+};
 
 /** The `TransferPolicy` object */
 export type TransferPolicy = {
@@ -30,4 +45,23 @@ export type TransferPolicy = {
 /** Event emitted when a TransferPolicy is created. */
 export type TransferPolicyCreated = {
 	id: string;
+};
+
+// The object a Rule resolving function accepts
+// It can accept a set of fixed fields, that are part of every purchase flow as well any extra arguments to resolve custom policies!
+// Each rule resolving function should check that the key it's seeking is in the object
+// e.g. `if(!'my_key' in ruleParams!) throw new Error("Can't resolve that rule!")`
+export type RuleResolvingParams = {
+	transactionBlock: TransactionBlock;
+	itemType: string;
+	itemId: string;
+	price: string;
+	policyId: ObjectArgument;
+	sellerKiosk: ObjectArgument;
+	kiosk: ObjectArgument;
+	kioskCap: ObjectArgument;
+	transferRequest: TransactionObjectArgument;
+	purchasedItem: TransactionObjectArgument;
+	packageId: string;
+	extraArgs: Record<string, any>; // extraParams contains more possible {key, values} to pass for custom rules.
 };

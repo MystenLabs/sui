@@ -85,26 +85,6 @@ module.exports = {
 		{
 			files: ['apps/explorer/**/*'],
 			rules: {
-				'import/order': [
-					'warn',
-					{
-						groups: [['builtin', 'external'], ['internal', 'parent', 'sibling', 'index'], 'type'],
-						pathGroups: [
-							{
-								pattern: '{.,..}/**/*.css',
-								group: 'type',
-								position: 'after',
-							},
-							{
-								pattern: '~/**',
-								group: 'internal',
-							},
-						],
-						'newlines-between': 'always',
-						alphabetize: { order: 'asc' },
-						warnOnUnassignedImports: true,
-					},
-				],
 				'import/no-duplicates': ['error'],
 				'import/no-anonymous-default-export': 'off',
 				'@typescript-eslint/consistent-type-imports': [
@@ -220,30 +200,6 @@ module.exports = {
 			files: ['apps/wallet/**/*'],
 			rules: {
 				'react/display-name': 'off',
-				'import/order': [
-					'warn',
-					{
-						groups: [['builtin', 'external'], ['internal', 'parent', 'sibling', 'index'], 'type'],
-						pathGroups: [
-							{
-								pattern: '{.,..,_*,*}/**/*.?(s)css',
-								group: 'type',
-								position: 'after',
-							},
-							{
-								pattern: '_*',
-								group: 'internal',
-							},
-							{
-								pattern: '_*/**',
-								group: 'internal',
-							},
-						],
-						pathGroupsExcludedImportTypes: ['builtin', 'object', 'type'],
-						alphabetize: { order: 'asc' },
-						warnOnUnassignedImports: true,
-					},
-				],
 				'import/no-duplicates': ['error'],
 				'@typescript-eslint/consistent-type-imports': [
 					'error',
@@ -284,7 +240,7 @@ module.exports = {
 			},
 		},
 		{
-			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*', 'sdk/zklogin/**/*'],
+			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*'],
 			rules: {
 				// ledgerjs-hw-app-sui and wallet use Buffer
 				'no-restricted-globals': ['off'],
@@ -304,6 +260,12 @@ module.exports = {
 			rules: {
 				// Story files have render functions that this rule incorrectly warns on:
 				'react-hooks/rules-of-hooks': 'off',
+			},
+		},
+		{
+			files: ['sdk/create-dapp/templates/**/*'],
+			rules: {
+				'header/header': 'off',
 			},
 		},
 	],

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useGetValidatorsApy, useGetValidatorsEvents } from '@mysten/core';
-import { useLatestSuiSystemState } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { type SuiSystemStateSummary } from '@mysten/sui.js/client';
 import { LoadingIndicator, Text } from '@mysten/ui';
 import React, { useMemo } from 'react';
@@ -26,7 +26,7 @@ const getAtRiskRemainingEpochs = (
 
 function ValidatorDetails() {
 	const { id } = useParams();
-	const { data, isLoading } = useLatestSuiSystemState();
+	const { data, isLoading } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const validatorData = useMemo(() => {
 		if (!data) return null;

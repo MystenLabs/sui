@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Settings24 as SettingsIcon, HamburgerOpen24 as HamburgerOpenIcon } from '@mysten/icons';
-import { cx } from 'class-variance-authority';
-import { useMenuIsOpen, useNextMenuUrl } from '../hooks';
 import { ButtonOrLink } from '_src/ui/app/shared/utils/ButtonOrLink';
+import { HamburgerOpen24 as HamburgerOpenIcon, Settings24 as SettingsIcon } from '@mysten/icons';
+import { cx } from 'class-variance-authority';
+
+import { useMenuIsOpen, useNextMenuUrl } from '../hooks';
 
 export function WalletSettingsButton() {
 	const isOpen = useMenuIsOpen();

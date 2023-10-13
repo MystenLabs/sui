@@ -448,6 +448,13 @@ mod tests {
                 &self,
                 digest: TransactionDigest,
             ) -> SuiResult<Option<CheckpointSequenceNumber>>;
+
+            async fn get_object(&self, object_id: ObjectID, version: SequenceNumber) -> SuiResult<Option<Object>>;
+
+            async fn multi_get_transaction_checkpoint(
+                &self,
+                digests: &[TransactionDigest],
+            ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
         }
     }
 

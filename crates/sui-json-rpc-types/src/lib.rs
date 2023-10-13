@@ -45,3 +45,13 @@ pub struct Page<T, C> {
     pub next_cursor: Option<C>,
     pub has_next_page: bool,
 }
+
+impl<T, C> Page<T, C> {
+    pub fn empty() -> Self {
+        Self {
+            data: vec![],
+            next_cursor: None,
+            has_next_page: false,
+        }
+    }
+}

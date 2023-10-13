@@ -3,8 +3,9 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.42.0",
+	"version": "0.44.0",
 	"license": "Apache-2.0",
+	"sideEffects": false,
 	"files": [
 		"CHANGELOG.md",
 		"LICENSE",
@@ -20,7 +21,8 @@
 		"src",
 		"transactions",
 		"utils",
-		"verify"
+		"verify",
+		"zklogin"
 	],
 	"engines": {
 		"node": ">=16"
@@ -81,6 +83,11 @@
 			"source": "./src/verify/index.ts",
 			"import": "./dist/esm/verify/index.js",
 			"require": "./dist/cjs/verify/index.js"
+		},
+		"./zklogin": {
+			"source": "./src/zklogin/index.ts",
+			"import": "./dist/esm/zklogin/index.js",
+			"require": "./dist/cjs/zklogin/index.js"
 		}
 	},
 	"scripts": {

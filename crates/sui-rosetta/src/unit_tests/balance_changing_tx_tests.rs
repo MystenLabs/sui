@@ -184,7 +184,7 @@ async fn test_publish_and_move_call() {
     // TODO: Improve tx response to make it easier to find objects.
     let treasury = find_module_object(&object_changes, "::TreasuryCap");
     let treasury = treasury.clone().reference.to_object_ref();
-    let recipient = *addresses.choose(&mut OsRng::default()).unwrap();
+    let recipient = *addresses.choose(&mut OsRng).unwrap();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder
@@ -808,7 +808,7 @@ async fn get_random_sui(
             let obj = object.object().unwrap();
             obj.is_gas_coin() && !except.contains(&obj.object_id)
         })
-        .choose(&mut OsRng::default())
+        .choose(&mut OsRng)
         .unwrap();
 
     let coin = coin_resp.object().unwrap();
@@ -819,7 +819,7 @@ fn get_random_address(addresses: &[SuiAddress], except: Vec<SuiAddress>) -> SuiA
     *addresses
         .iter()
         .filter(|addr| !except.contains(*addr))
-        .choose(&mut OsRng::default())
+        .choose(&mut OsRng)
         .unwrap()
 }
 

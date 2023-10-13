@@ -29,10 +29,11 @@ sui-sdk.workspace = true
 sui-test-transaction-builder.workspace = true
 
 move-binary-format.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
+fastcrypto-zkp.workspace = true
 
 [dev-dependencies]
 sui-macros.workspace = true

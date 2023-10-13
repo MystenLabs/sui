@@ -3,8 +3,8 @@
 
 import {
 	toSerializedSignature,
-	type SerializedSignature,
 	type Keypair,
+	type SerializedSignature,
 } from '@mysten/sui.js/cryptography';
 import { blake2b } from '@noble/hashes/blake2b';
 
@@ -26,7 +26,7 @@ export class AccountKeypair {
 		return toSerializedSignature({
 			signature,
 			signatureScheme,
-			pubKey: pubkey,
+			publicKey: pubkey,
 		});
 	}
 

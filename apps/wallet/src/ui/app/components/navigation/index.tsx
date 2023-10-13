@@ -1,22 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppSelector } from '_hooks';
+import { getNavIsVisible } from '_redux/slices/app';
 import { Activity32, Apps32, Nft132, Tokens32 } from '@mysten/icons';
 import cl from 'classnames';
-import { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import { useActiveAccount } from '../../hooks/useActiveAccount';
-import { useAppSelector } from '_hooks';
-import { getNavIsVisible } from '_redux/slices/app';
-
 import st from './Navigation.module.scss';
 
-export type NavigationProps = {
-	className?: string;
-};
-
-function Navigation({ className }: NavigationProps) {
+export function Navigation() {
 	const isVisible = useAppSelector(getNavIsVisible);
 	const activeAccount = useActiveAccount();
 	const makeLinkCls = ({ isActive }: { isActive: boolean }) =>
@@ -25,15 +19,11 @@ function Navigation({ className }: NavigationProps) {
 		cl(st.link, { [st.active]: isActive });
 	return (
 		<nav
-			className={cl('border-b-0 rounded-tl-md rounded-tr-md pt-2 pb-0', st.container, className, {
+			className={cl('border-b-0 rounded-tl-md rounded-tr-md shrink-0', st.container, {
 				[st.hidden]: !isVisible,
 			})}
 		>
-			<div
-				id="sui-apps-filters"
-				className="flex overflow-x:hidden whitespace-nowrap w-full justify-center"
-			></div>
-
+			<div id="sui-apps-filters" className="flex whitespace-nowrap w-full justify-center"></div>
 			<div className={st.navMenu}>
 				<NavLink
 					data-testid="nav-tokens"
@@ -88,5 +78,3 @@ function Navigation({ className }: NavigationProps) {
 		</nav>
 	);
 }
-
-export default memo(Navigation);

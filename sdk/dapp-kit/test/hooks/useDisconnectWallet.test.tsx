@@ -1,19 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+
+import { WalletNotConnectedError } from '../../src/errors/walletErrors.js';
 import {
 	useConnectWallet,
-	useDisconnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
-} from 'dapp-kit/src';
-import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
-import { WalletNotConnectedError } from 'dapp-kit/src/errors/walletErrors.js';
+	useDisconnectWallet,
+} from '../../src/index.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('useDisconnectWallet', () => {
 	test('that an error is thrown when trying to disconnect with no active connection', async () => {
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useDisconnectWallet(), { wrapper });
 
 		result.current.mutate();
@@ -24,7 +25,7 @@ describe('useDisconnectWallet', () => {
 	test('that disconnecting works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({ walletName: 'Mock Wallet 1' });
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),

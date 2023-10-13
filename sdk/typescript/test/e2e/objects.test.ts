@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { normalizeSuiAddress, SUI_TYPE_ARG } from '../../src/utils';
-import { SuiObjectData } from '../../src/client';
+import { beforeAll, describe, expect, it } from 'vitest';
+
 import { TransactionBlock } from '../../src/builder';
+import { SuiObjectData } from '../../src/client';
+import { normalizeSuiAddress, SUI_TYPE_ARG } from '../../src/utils';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object Reading API', () => {

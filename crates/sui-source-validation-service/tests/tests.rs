@@ -6,31 +6,34 @@ use reqwest::Client;
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::FileExt;
+use std::sync::{Arc, RwLock};
 use std::{collections::BTreeMap, path::PathBuf};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::rpc_types::{
-    OwnedObjectRef, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsV1,
+    OwnedObjectRef, SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockEffectsV1,
 };
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::types::object::Owner;
 use sui_sdk::types::transaction::TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
 use sui_sdk::wallet_context::WalletContext;
+use tokio::sync::oneshot;
 
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
     host_port, initialize, serve, verify_packages, watch_for_upgrades, AppState, CloneCommand,
     Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package, PackageSources,
-    RepositorySource, SourceInfo, SourceResponse, SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    RepositorySource, SourceInfo, SourceLookup, SourceResponse,
+    SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
 const LOCALNET_PORT: u16 = 9000;
 const TEST_FIXTURES_DIR: &str = "tests/fixture";
 
+#[allow(clippy::await_holding_lock)]
 #[tokio::test]
 async fn test_end_to_end() -> anyhow::Result<()> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
@@ -85,7 +88,12 @@ async fn test_end_to_end() -> anyhow::Result<()> {
         })],
     };
     // Start watching for upgrades.
-    let t = tokio::spawn(async move { watch_for_upgrades(&config).await });
+    let mut sources = NetworkLookup::new();
+    sources.insert(Network::Localnet, SourceLookup::new());
+    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let app_state_ref = app_state.clone();
+    let (tx, rx) = oneshot::channel();
+    tokio::spawn(async move { watch_for_upgrades(&config, app_state, Some(tx)).await });
 
     // Set up to upgrade package.
     let package = effects
@@ -100,8 +108,14 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Run the upgrade.
     run_upgrade(upgrade_pkg_path, cap, context, gas_obj_id, rgp).await?;
 
-    // Test expects to terminate when we observe an upgrade transaction.
-    t.await.unwrap()?;
+    // Test expects to observe an upgrade transaction.
+    let Ok(SuiTransactionBlockEffects::V1(effects)) = rx.await else {
+        panic!("No upgrade transaction observed")
+    };
+    assert!(effects.status.is_ok());
+    // Test expects `sources` of server state to be empty / cleared on upgrade.
+    let app_state_ref = app_state_ref.read().unwrap();
+    assert!(app_state_ref.sources.is_empty());
 
     ///////////////////////////
     // Test verify_packages
@@ -197,8 +211,8 @@ async fn run_upgrade(
     .await?;
 
     let SuiClientCommandResult::Upgrade(response) = resp else {
-            unreachable!("Invalid upgrade response");
-        };
+        unreachable!("Invalid upgrade response");
+    };
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
     assert!(effects.status.is_ok());
     Ok(())
@@ -274,7 +288,8 @@ async fn test_api_route() -> anyhow::Result<()> {
     );
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, test_lookup);
-    tokio::spawn(serve(AppState { sources }).expect("Cannot start service."));
+    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    tokio::spawn(serve(app_state).expect("Cannot start service."));
 
     let client = Client::new();
 

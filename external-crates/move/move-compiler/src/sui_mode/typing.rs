@@ -12,15 +12,16 @@ use crate::{
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, StructName},
+    parser::ast::{Ability_, FunctionName, Mutability, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
+        program_info::TypingProgramInfo,
         CompilationEnv, Identifier,
     },
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
-        core::{ability_not_satisfied_tips, error_format, error_format_, Subst, TypingProgramInfo},
+        core::{ability_not_satisfied_tips, error_format, error_format_, Subst},
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
@@ -36,7 +37,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
     fn context<'a>(
         env: &'a mut CompilationEnv,
         program_info: &'a TypingProgramInfo,
-        _program: &T::Program,
+        _program: &T::Program_,
     ) -> Self::Context<'a> {
         Context::new(env, program_info)
     }
@@ -207,7 +208,9 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         return;
     };
 
-    let StructFields::Defined(fields) = fields else { return };
+    let StructFields::Defined(fields) = fields else {
+        return;
+    };
     let invalid_first_field = if fields.is_empty() {
         // no fields
         Some(name.loc())
@@ -358,11 +361,11 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     }
     let last_loc = parameters
         .last()
-        .map(|(_, sp!(loc, _))| *loc)
+        .map(|(_, _, sp!(loc, _))| *loc)
         .unwrap_or(name.loc());
     let tx_ctx_kind = parameters
         .last()
-        .map(|(_, last_param_ty)| tx_context_kind(last_param_ty))
+        .map(|(_, _, last_param_ty)| tx_context_kind(last_param_ty))
         .unwrap_or(TxContextKind::None);
     if tx_ctx_kind == TxContextKind::None {
         let msg = format!(
@@ -392,14 +395,14 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
-            (parameters[0].1.loc, msg),
+            (parameters[0].2.loc, msg),
             (otw_loc, otw_msg),
         );
         diag.add_note(OTW_NOTE);
         context.env.add_diag(diag)
     } else if parameters.len() > 1 {
         // if there is more than one parameter, the first must be the OTW
-        let (first_var, first_ty) = parameters.first().unwrap();
+        let (_, first_var, first_ty) = parameters.first().unwrap();
         let is_otw = matches!(
             first_ty.value.type_name(),
             Some(sp!(_, TypeName_::ModuleType(m, n)))
@@ -436,7 +439,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         }
     } else if parameters.len() > 2 {
         // no init function can take more than 2 parameters (the OTW and the TxContext)
-        let (second_var, _) = &parameters[1];
+        let (_, second_var, _) = &parameters[1];
         context.env.add_diag(diag!(
             INIT_FUN_DIAG,
             (name.loc(), "Invalid 'init' function declaration"),
@@ -574,7 +577,7 @@ fn entry_signature(
         return_type,
     } = signature;
     let all_non_ctx_parameters = match parameters.last() {
-        Some((_, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
+        Some((_, _, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
             &parameters[0..parameters.len() - 1]
         }
         _ => parameters,
@@ -585,10 +588,10 @@ fn entry_signature(
 
 fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
     let Type_::Ref(is_mut, inner_ty) = last_param_ty_ else {
-        return TxContextKind::None
+        return TxContextKind::None;
     };
     let Type_::Apply(_, sp!(_, inner_name), _) = &inner_ty.value else {
-        return TxContextKind::None
+        return TxContextKind::None;
     };
     if inner_name.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME) {
         if *is_mut {
@@ -615,9 +618,9 @@ fn entry_param(
     context: &mut Context,
     entry_loc: Loc,
     name: FunctionName,
-    parameters: &[(Var, Type)],
+    parameters: &[(Mutability, Var, Type)],
 ) {
-    for (var, ty) in parameters {
+    for (_, var, ty) in parameters {
         entry_param_ty(context, entry_loc, name, var, ty);
     }
 }
@@ -641,7 +644,9 @@ fn entry_param_ty(
     // which should give a contextual error about `MyObject` having `key`, but the instantiation
     // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
     // `store`
-    let is_valid = is_entry_primitive_ty(param_ty) || is_entry_object_ty(param_ty);
+    let is_valid = is_entry_primitive_ty(param_ty)
+        || is_entry_object_ty(param_ty)
+        || is_entry_receiving_ty(param_ty);
     if is_mut_clock || !is_valid {
         let pmsg = format!(
             "Invalid 'entry' parameter type for parameter '{}'",
@@ -656,7 +661,7 @@ fn entry_param_ty(
             )
         } else {
             "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
-            (by-reference or by-value), or vectors of objects"
+            (by-reference or by-value), vectors of objects, or 'Receiving' arguments (by-reference or by-value)"
                 .to_owned()
         };
         let emsg = format!("'{name}' was declared 'entry' here");
@@ -679,6 +684,22 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         | Type_::Var(_)
         | Type_::Anything
         | Type_::UnresolvedError => false,
+    }
+}
+
+fn is_entry_receiving_ty(param_ty: &Type) -> bool {
+    match &param_ty.value {
+        Type_::Ref(_, t) => is_entry_receiving_ty(t),
+        Type_::Apply(_, sp!(_, n), targs)
+            if n.is(SUI_ADDR_NAME, TRANSFER_MODULE_NAME, RECEIVING_TYPE_NAME) =>
+        {
+            debug_assert!(targs.len() == 1);
+            // Don't care about the type parameter, just that it's a receiving type -- since it has
+            // a `key` requirement on the type parameter it must be an object or type checking will
+            // fail.
+            true
+        }
+        _ => false,
     }
 }
 

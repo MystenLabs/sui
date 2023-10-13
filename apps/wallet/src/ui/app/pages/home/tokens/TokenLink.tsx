@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { CoinItem } from '_components/active-coins-card/CoinItem';
+import { ampli } from '_src/shared/analytics/ampli';
 import { type CoinBalance } from '@mysten/sui.js/client';
 import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import { CoinItem } from '_components/active-coins-card/CoinItem';
-import { ampli } from '_src/shared/analytics/ampli';
-
 type Props = {
 	coinBalance: CoinBalance;
 	centerAction?: ReactNode;
+	subtitle?: string;
 };
 
-export function TokenLink({ coinBalance, centerAction }: Props) {
+export function TokenLink({ coinBalance, centerAction, subtitle }: Props) {
 	return (
 		<Link
 			to={`/send?type=${encodeURIComponent(coinBalance.coinType)}`}
@@ -31,6 +31,7 @@ export function TokenLink({ coinBalance, centerAction }: Props) {
 				coinType={coinBalance.coinType}
 				balance={BigInt(coinBalance.totalBalance)}
 				centerAction={centerAction}
+				subtitle={subtitle}
 			/>
 		</Link>
 	);

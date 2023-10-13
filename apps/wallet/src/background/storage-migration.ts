@@ -2,21 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import Dexie from 'dexie';
+
+import { accountSourcesEvents } from './account-sources/events';
 import {
-	MnemonicAccountSource,
 	deriveKeypairFromSeed,
 	makeDerivationPath,
+	MnemonicAccountSource,
 } from './account-sources/MnemonicAccountSource';
 import { QredoAccountSource } from './account-sources/QredoAccountSource';
-import { accountSourcesEvents } from './account-sources/events';
 import { type SerializedAccount } from './accounts/Account';
+import { accountsEvents } from './accounts/events';
 import { ImportedAccount } from './accounts/ImportedAccount';
 import { LedgerAccount } from './accounts/LedgerAccount';
 import { MnemonicAccount } from './accounts/MnemonicAccount';
 import { type QredoSerializedAccount } from './accounts/QredoAccount';
-import { accountsEvents } from './accounts/events';
 import { backupDB, getDB } from './db';
-import { STORAGE_LAST_ACCOUNT_INDEX_KEY, getSavedLedgerAccounts } from './keyring';
+import { getSavedLedgerAccounts, STORAGE_LAST_ACCOUNT_INDEX_KEY } from './keyring';
 import { VaultStorage } from './keyring/VaultStorage';
 import { getAllQredoConnections } from './qredo/storage';
 import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from './storage-utils';

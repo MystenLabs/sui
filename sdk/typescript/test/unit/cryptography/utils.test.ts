@@ -1,18 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { parseSerializedSignature } from '../../../src/cryptography/signature';
-import { PubkeyWeightPair, combinePartialSigs } from '../../../src/cryptography/multisig';
 import { fromB64, toB64 } from '@mysten/bcs';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import { ExportedKeypair } from '../../../src/cryptography/keypair';
+import { combinePartialSigs, PubkeyWeightPair } from '../../../src/cryptography/multisig';
+import { PublicKey } from '../../../src/cryptography/publickey';
+import { parseSerializedSignature } from '../../../src/cryptography/signature';
 import {
+	fromExportedKeypair,
+	publicKeyFromSerialized,
 	toParsedSignaturePubkeyPair,
 	toSingleSignaturePubkeyPair,
-	publicKeyFromSerialized,
-	fromExportedKeypair,
 } from '../../../src/cryptography/utils';
-import { PublicKey } from '../../../src/cryptography/publickey';
-import { ExportedKeypair } from '../../../src/cryptography/keypair';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
@@ -108,7 +109,7 @@ describe('Utils', () => {
 		let invalidSignature = toB64(bytes);
 
 		expect(() => toParsedSignaturePubkeyPair(invalidSignature)).toThrowError(
-			new Error('Unable to parse a zk signature. (not implemented yet)'),
+			new Error('ZkLogin signature not supported'),
 		);
 	});
 

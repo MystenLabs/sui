@@ -47,19 +47,10 @@ pub async fn send_and_confirm_transaction_(
     Ok((txn, effects))
 }
 
-pub async fn send_and_confirm_transaction_with_execution_error(
+pub async fn certify_transaction(
     authority: &AuthorityState,
-    fullnode: Option<&AuthorityState>,
     transaction: Transaction,
-    with_shared: bool, // transaction includes shared objects
-) -> Result<
-    (
-        CertifiedTransaction,
-        SignedTransactionEffects,
-        Option<ExecutionError>,
-    ),
-    SuiError,
-> {
+) -> Result<VerifiedCertificate, SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let transaction = authority.verify_transaction(transaction).unwrap();
@@ -71,12 +62,27 @@ pub async fn send_and_confirm_transaction_with_execution_error(
 
     // Collect signatures from a quorum of authorities
     let committee = authority.clone_committee_for_testing();
-    let certificate =
-        CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
-            .unwrap()
-            .verify_authenticated(&committee, &Default::default())
-            .unwrap();
+    let certificate = CertifiedTransaction::new(transaction.into_message(), vec![vote], &committee)
+        .unwrap()
+        .verify_authenticated(&committee, &Default::default())
+        .unwrap();
+    Ok(certificate)
+}
 
+pub async fn execute_certificate_with_execution_error(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    certificate: VerifiedCertificate,
+    with_shared: bool, // transaction includes shared objects
+) -> Result<
+    (
+        CertifiedTransaction,
+        SignedTransactionEffects,
+        Option<ExecutionError>,
+    ),
+    SuiError,
+> {
+    let epoch_store = authority.load_epoch_store_one_call_per_task();
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection.
     // We must do this before sending to consensus, otherwise consensus may already
@@ -115,6 +121,23 @@ pub async fn send_and_confirm_transaction_with_execution_error(
         result.into_inner(),
         execution_error_opt,
     ))
+}
+
+pub async fn send_and_confirm_transaction_with_execution_error(
+    authority: &AuthorityState,
+    fullnode: Option<&AuthorityState>,
+    transaction: Transaction,
+    with_shared: bool, // transaction includes shared objects
+) -> Result<
+    (
+        CertifiedTransaction,
+        SignedTransactionEffects,
+        Option<ExecutionError>,
+    ),
+    SuiError,
+> {
+    let certificate = certify_transaction(authority, transaction).await?;
+    execute_certificate_with_execution_error(authority, fullnode, certificate, with_shared).await
 }
 
 pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<AuthorityState>) {
@@ -285,27 +308,21 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority
+    let certs = authority
         .epoch_store_for_testing()
-        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
-    {
-        let certs = authority
-            .epoch_store_for_testing()
-            .process_consensus_transactions_for_tests(
-                vec![transaction],
-                &Arc::new(CheckpointServiceNoop {}),
-                authority.db(),
-            )
-            .await
-            .unwrap();
+        .process_consensus_transactions_for_tests(
+            vec![transaction],
+            &Arc::new(CheckpointServiceNoop {}),
+            authority.db(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap();
 
-        authority
-            .transaction_manager()
-            .enqueue(certs, &authority.epoch_store_for_testing())
-            .unwrap();
-    } else {
-        warn!("Failed to verify certificate: {:?}", cert);
-    }
+    authority
+        .transaction_manager()
+        .enqueue(certs, &authority.epoch_store_for_testing())
+        .unwrap();
 }
 
 pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &VerifiedCertificate) {
@@ -313,24 +330,18 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         ConsensusTransaction::new_certificate_message(&authority.name, cert.clone().into_inner()),
     );
 
-    if let Ok(transaction) = authority
+    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+    // This allows testing cert execution independently.
+    authority
         .epoch_store_for_testing()
-        .verify_consensus_transaction(transaction, &authority.metrics.skipped_consensus_txns)
-    {
-        // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
-        // This allows testing cert execution independently.
-        authority
-            .epoch_store_for_testing()
-            .process_consensus_transactions_for_tests(
-                vec![transaction],
-                &Arc::new(CheckpointServiceNoop {}),
-                &authority.db(),
-            )
-            .await
-            .unwrap();
-    } else {
-        warn!("Failed to verify certificate: {:?}", cert);
-    }
+        .process_consensus_transactions_for_tests(
+            vec![transaction],
+            &Arc::new(CheckpointServiceNoop {}),
+            &authority.db(),
+            &authority.metrics.skipped_consensus_txns,
+        )
+        .await
+        .unwrap();
 }
 
 pub fn build_test_modules_with_dep_addr(

@@ -1,7 +1,7 @@
 processed 4 tasks
 
 task 0 'publish'. lines 1-13:
-Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
     major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
     location: 0x1::Tester,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::Tester'. Got 
 }
 
 task 1 'publish'. lines 15-27:
-Error: Unable to publish module '00000000000000000000000000000001::Tester2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester2'. Got VMError: {
     major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
     location: 0x1::Tester2,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::Tester2'. Got
 }
 
 task 2 'publish'. lines 29-41:
-Error: Unable to publish module '00000000000000000000000000000001::Tester3'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester3'. Got VMError: {
     major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
     location: 0x1::Tester3,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::Tester3'. Got
 }
 
 task 3 'publish'. lines 43-55:
-Error: Unable to publish module '00000000000000000000000000000001::Tester4'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester4'. Got VMError: {
     major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
     location: 0x1::Tester4,

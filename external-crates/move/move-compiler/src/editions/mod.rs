@@ -28,6 +28,11 @@ pub struct Edition {
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub enum FeatureGate {
     PublicPackage,
+    PostFixAbilities,
+    StructTypeVisibility,
+    DotCall,
+    PositionalFields,
+    LetMut,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord, Default)]
@@ -37,12 +42,24 @@ pub enum Flavor {
     Sui,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+pub enum SyntaxEdition {
+    Legacy,
+    E2024,
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
 
-pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &FeatureGate, loc: Loc) {
-    if !edition.supports(feature) {
+pub fn check_feature(
+    env: &mut CompilationEnv,
+    edition: Edition,
+    feature: FeatureGate,
+    loc: Loc,
+) -> bool {
+    let supports_feature = edition.supports(feature);
+    if !supports_feature {
         let valid_editions = valid_editions_for_feature(feature)
             .into_iter()
             .map(|e| e.to_string())
@@ -53,8 +70,9 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &Featu
             (
                 loc,
                 format!(
-                    "{feature} not supported by current edition '{edition}', \
-                    only '{valid_editions}' support this feature"
+                    "{} not supported by current edition '{edition}', \
+                    only '{valid_editions}' support this feature",
+                    feature.error_prefix(),
                 )
             )
         );
@@ -64,9 +82,10 @@ pub fn check_feature(env: &mut CompilationEnv, edition: Edition, feature: &Featu
         );
         env.add_diag(diag);
     }
+    supports_feature
 }
 
-pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
+pub fn valid_editions_for_feature(feature: FeatureGate) -> Vec<Edition> {
     Edition::ALL
         .iter()
         .filter(|e| e.supports(feature))
@@ -80,6 +99,15 @@ pub fn valid_editions_for_feature(feature: &FeatureGate) -> Vec<Edition> {
 
 static SUPPORTED_FEATURES: Lazy<BTreeMap<Edition, BTreeSet<FeatureGate>>> =
     Lazy::new(|| BTreeMap::from_iter(Edition::ALL.iter().map(|e| (*e, e.features()))));
+
+const E2024_ALPHA_FEATURES: &[FeatureGate] = &[
+    FeatureGate::PublicPackage,
+    FeatureGate::PostFixAbilities,
+    FeatureGate::StructTypeVisibility,
+    FeatureGate::DotCall,
+    FeatureGate::PositionalFields,
+    FeatureGate::LetMut,
+];
 
 impl Edition {
     pub const LEGACY: Self = Self {
@@ -95,10 +123,17 @@ impl Edition {
 
     pub const ALL: &[Self] = &[Self::LEGACY, Self::E2024_ALPHA];
 
-    pub fn supports(&self, feature: &FeatureGate) -> bool {
-        SUPPORTED_FEATURES.get(self).unwrap().contains(feature)
+    pub fn supports(&self, feature: FeatureGate) -> bool {
+        SUPPORTED_FEATURES.get(self).unwrap().contains(&feature)
     }
 
+    pub fn syntax(&self) -> SyntaxEdition {
+        match *self {
+            Self::LEGACY => SyntaxEdition::Legacy,
+            Self::E2024_ALPHA => SyntaxEdition::E2024,
+            _ => self.unknown_edition_panic(),
+        }
+    }
     // Intended only for implementing the lazy static (supported feature map) above
     fn prev(&self) -> Option<Self> {
         match *self {
@@ -115,7 +150,7 @@ impl Edition {
             Self::LEGACY => BTreeSet::new(),
             Self::E2024_ALPHA => {
                 let mut features = self.prev().unwrap().features();
-                features.extend([FeatureGate::PublicPackage]);
+                features.extend(E2024_ALPHA_FEATURES);
                 features
             }
             _ => self.unknown_edition_panic(),
@@ -142,6 +177,19 @@ impl Flavor {
     pub const GLOBAL_STORAGE: &str = "global-storage";
     pub const SUI: &str = "sui";
     pub const ALL: &[Self] = &[Self::GlobalStorage, Self::Sui];
+}
+
+impl FeatureGate {
+    fn error_prefix(&self) -> &'static str {
+        match self {
+            FeatureGate::PublicPackage => "'public(package)' is",
+            FeatureGate::PostFixAbilities => "Postfix abilities are",
+            FeatureGate::StructTypeVisibility => "Struct visibility modifiers are",
+            FeatureGate::DotCall => "Method syntax is",
+            FeatureGate::PositionalFields => "Positional fields are",
+            FeatureGate::LetMut => "'mut' variable modifiers are",
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -245,12 +293,6 @@ impl Serialize for Flavor {
         S: serde::Serializer,
     {
         serializer.serialize_str(&format!("{}", self))
-    }
-}
-
-impl Display for FeatureGate {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
     }
 }
 

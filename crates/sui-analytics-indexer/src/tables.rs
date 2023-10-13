@@ -11,7 +11,7 @@ use serde::Serialize;
 //
 
 // Checkpoint information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct CheckpointEntry {
     // indexes
     pub(crate) checkpoint_digest: String,
@@ -23,9 +23,10 @@ pub(crate) struct CheckpointEntry {
     pub(crate) end_of_epoch: bool,
     // gas stats
     pub(crate) total_gas_cost: i64,
-    pub(crate) total_computation_cost: u64,
-    pub(crate) total_storage_cost: u64,
-    pub(crate) total_storage_rebate: u64,
+    pub(crate) computation_cost: u64,
+    pub(crate) storage_cost: u64,
+    pub(crate) storage_rebate: u64,
+    pub(crate) non_refundable_storage_fee: u64,
     // transaction stats
     pub(crate) total_transaction_blocks: u64,
     pub(crate) total_transactions: u64,
@@ -37,7 +38,7 @@ pub(crate) struct CheckpointEntry {
 }
 
 // Transaction information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct TransactionEntry {
     // main indexes
     pub(crate) transaction_digest: String,
@@ -47,6 +48,8 @@ pub(crate) struct TransactionEntry {
     // transaction info
     pub(crate) sender: String,
     pub(crate) transaction_kind: String,
+    pub(crate) is_system_txn: bool,
+    pub(crate) is_sponsored_tx: bool,
     pub(crate) transaction_count: u64,
     pub(crate) execution_success: bool,
     // object info
@@ -59,12 +62,20 @@ pub(crate) struct TransactionEntry {
     pub(crate) mutated: u64,
     pub(crate) deleted: u64,
     // PTB info
+    pub(crate) transfers: u64,
+    pub(crate) split_coins: u64,
+    pub(crate) merge_coins: u64,
+    pub(crate) publish: u64,
+    pub(crate) upgrade: u64,
+    // move_vec or default for future commands
+    pub(crate) others: u64,
     pub(crate) move_calls: u64,
     // pub(crate) packages: BTreeSet<String>,
     // commas separated list of packages used by the transaction.
     // Use as a simple way to query for transactions that use a specific package.
     pub(crate) packages: String,
     // gas info
+    pub(crate) gas_owner: String,
     pub(crate) gas_object_id: String,
     pub(crate) gas_object_sequence: u64,
     pub(crate) gas_object_digest: String,
@@ -84,7 +95,7 @@ pub(crate) struct TransactionEntry {
 
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct EventEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -106,7 +117,7 @@ pub(crate) struct EventEntry {
 }
 
 // Used in the transaction object table to identify the type of input object.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum InputObjectKind {
     Input,
     SharedInput,
@@ -115,7 +126,7 @@ pub enum InputObjectKind {
 
 // Used in the object table to identify the status of object, its result in the last transaction
 // effect.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -123,7 +134,7 @@ pub enum ObjectStatus {
 }
 
 // Object owner information.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,
@@ -133,7 +144,7 @@ pub enum OwnerType {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct ObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -164,7 +175,7 @@ pub(crate) struct ObjectEntry {
 // input kind (for input objects) and status (for objets in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub(crate) struct TransactionObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -178,8 +189,8 @@ pub(crate) struct TransactionObjectEntry {
     pub(crate) object_status: Option<ObjectStatus>,
 }
 
-// A move call expressed as a package, module and function.
-#[derive(Serialize)]
+// A Move call expressed as a package, module and function.
+#[derive(Serialize, Clone)]
 pub(crate) struct MoveCallEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -190,4 +201,19 @@ pub(crate) struct MoveCallEntry {
     pub(crate) package: String,
     pub(crate) module: String,
     pub(crate) function: String,
+}
+
+// A Move package. Pacakge id and MovePackage object bytes
+#[derive(Serialize, Clone)]
+pub(crate) struct MovePackageEntry {
+    // indexes
+    pub(crate) package_id: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // raw package bytes
+    // pub(crate) bcs: Vec<u8>,
+    // We represent them in base64 encoding so they work with the csv.
+    // TODO: review and possibly move back to Vec<u8>
+    pub(crate) bcs: String,
 }

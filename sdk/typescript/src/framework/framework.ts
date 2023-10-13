@@ -1,20 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type {
-	SuiObjectResponse,
-	SuiMoveObject,
-	SuiObjectInfo,
-	SuiObjectData,
-} from '../types/objects.js';
-import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
-
-import type { Option } from '../types/option.js';
-import { getOption } from '../types/option.js';
-import type { CoinStruct } from '../types/coin.js';
-import type { StructTag } from '../bcs/index.js';
 import type { Infer } from 'superstruct';
 import { nullable, number, object, string } from 'superstruct';
+
+import type { StructTag } from '../bcs/index.js';
+import type { CoinStruct } from '../client/types/index.js';
+import type {
+	SuiMoveObject,
+	SuiObjectData,
+	SuiObjectInfo,
+	SuiObjectResponse,
+} from '../types/objects.js';
+import { getObjectFields, getObjectId, getObjectType } from '../types/objects.js';
+import type { Option } from '../types/option.js';
+import { getOption } from '../types/option.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 
 export const SUI_SYSTEM_ADDRESS = '0x3';

@@ -152,12 +152,19 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_kv_store_write_config: Option<TransactionKeyValueStoreWriteConfig>,
+
+    #[serde(default = "default_jwk_fetch_interval_seconds")]
+    pub jwk_fetch_interval_seconds: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub struct TransactionKeyValueStoreReadConfig {
     pub base_url: String,
+}
+
+fn default_jwk_fetch_interval_seconds() -> u64 {
+    3600
 }
 
 fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {

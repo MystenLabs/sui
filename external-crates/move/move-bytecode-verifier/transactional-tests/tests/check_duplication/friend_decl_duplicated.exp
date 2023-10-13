@@ -1,7 +1,7 @@
 processed 2 tasks
 
 task 1 'publish'. lines 5-10:
-Error: Unable to publish module '00000000000000000000000000000042::B'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::B'. Got VMError: {
     major_status: DUPLICATE_ELEMENT,
     sub_status: None,
     location: 0x42::B,

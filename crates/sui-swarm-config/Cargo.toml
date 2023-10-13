@@ -18,13 +18,14 @@ tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 
+move-bytecode-utils.workspace = true
 narwhal-config.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 sui-genesis-builder.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

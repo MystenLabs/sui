@@ -2,25 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import {
-	useFloating,
-	autoUpdate,
-	offset,
-	flip,
-	shift,
-	useHover,
-	useFocus,
-	useDismiss,
-	useRole,
-	useInteractions,
-	FloatingPortal,
 	arrow,
+	autoUpdate,
+	flip,
+	FloatingPortal,
+	offset,
+	shift,
+	useDismiss,
+	useFloating,
+	useFocus,
+	useHover,
+	useInteractions,
+	useRole,
 } from '@floating-ui/react';
+import type { Placement } from '@floating-ui/react';
 import { Info16 } from '@mysten/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
-
-import type { Placement } from '@floating-ui/react';
-import type { ReactNode, CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 const TOOLTIP_DELAY = 150;
 
@@ -85,7 +84,7 @@ export function Tooltip({ tip, children, placement = 'top' }: TooltipProps) {
 
 	return (
 		<>
-			<div tabIndex={0} className="w-full" {...getReferenceProps({ ref: refs.setReference })}>
+			<div tabIndex={0} className="w-full flex" {...getReferenceProps({ ref: refs.setReference })}>
 				{children}
 			</div>
 			<FloatingPortal>

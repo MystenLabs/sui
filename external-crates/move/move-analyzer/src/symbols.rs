@@ -350,8 +350,14 @@ fn type_to_ide_string(sp!(_, t): &Type) -> String {
 
 fn addr_to_ide_string(addr: &Address) -> String {
     match addr {
-        Address::Numerical(None, sp!(_, bytes)) => format!("{}", bytes),
-        Address::Numerical(Some(name), _) => format!("{}", name),
+        Address::Numerical {
+            name: None,
+            value: sp!(_, bytes),
+            ..
+        } => format!("{}", bytes),
+        Address::Numerical {
+            name: Some(name), ..
+        } => format!("{}", name),
         Address::NamedUnassigned(name) => format!("{}", name),
     }
 }
@@ -702,7 +708,7 @@ impl Symbolicator {
             }
         }
 
-        let modules = &typed_ast.unwrap().modules;
+        let modules = &typed_ast.unwrap().inner.modules;
 
         let mut mod_outer_defs = BTreeMap::new();
         let mut mod_use_defs = BTreeMap::new();
@@ -873,12 +879,12 @@ impl Symbolicator {
                 fun.signature
                     .parameters
                     .iter()
-                    .map(|(n, _)| n.value.name)
+                    .map(|(_, n, _)| n.value.name)
                     .collect(),
                 fun.signature
                     .parameters
                     .iter()
-                    .map(|(_, t)| t.clone())
+                    .map(|(_, _, t)| t.clone())
                     .collect(),
                 fun.signature.return_type.clone(),
                 fun.acquires
@@ -1085,7 +1091,7 @@ impl Symbolicator {
         // function body)
         let mut scope = OrdMap::new();
 
-        for (pname, ptype) in &fun.signature.parameters {
+        for (_, pname, ptype) in &fun.signature.parameters {
             self.add_type_id_use_def(ptype, references, use_defs);
 
             // add definition of the parameter

@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
 import { ChevronDown12 } from '@mysten/icons';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { forwardRef } from 'react';
-import { Text } from '_app/shared/text';
 
 const Select = SelectPrimitive.Root;
 const SelectValue = SelectPrimitive.Value;
@@ -15,12 +15,12 @@ const SelectTrigger = forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<SelectPrimitive.Trigger
 		ref={ref}
-		className="flex items-center border border-solid border-gray-45 shadow-sm rounded-2lg bg-white px-4 py-2 gap-1.5 focus:outline-none h-[40px] cursor-pointer disabled:cursor-default"
+		className="flex transition items-center text-steel-dark hover:text-steel-darker active:text-steel-dark disabled:text-gray-60 border border-solid border-gray-45 hover:border-steel disabled:border-gray-45 shadow-sm rounded-lg bg-white px-4 py-3 gap-0.5 focus:outline-none cursor-pointer disabled:cursor-default group active:bg-hero/5 disabled:bg-white"
 		{...props}
 	>
 		{children}
 		<SelectPrimitive.Icon asChild>
-			<ChevronDown12 className="text-steel" />
+			<ChevronDown12 className="transition text-steel group-hover:text-steel-darker group-active:text-steel-dark group-disabled:text-gray-45" />
 		</SelectPrimitive.Icon>
 	</SelectPrimitive.Trigger>
 ));
@@ -36,7 +36,7 @@ const SelectContent = forwardRef<
 			className="z-[99999] min-w-[112px] bg-transparent"
 			{...props}
 		>
-			<SelectPrimitive.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-md shadow-md">
+			<SelectPrimitive.Viewport className="bg-white p-2 border border-solid border-gray-45 rounded-lg shadow-sm">
 				{children}
 			</SelectPrimitive.Viewport>
 		</SelectPrimitive.Content>
@@ -50,11 +50,11 @@ const SelectItem = forwardRef<
 >(({ className, children, ...props }, ref) => (
 	<SelectPrimitive.Item
 		ref={ref}
-		className="flex items-center hover:border-none hover:outline-none hover:cursor-pointer w-full hover:bg-hero-darkest hover:bg-opacity-5 p-2 rounded-sm"
+		className="transition flex items-center text-steel-dark cursor-pointer p-2 outline-none rounded-md hover:text-steel-darker hover:bg-hero/5"
 		{...props}
 	>
 		<SelectPrimitive.ItemText>
-			<Text variant="body" weight="semibold" color="steel">
+			<Text variant="body" weight="semibold">
 				{children}
 			</Text>
 		</SelectPrimitive.ItemText>

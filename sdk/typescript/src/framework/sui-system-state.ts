@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { TransactionBlock } from '../builder/index.js';
-import type { JsonRpcProvider } from '../providers/json-rpc-provider.js';
-import { getObjectReference } from '../types/index.js';
 import type { SuiClient } from '../client/index.js';
+import { getObjectReference } from '../types/index.js';
+import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import { SUI_SYSTEM_ADDRESS } from './framework.js';
 
 /**
@@ -31,7 +30,7 @@ export class SuiSystemStateUtil {
 	 * @param gasBudget omittable only for DevInspect mode
 	 */
 	public static async newRequestAddStakeTxn(
-		client: JsonRpcProvider | SuiClient,
+		client: SuiClient,
 		coins: string[],
 		amount: bigint,
 		validatorAddress: string,
@@ -39,7 +38,7 @@ export class SuiSystemStateUtil {
 		// TODO: validate coin types and handle locked coins
 		const tx = new TransactionBlock();
 
-		const coin = tx.splitCoins(tx.gas, [tx.pure(amount)]);
+		const coin = tx.splitCoins(tx.gas, [amount]);
 		tx.moveCall({
 			target: `${SUI_SYSTEM_ADDRESS}::${SUI_SYSTEM_MODULE_NAME}::${ADD_STAKE_FUN_NAME}`,
 			arguments: [tx.object(SUI_SYSTEM_STATE_OBJECT_ID), coin, tx.pure(validatorAddress)],

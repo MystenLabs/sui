@@ -236,7 +236,8 @@ impl SimpleFaucet {
         // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
-        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await else {
+        let Ok(mut consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.consumer.lock()).await
+        else {
             error!(?uuid, "Timeout when getting consumer lock");
             return None;
         };
@@ -261,8 +262,10 @@ impl SimpleFaucet {
         // If the gas candidate queue is exhausted, the request will be suspended indefinitely until
         // a producer puts in more candidate gas objects. At the same time, other requests will be
         // blocked by the lock acquisition as well.
-        let Ok(mut batch_consumer) = tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await else {
-            error!(?uuid, "Timeout when getting consumer lock");
+        let Ok(mut batch_consumer) =
+            tokio::time::timeout(LOCK_TIMEOUT, self.batch_consumer.lock()).await
+        else {
+            error!(?uuid, "Timeout when getting batch consumer lock");
             return None;
         };
 
@@ -305,9 +308,15 @@ impl SimpleFaucet {
                 GasCoinResponse::ValidGasCoin(coin_id)
             }
 
-            Ok(Some(_)) => GasCoinResponse::GasCoinWithInsufficientBalance(coin_id),
+            Ok(Some(_)) => {
+                info!(?uuid, ?coin_id, "insufficient balance",);
+                GasCoinResponse::GasCoinWithInsufficientBalance(coin_id)
+            }
 
-            Ok(None) => GasCoinResponse::InvalidGasCoin(coin_id),
+            Ok(None) => {
+                info!(?uuid, ?coin_id, "No gas coin returned.",);
+                GasCoinResponse::InvalidGasCoin(coin_id)
+            }
 
             Err(e) => {
                 error!(?uuid, ?coin_id, "Fullnode read error: {e:?}");
@@ -353,6 +362,7 @@ impl SimpleFaucet {
         coin_id: ObjectID,
     ) -> anyhow::Result<Option<GasCoin>> {
         let gas_obj = self.get_coin(coin_id).await?;
+        info!(?coin_id, "Reading gas coin object: {:?}", gas_obj);
         Ok(gas_obj.and_then(|(owner_opt, coin)| match owner_opt {
             Some(Owner::AddressOwner(owner_addr)) if owner_addr == self.active_address => {
                 Some(coin)
@@ -437,6 +447,7 @@ impl SimpleFaucet {
 
                 // We set the inflight status to false so that the async thread that
                 // retries this transactions will attempt to try again.
+                // We should only set this inflight if we see that it's not a client error
                 if let Err(err) = self.wal.lock().await.set_in_flight(coin_id, false) {
                     error!(
                         ?recipient,
@@ -752,7 +763,7 @@ impl SimpleFaucet {
             // Insert the coins into the map based on the destination address
             address_coins_map
                 .entry(owner.get_owner_address().unwrap())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(coin_obj_ref);
         });
 
@@ -767,7 +778,7 @@ impl SimpleFaucet {
             let index = *request_count.entry(addy).or_insert(0);
 
             // The address coin map should contain the coins transferred in the given request.
-            let coins_created_for_address = address_coins_map.entry(addy).or_insert_with(Vec::new);
+            let coins_created_for_address = address_coins_map.entry(addy).or_default();
 
             if number_of_coins as u64 + index > coins_created_for_address.len() as u64 {
                 return Err(FaucetError::CoinAmountTransferredIncorrect(format!(
@@ -942,7 +953,7 @@ pub async fn batch_gather(
 ) -> Result<(), FaucetError> {
     // Gather the rest of the batch after the first item has been taken.
     for _ in 1..batch_request_size {
-        let Some(req)  = request_consumer.recv().await else {
+        let Some(req) = request_consumer.recv().await else {
             error!("Request consumer queue closed");
             return Err(FaucetError::ChannelClosed);
         };
@@ -1451,7 +1462,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid, false).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 
@@ -1735,7 +1748,9 @@ mod tests {
         let faucet_address = faucet.active_address;
         let uuid = Uuid::new_v4();
 
-        let GasCoinResponse::ValidGasCoin(coin_id) = faucet.prepare_gas_coin(100, uuid, false).await else {
+        let GasCoinResponse::ValidGasCoin(coin_id) =
+            faucet.prepare_gas_coin(100, uuid, false).await
+        else {
             panic!("prepare_gas_coin did not give a valid coin.")
         };
 

@@ -1,0 +1,6 @@
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifies_no_abilities_infix_postfix.move:4:20
+  │
+4 │     struct Foo has {} has;
+  │                    ^ Unexpected '{'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+

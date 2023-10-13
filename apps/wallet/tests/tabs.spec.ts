@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { test, expect } from './fixtures';
+import { expect, test } from './fixtures';
 import { createWallet } from './utils/auth';
-
-test.skip();
 
 test('Assets tab', async ({ page, extensionUrl }) => {
 	await createWallet(page, extensionUrl);

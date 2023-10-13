@@ -1,21 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { type ZkLoginProvider } from '_src/background/accounts/zklogin/providers';
+import { type Wallet } from '_src/shared/qredo-api';
 import { type ExportedKeypair } from '@mysten/sui.js/cryptography';
 import {
-	type ReactNode,
 	createContext,
-	useContext,
-	useRef,
 	useCallback,
+	useContext,
 	useMemo,
+	useRef,
 	type MutableRefObject,
+	type ReactNode,
 } from 'react';
-import { type ZkProvider } from '_src/background/accounts/zk/providers';
-import { type Wallet } from '_src/shared/qredo-api';
 
 export type AccountsFormValues =
-	| { type: 'zk'; provider: ZkProvider }
+	| { type: 'zkLogin'; provider: ZkLoginProvider }
 	| { type: 'new-mnemonic' }
 	| { type: 'import-mnemonic'; entropy: string }
 	| { type: 'mnemonic-derived'; sourceID: string }

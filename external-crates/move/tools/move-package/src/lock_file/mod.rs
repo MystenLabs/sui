@@ -38,8 +38,8 @@ impl LockFile {
     /// of a move package).
     pub fn new(
         install_dir: PathBuf,
-        manifest_digest: Option<String>,
-        deps_digest: Option<String>,
+        manifest_digest: String,
+        deps_digest: String,
     ) -> Result<LockFile> {
         let mut locks_dir = install_dir;
         locks_dir.extend([

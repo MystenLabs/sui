@@ -1,26 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
-
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    coin::Coin,
+    digests::{ObjectDigest, TransactionDigest},
+    error::{ExecutionError, ExecutionErrorKind, SuiError},
+    event::Event,
+    execution_status::CommandArgumentError,
+    object::{Data, Object, Owner},
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
+    transfer::Receiving,
+};
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
     identifier::IdentStr,
     resolver::{ModuleResolver, ResourceResolver},
 };
 use move_vm_types::loaded_data::runtime_types::Type;
+use once_cell::sync::Lazy;
 use serde::Deserialize;
-
-use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
-    coin::Coin,
-    digests::ObjectDigest,
-    error::{ExecutionError, ExecutionErrorKind, SuiError},
-    event::Event,
-    execution_status::CommandArgumentError,
-    object::{Object, Owner},
-    storage::{BackingPackageStore, ChildObjectResolver, ObjectChange, StorageView},
-};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 pub trait SuiResolver:
     ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore
@@ -83,13 +83,13 @@ pub struct ExecutionResultsV1 {
 /// Used by sui-execution v1 and above, to capture the execution results from Move.
 /// The results represent the primitive information that can then be used to construct
 /// both transaction effects V1 and V2.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ExecutionResultsV2 {
     /// All objects written regardless of whether they were mutated, created, or unwrapped.
     pub written_objects: BTreeMap<ObjectID, Object>,
-    /// All objects loaded with the intention to be modified, with their original sequence number and digest.
-    /// If any object is not found in written_objects, they must be either deleted or wrapped.
-    pub objects_modified_at: BTreeMap<ObjectID, (SequenceNumber, ObjectDigest, Owner)>,
+    /// All objects that existed prior to this transaction, and are modified in this transaction.
+    /// This includes any type of modification, including mutated, wrapped and deleted objects.
+    pub modified_objects: BTreeSet<ObjectID>,
     /// All object IDs created in this transaction.
     pub created_object_ids: BTreeSet<ObjectID>,
     /// All object IDs deleted in this transaction.
@@ -97,24 +97,96 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
-    // TODO: capture loaded child objects if we want to.
+}
+
+impl ExecutionResultsV2 {
+    pub fn drop_writes(&mut self) {
+        self.written_objects.clear();
+        self.modified_objects.clear();
+        self.created_object_ids.clear();
+        self.deleted_object_ids.clear();
+        self.user_events.clear();
+    }
+
+    pub fn merge_results(&mut self, new_results: Self) {
+        self.written_objects.extend(new_results.written_objects);
+        self.modified_objects.extend(new_results.modified_objects);
+        self.created_object_ids
+            .extend(new_results.created_object_ids);
+        self.deleted_object_ids
+            .extend(new_results.deleted_object_ids);
+        self.user_events.extend(new_results.user_events);
+    }
+
+    pub fn update_version_and_previous_tx(
+        &mut self,
+        lamport_version: SequenceNumber,
+        prev_tx: TransactionDigest,
+    ) {
+        for (id, obj) in self.written_objects.iter_mut() {
+            // TODO: We can now get rid of the following logic by passing in lamport version
+            // into the execution layer, and create new objects using the lamport version directly.
+
+            // Update the version for the written object.
+            match &mut obj.data {
+                Data::Move(obj) => {
+                    // Move objects all get the transaction's lamport timestamp
+                    obj.increment_version_to(lamport_version);
+                }
+
+                Data::Package(pkg) => {
+                    // Modified packages get their version incremented (this is a special case that
+                    // only applies to system packages).  All other packages can only be created,
+                    // and they are left alone.
+                    if self.modified_objects.contains(id) {
+                        pkg.increment_version();
+                    }
+                }
+            }
+
+            // Record the version that the shared object was created at in its owner field.  Note,
+            // this only works because shared objects must be created as shared (not created as
+            // owned in one transaction and later converted to shared in another).
+            if let Owner::Shared {
+                initial_shared_version,
+            } = &mut obj.owner
+            {
+                if self.created_object_ids.contains(id) {
+                    assert_eq!(
+                        *initial_shared_version,
+                        SequenceNumber::new(),
+                        "Initial version should be blank before this point for {id:?}",
+                    );
+                    *initial_shared_version = lamport_version;
+                }
+            }
+
+            obj.previous_transaction = prev_tx;
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
-pub struct InputObjectMetadata {
-    pub id: ObjectID,
-    pub is_mutable_input: bool,
-    pub owner: Owner,
-    pub version: SequenceNumber,
-    pub digest: ObjectDigest,
+pub enum InputObjectMetadata {
+    Receiving {
+        id: ObjectID,
+        version: SequenceNumber,
+    },
+    InputObject {
+        id: ObjectID,
+        is_mutable_input: bool,
+        owner: Owner,
+        version: SequenceNumber,
+    },
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct LoadedChildObjectMetadata {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DynamicallyLoadedObjectMetadata {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,
     pub owner: Owner,
     pub storage_rebate: u64,
+    pub previous_transaction: TransactionDigest,
 }
 
 #[derive(Clone, Debug)]
@@ -144,6 +216,7 @@ pub enum UsageKind {
 pub enum Value {
     Object(ObjectValue),
     Raw(RawValueType, Vec<u8>),
+    Receiving(ObjectID, SequenceNumber, Option<Type>),
 }
 
 #[derive(Debug, Clone)]
@@ -188,6 +261,22 @@ pub enum CommandKind<'a> {
     Upgrade,
 }
 
+impl InputObjectMetadata {
+    pub fn id(&self) -> ObjectID {
+        match self {
+            InputObjectMetadata::Receiving { id, .. } => *id,
+            InputObjectMetadata::InputObject { id, .. } => *id,
+        }
+    }
+
+    pub fn version(&self) -> SequenceNumber {
+        match self {
+            InputObjectMetadata::Receiving { version, .. } => *version,
+            InputObjectMetadata::InputObject { version, .. } => *version,
+        }
+    }
+}
+
 impl InputValue {
     pub fn new_object(object_metadata: InputObjectMetadata, value: ObjectValue) -> Self {
         InputValue {
@@ -200,6 +289,13 @@ impl InputValue {
         InputValue {
             object_metadata: None,
             inner: ResultValue::new(Value::Raw(ty, value)),
+        }
+    }
+
+    pub fn new_receiving_object(id: ObjectID, version: SequenceNumber) -> Self {
+        InputValue {
+            object_metadata: Some(InputObjectMetadata::Receiving { id, version }),
+            inner: ResultValue::new(Value::Receiving(id, version, None)),
         }
     }
 }
@@ -219,6 +315,7 @@ impl Value {
             Value::Object(_) => false,
             Value::Raw(RawValueType::Any, _) => true,
             Value::Raw(RawValueType::Loaded { abilities, .. }, _) => abilities.has_copy(),
+            Value::Receiving(_, _, _) => false,
         }
     }
 
@@ -226,6 +323,9 @@ impl Value {
         match self {
             Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
             Value::Raw(_, bytes) => buf.extend(bytes),
+            Value::Receiving(id, version, _) => {
+                buf.extend(Receiving::new(*id, *version).to_bcs_bytes())
+            }
         }
     }
 
@@ -242,6 +342,9 @@ impl Value {
                 },
                 _,
             ) => *used_in_non_entry_move_call,
+            // Only thing you can do with a `Receiving<T>` is consume it, so once it's used it
+            // can't be used again.
+            Value::Receiving(_, _, _) => false,
         }
     }
 }
@@ -289,6 +392,7 @@ impl TryFromValue for ObjectValue {
             Value::Object(o) => Ok(o),
             Value::Raw(RawValueType::Any, _) => Err(CommandArgumentError::TypeMismatch),
             Value::Raw(RawValueType::Loaded { .. }, _) => Err(CommandArgumentError::TypeMismatch),
+            Value::Receiving(_, _, _) => Err(CommandArgumentError::TypeMismatch),
         }
     }
 }
@@ -311,6 +415,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
 ) -> Result<T, CommandArgumentError> {
     match value {
         Value::Object(_) => Err(CommandArgumentError::TypeMismatch),
+        Value::Receiving(_, _, _) => Err(CommandArgumentError::TypeMismatch),
         Value::Raw(RawValueType::Any, bytes) => {
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
@@ -321,4 +426,34 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
     }
+}
+
+/// If a transaction digest shows up in this list, when executing such transaction,
+/// we will always return `ExecutionError::CertificateDenied` without executing it (but still do
+/// gas smashing). Because this list is not gated by protocol version, there are a few important
+/// criteria for adding a digest to this list:
+/// 1. The certificate must be causing all validators to either panic or hang forever deterministically.
+/// 2. If we ever ship a fix to make it no longer panic or hang when executing such transaction,
+/// we must make sure the transaction is already in this list. Otherwise nodes running the newer version
+/// without these transactions in the list will generate forked result.
+/// Below is a scenario of when we need to use this list:
+/// 1. We detect that a specific transaction is causing all validators to either panic or hang forever deterministically.
+/// 2. We push a CertificateDenyConfig to deny such transaction to all validators asap.
+/// 3. To make sure that all fullnodes are able to sync to the latest version, we need to add the transaction digest
+/// to this list as well asap, and ship this binary to all fullnodes, so that they can sync past this transaction.
+/// 4. We then can start fixing the issue, and ship the fix to all nodes.
+/// 5. Unfortunately, we can't remove the transaction digest from this list, because if we do so, any future
+/// node that sync from genesis will fork on this transaction. We may be able to remove it once
+/// we have stable snapshots and the binary has a minimum supported protocol version past the epoch.
+pub fn get_denied_certificates() -> &'static HashSet<TransactionDigest> {
+    static DENIED_CERTIFICATES: Lazy<HashSet<TransactionDigest>> = Lazy::new(|| HashSet::from([]));
+    Lazy::force(&DENIED_CERTIFICATES)
+}
+
+pub fn is_certificate_denied(
+    transaction_digest: &TransactionDigest,
+    certificate_deny_set: &HashSet<TransactionDigest>,
+) -> bool {
+    certificate_deny_set.contains(transaction_digest)
+        || get_denied_certificates().contains(transaction_digest)
 }

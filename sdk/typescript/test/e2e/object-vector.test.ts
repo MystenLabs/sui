@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { Coin, SUI_FRAMEWORK_ADDRESS } from '../../src/framework';
-import { SuiObjectData } from '../../src/client';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { TransactionBlock } from '../../src/builder';
+import { SuiObjectData } from '../../src/client';
+import { Coin, SUI_FRAMEWORK_ADDRESS } from '../../src/framework';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with a vector of objects as input', () => {
@@ -76,7 +77,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const coinIDs = coins.map((coin) => Coin.getID(coin));
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
-			objects: [tx.object(coinIDs[1]), tx.object(coinIDs[2])],
+			objects: [coinIDs[1], tx.object(coinIDs[2])],
 		});
 		tx.moveCall({
 			target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,

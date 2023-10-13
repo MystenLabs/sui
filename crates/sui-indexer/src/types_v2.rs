@@ -1,23 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::errors::IndexerError;
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use sui_json_rpc_types::{EndOfEpochInfo, ObjectChange};
+use sui_json_rpc_types::ObjectChange;
 use sui_types::base_types::{ObjectDigest, SequenceNumber};
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::digests::TransactionDigest;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
-use sui_types::messages_checkpoint::{CheckpointDigest, EndOfEpochData};
+use sui_types::event::SystemEpochInfoEvent;
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointCommitment, CheckpointDigest, EndOfEpochData,
+};
 use sui_types::move_package::MovePackage;
 use sui_types::object::{Object, Owner};
 use sui_types::sui_serde::SuiStructTag;
-use sui_types::sui_system_state::sui_system_state_summary::SuiValidatorSummary;
+use sui_types::sui_system_state::sui_system_state_summary::{
+    SuiSystemStateSummary, SuiValidatorSummary,
+};
 use sui_types::transaction::SenderSignedData;
-
-use crate::errors::IndexerError;
 
 pub type IndexerResult<T> = Result<T, IndexerError>;
 
@@ -29,16 +34,17 @@ pub struct IndexedCheckpoint {
     pub tx_digests: Vec<TransactionDigest>,
     pub network_total_transactions: u64,
     pub previous_checkpoint_digest: Option<CheckpointDigest>,
-    pub end_of_epoch: bool,
     pub timestamp_ms: u64,
     pub total_gas_cost: i64, // total gas cost could be negative
     pub computation_cost: u64,
     pub storage_cost: u64,
     pub storage_rebate: u64,
     pub non_refundable_storage_fee: u64,
-    pub checkpoint_commitments: Vec<u8>,
-    pub validator_signature: Vec<u8>,
+    pub checkpoint_commitments: Vec<CheckpointCommitment>,
+    pub validator_signature: AggregateAuthoritySignature,
     pub successful_tx_num: usize,
+    pub end_of_epoch_data: Option<EndOfEpochData>,
+    pub end_of_epoch: bool,
 }
 
 impl IndexedCheckpoint {
@@ -58,7 +64,8 @@ impl IndexedCheckpoint {
             epoch: checkpoint.epoch,
             tx_digests,
             previous_checkpoint_digest: checkpoint.previous_digest,
-            end_of_epoch: checkpoint.end_of_epoch_data.is_some(),
+            end_of_epoch_data: checkpoint.end_of_epoch_data.clone(),
+            end_of_epoch: checkpoint.end_of_epoch_data.clone().is_some(),
             total_gas_cost,
             computation_cost: checkpoint.epoch_rolling_gas_cost_summary.computation_cost,
             storage_cost: checkpoint.epoch_rolling_gas_cost_summary.storage_cost,
@@ -69,31 +76,91 @@ impl IndexedCheckpoint {
             successful_tx_num,
             network_total_transactions: checkpoint.network_total_transactions,
             timestamp_ms: checkpoint.timestamp_ms,
-            validator_signature: bcs::to_bytes(auth_sig).unwrap(),
-            checkpoint_commitments: bcs::to_bytes(&checkpoint.checkpoint_commitments).unwrap(),
+            validator_signature: auth_sig.clone(),
+            checkpoint_commitments: checkpoint.checkpoint_commitments.clone(),
         }
     }
 }
 
-#[derive(Debug)]
-pub struct IndexedEndOfEpochInfo {
-    pub epoch: u64,
-    pub epoch_total_transactions: u64,
-    pub end_of_epoch_info: EndOfEpochInfo,
-    pub end_of_epoch_data: EndOfEpochData,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct IndexedEpochInfo {
     pub epoch: u64,
     pub validators: Vec<SuiValidatorSummary>,
-    pub epoch_total_transactions: u64,
     pub first_checkpoint_id: u64,
     pub epoch_start_timestamp: u64,
-    pub end_of_epoch_info: Option<EndOfEpochInfo>,
-    pub end_of_epoch_data: Option<EndOfEpochData>,
     pub reference_gas_price: u64,
     pub protocol_version: u64,
+    pub epoch_total_transactions: Option<u64>,
+    pub last_checkpoint_id: Option<u64>,
+    pub epoch_end_timestamp: Option<u64>,
+    pub storage_fund_reinvestment: Option<u64>,
+    pub storage_charge: Option<u64>,
+    pub storage_rebate: Option<u64>,
+    pub storage_fund_balance: Option<u64>,
+    pub stake_subsidy_amount: Option<u64>,
+    pub total_gas_fees: Option<u64>,
+    pub total_stake_rewards_distributed: Option<u64>,
+    pub leftover_storage_fund_inflow: Option<u64>,
+    pub new_total_stake: Option<u64>,
+    pub epoch_commitments: Option<Vec<CheckpointCommitment>>,
+    pub next_epoch_reference_gas_price: Option<u64>,
+    pub next_epoch_protocol_version: Option<u64>,
+}
+
+impl IndexedEpochInfo {
+    pub fn from_new_system_state_summary(
+        new_system_state_summary: SuiSystemStateSummary,
+        first_checkpoint_id: u64,
+    ) -> IndexedEpochInfo {
+        Self {
+            epoch: new_system_state_summary.epoch,
+            validators: new_system_state_summary.active_validators,
+            first_checkpoint_id,
+            epoch_start_timestamp: new_system_state_summary.epoch_start_timestamp_ms,
+            reference_gas_price: new_system_state_summary.reference_gas_price,
+            protocol_version: new_system_state_summary.protocol_version,
+            ..Default::default()
+        }
+    }
+
+    pub fn from_end_of_epoch_data(
+        last_checkpoint_summary: &CertifiedCheckpointSummary,
+        event: &SystemEpochInfoEvent,
+        network_total_tx_num_at_last_epoch_end: u64,
+    ) -> IndexedEpochInfo {
+        Self {
+            epoch: last_checkpoint_summary.epoch,
+            epoch_total_transactions: Some(
+                last_checkpoint_summary.network_total_transactions
+                    - network_total_tx_num_at_last_epoch_end,
+            ),
+            last_checkpoint_id: Some(*last_checkpoint_summary.sequence_number()),
+            epoch_end_timestamp: Some(last_checkpoint_summary.timestamp_ms),
+            next_epoch_protocol_version: Some(event.protocol_version),
+            next_epoch_reference_gas_price: Some(event.reference_gas_price),
+            new_total_stake: Some(event.total_stake),
+            storage_fund_reinvestment: Some(event.storage_fund_reinvestment),
+            storage_charge: Some(event.storage_charge),
+            storage_rebate: Some(event.storage_rebate),
+            leftover_storage_fund_inflow: Some(event.leftover_storage_fund_inflow),
+            stake_subsidy_amount: Some(event.stake_subsidy_amount),
+            storage_fund_balance: Some(event.storage_fund_balance),
+            total_gas_fees: Some(event.total_gas_fees),
+            total_stake_rewards_distributed: Some(event.total_stake_rewards_distributed),
+            epoch_commitments: last_checkpoint_summary
+                .end_of_epoch_data
+                .as_ref()
+                .map(|e| e.epoch_commitments.clone()),
+
+            // The following felds will not and shall not be upserted
+            // into DB. We have them below to make compiler and diesel happy
+            validators: vec![],
+            first_checkpoint_id: 0,
+            epoch_start_timestamp: 0,
+            reference_gas_price: 0,
+            protocol_version: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +272,7 @@ impl IndexedObject {
 pub struct IndexedPackage {
     pub package_id: ObjectID,
     pub move_package: MovePackage,
+    pub checkpoint_sequence_number: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -235,6 +303,7 @@ pub struct TxIndex {
     pub checkpoint_sequence_number: u64,
     pub input_objects: Vec<ObjectID>,
     pub changed_objects: Vec<ObjectID>,
+    pub payers: Vec<SuiAddress>,
     pub senders: Vec<SuiAddress>,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,

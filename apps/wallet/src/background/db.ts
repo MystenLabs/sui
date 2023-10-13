@@ -3,8 +3,9 @@
 
 import Dexie, { type Table } from 'dexie';
 import { exportDB, importDB } from 'dexie-export-import';
+
 import { type AccountSourceSerialized } from './account-sources/AccountSource';
-import { type SerializedAccount } from './accounts/Account';
+import { type AccountType, type SerializedAccount } from './accounts/Account';
 import { captureException } from './sentry';
 import { getFromLocalStorage, setToLocalStorage } from './storage-utils';
 
@@ -27,6 +28,15 @@ class DB extends Dexie {
 			accountSources: 'id, type',
 			accounts: 'id, type, address, sourceID',
 			settings: 'setting',
+		});
+		this.version(2).upgrade((transaction) => {
+			const zkLoginType: AccountType = 'zkLogin';
+			transaction
+				.table('accounts')
+				.where({ type: 'zk' })
+				.modify((anAccount) => {
+					anAccount.type = zkLoginType;
+				});
 		});
 	}
 }

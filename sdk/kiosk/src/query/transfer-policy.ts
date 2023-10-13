@@ -2,8 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SuiClient } from '@mysten/sui.js/client';
+import { isValidSuiAddress } from '@mysten/sui.js/utils';
+
 import { bcs } from '../bcs';
-import { TRANSFER_POLICY_CREATED_EVENT, TRANSFER_POLICY_TYPE, TransferPolicy } from '../types';
+import {
+	TRANSFER_POLICY_CAP_TYPE,
+	TRANSFER_POLICY_CREATED_EVENT,
+	TRANSFER_POLICY_TYPE,
+	TransferPolicy,
+	TransferPolicyCap,
+} from '../types';
+import { getAllOwnedObjects, parseTransferPolicyCapObject } from '../utils';
 
 /**
  * Searches the `TransferPolicy`-s for the given type. The seach is performed via
@@ -40,7 +49,7 @@ export async function queryTransferPolicy(
 				throw new Error(`Invalid policy: ${policy?.objectId}, expected object, got package`);
 			}
 
-			let parsed = bcs.de(TRANSFER_POLICY_TYPE, policy.bcs.bcsBytes, 'base64');
+			const parsed = bcs.de(TRANSFER_POLICY_TYPE, policy.bcs.bcsBytes, 'base64');
 
 			return {
 				id: policy?.objectId,
@@ -50,4 +59,75 @@ export async function queryTransferPolicy(
 				balance: parsed.balance,
 			} as TransferPolicy;
 		});
+}
+
+/**
+ * A function to fetch all the user's kiosk Caps
+ * And a list of the kiosk address ids.
+ * Returns a list of `kioskOwnerCapIds` and `kioskIds`.
+ * Extra options allow pagination.
+ * @returns TransferPolicyCap Object ID | undefined if not found.
+ */
+export async function queryTransferPolicyCapsByType(
+	client: SuiClient,
+	address: string,
+	type: string,
+): Promise<TransferPolicyCap[]> {
+	if (!isValidSuiAddress(address)) return [];
+
+	const filter = {
+		MatchAll: [
+			{
+				StructType: `${TRANSFER_POLICY_CAP_TYPE}<${type}>`,
+			},
+		],
+	};
+
+	// fetch owned kiosk caps, paginated.
+	const data = await getAllOwnedObjects({
+		client,
+		filter,
+		owner: address,
+	});
+
+	return data
+		.map((item) => parseTransferPolicyCapObject(item))
+		.filter((item) => !!item) as TransferPolicyCap[];
+}
+
+/**
+ * A function to fetch all the user's kiosk Caps
+ * And a list of the kiosk address ids.
+ * Returns a list of `kioskOwnerCapIds` and `kioskIds`.
+ * Extra options allow pagination.
+ * @returns TransferPolicyCap Object ID | undefined if not found.
+ */
+export async function queryOwnedTransferPolicies(
+	client: SuiClient,
+	address: string,
+): Promise<TransferPolicyCap[] | undefined> {
+	if (!isValidSuiAddress(address)) return;
+
+	const filter = {
+		MatchAll: [
+			{
+				MoveModule: {
+					module: 'transfer_policy',
+					package: '0x2',
+				},
+			},
+		],
+	};
+
+	// fetch all owned kiosk caps, paginated.
+	const data = await getAllOwnedObjects({ client, owner: address, filter });
+
+	const policies: TransferPolicyCap[] = [];
+
+	for (const item of data) {
+		const data = parseTransferPolicyCapObject(item);
+		if (data) policies.push(data);
+	}
+
+	return policies;
 }

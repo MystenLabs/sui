@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { expect } from 'vitest';
 import { execSync } from 'child_process';
 import tmp from 'tmp';
-
-import { Coin } from '../../../src/framework';
-import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
-import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 import { retry } from 'ts-retry-promise';
-import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
-import { SuiClient, SuiObjectChangePublished, getFullnodeUrl } from '../../../src/client';
+import { expect } from 'vitest';
+
+import { TransactionBlock, UpgradePolicy } from '../../../src/builder';
+import { getFullnodeUrl, SuiClient, SuiObjectChangePublished } from '../../../src/client';
 import { Keypair } from '../../../src/cryptography';
+import { FaucetRateLimitError, getFaucetHost, requestSuiFromFaucetV0 } from '../../../src/faucet';
+import { Coin } from '../../../src/framework';
+import { Ed25519Keypair } from '../../../src/keypairs/ed25519';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
 const DEFAULT_FULLNODE_URL = import.meta.env.VITE_FULLNODE_URL ?? getFullnodeUrl('localnet');
@@ -212,7 +212,7 @@ export async function paySui(
 		).data[0].coinObjectId;
 
 	recipients.forEach((recipient, i) => {
-		const coin = tx.splitCoins(tx.object(coinId!), [tx.pure(amounts![i])]);
+		const coin = tx.splitCoins(coinId!, [tx.pure(amounts![i])]);
 		tx.transferObjects([coin], tx.pure(recipient));
 	});
 

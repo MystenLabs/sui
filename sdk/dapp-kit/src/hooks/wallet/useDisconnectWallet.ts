@@ -3,13 +3,16 @@
 
 import type { UseMutationOptions } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
+
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import { WalletNotConnectedError } from '../../errors/walletErrors.js';
-import { useWalletStore } from './useWalletStore.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
+import { useWalletStore } from './useWalletStore.js';
+
+type UseDisconnectWalletError = WalletNotConnectedError | Error;
 
 type UseDisconnectWalletMutationOptions = Omit<
-	UseMutationOptions<void, Error, void, unknown>,
+	UseMutationOptions<void, UseDisconnectWalletError, void, unknown>,
 	'mutationFn'
 >;
 

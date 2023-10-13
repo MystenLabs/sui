@@ -16,13 +16,14 @@ import {
 	string,
 	union,
 } from 'superstruct';
-import { hashTypedData } from './hash.js';
+
+import { bcs } from '../bcs/index.js';
 import { SuiObjectRef } from '../types/index.js';
-import { builder } from './bcs.js';
-import { TransactionType, TransactionBlockInput } from './Transactions.js';
-import { BuilderCallArg, PureCallArg } from './Inputs.js';
-import { create } from './utils.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
+import { hashTypedData } from './hash.js';
+import { BuilderCallArg, PureCallArg } from './Inputs.js';
+import { TransactionBlockInput, TransactionType } from './Transactions.js';
+import { create } from './utils.js';
 
 export const TransactionExpiration = optional(
 	nullable(
@@ -31,7 +32,7 @@ export const TransactionExpiration = optional(
 );
 export type TransactionExpiration = Infer<typeof TransactionExpiration>;
 
-const StringEncodedBigint = define<string>('StringEncodedBigint', (val) => {
+const StringEncodedBigint = define<string | number | bigint>('StringEncodedBigint', (val) => {
 	if (!['string', 'number', 'bigint'].includes(typeof val)) return false;
 
 	try {
@@ -66,8 +67,8 @@ function prepareSuiAddress(address: string) {
 
 export class TransactionBlockDataBuilder {
 	static fromKindBytes(bytes: Uint8Array) {
-		const kind = builder.de('TransactionKind', bytes);
-		const programmableTx = kind?.ProgrammableTransaction;
+		const kind = bcs.TransactionKind.parse(bytes);
+		const programmableTx = 'ProgrammableTransaction' in kind ? kind.ProgrammableTransaction : null;
 		if (!programmableTx) {
 			throw new Error('Unable to deserialize from bytes.');
 		}
@@ -96,9 +97,10 @@ export class TransactionBlockDataBuilder {
 	}
 
 	static fromBytes(bytes: Uint8Array) {
-		const rawData = builder.de('TransactionData', bytes);
+		const rawData = bcs.TransactionData.parse(bytes);
 		const data = rawData?.V1;
-		const programmableTx = data?.kind?.ProgrammableTransaction;
+		const programmableTx =
+			'ProgrammableTransaction' in data.kind ? data?.kind?.ProgrammableTransaction : null;
 		if (!data || !programmableTx) {
 			throw new Error('Unable to deserialize from bytes.');
 		}
@@ -184,7 +186,7 @@ export class TransactionBlockDataBuilder {
 		};
 
 		if (onlyTransactionKind) {
-			return builder.ser('TransactionKind', kind, { maxSize: maxSizeBytes }).toBytes();
+			return bcs.TransactionKind.serialize(kind, { maxSize: maxSizeBytes }).toBytes();
 		}
 
 		const expiration = overrides?.expiration ?? this.expiration;
@@ -224,9 +226,10 @@ export class TransactionBlockDataBuilder {
 			},
 		};
 
-		return builder
-			.ser('TransactionData', { V1: transactionData }, { maxSize: maxSizeBytes })
-			.toBytes();
+		return bcs.TransactionData.serialize(
+			{ V1: transactionData },
+			{ maxSize: maxSizeBytes },
+		).toBytes();
 	}
 
 	getDigest() {

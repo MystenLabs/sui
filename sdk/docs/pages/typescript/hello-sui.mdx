@@ -52,8 +52,8 @@ address. You must be on Devnet, Testnet, or a local network to use a faucet for 
 Create a new `index.js` file in the root of your project with the following code.
 
 ```js
-import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 
 // replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
@@ -74,7 +74,7 @@ const suiBefore = await suiClient.getBalance({
 
 await requestSuiFromFaucetV0({
 	// use getFaucetHost to make sure you're using correct faucet address
-	// you can also just use the address (see Sui Typescript SDK Quick Start for values)
+	// you can also just use the address (see Sui TypeScript SDK Quick Start for values)
 	host: getFaucetHost('devnet'),
 	recipient: MY_ADDRESS,
 });

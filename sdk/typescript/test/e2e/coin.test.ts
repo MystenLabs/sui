@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { Coin } from '../../src/framework';
 import { normalizeSuiObjectId } from '../../src/utils';
-
 import { setup } from './utils/setup';
 
 describe('Coin related API', () => {

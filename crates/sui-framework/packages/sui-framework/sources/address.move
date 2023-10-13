@@ -13,6 +13,7 @@ module sui::address {
     // The largest integer that can be represented with 32 bytes: 2^(8*32) - 1
     const MAX: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
 
+    #[allow(unused_const)]
     /// Error from `from_bytes` when it is supplied too many or too few bytes.
     const EAddressParseError: u64 = 0;
 

@@ -6,7 +6,7 @@ error[E04007]: incompatible types
 9 │         f = 0;
   │         ^
   │         │
-  │         Invalid assignment to local 'f'
+  │         Invalid assignment to variable 'f'
   │         Given: integer
 
 error[E04007]: incompatible types
@@ -18,7 +18,7 @@ error[E04007]: incompatible types
 10 │         s2 = S { f: 0 }
    │         ^^   ---------- Given: '0x8675309::M::S'
    │         │     
-   │         Invalid assignment to local 's2'
+   │         Invalid assignment to variable 's2'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:17:9
@@ -28,7 +28,7 @@ error[E04007]: incompatible types
 17 │         f = 0;
    │         ^
    │         │
-   │         Invalid assignment to local 'f'
+   │         Invalid assignment to variable 'f'
    │         Given: integer
 
 error[E04007]: incompatible types
@@ -40,7 +40,7 @@ error[E04007]: incompatible types
 18 │         s2 = S { f: 0 }
    │         ^^   ---------- Given: '0x8675309::M::S'
    │         │     
-   │         Invalid assignment to local 's2'
+   │         Invalid assignment to variable 's2'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:26:9
@@ -50,7 +50,7 @@ error[E04006]: invalid subtype
 26 │         f = &0;
    │         ^   -- Given: '&{integer}'
    │         │    
-   │         Invalid assignment to local 'f'
+   │         Invalid assignment to variable 'f'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/assign_unpack_references_invalid.move:27:9
@@ -61,5 +61,5 @@ error[E04006]: invalid subtype
 27 │         s2 = &S { f: 0 }
    │         ^^   ----------- Given: '&0x8675309::M::S'
    │         │     
-   │         Invalid assignment to local 's2'
+   │         Invalid assignment to variable 's2'
 

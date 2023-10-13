@@ -3,18 +3,20 @@
 /* eslint-disable import/no-cycle */
 
 import { fromB64 } from '@mysten/bcs';
-import type { SerializedSignature, SignatureScheme } from './signature.js';
-import { SIGNATURE_FLAG_TO_SCHEME } from './signature.js';
-import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
-import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
-import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
-import { decodeMultiSig } from './multisig.js';
-import type { PublicKey } from './publickey.js';
+
 import { Ed25519Keypair } from '../keypairs/ed25519/keypair.js';
+import { Ed25519PublicKey } from '../keypairs/ed25519/publickey.js';
 import { Secp256k1Keypair } from '../keypairs/secp256k1/keypair.js';
+import { Secp256k1PublicKey } from '../keypairs/secp256k1/publickey.js';
 import { Secp256r1Keypair } from '../keypairs/secp256r1/keypair.js';
+import { Secp256r1PublicKey } from '../keypairs/secp256r1/publickey.js';
 import type { ExportedKeypair, Keypair } from './keypair.js';
 import { LEGACY_PRIVATE_KEY_SIZE, PRIVATE_KEY_SIZE } from './keypair.js';
+import { decodeMultiSig } from './multisig.js';
+import type { PublicKey } from './publickey.js';
+import { SIGNATURE_FLAG_TO_SCHEME } from './signature-scheme.js';
+import type { SignatureScheme } from './signature-scheme.js';
+import type { SerializedSignature } from './signature.js';
 
 /**
  * Pair of signature and corresponding public key
@@ -46,8 +48,8 @@ export function toParsedSignaturePubkeyPair(
 		}
 	}
 
-	if (signatureScheme === 'Zk') {
-		throw new Error('Unable to parse a zk signature. (not implemented yet)');
+	if (signatureScheme === 'ZkLogin') {
+		throw new Error('ZkLogin signature not supported');
 	}
 
 	const SIGNATURE_SCHEME_TO_PUBLIC_KEY = {

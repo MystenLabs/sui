@@ -7,6 +7,7 @@ use crate::network_config::NetworkConfig;
 use crate::node_config_builder::ValidatorConfigBuilder;
 use rand::rngs::OsRng;
 use std::path::PathBuf;
+use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_protocol_config::SupportedProtocolVersions;
@@ -19,6 +20,9 @@ pub enum CommitteeConfig {
     Size(NonZeroUsize),
     Validators(Vec<ValidatorGenesisConfig>),
     AccountKeys(Vec<AccountKeyPair>),
+    /// Indicates that a committee should be deterministically generated, useing the provided rng
+    /// as a source of randomness as well as generating deterministic network port information.
+    Deterministic(NonZeroUsize),
 }
 
 pub type SupportedProtocolVersionsCallback = Arc<
@@ -50,6 +54,7 @@ pub struct ConfigBuilder<R = OsRng> {
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
     additional_objects: Vec<Object>,
+    jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
 }
 
@@ -63,6 +68,7 @@ impl ConfigBuilder {
             genesis_config: None,
             reference_gas_price: None,
             additional_objects: vec![],
+            jwk_fetch_interval: None,
             num_unpruned_validators: None,
         }
     }
@@ -80,6 +86,11 @@ impl<R> ConfigBuilder<R> {
 
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
         self.committee = CommitteeConfig::Size(committee_size);
+        self
+    }
+
+    pub fn deterministic_committee_size(mut self, committee_size: NonZeroUsize) -> Self {
+        self.committee = CommitteeConfig::Deterministic(committee_size);
         self
     }
 
@@ -104,6 +115,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_jwk_fetch_interval(mut self, i: Duration) -> Self {
+        self.jwk_fetch_interval = Some(i);
+        self
+    }
+
     pub fn with_reference_gas_price(mut self, reference_gas_price: u64) -> Self {
         self.reference_gas_price = Some(reference_gas_price);
         self
@@ -111,6 +127,13 @@ impl<R> ConfigBuilder<R> {
 
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
+        self
+    }
+
+    pub fn with_chain_start_timestamp_ms(mut self, chain_start_timestamp_ms: u64) -> Self {
+        self.get_or_init_genesis_config()
+            .parameters
+            .chain_start_timestamp_ms = chain_start_timestamp_ms;
         self
     }
 
@@ -161,6 +184,7 @@ impl<R> ConfigBuilder<R> {
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
+            jwk_fetch_interval: self.jwk_fetch_interval,
         }
     }
 
@@ -204,7 +228,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 // See above re fixed protocol keys
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
-                    .zip(protocol_keys.into_iter())
+                    .zip(protocol_keys)
                     .map(|(account_key, protocol_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
@@ -215,6 +239,20 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                         builder.build(&mut rng)
                     })
                     .collect::<Vec<_>>()
+            }
+            CommitteeConfig::Deterministic(size) => {
+                let mut configs = vec![];
+                for i in 0..size.into() {
+                    let port_offset = 8000 + i * 10;
+                    let mut builder = ValidatorGenesisConfigBuilder::new()
+                        .with_ip("127.0.0.1".to_owned())
+                        .with_deterministic_ports(port_offset as u16);
+                    if let Some(rgp) = self.reference_gas_price {
+                        builder = builder.with_gas_price(rgp);
+                    }
+                    configs.push(builder.build(&mut rng));
+                }
+                configs
             }
         };
 
@@ -277,6 +315,11 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .map(|(idx, validator)| {
                 let mut builder = ValidatorConfigBuilder::new()
                     .with_config_directory(self.config_directory.clone());
+
+                if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
+                    builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
+                }
+
                 if let Some(spvc) = &self.supported_protocol_versions_config {
                     let supported_versions = match spvc {
                         ProtocolVersionsConfig::Default => {

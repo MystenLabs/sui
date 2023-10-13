@@ -22,7 +22,6 @@ sui-config.workspace = true
 sui-swarm-config.workspace = true
 
 mysten-network.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
 futures.workspace = true
@@ -31,6 +30,7 @@ rand.workspace = true
 anyhow.workspace = true
 prometheus.workspace = true
 mysten-metrics.workspace = true
+workspace-hack.workspace = true
 
 [build-dependencies]
 anemo-build.workspace = true

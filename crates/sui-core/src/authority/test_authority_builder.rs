@@ -29,7 +29,6 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::{AuthorityName, ObjectID};
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::digests::ChainIdentifier;
-use sui_types::error::SuiResult;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -48,6 +47,7 @@ pub struct TestAuthorityBuilder<'a> {
     genesis: Option<&'a Genesis>,
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
+    disable_indexer: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -119,19 +119,14 @@ impl<'a> TestAuthorityBuilder<'a> {
         )
     }
 
-    pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
-        assert!(self.expensive_safety_checks.replace(config).is_none());
+    pub fn disable_indexer(mut self) -> Self {
+        self.disable_indexer = true;
         self
     }
 
-    pub async fn side_load_objects(
-        authority_state: Arc<AuthorityState>,
-        objects: &'a [Object],
-    ) -> SuiResult {
-        authority_state
-            .database
-            .insert_raw_object_unchecked_for_testing(objects)
-            .await
+    pub fn with_expensive_safety_checks(mut self, config: ExpensiveSafetyCheckConfig) -> Self {
+        assert!(self.expensive_safety_checks.replace(config).is_none());
+        self
     }
 
     pub async fn build(self) -> Arc<AuthorityState> {
@@ -206,13 +201,17 @@ impl<'a> TestAuthorityBuilder<'a> {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
-        let index_store = Some(Arc::new(IndexStore::new(
-            path.join("indexes"),
-            &registry,
-            epoch_store
-                .protocol_config()
-                .max_move_identifier_len_as_option(),
-        )));
+        let index_store = if self.disable_indexer {
+            None
+        } else {
+            Some(Arc::new(IndexStore::new(
+                path.join("indexes"),
+                &registry,
+                epoch_store
+                    .protocol_config()
+                    .max_move_identifier_len_as_option(),
+            )))
+        };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
         let state = AuthorityState::new(
@@ -258,7 +257,7 @@ impl<'a> TestAuthorityBuilder<'a> {
         if let Some(starting_objects) = self.starting_objects {
             state
                 .database
-                .insert_raw_object_unchecked_for_testing(starting_objects)
+                .insert_objects_unsafe_for_testing_only(starting_objects)
                 .await
                 .unwrap();
         };

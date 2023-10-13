@@ -13,6 +13,7 @@ use rand::SeedableRng;
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::{fs::File, io::Write};
+use sui_types::effects::{IDOperation, ObjectIn, ObjectOut, TransactionEffects};
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
@@ -158,6 +159,11 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<PackageUpgradeError>(&samples)?;
     tracer.trace_type::<TransactionExpiration>(&samples)?;
     tracer.trace_type::<EndOfEpochTransactionKind>(&samples)?;
+
+    tracer.trace_type::<IDOperation>(&samples)?;
+    tracer.trace_type::<ObjectIn>(&samples)?;
+    tracer.trace_type::<ObjectOut>(&samples)?;
+    tracer.trace_type::<TransactionEffects>(&samples)?;
 
     // uncomment once GenericSignature is added
     tracer.trace_type::<FullCheckpointContents>(&samples)?;

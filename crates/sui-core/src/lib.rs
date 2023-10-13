@@ -11,14 +11,15 @@ pub mod authority_server;
 pub mod checkpoints;
 pub mod consensus_adapter;
 pub mod consensus_handler;
+pub mod consensus_throughput_calculator;
 pub mod consensus_validator;
 pub mod db_checkpoint_handler;
 pub mod epoch;
 mod execution_driver;
-mod math;
 pub mod metrics;
 pub mod module_cache_metrics;
 pub mod narwhal_manager;
+pub(crate) mod post_consensus_tx_reorder;
 pub mod quorum_driver;
 pub mod safe_client;
 mod scoring_decision;
@@ -47,6 +48,9 @@ mod move_package_upgrade_tests;
 #[path = "unit_tests/pay_sui_tests.rs"]
 mod pay_sui_tests;
 pub mod test_authority_clients;
+#[cfg(test)]
+#[path = "unit_tests/transfer_to_object_tests.rs"]
+mod transfer_to_object_tests;
 #[cfg(test)]
 #[path = "unit_tests/type_param_tests.rs"]
 mod type_param_tests;

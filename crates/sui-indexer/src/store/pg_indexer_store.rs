@@ -62,7 +62,7 @@ use crate::schema::{
     epochs, events, input_objects, move_calls, objects, objects_history, packages, recipients,
     system_states, transactions, validators,
 };
-use crate::store::diesel_marco::{read_only_blocking, transactional_blocking};
+use crate::store::diesel_macro::{read_only_blocking, transactional_blocking};
 use crate::store::module_resolver::IndexerModuleResolver;
 use crate::store::query::DBFilter;
 use crate::store::TransactionObjectChanges;
@@ -72,7 +72,7 @@ use crate::PgConnectionPool;
 const MAX_EVENT_PAGE_SIZE: usize = 1000;
 const PG_COMMIT_CHUNK_SIZE: usize = 1000;
 
-const GET_PARTITION_SQL: &str = r#"
+const GET_PARTITION_SQL: &str = r"
 SELECT parent.relname                           AS table_name,
        MAX(SUBSTRING(child.relname FROM '\d$')) AS last_partition
 FROM pg_inherits
@@ -82,7 +82,7 @@ FROM pg_inherits
          JOIN pg_namespace nmsp_child ON nmsp_child.oid = child.relnamespace
 WHERE parent.relkind = 'p'
 GROUP BY table_name;
-"#;
+";
 
 #[derive(QueryableByName, Debug, Clone)]
 struct TempDigestTable {

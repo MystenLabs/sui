@@ -1,0 +1,118 @@
+# Examples
+
+The following dApp-focused examples demonstrate how to use the SDK to interact with Kiosk.
+
+## Minting into Kiosk example
+
+For every scenario using Kiosk in dApps, the user who has connected their wallet either has at least
+one kiosk already or you must create it for them.
+
+The SDK supports the scenario of `silently` creating the kiosk, as part of our Programmable
+Transaction Blocks.
+
+Assume that the mint function of the contract is:
+
+`public fun mint(coin: Coin<SUI>, kiosk: &mut Kiosk, cap: &KioskOwnerCap){...}`
+
+### When the user has a kiosk
+
+```typescript
+// Assume that we have created the client somewhere else.
+const kioskClient = new KioskClient({...});
+const connectedAddress = '0xAnAddress';
+
+// This function should run when the user connects the wallet.
+// We should re-use the same `KioskClient` instance throughout our dApp.
+const getCap = async () => {
+    let { kioskOwnerCaps } = await kioskClient.getOwnedKiosks(address);
+    // Assume that the user has only 1 kiosk.
+    // Here, you need to do some more checks in a realistic scenario.
+    // And possibly give the user in our dApp a kiosk selector to choose which one they want to interact with (if they own more than one).
+    return kioskOwnerCaps[0];
+}
+
+// The mint function could be like the following.
+const mint = async () => {
+    const txb = new TransactionBlock();
+    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb, cap: await getCap() }});
+
+    // Assume it costs one SUI
+    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
+
+    // A function that mints directly into the kiosk.
+     txb.moveCall({
+            target: '0xMyGame::hero::mint',
+            arguments: [
+                coin, // the payment
+                kioskTx.getKiosk(), // our kiosk that the hero will be placed in.
+                kioskTx.getKioskCap() // our kiosk cap, so that the function can place or lock it.
+            ]
+    });
+
+    kioskTx.finalize();
+
+    // Sign and execute transaction block.
+    await signAndExecuteTransactionBlock({ tx: txb });
+}
+```
+
+### When the user doesn't have a kiosk (silent creation)
+
+```typescript
+// Assume the client exists somewhere else.
+const kioskClient = new KioskClient({...});
+
+// Our mint function.
+const mint = async () => {
+    const txb = new TransactionBlock();
+    const kioskTx = new KioskTransaction({ kioskClient, transactionBlock: txb }});
+
+    // Creates a kiosk.
+    kioskTx.create();
+
+    // We'll assume it costs 1 SUI
+    let coin = txb.splitCoins(txb.gas, [1_000_000_000]);
+
+    // A function that mints directly into the kiosk.
+     txb.moveCall({
+            target: '0xMyGame::hero::mint',
+            arguments: [
+                coin, // the payment
+                kioskTx.getKiosk(), // our kiosk that the hero will be placed in.
+                kioskTx.getKioskCap() // our kiosk cap, so that the function can place or lock it.
+            ]
+    });
+
+    kioskTx.shareAndTransferCap('0xAddressToTransferCapTo');
+    kioskTx.finalize();
+
+    // Sign and execute transaction block.
+    await signAndExecuteTransactionBlock({ tx: txb });
+}
+```
+
+## Borrowing an item from kiosk to do an action
+
+```typescript
+// A sample function that borrows an item from kiosk and levels it up.
+const levelUp = async (object) => {
+	const txb = new TransactionBlock();
+
+	new KioskTransaction({ kioskClient, transactionBlock: txb, cap })
+		.borrowTx(object, (item) => {
+			txb.moveCall({
+				target: '0xMyGame::hero::level_up',
+				arguments: [item],
+			});
+		})
+		.finalize();
+
+	// Sign and execute transaction block.
+	await signAndExecuteTransactionBlock({ tx: txb });
+};
+
+levelUp({
+	itemType: '0x2MyGame::hero::Hero',
+	itemId: '0xMyHeroObjectId',
+});
+```

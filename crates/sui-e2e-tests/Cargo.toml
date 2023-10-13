@@ -7,7 +7,7 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -34,6 +34,7 @@ move-binary-format.workspace = true
 move-package.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 move-core-types.workspace = true
 
 sui-core.workspace = true
@@ -53,7 +54,6 @@ sui-swarm.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-config.workspace = true
 sui-json-rpc-types.workspace = true
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true

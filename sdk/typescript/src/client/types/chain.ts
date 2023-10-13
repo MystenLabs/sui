@@ -3,12 +3,12 @@
 
 import type {
 	Checkpoint,
-	SuiValidatorSummary,
 	DynamicFieldInfo,
+	SuiCallArg,
 	SuiMoveNormalizedModule,
 	SuiParsedData,
 	SuiTransaction,
-	SuiCallArg,
+	SuiValidatorSummary,
 } from './generated.js';
 
 export type ResolvedNameServiceNames = {

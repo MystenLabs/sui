@@ -2,44 +2,52 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SharedObjectRef } from '@mysten/sui.js/bcs';
-import { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client';
-import { TransactionBlock, TransactionArgument } from '@mysten/sui.js/transactions';
-import { type DynamicFieldInfo } from '@mysten/sui.js/client';
-import { bcs } from './bcs';
-import { KIOSK_TYPE, Kiosk, KioskData, KioskListing, RulesEnvironmentParam } from './types';
-import { MAINNET_RULES_PACKAGE_ADDRESS, TESTNET_RULES_PACKAGE_ADDRESS } from './constants';
-import { SuiClient, PaginationArguments } from '@mysten/sui.js/client';
+import {
+	PaginationArguments,
+	SuiClient,
+	SuiObjectData,
+	SuiObjectDataFilter,
+	SuiObjectDataOptions,
+	SuiObjectRef,
+	SuiObjectResponse,
+	type DynamicFieldInfo,
+} from '@mysten/sui.js/client';
+import { TransactionBlock, TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
 
-/* A simple map to the rule package addresses */
-// TODO: Supply the mainnet and devnet addresses.
-export const rulesPackageAddresses = {
-	mainnet: MAINNET_RULES_PACKAGE_ADDRESS,
-	testnet: TESTNET_RULES_PACKAGE_ADDRESS,
-	devnet: '',
-	custom: null,
-};
+import { bcs } from './bcs';
+import {
+	Kiosk,
+	KIOSK_TYPE,
+	KioskData,
+	KioskListing,
+	TRANSFER_POLICY_CAP_TYPE,
+	TransferPolicyCap,
+} from './types';
+
+const DEFAULT_QUERY_LIMIT = 50;
 
 /**
  * Convert any valid input into a TransactionArgument.
  *
- * @param tx The transaction to use for creating the argument.
+ * @param txb The Transaction Block
  * @param arg The argument to convert.
  * @returns The converted TransactionArgument.
  */
 export function objArg(
-	tx: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionArgument,
-): TransactionArgument {
+	txb: TransactionBlock,
+	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
+): TransactionObjectArgument {
 	if (typeof arg === 'string') {
-		return tx.object(arg);
+		return txb.object(arg);
 	}
 
 	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
-		return tx.objectRef(arg);
+		return txb.objectRef(arg);
 	}
 
 	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
-		return tx.sharedObjectRef(arg);
+		return txb.sharedObjectRef(arg);
 	}
 
 	if ('kind' in arg) {
@@ -68,41 +76,44 @@ export function extractKioskData(
 	data: DynamicFieldInfo[],
 	listings: KioskListing[],
 	lockedItemIds: string[],
+	kioskId: string,
 ): KioskData {
 	return data.reduce<KioskData>(
 		(acc: KioskData, val: DynamicFieldInfo) => {
-			const type = getTypeWithoutPackageAddress(val.name.type);
+			const type = val.name.type;
 
-			switch (type) {
-				case 'kiosk::Item':
-					acc.itemIds.push(val.objectId);
-					acc.items.push({
-						objectId: val.objectId,
-						type: val.objectType,
-						isLocked: false,
-					});
-					break;
-				case 'kiosk::Listing':
-					acc.listingIds.push(val.objectId);
-					listings.push({
-						objectId: (val.name.value as { id: string }).id,
-						listingId: val.objectId,
-						isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
-					});
-					break;
-				case 'kiosk::Lock':
-					lockedItemIds?.push((val.name.value as { id: string }).id);
-					break;
+			if (type.startsWith('0x2::kiosk::Item')) {
+				acc.itemIds.push(val.objectId);
+				acc.items.push({
+					objectId: val.objectId,
+					type: val.objectType,
+					isLocked: false,
+					kioskId,
+				});
 			}
+			if (type.startsWith('0x2::kiosk::Listing')) {
+				acc.listingIds.push(val.objectId);
+				listings.push({
+					objectId: (val.name.value as { id: string }).id,
+					listingId: val.objectId,
+					isExclusive: (val.name.value as { is_exclusive: boolean }).is_exclusive,
+				});
+			}
+			if (type.startsWith('0x2::kiosk::Lock')) {
+				lockedItemIds?.push((val.name.value as { id: string }).id);
+			}
+
+			if (type.startsWith('0x2::kiosk_extension::ExtensionKey')) {
+				acc.extensions.push({
+					objectId: val.objectId,
+					type: normalizeStructTag(parseStructTag(val.name.type).typeParams[0]),
+				});
+			}
+
 			return acc;
 		},
 		{ items: [], itemIds: [], listingIds: [], extensions: [] },
 	);
-}
-
-// e.g. 0x2::kiosk::Item -> kiosk::Item
-export function getTypeWithoutPackageAddress(type: string) {
-	return type.split('::').slice(-2).join('::');
 }
 
 /**
@@ -140,6 +151,23 @@ export function attachListingsAndPrices(
 }
 
 /**
+ * A helper that attaches the listing prices to kiosk listings.
+ */
+export function attachObjects(kioskData: KioskData, objects: SuiObjectData[]) {
+	const mapping = objects.reduce<Record<string, SuiObjectData>>(
+		(acc: Record<string, SuiObjectData>, obj) => {
+			acc[obj.objectId] = obj;
+			return acc;
+		},
+		{},
+	);
+
+	kioskData.items.forEach((item) => {
+		item.data = mapping[item.objectId] || undefined;
+	});
+}
+
+/**
  * A Helper to attach locked state to items in Kiosk Data.
  */
 export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[]) {
@@ -156,19 +184,6 @@ export function attachLockedItems(kioskData: KioskData, lockedItemIds: string[])
 	kioskData.items.forEach((item) => {
 		item.isLocked = lockedStatuses[item.objectId] || false;
 	});
-}
-
-/**
- * A helper to get a rule's environment address.
- */
-export function getRulePackageAddress(environment: RulesEnvironmentParam): string {
-	// if we have custom environment, we return it.
-	if (environment.env === 'custom') {
-		if (!environment.address)
-			throw new Error('Please supply the custom package address for rules.');
-		return environment.address;
-	}
-	return rulesPackageAddresses[environment.env];
 }
 
 /**
@@ -200,6 +215,70 @@ export async function getAllDynamicFields(
 }
 
 /**
+ * A helper to fetch all objects that works with pagination.
+ * It will fetch all objects in the array, and limit it to 50/request.
+ * Requests are sent using `Promise.all`.
+ */
+export async function getAllObjects(
+	client: SuiClient,
+	ids: string[],
+	options: SuiObjectDataOptions,
+	limit: number = DEFAULT_QUERY_LIMIT,
+) {
+	const chunks = Array.from({ length: Math.ceil(ids.length / limit) }, (_, index) =>
+		ids.slice(index * limit, index * limit + limit),
+	);
+
+	const results = await Promise.all(
+		chunks.map((chunk) => {
+			return client.multiGetObjects({
+				ids: chunk,
+				options,
+			});
+		}),
+	);
+
+	return results.flat();
+}
+
+/**
+ * A helper to return all owned objects, with an optional filter.
+ * It parses all the pages and returns the data.
+ */
+export async function getAllOwnedObjects({
+	client,
+	owner,
+	filter,
+	limit = DEFAULT_QUERY_LIMIT,
+	options = { showType: true, showContent: true },
+}: {
+	client: SuiClient;
+	owner: string;
+	filter?: SuiObjectDataFilter;
+	options?: SuiObjectDataOptions;
+	limit?: number;
+}) {
+	let hasNextPage = true;
+	let cursor = undefined;
+	const data: SuiObjectResponse[] = [];
+
+	while (hasNextPage) {
+		const result = await client.getOwnedObjects({
+			owner,
+			filter,
+			limit,
+			cursor,
+			options,
+		});
+		data.push(...result.data);
+		hasNextPage = result.hasNextPage;
+		cursor = result.nextCursor;
+	}
+
+	return data;
+}
+
+/**
  * Converts a number to basis points.
  * Supports up to 2 decimal points.
  * E.g 9.95 -> 995
@@ -209,4 +288,34 @@ export function percentageToBasisPoints(percentage: number) {
 	if (percentage < 0 || percentage > 100)
 		throw new Error('Percentage needs to be in the [0,100] range.');
 	return Math.ceil(percentage * 100);
+}
+
+/**
+ * A helper to parse a transfer policy Cap into a usable object.
+ */
+export function parseTransferPolicyCapObject(
+	item: SuiObjectResponse,
+): TransferPolicyCap | undefined {
+	const type = (item?.data?.content as { type: string })?.type;
+
+	//@ts-ignore-next-line
+	const policy = item?.data?.content?.fields?.policy_id as string;
+
+	if (!type.includes(TRANSFER_POLICY_CAP_TYPE)) return undefined;
+
+	// Transform 0x2::transfer_policy::TransferPolicyCap<itemType> -> itemType
+	const objectType = type.replace(TRANSFER_POLICY_CAP_TYPE + '<', '').slice(0, -1);
+
+	return {
+		policyId: policy,
+		policyCapId: item.data?.objectId!,
+		type: objectType,
+	};
+}
+
+// Normalizes the packageId part of a rule's type.
+export function getNormalizedRuleType(rule: string) {
+	const normalizedRuleAddress = rule.split('::');
+	normalizedRuleAddress[0] = normalizeSuiAddress(normalizedRuleAddress[0]);
+	return normalizedRuleAddress.join('::');
 }

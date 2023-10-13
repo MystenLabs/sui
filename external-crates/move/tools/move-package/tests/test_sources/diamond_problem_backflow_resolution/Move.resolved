@@ -73,10 +73,8 @@ ResolvedGraph {
             "C",
             "Root",
         },
-        manifest_digest: Some(
-            "E32AB53F4BEAAD4BD8FE9D0973DE7CB7040C542240DD032821EA30AEE5F8EC9B",
-        ),
-        deps_digest: None,
+        manifest_digest: "E32AB53F4BEAAD4BD8FE9D0973DE7CB7040C542240DD032821EA30AEE5F8EC9B",
+        deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
         dev_mode: true,
@@ -145,7 +143,7 @@ ResolvedGraph {
                 ),
             },
             resolved_table: {
-                "AA": 00000000000000000000000000000001,
+                "AA": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -196,7 +194,7 @@ ResolvedGraph {
                 ),
             },
             resolved_table: {
-                "BA": 00000000000000000000000000000001,
+                "BA": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -228,7 +226,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "A": 00000000000000000000000000000001,
+                "A": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -270,7 +268,7 @@ ResolvedGraph {
                             subst: Some(
                                 {
                                     "BA": Assign(
-                                        00000000000000000000000000000001,
+                                        0000000000000000000000000000000000000000000000000000000000000001,
                                     ),
                                 },
                             ),
@@ -285,8 +283,8 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "AA": 00000000000000000000000000000001,
-                "BA": 00000000000000000000000000000001,
+                "AA": 0000000000000000000000000000000000000000000000000000000000000001,
+                "BA": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },

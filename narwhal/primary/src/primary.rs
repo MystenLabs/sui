@@ -10,7 +10,10 @@ use crate::{
     synchronizer::Synchronizer,
 };
 
-use anemo::{codegen::InboundRequestLayer, types::Address};
+use anemo::{
+    codegen::InboundRequestLayer,
+    types::{response::StatusCode, Address},
+};
 use anemo::{types::PeerInfo, Network, PeerId};
 use anemo_tower::auth::RequireAuthorizationLayer;
 use anemo_tower::set_header::SetResponseHeaderLayer;
@@ -59,14 +62,14 @@ use tracing::{debug, error, info, instrument, warn};
 use types::{
     ensure,
     error::{DagError, DagResult},
-    now, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI, PreSubscribedBroadcastSender,
-    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
-    SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI, WorkerOthersBatchMessage,
-    WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    now, validate_received_certificate_version, Certificate, CertificateAPI, CertificateDigest,
+    FetchCertificatesRequest, FetchCertificatesResponse, Header, HeaderAPI, MetadataAPI,
+    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, Vote, VoteInfoAPI,
+    WorkerOthersBatchMessage, WorkerOwnBatchMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 
-#[cfg(any(test))]
+#[cfg(test)]
 #[path = "tests/primary_tests.rs"]
 pub mod primary_tests;
 
@@ -90,7 +93,7 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
-        _protocol_config: ProtocolConfig,
+        protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
         certificate_store: CertificateStore,
@@ -167,6 +170,7 @@ impl Primary {
         let synchronizer = Arc::new(Synchronizer::new(
             authority.id(),
             committee.clone(),
+            protocol_config.clone(),
             worker_cache.clone(),
             parameters.gc_depth,
             client.clone(),
@@ -190,6 +194,7 @@ impl Primary {
         let mut primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             authority_id: authority.id(),
             committee: committee.clone(),
+            protocol_config: protocol_config.clone(),
             worker_cache: worker_cache.clone(),
             synchronizer: synchronizer.clone(),
             signature_service: signature_service.clone(),
@@ -425,6 +430,7 @@ impl Primary {
         let core_handle = Certifier::spawn(
             authority.id(),
             committee.clone(),
+            protocol_config.clone(),
             certificate_store.clone(),
             synchronizer.clone(),
             signature_service,
@@ -439,6 +445,7 @@ impl Primary {
         let certificate_fetcher_handle = CertificateFetcher::spawn(
             authority.id(),
             committee.clone(),
+            protocol_config.clone(),
             network.clone(),
             certificate_store,
             rx_consensus_round_updates,
@@ -453,6 +460,7 @@ impl Primary {
         let proposer_handle = Proposer::spawn(
             authority.id(),
             committee,
+            &protocol_config,
             proposer_store,
             parameters.header_num_of_batches_threshold,
             parameters.max_header_num_of_batches,
@@ -521,6 +529,7 @@ struct PrimaryReceiverHandler {
     /// The id of this primary.
     authority_id: AuthorityIdentifier,
     committee: Committee,
+    protocol_config: ProtocolConfig,
     worker_cache: WorkerCache,
     synchronizer: Arc<Synchronizer>,
     /// Service to sign headers.
@@ -854,7 +863,17 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
         request: anemo::Request<SendCertificateRequest>,
     ) -> Result<anemo::Response<SendCertificateResponse>, anemo::rpc::Status> {
         let _scope = monitored_scope("PrimaryReceiverHandler::send_certificate");
-        let certificate = request.into_body().certificate;
+        let certificate = validate_received_certificate_version(
+            request.into_body().certificate,
+            &self.protocol_config,
+        )
+        .map_err(|err| {
+            anemo::rpc::Status::new_with_message(
+                StatusCode::BadRequest,
+                format!("Invalid certifcate: {err}"),
+            )
+        })?;
+
         match self.synchronizer.try_accept_certificate(certificate).await {
             Ok(()) => Ok(anemo::Response::new(SendCertificateResponse {
                 accepted: true,

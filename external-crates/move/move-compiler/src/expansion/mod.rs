@@ -5,6 +5,6 @@
 mod aliases;
 pub mod ast;
 mod byte_string;
-mod dependency_ordering;
 mod hex_string;
+mod primitive_definers;
 pub(crate) mod translate;

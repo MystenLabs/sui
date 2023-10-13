@@ -2,12 +2,12 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move-execution/suivm/move-bytecode-verifier",
-    "external-crates/move-execution/suivm/move-stdlib",
-    "external-crates/move-execution/suivm/move-vm/runtime",
     "external-crates/move-execution/v0/move-bytecode-verifier",
     "external-crates/move-execution/v0/move-stdlib",
     "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move-execution/vm-rework/move-bytecode-verifier",
+    "external-crates/move-execution/vm-rework/move-stdlib",
+    "external-crates/move-execution/vm-rework/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
@@ -65,11 +65,12 @@ exclude = [
     "external-crates/move/tools/read-write-set",
     "external-crates/move/tools/read-write-set/dynamic",
     "external-crates/move/tools/read-write-set/types",
-    "sdk/move-binary-format",
+    "sdk/move-binary-format-wasm",
 ]
 
 members = [
     "crates/anemo-benchmark",
+    "crates/data-transform",
     "crates/mysten-common",
     "crates/mysten-metrics",
     "crates/mysten-network",
@@ -77,6 +78,7 @@ members = [
     "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
+    "crates/simulacrum",
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-analytics-indexer",
@@ -121,6 +123,7 @@ members = [
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-single-node-benchmark",
     "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-source-validation-service",
@@ -162,17 +165,17 @@ members = [
     "sui-execution/latest/sui-adapter",
     "sui-execution/latest/sui-move-natives",
     "sui-execution/latest/sui-verifier",
-    "sui-execution/suivm/sui-adapter",
-    "sui-execution/suivm/sui-move-natives",
-    "sui-execution/suivm/sui-verifier",
     "sui-execution/v0/sui-adapter",
     "sui-execution/v0/sui-move-natives",
     "sui-execution/v0/sui-verifier",
+    "sui-execution/vm-rework/sui-adapter",
+    "sui-execution/vm-rework/sui-move-natives",
+    "sui-execution/vm-rework/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, and sui crates.
-version = "1.11.0"
+version = "1.12.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -213,7 +216,8 @@ opt-level = 1
 anyhow = "1.0.71"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
-async-graphql = "5.0.10"
+async-graphql = "6.0.7"
+async-graphql-axum = "6.0.7"
 async-recursion = "1.0.4"
 async-trait = "0.1.61"
 aws-config = "0.56"
@@ -263,7 +267,7 @@ collectable = "0.0.2"
 colored = "2.0.0"
 color-eyre = "0.6.2"
 comfy-table = "6.1.3"
-console-subscriber = "0.1.6"
+console-subscriber = "0.2"
 const-str = "0.5.3"
 criterion = { version = "0.5.0", features = [
   "async",
@@ -366,11 +370,11 @@ prometheus-http-query = { version = "0.6.6", default_features = false, features 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
-prost = "0.11.8"
-prost-build = "0.11.8"
+prost = "0.12.1"
+prost-build = "0.12.1"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
-quinn-proto = "^0.10.0"
+quinn-proto = "^0.10.5"
 quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
@@ -446,9 +450,9 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.4"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.8.2", features = ["transport", "tls"] }
-tonic-build = { version = "0.8.2", features = ["prost", "transport"] }
-tonic-health = "0.8.0"
+tonic = { version = "0.10", features = ["transport", "tls"] }
+tonic-build = { version = "0.10", features = ["prost", "transport"] }
+tonic-health = "0.10"
 tower = { version = "0.4.12", features = [
   "full",
   "util",
@@ -513,8 +517,8 @@ move-stackless-bytecode = { path = "external-crates/move/move-prover/bytecode" }
 move-symbol-pool = { path = "external-crates/move/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "eb77c7556c1996aac9610f0475742a3277f26a3f", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "1169850e6af127397068cd86764c29b1d49dbe35" }
@@ -531,6 +535,7 @@ mysten-util-mem = { path = "crates/mysten-util-mem" }
 mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
+simulacrum = { path = "crates/simulacrum" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
@@ -594,7 +599,7 @@ test-cluster = { path = "crates/test-cluster" }
 transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-derive = { path = "crates/typed-store-derive" }
-workspace-hack = { path = "crates/workspace-hack" }
+workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
 narwhal-config = { path = "narwhal/config" }
@@ -616,3 +621,11 @@ sui-execution = { path = "sui-execution" }
 # move-stdlib = { path = "external-crates/move/move-stdlib" }
 # move-vm-runtime = { path = "external-crates/move/move-vm/runtime" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
+
+
+# Using the workspace-hack via this patch directive means that it only applies
+# while building within this workspace. If another workspace imports a crate
+# from here via a git dependency, it will not have the workspace-hack applied
+# to it.
+[patch.crates-io.workspace-hack]
+path = "crates/workspace-hack"

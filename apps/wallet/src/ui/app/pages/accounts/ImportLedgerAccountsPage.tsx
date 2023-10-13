@@ -1,10 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Button } from '_src/ui/app/shared/ButtonUI';
+import { Link } from '_src/ui/app/shared/Link';
+import { Text } from '_src/ui/app/shared/text';
 import {
-	LockUnlocked16 as UnlockedLockIcon,
 	Spinner16 as SpinnerIcon,
 	ThumbUpStroke32 as ThumbUpIcon,
+	LockUnlocked16 as UnlockedLockIcon,
 } from '@mysten/icons';
 import { useCallback, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -12,19 +15,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import {
-	type SelectableLedgerAccount,
 	LedgerAccountList,
+	type SelectableLedgerAccount,
 } from '../../components/ledger/LedgerAccountList';
 import {
-	type DerivedLedgerAccount,
 	useDeriveLedgerAccounts,
+	type DerivedLedgerAccount,
 } from '../../components/ledger/useDeriveLedgerAccounts';
 import Overlay from '../../components/overlay';
 import { getSuiApplicationErrorMessage } from '../../helpers/errorMessages';
 import { useAccounts } from '../../hooks/useAccounts';
-import { Button } from '_src/ui/app/shared/ButtonUI';
-import { Link } from '_src/ui/app/shared/Link';
-import { Text } from '_src/ui/app/shared/text';
 
 const numLedgerAccountsToDeriveByDefault = 10;
 
@@ -114,8 +114,8 @@ export function ImportLedgerAccountsPage() {
 				navigate(-1);
 			}}
 		>
-			<div className="w-full flex flex-col gap-5">
-				<div className="h-full bg-white flex flex-col border border-solid border-gray-45 rounded-2xl">
+			<div className="w-full h-full flex flex-col gap-5">
+				<div className="h-full max-h-[368px] bg-white flex flex-col border border-solid border-gray-45 rounded-2xl">
 					<div className="text-center bg-gray-40 py-2.5 rounded-t-2xl">
 						<Text variant="captionSmall" weight="bold" color="steel-darker" truncate>
 							{areAllAccountsImported ? 'Ledger Accounts ' : 'Connect Ledger Accounts'}
@@ -138,7 +138,7 @@ export function ImportLedgerAccountsPage() {
 						</div>
 					</div>
 				</div>
-				<div>
+				<div className="flex items-end flex-1">
 					<Button
 						variant="primary"
 						size="tall"

@@ -25,9 +25,10 @@ shared-crypto.workspace = true
 sui-config.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
+sui-framework-snapshot.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
 

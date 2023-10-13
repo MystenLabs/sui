@@ -2,11 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB64 } from '@mysten/bcs';
-import type { PublicKey } from './publickey.js';
-import type { MultiSigStruct } from '../multisig/publickey.js';
-import { builder } from '../builder/bcs.js';
 
-export type SignatureScheme = 'ED25519' | 'Secp256k1' | 'Secp256r1' | 'MultiSig';
+import { bcs } from '../bcs/index.js';
+import type { MultiSigStruct } from '../multisig/publickey.js';
+import { computeZkLoginAddressFromSeed } from '../zklogin/address.js';
+import { extractClaimValue } from '../zklogin/jwt-utils.js';
+import { parseZkLoginSignature } from '../zklogin/signature.js';
+import type { PublicKey } from './publickey.js';
+import type { SignatureScheme } from './signature-scheme.js';
+import {
+	SIGNATURE_FLAG_TO_SCHEME,
+	SIGNATURE_SCHEME_TO_FLAG,
+	SIGNATURE_SCHEME_TO_SIZE,
+} from './signature-scheme.js';
 
 /**
  * Pair of signature and corresponding public key
@@ -15,8 +23,6 @@ export type SerializeSignatureInput = {
 	signatureScheme: SignatureScheme;
 	/** Base64-encoded signature */
 	signature: Uint8Array;
-	/** @deprecated use publicKey instead */
-	pubKey?: PublicKey;
 	/** Base64-encoded public key */
 	publicKey?: PublicKey;
 };
@@ -27,44 +33,19 @@ export type SerializeSignatureInput = {
  */
 export type SerializedSignature = string;
 
-export const SIGNATURE_SCHEME_TO_FLAG = {
-	ED25519: 0x00,
-	Secp256k1: 0x01,
-	Secp256r1: 0x02,
-	MultiSig: 0x03,
-	Zk: 0x05,
-};
-
-export const SIGNATURE_SCHEME_TO_SIZE = {
-	ED25519: 32,
-	Secp256k1: 33,
-	Secp256r1: 33,
-};
-
-export const SIGNATURE_FLAG_TO_SCHEME = {
-	0x00: 'ED25519',
-	0x01: 'Secp256k1',
-	0x02: 'Secp256r1',
-	0x03: 'MultiSig',
-	0x05: 'Zk',
-} as const;
-
-export type SignatureFlag = keyof typeof SIGNATURE_FLAG_TO_SCHEME;
-
 /**
  * Takes in a signature, its associated signing scheme and a public key, then serializes this data
  */
 export function toSerializedSignature({
 	signature,
 	signatureScheme,
-	pubKey,
-	publicKey = pubKey,
+	publicKey,
 }: SerializeSignatureInput): SerializedSignature {
 	if (!publicKey) {
 		throw new Error('`publicKey` is required');
 	}
 
-	const pubKeyBytes = publicKey.toBytes();
+	const pubKeyBytes = publicKey.toRawBytes();
 	const serializedSignature = new Uint8Array(1 + signature.length + pubKeyBytes.length);
 	serializedSignature.set([SIGNATURE_SCHEME_TO_FLAG[signatureScheme]]);
 	serializedSignature.set(signature, 1);
@@ -82,7 +63,7 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 		SIGNATURE_FLAG_TO_SCHEME[bytes[0] as keyof typeof SIGNATURE_FLAG_TO_SCHEME];
 
 	if (signatureScheme === 'MultiSig') {
-		const multisig: MultiSigStruct = builder.de('MultiSig', bytes.slice(1));
+		const multisig: MultiSigStruct = bcs.MultiSig.parse(bytes.slice(1));
 		return {
 			serializedSignature,
 			signatureScheme,
@@ -91,8 +72,24 @@ export function parseSerializedSignature(serializedSignature: SerializedSignatur
 		};
 	}
 
-	if (signatureScheme === 'Zk') {
-		throw new Error('Unable to parse a zk signature. (not implemented yet)');
+	if (signatureScheme === 'ZkLogin') {
+		const signatureBytes = bytes.slice(1);
+		const { inputs, maxEpoch, userSignature } = parseZkLoginSignature(signatureBytes);
+		const { issBase64Details, addressSeed } = inputs;
+		const iss = extractClaimValue<string>(issBase64Details, 'iss');
+		const address = computeZkLoginAddressFromSeed(BigInt(addressSeed), iss);
+		return {
+			serializedSignature,
+			signatureScheme,
+			zkLogin: {
+				inputs,
+				maxEpoch,
+				userSignature,
+				iss,
+				address,
+			},
+			bytes,
+		};
 	}
 
 	if (!(signatureScheme in SIGNATURE_SCHEME_TO_SIZE)) {

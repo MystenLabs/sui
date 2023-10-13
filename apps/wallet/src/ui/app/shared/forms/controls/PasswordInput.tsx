@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { EyeOpen16, EyeClose16 } from '@mysten/icons';
+import { EyeClose16, EyeOpen16 } from '@mysten/icons';
 import { forwardRef, useState, type ComponentProps } from 'react';
-import { Input } from './Input';
+
 import { ButtonOrLink } from '../../utils/ButtonOrLink';
+import { Input } from './Input';
 
 type PasswordInputProps = {
 	name: string;

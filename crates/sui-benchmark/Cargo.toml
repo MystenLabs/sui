@@ -32,7 +32,6 @@ sui-network.workspace = true
 sui-types.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
-sui-node.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
 sui-test-transaction-builder.workspace = true
@@ -40,13 +39,14 @@ sui-swarm-config.workspace = true
 telemetry-subscribers.workspace = true
 roaring.workspace = true
 regex.workspace = true
+fastcrypto-zkp.workspace = true
 
 move-core-types.workspace = true
 mysten-metrics.workspace = true
 narwhal-node.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 test-cluster.workspace = true
 sysinfo.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-framework.workspace = true

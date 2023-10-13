@@ -34,7 +34,8 @@ use move_compiler::{
     expansion::ast::{self as E, Address, ModuleDefinition, ModuleIdent, ModuleIdent_},
     parser::ast::{self as P, ModuleName as ParserModuleName},
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
-    Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER,
+    typing::ast::{self as T},
+    Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_ir_types::location::sp;
@@ -217,22 +218,36 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         }
         Ok(compiler) => compiler.into_ast(),
     };
+    let (compiler, typing_ast) = match compiler
+        .at_expansion(expansion_ast.clone())
+        .run::<PASS_TYPING>()
+    {
+        Err(diags) => {
+            add_move_lang_diagnostics(&mut env, diags);
+            return Ok(env);
+        }
+        Ok(compiler) => compiler.into_ast(),
+    };
 
     // Extract the module/script closure
     let mut visited_modules = BTreeSet::new();
-    for (_, mident, mdef) in &expansion_ast.modules {
+    for (_, mident, mdef) in &typing_ast.inner.modules {
         let src_file_hash = mdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
-            collect_related_modules_recursive(mident, &expansion_ast.modules, &mut visited_modules);
+            collect_related_modules_recursive(
+                mident,
+                &typing_ast.inner.modules,
+                &mut visited_modules,
+            );
         }
     }
-    for sdef in expansion_ast.scripts.values() {
+    for sdef in typing_ast.inner.scripts.values() {
         let src_file_hash = sdef.loc.file_hash();
         if !dep_files.contains(&src_file_hash) {
             for (_, mident, _neighbor) in &sdef.immediate_neighbors {
                 collect_related_modules_recursive(
                     mident,
-                    &expansion_ast.modules,
+                    &typing_ast.inner.modules,
                     &mut visited_modules,
                 );
             }
@@ -250,12 +265,21 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         });
         E::Program { modules, scripts }
     };
+    let typing_ast = {
+        let T::Program { info, inner } = typing_ast;
+        let T::Program_ { modules, scripts } = inner;
+        let modules = modules.filter_map(|mident, mut mdef| {
+            visited_modules.contains(&mident.value).then(|| {
+                mdef.is_source_module = true;
+                mdef
+            })
+        });
+        let inner = T::Program_ { modules, scripts };
+        T::Program { info, inner }
+    };
 
     // Run the compiler fully to the compiled units
-    let units = match compiler
-        .at_expansion(expansion_ast.clone())
-        .run::<PASS_COMPILATION>()
-    {
+    let units = match compiler.at_typing(typing_ast).run::<PASS_COMPILATION>() {
         Err(diags) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
@@ -287,7 +311,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
 fn collect_related_modules_recursive<'a>(
     mident: &'a ModuleIdent_,
-    modules: &'a UniqueMap<ModuleIdent, ModuleDefinition>,
+    modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     visited_modules: &mut BTreeSet<ModuleIdent_>,
 ) {
     if visited_modules.contains(mident) {
@@ -524,9 +548,8 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         package_name,
                         attributes,
                         loc,
-                        immediate_neighbors,
-                        used_addresses,
                         function_name,
+                        use_funs,
                         constants,
                         function,
                         specs,
@@ -541,8 +564,7 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         }
                     };
                     // Convert the script into a module.
-                    let address =
-                        Address::Numerical(None, sp(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS));
+                    let address = Address::anonymous(loc, NumericalAddress::DEFAULT_ERROR_ADDRESS);
                     let ident = sp(
                         loc,
                         ModuleIdent_::new(address, ParserModuleName(function_name.0)),
@@ -557,10 +579,8 @@ fn run_spec_checker(env: &mut GlobalEnv, units: Vec<AnnotatedCompiledUnit>, mut 
                         package_name,
                         attributes,
                         loc,
-                        dependency_order: usize::MAX,
-                        immediate_neighbors,
-                        used_addresses,
                         is_source_module: true,
+                        use_funs,
                         friends: UniqueMap::new(),
                         structs: UniqueMap::new(),
                         constants,

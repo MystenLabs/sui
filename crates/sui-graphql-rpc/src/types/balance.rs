@@ -7,9 +7,9 @@ use async_graphql::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct Balance {
-    // pub(crate) coin_type: MoveType,
-    pub(crate) coin_object_count: u64,
-    pub(crate) total_balance: BigInt,
+    pub(crate) coin_type: Option<String>, // TODO: replace with MoveType
+    pub(crate) coin_object_count: Option<u64>,
+    pub(crate) total_balance: Option<BigInt>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]

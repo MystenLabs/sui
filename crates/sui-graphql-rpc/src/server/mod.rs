@@ -3,5 +3,5 @@
 
 pub mod simple_server;
 
-mod builder;
+pub mod builder;
 mod version;

@@ -1,21 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import FiltersPortal from '_components/filters-tags';
+import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
+import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
+import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
+import PageTitle from '_src/ui/app/shared/PageTitle';
 import cl from 'classnames';
 import { Navigate, useParams } from 'react-router-dom';
 
 import { CompletedTransactions } from './CompletedTransactions';
 import { QredoPendingTransactions } from './QredoPendingTransactions';
-import FiltersPortal from '_components/filters-tags';
-import { isQredoAccountSerializedUI } from '_src/background/accounts/QredoAccount';
-import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
-import PageTitle from '_src/ui/app/shared/PageTitle';
 
 function TransactionBlocksPage() {
 	const activeAccount = useActiveAccount();
 	const isQredoAccount = !!(activeAccount && isQredoAccountSerializedUI(activeAccount));
 	const { status } = useParams();
 	const isPendingTransactions = status === 'pending';
+	if (useUnlockedGuard()) {
+		return null;
+	}
 	if (activeAccount && !isQredoAccount && isPendingTransactions) {
 		return <Navigate to="/transactions" replace />;
 	}

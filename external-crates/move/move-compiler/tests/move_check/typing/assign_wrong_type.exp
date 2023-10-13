@@ -69,7 +69,7 @@ error[E04007]: incompatible types
 27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
    │          ^
    │          │
-   │          Invalid assignment to local 'x'
+   │          Invalid assignment to variable 'x'
    │          Given: integer
 
 error[E04007]: incompatible types
@@ -81,7 +81,7 @@ error[E04007]: incompatible types
 27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
    │             ^                 ----- Given: 'bool'
    │             │                  
-   │             Invalid assignment to local 'b'
+   │             Invalid assignment to variable 'b'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:27:18
@@ -93,7 +93,7 @@ error[E04007]: incompatible types
    │                 ---- Expected: 'address'
 26 │         let r = S{ g: 0 };
 27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
-   │                  ^ Invalid assignment to local 'f'
+   │                  ^ Invalid assignment to variable 'f'
 
 error[E04007]: incompatible types
    ┌─ tests/move_check/typing/assign_wrong_type.move:27:22
@@ -103,5 +103,5 @@ error[E04007]: incompatible types
 27 │         (x, b, R{f}, r) = (0, false, R{f: 0}, R{f: 0});
    │                      ^                        ------- Given: '0x8675309::M::R'
    │                      │                         
-   │                      Invalid assignment to local 'r'
+   │                      Invalid assignment to variable 'r'
 

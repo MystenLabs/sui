@@ -33,6 +33,10 @@ impl TransactionBuilderApi {
         let reader = Arc::new(AuthorityStateDataReader::new(state));
         Self(TransactionBuilder::new(reader))
     }
+
+    pub fn new_with_data_reader(data_reader: Arc<dyn DataReader + Sync + Send>) -> Self {
+        Self(TransactionBuilder::new(data_reader))
+    }
 }
 
 pub struct AuthorityStateDataReader(Arc<dyn StateRead>);

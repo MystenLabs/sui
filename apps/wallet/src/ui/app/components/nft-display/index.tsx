@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isKioskOwnerToken, useGetObject } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
-import { cva } from 'class-variance-authority';
-
-import { Kiosk } from './Kiosk';
-import { useResolveVideo } from '../../hooks/useResolveVideo';
-import { Text } from '../../shared/text';
 import { Heading } from '_app/shared/heading';
 import Loading from '_components/loading';
 import { NftImage, type NftImageProps } from '_components/nft-display/NftImage';
-import { useGetNFTMeta, useFileExtensionType } from '_hooks';
-
+import { useFileExtensionType, useGetNFTMeta } from '_hooks';
+import { isKioskOwnerToken, useGetObject } from '@mysten/core';
+import { formatAddress } from '@mysten/sui.js/utils';
+import { cva } from 'class-variance-authority';
 import type { VariantProps } from 'class-variance-authority';
+
+import { useResolveVideo } from '../../hooks/useResolveVideo';
+import { Text } from '../../shared/text';
+import { Kiosk } from './Kiosk';
 
 const nftDisplayCardStyles = cva('flex flex-nowrap items-center h-full relative', {
 	variants: {

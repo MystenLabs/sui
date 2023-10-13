@@ -151,9 +151,13 @@ impl RWLockDependencyBuilder {
         digest: TransactionDigest,
         v: &mut BTreeSet<TransactionDigest>,
     ) {
-        let Some(overwrites) = self.overwrite_versions.get(&digest) else {return;};
+        let Some(overwrites) = self.overwrite_versions.get(&digest) else {
+            return;
+        };
         for obj_ver in overwrites {
-            let Some(reads) = self.read_version.get(obj_ver) else {continue;};
+            let Some(reads) = self.read_version.get(obj_ver) else {
+                continue;
+            };
             for dep in reads {
                 trace!(
                     "Assuming additional dependency when constructing checkpoint {:?} -> {:?}",

@@ -33,11 +33,10 @@ const-str.workspace = true
 num-bigint.workspace = true
 regex.workspace = true
 reqwest.workspace = true
-move-bytecode-verifier = { path = "../../external-crates/move/move-bytecode-verifier" }
-sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
-sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
+im.workspace = true
 
 sui-config.workspace = true
+sui-execution = { path = "../../sui-execution" }
 sui-swarm-config.workspace = true
 sui-genesis-builder.workspace = true
 sui-types.workspace = true
@@ -66,8 +65,8 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 move-package.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 csv.workspace = true
+workspace-hack.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true

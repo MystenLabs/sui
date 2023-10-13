@@ -1,23 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
 import {
+	getWallets,
+	ReadonlyWalletAccount,
 	StandardConnectFeature,
 	StandardConnectMethod,
 	StandardEventsFeature,
 	StandardEventsOnMethod,
+	SUI_CHAINS,
 	SuiFeatures,
+	SuiSignAndExecuteTransactionBlockMethod,
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockMethod,
-	SuiSignAndExecuteTransactionBlockMethod,
-	getWallets,
 	Wallet,
-	SUI_CHAINS,
-	ReadonlyWalletAccount,
 } from '@mysten/wallet-standard';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 
 const WALLET_NAME = 'Unsafe Burner Wallet';
 
@@ -47,7 +47,7 @@ export function registerUnsafeBurnerWallet(
 		address: keypair.getPublicKey().toSuiAddress(),
 		chains: ['sui:unknown'],
 		features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
-		publicKey: keypair.getPublicKey().toBytes(),
+		publicKey: keypair.getPublicKey().toRawBytes(),
 	});
 
 	class UnsafeBurnerWallet implements Wallet {

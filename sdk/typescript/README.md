@@ -1,6 +1,6 @@
 # Docs site
 
-For more complete docs, visit the [Sui Typescript SDK docs](https://sui-typescript-docs.vercel.app/)
+For more complete docs, visit the [Sui TypeScript SDK docs](https://sui-typescript-docs.vercel.app/)
 
 # Sui TypeScript SDK
 
@@ -109,7 +109,7 @@ read-only operations. The default URLs to connect with the RPC server are:
 - DevNet: https://fullnode.devnet.sui.io
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // create a client connected to devnet
 const client = new SuiClient({ url: getFullnodeUrl('devnet') });
@@ -125,7 +125,7 @@ with a local validator, a fullnode, and a faucet server. Refer to
 [this guide](https://docs.sui.io/build/sui-local-network) for more information.
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // create a client connected to devnet
 const client = new SuiClient({ url: getFullnodeUrl('localnet') });
@@ -139,7 +139,7 @@ await client.getCoins({
 You can also construct your own in custom connections, with the URL for your own fullnode
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 // create a client connected to devnet
 const client = new SuiClient({
@@ -157,7 +157,7 @@ await client.getCoins({
 You can request sui from the faucet when running against devnet, testnet, or localnet
 
 ```typescript
-import { requestSuiFromFaucetV0, getFaucetHost } from '@mysten/sui.js/faucet';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 
 await requestSuiFromFaucetV0({
 	host: getFaucetHost('testnet'),
@@ -173,9 +173,10 @@ For a primer for building transactions, refer to
 ### Transfer Object
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const client = new SuiClient({
@@ -184,8 +185,8 @@ const client = new SuiClient({
 
 const tx = new TransactionBlock();
 tx.transferObjects(
-	[tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2')],
-	tx.pure('0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a'),
+	['0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'],
+	'0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a',
 );
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -199,9 +200,10 @@ console.log({ result });
 To transfer `1000` MIST to another address:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const client = new SuiClient({
@@ -209,8 +211,8 @@ const client = new SuiClient({
 });
 
 const tx = new TransactionBlock();
-const [coin] = tx.splitCoins(tx.gas, [tx.pure(1000)]);
-tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+const [coin] = tx.splitCoins(tx.gas, [1000]);
+tx.transferObjects([coin], keypair.getPublicKey().toSuiAddress());
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
 	transactionBlock: tx,
@@ -221,9 +223,10 @@ console.log({ result });
 ### Merge coins
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const client = new SuiClient({
@@ -231,8 +234,8 @@ const client = new SuiClient({
 });
 
 const tx = new TransactionBlock();
-tx.mergeCoins(tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'), [
-	tx.object('0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b'),
+tx.mergeCoins('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2', [
+	'0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b',
 ]);
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -244,9 +247,10 @@ console.log({ result });
 ### Move Call
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
 const client = new SuiClient({
@@ -256,7 +260,7 @@ const packageObjectId = '0x...';
 const tx = new TransactionBlock();
 tx.moveCall({
 	target: `${packageObjectId}::nft::mint`,
-	arguments: [tx.pure('Example NFT')],
+	arguments: [tx.pure.string('Example NFT')],
 });
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -270,9 +274,10 @@ console.log({ result });
 To publish a package:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
+
 const { execSync } = require('child_process');
 // Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
@@ -289,7 +294,7 @@ const [upgradeCap] = tx.publish({
 	modules,
 	dependencies,
 });
-tx.transferObjects([upgradeCap], tx.pure(await client.getAddress()));
+tx.transferObjects([upgradeCap], await client.getAddress());
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
 	transactionBlock: tx,
@@ -305,7 +310,8 @@ Fetch objects owned by the address
 `0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231`
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
@@ -320,7 +326,8 @@ Fetch object details for the object with id
 `0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2`
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
@@ -345,7 +352,7 @@ const txns = await client.multiGetObjects({
 Fetch transaction details from transaction digests:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -413,7 +420,7 @@ Fetch coins of type `0x65b0553a591d7b13376e03a408e112c706dc0909a79080c810b93b06f
 owned by an address:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -427,7 +434,7 @@ const coins = await client.getCoins({
 Fetch all coin objects owned by an address:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -440,7 +447,7 @@ const allCoins = await client.getAllCoins({
 Fetch the total coin balance for one coin type, owned by an address:
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -458,7 +465,7 @@ Querying events created by transactions sent by account
 `0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231`
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -473,7 +480,7 @@ Subscribe to all events created by transactions sent by account
 `0xcc2bd176a478baea9a0de7a24cd927661cc6e860d5bacecb9a138ef20dbab231`
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
@@ -496,7 +503,7 @@ await unsubscribe();
 Subscribe to all events created by a package's `nft` module
 
 ```typescript
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),

@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Text } from '_app/shared/text';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { hexToBytes } from '@noble/hashes/utils';
 import { useNavigate } from 'react-router-dom';
+
 import { useAccountsFormContext } from '../../components/accounts/AccountsFormContext';
 import { ImportPrivateKeyForm } from '../../components/accounts/ImportPrivateKeyForm';
 import { Heading } from '../../shared/heading';
-import { Text } from '_app/shared/text';
 
 export function ImportPrivateKeyPage() {
 	const navigate = useNavigate();
@@ -28,7 +29,7 @@ export function ImportPrivateKeyPage() {
 					onSubmit={({ privateKey }) => {
 						setAccountsFormValues({
 							type: 'imported',
-							keyPair: Ed25519Keypair.fromSecretKey(hexToBytes(privateKey)).export(),
+							keyPair: Ed25519Keypair.fromSecretKey(hexToBytes(privateKey).slice(0, 32)).export(),
 						});
 						navigate('/accounts/protect-account?accountType=imported');
 					}}

@@ -17,25 +17,22 @@ use fastcrypto::{
     traits::ToFromBytes,
 };
 use json_to_table::json_to_table;
-use move_bytecode_verifier::meter::Scope;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig as MoveBuildConfig;
 use prometheus::Registry;
 use serde::Serialize;
 use serde_json::{json, Value};
-use sui_adapter::adapter::{default_verifier_config, run_metered_move_bytecode_verifier};
 use sui_move::build::resolve_lock_file_path;
 use sui_protocol_config::ProtocolConfig;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
-use sui_types::{digests::TransactionDigest, metrics::BytecodeVerifierMetrics};
-use sui_types::{dynamic_field::DynamicFieldInfo, error::SuiError};
-use sui_verifier::meter::SuiVerifierMeter;
 
 use shared_crypto::intent::Intent;
+use sui_execution::verifier::VerifierOverrides;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    DynamicFieldPage, SuiData, SuiObjectResponse, SuiObjectResponseQuery, SuiRawData,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    DynamicFieldPage, SuiData, SuiObjectData, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse,
+    SuiTransactionBlockResponseOptions,
 };
 use sui_json_rpc_types::{SuiExecutionStatus, SuiObjectDataOptions};
 use sui_keys::keystore::AccountKeystore;
@@ -46,22 +43,27 @@ use sui_move_build::{
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
-use sui_types::crypto::SignatureScheme;
-use sui_types::move_package::UpgradeCap;
-use sui_types::signature::GenericSignature;
-use sui_types::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use sui_types::{
-    base_types::{ObjectID, SuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    crypto::SignatureScheme,
+    digests::TransactionDigest,
+    dynamic_field::DynamicFieldInfo,
+    error::SuiError,
     gas_coin::GasCoin,
+    metrics::BytecodeVerifierMetrics,
+    move_package::UpgradeCap,
     object::Owner,
     parse_sui_type_tag,
-    transaction::Transaction,
+    signature::GenericSignature,
+    transaction::{SenderSignedData, Transaction, TransactionData, TransactionDataAPI},
 };
 
-use tabled::builder::Builder as TableBuilder;
-use tabled::settings::{
-    object::Cell as TableCell, Border as TableBorder, Modify as TableModify, Panel as TablePanel,
-    Style as TableStyle,
+use tabled::{
+    builder::Builder as TableBuilder,
+    settings::{
+        object::Cell as TableCell, style::HorizontalLine, Border as TableBorder,
+        Modify as TableModify, Panel as TablePanel, Style as TableStyle,
+    },
 };
 use tracing::info;
 
@@ -264,8 +266,8 @@ pub enum SuiClientCommands {
     /// Obtain all objects owned by the address
     #[clap(name = "objects")]
     Objects {
-        /// Address owning the objects
-        /// Shows all objects owned by `sui client active-address` if no argument is passed
+        /// Address owning the object. If no address is provided, it will show all
+        /// objects owned by `sui client active-address`.
         #[clap(name = "owner_address")]
         address: Option<SuiAddress>,
     },
@@ -732,6 +734,21 @@ impl SuiClientCommands {
                 serialize_signed_transaction,
                 lint,
             } => {
+                if build_config.test_mode {
+                    return Err(SuiError::ModulePublishFailure {
+                        error:
+                            "The `publish` subcommand should not be used with the `--test` flag\n\
+                            \n\
+                            Code in published packages must not depend on test code.\n\
+                            In order to fix this and publish the package without `--test`, \
+                            remove any non-test dependencies on test-only code.\n\
+                            You can ensure all test-only dependencies have been removed by \
+                            compiling the package normally with `sui move build`."
+                                .to_string(),
+                    }
+                    .into());
+                }
+
                 let sender = context.try_get_object_owner(&gas).await?;
                 let sender = sender.unwrap_or(context.active_address()?);
 
@@ -775,32 +792,25 @@ impl SuiClientCommands {
 
                 let package = compile_package_simple(build_config, package_path)?;
                 let modules: Vec<_> = package.get_modules().cloned().collect();
-                let mut metered_verifier_config =
-                    default_verifier_config(&protocol_config, true /* enable metering */);
-                // These are the actual system limits
-                let fun_limits = metered_verifier_config.max_per_fun_meter_units.unwrap();
-                let mod_limits = metered_verifier_config.max_per_mod_meter_units.unwrap();
-                // We want the test to run unmetered so we can know the true limit
-                // Unset the limits
-                metered_verifier_config.max_per_fun_meter_units = None;
-                metered_verifier_config.max_per_mod_meter_units = None;
-                let mut meter = SuiVerifierMeter::new(&metered_verifier_config);
-                println!("Running bytecode verifier for {} modules", modules.len());
-                run_metered_move_bytecode_verifier(
-                    &modules,
-                    &metered_verifier_config,
-                    &mut meter,
-                    &bytecode_verifier_metrics,
-                )?;
-                // Get the actual meter ticks used
-                let function = meter.get_usage(Scope::Function);
-                let module = meter.get_usage(Scope::Module);
 
+                let mut verifier =
+                    sui_execution::verifier(&protocol_config, true, &bytecode_verifier_metrics);
+                let overrides = VerifierOverrides::new(None, None);
+                println!("Running bytecode verifier for {} modules", modules.len());
+                let verifier_values = verifier.meter_compiled_modules_with_overrides(
+                    &modules,
+                    &protocol_config,
+                    &overrides,
+                )?;
                 SuiClientCommandResult::VerifyBytecodeMeter {
-                    max_module_ticks: mod_limits,
-                    max_function_ticks: fun_limits,
-                    used_function_ticks: function,
-                    used_module_ticks: module,
+                    max_module_ticks: verifier_values
+                        .max_per_mod_meter_current
+                        .unwrap_or(u128::MAX),
+                    max_function_ticks: verifier_values
+                        .max_per_fun_meter_current
+                        .unwrap_or(u128::MAX),
+                    used_function_ticks: verifier_values.fun_meter_units_result,
+                    used_module_ticks: verifier_values.mod_meter_units_result,
                 }
             }
 
@@ -1395,6 +1405,47 @@ impl Display for SuiClientCommandResult {
                 table.with(style);
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::Gas(gas_coins) => {
+                let gas_coins = gas_coins
+                    .iter()
+                    .map(GasCoinOutput::from)
+                    .collect::<Vec<_>>();
+                if gas_coins.is_empty() {
+                    write!(f, "No gas coins are owned by this address")?;
+                    return Ok(());
+                }
+
+                let mut builder = TableBuilder::default();
+                builder.set_header(vec!["gasCoinId", "gasBalance"]);
+                for coin in &gas_coins {
+                    builder.push_record(vec![
+                        coin.gas_coin_id.to_string(),
+                        coin.gas_balance.to_string(),
+                    ]);
+                }
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
+                if gas_coins.len() > 10 {
+                    table.with(TablePanel::header(format!(
+                        "Showing {} gas coins and their balances.",
+                        gas_coins.len()
+                    )));
+                    table.with(TablePanel::footer(format!(
+                        "Showing {} gas coins and their balances.",
+                        gas_coins.len()
+                    )));
+                    table.with(TableStyle::rounded().horizontals([
+                        HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
+                        HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+                        HorizontalLine::new(
+                            gas_coins.len() + 2,
+                            TableStyle::modern().get_horizontal(),
+                        ),
+                    ]));
+                    table.with(tabled::settings::style::BorderSpanCorrection);
+                }
+                write!(f, "{}", table)?;
+            }
             SuiClientCommandResult::NewAddress(new_address) => {
                 let mut builder = TableBuilder::default();
 
@@ -1425,13 +1476,31 @@ impl Display for SuiClientCommandResult {
 
                 write!(f, "{}", table)?
             }
+            SuiClientCommandResult::Object(object_read) => match object_read.object() {
+                Ok(obj) => {
+                    let object = ObjectOutput::from(obj);
+                    let json_obj = json!(&object);
+                    let mut table = json_to_table(&json_obj);
+                    table.with(TableStyle::rounded().horizontals([]));
+                    writeln!(f, "{}", table)?
+                }
+                Err(e) => writeln!(f, "Internal error, cannot read the object: {e}")?,
+            },
+            SuiClientCommandResult::Objects(object_refs) => {
+                let objects = ObjectsOutput::from_vec(object_refs.to_vec());
+                match objects {
+                    Ok(objs) => {
+                        let json_obj = json!(objs);
+                        let mut table = json_to_table(&json_obj);
+                        table.with(TableStyle::rounded().horizontals([]));
+                        writeln!(f, "{}", table)?
+                    }
+                    Err(e) => write!(f, "Internal error: {e}")?,
+                }
+            }
             SuiClientCommandResult::Upgrade(response)
             | SuiClientCommandResult::Publish(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
-            }
-            SuiClientCommandResult::Object(object_read) => {
-                let object = unwrap_err_to_string(|| Ok(object_read.object()?));
-                writeln!(writer, "{}", object)?;
             }
             SuiClientCommandResult::TransactionBlock(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
@@ -1489,53 +1558,8 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::PayAllSui(response) => {
                 write!(writer, "{}", write_transaction_response(response)?)?;
             }
-            SuiClientCommandResult::Objects(object_refs) => {
-                writeln!(
-                    writer,
-                    " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
-                    "Object ID", "Version", "Digest", "Owner Type", "Object Type"
-                )?;
-                writeln!(writer, "{}", ["-"; 165].join(""))?;
-                for oref in object_refs {
-                    let obj = oref.clone().into_object();
-                    match obj {
-                        Ok(obj) => {
-                            let owner_type = match obj.owner {
-                                Some(Owner::AddressOwner(_)) => "AddressOwner",
-                                Some(Owner::ObjectOwner(_)) => "object_owner",
-                                Some(Owner::Shared { .. }) => "Shared",
-                                Some(Owner::Immutable) => "Immutable",
-                                None => "None",
-                            };
-
-                            writeln!(
-                                writer,
-                                " {0: ^42} | {1: ^10} | {2: ^44} | {3: ^15} | {4: ^40}",
-                                obj.object_id,
-                                obj.version.value(),
-                                Base64::encode(obj.digest),
-                                owner_type,
-                                format!("{:?}", obj.type_)
-                            )?
-                        }
-                        Err(e) => writeln!(writer, "Error: {e:?}")?,
-                    }
-                }
-                writeln!(writer, "Showing {} results.", object_refs.len())?;
-            }
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
-            }
-            SuiClientCommandResult::Gas(gases) => {
-                // TODO: generalize formatting of CLI
-                writeln!(writer, " {0: ^66} | {1: ^11}", "Object ID", "Gas Value")?;
-                writeln!(
-                    writer,
-                    "----------------------------------------------------------------------------------"
-                )?;
-                for gas in gases {
-                    writeln!(writer, " {0: ^66} | {1: ^11}", gas.id(), gas.value())?;
-                }
             }
             SuiClientCommandResult::ChainIdentifier(ci) => {
                 writeln!(writer, "{}", ci)?;
@@ -1565,13 +1589,20 @@ impl Display for SuiClientCommandResult {
                 writeln!(writer, "Added new Sui env [{}] to config.", env.alias)?;
             }
             SuiClientCommandResult::Envs(envs, active) => {
+                let mut builder = TableBuilder::default();
+                builder.set_header(["alias", "url", "active"]);
                 for env in envs {
-                    write!(writer, "{} => {}", env.alias, env.rpc)?;
-                    if Some(env.alias.as_str()) == active.as_deref() {
-                        write!(writer, " (active)")?;
-                    }
-                    writeln!(writer)?;
+                    builder.push_record(vec![env.alias.clone(), env.rpc.clone(), {
+                        if Some(env.alias.as_str()) == active.as_deref() {
+                            "*".to_string()
+                        } else {
+                            "".to_string()
+                        }
+                    }]);
                 }
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
+                write!(f, "{}", table)?
             }
             SuiClientCommandResult::VerifySource => {
                 writeln!(writer, "Source verification succeeded!")?;
@@ -1582,30 +1613,29 @@ impl Display for SuiClientCommandResult {
                 used_function_ticks,
                 used_module_ticks,
             } => {
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "", "Module", "Function"
-                )?;
-                writeln!(writer, "------------------------------------------------")?;
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "Max", max_module_ticks, max_function_ticks,
-                )?;
-                writeln!(
-                    writer,
-                    "{0: ^15} | {1: ^15} | {2: ^15}",
-                    "Used", used_module_ticks, used_function_ticks,
-                )?;
-
+                let mut builder = TableBuilder::default();
+                builder.set_header(vec!["", "Module", "Function"]);
+                builder.push_record(vec![
+                    "Max".to_string(),
+                    max_module_ticks.to_string(),
+                    max_function_ticks.to_string(),
+                ]);
+                builder.push_record(vec![
+                    "Used".to_string(),
+                    used_module_ticks.to_string(),
+                    used_function_ticks.to_string(),
+                ]);
+                let mut table = builder.build();
+                table.with(TableStyle::rounded());
                 if (used_module_ticks > max_module_ticks)
                     || (used_function_ticks > max_function_ticks)
                 {
-                    writeln!(writer, "Module will NOT pass metering check!")?;
+                    table.with(TablePanel::header("Module will NOT pass metering check!"));
                 } else {
-                    writeln!(writer, "Module will pass metering check!")?;
+                    table.with(TablePanel::header("Module will pass metering check!"));
                 }
+                table.with(tabled::settings::style::BorderSpanCorrection);
+                writeln!(f, "{}", table)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
@@ -1694,6 +1724,13 @@ pub fn write_transaction_response(
 impl Debug for SuiClientCommandResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = unwrap_err_to_string(|| match self {
+            SuiClientCommandResult::Gas(gas_coins) => {
+                let gas_coins = gas_coins
+                    .iter()
+                    .map(GasCoinOutput::from)
+                    .collect::<Vec<_>>();
+                Ok(serde_json::to_string_pretty(&gas_coins)?)
+            }
             SuiClientCommandResult::Object(object_read) => {
                 let object = object_read.object()?;
                 Ok(serde_json::to_string_pretty(&object)?)
@@ -1771,6 +1808,107 @@ pub struct NewAddressOutput {
     pub address: SuiAddress,
     pub key_scheme: SignatureScheme,
     pub recovery_phrase: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectOutput {
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: String,
+    pub obj_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub owner_type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prev_tx: Option<TransactionDigest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storage_rebate: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<SuiParsedData>,
+}
+
+impl From<&SuiObjectData> for ObjectOutput {
+    fn from(obj: &SuiObjectData) -> Self {
+        let owner_type = match obj.owner {
+            Some(Owner::AddressOwner(_)) => Some("AddressOwner".to_string()),
+            Some(Owner::ObjectOwner(_)) => Some("ObjectOwner".to_string()),
+            Some(Owner::Shared { .. }) => Some("Shared".to_string()),
+            Some(Owner::Immutable) => Some("Immutable".to_string()),
+            None => None,
+        };
+        let obj_type = match obj.type_.as_ref() {
+            Some(x) => x.to_string(),
+            None => "unknown".to_string(),
+        };
+        Self {
+            object_id: obj.object_id,
+            version: obj.version,
+            digest: obj.digest.to_string(),
+            obj_type,
+            owner_type,
+            prev_tx: obj.previous_transaction,
+            storage_rebate: obj.storage_rebate,
+            content: obj.content.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GasCoinOutput {
+    pub gas_coin_id: ObjectID,
+    pub gas_balance: u64,
+}
+
+impl From<&GasCoin> for GasCoinOutput {
+    fn from(gas_coin: &GasCoin) -> Self {
+        Self {
+            gas_coin_id: *gas_coin.id(),
+            gas_balance: gas_coin.value(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ObjectsOutput {
+    pub object_id: ObjectID,
+    pub version: SequenceNumber,
+    pub digest: String,
+    pub object_type: String,
+}
+
+impl ObjectsOutput {
+    fn from(obj: SuiObjectResponse) -> Result<Self, anyhow::Error> {
+        let obj = obj.into_object()?;
+        // this replicates the object type display as in the sui explorer
+        let object_type = match obj.type_ {
+            Some(sui_types::base_types::ObjectType::Struct(x)) => {
+                let address = x.address().to_string();
+                // check if the address has length of 64 characters
+                // otherwise, keep it as it is
+                let address = if address.len() == 64 {
+                    format!("0x{}..{}", &address[..4], &address[address.len() - 4..])
+                } else {
+                    address
+                };
+                format!("{}::{}::{}", address, x.module(), x.name(),)
+            }
+            Some(sui_types::base_types::ObjectType::Package) => "Package".to_string(),
+            None => "unknown".to_string(),
+        };
+        Ok(Self {
+            object_id: obj.object_id,
+            version: obj.version,
+            digest: Base64::encode(obj.digest),
+            object_type,
+        })
+    }
+    fn from_vec(objs: Vec<SuiObjectResponse>) -> Result<Vec<Self>, anyhow::Error> {
+        objs.into_iter()
+            .map(ObjectsOutput::from)
+            .collect::<Result<Vec<_>, _>>()
+    }
 }
 
 #[derive(Serialize)]

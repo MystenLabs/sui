@@ -5,10 +5,14 @@ pub mod commands;
 pub mod config;
 pub mod server;
 
+pub(crate) mod functional_group;
+
+mod client;
+mod cluster;
 mod context_data;
 mod error;
 mod extensions;
-mod functional_group;
+mod metrics;
 mod types;
 
 use async_graphql::*;

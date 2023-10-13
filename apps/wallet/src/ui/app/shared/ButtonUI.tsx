@@ -5,7 +5,7 @@
 // TODO: rename this to Button when the existing Button component is removed
 
 import { cva, type VariantProps } from 'class-variance-authority';
-import { forwardRef, type Ref, type ReactNode } from 'react';
+import { forwardRef, type ReactNode, type Ref } from 'react';
 
 import { ButtonOrLink, type ButtonOrLinkProps } from './utils/ButtonOrLink';
 
@@ -41,7 +41,7 @@ const styles = cva(
 					'disabled:bg-gray-40 disabled:text-steel/50',
 				],
 				outline: [
-					'bg-white border-solid border border-steel text-steel-dark text-captionSmall font-semibold',
+					'bg-white border-solid border border-steel text-steel-dark text-body font-semibold',
 					'hover:border-steel-dark focus:border-steel-dark hover:text-steel-darker focus:text-steel-darker',
 					'visited:text-steel-dark',
 					'active:border-steel active:text-steel-dark',
@@ -73,7 +73,7 @@ const styles = cva(
 			size: {
 				tall: ['h-10 px-5 rounded-xl'],
 				narrow: ['h-9 py-2.5 px-5 rounded-lg'],
-				xs: ['h-6 rounded-lg px-2 py-3 !uppercase'],
+				xs: ['h-6 rounded-lg px-2 py-3 !uppercase text-captionSmall'],
 				icon: ['h-full w-full rounded-lg p-1'],
 			},
 		},

@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { ImageIcon } from '_app/shared/image-icon';
 import { useCoinMetadata } from '@mysten/core';
 import { Sui, Unstaked } from '@mysten/icons';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
-
-import { ImageIcon } from '_app/shared/image-icon';
 
 const imageStyle = cva(['rounded-full flex'], {
 	variants: {
@@ -29,7 +28,7 @@ const imageStyle = cva(['rounded-full flex'], {
 
 function SuiCoin() {
 	return (
-		<Sui className="flex items-center w-full h-full justify-center text-white p-1 text-body rounded-full" />
+		<Sui className="flex items-center w-full h-full justify-center text-white p-1.5 text-body rounded-full" />
 	);
 }
 

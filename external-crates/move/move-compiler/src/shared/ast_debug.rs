@@ -24,8 +24,55 @@
 ///     }
 /// }
 /// ```
+//**************************************************************************************************
+// Macros
+//**************************************************************************************************
+use std::fmt::Display;
+
+#[macro_export]
+macro_rules! debug_print {
+    ($e:expr) => {
+        $crate::shared::ast_debug::print(&$e)
+    };
+}
+
+#[macro_export]
+macro_rules! debug_print_verbose {
+    ($e:expr) => {
+        $crate::shared::ast_debug::print_verbose(&$e)
+    };
+}
+
+#[macro_export]
+macro_rules! debug_display {
+    ($e:expr) => {
+        $crate::shared::ast_debug::DisplayWrapper(&$e, false)
+    };
+}
+
+#[macro_export]
+macro_rules! debug_display_verbose {
+    ($e:expr) => {
+        $crate::shared::ast_debug::DisplayWrapper(&$e, true)
+    };
+}
+
+//**************************************************************************************************
+// Printer
+//**************************************************************************************************
+
 pub trait AstDebug {
     fn ast_debug(&self, w: &mut AstWriter);
+    fn print(&self) {
+        let mut writer = AstWriter::normal();
+        self.ast_debug(&mut writer);
+        print!("{}", writer);
+    }
+    fn print_verbose(&self) {
+        let mut writer = AstWriter::verbose();
+        self.ast_debug(&mut writer);
+        print!("{}", writer);
+    }
 }
 
 impl<T: AstDebug> AstDebug for Box<T> {
@@ -34,16 +81,16 @@ impl<T: AstDebug> AstDebug for Box<T> {
     }
 }
 
-pub fn print<T: AstDebug>(t: &T) {
-    let mut writer = AstWriter::normal();
-    t.ast_debug(&mut writer);
-    print!("{}", writer);
+impl<T: AstDebug> AstDebug for &T {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        AstDebug::ast_debug(*self, w)
+    }
 }
 
-pub fn print_verbose<T: AstDebug>(t: &T) {
-    let mut writer = AstWriter::verbose();
-    t.ast_debug(&mut writer);
-    print!("{}", writer);
+impl<T: AstDebug> AstDebug for &mut T {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        AstDebug::ast_debug(*self, w)
+    }
 }
 
 pub struct AstWriter {
@@ -178,7 +225,7 @@ impl AstWriter {
     }
 }
 
-impl std::fmt::Display for AstWriter {
+impl Display for AstWriter {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for line in &self.lines {
             writeln!(f, "{}", line)?;
@@ -190,5 +237,23 @@ impl std::fmt::Display for AstWriter {
 impl<T: AstDebug> AstDebug for move_ir_types::location::Spanned<T> {
     fn ast_debug(&self, w: &mut AstWriter) {
         self.value.ast_debug(w)
+    }
+}
+
+//**************************************************************************************************
+// Display
+//**************************************************************************************************
+
+pub struct DisplayWrapper<'a, T: AstDebug>(pub &'a T, /* verbose */ pub bool);
+
+impl<T: AstDebug> Display for DisplayWrapper<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut writer = if self.1 {
+            AstWriter::verbose()
+        } else {
+            AstWriter::normal()
+        };
+        self.0.ast_debug(&mut writer);
+        writer.fmt(f)
     }
 }

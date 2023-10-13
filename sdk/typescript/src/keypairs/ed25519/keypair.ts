@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import nacl from 'tweetnacl';
-import type { ExportedKeypair } from '../../cryptography/keypair.js';
-import { Ed25519PublicKey } from './publickey.js';
-import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
-import { derivePath } from './ed25519-hd-key.js';
 import { toB64 } from '@mysten/bcs';
-import type { SignatureScheme } from '../../cryptography/signature.js';
-import { PRIVATE_KEY_SIZE, Keypair } from '../../cryptography/keypair.js';
+import nacl from 'tweetnacl';
+
+import type { ExportedKeypair } from '../../cryptography/keypair.js';
+import { Keypair, PRIVATE_KEY_SIZE } from '../../cryptography/keypair.js';
+import { isValidHardenedPath, mnemonicToSeedHex } from '../../cryptography/mnemonics.js';
+import type { SignatureScheme } from '../../cryptography/signature-scheme.js';
+import { derivePath } from './ed25519-hd-key.js';
+import { Ed25519PublicKey } from './publickey.js';
 
 export const DEFAULT_ED25519_DERIVATION_PATH = "m/44'/784'/0'/0'/0'";
 

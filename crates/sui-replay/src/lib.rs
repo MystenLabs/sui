@@ -21,12 +21,14 @@ use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
 pub mod config;
 mod data_fetcher;
-mod db_rider;
 pub mod fuzz;
 pub mod fuzz_mutations;
 mod replay;
 pub mod transaction_provider;
 pub mod types;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Parser, Clone)]
 #[command(rename_all = "kebab-case")]

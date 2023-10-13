@@ -29,10 +29,8 @@ ResolvedGraph {
             "OtherDep",
             "Root",
         },
-        manifest_digest: Some(
-            "4E7F1AB3DAE2E52F6D5C1C326BB270B2097D47C8964275046E002AB005B38E2B",
-        ),
-        deps_digest: None,
+        manifest_digest: "4E7F1AB3DAE2E52F6D5C1C326BB270B2097D47C8964275046E002AB005B38E2B",
+        deps_digest: "F8BBB0CCB2491CA29A3DF03D6F92277A4F3574266507ACD77214D37ECA3F3082",
     },
     build_options: BuildConfig {
         dev_mode: true,
@@ -72,7 +70,7 @@ ResolvedGraph {
                 addresses: Some(
                     {
                         "B": Some(
-                            00000000000000000000000000000001,
+                            0000000000000000000000000000000000000000000000000000000000000001,
                         ),
                     },
                 ),
@@ -84,7 +82,7 @@ ResolvedGraph {
             package_path: "ELIDED_FOR_TEST",
             renaming: {},
             resolved_table: {
-                "B": 00000000000000000000000000000001,
+                "B": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },
@@ -135,7 +133,7 @@ ResolvedGraph {
                 ),
             },
             resolved_table: {
-                "A": 00000000000000000000000000000001,
+                "A": 0000000000000000000000000000000000000000000000000000000000000001,
             },
             source_digest: "ELIDED_FOR_TEST",
         },

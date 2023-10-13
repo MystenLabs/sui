@@ -1,20 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+
 import { parseSerializedSignature } from '../../../src/cryptography';
 import {
-	PubkeyWeightPair,
-	toMultiSigAddress,
-	MAX_SIGNER_IN_MULTISIG,
 	combinePartialSigs,
 	decodeMultiSig,
+	MAX_SIGNER_IN_MULTISIG,
+	PubkeyWeightPair,
+	toMultiSigAddress,
 } from '../../../src/cryptography/multisig';
 import { PublicKey } from '../../../src/cryptography/publickey';
-import { MultiSigPublicKey } from '../../../src/multisig/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
+import { MultiSigPublicKey } from '../../../src/multisig/publickey';
 
 describe('multisig address and combine sigs', () => {
 	// Address and combined multisig matches rust impl: fn multisig_serde_test()

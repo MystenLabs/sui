@@ -38,6 +38,7 @@ pub mod digests;
 pub mod display;
 pub mod dynamic_field;
 pub mod effects;
+pub mod epoch_data;
 pub mod event;
 pub mod executable_transaction;
 pub mod execution;
@@ -56,6 +57,7 @@ pub mod messages_consensus;
 pub mod messages_grpc;
 pub mod messages_safe_client;
 pub mod metrics;
+pub mod mock_checkpoint_builder;
 pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;
@@ -67,12 +69,11 @@ pub mod storage;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod transaction;
+pub mod transfer;
 pub mod type_resolver;
 pub mod versioned;
 pub mod zk_login_authenticator;
 pub mod zk_login_util;
-
-pub mod epoch_data;
 
 #[cfg(any(test, feature = "test-utils"))]
 #[path = "./unit_tests/utils.rs"]
@@ -202,7 +203,7 @@ pub fn is_primitive(
 
         S::StructInstantiation(idx, targs) => {
             let resolved_struct = resolve_struct(view, *idx);
-            // is option of a primitive
+            // option is a primitive
             resolved_struct == RESOLVED_STD_OPTION
                 && targs.len() == 1
                 && is_primitive(view, function_type_args, &targs[0])

@@ -39,7 +39,7 @@ Validator nodes store only the latest transactions on the _frontier_ of the obje
 
 ## Full node setup
 
-Follow the instructions here to run your own Sui Full.
+Follow the instructions here to run your own Sui Full node.
 
 ### Hardware requirements
 

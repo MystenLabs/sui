@@ -9,6 +9,7 @@ use object_store::path::Path;
 use object_store::{DynObjectStore, Error};
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{error, warn};
@@ -168,9 +169,10 @@ pub fn path_to_filesystem(local_dir_path: PathBuf, location: &Path) -> anyhow::R
 /// and return a map of epoch number to the directory path
 pub async fn find_all_dirs_with_epoch_prefix(
     store: &Arc<DynObjectStore>,
+    prefix: Option<&Path>,
 ) -> anyhow::Result<BTreeMap<u64, Path>> {
     let mut dirs = BTreeMap::new();
-    let entries = store.list_with_delimiter(None).await?;
+    let entries = store.list_with_delimiter(prefix).await?;
     for entry in entries.common_prefixes {
         if let Some(filename) = entry.filename() {
             if !filename.starts_with("epoch_") {
@@ -186,6 +188,34 @@ pub async fn find_all_dirs_with_epoch_prefix(
     Ok(dirs)
 }
 
+/// This function will find all child directories in the input store which are of the form "epoch_num"
+/// and return a map of epoch number to the directory path
+pub async fn find_all_files_with_epoch_prefix(
+    store: &Arc<DynObjectStore>,
+    prefix: Option<&Path>,
+) -> anyhow::Result<Vec<Range<u64>>> {
+    let mut ranges = Vec::new();
+    let entries = store.list_with_delimiter(prefix).await?;
+    for entry in entries.objects {
+        let checkpoint_seq_range = entry
+            .location
+            .filename()
+            .ok_or(anyhow!("Illegal file name"))?
+            .split_once('.')
+            .context("Failed to split dir name")?
+            .0
+            .split_once('_')
+            .context("Failed to split dir name")
+            .map(|(start, end)| Range {
+                start: start.parse::<u64>().unwrap(),
+                end: end.parse::<u64>().unwrap(),
+            })?;
+
+        ranges.push(checkpoint_seq_range);
+    }
+    Ok(ranges)
+}
+
 /// This function will find missing epoch directories in the input store and return a list of such
 /// epoch numbers. If the highest epoch directory in the store is `epoch_N` then it is expected that the
 /// store will have all epoch directories from `epoch_0` to `epoch_N`. Additionally, any epoch directory
@@ -195,7 +225,7 @@ pub async fn find_missing_epochs_dirs(
     store: &Arc<DynObjectStore>,
     success_marker: &str,
 ) -> anyhow::Result<Vec<u64>> {
-    let remote_checkpoints_by_epoch = find_all_dirs_with_epoch_prefix(store).await?;
+    let remote_checkpoints_by_epoch = find_all_dirs_with_epoch_prefix(store, None).await?;
     let mut dirs: Vec<_> = remote_checkpoints_by_epoch.iter().collect();
     dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
     let mut candidate_epoch: u64 = 0;

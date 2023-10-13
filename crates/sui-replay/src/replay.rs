@@ -1,64 +1,67 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::ReplayableNetworkConfigSet;
-use crate::data_fetcher::extract_epoch_and_version;
-use crate::data_fetcher::DataFetcher;
-use crate::data_fetcher::Fetchers;
-use crate::data_fetcher::NodeStateDumpFetcher;
-use crate::data_fetcher::RemoteFetcher;
-use crate::types::*;
+use crate::{
+    config::ReplayableNetworkConfigSet,
+    data_fetcher::{
+        extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
+    },
+    types::*,
+};
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::{
+    account_address::AccountAddress,
+    language_storage::{ModuleId, StructTag},
+    resolver::{ModuleResolver, ResourceResolver},
+};
 use prometheus::Registry;
 use similar::{ChangeTag, TextDiff};
-use std::collections::{BTreeMap, HashSet};
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+    sync::Mutex,
+};
 use sui_config::node::ExpensiveSafetyCheckConfig;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
-use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
-use sui_core::authority::AuthorityState;
-use sui_core::authority::NodeStateDump;
-use sui_core::epoch::epoch_metrics::EpochMetrics;
-use sui_core::module_cache_metrics::ResolverMetrics;
-use sui_core::signature_verifier::SignatureVerifierMetrics;
+use sui_core::{
+    authority::{
+        authority_per_epoch_store::AuthorityPerEpochStore,
+        epoch_start_configuration::EpochStartConfiguration,
+        test_authority_builder::TestAuthorityBuilder, AuthorityState, NodeStateDump,
+    },
+    epoch::epoch_metrics::EpochMetrics,
+    module_cache_metrics::ResolverMetrics,
+    signature_verifier::SignatureVerifierMetrics,
+};
 use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
-use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_protocol_config::Chain;
-use sui_protocol_config::ProtocolConfig;
+use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
-use sui_types::committee::EpochId;
-use sui_types::digests::ChainIdentifier;
-use sui_types::digests::CheckpointDigest;
-use sui_types::digests::TransactionDigest;
-use sui_types::error::ExecutionError;
-use sui_types::error::{SuiError, SuiResult};
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
-use sui_types::gas::SuiGasStatus;
-use sui_types::inner_temporary_store::InnerTemporaryStore;
-use sui_types::metrics::LimitsMetrics;
-use sui_types::object::{Data, Object, Owner};
-use sui_types::storage::get_module_by_id;
-use sui_types::storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync};
-use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::{
-    CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
-    TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate, VerifiedTransaction,
+use sui_types::{
+    authenticator_state::get_authenticator_state_obj_initial_shared_version,
+    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    committee::EpochId,
+    digests::{ChainIdentifier, CheckpointDigest, TransactionDigest},
+    error::{ExecutionError, SuiError, SuiResult},
+    executable_transaction::VerifiedExecutableTransaction,
+    gas::SuiGasStatus,
+    inner_temporary_store::InnerTemporaryStore,
+    metrics::LimitsMetrics,
+    object::{Data, Object, Owner},
+    storage::get_module_by_id,
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
+    transaction::{
+        CertifiedTransaction, InputObjectKind, InputObjects, SenderSignedData, Transaction,
+        TransactionData, TransactionDataAPI, TransactionKind, VerifiedCertificate,
+        VerifiedTransaction,
+    },
+    DEEPBOOK_PACKAGE_ID,
 };
-use sui_types::DEEPBOOK_PACKAGE_ID;
-use tracing::info;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
@@ -335,7 +338,7 @@ impl LocalExec {
 
         if let Some(url) = rpc_url.clone() {
             info!("Using RPC URL: {}", url);
-            if let Ok(x) = inner_exec(
+            match inner_exec(
                 url,
                 tx_digest,
                 expensive_safety_check_config.clone(),
@@ -345,9 +348,14 @@ impl LocalExec {
             )
             .await
             {
-                return Ok(x);
+                Ok(exec_state) => return Ok(exec_state),
+                Err(e) => {
+                    warn!(
+                        "Failed to execute transaction with provided RPC URL: Error {}",
+                        e
+                    );
+                }
             }
-            warn!("Failed to execute transaction with provided RPC URL. Attempting to load configs from file");
         }
 
         let cfg = ReplayableNetworkConfigSet::load_config(path)?;
@@ -383,6 +391,7 @@ impl LocalExec {
     /// But it should only be called once per epoch.
     pub async fn init_for_execution(mut self) -> Result<Self, ReplayEngineError> {
         self.populate_protocol_version_tables().await?;
+        tokio::task::yield_now().await;
         Ok(self)
     }
 
@@ -489,6 +498,7 @@ impl LocalExec {
                     .insert(o_ref.0, obj.clone());
             }
         }
+        tokio::task::yield_now().await;
         Ok(objs)
     }
 
@@ -1009,7 +1019,9 @@ impl LocalExec {
             return Ok(Some(obj.clone()));
         }
 
-        let Some(o) =  self.download_latest_object(obj_id)? else { return Ok(None) };
+        let Some(o) = self.download_latest_object(obj_id)? else {
+            return Ok(None);
+        };
 
         if o.is_package() {
             assert!(
@@ -1629,6 +1641,7 @@ impl LocalExec {
         let loaded_child_refs = self.fetch_loaded_child_refs(&tx_info.tx_digest).await?;
         self.diag.loaded_child_objects = loaded_child_refs.clone();
         self.multi_download_and_store(&loaded_child_refs).await?;
+        tokio::task::yield_now().await;
 
         Ok(InputObjects::new(input_objs))
     }
@@ -1709,6 +1722,48 @@ impl ChildObjectResolver for LocalExec {
             );
         res
     }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> SuiResult<Option<Object>> {
+        fn inner(
+            self_: &LocalExec,
+            owner: &ObjectID,
+            receiving_object_id: &ObjectID,
+            receive_object_at_version: SequenceNumber,
+        ) -> SuiResult<Option<Object>> {
+            let recv_object = match self_.get_object(receiving_object_id)? {
+                None => return Ok(None),
+                Some(o) => o,
+            };
+            if recv_object.version() != receive_object_at_version {
+                return Err(SuiError::Unknown(format!(
+                    "Invariant Violation. Replay loaded child_object {receiving_object_id} at version \
+                    {receive_object_at_version} but expected the version to be == {receive_object_at_version}"
+                )));
+            }
+            if recv_object.owner != Owner::AddressOwner((*owner).into()) {
+                return Ok(None);
+            }
+            Ok(Some(recv_object))
+        }
+
+        let res = inner(self, owner, receiving_object_id, receive_object_at_version);
+        self.exec_store_events
+            .lock()
+            .expect("Unable to lock events list")
+            .push(ExecutionStoreEvent::ReceiveObject {
+                owner: *owner,
+                receive: *receiving_object_id,
+                receive_at_version: receive_object_at_version,
+                result: res.clone(),
+            });
+        res
+    }
 }
 
 impl ParentSync for LocalExec {
@@ -1755,7 +1810,10 @@ impl ResourceResolver for LocalExec {
         ) -> SuiResult<Option<Vec<u8>>> {
             // If package not present fetch it from the network or some remote location
             let Some(object) = self_.get_or_download_object(
-                &ObjectID::from(*address),false /* we expect a Move obj*/)? else {
+                &ObjectID::from(*address),
+                false, /* we expect a Move obj*/
+            )?
+            else {
                 return Ok(None);
             };
 

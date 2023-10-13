@@ -24,7 +24,10 @@ use test_utils::{
     CommitteeFixture,
 };
 use tokio::sync::watch;
-use types::{error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round};
+use types::{
+    error::DagError, Certificate, CertificateAPI, Header, HeaderAPI, Round,
+    SignatureVerificationState,
+};
 
 #[tokio::test]
 async fn accept_certificates() {
@@ -51,6 +54,7 @@ async fn accept_certificates() {
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -78,10 +82,10 @@ async fn accept_certificates() {
 
     // Send 3 certificates to the Synchronizer.
     let certificates: Vec<_> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(3)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
     for cert in certificates.clone() {
         synchronizer.try_accept_certificate(cert).await.unwrap();
@@ -148,6 +152,7 @@ async fn accept_suspended_certificates() {
     let synchronizer = Arc::new(Synchronizer::new(
         authority_id,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -163,7 +168,7 @@ async fn accept_suspended_certificates() {
 
     // Make fake certificates.
     let committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -180,7 +185,7 @@ async fn accept_suspended_certificates() {
     );
     let certificates = certificates.into_iter().collect_vec();
 
-    // Try to aceept certificates from round 2 to 5. All of them should be suspended.
+    // Try to accept certificates from round 2 to 5. All of them should be suspended.
     let accept = FuturesUnordered::new();
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
@@ -193,7 +198,7 @@ async fn accept_suspended_certificates() {
         }
     }
 
-    // Try to aceept certificates from round 1. All of them should be accepted.
+    // Try to accept certificates from round 1. All of them should be accepted.
     for cert in &certificates[..NUM_AUTHORITIES] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,
@@ -204,7 +209,7 @@ async fn accept_suspended_certificates() {
     // Wait for all notifications to arrive.
     accept.collect::<Vec<()>>().await;
 
-    // Try to aceept certificates from round 2 and above again. All of them should be accepted.
+    // Try to accept certificates from round 2 and above again. All of them should be accepted.
     for cert in &certificates[NUM_AUTHORITIES..] {
         match synchronizer.try_accept_certificate(cert.clone()).await {
             Ok(()) => continue,
@@ -254,6 +259,7 @@ async fn synchronizer_recover_basic() {
     let synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -281,10 +287,10 @@ async fn synchronizer_recover_basic() {
 
     // Send 3 certificates to Synchronizer.
     let certificates: Vec<_> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(3)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
     for cert in certificates.clone() {
         synchronizer.try_accept_certificate(cert).await.unwrap();
@@ -302,6 +308,7 @@ async fn synchronizer_recover_basic() {
     let _synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -370,6 +377,7 @@ async fn synchronizer_recover_partial_certs() {
     let synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -397,10 +405,10 @@ async fn synchronizer_recover_partial_certs() {
 
     // Send 1 certificate.
     let certificates: Vec<Certificate> = fixture
-        .headers()
+        .headers(&latest_protocol_version())
         .iter()
         .take(3)
-        .map(|h| fixture.certificate(h))
+        .map(|h| fixture.certificate(&latest_protocol_version(), h))
         .collect();
     let last_cert = certificates.clone().into_iter().last().unwrap();
     synchronizer
@@ -420,6 +428,7 @@ async fn synchronizer_recover_partial_certs() {
     let synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -480,6 +489,7 @@ async fn synchronizer_recover_previous_round() {
     let synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -506,7 +516,7 @@ async fn synchronizer_recover_previous_round() {
     client.set_primary_network(network.clone());
 
     // Send 3 certificates from round 1, and 2 certificates from round 2 to Synchronizer.
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&latest_protocol_version(), &committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -549,6 +559,7 @@ async fn synchronizer_recover_previous_round() {
     let _synchronizer = Arc::new(Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client.clone(),
@@ -595,6 +606,7 @@ async fn deliver_certificate_using_store() {
     let synchronizer = Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -609,7 +621,7 @@ async fn deliver_certificate_using_store() {
     );
 
     // create some certificates in a complete DAG form
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&latest_protocol_version(), &committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -666,6 +678,7 @@ async fn deliver_certificate_not_found_parents() {
     let synchronizer = Synchronizer::new(
         name,
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -680,7 +693,7 @@ async fn deliver_certificate_not_found_parents() {
     );
 
     // create some certificates in a complete DAG form
-    let genesis_certs = Certificate::genesis(&committee);
+    let genesis_certs = Certificate::genesis(&latest_protocol_version(), &committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
@@ -712,7 +725,9 @@ async fn deliver_certificate_not_found_parents() {
     // and we should fail
     assert!(!parents_available);
 
-    let CertificateFetcherCommand::Ancestors(certificate)  = rx_certificate_fetcher.recv().await.unwrap() else {
+    let CertificateFetcherCommand::Ancestors(certificate) =
+        rx_certificate_fetcher.recv().await.unwrap()
+    else {
         panic!("Expected CertificateFetcherCommand::Ancestors");
     };
 
@@ -748,6 +763,7 @@ async fn sync_batches_drops_old() {
     let synchronizer = Arc::new(Synchronizer::new(
         primary.id(),
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -765,7 +781,7 @@ async fn sync_batches_drops_old() {
     for _ in 0..3 {
         let header = Header::V1(
             author
-                .header_builder(&fixture.committee())
+                .header_builder(&latest_protocol_version(), &fixture.committee())
                 .with_payload_batch(
                     test_utils::fixture_batch_with_transactions(10, &latest_protocol_version()),
                     0,
@@ -775,7 +791,7 @@ async fn sync_batches_drops_old() {
                 .unwrap(),
         );
 
-        let certificate = fixture.certificate(&header);
+        let certificate = fixture.certificate(&latest_protocol_version(), &header);
         let digest = certificate.clone().digest();
 
         certificates.insert(digest, certificate.clone());
@@ -786,7 +802,7 @@ async fn sync_batches_drops_old() {
     }
     let test_header = Header::V1(
         author
-            .header_builder(&fixture.committee())
+            .header_builder(&latest_protocol_version(), &fixture.committee())
             .round(2)
             .parents(certificates.keys().cloned().collect())
             .with_payload_batch(
@@ -834,6 +850,7 @@ async fn gc_suspended_certificates() {
     let synchronizer = Arc::new(Synchronizer::new(
         primary.id(),
         fixture.committee(),
+        latest_protocol_version(),
         worker_cache.clone(),
         /* gc_depth */ GC_DEPTH,
         client,
@@ -849,7 +866,7 @@ async fn gc_suspended_certificates() {
 
     // Make 5 rounds of fake certificates.
     let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&committee)
+    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -886,9 +903,35 @@ async fn gc_suspended_certificates() {
     );
 
     // Re-insertion of missing certificate as fetched certificates should be suspended too.
-    for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
+    for (idx, cert) in certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4]
+        .iter()
+        .enumerate()
+    {
+        let mut verified_cert = cert.clone();
+        // Simulate CertificateV2 fetched certificate leaf only verification
+        if (idx + NUM_AUTHORITIES * 2) < NUM_AUTHORITIES * 3 {
+            // Round 3 certs are parents of round 4 certs, so we mark them as verified indirectly
+            verified_cert.set_signature_verification_state(
+                SignatureVerificationState::VerifiedIndirectly(
+                    verified_cert
+                        .aggregated_signature()
+                        .expect("Invalid Signature")
+                        .clone(),
+                ),
+            )
+        } else {
+            // Round 4 certs are leaf certs in this case and are verified directly
+            verified_cert.set_signature_verification_state(
+                SignatureVerificationState::VerifiedDirectly(
+                    verified_cert
+                        .aggregated_signature()
+                        .expect("Invalid Signature")
+                        .clone(),
+                ),
+            )
+        }
         match synchronizer
-            .try_accept_fetched_certificate(cert.clone())
+            .try_accept_fetched_certificate(verified_cert)
             .await
         {
             Ok(()) => panic!("Unexpected acceptance of {cert:?}"),

@@ -1,0 +1,26 @@
+[package]
+name = "data-transform"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+diesel = { version = "2.1.0", features = ["postgres"] }
+fastcrypto = { workspace = true, features = ["copy_key"] }
+dotenvy = "0.15"
+anyhow = "1.0.71"
+serde = { version = "1.0.144", features = ["derive", "rc"] }
+serde_json = { version = "1.0.95", features = ["preserve_order", "arbitrary_precision"] }
+tracing = "0.1.37"
+base64 = "0.21.2"
+sui-types.workspace = true
+sui-indexer.workspace = true
+move-core-types.workspace = true
+move-bytecode-utils.workspace = true
+sui-json-rpc-types.workspace = true
+once_cell.workspace = true
+workspace-hack.workspace = true

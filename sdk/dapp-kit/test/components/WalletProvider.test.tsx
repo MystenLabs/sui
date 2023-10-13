@@ -2,19 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { createWalletProviderContextWrappe, registerMockWallet } from '../test-utils.js';
+
 import {
+	useAccounts,
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
 	useDisconnectWallet,
 	useWallets,
-} from 'dapp-kit/src';
+} from '../../src/index.js';
 import { createMockAccount } from '../mocks/mockAccount.js';
+import { suiFeatures, superCoolFeature } from '../mocks/mockFeatures.js';
+import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
 describe('WalletProvider', () => {
 	test('the correct wallet and account information is returned on initial render', () => {
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(
 			() => ({
 				wallets: useWallets(),
@@ -30,11 +33,20 @@ describe('WalletProvider', () => {
 	});
 
 	test('the list of wallets is ordered correctly by preference', () => {
-		const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
-		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
-		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
+		const { unregister: unregister1 } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			features: suiFeatures,
+		});
+		const { unregister: unregister2 } = registerMockWallet({
+			walletName: 'Mock Wallet 2',
+			features: suiFeatures,
+		});
+		const { unregister: unregister3 } = registerMockWallet({
+			walletName: 'Mock Wallet 3',
+			features: suiFeatures,
+		});
 
-		const wrapper = createWalletProviderContextWrappe({
+		const wrapper = createWalletProviderContextWrapper({
 			preferredWallets: ['Mock Wallet 2', 'Mock Wallet 1'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -50,7 +62,7 @@ describe('WalletProvider', () => {
 	});
 
 	test('the unsafe burner wallet is registered when enableUnsafeBurner is set', async () => {
-		const wrapper = createWalletProviderContextWrappe({
+		const wrapper = createWalletProviderContextWrapper({
 			enableUnsafeBurner: true,
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -60,11 +72,20 @@ describe('WalletProvider', () => {
 	});
 
 	test('unregistered wallets are removed from the list of wallets', async () => {
-		const { unregister: unregister1 } = registerMockWallet({ walletName: 'Mock Wallet 1' });
-		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
-		const { unregister: unregister3 } = registerMockWallet({ walletName: 'Mock Wallet 3' });
+		const { unregister: unregister1 } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			features: suiFeatures,
+		});
+		const { unregister: unregister2 } = registerMockWallet({
+			walletName: 'Mock Wallet 2',
+			features: suiFeatures,
+		});
+		const { unregister: unregister3 } = registerMockWallet({
+			walletName: 'Mock Wallet 3',
+			features: suiFeatures,
+		});
 
-		const wrapper = createWalletProviderContextWrappe();
+		const wrapper = createWalletProviderContextWrapper();
 		const { result } = renderHook(() => useWallets(), { wrapper });
 
 		act(() => unregister2());
@@ -81,16 +102,11 @@ describe('WalletProvider', () => {
 	test('the list of wallets is correctly filtered by required features', () => {
 		const { unregister: unregister1 } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
-			additionalFeatures: {
-				'my-dapp:super-cool-feature': {
-					version: '1.0.0',
-					superCoolFeature: () => {},
-				},
-			},
+			features: superCoolFeature,
 		});
 		const { unregister: unregister2 } = registerMockWallet({ walletName: 'Mock Wallet 2' });
 
-		const wrapper = createWalletProviderContextWrappe({
+		const wrapper = createWalletProviderContextWrapper({
 			requiredFeatures: ['my-dapp:super-cool-feature'],
 		});
 		const { result } = renderHook(() => useWallets(), { wrapper });
@@ -104,14 +120,48 @@ describe('WalletProvider', () => {
 		});
 	});
 
+	test('accounts are properly updated when changed from a wallet', async () => {
+		const { unregister, mockWallet } = registerMockWallet({
+			walletName: 'Mock Wallet 1',
+			accounts: [createMockAccount(), createMockAccount(), createMockAccount()],
+		});
+
+		const wrapper = createWalletProviderContextWrapper();
+		const { result } = renderHook(
+			() => ({
+				connectWallet: useConnectWallet(),
+				currentAccount: useCurrentAccount(),
+				currentWallet: useCurrentWallet(),
+				accounts: useAccounts(),
+			}),
+			{ wrapper },
+		);
+
+		result.current.connectWallet.mutate({ wallet: mockWallet });
+		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
+
+		// Simulate deleting the account we're currently connected to.
+		mockWallet.deleteFirstAccount();
+
+		expect(result.current.currentAccount).toBeTruthy();
+		await waitFor(() => {
+			expect(result.current.currentAccount!.address).toBe(result.current.accounts[0].address);
+		});
+
+		expect(result.current.accounts).toHaveLength(2);
+
+		act(() => unregister());
+	});
+
 	describe('wallet auto-connection', () => {
 		test('auto-connecting to a wallet works successfully', async () => {
 			const { unregister, mockWallet } = registerMockWallet({
 				walletName: 'Mock Wallet 1',
 				accounts: [createMockAccount(), createMockAccount()],
+				features: suiFeatures,
 			});
 
-			const wrapper = createWalletProviderContextWrappe({
+			const wrapper = createWalletProviderContextWrapper({
 				autoConnect: true,
 			});
 			const { result, unmount } = renderHook(() => useConnectWallet(), { wrapper });
@@ -151,7 +201,7 @@ describe('WalletProvider', () => {
 			const { unregister, mockWallet } = registerMockWallet({
 				walletName: 'Mock Wallet 1',
 			});
-			const wrapper = createWalletProviderContextWrappe({
+			const wrapper = createWalletProviderContextWrapper({
 				autoConnect: true,
 			});
 

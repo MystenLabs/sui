@@ -9,7 +9,8 @@
 		"node": ">=16"
 	},
 	"bin": {
-		"build-package": "./src/build-package.ts"
+		"build-package": "./src/build-package.ts",
+		"build-dapp-kit": "./src/build-dapp-kit.ts"
 	},
 	"scripts": {
 		"prettier:check": "prettier -c --ignore-unknown .",
@@ -21,7 +22,12 @@
 		"build": "tsc --build"
 	},
 	"devDependencies": {
-		"esbuild": "^0.18.14",
+		"@types/postcss-prefix-selector": "^1.16.1",
+		"@vanilla-extract/esbuild-plugin": "^2.3.0",
+		"autoprefixer": "^10.4.14",
+		"esbuild": "^0.17.6",
+		"postcss": "^8.4.31",
+		"postcss-prefix-selector": "^1.16.0",
 		"typescript": "^5.1.6"
 	},
 	"dependencies": {
