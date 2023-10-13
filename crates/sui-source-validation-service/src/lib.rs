@@ -7,6 +7,7 @@ use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::{ffi::OsString, fs, path::Path, process::Command};
+use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
@@ -127,7 +128,7 @@ impl fmt::Display for Network {
 }
 
 /// Map (package address, module name) tuples to verified source info.
-type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
+pub type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
 /// Top-level lookup that maps network to sources for corresponding on-chain networks.
 pub type NetworkLookup = BTreeMap<Network, SourceLookup>;
 
@@ -361,9 +362,15 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     Ok(lookup)
 }
 
+// A thread that monitors on-chain transactions for package upgrades. `config` specifies which packages
+// to watch. `app_state` contains the map of sources returned by the server. In particular, `watch_for_upgrades`
+// invalidates (i.e., clears) the sources returned by the serve when we observe a package upgrade, so that we do not
+// falsely report outdated sources for a package. Pass an optional `channel` to observe the upgrade transaction(s).
+// The `channel` parameter exists for testing.
 pub async fn watch_for_upgrades(
     config: &Config,
-    _app_state: Arc<RwLock<AppState>>,
+    app_state: Arc<RwLock<AppState>>,
+    channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
     for s in &config.packages {
@@ -388,9 +395,32 @@ pub async fn watch_for_upgrades(
         .await?;
 
     info!("Listening for upgrades...");
-    let result = subscription.next().await;
-    info!("Saw upgrade txn: {:?}", result);
-    Ok(())
+    loop {
+        let result: Option<Result<SuiTransactionBlockEffects, _>> = subscription.next().await;
+        match result {
+            Some(Ok(result)) => {
+                // We see an upgrade transaction. Clear all sources since all of part of these may now be invalid.
+                // Currently we need to restart the server within some time delta of this observation to resume
+                // returning source. Restarting revalidates the latest release sources per repositories in the config file.
+                // Restarting is a manual side-effect outside of this server because we need to ensure that sources in the
+                // repositories _actually contain_ the latest source corresponding to on-chain data (which is subject to
+                // manual syncing itself currently).
+                info!("Saw upgrade txn: {:?}", result);
+                let mut app_state = app_state.write().unwrap();
+                app_state.sources = NetworkLookup::new(); // Clear all sources.
+                if let Some(channel) = channel {
+                    channel.send(result).unwrap();
+                    break Ok(());
+                }
+            }
+            Some(_) => {
+                info!("Saw failed transaction when listening to upgrades.")
+            }
+            None => {
+                bail!("Fatal: WebSocket connection lost while listening for upgrades. Shutting down server.")
+            }
+        }
+    }
 }
 
 pub struct AppState {
