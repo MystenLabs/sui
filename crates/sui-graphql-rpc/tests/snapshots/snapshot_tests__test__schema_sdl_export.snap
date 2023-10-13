@@ -688,7 +688,7 @@ enum TransactionBlockKindInput {
 }
 
 type TransactionSignature {
-	base64Sig: String!
+	base64Sig: Base64!
 }
 
 type Validator {
