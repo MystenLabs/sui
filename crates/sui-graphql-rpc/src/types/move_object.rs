@@ -3,6 +3,7 @@
 
 use super::big_int::BigInt;
 use super::move_value::MoveValue;
+use super::stake::StakeStatus;
 use super::{coin::Coin, object::Object};
 use crate::context_data::db_data_provider::PgManager;
 use crate::types::stake::Stake;
@@ -70,21 +71,28 @@ impl MoveObject {
         })
     }
 
-    // TODO implement this properly, it is missing status
-    async fn as_stake(&self) -> Option<Stake> {
-        let stake_object = StakedSui::try_from(&self.native_object);
-
-        if let Ok(stake) = stake_object {
-            Some(Stake {
-                active_epoch_id: Some(stake.activation_epoch()),
-                estimated_reward: None,
-                principal: Some(BigInt::from(stake.principal())),
-                request_epoch_id: Some(stake.activation_epoch() - 1),
-                status: None,
-                staked_sui_id: stake.id(),
-            })
+    // TODO implement this properly, it is missing estimate reward
+    async fn as_stake(&self, ctx: &Context<'_>) -> Result<Option<Stake>, Error> {
+        let stake =
+            StakedSui::try_from(&self.native_object).map_err(|e| Error::new(e.to_string()))?;
+        let latest_system_state = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_latest_sui_system_state()
+            .await
+            .map_err(|e| Error::new(e.to_string()))?;
+        let current_epoch_id = latest_system_state.epoch_id;
+        let status = if current_epoch_id >= stake.activation_epoch() {
+            StakeStatus::Active
         } else {
-            None
-        }
+            StakeStatus::Pending
+        };
+        Ok(Some(Stake {
+            active_epoch_id: Some(stake.activation_epoch()),
+            estimated_reward: None,
+            principal: Some(BigInt::from(stake.principal())),
+            request_epoch_id: Some(stake.activation_epoch() - 1),
+            status: Some(status),
+            staked_sui_id: stake.id(),
+        }))
     }
 }
