@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::big_int::BigInt;
 use super::move_value::MoveValue;
 use super::{coin::Coin, object::Object};
 use crate::context_data::db_data_provider::PgManager;
@@ -9,6 +10,7 @@ use async_graphql::Error;
 use async_graphql::*;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
+use sui_types::governance::StakedSui;
 use sui_types::object::Object as NativeSuiObject;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -68,21 +70,21 @@ impl MoveObject {
         })
     }
 
-    // TODO implement this
+    // TODO implement this properly, it is missing status
     async fn as_stake(&self) -> Option<Stake> {
-        self.native_object.data.try_as_move().and_then(|x| {
-            if x.type_().is_staked_sui() {
-                Some(Stake {
-                    active_epoch_id: None,
-                    estimated_reward: None,
-                    principal: None,
-                    request_epoch_id: None,
-                    status: None,
-                    staked_sui_id: x.id(), // get the move object from the resolver
-                })
-            } else {
-                None
-            }
-        })
+        let stake_object = StakedSui::try_from(&self.native_object);
+
+        if let Ok(stake) = stake_object {
+            Some(Stake {
+                active_epoch_id: Some(stake.activation_epoch()),
+                estimated_reward: None,
+                principal: Some(BigInt::from(stake.principal())),
+                request_epoch_id: Some(stake.activation_epoch() - 1),
+                status: None,
+                staked_sui_id: stake.id(),
+            })
+        } else {
+            None
+        }
     }
 }

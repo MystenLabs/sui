@@ -44,7 +44,6 @@ use diesel::{
     RunQueryDsl,
 };
 use std::str::FromStr;
-use sui_indexer::apis::governance_api_v2::GovernanceReadApiV2;
 use sui_indexer::{
     indexer_reader::IndexerReader,
     models_v2::{
@@ -78,10 +77,7 @@ use sui_sdk::types::{
     },
 };
 use sui_types::dynamic_field::Field;
-use sui_types::{
-    base_types::{MoveObjectType, ObjectID},
-    governance::StakedSui,
-};
+use sui_types::{base_types::MoveObjectType, governance::StakedSui};
 
 use super::DEFAULT_PAGE_SIZE;
 
@@ -1142,72 +1138,9 @@ impl PgManager {
             protocol_version: cfg.protocol_version.as_u64(),
         })
     }
-    // pub(crate) async fn fetch_staked_sui(
-    //     &self,
-    //     address: SuiAddress,
-    //     first: Option<u64>,
-    //     after: Option<String>,
-    //     last: Option<u64>,
-    //     before: Option<String>,
-    // ) -> Result<Option<Connection<String, Stake>>, Error> {
-    //     let obj_filter = ObjectFilter {
-    //         package: None,
-    //         module: None,
-    //         ty: Some(MoveObjectType::staked_sui().to_string()),
-    //         owner: Some(address),
-    //         object_ids: None,
-    //         object_keys: None,
-    //     };
-    //     let system_state = self.fetch_latest_sui_system_state().await?;
-    //     let current_epoch_id = system_state.epoch_id;
-    //     // we want the object ids of staked sui
-    //     // The reason we're using this API and not get_staked_by_owner in the
-    //     // governance api is because that API is
-    //     // is limited to 1000 objects, and ideally, we want to paginate these stakes
-    //     let objs = self
-    //         .multi_get_objs(first, after, last, before, Some(obj_filter))
-    //         .await?;
 
-    //     if let Some((stored_objs, has_next_page)) = objs {
-    //         let mut connection = Connection::new(false, has_next_page);
-
-    //         let mut edges = vec![];
-
-    //         for stored_obj in stored_objs {
-    //             let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
-    //                 Error::Internal("Error converting from stored obj to object".to_string())
-    //             })?;
-    //             let stake_object = StakedSui::try_from(&object).map_err(|_| {
-    //                 Error::Internal("Error converting from stored obj to object".to_string())
-    //             })?;
-
-    //             // TODO this only does active / pending stake status, but not unstaked
-    //             let status = if current_epoch_id >= stake_object.activation_epoch() {
-    //                 Some(StakeStatus::Active)
-    //             } else {
-    //                 Some(StakeStatus::Pending)
-    //             };
-    //             let stake = Stake {
-    //                 active_epoch_id: Some(stake_object.activation_epoch()),
-    //                 estimated_reward: None, // TODO once we have a good working governance API, we should fix this
-    //                 principal: Some(BigInt::from(stake_object.principal())),
-    //                 request_epoch_id: Some(stake_object.activation_epoch() - 1),
-    //                 status,
-    //                 staked_sui_id: stake_object.id(),
-    //             };
-    //             let cursor = stake.staked_sui_id.to_string();
-    //             edges.push(Edge::new(cursor, stake));
-    //         }
-    //         connection.edges.extend(edges);
-    //         Ok(Some(connection))
-    //     } else {
-    //         Ok(None)
-    //     }
-    // }
-
-    // TODO - this works nicely if we have fast pool rates computation,
-    // otherwise it's too slow now. Deferred to the other fetch_staked_sui that skips
-    // computing the estimated reward field
+    //TODO this does not compute estimated reward because of some perf issues
+    // to be revisited once we figure out what's going on there
     pub(crate) async fn fetch_staked_sui(
         &self,
         address: SuiAddress,
@@ -1224,7 +1157,8 @@ impl PgManager {
             object_ids: None,
             object_keys: None,
         };
-
+        let system_state = self.fetch_latest_sui_system_state().await?;
+        let current_epoch_id = system_state.epoch_id;
         // we want the object ids of staked sui
         // The reason we're using this API and not get_staked_by_owner in the
         // governance api is because that API is
@@ -1233,36 +1167,36 @@ impl PgManager {
             .multi_get_objs(first, after, last, before, Some(obj_filter))
             .await?;
 
-        println!("{:?}", objs);
-
-        let governance_api = GovernanceReadApiV2::new(self.inner.clone());
-
         if let Some((stored_objs, has_next_page)) = objs {
             let mut connection = Connection::new(false, has_next_page);
 
-            let object_ids = stored_objs
-                .into_iter()
-                .filter_map(|x| {
-                    ObjectID::try_from(x.object_id)
-                        .map_err(|_| eprintln!("Error extracting ObjectID from StoredObject"))
-                        .ok()
-                })
-                .collect::<Vec<_>>();
-            println!("objects_ids: {:?}", object_ids);
-            let stakes = governance_api.get_stakes_by_ids(object_ids).await?;
-            println!("stakes: {:?}", stakes);
             let mut edges = vec![];
-            println!("fetch staked sui fn: {:?}", stakes);
-            for stake in stakes {
-                edges.extend(stake.stakes.into_iter().filter_map(|x| {
-                    let cursor = x.staked_sui_id.to_string();
-                    Stake::try_from(x)
-                        .map_err(|e| eprintln!("Error converting Stake object to Stake: {:?}", e))
-                        .ok()
-                        .map(|obj| Edge::new(cursor, obj))
-                }));
-            }
 
+            for stored_obj in stored_objs {
+                let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
+                    Error::Internal("Error converting from stored obj to object".to_string())
+                })?;
+                let stake_object = StakedSui::try_from(&object).map_err(|_| {
+                    Error::Internal("Error converting from stored obj to object".to_string())
+                })?;
+
+                // TODO this only does active / pending stake status, but not unstaked
+                let status = if current_epoch_id >= stake_object.activation_epoch() {
+                    Some(StakeStatus::Active)
+                } else {
+                    Some(StakeStatus::Pending)
+                };
+                let stake = Stake {
+                    active_epoch_id: Some(stake_object.activation_epoch()),
+                    estimated_reward: None, // TODO once we have a good working governance API, we should fix this
+                    principal: Some(BigInt::from(stake_object.principal())),
+                    request_epoch_id: Some(stake_object.activation_epoch() - 1),
+                    status,
+                    staked_sui_id: stake_object.id(),
+                };
+                let cursor = stake.staked_sui_id.to_string();
+                edges.push(Edge::new(cursor, stake));
+            }
             connection.edges.extend(edges);
             Ok(Some(connection))
         } else {
