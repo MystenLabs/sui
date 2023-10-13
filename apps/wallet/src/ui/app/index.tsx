@@ -3,7 +3,7 @@
 
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { SwapPage } from '_pages/swap';
-import { BaseAssets } from '_pages/swap/BaseAssets';
+import { FromAssets } from '_pages/swap/FromAssets';
 import { setNavVisibility } from '_redux/slices/app';
 import { isLedgerAccountSerializedUI } from '_src/background/accounts/LedgerAccount';
 import { persistableStorage } from '_src/shared/analytics/amplitude';
@@ -172,7 +172,7 @@ const App = () => {
 				<Route path="send/select" element={<CoinsSelectorPage />} />
 				<Route path="stake/*" element={<Staking />} />
 				<Route path="swap/*" element={<SwapPage />} />
-				<Route path="swap/base-assets" element={<BaseAssets />} />
+				<Route path="swap/from-assets" element={<FromAssets />} />
 				<Route path="tokens/*" element={<TokenDetailsPage />} />
 				<Route path="transactions/:status?" element={<TransactionBlocksPage />} />
 				<Route path="*" element={<Navigate to="/tokens" replace={true} />} />

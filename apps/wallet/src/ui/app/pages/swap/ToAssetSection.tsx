@@ -30,7 +30,7 @@ import { useFormContext } from 'react-hook-form';
 
 import { type FormValues } from './utils';
 
-export function QuoteAssetSection({
+export function ToAssetSection({
 	activeCoinType,
 	balanceChanges,
 }: {
@@ -56,7 +56,7 @@ export function QuoteAssetSection({
 	)?.amount;
 
 	const quotedAssetAmount = new BigNumber(rawQuoteAssetAmount || '0').shiftedBy(
-		activeCoinType === SUI_TYPE_ARG ? -6 : -USDC_DECIMALS,
+		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : -USDC_DECIMALS,
 	);
 
 	const quotedAssetAmountAsNum = quotedAssetAmount.toNumber();
@@ -88,7 +88,7 @@ export function QuoteAssetSection({
 		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	);
 
-	const averagePriceAsString = parseFloat(averagePrice.toNumber().toFixed(MAX_FLOAT))?.toString();
+	const averagePriceAsString = averagePrice.toFixed(MAX_FLOAT).toString();
 
 	if (!quotedAssetMetaData.data) {
 		return null;

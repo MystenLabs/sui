@@ -10,7 +10,7 @@ import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export function BaseAssets() {
+export function FromAssets() {
 	const navigate = useNavigate();
 	const selectedAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();

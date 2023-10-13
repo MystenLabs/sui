@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
-import { useSigner } from '_app/hooks/useSigner';
 import { type WalletSigner } from '_app/WalletSigner';
 import { useDeepBookClient } from '_shared/deepBook/context';
-import { useGetObject, useGetOwnedObjects } from '@mysten/core';
+import { roundFloat } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { TransactionBlock } from '@mysten/sui.js/builder';
 import { type CoinStruct, type SuiClient } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
 
@@ -19,6 +18,7 @@ const DEEPBOOK_KEY = 'deepbook';
 export const SUI_CONVERSION_RATE = 6;
 export const USDC_DECIMALS = 9;
 export const MAX_FLOAT = 2;
+const SUI_USDC_LOT_SIZE = 100000000;
 
 export enum Coins {
 	SUI = 'SUI',
@@ -65,7 +65,7 @@ export function getUSDCurrency(amount: number | null) {
 		return null;
 	}
 
-	return parseFloat(amount.toFixed(MAX_FLOAT)).toLocaleString('en', {
+	return roundFloat(amount).toLocaleString('en', {
 		style: 'currency',
 		currency: 'USD',
 	});
@@ -184,32 +184,6 @@ export function useBalanceConversion(
 	};
 }
 
-export function useCreateAccount({
-	onSuccess,
-	deepBookClient,
-}: {
-	onSuccess: () => void;
-	deepBookClient: DeepBookClient;
-}) {
-	const activeAccount = useActiveAccount();
-	const activeAccountAddress = activeAccount?.address;
-	const signer = useSigner(activeAccount);
-
-	return useMutation({
-		mutationKey: [DEEPBOOK_KEY, 'create-account', activeAccountAddress],
-		mutationFn: async () => {
-			if (activeAccountAddress) {
-				const txb = deepBookClient.createAccount(activeAccountAddress);
-
-				return signer?.signAndExecuteTransactionBlock({ transactionBlock: txb });
-			}
-
-			return null;
-		},
-		onSuccess,
-	});
-}
-
 const MAX_COINS_PER_REQUEST = 10;
 
 export async function getCoinsByBalance({
@@ -227,7 +201,7 @@ export async function getCoinsByBalance({
 	let currentBalance = 0n;
 	let hasNextPage = true;
 	const coins = [];
-	const bigIntBalance = BigInt(Math.floor(Number(balance)));
+	const bigIntBalance = BigInt(new BigNumber(balance).integerValue(BigNumber.ROUND_UP).toString());
 
 	while (currentBalance < bigIntBalance && hasNextPage) {
 		const { data, nextCursor } = await suiClient.getCoins({
@@ -257,27 +231,40 @@ export async function getCoinsByBalance({
 	return coins;
 }
 
+function formatBalanceToLotSize(balance: string, lotSize: number) {
+	const balanceBigNumber = new BigNumber(balance);
+	const lotSizeBigNumber = new BigNumber(lotSize);
+	const remainder = balanceBigNumber.mod(lotSizeBigNumber);
+
+	if (remainder.isEqualTo(0)) {
+		return balanceBigNumber.toString();
+	}
+
+	const roundedDownBalance = balanceBigNumber.minus(remainder);
+	return roundedDownBalance.toString();
+}
+
 export async function getPlaceMarketOrderTxn({
 	deepBookClient,
 	poolId,
 	balance,
 	accountCapId,
 	coins,
-	coinType,
 	address,
+	isAsk,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
 	balance: string;
 	accountCapId: string;
 	coins: CoinStruct[];
-	coinType: string;
 	address: string;
+	isAsk: boolean;
 }) {
 	const txb = new TransactionBlock();
 
 	let swapCoin;
-	if (coinType === SUI_TYPE_ARG) {
+	if (isAsk) {
 		swapCoin = txb.splitCoins(txb.gas, [balance]);
 	} else {
 		const primaryCoinInput = txb.object(coins[0].coinObjectId);
@@ -296,13 +283,15 @@ export async function getPlaceMarketOrderTxn({
 
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
+	const validBalance = formatBalanceToLotSize(balance, SUI_USDC_LOT_SIZE);
+
 	return await deepBookClient.placeMarketOrder(
 		accountCap,
 		poolId,
-		BigInt(balance),
-		coinType === SUI_TYPE_ARG ? 'ask' : 'bid',
-		coinType === SUI_TYPE_ARG ? swapCoin : undefined,
-		coinType === SUI_TYPE_ARG ? undefined : swapCoin,
+		BigInt(validBalance),
+		isAsk ? 'ask' : 'bid',
+		isAsk ? swapCoin : undefined,
+		isAsk ? undefined : swapCoin,
 		undefined,
 		address,
 		txb,
@@ -310,17 +299,21 @@ export async function getPlaceMarketOrderTxn({
 }
 
 export function useGetEstimate({
-	balance,
 	accountCapId,
 	signer,
 	coinType,
 	poolId,
+	baseBalance,
+	quoteBalance,
+	isAsk,
 }: {
-	balance: string;
 	accountCapId: string;
 	signer: WalletSigner | null;
 	coinType: string;
 	poolId: string;
+	baseBalance: string;
+	quoteBalance: string;
+	isAsk: boolean;
 }) {
 	const queryClient = useQueryClient();
 	const suiClient = useSuiClient();
@@ -335,38 +328,68 @@ export function useGetEstimate({
 			'get-estimate',
 			poolId,
 			accountCapId,
-			balance,
 			coinType,
 			activeAddress,
+			baseBalance,
+			quoteBalance,
+			isAsk,
 		],
 		queryFn: async () => {
-			const data = await getCoinsByBalance({
+			const coins = await getCoinsByBalance({
 				coinType,
-				balance,
+				balance: isAsk ? baseBalance : quoteBalance,
 				suiClient,
 				address: activeAddress!,
 			});
 
-			if (!data?.length) {
+			if (!coins?.length) {
 				return null;
 			}
 
 			const txn = await getPlaceMarketOrderTxn({
 				deepBookClient,
 				poolId,
-				balance,
+				balance: baseBalance,
 				accountCapId,
 				address: activeAddress!,
-				coins: data,
-				coinType,
+				coins,
+				isAsk,
 			});
 
 			if (!accountCapId) {
-				queryClient.invalidateQueries(['get-owned-objects']);
+				await queryClient.invalidateQueries(['get-owned-objects']);
 			}
 
-			return signer?.dryRunTransactionBlock({ transactionBlock: txn });
+			const dryRunResponse = await signer?.dryRunTransactionBlock({ transactionBlock: txn });
+
+			return {
+				txn,
+				dryRunResponse,
+			};
 		},
-		enabled: !!balance && !!signer && !!activeAddress,
+		enabled: !!baseBalance && !!quoteBalance && !!signer && !!activeAddress,
 	});
+}
+
+export async function isExceedingSlippageTolerance({
+	slipPercentage,
+	averagePrice,
+	poolId,
+	deepBookClient,
+	isAsk,
+}: {
+	slipPercentage: string;
+	averagePrice: BigNumber;
+	poolId: string;
+	deepBookClient: DeepBookClient;
+	isAsk: boolean;
+}) {
+	const { bestBidPrice, bestAskPrice } = await deepBookClient.getMarketPrice(poolId);
+	const slipPercentageDecimal = parseFloat(slipPercentage) / 100;
+	const slippageTolerance = averagePrice.multipliedBy(slipPercentageDecimal);
+	const priceDifference = averagePrice
+		.minus(((isAsk ? bestAskPrice : bestBidPrice) || 0n).toString())
+		.absoluteValue();
+
+	return priceDifference.isGreaterThan(slippageTolerance);
 }

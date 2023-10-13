@@ -14,9 +14,8 @@ import { filterAndSortTokenBalances } from '_helpers';
 import {
 	allowedSwapCoinsList,
 	Coins,
-	getCoinsByBalance,
-	getPlaceMarketOrderTxn,
 	getUSDCurrency,
+	isExceedingSlippageTolerance,
 	SUI_CONVERSION_RATE,
 	USDC_DECIMALS,
 	useBalanceConversion,
@@ -32,7 +31,7 @@ import {
 	useDeepBookClient,
 } from '_shared/deepBook/context';
 import { useFormatCoin, useTransactionSummary, useZodForm } from '@mysten/core';
-import { useSuiClient, useSuiClientQuery } from '@mysten/dapp-kit';
+import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
 import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
 import { SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -46,27 +45,25 @@ import { z } from 'zod';
 
 import { AssetData } from './AssetData';
 import { GasFeeSection } from './GasFeeSection';
-import { QuoteAssetSection } from './QuoteAssetSection';
+import { ToAssetSection } from './ToAssetSection';
 import { initialValues, type FormValues } from './utils';
 
 function getSwapPageAtcText(
 	fromSymbol: string,
-	quoteAssetType: string,
+	toAssetType: string,
 	coinsMap: Record<string, string>,
 ) {
 	const toSymbol =
-		quoteAssetType === SUI_TYPE_ARG
+		toAssetType === SUI_TYPE_ARG
 			? Coins.SUI
-			: Object.entries(coinsMap).find(([key, value]) => value === quoteAssetType)?.[0] || '';
+			: Object.entries(coinsMap).find(([key, value]) => value === toAssetType)?.[0] || '';
 
 	return `Swap ${fromSymbol} to ${toSymbol}`;
 }
 
 export function SwapPageContent() {
 	const queryClient = useQueryClient();
-	const suiClient = useSuiClient();
 	const mainnetPools = useMainnetPools();
-	const deepBookClient = useDeepBookClient();
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const activeAccount = useActiveAccount();
@@ -74,20 +71,39 @@ export function SwapPageContent() {
 	const activeAccountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const coinsMap = useMainnetCoinsMap();
+	const deepBookClient = useDeepBookClient();
 
 	const accountCapId = useDeepBookAccountCapId();
 
 	const activeCoinType = searchParams.get('type');
+	const isAsk = activeCoinType === SUI_TYPE_ARG;
 
-	const { data: coinBalanceData, isLoading } = useSuiClientQuery(
+	const baseCoinType = SUI_TYPE_ARG;
+	const quoteCoinType = coinsMap.USDC;
+
+	const { data: baseCoinBalanceData, isLoading: baseCoinBalanceDataLoading } = useSuiClientQuery(
 		'getBalance',
-		{ coinType: activeCoinType, owner: activeAccountAddress! },
+		{ coinType: baseCoinType, owner: activeAccountAddress! },
 		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
 	);
 
-	const rawBalance = coinBalanceData?.totalBalance;
+	const { data: quoteCoinBalanceData, isLoading: quoteCoinBalanceDataLoading } = useSuiClientQuery(
+		'getBalance',
+		{ coinType: quoteCoinType, owner: activeAccountAddress! },
+		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
+	);
 
-	const [formattedBalance, _, coinMetadata] = useFormatCoin(rawBalance, activeCoinType);
+	const rawBaseBalance = baseCoinBalanceData?.totalBalance;
+	const rawQuoteBalance = quoteCoinBalanceData?.totalBalance;
+
+	const [formattedBaseBalance, baseCoinSymbol, baseCoinMetadata] = useFormatCoin(
+		rawBaseBalance,
+		activeCoinType,
+	);
+	const [formattedQuoteBalance, quoteCoinSymbol, quoteCoinMetadata] = useFormatCoin(
+		rawQuoteBalance,
+		activeCoinType,
+	);
 
 	const { data: coinBalances } = useSuiClientQuery(
 		'getAllBalances',
@@ -102,11 +118,15 @@ export function SwapPageContent() {
 
 	const { recognized } = useSortedCoinsByCategories(coinBalances ?? []);
 
-	const formattedTokenBalance = formattedBalance.replace(/,/g, '');
-	const symbol = coinMetadata.data?.symbol ?? '';
+	const formattedBaseTokenBalance = formattedBaseBalance.replace(/,/g, '');
 
-	const coinDecimals = coinMetadata.data?.decimals ?? 0;
-	const maxBalanceInMist = rawBalance || '0';
+	const formattedQuoteTokenBalance = formattedQuoteBalance.replace(/,/g, '');
+
+	const baseCoinDecimals = baseCoinMetadata.data?.decimals ?? 0;
+	const maxBaseBalance = rawBaseBalance || '0';
+
+	const quoteCoinDecimals = quoteCoinMetadata.data?.decimals ?? 0;
+	const maxQuoteBalance = rawQuoteBalance || '0';
 
 	const validationSchema = useMemo(() => {
 		return z.object({
@@ -129,7 +149,10 @@ export function SwapPageContent() {
 					return z.NEVER;
 				}
 
-				if (bigNumberValue.shiftedBy(coinDecimals).gt(BigInt(maxBalanceInMist).toString())) {
+				const shiftedValue = isAsk ? baseCoinDecimals : quoteCoinDecimals;
+				const maxBalance = isAsk ? maxBaseBalance : maxQuoteBalance;
+
+				if (bigNumberValue.shiftedBy(shiftedValue).gt(BigInt(maxBalance).toString())) {
 					context.addIssue({
 						code: 'custom',
 						message: 'Not available in account',
@@ -155,7 +178,7 @@ export function SwapPageContent() {
 				return percent;
 			}),
 		});
-	}, [maxBalanceInMist, coinDecimals]);
+	}, [isAsk, baseCoinDecimals, quoteCoinDecimals, maxBaseBalance, maxQuoteBalance]);
 
 	const form = useZodForm({
 		mode: 'all',
@@ -188,39 +211,43 @@ export function SwapPageContent() {
 		name: 'amount',
 		control,
 	});
-	const quoteAssetType = useWatch({
-		name: 'quoteAssetType',
-		control,
-	});
-	const { rawValue } = useBalanceConversion(
-		new BigNumber(amount),
-		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
-		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
-		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
-	);
+
+	const { rawValue: rawInputConversionAmount, averagePrice: averagePriceConversionAmount } =
+		useBalanceConversion(
+			new BigNumber(amount),
+			isAsk ? Coins.SUI : Coins.USDC,
+			isAsk ? Coins.USDC : Coins.SUI,
+			isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+		);
 
 	const atcText = useMemo(() => {
-		return getSwapPageAtcText(symbol, quoteAssetType, coinsMap);
-	}, [symbol, quoteAssetType, coinsMap]);
+		if (isAsk) {
+			return getSwapPageAtcText(baseCoinSymbol, quoteCoinType, coinsMap);
+		}
+		return getSwapPageAtcText(quoteCoinSymbol, baseCoinType, coinsMap);
+	}, [isAsk, baseCoinSymbol, baseCoinType, coinsMap, quoteCoinSymbol, quoteCoinType]);
 
-	const balance = amount
-		? new BigNumber(activeCoinType === SUI_TYPE_ARG ? amount : Math.floor(Number(rawValue || '0')))
-				.shiftedBy(activeCoinType === SUI_TYPE_ARG ? SUI_DECIMALS : USDC_DECIMALS)
-				.toString()
-		: '0';
+	const baseBalance = new BigNumber(isAsk ? amount || 0 : rawInputConversionAmount || 0)
+		.shiftedBy(SUI_DECIMALS)
+		.toString();
+	const quoteBalance = new BigNumber(isAsk ? rawInputConversionAmount || 0 : amount || 0)
+		.shiftedBy(USDC_DECIMALS)
+		.toString();
 
-	const { data: currentEstimatedData } = useGetEstimate({
-		balance,
+	const { data: dataFromEstimate } = useGetEstimate({
 		signer,
 		accountCapId,
 		coinType: activeCoinType || '',
 		poolId: mainnetPools.SUI_USDC_2,
+		baseBalance,
+		quoteBalance,
+		isAsk,
 	});
 
 	const recognizedPackagesList = useRecognizedPackages();
 
 	const txnSummary = useTransactionSummary({
-		transaction: currentEstimatedData as DryRunTransactionBlockResponse,
+		transaction: dataFromEstimate?.dryRunResponse as DryRunTransactionBlockResponse,
 		recognizedPackagesList,
 		currentAddress: activeAccountAddress,
 	});
@@ -228,23 +255,19 @@ export function SwapPageContent() {
 	const totalGas = txnSummary?.gas?.totalGas;
 
 	const { mutate: handleSwap, isLoading: isSwapLoading } = useMutation({
-		mutationFn: async () => {
-			const data = await getCoinsByBalance({
-				coinType: activeCoinType!,
-				balance,
-				suiClient,
-				address: activeAccountAddress!,
+		mutationFn: async (formData: FormValues) => {
+			const txn = dataFromEstimate?.txn;
+			const isSlippageAcceptable = await isExceedingSlippageTolerance({
+				slipPercentage: formData.allowedMaxSlippagePercentage,
+				averagePrice: averagePriceConversionAmount,
+				poolId: mainnetPools.SUI_USDC_2,
+				deepBookClient,
+				isAsk,
 			});
 
-			const txn = await getPlaceMarketOrderTxn({
-				deepBookClient,
-				poolId: mainnetPools.SUI_USDC_2,
-				balance,
-				accountCapId,
-				coins: data || [],
-				coinType: activeCoinType!,
-				address: activeAccountAddress!,
-			});
+			if (!isSlippageAcceptable) {
+				throw new Error('Slippage is not acceptable');
+			}
 
 			if (!txn || !signer) {
 				throw new Error('Missing data');
@@ -271,13 +294,13 @@ export function SwapPageContent() {
 	});
 
 	const handleOnsubmit: SubmitHandler<FormValues> = async (formData) => {
-		handleSwap();
+		handleSwap(formData);
 	};
 
 	return (
 		<Overlay showModal title="Swap" closeOverlay={() => navigate('/')}>
 			<div className="flex flex-col h-full w-full">
-				<Loading loading={isLoading}>
+				<Loading loading={baseCoinBalanceDataLoading || quoteCoinBalanceDataLoading}>
 					<BottomMenuLayout>
 						<Content>
 							<Form form={form} onSubmit={handleOnsubmit}>
@@ -290,24 +313,37 @@ export function SwapPageContent() {
 									{activeCoinType && (
 										<AssetData
 											disabled={!renderButtonToCoinsList}
-											tokenBalance={formattedBalance}
+											tokenBalance={
+												activeCoinType === SUI_TYPE_ARG
+													? formattedBaseTokenBalance
+													: formattedQuoteTokenBalance
+											}
 											coinType={activeCoinType}
-											symbol={symbol}
-											to="/swap/base-assets"
+											symbol={activeCoinType === SUI_TYPE_ARG ? baseCoinSymbol : quoteCoinSymbol}
+											to="/swap/from-assets"
 										/>
 									)}
 
 									<InputWithActionButton
 										{...register('amount')}
 										dark
-										suffix={<div className="ml-2">{symbol}</div>}
+										suffix={
+											<div className="ml-2">
+												{activeCoinType === SUI_TYPE_ARG ? baseCoinSymbol : quoteCoinSymbol}
+											</div>
+										}
 										type="number"
 										errorString={errors.amount?.message}
 										actionText="Max"
 										actionType="button"
 										actionDisabled={isPayAll}
 										onActionClicked={() => {
-											setValue('amount', formattedTokenBalance);
+											setValue(
+												'amount',
+												activeCoinType === SUI_TYPE_ARG
+													? formattedBaseTokenBalance
+													: formattedQuoteTokenBalance,
+											);
 											trigger('amount');
 										}}
 									/>
@@ -317,7 +353,9 @@ export function SwapPageContent() {
 											<div className="text-bodySmall font-medium text-hero-darkest/40">
 												{isPayAll ? '~ ' : ''}
 												{getUSDCurrency(
-													activeCoinType === SUI_TYPE_ARG ? rawValue : Number(amount),
+													activeCoinType === SUI_TYPE_ARG
+														? rawInputConversionAmount
+														: Number(amount),
 												)}
 											</div>
 										</div>
@@ -332,9 +370,9 @@ export function SwapPageContent() {
 									<div className="bg-gray-45 h-px w-full" />
 								</div>
 
-								<QuoteAssetSection
+								<ToAssetSection
 									activeCoinType={activeCoinType}
-									balanceChanges={currentEstimatedData?.balanceChanges || []}
+									balanceChanges={dataFromEstimate?.dryRunResponse?.balanceChanges || []}
 								/>
 
 								<div className="mt-4">
