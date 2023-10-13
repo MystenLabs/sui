@@ -26,7 +26,6 @@ pub(crate) mod query;
 pub(crate) mod safe_mode;
 pub(crate) mod stake;
 pub(crate) mod stake_subsidy;
-pub(crate) mod staked_sui;
 pub(crate) mod storage_fund;
 pub(crate) mod sui_address;
 pub(crate) mod sui_system_state_summary;
