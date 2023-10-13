@@ -460,6 +460,10 @@ type PageInfo {
 	endCursor: String
 }
 
+type ProgrammableTransaction {
+	value: String!
+}
+
 type ProtocolConfigAttr {
 	key: String!
 	value: String!
@@ -667,7 +671,7 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX

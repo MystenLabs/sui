@@ -29,7 +29,7 @@ use crate::{
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
             ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
-            TransactionBlockKind,
+            ProgrammableTransaction, TransactionBlockKind,
         },
         validator_set::ValidatorSet,
     },
@@ -39,8 +39,8 @@ use async_graphql::{
     ID,
 };
 use diesel::{
-    ExpressionMethods, JoinOnDsl, OptionalExtension, PgArrayExpressionMethods, PgConnection,
-    QueryDsl, RunQueryDsl,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
+    RunQueryDsl,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -49,7 +49,10 @@ use sui_indexer::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
         packages::StoredPackage, transactions::StoredTransaction,
     },
-    schema_v2::{checkpoints, epochs, objects, packages, transactions, tx_indices},
+    schema_v2::{
+        checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
+        tx_input_objects, tx_recipients, tx_senders,
+    },
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
@@ -352,12 +355,7 @@ impl PgManager {
         before: Option<String>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
-        let mut query =
-            transactions::dsl::transactions
-                .inner_join(tx_indices::dsl::tx_indices.on(
-                    transactions::dsl::tx_sequence_number.eq(tx_indices::dsl::tx_sequence_number),
-                ))
-                .into_boxed();
+        let mut query = transactions::dsl::transactions.into_boxed();
         if let Some(after) = after {
             let after = self.parse_tx_cursor(&after)?;
             query = query
@@ -397,55 +395,86 @@ impl PgManager {
                 query = query.filter(transactions::dsl::transaction_digest.eq_any(digests));
             }
 
-            // Filters for tx_indices table
+            // Queries on foreign tables
             match (filter.package, filter.module, filter.function) {
                 (Some(p), None, None) => {
-                    query = query.filter(
-                        tx_indices::dsl::packages.contains(vec![Some(p.into_array().to_vec())]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), None) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_modules
-                            .contains(vec![Some(format!("{}::{}", p, m))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 (Some(p), Some(m), Some(f)) => {
-                    query = query.filter(
-                        tx_indices::dsl::package_module_functions
-                            .contains(vec![Some(format!("{}::{}::{}", p, m, f))]),
-                    );
+                    let subquery = tx_calls::dsl::tx_calls
+                        .filter(tx_calls::dsl::package.eq(p.into_vec()))
+                        .filter(tx_calls::dsl::module.eq(m))
+                        .filter(tx_calls::dsl::func.eq(f))
+                        .select(tx_calls::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
                 }
                 _ => {}
             }
-            // sign and sent are indexed the same
-            let mut senders = Vec::new();
+
             if let Some(signer) = filter.sign_address {
-                senders.push(signer.into_vec());
+                if let Some(sender) = filter.sent_address {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(
+                            tx_senders::dsl::sender
+                                .eq(signer.into_vec())
+                                .or(tx_senders::dsl::sender.eq(sender.into_vec())),
+                        )
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                } else {
+                    let subquery = tx_senders::dsl::tx_senders
+                        .filter(tx_senders::dsl::sender.eq(signer.into_vec()))
+                        .select(tx_senders::dsl::tx_sequence_number);
+
+                    query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
+                }
+            } else if let Some(sender) = filter.sent_address {
+                let subquery = tx_senders::dsl::tx_senders
+                    .filter(tx_senders::dsl::sender.eq(sender.into_vec()))
+                    .select(tx_senders::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if let Some(sender) = filter.sent_address {
-                senders.push(sender.into_vec());
+            if let Some(recipient) = filter.recv_address {
+                let subquery = tx_recipients::dsl::tx_recipients
+                    .filter(tx_recipients::dsl::recipient.eq(recipient.into_vec()))
+                    .select(tx_recipients::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if !senders.is_empty() {
-                query = query.filter(tx_indices::dsl::senders.contains(senders));
-            }
-            if let Some(receiver) = filter.recv_address {
-                query =
-                    query.filter(tx_indices::dsl::recipients.contains(vec![receiver.into_vec()]));
-            }
-            if let Some(paid_address) = filter.paid_address {
-                query =
-                    query.filter(tx_indices::dsl::payers.contains(vec![paid_address.into_vec()]));
+            if filter.paid_address.is_some() {
+                return Err(Error::Internal(
+                    "Paid address filter not supported".to_string(),
+                ));
             }
 
             if let Some(input_object) = filter.input_object {
-                query = query
-                    .filter(tx_indices::dsl::input_objects.contains(vec![input_object.into_vec()]));
+                let subquery = tx_input_objects::dsl::tx_input_objects
+                    .filter(tx_input_objects::dsl::object_id.eq(input_object.into_vec()))
+                    .select(tx_input_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
             if let Some(changed_object) = filter.changed_object {
-                query = query.filter(
-                    tx_indices::dsl::changed_objects.contains(vec![changed_object.into_vec()]),
-                );
+                let subquery = tx_changed_objects::dsl::tx_changed_objects
+                    .filter(tx_changed_objects::dsl::object_id.eq(changed_object.into_vec()))
+                    .select(tx_changed_objects::dsl::tx_sequence_number);
+
+                query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
         };
 
@@ -1442,7 +1471,9 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => unimplemented!(),
+            _ => TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                value: "ProgrammableTransactionBlock".to_string(),
+            }),
         }
     }
 }
