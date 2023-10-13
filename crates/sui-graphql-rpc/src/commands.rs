@@ -34,13 +34,13 @@ pub enum Command {
         #[clap(long)]
         host: Option<String>,
         /// DB URL to connect to
-        #[clap(long)]
+        #[clap(short = 'd', long)]
         db_url: Option<String>,
         /// Port to bind the prom server to
-        #[clap(short, long)]
+        #[clap(short = 'r', long)]
         prom_port: Option<u16>,
         /// Host to bind the prom server to
-        #[clap(long)]
+        #[clap(short = 's', long)]
         prom_host: Option<String>,
 
         /// Path to TOML file containing configuration for service.
