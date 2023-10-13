@@ -79,6 +79,7 @@ const MAX_PROTOCOL_VERSION: u64 = 29;
 // Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
 // Version 29: Add verify_legacy_zklogin_address flag to sui framework, this add ability to verify
 //             transactions from a legacy zklogin address.
+//             Enable Narwhal CertificateV2
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1546,6 +1547,10 @@ impl ProtocolConfig {
                 }
                 29 => {
                     cfg.feature_flags.verify_legacy_zklogin_address = true;
+                    // Only enable nw certificate v2 on devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_certificate_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

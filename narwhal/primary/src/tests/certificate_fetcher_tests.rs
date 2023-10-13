@@ -20,7 +20,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
+use test_utils::{get_protocol_config, latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -186,7 +186,7 @@ struct BadHeader {
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v1_basic() {
-    let cert_v1_protocol_config = latest_protocol_version();
+    let cert_v1_protocol_config = get_protocol_config(28);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -475,8 +475,7 @@ async fn fetch_certificates_v1_basic() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v2_basic() {
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -774,7 +773,7 @@ async fn fetch_certificates_v2_basic() {
     // Send out a batch of certificate V1s.
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(204) {
-        certs.push(fixture.certificate(&latest_protocol_version(), cert.header()));
+        certs.push(fixture.certificate(&get_protocol_config(28), cert.header()));
     }
     tx_fetch_resp
         .try_send(FetchCertificatesResponse {
