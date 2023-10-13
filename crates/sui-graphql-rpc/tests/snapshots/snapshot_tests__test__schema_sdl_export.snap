@@ -235,7 +235,7 @@ type GasEffects {
 
 type GasInput {
 	gasSponsor: Address
-	gasPayment: [Object!]
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
 	gasPrice: BigInt
 	gasBudget: BigInt
 }

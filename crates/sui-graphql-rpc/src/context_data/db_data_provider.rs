@@ -19,6 +19,7 @@ use crate::{
         gas::{GasCostSummary, GasInput},
         move_object::MoveObject,
         object::{Object, ObjectFilter, ObjectKind},
+        protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
         stake_subsidy::StakeSubsidy,
         storage_fund::StorageFund,
@@ -52,7 +53,8 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::{ProtocolConfigResponse, SuiTransactionBlockEffects};
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
     digests::ChainIdentifier,
@@ -222,6 +224,20 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredCheckpoint>(conn).optional())
             .await
+    }
+
+    async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
+        let result = self
+            .get_checkpoint(None, Some(0))
+            .await?
+            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
+
+        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
+            Error::Internal(format!(
+                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
+            ))
+        })?;
+        Ok(ChainIdentifier::from(digest))
     }
 
     async fn multi_get_coins(
@@ -699,17 +715,8 @@ impl PgManager {
     }
 
     pub(crate) async fn fetch_chain_identifier(&self) -> Result<String, Error> {
-        let result = self
-            .get_checkpoint(None, Some(0))
-            .await?
-            .ok_or_else(|| Error::Internal("Genesis checkpoint cannot be found".to_string()))?;
-
-        let digest = CheckpointDigest::try_from(result.checkpoint_digest).map_err(|e| {
-            Error::Internal(format!(
-                "Failed to convert checkpoint digest to CheckpointDigest. Error: {e}",
-            ))
-        })?;
-        Ok(ChainIdentifier::from(digest).to_string())
+        let result = self.get_chain_identifier().await?;
+        Ok(result.to_string())
     }
 
     pub(crate) async fn fetch_txs_for_address(
@@ -1050,6 +1057,50 @@ impl PgManager {
             .spawn_blocking(|this| this.get_latest_sui_system_state())
             .await?;
         SuiSystemStateSummary::try_from(result)
+    }
+
+    pub(crate) async fn fetch_protocol_configs(
+        &self,
+        protocol_version: Option<u64>,
+    ) -> Result<ProtocolConfigs, Error> {
+        let chain = self.get_chain_identifier().await?.chain();
+        let version: ProtocolVersion = if let Some(version) = protocol_version {
+            (version).into()
+        } else {
+            (self.fetch_latest_epoch().await?.protocol_version).into()
+        };
+
+        let cfg = ProtocolConfig::get_for_version_if_supported(version, chain)
+            .ok_or(Error::ProtocolVersionUnsupported(
+                ProtocolVersion::MIN.as_u64(),
+                ProtocolVersion::MAX.as_u64(),
+            ))
+            .map(ProtocolConfigResponse::from)?;
+
+        Ok(ProtocolConfigs {
+            configs: cfg
+                .attributes
+                .into_iter()
+                .map(|(k, v)| ProtocolConfigAttr {
+                    key: k,
+                    // TODO:  what to return when value is None? nothing?
+                    // TODO: do we want to return type info separately?
+                    value: match v {
+                        Some(q) => format!("{:?}", q),
+                        None => "".to_string(),
+                    },
+                })
+                .collect(),
+            feature_flags: cfg
+                .feature_flags
+                .into_iter()
+                .map(|x| ProtocolConfigFeatureFlag {
+                    key: x.0,
+                    value: x.1,
+                })
+                .collect(),
+            protocol_version: cfg.protocol_version.as_u64(),
+        })
     }
 }
 

@@ -10491,6 +10491,7 @@ dependencies = [
  "sui-indexer",
  "sui-json-rpc",
  "sui-json-rpc-types",
+ "sui-protocol-config",
  "sui-sdk",
  "sui-types",
  "telemetry-subscribers",

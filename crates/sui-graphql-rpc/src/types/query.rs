@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager},
+    context_data::db_data_provider::PgManager,
     error::{code, graphql_error, Error},
 };
 
@@ -184,10 +184,10 @@ impl Query {
         ctx: &Context<'_>,
         protocol_version: Option<u64>,
     ) -> Result<ProtocolConfigs> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_protocol_config(protocol_version)
+        ctx.data_unchecked::<PgManager>()
+            .fetch_protocol_configs(protocol_version)
             .await
+            .extend()
     }
 
     async fn resolve_name_service_address(
