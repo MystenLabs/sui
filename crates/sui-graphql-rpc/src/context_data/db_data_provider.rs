@@ -1159,10 +1159,6 @@ impl PgManager {
         };
         let system_state = self.fetch_latest_sui_system_state().await?;
         let current_epoch_id = system_state.epoch_id;
-        // we want the object ids of staked sui
-        // The reason we're using this API and not get_staked_by_owner in the
-        // governance api is because that API is
-        // is limited to 1000 objects, and ideally, we want to paginate these stakes
         let objs = self
             .multi_get_objs(first, after, last, before, Some(obj_filter))
             .await?;
@@ -1174,10 +1170,10 @@ impl PgManager {
 
             for stored_obj in stored_objs {
                 let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
-                    Error::Internal("Error converting from stored obj to object".to_string())
+                    Error::Internal("Error converting from StoredObject to Object".to_string())
                 })?;
                 let stake_object = StakedSui::try_from(&object).map_err(|_| {
-                    Error::Internal("Error converting from stored obj to object".to_string())
+                    Error::Internal("Error converting from Object to StakedSui".to_string())
                 })?;
 
                 // TODO this only does active / pending stake status, but not unstaked
