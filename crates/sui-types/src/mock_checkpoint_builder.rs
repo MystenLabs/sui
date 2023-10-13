@@ -1,27 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_types::{
-    base_types::VerifiedExecutionData,
-    effects::{TransactionEffects, TransactionEffectsAPI},
-    gas::GasCostSummary,
-    messages_checkpoint::{
-        CheckpointContents, CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
-    },
-    transaction::VerifiedTransaction,
+use crate::base_types::{AuthorityName, VerifiedExecutionData};
+use crate::committee::Committee;
+use crate::crypto::{
+    AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature,
 };
+use crate::effects::{TransactionEffects, TransactionEffectsAPI};
+use crate::gas::GasCostSummary;
+use crate::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
+    VerifiedCheckpoint,
+};
+use crate::transaction::VerifiedTransaction;
 
-use super::CommitteeWithKeys;
+pub trait ValidatorKeypairProvider {
+    fn get_validator_key(&self, name: &AuthorityName) -> &AuthorityKeyPair;
+    fn get_committee(&self) -> &Committee;
+}
 
+/// A utility to build consecutive checkpoints by adding transactions to the checkpoint builder.
+/// It's mostly used by simulations, tests and benchmarks.
 #[derive(Debug)]
-pub struct CheckpointBuilder {
+pub struct MockCheckpointBuilder {
     previous_checkpoint: VerifiedCheckpoint,
     transactions: Vec<VerifiedExecutionData>,
     epoch_rolling_gas_cost_summary: GasCostSummary,
     epoch: u64,
 }
 
-impl CheckpointBuilder {
+impl MockCheckpointBuilder {
     pub fn new(previous_checkpoint: VerifiedCheckpoint) -> Self {
         let epoch_rolling_gas_cost_summary =
             previous_checkpoint.epoch_rolling_gas_cost_summary.clone();
@@ -53,21 +61,21 @@ impl CheckpointBuilder {
     /// Builds a checkpoint using internally buffered transactions.
     pub fn build(
         &mut self,
-        committee: &CommitteeWithKeys<'_>,
+        validator_keys: &impl ValidatorKeypairProvider,
         timestamp_ms: u64,
     ) -> (VerifiedCheckpoint, CheckpointContents) {
-        self.build_internal(committee, timestamp_ms, None)
+        self.build_internal(validator_keys, timestamp_ms, None)
     }
 
     pub fn build_end_of_epoch(
         &mut self,
-        committee: &CommitteeWithKeys<'_>,
+        validator_keys: &impl ValidatorKeypairProvider,
         timestamp_ms: u64,
         new_epoch: u64,
         end_of_epoch_data: EndOfEpochData,
     ) -> (VerifiedCheckpoint, CheckpointContents) {
         self.build_internal(
-            committee,
+            validator_keys,
             timestamp_ms,
             Some((new_epoch, end_of_epoch_data)),
         )
@@ -75,7 +83,7 @@ impl CheckpointBuilder {
 
     fn build_internal(
         &mut self,
-        committee: &CommitteeWithKeys<'_>,
+        validator_keys: &impl ValidatorKeypairProvider,
         timestamp_ms: u64,
         new_epoch_data: Option<(u64, EndOfEpochData)>,
     ) -> (VerifiedCheckpoint, CheckpointContents) {
@@ -117,9 +125,39 @@ impl CheckpointBuilder {
             checkpoint_commitments: Default::default(),
         };
 
-        let checkpoint = committee.create_certified_checkpoint(summary);
-
+        let checkpoint = Self::create_certified_checkpoint(validator_keys, summary);
         self.previous_checkpoint = checkpoint.clone();
         (checkpoint, contents)
+    }
+
+    fn create_certified_checkpoint(
+        validator_keys: &impl ValidatorKeypairProvider,
+        checkpoint: CheckpointSummary,
+    ) -> VerifiedCheckpoint {
+        let signatures = validator_keys
+            .get_committee()
+            .voting_rights
+            .iter()
+            .map(|(name, _)| {
+                let intent_msg = shared_crypto::intent::IntentMessage::new(
+                    shared_crypto::intent::Intent::sui_app(
+                        shared_crypto::intent::IntentScope::CheckpointSummary,
+                    ),
+                    &checkpoint,
+                );
+                let key = validator_keys.get_validator_key(name);
+                let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, key);
+                AuthoritySignInfo {
+                    epoch: checkpoint.epoch,
+                    authority: *name,
+                    signature,
+                }
+            })
+            .collect();
+
+        let checkpoint_cert =
+            CertifiedCheckpointSummary::new(checkpoint, signatures, validator_keys.get_committee())
+                .unwrap();
+        VerifiedCheckpoint::new_unchecked(checkpoint_cert)
     }
 }

@@ -26,12 +26,14 @@ use std::{
 };
 use storage::{NodeStorage, VoteDigestStore};
 use test_utils::{
-    latest_protocol_version, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
+    get_protocol_config, latest_protocol_version, make_optimal_signed_certificates, temp_dir,
+    CommitteeFixture,
 };
 use tokio::{sync::watch, time::timeout};
 use types::{
     now, Certificate, CertificateAPI, FetchCertificatesRequest, Header, HeaderAPI,
     MockPrimaryToWorker, PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest,
+    SignatureVerificationState,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -306,6 +308,7 @@ async fn test_request_vote_has_missing_parents() {
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -474,6 +477,7 @@ async fn test_request_vote_accept_missing_parents() {
     let handler = PrimaryReceiverHandler {
         authority_id: target_id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -630,6 +634,7 @@ async fn test_request_vote_missing_batches() {
     let handler = PrimaryReceiverHandler {
         authority_id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -777,6 +782,7 @@ async fn test_request_vote_already_voted() {
     let handler = PrimaryReceiverHandler {
         authority_id: id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -924,8 +930,184 @@ async fn test_request_vote_already_voted() {
     );
 }
 
+// TODO: Remove after network has moved to CertificateV2
 #[tokio::test]
-async fn test_fetch_certificates_handler() {
+async fn test_fetch_certificates_v1_handler() {
+    let cert_v1_protocol_config = get_protocol_config(27);
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(4).unwrap())
+        .build();
+    let id = fixture.authorities().next().unwrap().id();
+    let worker_cache = fixture.worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let signature_service = SignatureService::new(primary.keypair().copy());
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+
+    let (certificate_store, payload_store) = create_db_stores();
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(1);
+    let (tx_new_certificates, _rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::default());
+    let (_tx_narwhal_round_updates, rx_narwhal_round_updates) = watch::channel(1u64);
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        id,
+        fixture.committee(),
+        cert_v1_protocol_config.clone(),
+        worker_cache.clone(),
+        /* gc_depth */ 50,
+        client,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        metrics.clone(),
+        &primary_channel_metrics,
+    ));
+    let handler = PrimaryReceiverHandler {
+        authority_id: id,
+        committee: fixture.committee(),
+        protocol_config: cert_v1_protocol_config.clone(),
+        worker_cache: worker_cache.clone(),
+        synchronizer: synchronizer.clone(),
+        signature_service,
+        certificate_store: certificate_store.clone(),
+        vote_digest_store: VoteDigestStore::new_for_tests(),
+        rx_narwhal_round_updates,
+        parent_digests: Default::default(),
+        metrics: metrics.clone(),
+    };
+
+    let mut current_round: Vec<_> =
+        Certificate::genesis(&cert_v1_protocol_config, &fixture.committee())
+            .into_iter()
+            .map(|cert| cert.header().clone())
+            .collect();
+    let mut headers = vec![];
+    let total_rounds = 4;
+    for i in 0..total_rounds {
+        let parents: BTreeSet<_> = current_round
+            .into_iter()
+            .map(|header| {
+                fixture
+                    .certificate(&cert_v1_protocol_config, &header)
+                    .digest()
+            })
+            .collect();
+        (_, current_round) = fixture.headers_round(i, &parents, &cert_v1_protocol_config);
+        headers.extend(current_round.clone());
+    }
+
+    let total_authorities = fixture.authorities().count();
+    let total_certificates = total_authorities * total_rounds as usize;
+    // Create certificates test data.
+    let mut certificates = vec![];
+    for header in headers.into_iter() {
+        certificates.push(fixture.certificate(&cert_v1_protocol_config, &header));
+    }
+    assert_eq!(certificates.len(), total_certificates);
+    assert_eq!(16, total_certificates);
+
+    // Populate certificate store such that each authority has the following rounds:
+    // Authority 0: 1
+    // Authority 1: 1 2
+    // Authority 2: 1 2 3
+    // Authority 3: 1 2 3 4
+    // This is unrealistic because in practice a certificate can only be stored with 2f+1 parents
+    // already in store. But this does not matter for testing here.
+    let mut authorities = Vec::<AuthorityIdentifier>::new();
+    for i in 0..total_authorities {
+        authorities.push(certificates[i].header().author());
+        for j in 0..=i {
+            let cert = certificates[i + j * total_authorities].clone();
+            assert_eq!(&cert.header().author(), authorities.last().unwrap());
+            certificate_store
+                .write(cert)
+                .expect("Writing certificate to store failed");
+        }
+    }
+
+    // Each test case contains (lower bound round, skip rounds, max items, expected output).
+    let test_cases = vec![
+        (
+            0,
+            vec![vec![], vec![], vec![], vec![]],
+            20,
+            vec![1, 1, 1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![1u64], vec![1], vec![], vec![]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            0,
+            vec![vec![], vec![], vec![1], vec![1]],
+            20,
+            vec![1, 1, 2, 2, 2, 3, 3, 4],
+        ),
+        (
+            1,
+            vec![vec![], vec![], vec![2], vec![2]],
+            4,
+            vec![2, 3, 3, 4],
+        ),
+        (1, vec![vec![], vec![], vec![2], vec![2]], 2, vec![2, 3]),
+        (
+            0,
+            vec![vec![1], vec![1], vec![1, 2, 3], vec![1, 2, 3]],
+            2,
+            vec![2, 4],
+        ),
+        (2, vec![vec![], vec![], vec![], vec![]], 3, vec![3, 3, 4]),
+        (2, vec![vec![], vec![], vec![], vec![]], 2, vec![3, 3]),
+        // Check that round 2 and 4 are fetched for the last authority, skipping round 3.
+        (
+            1,
+            vec![vec![], vec![], vec![3], vec![3]],
+            5,
+            vec![2, 2, 2, 4],
+        ),
+    ];
+    for (lower_bound_round, skip_rounds_vec, max_items, expected_rounds) in test_cases {
+        let req = FetchCertificatesRequest::default()
+            .set_bounds(
+                lower_bound_round,
+                authorities
+                    .clone()
+                    .into_iter()
+                    .zip(
+                        skip_rounds_vec
+                            .into_iter()
+                            .map(|rounds| rounds.into_iter().collect()),
+                    )
+                    .collect(),
+            )
+            .set_max_items(max_items);
+        let resp = handler
+            .fetch_certificates(anemo::Request::new(req.clone()))
+            .await
+            .unwrap()
+            .into_body();
+        assert_eq!(
+            resp.certificates
+                .iter()
+                .map(|cert| cert.round())
+                .collect_vec(),
+            expected_rounds
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_fetch_certificates_v2_handler() {
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -965,6 +1147,7 @@ async fn test_fetch_certificates_handler() {
     let handler = PrimaryReceiverHandler {
         authority_id: id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -1017,8 +1200,27 @@ async fn test_fetch_certificates_handler() {
     for i in 0..total_authorities {
         authorities.push(certificates[i].header().author());
         for j in 0..=i {
-            let cert = certificates[i + j * total_authorities].clone();
+            let mut cert = certificates[i + j * total_authorities].clone();
             assert_eq!(&cert.header().author(), authorities.last().unwrap());
+            if i == 3 && j == 3 {
+                // Simulating only 1 directly verified certificate (Auth 3 Round 4) being stored.
+                cert.set_signature_verification_state(
+                    SignatureVerificationState::VerifiedDirectly(
+                        cert.aggregated_signature()
+                            .expect("Invalid Signature")
+                            .clone(),
+                    ),
+                );
+            } else {
+                // Simulating some indirectly verified certificates being stored.
+                cert.set_signature_verification_state(
+                    SignatureVerificationState::VerifiedIndirectly(
+                        cert.aggregated_signature()
+                            .expect("Invalid Signature")
+                            .clone(),
+                    ),
+                );
+            }
             certificate_store
                 .write(cert)
                 .expect("Writing certificate to store failed");
@@ -1142,6 +1344,7 @@ async fn test_request_vote_created_at_in_future() {
     let handler = PrimaryReceiverHandler {
         authority_id: id,
         committee: fixture.committee(),
+        protocol_config: latest_protocol_version(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,

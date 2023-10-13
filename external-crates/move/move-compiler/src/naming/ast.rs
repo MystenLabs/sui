@@ -9,7 +9,8 @@ use crate::{
         Friend, ImplicitUseFunCandidate, ModuleIdent, SpecId, Value, Value_, Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER,
+        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
+        ENTRY_MODIFIER,
     },
     shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
 };
@@ -147,7 +148,7 @@ pub enum StructFields {
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<TParam>,
-    pub parameters: Vec<(Var, Type)>,
+    pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
@@ -267,7 +268,11 @@ pub type Var = Spanned<Var_>;
 #[allow(clippy::large_enum_variant)]
 pub enum LValue_ {
     Ignore,
-    Var { var: Var, unused_binding: bool },
+    Var {
+        mut_: Mutability,
+        var: Var,
+        unused_binding: bool,
+    },
     Unpack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<LValue>),
 }
 pub type LValue = Spanned<LValue_>;
@@ -1023,7 +1028,10 @@ impl AstDebug for FunctionSignature {
         } = self;
         type_parameters.ast_debug(w);
         w.write("(");
-        w.comma(parameters, |w, (v, st)| {
+        w.comma(parameters, |w, (mut_, v, st)| {
+            if mut_.is_some() {
+                w.write("mut ");
+            }
             v.ast_debug(w);
             w.write(": ");
             st.ast_debug(w);
@@ -1455,9 +1463,13 @@ impl AstDebug for LValue_ {
         match self {
             L::Ignore => w.write("_"),
             L::Var {
+                mut_,
                 var,
                 unused_binding,
             } => {
+                if mut_.is_some() {
+                    w.write("mut ");
+                }
                 var.ast_debug(w);
                 if *unused_binding {
                     w.write("#unused");

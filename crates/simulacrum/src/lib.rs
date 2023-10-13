@@ -6,7 +6,7 @@
 //! The word simulacrum is latin for "likeness, semblance", it is also a spell in D&D which creates
 //! a copy of a creature which then follows the player's commands and wishes. As such this crate
 //! provides the [`Simulacrum`] type which is a implementation or instantiation of a sui
-//! blockcahin, one which doesn't do anything unless acted upon.
+//! blockchain, one which doesn't do anything unless acted upon.
 //!
 //! [`Simulacrum`]: crate::Simulacrum
 
@@ -15,27 +15,29 @@ use std::num::NonZeroUsize;
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
+use sui_protocol_config::ProtocolVersion;
+use sui_swarm_config::genesis_config::AccountConfig;
+use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::base_types::AuthorityName;
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
-    crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature},
     effects::TransactionEffects,
+    error::ExecutionError,
     gas_coin::MIST_PER_SUI,
     inner_temporary_store::InnerTemporaryStore,
-    messages_checkpoint::{
-        CertifiedCheckpointSummary, CheckpointSummary, EndOfEpochData, VerifiedCheckpoint,
-    },
+    messages_checkpoint::{EndOfEpochData, VerifiedCheckpoint},
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
 
-use self::checkpoint_builder::CheckpointBuilder;
 use self::epoch_state::EpochState;
 pub use self::store::InMemoryStore;
 use self::store::KeyStore;
+use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 
-mod checkpoint_builder;
 mod epoch_state;
 mod store;
 
@@ -54,7 +56,7 @@ pub struct Simulacrum<R = OsRng> {
     #[allow(unused)]
     genesis: genesis::Genesis,
     store: InMemoryStore,
-    checkpoint_builder: CheckpointBuilder,
+    checkpoint_builder: MockCheckpointBuilder,
 
     // Epoch specific data
     epoch_state: EpochState,
@@ -95,17 +97,37 @@ where
             .with_chain_start_timestamp_ms(1)
             .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
             .build();
-        let keystore = KeyStore::from_newtork_config(&config);
-        let store = InMemoryStore::new(&config.genesis);
-        let checkpoint_builder = CheckpointBuilder::new(config.genesis.checkpoint());
+        Self::new_with_network_config(&config, rng)
+    }
 
-        let genesis = config.genesis;
+    pub fn new_with_protocol_version_and_accounts(
+        mut rng: R,
+        chain_start_timestamp_ms: u64,
+        protocol_version: ProtocolVersion,
+        account_configs: Vec<AccountConfig>,
+    ) -> Self {
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .with_chain_start_timestamp_ms(chain_start_timestamp_ms)
+            .deterministic_committee_size(NonZeroUsize::new(1).unwrap())
+            .with_protocol_version(protocol_version)
+            .with_accounts(account_configs)
+            .build();
+        Self::new_with_network_config(&config, rng)
+    }
+
+    fn new_with_network_config(config: &NetworkConfig, rng: R) -> Self {
+        let keystore = KeyStore::from_network_config(config);
+        let store = InMemoryStore::new(&config.genesis);
+        let checkpoint_builder = MockCheckpointBuilder::new(config.genesis.checkpoint());
+
+        let genesis = &config.genesis;
         let epoch_state = EpochState::new(genesis.sui_system_object());
 
         Self {
             rng,
             keystore,
-            genesis,
+            genesis: genesis.clone(),
             store,
             checkpoint_builder,
             epoch_state,
@@ -126,11 +148,13 @@ impl<R> Simulacrum<R> {
     /// If the above checks are successful then the transaction is immediately executed, enqueued
     /// to be included in the next checkpoint (the next time `create_checkpoint` is called) and the
     /// corresponding TransactionEffects are returned.
-    pub fn execute_transaction(&mut self, transaction: Transaction) -> Result<TransactionEffects> {
-        // This only supports traditional authenticators and not zklogin
+    pub fn execute_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction.verify(&VerifyParams::default())?;
 
-        let (inner_temporary_store, effects, _execution_error_opt) = self
+        let (inner_temporary_store, effects, execution_error_opt) = self
             .epoch_state
             .execute_transaction(&self.store, &self.deny_config, &transaction)?;
 
@@ -148,8 +172,7 @@ impl<R> Simulacrum<R> {
         // Insert into checkpoint builder
         self.checkpoint_builder
             .push_transaction(transaction, effects.clone());
-
-        Ok(effects)
+        Ok((effects, execution_error_opt.err()))
     }
 
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
@@ -177,6 +200,7 @@ impl<R> Simulacrum<R> {
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())
             .expect("advancing the clock cannot fail")
+            .0
     }
 
     /// Advances the epoch.
@@ -301,7 +325,7 @@ impl<R> Simulacrum<R> {
             vec![key],
         );
 
-        self.execute_transaction(tx)
+        self.execute_transaction(tx).map(|x| x.0)
     }
 }
 
@@ -318,42 +342,18 @@ impl<'a> CommitteeWithKeys<'a> {
         }
     }
 
-    pub fn committee(&self) -> &Committee {
-        self.committee
-    }
-
     pub fn keystore(&self) -> &KeyStore {
         self.keystore
     }
+}
 
-    fn create_certified_checkpoint(&self, checkpoint: CheckpointSummary) -> VerifiedCheckpoint {
-        let signatures = self
-            .committee()
-            .voting_rights
-            .iter()
-            .map(|(name, _)| {
-                let intent_msg = shared_crypto::intent::IntentMessage::new(
-                    shared_crypto::intent::Intent::sui_app(
-                        shared_crypto::intent::IntentScope::CheckpointSummary,
-                    ),
-                    &checkpoint,
-                );
-                let key = self.keystore().validator(name).unwrap();
-                let signature = AuthoritySignature::new_secure(&intent_msg, &checkpoint.epoch, key);
-                AuthoritySignInfo {
-                    epoch: checkpoint.epoch,
-                    authority: *name,
-                    signature,
-                }
-            })
-            .collect();
+impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
+    fn get_validator_key(&self, name: &AuthorityName) -> &AuthorityKeyPair {
+        self.keystore.validator(name).unwrap()
+    }
 
-        let checkpoint = CertifiedCheckpointSummary::new(checkpoint, signatures, self.committee())
-            .unwrap()
-            .verify(self.committee())
-            .unwrap();
-
-        checkpoint
+    fn get_committee(&self) -> &Committee {
+        self.committee
     }
 }
 
@@ -472,7 +472,7 @@ mod tests {
         let tx_data = TransactionData::new_with_gas_data(kind, sender, gas_data);
         let tx = Transaction::from_data_and_signer(tx_data, Intent::sui_transaction(), vec![key]);
 
-        let effects = sim.execute_transaction(tx).unwrap();
+        let effects = sim.execute_transaction(tx).unwrap().0;
         let gas_summary = effects.gas_cost_summary();
         let gas_paid = gas_summary.net_gas_usage();
 

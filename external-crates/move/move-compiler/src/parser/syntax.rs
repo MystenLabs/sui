@@ -650,38 +650,56 @@ fn parse_exp_field(context: &mut Context) -> Result<(Field, Exp), Box<Diagnostic
 }
 
 // Parse a field name optionally followed by a colon and a binding:
-//      BindField = <Field> <":" <Bind>>?
+//      BindField =
+//          <Field> <":" <Bind>>?
+//          | "mut" <Field>
 //
 // If the binding is not specified, the default is to use a variable
 // with the same name as the field.
 fn parse_bind_field(context: &mut Context) -> Result<(Field, Bind), Box<Diagnostic>> {
-    let f = parse_field(context)?;
-    let arg = if match_token(context.tokens, Tok::Colon)? {
-        parse_bind(context)?
+    if context.tokens.peek() == Tok::Mut {
+        let start_loc = context.tokens.start_loc();
+        context.tokens.advance()?;
+        let end_loc = context.tokens.previous_end_loc();
+        let mut_loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+        let f = parse_field(context)?;
+        let arg = sp(f.loc(), Bind_::Var(Some(mut_loc), Var(f.0)));
+        Ok((f, arg))
     } else {
-        let v = Var(f.0);
-        sp(v.loc(), Bind_::Var(v))
-    };
-    Ok((f, arg))
+        let f = parse_field(context)?;
+        let arg = if match_token(context.tokens, Tok::Colon)? {
+            parse_bind(context)?
+        } else {
+            sp(f.loc(), Bind_::Var(None, Var(f.0)))
+        };
+        Ok((f, arg))
+    }
 }
 
 // Parse a binding:
 //      Bind =
-//          <Var>
+//          "mut"? <Var>
 //          | <NameAccessChain> <OptionalTypeArgs> "{" Comma<BindField> "}"
 //          | <NameAccessChain> <OptionalTypeArgs> "(" Comma<Bind> ")"
 fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     if matches!(
         context.tokens.peek(),
-        Tok::Identifier | Tok::RestrictedIdentifier
+        Tok::Identifier | Tok::RestrictedIdentifier | Tok::Mut
     ) {
         let next_tok = context.tokens.lookahead()?;
         if !matches!(
             next_tok,
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
         ) {
-            let v = Bind_::Var(parse_var(context)?);
+            let mut_ = if context.tokens.peek() == Tok::Mut {
+                context.tokens.advance()?;
+                let end_loc = context.tokens.previous_end_loc();
+                Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
+            } else {
+                None
+            };
+            let v = Bind_::Var(mut_, parse_var(context)?);
             let end_loc = context.tokens.previous_end_loc();
             return Ok(spanned(context.tokens.file_hash(), start_loc, end_loc, v));
         }
@@ -1467,6 +1485,7 @@ fn parse_binop_exp(context: &mut Context, lhs: Exp, min_prec: u32) -> Result<Exp
 //      UnaryExp =
 //          "!" <UnaryExp>
 //          | "&mut" <UnaryExp>
+//          | "&" "mut" <UnaryExp>
 //          | "&" <UnaryExp>
 //          | "*" <UnaryExp>
 //          | "move" <Var>
@@ -1763,7 +1782,7 @@ fn parse_quant_binding(context: &mut Context) -> Result<Spanned<(Bind, Exp)>, Bo
         context.tokens.file_hash(),
         start_loc,
         context.tokens.previous_end_loc(),
-        Bind_::Var(Var(ident)),
+        Bind_::Var(None, Var(ident)),
     );
     let range = if context.tokens.peek() == Tok::Colon {
         // This is a quantifier over the full domain of a type.
@@ -1799,6 +1818,7 @@ fn make_builtin_call(loc: Loc, name: Symbol, type_args: Option<Vec<Type>>, args:
 //          <NameAccessChain> ('<' Comma<Type> ">")?
 //          | "&" <Type>
 //          | "&mut" <Type>
+//          | "&" "mut" <Type>
 //          | "|" Comma<Type> "|" Type   (spec only)
 //          | "(" Comma<Type> ")"
 fn parse_type(context: &mut Context) -> Result<Type, Box<Diagnostic>> {
@@ -2107,12 +2127,20 @@ fn parse_function_decl(
 }
 
 // Parse a function parameter:
-//      Parameter = <Var> ":" <Type>
-fn parse_parameter(context: &mut Context) -> Result<(Var, Type), Box<Diagnostic>> {
+//      Parameter = "mut"? <Var> ":" <Type>
+fn parse_parameter(context: &mut Context) -> Result<(Mutability, Var, Type), Box<Diagnostic>> {
+    let mut_ = if context.tokens.peek() == Tok::Mut {
+        let start_loc = context.tokens.start_loc();
+        context.tokens.advance()?;
+        let end_loc = context.tokens.previous_end_loc();
+        Some(make_loc(context.tokens.file_hash(), start_loc, end_loc))
+    } else {
+        None
+    };
     let v = parse_var(context)?;
     consume_token(context.tokens, Tok::Colon)?;
     let t = parse_type(context)?;
-    Ok((v, t))
+    Ok((mut_, v, t))
 }
 
 //**************************************************************************************************

@@ -35,7 +35,7 @@ pages.
 
 ```tsx
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { type SuiClientOptions } from '@mysten/sui.js';
+import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to
@@ -53,7 +53,7 @@ function App() {
 					<YourApp />
 				</WalletProvider>
 			</SuiClientProvider>
-		</QueryClient>
+		</QueryClientProvider>
 	);
 }
 ```

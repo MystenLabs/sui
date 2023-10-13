@@ -76,7 +76,8 @@ const MAX_PROTOCOL_VERSION: u64 = 28;
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
-// Version 27: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+// Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+//             Use CertificateV2 in narwhal
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1529,9 +1530,10 @@ impl ProtocolConfig {
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
-                    // Only enable effects v2 on devnet.
+                    // Only enable effects v2 & nw certificate v2 on devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_effects_v2 = true;
+                        cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
                 }
                 // Use this template when making changes:

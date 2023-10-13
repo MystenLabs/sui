@@ -455,13 +455,13 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// enters them into the environment. Returns a vector for representing them in the target AST.
     pub fn analyze_and_add_params(
         &mut self,
-        params: &[(PA::Var, EA::Type)],
+        params: &[(PA::Mutability, PA::Var, EA::Type)],
         for_move_fun: bool,
     ) -> Vec<(Symbol, Type)> {
         params
             .iter()
             .enumerate()
-            .map(|(idx, (v, ty))| {
+            .map(|(idx, (_, v, ty))| {
                 let ty = self.translate_type(ty);
                 let sym = self.symbol_pool().make(v.0.value.as_str());
                 self.define_local(
@@ -991,7 +991,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
                     }
                     let bind_loc = self.to_loc(&list.value[0].loc);
                     match &list.value[0].value {
-                        EA::LValue_::Var(maccess, _) => {
+                        EA::LValue_::Var(_, maccess, _) => {
                             let name = match &maccess.value {
                                 EA::ModuleAccess_::Name(n) => n,
                                 EA::ModuleAccess_::ModuleAccess(_, n) => n,
@@ -1784,6 +1784,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             let loc = self.to_loc(&bind.loc);
             match &bind.value {
                 EA::LValue_::Var(
+                    _,
                     Spanned {
                         value: EA::ModuleAccess_::Name(n),
                         ..
@@ -1880,6 +1881,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             }
             match &bind.value {
                 EA::LValue_::Var(
+                    _,
                     Spanned {
                         value: EA::ModuleAccess_::Name(n),
                         ..

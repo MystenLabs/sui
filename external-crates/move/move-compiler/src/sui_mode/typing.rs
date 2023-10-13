@@ -12,7 +12,7 @@ use crate::{
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, StructName},
+    parser::ast::{Ability_, FunctionName, Mutability, StructName},
     shared::{
         known_attributes::{KnownAttribute, TestingAttribute},
         program_info::TypingProgramInfo,
@@ -361,11 +361,11 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     }
     let last_loc = parameters
         .last()
-        .map(|(_, sp!(loc, _))| *loc)
+        .map(|(_, _, sp!(loc, _))| *loc)
         .unwrap_or(name.loc());
     let tx_ctx_kind = parameters
         .last()
-        .map(|(_, last_param_ty)| tx_context_kind(last_param_ty))
+        .map(|(_, _, last_param_ty)| tx_context_kind(last_param_ty))
         .unwrap_or(TxContextKind::None);
     if tx_ctx_kind == TxContextKind::None {
         let msg = format!(
@@ -395,14 +395,14 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         let otw_msg = "One-time witness declared here";
         let mut diag = diag!(
             INIT_FUN_DIAG,
-            (parameters[0].1.loc, msg),
+            (parameters[0].2.loc, msg),
             (otw_loc, otw_msg),
         );
         diag.add_note(OTW_NOTE);
         context.env.add_diag(diag)
     } else if parameters.len() > 1 {
         // if there is more than one parameter, the first must be the OTW
-        let (first_var, first_ty) = parameters.first().unwrap();
+        let (_, first_var, first_ty) = parameters.first().unwrap();
         let is_otw = matches!(
             first_ty.value.type_name(),
             Some(sp!(_, TypeName_::ModuleType(m, n)))
@@ -439,7 +439,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         }
     } else if parameters.len() > 2 {
         // no init function can take more than 2 parameters (the OTW and the TxContext)
-        let (second_var, _) = &parameters[1];
+        let (_, second_var, _) = &parameters[1];
         context.env.add_diag(diag!(
             INIT_FUN_DIAG,
             (name.loc(), "Invalid 'init' function declaration"),
@@ -577,7 +577,7 @@ fn entry_signature(
         return_type,
     } = signature;
     let all_non_ctx_parameters = match parameters.last() {
-        Some((_, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
+        Some((_, _, last_param_ty)) if tx_context_kind(last_param_ty) != TxContextKind::None => {
             &parameters[0..parameters.len() - 1]
         }
         _ => parameters,
@@ -618,9 +618,9 @@ fn entry_param(
     context: &mut Context,
     entry_loc: Loc,
     name: FunctionName,
-    parameters: &[(Var, Type)],
+    parameters: &[(Mutability, Var, Type)],
 ) {
-    for (var, ty) in parameters {
+    for (_, var, ty) in parameters {
         entry_param_ty(context, entry_loc, name, var, ty);
     }
 }

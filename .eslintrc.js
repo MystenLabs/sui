@@ -240,7 +240,7 @@ module.exports = {
 			},
 		},
 		{
-			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*', 'sdk/zklogin/**/*'],
+			files: ['sdk/ledgerjs-hw-app-sui/**/*', 'apps/wallet/**/*'],
 			rules: {
 				// ledgerjs-hw-app-sui and wallet use Buffer
 				'no-restricted-globals': ['off'],
@@ -260,6 +260,12 @@ module.exports = {
 			rules: {
 				// Story files have render functions that this rule incorrectly warns on:
 				'react-hooks/rules-of-hooks': 'off',
+			},
+		},
+		{
+			files: ['sdk/create-dapp/templates/**/*'],
+			rules: {
+				'header/header': 'off',
 			},
 		},
 	],

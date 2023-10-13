@@ -875,7 +875,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(param, param_ty)| {
+        .map(|(mut_, param, param_ty)| {
             if let Err((param, prev_loc)) = declared.add(param, ()) {
                 if !param.is_underscore() {
                     let msg = format!("Duplicate parameter with name '{}'", param);
@@ -889,7 +889,7 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
             let is_parameter = true;
             let nparam = context.declare_local(is_parameter, param.0);
             let nparam_ty = type_(context, param_ty);
-            (nparam, nparam_ty)
+            (mut_, nparam, nparam_ty)
         })
         .collect();
     let return_type = type_(context, sig.return_type);
@@ -1624,7 +1624,7 @@ fn lvalue(
     use E::LValue_ as EL;
     use N::LValue_ as NL;
     let nl_ = match l_ {
-        EL::Var(sp!(_, E::ModuleAccess_::Name(n)), None) => {
+        EL::Var(mut_, sp!(_, E::ModuleAccess_::Name(n)), None) => {
             let v = P::Var(n);
             if v.is_underscore() {
                 NL::Ignore
@@ -1658,6 +1658,7 @@ fn lvalue(
                     C::Assign => context.resolve_local(loc, "assignment", n)?,
                 };
                 NL::Var {
+                    mut_,
                     var: nv,
                     // set later
                     unused_binding: false,
@@ -1707,7 +1708,7 @@ fn lvalue(
                 nfields.expect("ICE fields were already unique"),
             )
         }
-        EL::Var(_, _) => panic!("unexpected specification construct"),
+        EL::Var(_, _, _) => panic!("unexpected specification construct"),
     };
     Some(sp(loc, nl_))
 }
@@ -1895,7 +1896,7 @@ fn remove_unused_bindings_function(
         // no warnings for natives
         N::FunctionBody_::Native => return,
     }
-    for (v, _) in &mut f.signature.parameters {
+    for (_, v, _) in &mut f.signature.parameters {
         if !used.contains(&v.value) {
             report_unused_local(context, v);
         }
@@ -1948,12 +1949,14 @@ fn remove_unused_bindings_lvalue(
         N::LValue_::Var {
             var,
             unused_binding,
+            ..
         } if used.contains(&var.value) => {
             debug_assert!(!*unused_binding);
         }
         N::LValue_::Var {
             var,
             unused_binding,
+            ..
         } => {
             debug_assert!(!*unused_binding);
             if report {
@@ -2175,7 +2178,7 @@ fn spec_lvalues(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, lvs_): &E::
 
 fn spec_lvalue(used: &mut BTreeSet<(ModuleIdent, Neighbor)>, sp!(_, lv_): &E::LValue) {
     match lv_ {
-        E::LValue_::Var(m, tys_opt) => {
+        E::LValue_::Var(_, m, tys_opt) => {
             spec_module_access(used, m);
             if let Some(tys) = tys_opt {
                 spec_types(used, tys)
