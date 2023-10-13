@@ -455,17 +455,34 @@ impl Command_ {
         }
         successors
     }
+
+    pub fn is_hlir_terminal(&self) -> bool {
+        use Command_::*;
+        match self {
+            Assign(_, _) | Mutate(_, _) | IgnoreAndPop { .. } => false,
+            Break | Continue | Abort(_) | Return { .. } => true,
+            Jump { .. } | JumpIf { .. } => panic!("ICE found jump/jump-if in hlir"),
+        }
+    }
 }
 
 impl Exp {
     pub fn is_unit(&self) -> bool {
         self.exp.value.is_unit()
     }
+
+    pub fn is_unreachable(&self) -> bool {
+        self.exp.value.is_unreachable()
+    }
 }
 
 impl UnannotatedExp_ {
     pub fn is_unit(&self) -> bool {
         matches!(self, UnannotatedExp_::Unit { case: _case })
+    }
+
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, UnannotatedExp_::Unreachable)
     }
 }
 
