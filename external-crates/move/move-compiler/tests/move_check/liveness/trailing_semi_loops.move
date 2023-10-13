@@ -1,44 +1,34 @@
-script {
-    fun main() {
+module 0x42::m {
+    fun t0() {
         loop ();
     }
-}
 
-script {
-    fun main() {
+    fun t1() {
         { (loop (): ()) };
     }
-}
 
-script {
-    fun main() {
+    fun t2() {
         loop {
             let x = 0;
             0 + x + 0;
         };
     }
-}
 
-script {
-    fun main() {
+    fun t3() {
         loop {
             // TODO can probably improve this message,
             // but its different than the normal trailing case
             let _: u64 = if (true) break else break;
         }
     }
-}
 
-script {
-    fun main() {
+    fun t4() {
         loop {
             break;
         }
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t5(cond: bool) {
         loop {
             if (cond) {
                 break;
@@ -47,26 +37,20 @@ script {
             }
         }
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t6(cond: bool) {
         loop {
             if (cond) continue else break;
         }
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t7(cond: bool) {
         loop {
             if (cond) abort 0 else return;
         }
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t8(cond: bool) {
         let x;
         loop {
             if (cond) {
@@ -79,10 +63,8 @@ script {
         };
         x;
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t9(cond: bool) {
         loop {
             if (cond) {
                 break;
@@ -91,10 +73,8 @@ script {
             };
         }
     }
-}
 
-script {
-    fun main(cond: bool) {
+    fun t10(cond: bool) {
         loop {
             if (cond) {
                 return;
