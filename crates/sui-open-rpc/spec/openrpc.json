@@ -1826,6 +1826,8 @@
                 "package_publish_cost_per_byte": {
                   "u64": "80"
                 },
+                "poseidon_bn254_cost_base": null,
+                "poseidon_bn254_data_cost_per_block": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
