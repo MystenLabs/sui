@@ -14,6 +14,7 @@ use super::{
     gas::{GasEffects, GasInput},
     sui_address::SuiAddress,
     transaction_block_kind::TransactionBlockKind,
+    transaction_signature::TransactionSignature,
 };
 use async_graphql::*;
 use sui_json_rpc_types::{
@@ -33,7 +34,7 @@ pub(crate) struct TransactionBlock {
     #[graphql(skip)]
     pub epoch_id: Option<u64>,
     pub kind: Option<TransactionBlockKind>,
-    pub signatures: Option<Vec<Option<String>>>,
+    pub signatures: Option<Vec<Option<TransactionSignature>>>,
 }
 
 impl From<SuiTransactionBlockResponse> for TransactionBlock {

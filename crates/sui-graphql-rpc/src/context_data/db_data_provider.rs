@@ -1259,7 +1259,11 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
         let signatures = sender_signed_data
             .tx_signatures()
             .iter()
-            .map(|s| Some(fastcrypto::encoding::Base64::from_bytes(s.as_ref()).encoded()))
+            .map(|s| {
+                Some(crate::types::transaction_signature::TransactionSignature {
+                    base64_sig: fastcrypto::encoding::Base64::from_bytes(s.as_ref()).encoded(),
+                })
+            })
             .collect::<Vec<_>>();
 
         Ok(Self {
