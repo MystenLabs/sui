@@ -63,8 +63,9 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::{ProtocolConfigResponse, SuiTransactionBlockEffects, EventFilter as RpcEventFilter};
-use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::{
+    EventFilter as RpcEventFilter, ProtocolConfigResponse, SuiTransactionBlockEffects,
+};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,

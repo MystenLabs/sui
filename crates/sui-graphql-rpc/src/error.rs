@@ -67,7 +67,7 @@ pub enum Error {
     #[error("reverse pagination is not supported")]
     _CursorNoReversePagination,
     #[error("Invalid cursor: {0}")]
-    _InvalidCursor(String),
+    InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
     _CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
@@ -80,14 +80,14 @@ impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
             Error::InvalidFilter
-            | Error::ProtocolVersionUnsupported { .. }            
+            | Error::ProtocolVersionUnsupported { .. }
             | Error::DomainParse(_)
             | Error::DbValidation(_)
             | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
             | Error::_CursorNoReversePagination
-            | Error::_InvalidCursor(_)
+            | Error::InvalidCursor(_)
             | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
