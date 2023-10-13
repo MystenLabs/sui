@@ -46,6 +46,8 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
+    ProtocolVersionUnsupported(u64, u64),
     #[error(transparent)]
     DomainParse(#[from] DomainParseError),
     #[error(transparent)]
@@ -75,7 +77,8 @@ pub enum Error {
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::DomainParse(_)
+            Error::ProtocolVersionUnsupported { .. }
+            | Error::DomainParse(_)
             | Error::DbValidation(_)
             | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
