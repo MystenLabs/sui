@@ -62,7 +62,7 @@ impl Domain {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NameServiceConfig {
     pub package_address: SuiAddress,
     pub registry_id: ObjectID,
