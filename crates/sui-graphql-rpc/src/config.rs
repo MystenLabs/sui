@@ -6,6 +6,7 @@ use std::{collections::BTreeSet, path::PathBuf};
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
 use std::env;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
 
@@ -17,8 +18,11 @@ const MAX_QUERY_NODES: u32 = 100;
 pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
+    // TODO: remove rpc 1.0 dependency once DB work done
     pub(crate) rpc_url: String,
     pub(crate) db_url: String,
+    pub(crate) prom_url: String,
+    pub(crate) prom_port: u16,
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -59,6 +63,8 @@ impl ConnectionConfig {
         host: Option<String>,
         rpc_url: Option<String>,
         db_url: Option<String>,
+        prom_url: Option<String>,
+        prom_port: Option<u16>,
     ) -> Self {
         let default = Self::default();
         Self {
@@ -66,6 +72,8 @@ impl ConnectionConfig {
             host: host.unwrap_or(default.host),
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
             db_url: db_url.unwrap_or(default.db_url),
+            prom_url: prom_url.unwrap_or(default.prom_url),
+            prom_port: prom_port.unwrap_or(default.prom_port),
         }
     }
 }
@@ -111,6 +119,8 @@ impl Default for ConnectionConfig {
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
             db_url: env::var("PG_DB_URL")
                 .expect("PG_DB_URL must be set if db_url not provided in config"),
+            prom_url: "0.0.0.0".to_string(),
+            prom_port: 9184,
         }
     }
 }
@@ -126,7 +136,7 @@ impl Default for Limits {
 
 #[allow(dead_code)]
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
-struct InternalFeatureConfig {
+pub struct InternalFeatureConfig {
     #[serde(default)]
     pub(crate) query_limits_checker: bool,
     #[serde(default)]
@@ -151,14 +161,16 @@ impl Default for InternalFeatureConfig {
     }
 }
 
-#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
-struct ServerConfig {
+#[derive(Serialize, Clone, Deserialize, Debug, Default)]
+pub struct ServerConfig {
     #[serde(default)]
     pub(crate) service: ServiceConfig,
     #[serde(default)]
     pub(crate) connection: ConnectionConfig,
     #[serde(default)]
     pub(crate) internal_features: InternalFeatureConfig,
+    #[serde(default)]
+    pub name_service: NameServiceConfig,
 }
 
 #[allow(dead_code)]
