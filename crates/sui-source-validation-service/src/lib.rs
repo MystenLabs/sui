@@ -368,12 +368,12 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 // falsely report outdated sources for a package. Pass an optional `channel` to observe the upgrade transaction(s).
 // The `channel` parameter exists for testing.
 pub async fn watch_for_upgrades(
-    config: &Config,
+    packages: Vec<PackageSources>,
     app_state: Arc<RwLock<AppState>>,
     channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
-    for s in &config.packages {
+    for s in packages {
         let packages = match s {
             PackageSources::Repository(RepositorySource { packages, .. }) => packages,
             PackageSources::Directory(DirectorySource { packages, .. }) => packages,
