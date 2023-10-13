@@ -909,14 +909,6 @@ impl Certificate {
         }
     }
 
-    pub fn new_test_empty(protocol_config: &ProtocolConfig, author: AuthorityIdentifier) -> Self {
-        if protocol_config.narwhal_certificate_v2() {
-            CertificateV2::new_test_empty(author)
-        } else {
-            CertificateV1::new_test_empty(author)
-        }
-    }
-
     /// This function requires that certificate was verified against given committee
     pub fn signed_authorities(&self, committee: &Committee) -> Vec<PublicKey> {
         match self {
@@ -1075,17 +1067,6 @@ impl CertificateV1 {
         votes: Vec<(AuthorityIdentifier, Signature)>,
     ) -> DagResult<Certificate> {
         Self::new_unsafe(committee, header, votes, false)
-    }
-
-    pub fn new_test_empty(author: AuthorityIdentifier) -> Certificate {
-        let header = Header::V1(HeaderV1 {
-            author,
-            ..Default::default()
-        });
-        Certificate::V1(CertificateV1 {
-            header,
-            ..Default::default()
-        })
     }
 
     fn new_unsafe(
@@ -1344,17 +1325,6 @@ impl CertificateV2 {
         votes: Vec<(AuthorityIdentifier, Signature)>,
     ) -> DagResult<Certificate> {
         Self::new_unsafe(committee, header, votes, false)
-    }
-
-    pub fn new_test_empty(author: AuthorityIdentifier) -> Certificate {
-        let header = Header::V1(HeaderV1 {
-            author,
-            ..Default::default()
-        });
-        Certificate::V1(CertificateV1 {
-            header,
-            ..Default::default()
-        })
     }
 
     fn new_unsafe(
