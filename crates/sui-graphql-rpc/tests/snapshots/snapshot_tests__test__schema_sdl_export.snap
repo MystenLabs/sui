@@ -621,7 +621,7 @@ type TransactionBlock {
 	bcs: Base64
 	gasInput: GasInput
 	kind: TransactionBlockKind
-	signatures: [String]
+	signatures: [TransactionSignature]
 	digest: String!
 	expiration: Epoch
 }
@@ -685,6 +685,10 @@ union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransac
 enum TransactionBlockKindInput {
 	SYSTEM_TX
 	PROGRAMMABLE_TX
+}
+
+type TransactionSignature {
+	base64Sig: String!
 }
 
 type Validator {
