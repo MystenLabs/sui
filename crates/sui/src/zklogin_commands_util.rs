@@ -71,16 +71,18 @@ pub async fn perform_zk_login_test_tx(
     network: &str,
 ) -> Result<String, anyhow::Error> {
     let (gas_url, fullnode_url) = get_config(network);
-    let user_salt = get_salt(parsed_token)
-        .await
-        .map_err(|_| anyhow!("Failed to get salt"))?;
+    let user_salt = "129390038577185583942388216820280642146";
+    // let user_salt = get_salt(parsed_token, "http://185.209.177.123:3000/get_salt")
+    //     .await
+    //     .map_err(|_| anyhow!("Failed to get salt"))?;
     println!("User salt: {user_salt}");
     let reader = get_proof(
         parsed_token,
         max_epoch,
         jwt_randomness,
         kp_bigint,
-        &user_salt,
+        user_salt,
+        "http://185.209.177.123:7000/v1"
     )
     .await
     .map_err(|_| anyhow!("Failed to get salt"))?;

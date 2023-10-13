@@ -94,7 +94,6 @@ impl AuthenticatorTrait for MultiSigLegacy {
         &self,
         _value: &IntentMessage<T>,
         _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

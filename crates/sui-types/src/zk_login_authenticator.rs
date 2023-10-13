@@ -9,7 +9,6 @@ use crate::{
     signature::{AuthenticatorTrait, VerifyParams},
 };
 use fastcrypto::{error::FastCryptoError, traits::ToFromBytes};
-use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use fastcrypto_zkp::bn254::{zk_login::ZkLoginInputs, zk_login_api::verify_zk_login};
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
@@ -98,25 +97,12 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: &VerifyParams,
     ) -> SuiResult
     where
         T: Serialize,
     {
         if author != self.try_into()? {
             return Err(SuiError::InvalidAddress);
-        }
-
-        if !aux_verify_data.supported_providers.contains(
-            &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
-                SuiError::InvalidSignature {
-                    error: "Unknown provider".to_string(),
-                }
-            })?,
-        ) {
-            return Err(SuiError::InvalidSignature {
-                error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
-            });
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
@@ -142,7 +128,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     where
         T: Serialize,
     {
-        self.verify_uncached_checks(intent_msg, author, aux_verify_data)?;
+        self.verify_uncached_checks(intent_msg, author)?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];

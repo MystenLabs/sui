@@ -112,7 +112,7 @@ pub trait AuthenticatedMessage {
     fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult;
 
     /// Checks that still need to be verified outside cache.
-    fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult;
+    fn verify_uncached_checks(&self) -> SuiResult;
 }
 
 /// A marker trait to indicate !AuthenticatedMessage since rust does not allow negative trait

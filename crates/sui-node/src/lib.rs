@@ -258,12 +258,10 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
         let epoch = epoch_store.epoch();
-        let supported_providers = epoch_store
-            .protocol_config()
-            .zklogin_supported_providers()
-            .iter()
-            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
-            .collect::<Vec<_>>();
+        let supported_providers = config.zklogin_oauth_providers
+        .iter()
+        .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
+        .collect::<Vec<_>>();
 
         let fetch_interval = Duration::from_secs(config.jwk_fetch_interval_seconds);
 

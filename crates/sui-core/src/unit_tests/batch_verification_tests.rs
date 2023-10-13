@@ -117,7 +117,6 @@ async fn test_async_verifier() {
     let verifier = Arc::new(SignatureVerifier::new(
         committee.clone(),
         metrics,
-        vec![],
         ZkLoginEnv::Test,
     ));
 

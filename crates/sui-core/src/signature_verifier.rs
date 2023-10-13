@@ -3,7 +3,7 @@
 
 use either::Either;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
-use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::JWK;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
@@ -113,8 +113,6 @@ pub struct SignatureVerifier {
 /// Contains two parameters to pass in to verify a ZkLogin signature.
 #[derive(Clone)]
 struct ZkLoginParams {
-    /// A list of supported OAuth providers for ZkLogin.
-    pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
 }
@@ -124,7 +122,6 @@ impl SignatureVerifier {
         committee: Arc<Committee>,
         batch_size: usize,
         metrics: Arc<SignatureVerifierMetrics>,
-        supported_providers: Vec<OIDCProvider>,
         env: ZkLoginEnv,
     ) -> Self {
         Self {
@@ -145,7 +142,6 @@ impl SignatureVerifier {
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
             zk_login_params: ZkLoginParams {
-                supported_providers,
                 env,
             },
         }
@@ -154,14 +150,12 @@ impl SignatureVerifier {
     pub fn new(
         committee: Arc<Committee>,
         metrics: Arc<SignatureVerifierMetrics>,
-        supported_providers: Vec<OIDCProvider>,
         zklogin_env: ZkLoginEnv,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
             MAX_BATCH_SIZE,
             metrics,
-            supported_providers,
             zklogin_env,
         )
     }
@@ -344,7 +338,6 @@ impl SignatureVerifier {
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
                     jwks,
-                    self.zk_login_params.supported_providers.clone(),
                     self.zk_login_params.env.clone(),
                 );
                 signed_tx
@@ -358,7 +351,7 @@ impl SignatureVerifier {
                             self.zklogin_inputs_cache.is_verified(
                                 z.hash_inputs(),
                                 || signed_tx.verify_message_signature(&verify_params),
-                                || signed_tx.verify_uncached_checks(&verify_params),
+                                || signed_tx.verify_uncached_checks(),
                             )
                         }
                         _ => signed_tx.verify_message_signature(&verify_params),
@@ -477,7 +470,7 @@ pub fn batch_verify_certificates(
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-    let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default());
+    let verify_params = VerifyParams::new(Default::default(), Default::default());
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

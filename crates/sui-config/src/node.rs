@@ -12,6 +12,7 @@ use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeSet;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -155,6 +156,9 @@ pub struct NodeConfig {
 
     #[serde(default = "default_jwk_fetch_interval_seconds")]
     pub jwk_fetch_interval_seconds: u64,
+
+    #[serde(default = "default_zklogin_oauth_providers")]
+    pub zklogin_oauth_providers: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -165,6 +169,15 @@ pub struct TransactionKeyValueStoreReadConfig {
 
 fn default_jwk_fetch_interval_seconds() -> u64 {
     3600
+}
+
+fn default_zklogin_oauth_providers() -> BTreeSet<String> {
+    BTreeSet::from([
+        "Google".to_string(),
+        "Facebook".to_string(),
+        "Twitch".to_string(),
+        "Kakao".to_string(),
+    ])
 }
 
 fn default_transaction_kv_store_config() -> TransactionKeyValueStoreReadConfig {

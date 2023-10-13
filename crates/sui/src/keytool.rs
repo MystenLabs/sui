@@ -9,7 +9,7 @@ use fastcrypto::encoding::{decode_bytes_hex, Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_zkp::bn254::utils::get_oidc_url;
+use fastcrypto_zkp::bn254::utils::{get_oidc_url, get_token_exchange_url};
 use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
@@ -792,9 +792,27 @@ impl KeyToolCommand {
                     "https://sui.io/",
                     &jwt_randomness,
                 )?;
+                let url_4 = get_oidc_url(
+                    OIDCProvider::Kakao,
+                    &eph_pk_bytes,
+                    max_epoch,
+                    "aa6bddf393b54d4e0d42ae0014edfd2f",
+                    "https://sui.io/",
+                    &jwt_randomness,
+                )?;
+
+                let url_5 = get_token_exchange_url(
+                    OIDCProvider::Kakao,
+                    "aa6bddf393b54d4e0d42ae0014edfd2f",
+                    "https://sui.io/",
+                    "REPLACE_WITH_AUTH_CODE",
+                )?;
+
                 println!("Visit URL (Google): {url}");
                 println!("Visit URL (Twitch): {url_2}");
                 println!("Visit URL (Facebook): {url_3}");
+                println!("Visit URL (Kakao): {url_4}");
+                println!("Token exchange URL: {url_5}");
 
                 println!("Finish login and paste the entire URL here (e.g. https://sui.io/#id_token=...):");
 
@@ -865,11 +883,6 @@ impl KeyToolCommand {
                         let parsed: ImHashMap<JwkId, JWK> = jwks.clone().into_iter().collect();
                         let aux_verify_data = VerifyParams::new(
                             parsed,
-                            vec![
-                                OIDCProvider::Facebook,
-                                OIDCProvider::Twitch,
-                                OIDCProvider::Google,
-                            ],
                             ZkLoginEnv::Prod,
                         );
                         let res = zk.verify_authenticator(

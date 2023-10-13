@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use enum_dispatch::enum_dispatch;
-use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::{join_all, select, Either};
 use futures::FutureExt;
@@ -60,7 +60,6 @@ use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
 use narwhal_types::{Round, TimestampMs};
 use prometheus::IntCounter;
-use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -564,16 +563,9 @@ impl AuthorityPerEpochStore {
             _ => ZkLoginEnv::Test,
         };
 
-        let supported_providers = protocol_config
-            .zklogin_supported_providers()
-            .iter()
-            .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
-            .collect::<Vec<_>>();
-
         let signature_verifier = SignatureVerifier::new(
             committee.clone(),
             signature_verifier_metrics,
-            supported_providers,
             zklogin_env,
         );
 

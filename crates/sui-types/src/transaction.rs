@@ -2075,9 +2075,9 @@ impl Message for SenderSignedData {
 
 impl AuthenticatedMessage for SenderSignedData {
     // Checks that are required to be done outside cache.
-    fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult {
+    fn verify_uncached_checks(&self) -> SuiResult {
         for (signer, signature) in self.get_signer_sig_mapping()? {
-            signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
+            signature.verify_uncached_checks(self.intent_message(), signer)?;
         }
         Ok(())
     }

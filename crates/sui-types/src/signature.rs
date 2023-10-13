@@ -11,7 +11,7 @@ use fastcrypto::{
     error::FastCryptoError,
     traits::{EncodeDecodeBase64, ToFromBytes},
 };
-use fastcrypto_zkp::bn254::zk_login::{JwkId, OIDCProvider, JWK};
+use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use schemars::JsonSchema;
@@ -22,19 +22,16 @@ use std::hash::Hash;
 pub struct VerifyParams {
     // map from JwkId (iss, kid) => JWK
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
-    pub supported_providers: Vec<OIDCProvider>,
     pub zk_login_env: ZkLoginEnv,
 }
 
 impl VerifyParams {
     pub fn new(
         oidc_provider_jwks: ImHashMap<JwkId, JWK>,
-        supported_providers: Vec<OIDCProvider>,
         zk_login_env: ZkLoginEnv,
     ) -> Self {
         Self {
             oidc_provider_jwks,
-            supported_providers,
             zk_login_env,
         }
     }
@@ -74,7 +71,6 @@ pub trait AuthenticatorTrait {
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
-        aux_verify_data: &VerifyParams,
     ) -> SuiResult
     where
         T: Serialize;
@@ -191,7 +187,6 @@ impl AuthenticatorTrait for Signature {
         &self,
         _value: &IntentMessage<T>,
         _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
     ) -> SuiResult
     where
         T: Serialize,
