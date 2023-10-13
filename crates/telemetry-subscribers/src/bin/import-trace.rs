@@ -26,6 +26,9 @@ struct Args {
 
     #[arg(long)]
     span_limit: Option<usize>,
+
+    #[arg(long)]
+    dump_spans: bool,
 }
 
 #[tokio::main]
@@ -34,6 +37,22 @@ async fn main() {
     let file = std::fs::File::open(args.trace_file).unwrap();
 
     let messages = decode_all_length_delimited::<_, ExportTraceServiceRequest>(file).unwrap();
+
+    let mut total_spans = 0;
+    if args.dump_spans {
+        for message in messages.iter() {
+            for span in &message.resource_spans {
+                total_spans += 1;
+                if let Some(span_limit) = args.span_limit {
+                    if total_spans > span_limit {
+                        return;
+                    }
+                }
+                println!("{:?}", span);
+            }
+        }
+        return;
+    }
 
     let endpoint = format!("{}{}", args.otlp_endpoint, "/v1/traces");
     let mut trace_exporter = TraceServiceClient::connect(endpoint).await.unwrap();
@@ -48,7 +67,6 @@ async fn main() {
 
     println!("importing trace with service name {:?}", service_name);
 
-    let mut total_spans = 0;
     for mut message in messages {
         let num_spans = message.resource_spans.len();
         total_spans += num_spans;
