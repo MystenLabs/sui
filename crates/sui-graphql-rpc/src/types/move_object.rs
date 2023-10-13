@@ -90,7 +90,7 @@ impl MoveObject {
             active_epoch_id: Some(stake.activation_epoch()),
             estimated_reward: None,
             principal: Some(BigInt::from(stake.principal())),
-            request_epoch_id: Some(stake.activation_epoch() - 1),
+            request_epoch_id: Some(stake.activation_epoch().saturating_sub(1)),
             status: Some(status),
             staked_sui_id: stake.id(),
         }))
