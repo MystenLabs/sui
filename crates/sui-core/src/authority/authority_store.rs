@@ -15,7 +15,7 @@ use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolConfig;
-use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
+use sui_storage::mutex_table::{RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
@@ -111,8 +111,7 @@ impl AuthorityStoreMetrics {
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct AuthorityStore {
     /// Internal vector of locks to manage concurrent writes to the database
-    mutex_table: MutexTable<ObjectDigest>,
-
+    // mutex_table: MutexTable<ObjectDigest>,
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
@@ -236,7 +235,7 @@ impl AuthorityStore {
         let epoch = committee.epoch;
 
         let store = Arc::new(Self {
-            mutex_table: MutexTable::new(NUM_SHARDS),
+            // mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
@@ -484,11 +483,13 @@ impl AuthorityStore {
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
+    ///
+    /*
     async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<MutexGuard> {
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
-    }
+    }*/
 
     pub fn get_object_ref_prior_to_key(
         &self,
@@ -1230,15 +1231,30 @@ impl AuthorityStore {
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
         // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
-        let _mutexes = self.acquire_locks(owned_input_objects).await;
+
+        // let _mutexes = self.acquire_locks(owned_input_objects).await;
 
         trace!(?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
+        // ZZZ using snapshot
+        let mut db_transaction = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .transaction()
+            .unwrap();
+
+        let locks = db_transaction.multi_get(
+            &self.perpetual_tables.owned_object_transaction_locks,
+            owned_input_objects,
+        )?;
+
+        /*
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
             .multi_get(owned_input_objects)?;
+        */
 
         for ((i, lock), obj_ref) in locks.into_iter().enumerate().zip(owned_input_objects) {
             // The object / version must exist, and therefore lock initialized.
@@ -1294,12 +1310,21 @@ impl AuthorityStore {
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
+            db_transaction.insert_batch(
+                &self.perpetual_tables.owned_object_transaction_locks,
+                locks_to_write,
+            )?;
+
+            /*
             let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
             batch.insert_batch(
                 &self.perpetual_tables.owned_object_transaction_locks,
                 locks_to_write,
             )?;
             batch.write()?;
+            */
+
+            db_transaction.commit()?;
         }
 
         Ok(())

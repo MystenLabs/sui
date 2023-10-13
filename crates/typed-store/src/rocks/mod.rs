@@ -24,6 +24,7 @@ use rocksdb::{
     WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use std::backtrace::Backtrace;
 use std::{
     borrow::Borrow,
     collections::BTreeMap,
@@ -2412,6 +2413,8 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
+    eprintln!("ZZZZZ Open DBWithThreadMode, path {:?}", path);
+    eprintln!("{}", Backtrace::force_capture());
     // In the simulator, we intercept the wall clock in the test thread only. This causes problems
     // because rocksdb uses the simulated clock when creating its background threads, but then
     // those threads see the real wall clock (because they are not the test thread), which causes
@@ -2450,7 +2453,9 @@ pub fn open_cf_opts_transactional<P: AsRef<Path>>(
     opt_cfs: &[(&str, rocksdb::Options)],
 ) -> Result<Arc<RocksDB>, TypedStoreError> {
     let path = path.as_ref();
-    let cfs = populate_missing_cfs(opt_cfs, path)?;
+    let cfs: Vec<(String, rocksdb::Options)> = populate_missing_cfs(opt_cfs, path)?;
+    eprintln!("ZZZZZ Open OptimisticTransactionDB, path {:?}", path);
+    eprintln!("{}", Backtrace::force_capture());
     // See comment above for explanation of why nondeterministic is necessary here.
     nondeterministic!({
         let options = prepare_db_options(db_options);
