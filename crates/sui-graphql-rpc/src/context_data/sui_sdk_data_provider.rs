@@ -80,22 +80,6 @@ impl Loader<Digest> for SuiClientLoader {
 
 #[async_trait]
 impl DataProvider for SuiClient {
-    async fn get_object_with_options(
-        &self,
-        object_id: NativeObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<Option<Object>> {
-        let obj = self
-            .read_api()
-            .get_object_with_options(object_id, options)
-            .await?;
-
-        if obj.error.is_some() || obj.data.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(convert_obj(&obj.data.unwrap())))
-    }
-
     async fn multi_get_object_with_options(
         &self,
         object_ids: Vec<NativeObjectID>,

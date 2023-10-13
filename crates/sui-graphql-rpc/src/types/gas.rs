@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::context_ext::DataProviderContextExt;
+use crate::context_data::db_data_provider::PgManager;
 use crate::types::object::Object;
 use async_graphql::*;
 use sui_json_rpc_types::{OwnedObjectRef, SuiGasData, SuiObjectDataOptions};
@@ -130,11 +130,10 @@ impl From<(&NativeGasCostSummary, &OwnedObjectRef)> for GasEffects {
 impl GasEffects {
     async fn gas_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         // TODO: implement DB counterpart without using Sui SDK client
-        let gas_obj = ctx
-            .data_provider()
-            .get_object_with_options(self.object_id, SuiObjectDataOptions::full_content())
-            .await?;
-        Ok(gas_obj)
+        ctx.data_unchecked::<PgManager>()
+            .fetch_obj(address, version)
+            .await
+            .extend()
     }
 
     async fn gas_summary(&self) -> Option<GasCostSummary> {

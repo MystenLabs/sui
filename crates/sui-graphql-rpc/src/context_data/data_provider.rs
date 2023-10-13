@@ -11,12 +11,6 @@ use sui_sdk::types::sui_system_state::sui_system_state_summary::SuiSystemStateSu
 
 #[async_trait]
 pub(crate) trait DataProvider: Send + Sync {
-    async fn get_object_with_options(
-        &self,
-        object_id: ObjectID,
-        options: SuiObjectDataOptions,
-    ) -> Result<Option<Object>>;
-
     async fn multi_get_object_with_options(
         &self,
         object_ids: Vec<ObjectID>,
