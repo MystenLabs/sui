@@ -32,6 +32,7 @@ use crate::{
             EndOfEpochTransaction, GenesisTransaction, ProgrammableTransaction,
             TransactionBlockKind,
         },
+        transaction_signature::TransactionSignature,
         validator_set::ValidatorSet,
     },
 };
@@ -1260,8 +1261,8 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             .tx_signatures()
             .iter()
             .map(|s| {
-                Some(crate::types::transaction_signature::TransactionSignature {
-                    base64_sig: fastcrypto::encoding::Base64::from_bytes(s.as_ref()).encoded(),
+                Some(TransactionSignature {
+                    base64_sig: Base64::from(s.as_ref()),
                 })
             })
             .collect::<Vec<_>>();
