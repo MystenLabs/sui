@@ -20,7 +20,7 @@ mod coin_api_v2;
 mod extended_api;
 mod extended_api_v2;
 mod governance_api;
-pub mod governance_api_v2;
+mod governance_api_v2;
 mod indexer_api;
 mod indexer_api_v2;
 mod move_utils;
