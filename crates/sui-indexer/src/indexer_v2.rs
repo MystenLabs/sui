@@ -20,7 +20,8 @@ use tracing::info;
 
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler_v2::new_handlers;
-use crate::store::IndexerStoreV2;
+use crate::processors_v2::processor_orchestrator_v2::ProcessorOrchestratorV2;
+use crate::store::{IndexerStoreV2, PgIndexerAnalyticalStore};
 
 pub struct IndexerV2;
 
@@ -90,6 +91,18 @@ impl IndexerV2 {
             .await
             .expect("Rpc server task failed");
 
+        Ok(())
+    }
+
+    pub async fn start_analytical_worker(
+        store: PgIndexerAnalyticalStore,
+    ) -> Result<(), IndexerError> {
+        info!(
+            "Sui indexerV2 Analytical Worker (version {:?}) started...",
+            env!("CARGO_PKG_VERSION")
+        );
+        let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store);
+        processor_orchestrator_v2.run_forever().await;
         Ok(())
     }
 }
