@@ -6,7 +6,8 @@
 	"main": "index.js",
 	"scripts": {
 		"dev": "next dev",
-		"build": "next build",
+		"#build": "next cache causes issues in vercel: https://github.com/orgs/vercel/discussions/2079",
+		"build": "next build && rm -rf .next/cache",
 		"start": "next start",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
