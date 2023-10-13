@@ -15,7 +15,7 @@ use move_core_types::resolver::ModuleResolver;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolConfig;
-use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
+use sui_storage::mutex_table::{RwLockGuard, RwLockTable};
 use sui_types::accumulator::Accumulator;
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::error::UserInputError;
@@ -111,8 +111,7 @@ impl AuthorityStoreMetrics {
 /// S allows SuiDataStore to either store the authority signed version or unsigned version.
 pub struct AuthorityStore {
     /// Internal vector of locks to manage concurrent writes to the database
-    mutex_table: MutexTable<ObjectDigest>,
-
+    // mutex_table: MutexTable<ObjectDigest>,
     pub(crate) perpetual_tables: Arc<AuthorityPerpetualTables>,
 
     // Implementation detail to support notify_read_effects().
@@ -236,7 +235,7 @@ impl AuthorityStore {
         let epoch = committee.epoch;
 
         let store = Arc::new(Self {
-            mutex_table: MutexTable::new(NUM_SHARDS),
+            // mutex_table: MutexTable::new(NUM_SHARDS),
             perpetual_tables,
             executed_effects_notify_read: NotifyRead::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
@@ -484,11 +483,13 @@ impl AuthorityStore {
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
+    ///
+    /*
     async fn acquire_locks(&self, input_objects: &[ObjectRef]) -> Vec<MutexGuard> {
         self.mutex_table
             .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
-    }
+    }*/
 
     pub fn get_object_ref_prior_to_key(
         &self,
@@ -1230,11 +1231,79 @@ impl AuthorityStore {
         // Other writers may be attempting to acquire locks on the same objects, so a mutex is
         // required.
         // TODO: replace with optimistic db_transactions (i.e. set lock to tx if none)
-        let _mutexes = self.acquire_locks(owned_input_objects).await;
+
+        // let _mutexes = self.acquire_locks(owned_input_objects).await;
 
         trace!(?owned_input_objects, "acquire_locks");
         let mut locks_to_write = Vec::new();
 
+        let mut db_transaction = self
+            .perpetual_tables
+            .owned_object_transaction_locks
+            .transaction_without_snapshot()
+            .unwrap();
+
+        for (i, obj_ref) in owned_input_objects.iter().enumerate() {
+            let lock = db_transaction
+                .get_for_update(
+                    &self.perpetual_tables.owned_object_transaction_locks,
+                    obj_ref,
+                )
+                .unwrap();
+
+            if lock.is_none() {
+                let latest_lock = self.get_latest_lock_for_object_id(obj_ref.0)?;
+                fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
+                    provided_obj_ref: *obj_ref,
+                    current_version: latest_lock.1
+                }
+                .into());
+            }
+            // Safe to unwrap as it is checked above
+            let lock = lock.unwrap().map(|l| l.migrate().into_inner());
+
+            if let Some(LockDetails {
+                epoch: previous_epoch,
+                tx_digest: previous_tx_digest,
+            }) = &lock
+            {
+                fp_ensure!(
+                    &epoch >= previous_epoch,
+                    SuiError::ObjectLockedAtFutureEpoch {
+                        obj_refs: owned_input_objects.to_vec(),
+                        locked_epoch: *previous_epoch,
+                        new_epoch: epoch,
+                        locked_by_tx: *previous_tx_digest,
+                    }
+                );
+                // Lock already set to different transaction from the same epoch.
+                // If the lock is set in a previous epoch, it's ok to override it.
+                if previous_epoch == &epoch && previous_tx_digest != &tx_digest {
+                    // TODO: add metrics here
+                    info!(prev_tx_digest = ?previous_tx_digest,
+                          cur_tx_digest = ?tx_digest,
+                          "Cannot acquire lock: conflicting transaction!");
+                    return Err(SuiError::ObjectLockConflict {
+                        obj_ref: *obj_ref,
+                        pending_transaction: *previous_tx_digest,
+                    });
+                }
+                if &epoch == previous_epoch {
+                    // Exactly the same epoch and same transaction, nothing to lock here.
+                    continue;
+                } else {
+                    info!(prev_epoch =? previous_epoch, cur_epoch =? epoch, "Overriding an old lock from previous epoch");
+                    // Fall through and override the old lock.
+                }
+            }
+            let obj_ref = owned_input_objects[i];
+            let lock_details = LockDetails { epoch, tx_digest };
+            locks_to_write.push((obj_ref, Some(lock_details.into())));
+        }
+
+        // tokio::time::sleep(Duration::from_millis(10)).await;
+
+        /*
         let locks = self
             .perpetual_tables
             .owned_object_transaction_locks
@@ -1290,16 +1359,25 @@ impl AuthorityStore {
             let obj_ref = owned_input_objects[i];
             let lock_details = LockDetails { epoch, tx_digest };
             locks_to_write.push((obj_ref, Some(lock_details.into())));
-        }
+        } */
 
         if !locks_to_write.is_empty() {
             trace!(?locks_to_write, "Writing locks");
+            db_transaction.insert_batch(
+                &self.perpetual_tables.owned_object_transaction_locks,
+                locks_to_write,
+            )?;
+
+            /*
             let mut batch = self.perpetual_tables.owned_object_transaction_locks.batch();
             batch.insert_batch(
                 &self.perpetual_tables.owned_object_transaction_locks,
                 locks_to_write,
             )?;
             batch.write()?;
+            */
+
+            db_transaction.commit()?;
         }
 
         Ok(())
