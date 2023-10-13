@@ -303,6 +303,7 @@ impl TelemetryConfig {
         if env::var("TRACE_FILTER").is_ok() {
             self.enable_otlp_tracing = true
         }
+        self.enable_otlp_tracing = true;
 
         if env::var("RUST_LOG_JSON").is_ok() {
             self.json_log_output = true;
@@ -368,7 +369,8 @@ impl TelemetryConfig {
         let sampler = SamplingFilter::new(config.sample_rate);
 
         if config.enable_otlp_tracing {
-            let trace_file = env::var("TRACE_FILE").ok();
+            //let trace_file = env::var("TRACE_FILE").ok();
+            let trace_file = Some("/dev/null".to_string());
 
             let config = sdk::trace::config()
                 .with_resource(Resource::new(vec![opentelemetry::KeyValue::new(
@@ -417,7 +419,9 @@ impl TelemetryConfig {
                 opentelemetry::sdk::propagation::TraceContextPropagator::new(),
             );
 
-            let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
+            //let trace_env_filter =
+            //    EnvFilter::try_from_env("TRACE_FILTER").unwrap_or_else(|_| "off".to_string());
+            let trace_env_filter = EnvFilter::try_new("off").unwrap();
             let (trace_env_filter, reload_handle) = reload::Layer::new(trace_env_filter);
             trace_filter_handle = Some(FilterHandle(reload_handle));
 
