@@ -286,22 +286,24 @@ fn constants(
         if scc.len() > 1 {
             let names = scc
                 .iter()
-                .map(|x| x.to_string())
+                .map(|name| name.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
-            for name in scc {
-                context.env.add_diag(diag!(
-                    BytecodeGeneration::UnfoldableConstant,
-                    (
-                        *consts.get_loc(&name).unwrap(),
-                        format!(
-                            "Constant definiiton forms a circular dependency involving {}",
-                            names
-                        )
-                    )
+            let mut diag = diag!(
+                BytecodeGeneration::UnfoldableConstant,
+                (
+                    *consts.get_loc(&scc[0]).unwrap(),
+                    format!("Constant definitions form a circular dependency: {}", names),
+                )
+            );
+            for name in scc.iter().skip(1) {
+                diag.add_secondary_label((
+                    *consts.get_loc(name).unwrap(),
+                    "Cyclic constant defined here",
                 ));
-                cycle_nodes.insert(name);
             }
+            context.env.add_diag(diag);
+            cycle_nodes.append(&mut scc.into_iter().collect());
         }
     }
     // report any node that relies on a node in a cycle but is not iself part of that cycle
