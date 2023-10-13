@@ -72,7 +72,7 @@ section .codeview pre {
 
 .codelinenumbers {
 	display: table-cell;
-	text-align: left;
+	text-align: right;
 	padding-right: 1em;
 	user-select: none;
 	opacity: 0.5;
