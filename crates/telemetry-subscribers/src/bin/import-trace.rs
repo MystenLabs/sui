@@ -23,6 +23,9 @@ struct Args {
 
     #[arg(long)]
     service_name: Option<String>,
+
+    #[arg(long)]
+    span_limit: Option<usize>,
 }
 
 #[tokio::main]
@@ -45,7 +48,20 @@ async fn main() {
 
     println!("importing trace with service name {:?}", service_name);
 
+    let mut total_spans = 0;
     for mut message in messages {
+        let num_spans = message.resource_spans.len();
+        total_spans += num_spans;
+        if let Some(span_limit) = args.span_limit {
+            if total_spans > span_limit {
+                println!(
+                    "span limit of {} reached, stopping import",
+                    args.span_limit.unwrap()
+                );
+                break;
+            }
+        }
+
         println!(
             "sending {} spans to otlp collector",
             message.resource_spans.len()
