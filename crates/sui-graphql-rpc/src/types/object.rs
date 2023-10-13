@@ -177,12 +177,16 @@ impl Object {
 
     pub async fn stake_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Stake>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, Stake>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_staked_sui(self.address, first, after, last, before)
+            .await
+            .extend()
     }
 
     pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {

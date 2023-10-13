@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
-
 use crate::{
     error::Error,
     types::{
@@ -21,6 +20,7 @@ use crate::{
         object::{Object, ObjectFilter, ObjectKind},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
+        stake::{Stake, StakeStatus},
         stake_subsidy::StakeSubsidy,
         storage_fund::StorageFund,
         sui_address::SuiAddress,
@@ -58,7 +58,8 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::{ProtocolConfigResponse, SuiTransactionBlockEffects};
+use sui_json_rpc_types::ProtocolConfigResponse;
+use sui_json_rpc_types::{Stake as SuiStake, SuiTransactionBlockEffects};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -77,6 +78,7 @@ use sui_sdk::types::{
     },
 };
 use sui_types::dynamic_field::Field;
+use sui_types::{base_types::MoveObjectType, governance::StakedSui};
 
 use super::DEFAULT_PAGE_SIZE;
 
@@ -570,6 +572,10 @@ impl PgManager {
                 query = query
                     .filter(objects::dsl::owner_id.eq(owner.into_vec()))
                     .filter(objects::dsl::owner_type.between(1, 2));
+            }
+
+            if let Some(object_type) = filter.ty {
+                query = query.filter(objects::dsl::object_type.eq(object_type));
             }
         }
 
@@ -1133,6 +1139,67 @@ impl PgManager {
             protocol_version: cfg.protocol_version.as_u64(),
         })
     }
+
+    //TODO this does not compute estimated reward because of some perf issues
+    // to be revisited once we figure out what's going on there
+    pub(crate) async fn fetch_staked_sui(
+        &self,
+        address: SuiAddress,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+    ) -> Result<Option<Connection<String, Stake>>, Error> {
+        let obj_filter = ObjectFilter {
+            package: None,
+            module: None,
+            ty: Some(MoveObjectType::staked_sui().to_string()),
+            owner: Some(address),
+            object_ids: None,
+            object_keys: None,
+        };
+        let system_state = self.fetch_latest_sui_system_state().await?;
+        let current_epoch_id = system_state.epoch_id;
+        let objs = self
+            .multi_get_objs(first, after, last, before, Some(obj_filter))
+            .await?;
+
+        if let Some((stored_objs, has_next_page)) = objs {
+            let mut connection = Connection::new(false, has_next_page);
+
+            let mut edges = vec![];
+
+            for stored_obj in stored_objs {
+                let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
+                    Error::Internal("Error converting from StoredObject to Object".to_string())
+                })?;
+                let stake_object = StakedSui::try_from(&object).map_err(|_| {
+                    Error::Internal("Error converting from Object to StakedSui".to_string())
+                })?;
+
+                // TODO this only does active / pending stake status, but not unstaked
+                let status = if current_epoch_id >= stake_object.activation_epoch() {
+                    Some(StakeStatus::Active)
+                } else {
+                    Some(StakeStatus::Pending)
+                };
+                let stake = Stake {
+                    active_epoch_id: Some(stake_object.activation_epoch()),
+                    estimated_reward: None, // TODO once we have a good working governance API, we should fix this
+                    principal: Some(BigInt::from(stake_object.principal())),
+                    request_epoch_id: Some(stake_object.activation_epoch() - 1),
+                    status,
+                    staked_sui_id: stake_object.id(),
+                };
+                let cursor = stake.staked_sui_id.to_string();
+                edges.push(Edge::new(cursor, stake));
+            }
+            connection.edges.extend(edges);
+            Ok(Some(connection))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 impl TryFrom<StoredCheckpoint> for Checkpoint {
@@ -1539,6 +1606,34 @@ impl TryFrom<StoredObject> for Coin {
             balance,
             move_obj: MoveObject { native_object },
         })
+    }
+}
+
+impl From<SuiStake> for Stake {
+    fn from(value: SuiStake) -> Stake {
+        let mut reward = None;
+        let status = match value.status {
+            sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
+            sui_json_rpc_types::StakeStatus::Active { estimated_reward } => {
+                reward = Some(estimated_reward);
+                StakeStatus::Active
+            }
+            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
+        };
+        let estimated_reward = reward.map(BigInt::from);
+        let active_epoch_id = Some(value.stake_active_epoch);
+        let request_epoch_id = Some(value.stake_request_epoch);
+        let principal = value.principal;
+        let staked_sui_id = value.staked_sui_id;
+
+        Self {
+            active_epoch_id,
+            estimated_reward,
+            principal: Some(BigInt::from(principal)),
+            request_epoch_id,
+            status: Some(status),
+            staked_sui_id,
+        }
     }
 }
 

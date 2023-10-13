@@ -304,7 +304,7 @@ type MoveObject {
 	hasPublicTransfer: Boolean
 	asObject: Object
 	asCoin: Coin
-	asStakedSui: StakedSui
+	asStake: Stake
 }
 
 type MovePackage {
@@ -535,7 +535,12 @@ type ServiceConfig {
 }
 
 type Stake {
-	id: ID!
+	estimatedReward: BigInt
+	principal: BigInt
+	status: StakeStatus
+	activeEpoch: Epoch
+	requestEpoch: Epoch
+	asMoveObject: MoveObject
 }
 
 type StakeConnection {
@@ -567,16 +572,18 @@ type StakeEdge {
 	cursor: String!
 }
 
+enum StakeStatus {
+	ACTIVE
+	PENDING
+	UNSTAKED
+}
+
 type StakeSubsidy {
 	balance: BigInt
 	distributionCounter: Int
 	currentDistributionAmount: BigInt
 	periodLength: Int
 	decreaseRate: Int
-}
-
-type StakedSui {
-	asMoveObject: MoveObject
 }
 
 type StorageFund {
