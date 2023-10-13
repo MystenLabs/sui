@@ -11,7 +11,12 @@ pub(crate) enum TransactionBlockKind {
     ConsensusCommitPrologueTransaction(ConsensusCommitPrologueTransaction),
     GenesisTransaction(GenesisTransaction),
     ChangeEpochTransaction(ChangeEpochTransaction),
-    // ProgrammableTransactionBlock(ProgrammableTransactionBlock),
+    ProgrammableTransactionBlock(ProgrammableTransaction),
+}
+
+#[derive(SimpleObject, Clone, Eq, PartialEq)]
+pub(crate) struct ProgrammableTransaction {
+    pub value: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]

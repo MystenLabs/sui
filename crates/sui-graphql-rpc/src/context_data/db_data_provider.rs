@@ -29,7 +29,7 @@ use crate::{
         transaction_block::{TransactionBlock, TransactionBlockEffects, TransactionBlockFilter},
         transaction_block_kind::{
             ChangeEpochTransaction, ConsensusCommitPrologueTransaction, GenesisTransaction,
-            TransactionBlockKind,
+            ProgrammableTransaction, TransactionBlockKind,
         },
         validator_set::ValidatorSet,
     },
@@ -39,8 +39,8 @@ use async_graphql::{
     ID,
 };
 use diesel::{
-    BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension,
-    PgArrayExpressionMethods, PgConnection, QueryDsl, RunQueryDsl,
+    BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
+    RunQueryDsl,
 };
 use std::str::FromStr;
 use sui_indexer::{
@@ -51,7 +51,7 @@ use sui_indexer::{
     },
     schema_v2::{
         checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
-        tx_indices, tx_input_objects, tx_recipients, tx_senders,
+        tx_input_objects, tx_recipients, tx_senders,
     },
     PgConnectionPoolConfig,
 };
@@ -456,7 +456,7 @@ impl PgManager {
 
                 query = query.filter(transactions::dsl::tx_sequence_number.eq_any(subquery));
             }
-            if let Some(paid_address) = filter.paid_address {
+            if filter.paid_address.is_some() {
                 return Err(Error::Internal(
                     "Paid address filter not supported".to_string(),
                 ));
@@ -1471,7 +1471,9 @@ impl From<&TransactionKind> for TransactionBlockKind {
                 };
                 TransactionBlockKind::GenesisTransaction(genesis)
             }
-            _ => unimplemented!(),
+            _ => TransactionBlockKind::ProgrammableTransactionBlock(ProgrammableTransaction {
+                value: "ProgrammableTransactionBlock".to_string(),
+            }),
         }
     }
 }
