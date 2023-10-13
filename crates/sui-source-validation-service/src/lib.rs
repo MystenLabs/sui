@@ -57,12 +57,12 @@ pub fn host_port() -> String {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct Config {
     pub packages: Vec<PackageSource>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "source", content = "values")]
 pub enum PackageSource {
     Repository(RepositorySource),
@@ -370,9 +370,11 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 pub async fn watch_for_upgrades(
     packages: Vec<PackageSource>,
     app_state: Arc<RwLock<AppState>>,
+    network: Network,
     channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
+    let mut num_packages = 0;
     for s in packages {
         let packages = match s {
             PackageSource::Repository(RepositorySource { packages, .. }) => packages,
@@ -380,12 +382,20 @@ pub async fn watch_for_upgrades(
         };
         for p in packages {
             if let Some(id) = p.watch {
+                num_packages += 1;
                 watch_ids.insert(TransactionFilter::ChangedObject(id))?
             }
         }
     }
 
-    let client: WsClient = WsClientBuilder::default().build(LOCALNET_WS_URL).await?;
+    let websocket_url = match network {
+        Network::Mainnet => MAINNET_WS_URL,
+        Network::Testnet => TESTNET_WS_URL,
+        Network::Devnet => DEVNET_WS_URL,
+        Network::Localnet => LOCALNET_WS_URL,
+    };
+
+    let client: WsClient = WsClientBuilder::default().build(websocket_url).await?;
     let mut subscription: Subscription<SuiTransactionBlockEffects> = client
         .subscribe(
             "suix_subscribeTransaction",
@@ -394,7 +404,7 @@ pub async fn watch_for_upgrades(
         )
         .await?;
 
-    info!("Listening for upgrades...");
+    info!("Listening for upgrades on {num_packages} package(s) on {websocket_url}...");
     loop {
         let result: Option<Result<SuiTransactionBlockEffects, _>> = subscription.next().await;
         match result {
