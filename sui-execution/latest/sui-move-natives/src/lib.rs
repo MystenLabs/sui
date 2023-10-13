@@ -33,8 +33,9 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
-use crate::crypto::zklogin;
+use crate::crypto::poseidon::PoseidonBN254CostParams;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
+use crate::crypto::{poseidon, zklogin};
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -146,6 +147,9 @@ pub struct NativesCostTable {
 
     // Receive object
     pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
+
+    // Poseidon
+    pub poseidon_bn254_cost_params: PoseidonBN254CostParams,
 }
 
 impl NativesCostTable {
@@ -498,6 +502,12 @@ impl NativesCostTable {
                     .check_zklogin_issuer_cost_base_as_option()
                     .map(Into::into),
             },
+            poseidon_bn254_cost_params: PoseidonBN254CostParams {
+                poseidon_bn254_cost_base: protocol_config.poseidon_bn254_cost_base().into(),
+                poseidon_bn254_data_cost_per_block: protocol_config
+                    .poseidon_bn254_data_cost_per_block()
+                    .into(),
+            },
         }
     }
 }
@@ -704,6 +714,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "zklogin_verified_issuer",
             "check_zklogin_issuer_internal",
             make_native!(zklogin::check_zklogin_issuer_internal),
+        ),
+        (
+            "poseidon",
+            "poseidon_bn254",
+            make_native!(poseidon::poseidon_bn254),
         ),
     ];
     let sui_framework_natives_iter =

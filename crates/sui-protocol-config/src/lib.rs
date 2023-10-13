@@ -778,6 +778,10 @@ pub struct ProtocolConfig {
     // zklogin::check_zklogin_issuer
     check_zklogin_issuer_cost_base: Option<u64>,
 
+    // poseidon::poseidon_bn254
+    poseidon_bn254_cost_base: Option<u64>,
+    poseidon_bn254_data_cost_per_block: Option<u64>,
+
     // Const params for consensus scoring decision
     // The scaling factor property for the MED outlier detection
     scoring_decision_mad_divisor: Option<f64>,
@@ -1312,6 +1316,10 @@ impl ProtocolConfig {
             // zklogin::check_zklogin_issuer
             check_zklogin_issuer_cost_base: None,
 
+            // hash::poseidon_bn254
+            poseidon_bn254_cost_base: None,
+            poseidon_bn254_data_cost_per_block: None,
+
             max_size_written_objects: None,
             max_size_written_objects_system_tx: None,
 
@@ -1535,6 +1543,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_effects_v2 = true;
                         cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
+
+                    cfg.poseidon_bn254_cost_base = Some(100);
+                    cfg.poseidon_bn254_data_cost_per_block = Some(100);
                 }
                 // Use this template when making changes:
                 //
