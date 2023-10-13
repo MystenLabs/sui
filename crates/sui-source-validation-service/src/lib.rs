@@ -59,12 +59,12 @@ pub fn host_port() -> String {
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub packages: Vec<PackageSources>,
+    pub packages: Vec<PackageSource>,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(tag = "source", content = "values")]
-pub enum PackageSources {
+pub enum PackageSource {
     Repository(RepositorySource),
     Directory(DirectorySource),
 }
@@ -305,8 +305,8 @@ pub async fn initialize(config: &Config, dir: &Path) -> anyhow::Result<NetworkLo
     let mut repos = vec![];
     for s in &config.packages {
         match s {
-            PackageSources::Repository(r) => repos.push(r),
-            PackageSources::Directory(_) => (), /* skip cloning */
+            PackageSource::Repository(r) => repos.push(r),
+            PackageSource::Directory(_) => (), /* skip cloning */
         }
     }
     clone_repositories(repos, dir).await?;
@@ -317,7 +317,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
     let mut tasks = vec![];
     for p in &config.packages {
         match p {
-            PackageSources::Repository(r) => {
+            PackageSource::Repository(r) => {
                 let repo_name = repo_name_from_url(&r.repository)?;
                 let network_name = r.network.clone().unwrap_or_default().to_string();
                 let packages_dir = dir.join(network_name).join(repo_name);
@@ -329,7 +329,7 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
                     tasks.push(t)
                 }
             }
-            PackageSources::Directory(packages_dir) => {
+            PackageSource::Directory(packages_dir) => {
                 for p in &packages_dir.packages {
                     let package_path = PathBuf::from(p.path.clone());
                     let network = packages_dir.network.clone().unwrap_or_default();
@@ -368,15 +368,15 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
 // falsely report outdated sources for a package. Pass an optional `channel` to observe the upgrade transaction(s).
 // The `channel` parameter exists for testing.
 pub async fn watch_for_upgrades(
-    packages: Vec<PackageSources>,
+    packages: Vec<PackageSource>,
     app_state: Arc<RwLock<AppState>>,
     channel: Option<Sender<SuiTransactionBlockEffects>>,
 ) -> anyhow::Result<()> {
     let mut watch_ids = ArrayParams::new();
     for s in packages {
         let packages = match s {
-            PackageSources::Repository(RepositorySource { packages, .. }) => packages,
-            PackageSources::Directory(DirectorySource { packages, .. }) => packages,
+            PackageSource::Repository(RepositorySource { packages, .. }) => packages,
+            PackageSource::Directory(DirectorySource { packages, .. }) => packages,
         };
         for p in packages {
             if let Some(id) = p.watch {
