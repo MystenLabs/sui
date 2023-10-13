@@ -503,12 +503,10 @@ impl NativesCostTable {
                     .map(Into::into),
             },
             poseidon_bn254_cost_params: PoseidonBN254CostParams {
-                poseidon_bn254_cost_base: protocol_config
-                    .poseidon_bn254_cost_base_as_option()
-                    .map(Into::into),
+                poseidon_bn254_cost_base: protocol_config.poseidon_bn254_cost_base().into(),
                 poseidon_bn254_data_cost_per_block: protocol_config
-                    .poseidon_bn254_data_cost_per_block_as_option()
-                    .map(Into::into),
+                    .poseidon_bn254_data_cost_per_block()
+                    .into(),
             },
         }
     }

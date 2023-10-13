@@ -5,9 +5,7 @@ use fastcrypto_zkp::bn254::poseidon::hash_to_bytes;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::u256::U256;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use move_vm_types::natives::function::PartialVMError;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -26,16 +24,16 @@ pub const MAX_INPUTS: u64 = 32;
 #[derive(Clone)]
 pub struct PoseidonBN254CostParams {
     /// Base cost for invoking the `poseidon_bn254` function
-    pub poseidon_bn254_cost_base: Option<InternalGas>,
+    pub poseidon_bn254_cost_base: InternalGas,
     /// Cost per block of `data`, where a block is 32 bytes
-    pub poseidon_bn254_data_cost_per_block: Option<InternalGas>,
+    pub poseidon_bn254_data_cost_per_block: InternalGas,
 }
 
 /***************************************************************************************************
  * native fun poseidon_bn254
- * Implementation of the Move native function `poseidon::poseidon_bn254(data: &vector<u256>): u256
+ * Implementation of the Move native function `poseidon::poseidon_bn254(data: &vecror<u256>): u256
  *   gas cost: poseidon_bn254_cost_base                           | base cost for function call and fixed opers
- *              + poseidon_bn254_data_cost_per_block * num_inputs | cost depends on number of inputs
+ *              + poseidon_bn254_data_cost_per_block * num_blocks | cost depends on number of blocks in message
  **************************************************************************************************/
 pub fn poseidon_bn254(
     context: &mut NativeContext,
@@ -50,15 +48,7 @@ pub fn poseidon_bn254(
         .clone();
 
     // Charge the base cost for this operation
-    native_charge_gas_early_exit!(
-        context,
-        cost_params
-            .poseidon_bn254_cost_base
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Gas cost for poseidon_bn254 not available".to_string())
-            )?
-    );
+    native_charge_gas_early_exit!(context, cost_params.poseidon_bn254_cost_base);
 
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 1);

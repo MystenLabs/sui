@@ -1653,6 +1653,8 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.shared_object_deletion = true;
                     }
+                    cfg.poseidon_bn254_cost_base = Some(100);
+                    cfg.poseidon_bn254_data_cost_per_block = Some(100);
                 }
                 // Use this template when making changes:
                 //
