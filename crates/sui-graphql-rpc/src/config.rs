@@ -180,8 +180,12 @@ impl ServerConfig {
         serde_yaml::from_str::<Self>(&contents).unwrap()
     }
 
+    pub fn to_yaml(&self) -> String {
+        serde_yaml::to_string(&self).unwrap()
+    }
+
     pub fn to_yaml_file(&self, path: PathBuf) {
-        let config = serde_yaml::to_string(&self).unwrap();
+        let config = self.to_yaml();
         std::fs::write(path, config).unwrap();
     }
 }
