@@ -10,9 +10,11 @@ mod checked {
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::transaction::{InputObjects, TransactionDataAPI, VersionedProtocolMessage};
     use sui_types::{error::SuiResult, gas::SuiGasStatus};
+    use tracing::instrument;
 
     pub use sui_transaction_checks::*;
 
+    #[instrument(level = "trace", skip_all)]
     pub fn check_certificate_input(
         store: &AuthorityStore,
         epoch_store: &AuthorityPerEpochStore,
