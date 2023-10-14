@@ -8,7 +8,3 @@ export const container = style({
 	flexDirection: 'column',
 	gap: 4,
 });
-
-export const heading = style({});
-
-export const description = style({});

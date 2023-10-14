@@ -1,67 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use axum::{
-    extract::Extension,
-    http::{header, StatusCode},
-    routing::get,
-    Router,
-};
-
+use axum::http::header;
 use mysten_network::metrics::MetricsCallbackProvider;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, Encoder, HistogramVec, IntCounterVec, IntGaugeVec,
-    Registry, TextEncoder, PROTOBUF_FORMAT,
+    Registry, PROTOBUF_FORMAT,
 };
 
-use std::net::SocketAddr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use sui_network::tonic::Code;
 
 use mysten_metrics::RegistryService;
-use tracing::{error, warn};
-
-pub const METRICS_ROUTE: &str = "/metrics";
-
-// Creates a new http server that has as a sole purpose to expose
-// and endpoint that prometheus agent can use to poll for the metrics.
-// A RegistryService is returned that can be used to get access in prometheus Registries.
-pub fn start_prometheus_server(addr: SocketAddr) -> RegistryService {
-    let registry = Registry::new();
-
-    let registry_service = RegistryService::new(registry);
-
-    if cfg!(msim) {
-        // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
-        // can't yet run it in the simulator.
-        warn!("not starting prometheus server in simulator");
-        return registry_service;
-    }
-
-    let app = Router::new()
-        .route(METRICS_ROUTE, get(metrics))
-        .layer(Extension(registry_service.clone()));
-
-    tokio::spawn(async move {
-        axum::Server::bind(&addr)
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
-    });
-
-    registry_service
-}
-
-async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
-    let metrics_families = registry_service.gather_all();
-    match TextEncoder.encode_to_string(&metrics_families) {
-        Ok(metrics) => (StatusCode::OK, metrics),
-        Err(error) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("unable to encode metrics: {error}"),
-        ),
-    }
-}
+use tracing::error;
 
 pub struct MetricsPushClient {
     certificate: std::sync::Arc<sui_tls::SelfSignedCertificate>,
@@ -191,6 +142,57 @@ pub fn start_metrics_push_task(config: &sui_config::NodeConfig, registry: Regist
     });
 }
 
+pub struct SuiNodeMetrics {
+    pub jwk_requests: IntCounterVec,
+    pub jwk_request_errors: IntCounterVec,
+
+    pub total_jwks: IntCounterVec,
+    pub invalid_jwks: IntCounterVec,
+    pub unique_jwks: IntCounterVec,
+}
+
+impl SuiNodeMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            jwk_requests: register_int_counter_vec_with_registry!(
+                "jwk_requests",
+                "Total number of JWK requests",
+                &["provider"],
+                registry,
+            )
+            .unwrap(),
+            jwk_request_errors: register_int_counter_vec_with_registry!(
+                "jwk_request_errors",
+                "Total number of JWK request errors",
+                &["provider"],
+                registry,
+            )
+            .unwrap(),
+            total_jwks: register_int_counter_vec_with_registry!(
+                "total_jwks",
+                "Total number of JWKs",
+                &["provider"],
+                registry,
+            )
+            .unwrap(),
+            invalid_jwks: register_int_counter_vec_with_registry!(
+                "invalid_jwks",
+                "Total number of invalid JWKs",
+                &["provider"],
+                registry,
+            )
+            .unwrap(),
+            unique_jwks: register_int_counter_vec_with_registry!(
+                "unique_jwks",
+                "Total number of unique JWKs",
+                &["provider"],
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GrpcMetrics {
     inflight_grpc: IntGaugeVec,
@@ -254,7 +256,7 @@ impl MetricsCallbackProvider for GrpcMetrics {
 
 #[cfg(test)]
 mod tests {
-    use crate::metrics::start_prometheus_server;
+    use mysten_metrics::start_prometheus_server;
     use prometheus::{IntCounter, Registry};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

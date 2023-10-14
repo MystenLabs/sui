@@ -98,8 +98,11 @@ pub type AnnotatedCompiledUnit = CompiledUnitEnum<AnnotatedCompiledModule, Annot
 impl AnnotatedCompiledModule {
     pub fn module_ident(&self) -> ModuleIdent {
         use crate::expansion::ast::Address;
-        let address =
-            Address::Numerical(self.address_name, sp(self.loc, self.named_module.address));
+        let address = Address::Numerical {
+            name: self.address_name,
+            value: sp(self.loc, self.named_module.address),
+            name_conflict: false,
+        };
         sp(
             self.loc,
             ModuleIdent_::new(

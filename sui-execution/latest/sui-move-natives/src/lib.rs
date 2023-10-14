@@ -33,6 +33,8 @@ use self::{
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
+use crate::crypto::zklogin;
+use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -137,6 +139,10 @@ pub struct NativesCostTable {
 
     // hmac
     pub hmac_hmac_sha3_256_cost_params: HmacHmacSha3256CostParams,
+
+    // zklogin
+    pub check_zklogin_id_cost_params: CheckZkloginIdCostParams,
+    pub check_zklogin_issuer_cost_params: CheckZkloginIssuerCostParams,
 
     // Receive object
     pub transfer_receive_object_internal_cost_params: TransferReceiveObjectInternalCostParams,
@@ -482,6 +488,16 @@ impl NativesCostTable {
                     .unwrap_or(0)
                     .into(),
             },
+            check_zklogin_id_cost_params: CheckZkloginIdCostParams {
+                check_zklogin_id_cost_base: protocol_config
+                    .check_zklogin_id_cost_base_as_option()
+                    .map(Into::into),
+            },
+            check_zklogin_issuer_cost_params: CheckZkloginIssuerCostParams {
+                check_zklogin_issuer_cost_base: protocol_config
+                    .check_zklogin_issuer_cost_base_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -679,6 +695,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "create_one_time_witness",
             make_native!(test_utils::create_one_time_witness),
         ),
+        (
+            "zklogin_verified_id",
+            "check_zklogin_id_internal",
+            make_native!(zklogin::check_zklogin_id_internal),
+        ),
+        (
+            "zklogin_verified_issuer",
+            "check_zklogin_issuer_internal",
+            make_native!(zklogin::check_zklogin_issuer_internal),
+        ),
     ];
     let sui_framework_natives_iter =
         sui_framework_natives
@@ -764,10 +790,10 @@ pub(crate) fn get_tag_and_layouts(
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     Ok(Some((*tag, layout, annotated_layout)))
 }

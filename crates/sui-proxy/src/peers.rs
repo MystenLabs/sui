@@ -208,17 +208,31 @@ fn extract(summary: SuiSystemStateSummary) -> impl Iterator<Item = (Ed25519Publi
         match Ed25519PublicKey::from_bytes(&vm.network_pubkey_bytes) {
             Ok(public_key) => {
                 let Ok(p2p_address) = Multiaddr::try_from(vm.p2p_address) else {
-                    error!("refusing to add peer to allow list; unable to decode multiaddr for {}", vm.name);
-                    return None // scoped to filter_map
+                    error!(
+                        "refusing to add peer to allow list; unable to decode multiaddr for {}",
+                        vm.name
+                    );
+                    return None; // scoped to filter_map
                 };
-                debug!("adding public key {:?} for address {:?}", public_key, p2p_address);
-                Some((public_key.clone(), SuiPeer { name: vm.name, p2p_address, public_key })) // scoped to filter_map
-            },
+                debug!(
+                    "adding public key {:?} for address {:?}",
+                    public_key, p2p_address
+                );
+                Some((
+                    public_key.clone(),
+                    SuiPeer {
+                        name: vm.name,
+                        p2p_address,
+                        public_key,
+                    },
+                )) // scoped to filter_map
+            }
             Err(error) => {
                 error!(
-                "unable to decode public key for name: {:?} sui_address: {:?} error: {error}",
-                vm.name, vm.sui_address);
-                 None  // scoped to filter_map
+                    "unable to decode public key for name: {:?} sui_address: {:?} error: {error}",
+                    vm.name, vm.sui_address
+                );
+                None // scoped to filter_map
             }
         }
     })

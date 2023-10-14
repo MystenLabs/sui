@@ -195,13 +195,12 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             function: (target_m, target_f),
             kind: ekind,
         } = implicit;
-        let Some((target_f,tn)) = is_valid_method(context, &target_m, target_f) else {
+        let Some((target_f, tn)) = is_valid_method(context, &target_m, target_f) else {
             if matches!(ekind, E::ImplicitUseFunKind::UseAlias { used: false }) {
                 let msg = format!("Unused 'use' of alias '{}'. Consider removing it", method);
-                context.env.add_diag(diag!(
-                    UnusedItem::Alias,
-                    (method.loc, msg),
-                ))
+                context
+                    .env
+                    .add_diag(diag!(UnusedItem::Alias, (method.loc, msg),))
             }
             continue;
         };
@@ -279,7 +278,12 @@ fn first_arg_type(
     f: &FunctionName,
 ) -> (Loc, Option<N::Type>) {
     let finfo = context.info.function_info(m, f);
-    match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
+    match finfo
+        .signature
+        .parameters
+        .first()
+        .map(|(_, _, t)| t.clone())
+    {
         None => (finfo.defined_loc, None),
         Some(t) => (t.loc, Some(t)),
     }

@@ -10,9 +10,9 @@ edition = "2021"
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 bcs.workspace = true
 versions.workspace = true
+workspace-hack.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

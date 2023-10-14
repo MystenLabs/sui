@@ -44,6 +44,7 @@ pub mod metrics;
 pub mod models;
 pub mod models_v2;
 pub mod processors;
+pub mod processors_v2;
 pub mod schema;
 pub mod schema_v2;
 pub mod store;
@@ -110,10 +111,11 @@ pub struct IndexerConfig {
     pub fullnode_sync_worker: bool,
     #[clap(long)]
     pub rpc_server_worker: bool,
+    #[clap(long)]
+    pub analytical_worker: bool,
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
-
     #[clap(long)]
     pub use_v2: bool,
 }
@@ -169,6 +171,7 @@ impl Default for IndexerConfig {
             reset_db: false,
             fullnode_sync_worker: true,
             rpc_server_worker: true,
+            analytical_worker: false,
             skip_db_commit: false,
             use_v2: false,
         }
@@ -189,7 +192,6 @@ impl Indexer {
             "Sui indexer of version {:?} started...",
             env!("CARGO_PKG_VERSION")
         );
-        mysten_metrics::init_metrics(registry);
 
         if config.rpc_server_worker {
             info!("Starting indexer with only RPC server");
@@ -263,7 +265,7 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
 }
 
 pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
-    let pool_config = PgConectionPoolConfig::default();
+    let pool_config = PgConnectionPoolConfig::default();
     let manager = ConnectionManager::<PgConnection>::new(db_url);
 
     diesel::r2d2::Pool::builder()
@@ -280,13 +282,13 @@ pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerE
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PgConectionPoolConfig {
+pub struct PgConnectionPoolConfig {
     pool_size: u32,
     connection_timeout: Duration,
     statement_timeout: Duration,
 }
 
-impl PgConectionPoolConfig {
+impl PgConnectionPoolConfig {
     const DEFAULT_POOL_SIZE: u32 = 100;
     const DEFAULT_CONNECTION_TIMEOUT: u64 = 30;
     const DEFAULT_STATEMENT_TIMEOUT: u64 = 30;
@@ -297,9 +299,21 @@ impl PgConectionPoolConfig {
             read_only: false,
         }
     }
+
+    pub fn set_pool_size(&mut self, size: u32) {
+        self.pool_size = size;
+    }
+
+    pub fn set_connection_timeout(&mut self, timeout: Duration) {
+        self.connection_timeout = timeout;
+    }
+
+    pub fn set_statement_timeout(&mut self, timeout: Duration) {
+        self.statement_timeout = timeout;
+    }
 }
 
-impl Default for PgConectionPoolConfig {
+impl Default for PgConnectionPoolConfig {
     fn default() -> Self {
         let db_pool_size = std::env::var("DB_POOL_SIZE")
             .ok()

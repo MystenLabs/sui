@@ -368,7 +368,6 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
-                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),

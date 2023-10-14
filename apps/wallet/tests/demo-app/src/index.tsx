@@ -9,8 +9,8 @@ import ReactDOM from 'react-dom/client';
 
 function getDemoTransaction(address: string) {
 	const txb = new TransactionBlock();
-	const [coin] = txb.splitCoins(txb.gas, [txb.pure(1)]);
-	txb.transferObjects([coin], txb.pure(address));
+	const [coin] = txb.splitCoins(txb.gas, [1]);
+	txb.transferObjects([coin], address);
 	return txb;
 }
 
@@ -93,7 +93,7 @@ function App() {
 			<button
 				onClick={async () => {
 					setError(null);
-					const txb = getDemoTransaction(accounts[0]?.address);
+					const txb = getDemoTransaction(accounts[0]?.address || '');
 					try {
 						await suiWallet.features[
 							'sui:signAndExecuteTransactionBlock'
@@ -112,7 +112,7 @@ function App() {
 			<button
 				onClick={async () => {
 					setError(null);
-					const txb = getDemoTransaction(accounts[0]?.address);
+					const txb = getDemoTransaction(accounts[0]?.address || '');
 					try {
 						await suiWallet.features['sui:signTransactionBlock'].signTransactionBlock({
 							transactionBlock: txb,

@@ -61,6 +61,7 @@ mod checked {
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
+    use tracing::instrument;
 
     use crate::adapter::substitute_package_id;
     use crate::programmable_transactions::context::*;
@@ -113,6 +114,7 @@ mod checked {
     }
 
     /// Execute a single command
+    #[instrument(level = "trace", skip_all)]
     fn execute_command<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
@@ -623,12 +625,10 @@ mod checked {
             ));
         };
 
-        let Ok(current_normalized) = existing_package
-            .normalize(
-                context.protocol_config.move_binary_format_version(),
-                context.protocol_config.no_extraneous_module_bytes(),
-            )
-        else {
+        let Ok(current_normalized) = existing_package.normalize(
+            context.protocol_config.move_binary_format_version(),
+            context.protocol_config.no_extraneous_module_bytes(),
+        ) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
 
@@ -924,9 +924,14 @@ mod checked {
             .get_runtime()
             .load_module(module_id, &data_store)
             .map_err(|e| context.convert_vm_error(e))?;
-        let Some((index, fdef)) = module.function_defs.iter().enumerate().find(|(_index, fdef)| {
-            module.identifier_at(module.function_handle_at(fdef.function).name) == function
-        }) else {
+        let Some((index, fdef)) = module
+            .function_defs
+            .iter()
+            .enumerate()
+            .find(|(_index, fdef)| {
+                module.identifier_at(module.function_handle_at(fdef.function).name) == function
+            })
+        else {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::FunctionNotFound,
                 format!(
@@ -1313,14 +1318,11 @@ mod checked {
                     return Err(command_argument_error(
                         CommandArgumentError::TypeMismatch,
                         idx,
-                    ))
+                    ));
                 };
-                let Some(s) = context
-                    .vm
-                    .get_runtime()
-                    .get_struct_type(*sidx) else {
-                        invariant_violation!("sui::transfer::Receiving struct not found in session")
-                    };
+                let Some(s) = context.vm.get_runtime().get_struct_type(*sidx) else {
+                    invariant_violation!("sui::transfer::Receiving struct not found in session")
+                };
                 let resolved_struct = get_struct_ident(&s);
 
                 if resolved_struct != RESOLVED_RECEIVING_STRUCT || targs.len() != 1 {
@@ -1356,7 +1358,9 @@ mod checked {
             Type::Reference(inner) => (false, inner),
             _ => return Ok(TxContextKind::None),
         };
-        let Type::Struct(idx) = &**inner else { return Ok(TxContextKind::None) };
+        let Type::Struct(idx) = &**inner else {
+            return Ok(TxContextKind::None);
+        };
         let Some(s) = context.vm.get_runtime().get_struct_type(*idx) else {
             invariant_violation!("Loaded struct not found")
         };

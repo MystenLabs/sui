@@ -8,9 +8,7 @@ use crate::digests::TransactionEventsDigest;
 use crate::effects::{InputSharedObjectKind, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::Message;
 use crate::object::Owner;
-use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter, Write};
@@ -41,7 +39,7 @@ pub struct TransactionEffectsV1 {
     /// Unwrapped objects are objects that were wrapped into other objects in the past,
     /// and just got extracted out.
     unwrapped: Vec<(ObjectRef, Owner)>,
-    /// Object Refs of objects now deleted (the old refs).
+    /// Object Refs of objects now deleted (the new refs).
     deleted: Vec<ObjectRef>,
     /// Object refs of objects previously wrapped in other objects but now deleted.
     unwrapped_then_deleted: Vec<ObjectRef>,
@@ -93,22 +91,6 @@ impl TransactionEffectsV1 {
             dependencies,
         }
     }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            gas_object,
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            status,
-            ..Default::default()
-        }
-    }
 }
 
 impl TransactionEffectsAPI for TransactionEffectsV1 {
@@ -120,6 +102,9 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
         self.modified_at_versions.clone()
+    }
+    fn old_object_metadata(&self) -> Vec<(ObjectRef, Owner)> {
+        unimplemented!("Only supposed by v2 and above");
     }
 
     fn input_shared_objects(&self) -> Vec<(ObjectRef, InputSharedObjectKind)> {

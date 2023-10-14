@@ -565,6 +565,41 @@ impl<S: ?Sized + StateRead> ObjectProvider for Arc<S> {
     }
 }
 
+#[async_trait]
+impl<S: ?Sized + StateRead> ObjectProvider for (Arc<S>, Arc<TransactionKeyValueStore>) {
+    type Error = StateReadError;
+
+    async fn get_object(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Object, Self::Error> {
+        let object_read = self.0.get_past_object_read(id, *version)?;
+        match object_read {
+            PastObjectRead::ObjectNotExists(_) | PastObjectRead::VersionNotFound(..) => {
+                match self.1.get_object(*id, *version).await? {
+                    Some(object) => Ok(object),
+                    None => Ok(PastObjectRead::VersionNotFound(*id, *version).into_object()?),
+                }
+            }
+            _ => Ok(object_read.into_object()?),
+        }
+    }
+
+    async fn find_object_lt_or_eq_version(
+        &self,
+        id: &ObjectID,
+        version: &SequenceNumber,
+    ) -> Result<Option<Object>, Self::Error> {
+        let database = self.0.get_db();
+        let id = *id;
+        let version = *version;
+        spawn_monitored_task!(async move { database.find_object_lt_or_eq_version(id, version) })
+            .await
+            .map_err(StateReadError::from)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum StateReadInternalError {
     #[error(transparent)]

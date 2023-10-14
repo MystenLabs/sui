@@ -56,7 +56,7 @@ impl<'a> TextBuilder<'a> {
                     .push(Span::styled(line_continuation.to_string(), style));
             });
             iter.next().into_iter().for_each(|remainder| {
-                self.chunks.extend(chunk(remainder.to_string()).into_iter());
+                self.chunks.extend(chunk(remainder.to_string()));
             });
         } else {
             self.chunks.extend(chunk(text))

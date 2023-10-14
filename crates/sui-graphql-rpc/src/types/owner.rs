@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::context_ext::DataProviderContextExt;
+use super::stake::Stake;
+use super::{address::Address, name_service::NameService};
+use crate::context_data::db_data_provider::PgManager;
 use crate::types::balance::*;
 use crate::types::coin::*;
 use crate::types::object::*;
-use crate::types::stake::*;
 use crate::types::sui_address::SuiAddress;
+
 use async_graphql::connection::Connection;
 use async_graphql::*;
-
-use super::address::Address;
-use super::name_service::NameService;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 #[derive(Interface)]
 #[graphql(
@@ -27,8 +27,8 @@ use super::name_service::NameService;
     ),
     field(
         name = "balance",
-        ty = "Balance",
-        arg(name = "type", ty = "Option<String>")
+        ty = "Option<Balance>",
+        arg(name = "type", ty = "String")
     ),
     field(
         name = "balance_connection",
@@ -77,6 +77,7 @@ pub(crate) struct Owner {
     pub address: SuiAddress,
 }
 
+#[allow(clippy::diverging_sub_expression)]
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
@@ -108,16 +109,18 @@ impl Owner {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
-    ) -> Result<Connection<String, Object>> {
-        ctx.data_provider()
-            .fetch_owned_objs(&self.address, first, after, last, before, filter)
+    ) -> Result<Option<Connection<String, Object>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_owned_objs(first, after, last, before, filter, self.address)
             .await
+            .extend()
     }
 
-    pub async fn balance(&self, ctx: &Context<'_>, type_: Option<String>) -> Result<Balance> {
-        ctx.data_provider()
-            .fetch_balance(&self.address, type_)
+    pub async fn balance(&self, ctx: &Context<'_>, type_: String) -> Result<Option<Balance>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balance(self.address, type_)
             .await
+            .extend()
     }
 
     pub async fn balance_connection(
@@ -127,10 +130,11 @@ impl Owner {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Connection<String, Balance>> {
-        ctx.data_provider()
-            .fetch_balance_connection(&self.address, first, after, last, before)
+    ) -> Result<Option<Connection<String, Balance>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_balances(self.address, first, after, last, before)
             .await
+            .extend()
     }
 
     pub async fn coin_connection(
@@ -146,25 +150,33 @@ impl Owner {
 
     pub async fn stake_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, Stake>> {
-        unimplemented!()
+    ) -> Result<Option<Connection<String, Stake>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_staked_sui(self.address, first, after, last, before)
+            .await
+            .extend()
     }
 
-    pub async fn default_name_service_name(&self) -> Option<String> {
-        unimplemented!()
+    pub async fn default_name_service_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+        ctx.data_unchecked::<PgManager>()
+            .default_name_service_name(ctx.data_unchecked::<NameServiceConfig>(), self.address)
+            .await
+            .extend()
     }
 
     pub async fn name_service_connection(
         &self,
+        ctx: &Context<'_>,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Option<Connection<String, NameService>> {
+    ) -> Result<Option<Connection<String, NameService>>> {
         unimplemented!()
     }
 }

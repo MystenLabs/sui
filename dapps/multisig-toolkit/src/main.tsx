@@ -17,7 +17,7 @@ import { router } from './routes';
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 	<React.StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<WalletKitProvider enableUnsafeBurner disableAutoConnect>
+			<WalletKitProvider disableAutoConnect>
 				<RouterProvider router={router} />
 			</WalletKitProvider>
 		</QueryClientProvider>

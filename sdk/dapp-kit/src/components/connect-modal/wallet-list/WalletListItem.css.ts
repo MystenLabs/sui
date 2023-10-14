@@ -3,34 +3,33 @@
 
 import { style } from '@vanilla-extract/css';
 
+import { themeVars } from '../../../themes/themeContract.js';
+
 export const container = style({
-	padding: 8,
-	borderRadius: 8,
+	display: 'flex',
 });
 
-export const selectedContainer = style({
-	background: '#FFFFFF',
-	boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.05)',
-});
-
-export const buttonContainer = style({
-	width: '100%',
+export const walletItem = style({
 	display: 'flex',
 	alignItems: 'center',
-	gap: '8px',
+	flexGrow: 1,
+	padding: 8,
+	gap: 8,
+	borderRadius: themeVars.radii.large,
+	':hover': {
+		backgroundColor: themeVars.backgroundColors.walletItemHover,
+	},
 });
 
-export const walletName = style({
-	overflow: 'hidden',
-	textOverflow: 'ellipsis',
-	whiteSpace: 'nowrap',
+export const selectedWalletItem = style({
+	backgroundColor: themeVars.backgroundColors.walletItemSelected,
+	boxShadow: '0px 2px 6px rgba(0, 0, 0, 0.05)',
 });
 
 export const walletIcon = style({
 	width: 28,
 	height: 28,
-	borderRadius: 6,
 	flexShrink: 0,
-	background: 'white',
 	objectFit: 'cover',
+	borderRadius: themeVars.radii.small,
 });

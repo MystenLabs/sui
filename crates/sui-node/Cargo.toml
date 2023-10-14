@@ -25,6 +25,7 @@ snap.workspace = true
 git-version.workspace = true
 const-str.workspace = true
 url.workspace = true
+humantime.workspace = true
 
 sui-archival.workspace = true
 sui-tls.workspace = true
@@ -48,7 +49,7 @@ mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

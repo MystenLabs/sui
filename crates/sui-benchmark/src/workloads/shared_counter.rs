@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::drivers::Interval;
 use crate::system_state_observer::SystemStateObserver;
 use crate::util::publish_basics_package;
 use crate::workloads::payload::Payload;
@@ -90,6 +91,8 @@ impl SharedCounterWorkloadBuilder {
         shared_counter_hotness_factor: u32,
         shared_counter_max_tip_amount: u64,
         reference_gas_price: u64,
+        duration: Interval,
+        group: u32,
     ) -> Option<WorkloadBuilderInfo> {
         let target_qps = (workload_weight * target_qps as f32) as u64;
         let num_workers = (workload_weight * num_workers as f32).ceil() as u64;
@@ -101,9 +104,11 @@ impl SharedCounterWorkloadBuilder {
             None
         } else {
             let workload_params = WorkloadParams {
+                group,
                 target_qps,
                 num_workers,
                 max_ops,
+                duration,
             };
             let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
                 SharedCounterWorkloadBuilder {
@@ -209,6 +214,7 @@ impl Workload<dyn Payload> for SharedCounterWorkload {
                 .await
                 .0,
         );
+        info!("Basics package id {:?}", self.basics_package_id);
         if !self.counters.is_empty() {
             // We already initialized the workload with some counters
             return;

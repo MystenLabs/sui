@@ -329,7 +329,7 @@ fn function(context: &mut Context, fdef: &T::Function) {
 }
 
 fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
-    types(context, sig.parameters.iter().map(|(_, st)| st));
+    types(context, sig.parameters.iter().map(|(_, _, st)| st));
     type_(context, &sig.return_type)
 }
 

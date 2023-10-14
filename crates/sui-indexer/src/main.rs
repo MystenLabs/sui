@@ -8,6 +8,7 @@ use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
 use sui_indexer::start_prometheus_server;
+use sui_indexer::store::PgIndexerAnalyticalStore;
 use sui_indexer::store::PgIndexerStore;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
@@ -34,6 +35,9 @@ async fn main() -> Result<(), IndexerError> {
         indexer_config.rpc_client_url.as_str(),
     )?;
     let indexer_metrics = IndexerMetrics::new(&registry);
+
+    mysten_metrics::init_metrics(&registry);
+
     let db_url = indexer_config.get_db_url().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed parsing database url with error {:?}",
@@ -86,8 +90,17 @@ async fn main() -> Result<(), IndexerError> {
     }
     if indexer_config.use_v2 {
         info!("Use v2");
-        let store = PgIndexerStoreV2::new(blocking_cp, indexer_metrics.clone());
-        return IndexerV2::start(&indexer_config, &registry, store, indexer_metrics).await;
+        if indexer_config.fullnode_sync_worker {
+            let store = PgIndexerStoreV2::new(blocking_cp, indexer_metrics.clone());
+            return IndexerV2::start_writer(&indexer_config, store, indexer_metrics).await;
+        } else if indexer_config.rpc_server_worker {
+            return IndexerV2::start_reader(&indexer_config, &registry, db_url).await;
+        } else if indexer_config.analytical_worker {
+            let store = PgIndexerAnalyticalStore::new(blocking_cp);
+            return IndexerV2::start_analytical_worker(store).await;
+        } else {
+            panic!("No worker is specified");
+        }
     }
 
     let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());

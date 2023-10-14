@@ -34,9 +34,7 @@ move-bytecode-verifier-vm-rework = { path = "../external-crates/move-execution/v
 move-vm-runtime-latest = { path = "../external-crates/move/move-vm/runtime", package = "move-vm-runtime" }
 move-vm-runtime-v0 = { path = "../external-crates/move-execution/v0/move-vm/runtime" }
 move-vm-runtime-vm-rework = { path = "../external-crates/move-execution/vm-rework/move-vm/runtime" }
-# move-vm-runtime-$CUT = { path = "../external-crates/move-execution/$CUT/move-vm/runtime" }
-
-workspace-hack = { version = "0.1", path = "../crates/workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 cargo_metadata = "0.15.4"

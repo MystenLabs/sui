@@ -6,7 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, ConstantName, Field, FunctionName, ModuleName,
-        QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
+        Mutability, QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -142,7 +142,12 @@ pub struct Script {
 
 #[derive(Clone, Copy)]
 pub enum Address {
-    Numerical(Option<Name>, Spanned<NumericalAddress>),
+    Numerical {
+        name: Option<Name>,
+        value: Spanned<NumericalAddress>,
+        // set to true when the same name is used across multiple packages
+        name_conflict: bool,
+    },
     NamedUnassigned(Name),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -205,7 +210,8 @@ pub struct StructDefinition {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum StructFields {
-    Defined(Fields<Type>),
+    Positional(Vec<Type>),
+    Named(Fields<Type>),
     Native(Loc),
 }
 
@@ -224,7 +230,7 @@ pub enum Visibility {
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<(Name, AbilitySet)>,
-    pub parameters: Vec<(Var, Type)>,
+    pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
@@ -399,9 +405,15 @@ pub type Type = Spanned<Type_>;
 //**************************************************************************************************
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FieldBindings {
+    Named(Fields<LValue>),
+    Positional(Vec<LValue>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
-    Var(ModuleAccess, Option<Vec<Type>>),
-    Unpack(ModuleAccess, Option<Vec<Type>>, Fields<LValue>),
+    Var(Mutability, ModuleAccess, Option<Vec<Type>>),
+    Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -565,7 +577,7 @@ impl fmt::Debug for Address {
 impl PartialEq for Address {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Numerical(_, l), Self::Numerical(_, r)) => l == r,
+            (Self::Numerical { value: l, .. }, Self::Numerical { value: r, .. }) => l == r,
             (Self::NamedUnassigned(l), Self::NamedUnassigned(r)) => l == r,
             _ => false,
         }
@@ -585,10 +597,10 @@ impl Ord for Address {
         use std::cmp::Ordering;
 
         match (self, other) {
-            (Self::Numerical(_, _), Self::NamedUnassigned(_)) => Ordering::Less,
-            (Self::NamedUnassigned(_), Self::Numerical(_, _)) => Ordering::Greater,
+            (Self::Numerical { .. }, Self::NamedUnassigned(_)) => Ordering::Less,
+            (Self::NamedUnassigned(_), Self::Numerical { .. }) => Ordering::Greater,
 
-            (Self::Numerical(_, l), Self::Numerical(_, r)) => l.cmp(r),
+            (Self::Numerical { value: l, .. }, Self::Numerical { value: r, .. }) => l.cmp(r),
             (Self::NamedUnassigned(l), Self::NamedUnassigned(r)) => l.cmp(r),
         }
     }
@@ -597,7 +609,10 @@ impl Ord for Address {
 impl Hash for Address {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
-            Self::Numerical(_, sp!(_, bytes)) => bytes.hash(state),
+            Self::Numerical {
+                value: sp!(_, bytes),
+                ..
+            } => bytes.hash(state),
             Self::NamedUnassigned(name) => name.hash(state),
         }
     }
@@ -623,22 +638,29 @@ impl UseFuns {
 
 impl Address {
     pub const fn anonymous(loc: Loc, address: NumericalAddress) -> Self {
-        Self::Numerical(None, sp(loc, address))
+        Self::Numerical {
+            name: None,
+            value: sp(loc, address),
+            name_conflict: false,
+        }
     }
 
     pub fn into_addr_bytes(self) -> NumericalAddress {
         match self {
-            Self::Numerical(_, sp!(_, bytes)) => bytes,
+            Self::Numerical {
+                value: sp!(_, bytes),
+                ..
+            } => bytes,
             Self::NamedUnassigned(_) => NumericalAddress::DEFAULT_ERROR_ADDRESS,
         }
     }
 
     pub fn is(&self, address: impl AsRef<str>) -> bool {
         match self {
-            Self::Numerical(Some(n), _) | Self::NamedUnassigned(n) => {
+            Self::Numerical { name: Some(n), .. } | Self::NamedUnassigned(n) => {
                 n.value.as_str() == address.as_ref()
             }
-            Self::Numerical(None, _) => false,
+            Self::Numerical { name: None, .. } => false,
         }
     }
 }
@@ -843,9 +865,22 @@ impl IntoIterator for AbilitySet {
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Numerical(None, sp!(_, bytes)) => write!(f, "{}", bytes),
-            Self::Numerical(Some(name), sp!(_, bytes)) => write!(f, "({}={})", name, bytes),
-            Self::NamedUnassigned(name) => write!(f, "{}", name),
+            Self::Numerical {
+                name: None,
+                value: sp!(_, bytes),
+                ..
+            } => write!(f, "{}", bytes),
+            Self::Numerical {
+                name: Some(name),
+                value: sp!(_, bytes),
+                name_conflict: true,
+            } => write!(f, "({}={})", name, bytes),
+            Self::Numerical {
+                name: Some(name),
+                value: _,
+                name_conflict: false,
+            }
+            | Self::NamedUnassigned(name) => write!(f, "{}", name),
         }
     }
 }
@@ -1160,15 +1195,23 @@ impl AstDebug for (StructName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
-            w.block(|w| {
+        match fields {
+            StructFields::Named(fields) => w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
                     w.write(&format!("{}#{}: ", idx, f));
                     st.ast_debug(w);
                     true
                 });
-            })
+            }),
+            StructFields::Positional(fields) => w.block(|w| {
+                w.list(fields.iter().enumerate(), ",", |w, (idx, ty)| {
+                    w.write(&format!("{idx}#pos{idx}: "));
+                    ty.ast_debug(w);
+                    true
+                });
+            }),
+            StructFields::Native(_) => (),
         }
     }
 }
@@ -1414,7 +1457,10 @@ impl AstDebug for FunctionSignature {
         } = self;
         type_parameters.ast_debug(w);
         w.write("(");
-        w.comma(parameters, |w, (v, st)| {
+        w.comma(parameters, |w, (mutability, v, st)| {
+            if mutability.is_some() {
+                w.write("mut ");
+            }
             w.write(&format!("{}: ", v));
             st.ast_debug(w);
         });
@@ -1827,7 +1873,10 @@ impl AstDebug for LValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use LValue_ as L;
         match self {
-            L::Var(v, tys_opt) => {
+            L::Var(mutability, v, tys_opt) => {
+                if mutability.is_some() {
+                    w.write("mut ");
+                }
                 w.write(&format!("{}", v));
                 if let Some(ss) = tys_opt {
                     w.write("<");
@@ -1835,20 +1884,14 @@ impl AstDebug for LValue_ {
                     w.write(">");
                 }
             }
-            L::Unpack(ma, tys_opt, fields) => {
+            L::Unpack(ma, tys_opt, field_binds) => {
                 ma.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
                     w.write(">");
                 }
-                w.write("{");
-                w.comma(fields, |w, (_, f, idx_b)| {
-                    let (idx, b) = idx_b;
-                    w.write(&format!("{}#{}: ", idx, f));
-                    b.ast_debug(w);
-                });
-                w.write("}");
+                field_binds.ast_debug(w);
             }
         }
     }
@@ -1881,6 +1924,30 @@ impl AstDebug for Vec<Vec<Exp>> {
             w.write("{");
             w.comma(trigger, |w, b| b.ast_debug(w));
             w.write("}");
+        }
+    }
+}
+
+impl AstDebug for FieldBindings {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            FieldBindings::Named(fields) => {
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_b)| {
+                    let (idx, b) = idx_b;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    b.ast_debug(w);
+                });
+                w.write("}");
+            }
+            FieldBindings::Positional(vals) => {
+                w.write("(");
+                w.comma(vals.iter().enumerate(), |w, (idx, lval)| {
+                    w.write(&format!("{idx}: "));
+                    lval.ast_debug(w);
+                });
+                w.write(")");
+            }
         }
     }
 }

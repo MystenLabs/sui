@@ -5,7 +5,7 @@ import type { Infer } from 'superstruct';
 import { nullable, number, object, string } from 'superstruct';
 
 import type { StructTag } from '../bcs/index.js';
-import type { CoinStruct } from '../types/coin.js';
+import type { CoinStruct } from '../client/types/index.js';
 import type {
 	SuiMoveObject,
 	SuiObjectData,

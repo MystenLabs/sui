@@ -1,5 +1,66 @@
 # @mysten/sui.js
 
+## 0.44.0
+
+### Minor Changes
+
+- 11cf4e68b: Remove deprecated methods.
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+  - @mysten/bcs@0.8.1
+
+## 0.43.3
+
+### Patch Changes
+
+- 004fb1991: Export TransactionResult type
+
+## 0.43.2
+
+### Patch Changes
+
+- 9b052166d: Register Option enum to sdk bcs registry
+
+## 0.43.1
+
+### Patch Changes
+
+- faa13ded9: Ensure that TransactionBlocks can be copied via structuredClone to workaround bug in sui wallet
+- c5684bb52: rename zk to zkLogin
+
+## 0.43.0
+
+### Minor Changes
+
+- 781d073d9: Update getFaucetRequestStatus to GET request
+- e4484852b: Improve APIs for building transaction inputs
+
+  - txb.splitCoins now accepts `amounts`` as raw JavaScript number
+  - txb.transferObjects now accepts `address` as JavaScript string
+  - All single objects, or lists of objects, now also accepts object IDs as JavaScript strings
+  - txb.pure accepts `SerializedBcs` (eg `txb.pure(bcs.U64.serialize(123))`)
+  - Added pure helpers (`txb.pure.address()`, `txb.bool()`, and `txb.pure.u{8-256}()`) to simplify serialization of pure values
+  - Deprecated using `txb.pure` with raw JavaScript values, or an explicit type argument.
+
+- 1bc430161: Updated BCS defintions to use new BCS schema builder
+
+### Patch Changes
+
+- 3764c464f: - add support for basic parsing of zkLogin signatures
+  - new zklogin package
+- 71e0a3197: zklogin improvements
+
+  - use new bcs api
+  - rename `toBufferBE` to `toBigEndianBytes`
+  - stop exporting `ZkLoginSignatureInputs` and `extractClaimValue`
+
+- Updated dependencies [1bc430161]
+- Updated dependencies [e4484852b]
+  - @mysten/bcs@0.8.0
+
 ## 0.42.0
 
 ### Minor Changes
@@ -627,7 +688,7 @@
 ### Minor Changes
 
 - e0b173b9e: Standardize Ed25519KeyPair key derivation with SLIP10
-- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the Typescript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
+- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the TypeScript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
 - 03e6b552b: Add util function to get coin balances
 - 4575c0a02: Fix type definition of SuiMoveNormalizedType
 - ccf7f148d: Added generic signAndExecuteTransaction method to the SDK, which can be used with any supported type of transaction.

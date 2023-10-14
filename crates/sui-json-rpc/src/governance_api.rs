@@ -277,7 +277,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
-fn calculate_apys(
+pub fn calculate_apys(
     stake_subsidy_start_epoch: u64,
     exchange_rate_table: Vec<ValidatorExchangeRates>,
 ) -> Vec<ValidatorApy> {
@@ -445,10 +445,10 @@ async fn exchange_rates(
 
 #[derive(Clone, Debug)]
 pub struct ValidatorExchangeRates {
-    address: SuiAddress,
-    pool_id: ObjectID,
-    active: bool,
-    rates: Vec<(EpochId, PoolTokenExchangeRate)>,
+    pub address: SuiAddress,
+    pub pool_id: ObjectID,
+    pub active: bool,
+    pub rates: Vec<(EpochId, PoolTokenExchangeRate)>,
 }
 
 impl SuiRpcModule for GovernanceReadApi {

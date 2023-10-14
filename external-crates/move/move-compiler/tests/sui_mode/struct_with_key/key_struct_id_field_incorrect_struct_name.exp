@@ -4,7 +4,7 @@ error[Sui E02007]: invalid object declaration
 4 │     struct S has key {
   │                  --- The 'key' ability is used to declare objects in Sui
 5 │         id: object::ID
-  │         ^^  ---------- But found type: '(sui=0x2)::object::ID'
+  │         ^^  ---------- But found type: 'sui::object::ID'
   │         │    
   │         Invalid object 'S'. Structs with the 'key' ability must have 'id: sui::object::UID' as their first field
 

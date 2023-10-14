@@ -103,7 +103,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
                     // not an (potentially dereferenced) N::Type_::Apply nor N::Type_::Param
                     return false;
                 };
-                let N::Type_::Apply(_,tname, _) = &bt.value else {
+                let N::Type_::Apply(_, tname, _) = &bt.value else {
                     // not a struct type
                     return false;
                 };
@@ -204,7 +204,7 @@ impl<'a> Context<'a> {
     ) -> Option<WrappingFieldInfo> {
         let sdef = self.program_info.struct_definition(&mident, &sname);
         let N::StructFields::Defined(sfields) = &sdef.fields else {
-            return None
+            return None;
         };
         sfields.iter().find_map(|(_, fname, (_, ftype))| {
             let res = self.wraps_object(ftype);

@@ -9,6 +9,7 @@ use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
 use sui_types::digests::{TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::SuiError;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -16,8 +17,9 @@ use sui_types::messages_checkpoint::EndOfEpochData;
 use sui_types::messages_checkpoint::FullCheckpointContents;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::messages_checkpoint::VerifiedCheckpointContents;
-use sui_types::storage::ReadStore;
+use sui_types::object::Object;
 use sui_types::storage::WriteStore;
+use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use typed_store::Map;
 
@@ -48,6 +50,14 @@ impl RocksDbStore {
             highest_verified_checkpoint: Arc::new(Mutex::new(None)),
             highest_synced_checkpoint: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn get_objects(&self, object_keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, SuiError> {
+        self.authority_store.multi_get_object_by_key(object_keys)
+    }
+
+    pub fn get_last_executed_checkpoint(&self) -> Result<Option<VerifiedCheckpoint>, SuiError> {
+        Ok(self.checkpoint_store.get_highest_executed_checkpoint()?)
     }
 }
 

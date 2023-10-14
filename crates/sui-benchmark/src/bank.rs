@@ -13,7 +13,7 @@ use std::sync::Arc;
 use sui_core::test_utils::{make_pay_sui_transaction, make_transfer_sui_transaction};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
-use tracing::{debug, info};
+use tracing::info;
 
 /// Bank is used for generating gas for running the benchmark.
 #[derive(Clone)]
@@ -61,7 +61,7 @@ impl BenchmarkBank {
             )
             .await?;
 
-        debug!("Number of gas requests = {}", chunked_coin_configs.len());
+        info!("Number of gas requests = {}", chunked_coin_configs.len());
         for chunk in chunked_coin_configs {
             let gas_coins = self.pay_sui(chunk, &mut init_coin, gas_price).await?;
             new_gas_coins.extend(gas_coins);
@@ -98,7 +98,7 @@ impl BenchmarkBank {
     async fn pay_sui(
         &mut self,
         coin_configs: &[GasCoinConfig],
-        mut init_coin: &mut Gas,
+        init_coin: &mut Gas,
         gas_price: u64,
     ) -> Result<UpdatedAndNewlyMintedGasCoins> {
         let recipient_addresses: Vec<SuiAddress> = coin_configs.iter().map(|g| g.address).collect();

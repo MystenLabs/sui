@@ -1,7 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionArgument, TransactionBlock } from '@mysten/sui.js/transactions';
+import { bcs } from '@mysten/sui.js/bcs';
+import {
+	TransactionArgument,
+	TransactionBlock,
+	TransactionObjectArgument,
+} from '@mysten/sui.js/transactions';
 
 import { KIOSK_MODULE, KIOSK_TYPE, ObjectArgument } from '../types';
 import { objArg } from '../utils';
@@ -9,7 +14,9 @@ import { objArg } from '../utils';
 /**
  * Create a new shared Kiosk and returns the [kiosk, kioskOwnerCap] tuple.
  */
-export function createKiosk(tx: TransactionBlock): [TransactionArgument, TransactionArgument] {
+export function createKiosk(
+	tx: TransactionBlock,
+): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [kiosk, kioskOwnerCap] = tx.moveCall({
 		target: `${KIOSK_MODULE}::new`,
 	});
@@ -21,7 +28,7 @@ export function createKiosk(tx: TransactionBlock): [TransactionArgument, Transac
  * Calls the `kiosk::new()` function and shares the kiosk.
  * Returns the `kioskOwnerCap` object.
  */
-export function createKioskAndShare(tx: TransactionBlock): TransactionArgument {
+export function createKioskAndShare(tx: TransactionBlock): TransactionObjectArgument {
 	const [kiosk, kioskOwnerCap] = createKiosk(tx);
 	shareKiosk(tx, kiosk);
 	return kioskOwnerCap;
@@ -89,11 +96,11 @@ export function take(
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
 	itemId: string,
-): TransactionArgument {
+): TransactionObjectArgument {
 	const [item] = tx.moveCall({
 		target: `${KIOSK_MODULE}::take`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 
 	return item;
@@ -117,8 +124,8 @@ export function list(
 		arguments: [
 			objArg(tx, kiosk),
 			objArg(tx, kioskCap),
-			tx.pure(itemId, 'address'),
-			tx.pure(price, 'u64'),
+			tx.pure.address(itemId),
+			tx.pure.u64(price),
 		],
 	});
 }
@@ -137,7 +144,7 @@ export function delist(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::delist`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 }
 
@@ -156,7 +163,7 @@ export function placeAndList(
 	tx.moveCall({
 		target: `${KIOSK_MODULE}::place_and_list`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure(price, 'u64')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), objArg(tx, item), tx.pure.u64(price)],
 	});
 }
 
@@ -170,11 +177,11 @@ export function purchase(
 	kiosk: ObjectArgument,
 	itemId: string,
 	payment: ObjectArgument,
-): [TransactionArgument, TransactionArgument] {
+): [TransactionObjectArgument, TransactionObjectArgument] {
 	const [item, transferRequest] = tx.moveCall({
 		target: `${KIOSK_MODULE}::purchase`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), tx.pure(itemId, 'address'), objArg(tx, payment)],
+		arguments: [objArg(tx, kiosk), tx.pure.address(itemId), objArg(tx, payment)],
 	});
 
 	return [item, transferRequest];
@@ -189,8 +196,8 @@ export function withdrawFromKiosk(
 	kiosk: ObjectArgument,
 	kioskCap: ObjectArgument,
 	amount?: string | bigint | number,
-): TransactionArgument {
-	const amountArg = tx.pure(amount ? { Some: amount } : { None: true }, 'Option<u64>');
+): TransactionObjectArgument {
+	const amountArg = bcs.option(bcs.u64()).serialize(amount);
 
 	const [coin] = tx.moveCall({
 		target: `${KIOSK_MODULE}::withdraw`,
@@ -216,7 +223,7 @@ export function borrowValue(
 	const [item, promise] = tx.moveCall({
 		target: `${KIOSK_MODULE}::borrow_val`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure(itemId, 'address')],
+		arguments: [objArg(tx, kiosk), objArg(tx, kioskCap), tx.pure.address(itemId)],
 	});
 
 	return [item, promise];

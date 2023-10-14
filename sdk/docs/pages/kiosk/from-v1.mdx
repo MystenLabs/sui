@@ -87,7 +87,7 @@ const createKiosk = async () => {
 	const tx = new TransactionBlock();
 	const kiosk_cap = createKioskAndShare(tx);
 
-	tx.transferObjects([kiosk_cap], tx.pure(accountAddress, 'address'));
+	tx.transferObjects([kiosk_cap], accountAddress);
 
 	// ... continue to sign and execute the transaction
 	// ...

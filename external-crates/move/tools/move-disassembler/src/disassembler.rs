@@ -454,7 +454,7 @@ impl<'a> Disassembler<'a> {
                 .into_iter()
                 .enumerate()
                 .map(|(local_idx, local)| format!("L{}:\t{}", local_idx, local))
-                .chain(bytecode.into_iter())
+                .chain(bytecode)
                 .collect();
             format!(" {{\n{}\n}}", body_iter.join("\n"))
         }

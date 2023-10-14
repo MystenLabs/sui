@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::join_all;
+use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::WsClient;
 use jsonrpsee::ws_client::WsClientBuilder;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -17,7 +17,9 @@ use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::{
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, TransactionFilter,
+};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
@@ -46,7 +48,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::{Transaction, TransactionData};
+use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI, TransactionKind};
 use tokio::time::{timeout, Instant};
 use tokio::{task::JoinHandle, time::sleep};
 use tracing::info;
@@ -404,6 +406,34 @@ impl TestCluster {
         }
     }
 
+    pub async fn wait_for_authenticator_state_update(&self) {
+        timeout(
+            Duration::from_secs(60),
+            self.fullnode_handle.sui_node.with_async(|node| async move {
+                let mut txns = node.state().subscription_handler.subscribe_transactions(
+                    TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
+                );
+                let state = node.state();
+
+                while let Some(tx) = txns.next().await {
+                    let digest = *tx.transaction_digest();
+                    let tx = state
+                        .database
+                        .get_transaction_block(&digest)
+                        .unwrap()
+                        .unwrap();
+                    match &tx.data().intent_message().value.kind() {
+                        TransactionKind::EndOfEpochTransaction(_) => (),
+                        TransactionKind::AuthenticatorStateUpdate(_) => break,
+                        _ => panic!("{:?}", tx),
+                    }
+                }
+            }),
+        )
+        .await
+        .expect("Timed out waiting for authenticator state update");
+    }
+
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
         let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
         let rgp = self.get_reference_gas_price().await;
@@ -437,7 +467,7 @@ impl TestCluster {
     pub async fn execute_transaction_return_raw_effects(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let results = self
             .submit_transaction_to_validators(tx.clone(), &self.get_validator_pubkeys())
             .await?;
@@ -460,7 +490,7 @@ impl TestCluster {
         &self,
         tx: Transaction,
         pubkeys: &[AuthorityName],
-    ) -> anyhow::Result<(TransactionEffects, TransactionEvents, Vec<Object>)> {
+    ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
         let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
         let replies = loop {
@@ -501,20 +531,17 @@ impl TestCluster {
         let replies = replies?;
         let mut all_effects = HashMap::new();
         let mut all_events = HashMap::new();
-        let mut all_objects = HashSet::new();
         for reply in replies {
             let effects = reply.signed_effects.into_data();
             all_effects.insert(effects.digest(), effects);
             all_events.insert(reply.events.digest(), reply.events);
-            all_objects.insert(reply.fastpath_input_objects);
+            // reply.fastpath_input_objects is unused.
         }
         assert_eq!(all_effects.len(), 1);
         assert_eq!(all_events.len(), 1);
-        assert_eq!(all_objects.len(), 1);
         Ok((
             all_effects.into_values().next().unwrap(),
             all_events.into_values().next().unwrap(),
-            all_objects.into_iter().next().unwrap(),
         ))
     }
 

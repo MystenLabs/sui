@@ -364,7 +364,10 @@ impl TransactionBuilder {
             .await?
             .into_object()?;
         let Some(SuiRawData::Package(package)) = object.bcs else {
-            bail!("Bcs field in object [{}] is missing or not a package.", package_id);
+            bail!(
+                "Bcs field in object [{}] is missing or not a package.",
+                package_id
+            );
         };
         let package: MovePackage = MovePackage::new(
             package.id,
@@ -672,8 +675,8 @@ impl TransactionBuilder {
             .ok_or_else(|| anyhow!("Coins input should contain at lease one coin object."))?;
         let (oref, coin_type) = self.get_object_ref_and_type(coin).await?;
 
-        let ObjectType::Struct(type_) = &coin_type else{
-            return Err(anyhow!("Provided object [{coin}] is not a move object."))
+        let ObjectType::Struct(type_) = &coin_type else {
+            return Err(anyhow!("Provided object [{coin}] is not a move object."));
         };
         ensure!(
             type_.is_coin(),

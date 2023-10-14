@@ -3,7 +3,6 @@
 
 #[cfg(msim)]
 mod test {
-    use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
     use std::collections::HashSet;
     use std::path::PathBuf;
@@ -493,6 +492,7 @@ mod test {
 
         // Run random payloads at 100% load
         let adversarial_cfg = AdversarialPayloadCfg::from_str("0-1.0").unwrap();
+        let duration = Interval::from_str("unbounded").unwrap();
 
         // TODO: re-enable this when we figure out why it is causing connection errors and making
         // tests run for ever
@@ -500,8 +500,10 @@ mod test {
 
         let shared_counter_hotness_factor = 50;
         let shared_counter_max_tip = 0;
+        let gas_request_chunk_size = 100;
 
-        let workloads = WorkloadConfiguration::build_workloads(
+        let workloads_builders = WorkloadConfiguration::create_workload_builders(
+            0,
             num_workers,
             num_transfer_accounts,
             shared_counter_weight,
@@ -515,9 +517,16 @@ mod test {
             shared_counter_max_tip,
             target_qps,
             in_flight_ratio,
+            duration,
+            system_state_observer.clone(),
+        )
+        .await;
+
+        let workloads = WorkloadConfiguration::build(
+            workloads_builders,
             bank,
             system_state_observer.clone(),
-            100,
+            gas_request_chunk_size,
         )
         .await
         .unwrap();

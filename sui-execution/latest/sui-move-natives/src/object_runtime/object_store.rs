@@ -360,11 +360,12 @@ impl<'a> ChildObjectStore<'a> {
         child_fully_annotated_layout: &MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<Option<(ObjectResult<Value>, DynamicallyLoadedObjectMetadata)>> {
-        let Some((obj, obj_meta)) = self
-            .inner
-            .receive_object_from_store(parent, child, child_version)? else {
-                return Ok(None)
-            };
+        let Some((obj, obj_meta)) =
+            self.inner
+                .receive_object_from_store(parent, child, child_version)?
+        else {
+            return Ok(None);
+        };
 
         Ok(Some(
             match deserialize_move_object(&obj, child_ty, child_layout, child_move_type)? {

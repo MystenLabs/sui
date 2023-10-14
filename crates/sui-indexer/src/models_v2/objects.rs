@@ -2,17 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use diesel::prelude::*;
+use serde::de::DeserializeOwned;
 use sui_types::digests::ObjectDigest;
 
 use move_bytecode_utils::module_cache::GetModule;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
 use sui_types::object::{ObjectFormatOptions, ObjectRead};
 
 use crate::errors::IndexerError;
 use crate::schema_v2::objects;
 use crate::types_v2::IndexedObject;
+
+#[derive(Queryable)]
+pub struct DynamicFieldColumn {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_digest: Vec<u8>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
+#[derive(Queryable)]
+pub struct ObjectRefColumn {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_digest: Vec<u8>,
+}
 
 // NOTE: please add updating statement like below in pg_indexer_store_v2.rs,
 // if new columns are added here:
@@ -26,6 +45,8 @@ pub struct StoredObject {
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
+    /// The type of this object. This will be None if the object is a Package
+    pub object_type: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
@@ -51,6 +72,7 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
+            object_type: o.object.type_().map(|t| t.to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -89,7 +111,23 @@ impl StoredObject {
         Ok(ObjectRead::Exists(oref, object, layout))
     }
 
-    pub fn try_into_dynamic_field_info(self) -> Result<Option<DynamicFieldInfo>, IndexerError> {
+    pub fn try_into_expectant_dynamic_field_info(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<DynamicFieldInfo, IndexerError> {
+        match self.try_into_dynamic_field_info(module_cache).transpose() {
+            Some(Ok(info)) => Ok(info),
+            Some(Err(e)) => Err(e),
+            None => Err(IndexerError::PersistentStorageDataCorruptionError(
+                "Dynamic field object has incompatible dynamic field type: empty df_kind".into(),
+            )),
+        }
+    }
+
+    pub fn try_into_dynamic_field_info(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
         if self.df_kind.is_none() {
             return Ok(None);
         }
@@ -130,20 +168,26 @@ impl StoredObject {
                 )))
             }
         };
-        let (name, bcs_name) = if let Some(bcs_name) = self.df_name {
-            let name = bcs::from_bytes(&bcs_name).map_err(|e| {
+        let name = if let Some(field_name) = self.df_name {
+            let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_name. Error: {e}",
                     object_id
                 ))
             })?;
-            Ok::<_, IndexerError>((name, bcs_name))
+            name
         } else {
             return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
                 "object {} has incompatible dynamic field type: empty df_name",
                 object_id
             )));
-        }?;
+        };
+        let layout = move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(
+            &name.type_,
+            module_cache,
+        )?;
+        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
+        let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
         let object_type =
             self.df_object_type
                 .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -155,7 +199,7 @@ impl StoredObject {
             digest: object_digest,
             type_,
             name,
-            bcs_name: bcs_name.to_vec(),
+            bcs_name,
             object_type,
             object_id: df_object_id,
         }))
@@ -177,5 +221,22 @@ impl StoredObject {
             (self.object_version as u64).into(),
             object_digest,
         ))
+    }
+
+    pub fn to_dynamic_field<K, V>(&self) -> Option<Field<K, V>>
+    where
+        K: DeserializeOwned,
+        V: DeserializeOwned,
+    {
+        let object: Object = bcs::from_bytes(&self.serialized_object).ok()?;
+
+        let object = object.data.try_as_move()?;
+        let ty = object.type_();
+
+        if !ty.is_dynamic_field() {
+            return None;
+        }
+
+        bcs::from_bytes(object.contents()).ok()
     }
 }

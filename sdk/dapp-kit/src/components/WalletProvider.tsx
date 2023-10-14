@@ -11,8 +11,11 @@ import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletPropertiesChanged } from '../hooks/wallet/useWalletPropertiesChanged.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
+import { lightTheme } from '../themes/lightTheme.js';
+import type { Theme } from '../themes/themeContract.js';
 import { getRegisteredWallets } from '../utils/walletUtils.js';
 import { createWalletStore } from '../walletStore.js';
+import { InjectedThemeStyles } from './styling/InjectedThemeStyles.js';
 
 type WalletProviderProps = {
 	/** A list of wallets that are sorted to the top of the wallet list, if they are available to connect to. By default, wallets are sorted by the order they are loaded in. */
@@ -33,19 +36,28 @@ type WalletProviderProps = {
 	/** The key to use to store the most recently connected wallet account. */
 	storageKey?: string;
 
+	/** The theme to use for styling UI components. Defaults to using the light theme. */
+	theme?: Theme | null;
+
 	children: ReactNode;
 };
 
 const SUI_WALLET_NAME = 'Sui Wallet';
-const DEFUALT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
+
+const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
+
+const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[] = [
+	'sui:signTransactionBlock',
+];
 
 export function WalletProvider({
 	preferredWallets = [SUI_WALLET_NAME],
-	requiredFeatures = [],
+	requiredFeatures = DEFAULT_REQUIRED_FEATURES,
 	storage = localStorage,
-	storageKey = DEFUALT_STORAGE_KEY,
+	storageKey = DEFAULT_STORAGE_KEY,
 	enableUnsafeBurner = false,
 	autoConnect = false,
+	theme = lightTheme,
 	children,
 }: WalletProviderProps) {
 	const storeRef = useRef(
@@ -64,6 +76,8 @@ export function WalletProvider({
 				enableUnsafeBurner={enableUnsafeBurner}
 				autoConnect={autoConnect}
 			>
+				{/* TODO: We ideally don't want to inject styles if people aren't using the UI components */}
+				{theme ? <InjectedThemeStyles theme={theme} /> : null}
 				{children}
 			</WalletConnectionManager>
 		</WalletContext.Provider>

@@ -1,5 +1,77 @@
 # @mysten/dapp-kit
 
+## 0.3.0
+
+### Minor Changes
+
+- 361818abc: execute transaction from dApp rather than wallet in useSignAndExecuteTransactionBlock
+- 2b532bc37: Fix issue where CSS was being overridden by application code
+- 0c5cdc049: Expose types related to theming
+- c7e12c928: Infer the active chain when signing transactions and expose some more descriptive errors
+
+### Patch Changes
+
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/wallet-standard@0.8.5
+  - @mysten/sui.js@0.44.0
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [004fb1991]
+  - @mysten/sui.js@0.43.3
+  - @mysten/wallet-standard@0.8.4
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [9b052166d]
+  - @mysten/sui.js@0.43.2
+  - @mysten/wallet-standard@0.8.3
+
+## 0.2.2
+
+### Patch Changes
+
+- 87ef14c70: Fix side effects
+
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [faa13ded9]
+- Updated dependencies [c5684bb52]
+  - @mysten/sui.js@0.43.1
+  - @mysten/wallet-standard@0.8.2
+
+## 0.2.0
+
+### Minor Changes
+
+- b29f66f18: Add theme definitions for our UI components
+- 1227ee1ce: Theme UI components based on provided theme and add design polish
+- 8e9590a8c: Exclude non-Sui accounts from the accounts state when someone connects a multi-chain wallet
+
+## 0.1.0
+
+### Minor Changes
+
+- c51db090a: update useSuiClientQuery hooks and remove generated RPC hooks
+- ccfc810c0: Require wallets to have some default characteristics in order to be recognized
+
+### Patch Changes
+
+- Updated dependencies [781d073d9]
+- Updated dependencies [3764c464f]
+- Updated dependencies [e4484852b]
+- Updated dependencies [71e0a3197]
+- Updated dependencies [1bc430161]
+  - @mysten/sui.js@0.43.0
+  - @mysten/wallet-standard@0.8.1
+
 ## 0.0.5
 
 ### Patch Changes

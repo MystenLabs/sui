@@ -26,7 +26,7 @@ export class AccountKeypair {
 		return toSerializedSignature({
 			signature,
 			signatureScheme,
-			pubKey: pubkey,
+			publicKey: pubkey,
 		});
 	}
 

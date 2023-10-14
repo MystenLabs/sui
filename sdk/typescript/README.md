@@ -1,6 +1,6 @@
 # Docs site
 
-For more complete docs, visit the [Sui Typescript SDK docs](https://sui-typescript-docs.vercel.app/)
+For more complete docs, visit the [Sui TypeScript SDK docs](https://sui-typescript-docs.vercel.app/)
 
 # Sui TypeScript SDK
 
@@ -185,8 +185,8 @@ const client = new SuiClient({
 
 const tx = new TransactionBlock();
 tx.transferObjects(
-	[tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2')],
-	tx.pure('0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a'),
+	['0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'],
+	'0x1d20dcdb2bca4f508ea9613994683eb4e76e9c4ed371169677c1be02aaf0b12a',
 );
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -211,8 +211,8 @@ const client = new SuiClient({
 });
 
 const tx = new TransactionBlock();
-const [coin] = tx.splitCoins(tx.gas, [tx.pure(1000)]);
-tx.transferObjects([coin], tx.pure(keypair.getPublicKey().toSuiAddress()));
+const [coin] = tx.splitCoins(tx.gas, [1000]);
+tx.transferObjects([coin], keypair.getPublicKey().toSuiAddress());
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
 	transactionBlock: tx,
@@ -234,8 +234,8 @@ const client = new SuiClient({
 });
 
 const tx = new TransactionBlock();
-tx.mergeCoins(tx.object('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2'), [
-	tx.object('0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b'),
+tx.mergeCoins('0xe19739da1a701eadc21683c5b127e62b553e833e8a15a4f292f4f48b4afea3f2', [
+	'0x127a8975134a4824d9288722c4ee4fc824cd22502ab4ad9f6617f3ba19229c1b',
 ]);
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -260,7 +260,7 @@ const packageObjectId = '0x...';
 const tx = new TransactionBlock();
 tx.moveCall({
 	target: `${packageObjectId}::nft::mint`,
-	arguments: [tx.pure('Example NFT')],
+	arguments: [tx.pure.string('Example NFT')],
 });
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
@@ -294,7 +294,7 @@ const [upgradeCap] = tx.publish({
 	modules,
 	dependencies,
 });
-tx.transferObjects([upgradeCap], tx.pure(await client.getAddress()));
+tx.transferObjects([upgradeCap], await client.getAddress());
 const result = await client.signAndExecuteTransactionBlock({
 	signer: keypair,
 	transactionBlock: tx,

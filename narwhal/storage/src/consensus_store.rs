@@ -192,7 +192,7 @@ mod test {
     use crate::ConsensusStore;
     use std::collections::HashMap;
     use store::Map;
-    use test_utils::CommitteeFixture;
+    use test_utils::{latest_protocol_version, CommitteeFixture};
     use types::{
         Certificate, CommittedSubDag, CommittedSubDagShell, ConsensusCommit, ConsensusCommitV2,
         ReputationScores, TimestampMs,
@@ -209,7 +209,7 @@ mod test {
         for sequence_number in 0..10 {
             let sub_dag = CommittedSubDag::new(
                 vec![],
-                Certificate::default(),
+                Certificate::default(&latest_protocol_version()),
                 sequence_number,
                 ReputationScores::new(&committee),
                 None,
@@ -237,7 +237,7 @@ mod test {
 
             let sub_dag = CommittedSubDag::new(
                 vec![],
-                Certificate::default(),
+                Certificate::default(&latest_protocol_version()),
                 sequence_number,
                 scores,
                 None,

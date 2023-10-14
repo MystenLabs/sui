@@ -34,7 +34,6 @@ import { ImportPrivateKeyPage } from './pages/accounts/ImportPrivateKeyPage';
 import { ManageAccountsPage } from './pages/accounts/manage/ManageAccountsPage';
 import { ProtectAccountPage } from './pages/accounts/ProtectAccountPage';
 import { WelcomePage } from './pages/accounts/WelcomePage';
-import { AccountsDev } from './pages/AccountsDevPage';
 import { ApprovalRequestPage } from './pages/approval-request';
 import HomePage, {
 	AppsPage,
@@ -67,7 +66,7 @@ const HIDDEN_MENU_PATHS = [
 	'/apps/disconnectapp',
 ];
 
-const notifyUserActiveInterval = 15 * 1000; // 15 seconds
+const notifyUserActiveInterval = 5 * 1000; // 5 seconds
 
 const App = () => {
 	const dispatch = useAppDispatch();
@@ -138,9 +137,13 @@ const App = () => {
 		if (!autoLockEnabled) {
 			return;
 		}
-		const sendUpdateThrottled = throttle(notifyUserActiveInterval, () => {
-			backgroundClient.notifyUserActive();
-		});
+		const sendUpdateThrottled = throttle(
+			notifyUserActiveInterval,
+			() => {
+				backgroundClient.notifyUserActive();
+			},
+			{ noTrailing: true },
+		);
 		document.addEventListener('mousemove', sendUpdateThrottled);
 		document.addEventListener('keydown', sendUpdateThrottled);
 		return () => {
@@ -208,9 +211,6 @@ const App = () => {
 				<Route path="connect/:requestID" element={<SiteConnectPage />} />
 				<Route path="approve/:requestID" element={<ApprovalRequestPage />} />
 			</Route>
-			{process.env.NODE_ENV === 'development' ? (
-				<Route path="/accounts-dev" element={<AccountsDev />} />
-			) : null}
 		</Routes>
 	);
 };

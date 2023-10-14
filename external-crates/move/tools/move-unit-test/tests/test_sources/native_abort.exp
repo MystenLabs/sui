@@ -20,7 +20,7 @@ Failures in 0x1::A:
 │ 11 │     fun native_abort_good_wrong_code() {
 │    │         ---------------------------- In this function in 0x1::A
 │ 12 │         vector::borrow(&vector::empty<u64>(), 1);
-│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to give a vector operation error with sub-status 0 originating in the module 00000000000000000000000000000001::A but instead it gave a vector operation error with sub-status 1 originating in the module 00000000000000000000000000000001::A rooted here
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to give a vector operation error with sub-status 0 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::A but instead it gave a vector operation error with sub-status 1 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::A rooted here
 │ 
 │ 
 └──────────────────
@@ -33,7 +33,7 @@ Failures in 0x1::A:
 │ 5 │     fun native_abort_unexpected_abort() {
 │   │         ----------------------------- In this function in 0x1::A
 │ 6 │         vector::borrow(&vector::empty<u64>(), 1);
-│   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it gave a vector operation error with sub-status 1 originating in the module 00000000000000000000000000000001::A rooted here
+│   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it gave a vector operation error with sub-status 1 originating in the module 0000000000000000000000000000000000000000000000000000000000000001::A rooted here
 │ 
 │ 
 └──────────────────

@@ -10,6 +10,7 @@ export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
+		connectedAccounts: readonly WalletAccount[],
 		selectedAccount: WalletAccount | null,
 	) => void;
 	updateWalletAccounts: (accounts: readonly WalletAccount[]) => void;
@@ -49,9 +50,9 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 				lastConnectedAccountAddress: null,
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
-				setWalletConnected(wallet, selectedAccount) {
+				setWalletConnected(wallet, connectedAccounts, selectedAccount) {
 					set(() => ({
-						accounts: wallet.accounts,
+						accounts: connectedAccounts,
 						currentWallet: wallet,
 						currentAccount: selectedAccount,
 						lastConnectedWalletName: wallet.name,

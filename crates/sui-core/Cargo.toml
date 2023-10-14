@@ -60,6 +60,7 @@ narwhal-crypto.workspace = true
 narwhal-executor.workspace = true
 narwhal-network.workspace = true
 narwhal-node.workspace = true
+narwhal-test-utils.workspace = true
 narwhal-types.workspace = true
 narwhal-worker.workspace = true
 shared-crypto.workspace = true
@@ -78,7 +79,7 @@ sui-transaction-checks.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [dev-dependencies]
 clap.workspace = true
@@ -92,7 +93,6 @@ serde_yaml.workspace = true
 
 move-symbol-pool.workspace = true
 
-narwhal-test-utils.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 

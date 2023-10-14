@@ -128,10 +128,9 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
             state.0.insert(*v);
         }),
 
-        E::ModuleCall(mcall) => exp(state, &mcall.arguments),
-        E::Builtin(_, e)
-        | E::Vector(_, _, _, e)
-        | E::Freeze(e)
+        E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
+        E::Builtin(_, args) | E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
+        E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)
         | E::Borrow(_, e, _)
@@ -144,15 +143,9 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
 
         E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(state, e)),
 
-        E::ExpList(es) => es.iter().for_each(|item| exp_list_item(state, item)),
+        E::Multiple(es) => es.iter().for_each(|e| exp(state, e)),
 
         E::Unreachable => panic!("ICE should not analyze dead code"),
-    }
-}
-
-fn exp_list_item(state: &mut LivenessState, item: &ExpListItem) {
-    match item {
-        ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(state, e),
     }
 }
 
@@ -353,10 +346,15 @@ mod last_usage {
                 }
             }
 
-            E::ModuleCall(mcall) => exp(context, &mut mcall.arguments),
-            E::Builtin(_, e)
-            | E::Vector(_, _, _, e)
-            | E::Freeze(e)
+            E::ModuleCall(mcall) => mcall
+                .arguments
+                .iter_mut()
+                .rev()
+                .for_each(|arg| exp(context, arg)),
+            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+                args.iter_mut().rev().for_each(|arg| exp(context, arg))
+            }
+            E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
             | E::Borrow(_, e, _)
@@ -372,18 +370,9 @@ mod last_usage {
                 .rev()
                 .for_each(|(_, _, e)| exp(context, e)),
 
-            E::ExpList(es) => es
-                .iter_mut()
-                .rev()
-                .for_each(|item| exp_list_item(context, item)),
+            E::Multiple(es) => es.iter_mut().rev().for_each(|e| exp(context, e)),
 
             E::Unreachable => panic!("ICE should not analyze dead code"),
-        }
-    }
-
-    fn exp_list_item(context: &mut Context, item: &mut ExpListItem) {
-        match item {
-            ExpListItem::Single(e, _) | ExpListItem::Splat(_, e, _) => exp(context, e),
         }
     }
 }

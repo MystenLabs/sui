@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, path::PathBuf};
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
+use std::env;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
 
@@ -12,10 +14,15 @@ const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct ConnectionConfig {
     pub(crate) port: u16,
     pub(crate) host: String,
+    // TODO: remove rpc 1.0 dependency once DB work done
     pub(crate) rpc_url: String,
+    pub(crate) db_url: String,
+    pub(crate) prom_url: String,
+    pub(crate) prom_port: u16,
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -51,12 +58,22 @@ pub struct Experiments {
 }
 
 impl ConnectionConfig {
-    pub fn new(port: Option<u16>, host: Option<String>, rpc_url: Option<String>) -> Self {
+    pub fn new(
+        port: Option<u16>,
+        host: Option<String>,
+        rpc_url: Option<String>,
+        db_url: Option<String>,
+        prom_url: Option<String>,
+        prom_port: Option<u16>,
+    ) -> Self {
         let default = Self::default();
         Self {
             port: port.unwrap_or(default.port),
             host: host.unwrap_or(default.host),
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
+            db_url: db_url.unwrap_or(default.db_url),
+            prom_url: prom_url.unwrap_or(default.prom_url),
+            prom_port: prom_port.unwrap_or(default.prom_port),
         }
     }
 }
@@ -100,6 +117,10 @@ impl Default for ConnectionConfig {
             port: 8000,
             host: "127.0.0.1".to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
+            db_url: env::var("PG_DB_URL")
+                .expect("PG_DB_URL must be set if db_url not provided in config"),
+            prom_url: "0.0.0.0".to_string(),
+            prom_port: 9184,
         }
     }
 }
@@ -110,6 +131,62 @@ impl Default for Limits {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
         }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
+pub struct InternalFeatureConfig {
+    #[serde(default)]
+    pub(crate) query_limits_checker: bool,
+    #[serde(default)]
+    pub(crate) feature_gate: bool,
+    #[serde(default)]
+    pub(crate) logger: bool,
+    #[serde(default)]
+    pub(crate) query_timeout: bool,
+    #[serde(default)]
+    pub(crate) metrics: bool,
+}
+
+impl Default for InternalFeatureConfig {
+    fn default() -> Self {
+        Self {
+            query_limits_checker: true,
+            feature_gate: true,
+            logger: true,
+            query_timeout: true,
+            metrics: true,
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Deserialize, Debug, Default)]
+pub struct ServerConfig {
+    #[serde(default)]
+    pub(crate) service: ServiceConfig,
+    #[serde(default)]
+    pub(crate) connection: ConnectionConfig,
+    #[serde(default)]
+    pub(crate) internal_features: InternalFeatureConfig,
+    #[serde(default)]
+    pub name_service: NameServiceConfig,
+}
+
+#[allow(dead_code)]
+impl ServerConfig {
+    pub fn from_yaml(path: &str) -> Self {
+        let contents = std::fs::read_to_string(path).unwrap();
+        serde_yaml::from_str::<Self>(&contents).unwrap()
+    }
+
+    pub fn to_yaml(&self) -> String {
+        serde_yaml::to_string(&self).unwrap()
+    }
+
+    pub fn to_yaml_file(&self, path: PathBuf) {
+        let config = self.to_yaml();
+        std::fs::write(path, config).unwrap();
     }
 }
 
