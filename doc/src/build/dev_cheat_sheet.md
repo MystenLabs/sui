@@ -64,19 +64,19 @@ No: use a dynamic field-backed collection (`Table`, `Bag`, `ObjectBag`, `ObjectT
     --> use `Bag`
 ```
 `vector` (
-    [example](github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#vectors) 
-    | [code](github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/vector.move) 
-    | [docs](move-book.com/advanced-topics/managing-collections-with-vectors.html) 
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#vectors) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/move-stdlib/sources/vector.move) 
+    | [docs](https://move-book.com/advanced-topics/managing-collections-with-vectors.html) 
     )  
 `Table` (
-    [example](github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#table) 
-    | [code](github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/table.move) 
-    | [docs](github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/table.md)
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/1_homogeneous_collections.md#table) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/table.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/table.md)
     )  
 `Bag` (
-    [example]() 
-    | [code](github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/bag.move) 
-    | [docs](github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bag.md)
+    [example](https://github.com/sui-foundation/sui-move-intro-course/blob/main/unit-four/lessons/3_heterogeneous_collections.md#heterogeneous-collections) 
+    | [code](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/bag.move) 
+    | [docs](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/bag.md)
     )  
 
 ### Composability
