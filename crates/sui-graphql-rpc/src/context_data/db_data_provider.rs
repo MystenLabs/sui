@@ -286,7 +286,7 @@ impl PgManager {
                 .order(objects::dsl::checkpoint_sequence_number.desc());
         }
 
-        let limit = first.or(last).unwrap_or(10) as i64;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredObject>> = self
@@ -1233,7 +1233,6 @@ impl PgManager {
 
     pub(crate) async fn fetch_events(
         &self,
-        address: SuiAddress,
         first: Option<u64>,
         after: Option<String>,
         last: Option<u64>,
@@ -1277,7 +1276,7 @@ impl PgManager {
         };
 
         let descending_order = before.is_some();
-        let limit = first.or(last).unwrap_or(10) as usize;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as usize;
         let cursor = after
             .or(before)
             .map(|c| self.parse_event_cursor(c))
