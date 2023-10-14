@@ -1,0 +1,9 @@
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/if_assigns_else_doesnt.move:11:13
+   │
+ 3 │     let x;
+   │         - The variable 'x' might not have a value. The variable must be assigned a value before being used.
+   ·
+11 │     assert!(x == 42, 42);
+   │             ^ Invalid usage of unassigned variable 'x'
+
