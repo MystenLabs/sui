@@ -127,9 +127,8 @@ pub fn mock_certified_checkpoint<'a>(
     committee: Committee,
     seq_num: u64,
 ) -> CertifiedCheckpointSummary {
-    let contents = CheckpointContents::new_with_causally_ordered_transactions(
-        [ExecutionDigests::random()].into_iter(),
-    );
+    let contents =
+        CheckpointContents::new_with_causally_ordered_transactions([ExecutionDigests::random()]);
 
     let summary = CheckpointSummary::new(
         committee.epoch,

@@ -138,7 +138,7 @@ async fn test_narwhal_manager() {
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,
-                TrivialTransactionValidator::default(),
+                TrivialTransactionValidator,
             )
             .await;
 
@@ -200,7 +200,7 @@ async fn test_narwhal_manager() {
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,
-                TrivialTransactionValidator::default(),
+                TrivialTransactionValidator,
             )
             .await;
 

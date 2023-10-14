@@ -54,9 +54,7 @@ struct LoggerExtension {
 
 impl LoggerExtension {
     async fn set_session_id(&self, ip: Option<SocketAddr>) {
-        let ip_component = ip
-            .map(|ip| format!("{}-", ip))
-            .unwrap_or_else(|| "".to_string());
+        let ip_component = ip.map(|ip| format!("{}-", ip)).unwrap_or_default();
         let uuid_component = format!("{}", Uuid::new_v4());
         *self.session_id.lock().await = format!("{}{}", ip_component, uuid_component);
     }

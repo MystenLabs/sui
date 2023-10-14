@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::{connection::Connection, *};
+use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::{
     address::Address,
@@ -11,11 +12,12 @@ use super::{
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
+    sui_system_state_summary::SuiSystemStateSummary,
     transaction_block::{TransactionBlock, TransactionBlockFilter},
 };
 use crate::{
     config::ServiceConfig,
-    context_data::{context_ext::DataProviderContextExt, db_data_provider::PgManager},
+    context_data::db_data_provider::PgManager,
     error::{code, graphql_error, Error},
 };
 
@@ -182,9 +184,27 @@ impl Query {
         ctx: &Context<'_>,
         protocol_version: Option<u64>,
     ) -> Result<ProtocolConfigs> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        ctx.data_provider()
-            .fetch_protocol_config(protocol_version)
+        ctx.data_unchecked::<PgManager>()
+            .fetch_protocol_configs(protocol_version)
             .await
+            .extend()
+    }
+
+    async fn resolve_name_service_address(
+        &self,
+        ctx: &Context<'_>,
+        name: String,
+    ) -> Result<Option<Address>> {
+        ctx.data_unchecked::<PgManager>()
+            .resolve_name_service_address(ctx.data_unchecked::<NameServiceConfig>(), name)
+            .await
+            .extend()
+    }
+
+    async fn latest_sui_system_state(&self, ctx: &Context<'_>) -> Result<SuiSystemStateSummary> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_latest_sui_system_state()
+            .await
+            .extend()
     }
 }

@@ -25,6 +25,10 @@ enum AddressTransactionBlockRelationship {
 	PAID
 }
 
+type AuthenticatorStateUpdate {
+	value: String!
+}
+
 type Balance {
 	coinType: String
 	coinObjectCount: Int
@@ -174,17 +178,17 @@ type EndOfEpochData {
 	nextProtocolVersion: Int
 }
 
+type EndOfEpochTransaction {
+	value: String!
+}
+
 type Epoch {
 	epochId: Int!
-	systemStateVersion: BigInt
-	protocolConfigs: ProtocolConfigs
 	referenceGasPrice: BigInt
-	systemParameters: SystemParameters
-	stakeSubsidy: StakeSubsidy
 	validatorSet: ValidatorSet
-	storageFund: StorageFund
-	safeMode: SafeMode
 	startTimestamp: DateTime
+	endTimestamp: DateTime
+	protocolConfigs: ProtocolConfigs
 }
 
 enum ExecutionStatus {
@@ -239,7 +243,7 @@ type GasEffects {
 
 type GasInput {
 	gasSponsor: Address
-	gasPayment: [Object!]
+	gasPayment(first: Int, after: String, last: Int, before: String): ObjectConnection
 	gasPrice: BigInt
 	gasBudget: BigInt
 }
@@ -304,7 +308,7 @@ type MoveObject {
 	hasPublicTransfer: Boolean
 	asObject: Object
 	asCoin: Coin
-	asStakedSui: StakedSui
+	asStake: Stake
 }
 
 type MovePackage {
@@ -464,6 +468,10 @@ type PageInfo {
 	endCursor: String
 }
 
+type ProgrammableTransaction {
+	value: String!
+}
+
 type ProtocolConfigAttr {
 	key: String!
 	value: String!
@@ -475,9 +483,9 @@ type ProtocolConfigFeatureFlag {
 }
 
 type ProtocolConfigs {
-	configs: [ProtocolConfigAttr!]
-	featureFlags: [ProtocolConfigFeatureFlag!]
 	protocolVersion: Int!
+	featureFlags: [ProtocolConfigFeatureFlag!]!
+	configs: [ProtocolConfigAttr!]!
 	config(key: String!): ProtocolConfigAttr
 	featureFlag(key: String!): ProtocolConfigFeatureFlag
 }
@@ -502,6 +510,8 @@ type Query {
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
+	resolveNameServiceAddress(name: String!): Address
+	latestSuiSystemState: SuiSystemStateSummary!
 }
 
 type SafeMode {
@@ -529,7 +539,12 @@ type ServiceConfig {
 }
 
 type Stake {
-	id: ID!
+	estimatedReward: BigInt
+	principal: BigInt
+	status: StakeStatus
+	activeEpoch: Epoch
+	requestEpoch: Epoch
+	asMoveObject: MoveObject
 }
 
 type StakeConnection {
@@ -561,16 +576,18 @@ type StakeEdge {
 	cursor: String!
 }
 
+enum StakeStatus {
+	ACTIVE
+	PENDING
+	UNSTAKED
+}
+
 type StakeSubsidy {
 	balance: BigInt
 	distributionCounter: Int
 	currentDistributionAmount: BigInt
 	periodLength: Int
 	decreaseRate: Int
-}
-
-type StakedSui {
-	asMoveObject: MoveObject
 }
 
 type StorageFund {
@@ -580,6 +597,19 @@ type StorageFund {
 
 
 scalar SuiAddress
+
+type SuiSystemStateSummary {
+	systemStateVersion: BigInt
+	referenceGasPrice: BigInt
+	systemParameters: SystemParameters
+	stakeSubsidy: StakeSubsidy
+	validatorSet: ValidatorSet
+	storageFund: StorageFund
+	safeMode: SafeMode
+	startTimestamp: DateTime
+	epoch: Epoch
+	protocolConfigs: ProtocolConfigs
+}
 
 type SystemParameters {
 	durationMs: BigInt
@@ -598,6 +628,7 @@ type TransactionBlock {
 	bcs: Base64
 	gasInput: GasInput
 	kind: TransactionBlockKind
+	signatures: [TransactionSignature]
 	digest: String!
 	expiration: Epoch
 }
@@ -656,11 +687,15 @@ input TransactionBlockFilter {
 	transactionIds: [String!]
 }
 
-union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction
+union TransactionBlockKind = ConsensusCommitPrologueTransaction | GenesisTransaction | ChangeEpochTransaction | ProgrammableTransaction | AuthenticatorStateUpdate | EndOfEpochTransaction
 
 enum TransactionBlockKindInput {
 	SYSTEM_TX
 	PROGRAMMABLE_TX
+}
+
+type TransactionSignature {
+	base64Sig: Base64!
 }
 
 type Validator {
@@ -685,6 +720,11 @@ type Validator {
 	nextEpochStake: BigInt
 	nextEpochGasPrice: BigInt
 	nextEpochCommissionRate: Int
+	atRisk: Int
+	reportRecords: [SuiAddress!]
+	operationCap: MoveObject
+	stakingPool: MoveObject
+	exchangeRates: MoveObject
 }
 
 type ValidatorCredentials {
@@ -711,3 +751,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+

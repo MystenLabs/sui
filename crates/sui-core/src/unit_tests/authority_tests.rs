@@ -1482,10 +1482,14 @@ async fn test_handle_transfer_transaction_ok() {
     );
 
     // Check the final state of the locks
-    let Some(envelope) = authority_state.get_transaction_lock(
-        &(object_id, before_object_version, object.digest()),
-        &authority_state.epoch_store_for_testing(),
-    ).await.unwrap() else {
+    let Some(envelope) = authority_state
+        .get_transaction_lock(
+            &(object_id, before_object_version, object.digest()),
+            &authority_state.epoch_store_for_testing(),
+        )
+        .await
+        .unwrap()
+    else {
         panic!("No verified envelope for transaction");
     };
 
@@ -3064,7 +3068,10 @@ async fn test_invalid_mutable_clock_parameter() {
     let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let transaction = authority_state.verify_transaction(transaction).unwrap();
 
-    let Err(e) = authority_state.handle_transaction(&epoch_store, transaction).await else {
+    let Err(e) = authority_state
+        .handle_transaction(&epoch_store, transaction)
+        .await
+    else {
         panic!("Expected handling transaction to fail");
     };
 

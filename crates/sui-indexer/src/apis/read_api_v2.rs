@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
@@ -208,9 +204,9 @@ impl ReadApiServer for ReadApiV2 {
 
     async fn try_get_past_object(
         &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-        options: Option<SuiObjectDataOptions>,
+        _object_id: ObjectID,
+        _version: SequenceNumber,
+        _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<SuiPastObjectResponse> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
@@ -220,8 +216,8 @@ impl ReadApiServer for ReadApiV2 {
 
     async fn try_multi_get_past_objects(
         &self,
-        past_objects: Vec<SuiGetPastObjectRequest>,
-        options: Option<SuiObjectDataOptions>,
+        _past_objects: Vec<SuiGetPastObjectRequest>,
+        _options: Option<SuiObjectDataOptions>,
     ) -> RpcResult<Vec<SuiPastObjectResponse>> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),
@@ -291,7 +287,7 @@ impl ReadApiServer for ReadApiV2 {
 
     async fn get_loaded_child_objects(
         &self,
-        digest: TransactionDigest,
+        _digest: TransactionDigest,
     ) -> RpcResult<SuiLoadedChildObjectsResponse> {
         Err(jsonrpsee::types::error::CallError::Custom(
             jsonrpsee::types::error::ErrorCode::MethodNotFound.into(),

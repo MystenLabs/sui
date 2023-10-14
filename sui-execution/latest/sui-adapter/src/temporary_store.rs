@@ -114,7 +114,7 @@ impl<'backing> TemporaryStore<'backing> {
             max_binary_format_version: self.protocol_config.move_binary_format_version(),
             loaded_runtime_objects: self.loaded_runtime_objects,
             no_extraneous_module_bytes: self.protocol_config.no_extraneous_module_bytes(),
-            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.read().clone(),
+            runtime_packages_loaded_from_db: self.runtime_packages_loaded_from_db.into_inner(),
         }
     }
 
@@ -835,7 +835,7 @@ impl<'backing> TemporaryStore<'backing> {
             })
         } else {
             // not in input objects, must be a dynamic field
-            let Ok(Some(obj))= self.store.get_object_by_key(id, expected_version) else {
+            let Ok(Some(obj)) = self.store.get_object_by_key(id, expected_version) else {
                 invariant_violation!(
                     "Failed looking up dynamic field {id} in SUI conservation checking"
                 );

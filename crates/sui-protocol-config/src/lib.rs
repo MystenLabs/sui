@@ -76,7 +76,7 @@ const MAX_PROTOCOL_VERSION: u64 = 28;
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
-// Version 27: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+// Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1603,6 +1603,9 @@ impl ProtocolConfig {
     }
     pub fn set_receive_object_for_testing(&mut self, val: bool) {
         self.feature_flags.receive_objects = val
+    }
+    pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
+        self.feature_flags.narwhal_certificate_v2 = val
     }
 }
 

@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
 use std::collections::BTreeMap;
 
 use crate::{errors::IndexerError, indexer_reader::IndexerReader};
@@ -22,7 +18,7 @@ use sui_types::{
     committee::EpochId,
     governance::StakedSui,
     sui_serde::BigInt,
-    sui_system_state::sui_system_state_summary::SuiSystemStateSummary,
+    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, PoolTokenExchangeRate},
 };
 
 #[derive(Clone)]
@@ -35,7 +31,7 @@ impl GovernanceReadApiV2 {
         Self { inner }
     }
 
-    async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
+    pub async fn get_epoch_info(&self, epoch: Option<EpochId>) -> Result<EpochInfo, IndexerError> {
         match self
             .inner
             .spawn_blocking(move |this| this.get_epoch_info(epoch))
@@ -151,7 +147,7 @@ impl GovernanceReadApiV2 {
                 delegations.push(sui_json_rpc_types::Stake {
                     staked_sui_id: stake.id(),
                     // TODO: this might change when we implement warm up period.
-                    stake_request_epoch: stake.activation_epoch() - 1,
+                    stake_request_epoch: stake.activation_epoch().saturating_sub(1),
                     stake_active_epoch: stake.activation_epoch(),
                     principal: stake.principal(),
                     status,
@@ -233,31 +229,20 @@ async fn exchange_rates(
         let mut rates = vec![];
         for df in state
             .inner
-            .get_dynamic_fields_in_blocking_task(
+            .get_dynamic_fields_raw_in_blocking_task(
                 exchange_rates_id,
                 None,
                 exchange_rates_size as usize,
             )
             .await?
         {
-            let epoch: EpochId = bcs::from_bytes(&df.bcs_name).map_err(|e| {
-                sui_types::error::SuiError::ObjectDeserializationError {
-                    error: e.to_string(),
-                }
-            })?;
+            let dynamic_field = df
+                .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
+                .ok_or_else(|| sui_types::error::SuiError::ObjectDeserializationError {
+                    error: "dynamic field malformed".to_owned(),
+                })?;
 
-            let exchange_rate: sui_types::sui_system_state::PoolTokenExchangeRate = state
-                .inner
-                .spawn_blocking(move |this| {
-                    sui_types::dynamic_field::get_dynamic_field_from_store(
-                        &this,
-                        exchange_rates_id,
-                        &epoch,
-                    )
-                })
-                .await?;
-
-            rates.push((epoch, exchange_rate));
+            rates.push((dynamic_field.name, dynamic_field.value));
         }
 
         rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());

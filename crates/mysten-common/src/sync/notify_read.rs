@@ -96,7 +96,9 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
     fn cleanup(&self, key: &K) {
         let mut pending = self.pending(key);
         // it is possible that registration was fulfilled before we get here
-        let Some(registrations) = pending.get_mut(key) else { return; };
+        let Some(registrations) = pending.get_mut(key) else {
+            return;
+        };
         let mut count_deleted = 0usize;
         registrations.retain(|s| {
             let delete = s.is_closed();

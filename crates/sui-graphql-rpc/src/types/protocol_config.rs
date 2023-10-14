@@ -3,8 +3,6 @@
 
 use async_graphql::*;
 
-use crate::context_data::context_ext::DataProviderContextExt;
-
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct ProtocolConfigAttr {
     pub key: String,
@@ -17,71 +15,26 @@ pub(crate) struct ProtocolConfigFeatureFlag {
     pub value: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[graphql(complex)]
 pub(crate) struct ProtocolConfigs {
-    pub configs: Vec<ProtocolConfigAttr>,
-    pub feature_flags: Vec<ProtocolConfigFeatureFlag>,
     pub protocol_version: u64,
+    pub feature_flags: Vec<ProtocolConfigFeatureFlag>,
+    pub configs: Vec<ProtocolConfigAttr>,
 }
 
-#[allow(unreachable_code)]
-#[allow(unused_variables)]
-#[Object]
+#[ComplexObject]
 impl ProtocolConfigs {
-    async fn configs(&self, ctx: &Context<'_>) -> Result<Option<Vec<ProtocolConfigAttr>>> {
-        Ok(Some(
-            // TODO: implement DB counterpart without using Sui SDK client
-            ctx.data_provider()
-                .fetch_protocol_config(None)
-                .await?
-                .configs,
-        ))
-    }
-
-    async fn feature_flags(
-        &self,
-        ctx: &Context<'_>,
-    ) -> Result<Option<Vec<ProtocolConfigFeatureFlag>>> {
-        Ok(Some(
-            // TODO: implement DB counterpart without using Sui SDK client
-            ctx.data_provider()
-                .fetch_protocol_config(None)
-                .await?
-                .feature_flags,
-        ))
-    }
-
-    async fn protocol_version(&self, ctx: &Context<'_>) -> Result<u64> {
-        // TODO: implement DB counterpart without using Sui SDK client
-        Ok(ctx
-            .data_provider()
-            .fetch_protocol_config(None)
-            .await?
-            .protocol_version)
-    }
-
-    async fn config(&self, ctx: &Context<'_>, key: String) -> Result<Option<ProtocolConfigAttr>> {
-        match self
-            .configs(ctx)
-            .await?
-            .map(|configs| configs.into_iter().find(|config| config.key == key))
-        {
-            Some(config) => Ok(config),
+    async fn config(&self, key: String) -> Result<Option<ProtocolConfigAttr>> {
+        match self.configs.iter().find(|config| config.key == key) {
+            Some(config) => Ok(Some(config.clone())),
             None => Ok(None),
         }
     }
 
-    async fn feature_flag(
-        &self,
-        ctx: &Context<'_>,
-        key: String,
-    ) -> Result<Option<ProtocolConfigFeatureFlag>> {
-        match self
-            .feature_flags(ctx)
-            .await?
-            .map(|flags| flags.into_iter().find(|config| config.key == key))
-        {
-            Some(config) => Ok(config),
+    async fn feature_flag(&self, key: String) -> Result<Option<ProtocolConfigFeatureFlag>> {
+        match self.feature_flags.iter().find(|config| config.key == key) {
+            Some(config) => Ok(Some(config.clone())),
             None => Ok(None),
         }
     }

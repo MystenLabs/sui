@@ -64,7 +64,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
         let Ok(MoveTypeLayout::Struct(layout)) = layout else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),
-            })
+            });
         };
         Ok(layout)
     }

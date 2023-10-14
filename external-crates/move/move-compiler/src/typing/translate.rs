@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    core::{self, Context, Subst},
+    core::{self, Context, Local, Subst},
     expand, globals, infinite_instantiations, recursive_structs,
 };
 use crate::{
     diag,
     diagnostics::{codes::*, Diagnostic},
-    editions::Flavor,
+    editions::{FeatureGate, Flavor},
     expansion::ast::{
         AttributeName_, AttributeValue_, Attribute_, Attributes, Fields, Friend, ModuleAccess_,
         ModuleIdent, ModuleIdent_, Value_, Visibility,
@@ -104,7 +104,7 @@ fn modules(
     }
 
     for (_, mident, mdef) in &typed_modules {
-        gen_unused_warnings(context, mident, mdef);
+        unused_module_members(context, mident, mdef);
     }
 
     typed_modules
@@ -116,8 +116,8 @@ fn module(
     mdef: N::ModuleDefinition,
 ) -> (T::ModuleDefinition, BTreeSet<(ModuleIdent, Loc)>) {
     assert!(context.current_script_constants.is_none());
+    assert!(context.current_package.is_none());
 
-    context.current_module = Some(ident);
     let N::ModuleDefinition {
         loc,
         warning_filter,
@@ -131,6 +131,8 @@ fn module(
         constants: nconstants,
         spec_dependencies,
     } = mdef;
+    context.current_module = Some(ident);
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     structs
@@ -140,6 +142,7 @@ fn module(
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let functions = nfunctions.map(|name, f| function(context, name, f, false));
     assert!(context.constraints.is_empty());
+    context.current_package = None;
     context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     let typed_module = T::ModuleDefinition {
@@ -174,6 +177,7 @@ fn scripts(
 
 fn script(context: &mut Context, nscript: N::Script) -> T::Script {
     assert!(context.current_script_constants.is_none());
+    assert!(context.current_package.is_none());
     context.current_module = None;
     let N::Script {
         warning_filter,
@@ -186,12 +190,14 @@ fn script(context: &mut Context, nscript: N::Script) -> T::Script {
         function: nfunction,
         spec_dependencies,
     } = nscript;
+    context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     context.bind_script_constants(&nconstants);
     let constants = nconstants.map(|name, c| constant(context, name, c));
     let function = function(context, function_name, nfunction, true);
     context.current_script_constants = None;
+    context.current_package = None;
     context.pop_use_funs_scope();
     context.env.pop_warning_filter_scope();
     T::Script {
@@ -255,6 +261,7 @@ fn function(
     expand::function_signature(context, &mut signature);
 
     let body = function_body(context, &acquires, n_body);
+    unused_let_muts(context);
     context.current_function = None;
     context.env.pop_warning_filter_scope();
     T::Function {
@@ -272,14 +279,14 @@ fn function(
 fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
     assert!(context.constraints.is_empty());
 
-    for (param, param_ty) in &sig.parameters {
+    for (mut_, param, param_ty) in &sig.parameters {
         let param_ty = core::instantiate(context, param_ty.clone());
         context.add_single_type_constraint(
             param_ty.loc,
             "Invalid parameter type",
             param_ty.clone(),
         );
-        context.declare_local(*param, param_ty);
+        context.declare_local(*mut_, *param, param_ty);
     }
     context.return_type = Some(core::instantiate(context, sig.return_type.clone()));
     core::solve_constraints(context);
@@ -347,7 +354,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
     context.return_type = Some(signature.clone());
 
     let mut value = exp_(context, nvalue);
-
+    unused_let_muts(context);
     subtype(
         context,
         signature.loc,
@@ -1287,12 +1294,12 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
         }
 
         NE::Move(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             let from_user = true;
             (ty, TE::Move { var, from_user })
         }
         NE::Copy(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             context.add_ability_constraint(
                 eloc,
                 Some(format!(
@@ -1306,7 +1313,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             (ty, TE::Copy { var, from_user })
         }
         NE::Use(var) => {
-            let ty = context.get_local(&var);
+            let ty = context.get_local_type(&var);
             (ty, TE::Use(var))
         }
         NE::MethodCall(ndotted, f, ty_args_opt, sp!(argloc, nargs_)) => {
@@ -1544,7 +1551,12 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             context.add_base_type_constraint(eloc, "Invalid borrow", er.ty.clone());
             let ty = sp(eloc, Type_::Ref(mut_, Box::new(er.ty.clone())));
             let eborrow = match er.exp {
-                sp!(_, TE::Use(v)) => TE::BorrowLocal(mut_, v),
+                sp!(_, TE::Use(v)) => {
+                    if mut_ {
+                        check_mutability(context, eloc, "mutable borrow", &v);
+                    }
+                    TE::BorrowLocal(mut_, v)
+                }
                 erexp => TE::TempBorrow(mut_, Box::new(T::exp(er.ty, erexp))),
             };
             (ty, eborrow)
@@ -1590,7 +1602,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
             let used_local_types = used_locals
                 .into_iter()
                 .map(|v| {
-                    let ty = context.get_local(&v);
+                    let ty = context.get_local_type(&v);
                     (v, ty)
                 })
                 .collect();
@@ -1759,20 +1771,22 @@ fn lvalue(
             TL::Ignore
         }
         NL::Var {
+            mut_,
             var,
             unused_binding,
         } => {
             let var_ty = match case {
                 C::Bind => {
-                    context.declare_local(var, ty.clone());
+                    context.declare_local(mut_, var, ty.clone());
                     ty
                 }
                 C::Assign => {
-                    let var_ty = context.get_local(&var);
+                    check_mutability(context, loc, "assignment", &var);
+                    let var_ty = context.get_local_type(&var);
                     subtype(
                         context,
                         loc,
-                        || format!("Invalid assignment to local '{}'", &var.value.name),
+                        || format!("Invalid assignment to variable '{}'", &var.value.name),
                         ty,
                         var_ty.clone(),
                     );
@@ -1869,6 +1883,21 @@ fn check_mutation(context: &mut Context, loc: Loc, given_ref: Type, rvalue_ty: &
         Ability_::Drop,
     );
     res_ty
+}
+
+fn check_mutability(context: &mut Context, eloc: Loc, usage: &str, v: &N::Var) {
+    let (decl_loc, mut_) = context.mark_mutable_usage(eloc, v);
+    if mut_.is_none() {
+        let v = &v.value.name;
+        let usage_msg = format!("Invalid {usage} of immutable variable '{v}'");
+        let decl_msg =
+            format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {v}'");
+        context.env.add_diag(diag!(
+            TypeSafety::InvalidImmVariableUsage,
+            (eloc, usage_msg),
+            (decl_loc, decl_msg),
+        ))
+    }
 }
 
 //**************************************************************************************************
@@ -2040,7 +2069,12 @@ fn exp_dotted_to_borrow(
             let eb_ty = eb.ty;
             let sp!(ebloc, eb_) = eb.exp;
             let e_ = match eb_ {
-                TE::Use(v) => TE::BorrowLocal(mut_, v),
+                TE::Use(v) => {
+                    if mut_ {
+                        check_mutability(context, loc, "mutable borrow", &v);
+                    }
+                    TE::BorrowLocal(mut_, v)
+                }
                 eb_ => {
                     match &eb_ {
                         TE::Move { from_user, .. } | TE::Copy { from_user, .. } => {
@@ -2529,11 +2563,37 @@ fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
 }
 
 //**************************************************************************************************
-// Module-wide warnings
+// Follow-up warnings
 //**************************************************************************************************
 
+/// Generates warnings for unused mut declerations
+/// Should be called at the end of functions/constants
+fn unused_let_muts(context: &mut Context) {
+    let locals = context.take_locals();
+    let supports_let_mut = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::LetMut);
+    if !supports_let_mut {
+        return;
+    }
+    for (v, local) in locals {
+        let Local { mut_, used_mut, .. } = local;
+        let Some(mut_loc) = mut_ else { continue };
+        if used_mut.is_none() {
+            let decl_msg = format!("The variable '{}' is never used mutably", v.value.name);
+            let mut_msg = "Consider removing the 'mut' declaration here";
+            context.env.add_diag(diag!(
+                UnusedItem::MutModifier,
+                (v.loc, decl_msg),
+                (mut_loc, mut_msg)
+            ))
+        }
+    }
+}
+
 /// Generates warnings for unused (private) functions and unused constants.
-fn gen_unused_warnings(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
+/// Should be called after the whole program has been processed.
+fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
     if !mdef.is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and

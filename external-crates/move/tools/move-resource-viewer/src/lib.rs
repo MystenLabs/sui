@@ -171,7 +171,7 @@ impl<'a, T: MoveResolver + ?Sized> MoveValueAnnotator<'a, T> {
                 .cache
                 .get_field_names(&ty)?
                 .into_iter()
-                .zip(runtime.into_iter())
+                .zip(runtime)
                 .collect(),
             MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. } => fields,
         })
@@ -204,10 +204,7 @@ impl<'a, T: MoveResolver + ?Sized> MoveValueAnnotator<'a, T> {
         Ok(AnnotatedMoveStruct {
             abilities: ty.abilities.0,
             type_: struct_tag,
-            value: field_names
-                .into_iter()
-                .zip(annotated_fields.into_iter())
-                .collect(),
+            value: field_names.into_iter().zip(annotated_fields).collect(),
         })
     }
 

@@ -1,5 +1,21 @@
 # @mysten/dapp-kit
 
+## 0.3.0
+
+### Minor Changes
+
+- 361818abc: execute transaction from dApp rather than wallet in useSignAndExecuteTransactionBlock
+- 2b532bc37: Fix issue where CSS was being overridden by application code
+- 0c5cdc049: Expose types related to theming
+- c7e12c928: Infer the active chain when signing transactions and expose some more descriptive errors
+
+### Patch Changes
+
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/wallet-standard@0.8.5
+  - @mysten/sui.js@0.44.0
+
 ## 0.2.4
 
 ### Patch Changes

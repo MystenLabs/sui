@@ -48,7 +48,7 @@ mod checked {
     use sui_types::execution::ExecutionResults;
     use sui_types::{
         balance::Balance,
-        base_types::{MoveObjectType, ObjectID, SequenceNumber, SuiAddress, TxContext},
+        base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
@@ -163,7 +163,8 @@ mod checked {
                 let Some(Value::Object(ObjectValue {
                     contents: ObjectContents::Coin(coin),
                     ..
-                })) = &mut gas.inner.value else {
+                })) = &mut gas.inner.value
+                else {
                     invariant_violation!("Gas object should be a populated coin")
                 };
 
@@ -586,13 +587,17 @@ mod checked {
             let mut additional_writes = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
-                    object_metadata: Some(InputObjectMetadata::InputObject {
-                        // We are only interested in mutable inputs.
-                        is_mutable_input: true,
-                        id, version, owner,
-                    }),
+                    object_metadata:
+                        Some(InputObjectMetadata::InputObject {
+                            // We are only interested in mutable inputs.
+                            is_mutable_input: true,
+                            id,
+                            version,
+                            owner,
+                        }),
                     inner: ResultValue { value, .. },
-                } = input else {
+                } = input
+                else {
                     continue;
                 };
                 loaded_runtime_objects.insert(
@@ -1094,7 +1099,11 @@ mod checked {
         new_packages: &[MovePackage],
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object { data: Data::Move(object), .. } = object else {
+        let Object {
+            data: Data::Move(object),
+            ..
+        } = object
+        else {
             invariant_violation!("Expected a Move object");
         };
 
@@ -1264,21 +1273,18 @@ mod checked {
         gas_charger: &mut GasCharger,
         gas_id: ObjectID,
     ) -> Result<(), ExecutionError> {
-        let Some(AdditionalWrite { bytes,.. }) = additional_writes.get_mut(&gas_id) else {
+        let Some(AdditionalWrite { bytes, .. }) = additional_writes.get_mut(&gas_id) else {
             invariant_violation!("Gas object cannot be wrapped or destroyed")
         };
         let Ok(mut coin) = Coin::from_bcs_bytes(bytes) else {
             invariant_violation!("Gas object must be a coin")
         };
-        let Some(new_balance) = coin
-            .balance
-            .value()
-            .checked_add(gas_charger.gas_budget()) else {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::CoinBalanceOverflow,
-                    "Gas coin too large after returning the max gas budget",
-                ));
-            };
+        let Some(new_balance) = coin.balance.value().checked_add(gas_charger.gas_budget()) else {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::CoinBalanceOverflow,
+                "Gas coin too large after returning the max gas budget",
+            ));
+        };
         coin.balance = Balance::new(new_balance);
         *bytes = coin.to_bcs_bytes();
         Ok(())
@@ -1319,7 +1325,7 @@ mod checked {
         MoveObject::new_from_execution(
             struct_tag.into(),
             has_public_transfer,
-            old_obj_ver.unwrap_or_else(SequenceNumber::new),
+            old_obj_ver.unwrap_or_default(),
             contents,
             protocol_config,
         )
