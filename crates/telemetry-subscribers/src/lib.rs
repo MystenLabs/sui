@@ -346,14 +346,6 @@ impl TelemetryConfig {
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
         let log_filter_handle = FilterHandle(reload_handle);
 
-        // Separate span level filter.
-        // This is a dumb filter for now - allows all spans that are below a given level.
-        // TODO: implement a sampling filter
-        let span_level = config.span_level.unwrap_or(Level::INFO);
-        let span_filter = filter::filter_fn(move |metadata| {
-            metadata.is_span() && *metadata.level() <= span_level
-        });
-
         let mut layers = Vec::new();
 
         // tokio-console layer
@@ -367,7 +359,7 @@ impl TelemetryConfig {
         if let Some(registry) = config.prom_registry {
             let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
                 .expect("Could not initialize span latency layer");
-            layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
+            layers.push(span_lat_layer.boxed());
         }
 
         let mut trace_filter_handle = None;
