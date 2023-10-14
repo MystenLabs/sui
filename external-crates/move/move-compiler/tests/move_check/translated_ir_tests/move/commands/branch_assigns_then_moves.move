@@ -1,8 +1,8 @@
 script {
-fun main() {
+fun main(cond: bool) {
     let x;
     let y;
-    if (true) {
+    if (cond) {
         x = 1;
         y = move x;
         y;

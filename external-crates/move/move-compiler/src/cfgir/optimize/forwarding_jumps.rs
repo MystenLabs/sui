@@ -43,16 +43,19 @@ pub fn optimize(
     _locals: &UniqueMap<Var, SingleType>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
+    println!("running forwarding jump optimization");
     let changed = optimize_(cfg.blocks_mut());
     if changed {
         cfg.recompute();
         remap_in_order(cfg.start_block(), cfg.blocks_mut());
     }
+    println!("done");
     changed
 }
 
 fn optimize_(blocks: &mut BasicBlocks) -> bool {
     let final_jumps = find_forwarding_jump_destinations(blocks);
+    println!("final jumps: {:?}", final_jumps);
     optimize_forwarding_jumps(blocks, final_jumps)
 }
 

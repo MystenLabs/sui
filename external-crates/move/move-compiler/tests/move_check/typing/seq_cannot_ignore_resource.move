@@ -14,8 +14,8 @@ module 0x8675309::M {
         (0, false, R{});
     }
 
-    fun t3() {
+    fun t3(cond: bool) {
         let r = R{};
-        if (true) (0, false, R{}) else (0, false, r);
+        if (cond) (0, false, R{}) else (0, false, r);
     }
 }

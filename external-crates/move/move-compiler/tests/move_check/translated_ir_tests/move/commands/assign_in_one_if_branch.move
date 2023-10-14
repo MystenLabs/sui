@@ -1,9 +1,9 @@
 script {
-fun main() {
+fun main(cond: bool) {
     let x;
     let y;
-    if (true) x = 5 else ();
-    if (true) y = 5;
+    if (cond) x = 5 else ();
+    if (cond) y = 5;
     x == y;
 }
 }

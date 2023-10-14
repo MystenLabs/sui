@@ -3,7 +3,7 @@ error[E06002]: use of unassigned variable
   │
 3 │     let x: u64;
   │         - The variable 'x' might not have a value. The variable must be assigned a value before being used.
-4 │     if (true) () else x = 100;
+4 │     if (cond) () else x = 100;
 5 │     assert!(x == 100, 42);
   │             ^ Invalid usage of unassigned variable 'x'
 

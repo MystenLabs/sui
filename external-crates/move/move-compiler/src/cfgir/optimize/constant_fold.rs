@@ -47,7 +47,7 @@ pub fn optimize(
 
 // Some(changed) to keep
 // None to remove the cmd
-fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
+pub fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
         C::Assign(_ls, e) => optimize_exp(e),
@@ -68,11 +68,12 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
         }
 
         C::Jump { .. } => false,
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break => false,
+        C::Continue => false,
     })
 }
 
-fn optimize_exp(e: &mut Exp) -> bool {
+pub fn optimize_exp(e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
     match &mut e.exp.value {
         //************************************

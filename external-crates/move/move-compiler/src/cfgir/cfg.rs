@@ -292,6 +292,7 @@ pub fn build_dead_code_error(block: &BasicBlock) -> Option<Diagnostic> {
     if block.is_empty() {
         None
     } else {
+        println!("error for block: {:?}", block);
         let first_command = block.front().unwrap();
         match unreachable_loc(first_command) {
             Some(loc) => Some(diag!(UnusedItem::DeadCode, (loc, DEAD_ERR_EXP))),

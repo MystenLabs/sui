@@ -1171,13 +1171,13 @@ impl AstDebug for Command_ {
         match self {
             C::Assign(lvalues, rhs) => {
                 lvalues.ast_debug(w);
-                w.write(" = ");
+                w.write(" <- ");
                 rhs.ast_debug(w);
             }
             C::Mutate(lhs, rhs) => {
                 w.write("*");
                 lhs.ast_debug(w);
-                w.write(" = ");
+                w.write(" := ");
                 rhs.ast_debug(w);
             }
             C::Abort(e) => {

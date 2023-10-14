@@ -11,6 +11,7 @@ use crate::{
     expansion::ast::{self as E, AbilitySet, Fields, ModuleIdent},
     hlir::ast::{self as H, Block, MoveOpAnnotation},
     hlir::detect_dead_code::program as detect_dead_code_analysis,
+    hlir::optimize_hlir::optimize,
     naming::ast as N,
     parser::ast::{BinOp, BinOp_, ConstantName, Field, FunctionName, StructName},
     shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
@@ -83,7 +84,7 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-const DEBUG_PRINT: bool = false;
+const DEBUG_PRINT: bool = true;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -398,6 +399,11 @@ fn function_body_defined(
     let locals = context.extract_function_locals();
     if DEBUG_PRINT {
         println!("--------------------");
+        body.print_verbose();
+    }
+    let body = optimize(body);
+    if DEBUG_PRINT {
+        println!("-- optimized -------");
         body.print_verbose();
         println!("--------------------------------------------------");
     }

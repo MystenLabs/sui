@@ -1,8 +1,8 @@
 script {
-fun main() {
+fun main(cond: bool) {
     let x;
     let y;
-    if (true) {
+    if (cond) {
         y = 0;
     } else {
         x = 42;

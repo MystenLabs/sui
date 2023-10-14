@@ -29,7 +29,7 @@ use std::{
 // Context
 //**************************************************************************************************
 
-const DEBUG_PRINT: bool = false;
+const DEBUG_PRINT: bool = true;
 
 struct Context<'env> {
     env: &'env mut CompilationEnv,
@@ -460,6 +460,10 @@ fn function_body(
             // do not optimize if there are errors, warnings are okay
             if !context.env.has_errors() {
                 cfgir::optimize(signature, &locals, &mut cfg);
+            }
+            if DEBUG_PRINT {
+                println!("-- optimized ------------------");
+                blocks.print_verbose();
             }
 
             let block_info = block_info

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-mod constant_fold;
+pub(crate) mod constant_fold;
 mod eliminate_locals;
 mod forwarding_jumps;
 mod inline_blocks;

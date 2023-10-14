@@ -1,7 +1,7 @@
 script {
-fun main() {
+fun main(cond: bool) {
     let x;
-    if (true) x = 42;
+    if (cond) x = 42;
     assert!(x == 42, 42);
 }
 }

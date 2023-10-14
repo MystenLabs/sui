@@ -36,7 +36,7 @@ error[E05001]: ability constraint not satisfied
    │
 18 │         let r = R{};
    │                 --- The type '(u64, bool, 0x8675309::M::R)' can have the ability 'drop' but the type argument '0x8675309::M::R' does not have the required ability 'drop'
-19 │         if (true) (0, false, R{}) else (0, false, r);
+19 │         if (cond) (0, false, R{}) else (0, false, r);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                              │
    │         │                              The type '(u64, bool, 0x8675309::M::R)' does not have the ability 'drop'
@@ -52,6 +52,6 @@ error[E06001]: unused value without 'drop'
    │             -   --- The type '0x8675309::M::R' does not have the ability 'drop'
    │             │    
    │             The local variable 'r' might still contain a value. The value does not have the 'drop' ability and must be consumed before the function returns
-19 │         if (true) (0, false, R{}) else (0, false, r);
+19 │         if (cond) (0, false, R{}) else (0, false, r);
    │                                                     ^ Invalid return
 

@@ -1,8 +1,8 @@
 script {
-fun main() {
+fun main(cond: bool) {
     let x = 5;
     let ref;
-    if (true) {
+    if (cond) {
         ref = &x;
     };
     assert!(*move ref == 5, 42);

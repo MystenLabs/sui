@@ -12,7 +12,7 @@ mod remove_no_ops;
 pub(crate) mod translate;
 pub mod visitor;
 
-mod optimize;
+pub(crate) mod optimize;
 
 use crate::{
     expansion::ast::{AbilitySet, ModuleIdent},
