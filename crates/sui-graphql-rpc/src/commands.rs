@@ -27,9 +27,6 @@ pub enum Command {
         /// URL of the RPC server for data fetching
         #[clap(short, long)]
         rpc_url: Option<String>,
-        /// DB URL for data fetching
-        #[clap(short, long)]
-        db_url: Option<String>,
         /// Port to bind the server to
         #[clap(short, long)]
         port: Option<u16>,

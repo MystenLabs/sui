@@ -5,7 +5,6 @@ use std::{collections::BTreeSet, path::PathBuf};
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
-use std::env;
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
@@ -21,11 +20,8 @@ pub struct ConnectionConfig {
     // TODO: remove rpc 1.0 dependency once DB work done
     pub(crate) rpc_url: String,
     pub(crate) db_url: String,
-<<<<<<< HEAD
     pub(crate) prom_url: String,
     pub(crate) prom_port: u16,
-=======
->>>>>>> 44750d6f94 (wrap up)
 }
 
 /// Configuration on features supported by the RPC, passed in a TOML-based file.
@@ -66,11 +62,8 @@ impl ConnectionConfig {
         host: Option<String>,
         rpc_url: Option<String>,
         db_url: Option<String>,
-<<<<<<< HEAD
         prom_url: Option<String>,
         prom_port: Option<u16>,
-=======
->>>>>>> 44750d6f94 (wrap up)
     ) -> Self {
         let default = Self::default();
         Self {
@@ -78,11 +71,8 @@ impl ConnectionConfig {
             host: host.unwrap_or(default.host),
             rpc_url: rpc_url.unwrap_or(default.rpc_url),
             db_url: db_url.unwrap_or(default.db_url),
-<<<<<<< HEAD
             prom_url: prom_url.unwrap_or(default.prom_url),
             prom_port: prom_port.unwrap_or(default.prom_port),
-=======
->>>>>>> 44750d6f94 (wrap up)
         }
     }
 }
@@ -126,14 +116,9 @@ impl Default for ConnectionConfig {
             port: 8000,
             host: "127.0.0.1".to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
-<<<<<<< HEAD
-            db_url: env::var("PG_DB_URL")
-                .expect("PG_DB_URL must be set if db_url not provided in config"),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
             prom_url: "0.0.0.0".to_string(),
             prom_port: 9184,
-=======
-            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
->>>>>>> 44750d6f94 (wrap up)
         }
     }
 }
