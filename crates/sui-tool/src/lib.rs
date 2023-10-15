@@ -47,6 +47,7 @@ use sui_snapshot::reader::StateSnapshotReaderV1;
 use sui_snapshot::setup_db_state;
 use sui_storage::object_store::util::{copy_file, get_path};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
+use sui_storage::verify_checkpoint_range;
 use sui_types::messages_checkpoint::{CheckpointCommitment, ECMHLiveObjectSetDigest};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse, TransactionInfoRequest,
@@ -675,22 +676,22 @@ fn start_summary_sync(
         let manifest = archive_reader.get_manifest().await?;
 
         let last_checkpoint = manifest.next_checkpoint_after_epoch(epoch) - 1;
-        let progress_bar = m.add(
+        let sync_progress_bar = m.add(
             ProgressBar::new(last_checkpoint).with_style(
                 ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})")
                     .unwrap(),
             ),
         );
-        let cloned_progress_bar = progress_bar.clone();
-        let checkpoint_counter = Arc::new(AtomicU64::new(0));
-        let instant = Instant::now();
+        let cloned_progress_bar = sync_progress_bar.clone();
+        let sync_checkpoint_counter = Arc::new(AtomicU64::new(0));
+        let s_instant = Instant::now();
 
-        let cloned_counter = checkpoint_counter.clone();
-        let latest_checkpoint = checkpoint_store
+        let cloned_counter = sync_checkpoint_counter.clone();
+        let latest_synced = checkpoint_store
             .get_highest_synced_checkpoint()?
             .map(|c| c.sequence_number)
             .unwrap_or(0);
-        let start = latest_checkpoint
+        let s_start = latest_synced
             .checked_add(1)
             .context("Checkpoint overflow")
             .map_err(|_| anyhow!("Failed to increment checkpoint"))?;
@@ -701,21 +702,79 @@ fn start_summary_sync(
                 }
                 let num_summaries = cloned_counter.load(Ordering::Relaxed);
                 let total_checkpoints_per_sec =
-                    num_summaries as f64 / instant.elapsed().as_secs_f64();
-                cloned_progress_bar.set_position(start + num_summaries);
-                cloned_progress_bar
-                    .set_message(format!("checkpoints/s: {}", total_checkpoints_per_sec));
+                    num_summaries as f64 / s_instant.elapsed().as_secs_f64();
+                cloned_progress_bar.set_position(s_start + num_summaries);
+                cloned_progress_bar.set_message(format!(
+                    "checkpoints synced per sec: {}",
+                    total_checkpoints_per_sec
+                ));
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
+
+        let sync_range = s_start..last_checkpoint + 1;
         archive_reader
             .read_summaries(
-                state_sync_store,
-                start..last_checkpoint + 1,
-                checkpoint_counter,
-                verify,
+                state_sync_store.clone(),
+                sync_range.clone(),
+                sync_checkpoint_counter,
+                // rather than blocking on verify, sync all summaries first, then verify later
+                false,
             )
             .await?;
+        sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
+
+        if verify {
+            // reset highest verified
+            let v_start = s_start;
+            let latest_verified = checkpoint_store
+                .get_checkpoint_by_sequence_number(latest_synced)
+                .expect("Failed to get checkpoint")
+                .expect("Expected checkpoint to exist after summary sync");
+            checkpoint_store
+                .update_highest_verified_checkpoint(&latest_verified)
+                .expect("Failed to update highest verified checkpoint");
+            let verify_progress_bar = m.add(
+                ProgressBar::new(last_checkpoint).with_style(
+                    ProgressStyle::with_template(
+                        "[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})",
+                    )
+                    .unwrap(),
+                ),
+            );
+            let cloned_verify_progress_bar = verify_progress_bar.clone();
+            let verify_checkpoint_counter = Arc::new(AtomicU64::new(0));
+            let cloned_verify_counter = verify_checkpoint_counter.clone();
+            let v_instant = Instant::now();
+
+            tokio::spawn(async move {
+                loop {
+                    if cloned_verify_progress_bar.is_finished() {
+                        break;
+                    }
+                    let num_summaries = cloned_verify_counter.load(Ordering::Relaxed);
+                    let total_checkpoints_per_sec =
+                        num_summaries as f64 / v_instant.elapsed().as_secs_f64();
+                    cloned_verify_progress_bar.set_position(v_start + num_summaries);
+                    cloned_verify_progress_bar.set_message(format!(
+                        "checkpoints verified per sec: {}",
+                        total_checkpoints_per_sec
+                    ));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            });
+
+            let verify_range = v_start..last_checkpoint + 1;
+            verify_checkpoint_range(
+                verify_range,
+                state_sync_store,
+                verify_checkpoint_counter,
+                num_parallel_downloads,
+            )
+            .await;
+            verify_progress_bar.finish_with_message("Checkpoint summary verification is complete");
+        }
+
         let checkpoint = checkpoint_store
             .get_checkpoint_by_sequence_number(last_checkpoint)?
             .ok_or(anyhow!("Failed to read last checkpoint"))?;
@@ -724,7 +783,6 @@ fn start_summary_sync(
         checkpoint_store.update_highest_synced_checkpoint(&checkpoint)?;
         checkpoint_store.update_highest_executed_checkpoint(&checkpoint)?;
         checkpoint_store.update_highest_pruned_checkpoint(&checkpoint)?;
-        progress_bar.finish_with_message("Checkpoint summary download is complete");
         Ok::<(), anyhow::Error>(())
     })
 }
@@ -1018,11 +1076,11 @@ pub async fn download_db_snapshot(
             None,
         ));
         Some(start_summary_sync(
-            perpetual_db.clone(),
-            committee_store.clone(),
-            checkpoint_store.clone(),
+            perpetual_db,
+            committee_store,
+            checkpoint_store,
             m.clone(),
-            genesis.clone(),
+            genesis,
             archive_store_config,
             epoch,
             num_parallel_downloads,

@@ -471,7 +471,7 @@ impl ToolCommand {
                         panic!("Cannot generate default archive bucket for unknown network");
                     }
                 });
-                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or_else(|| {
+                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or({
                     if formal {
                         ObjectStoreType::GCS
                     } else {
