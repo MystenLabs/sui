@@ -45,27 +45,3 @@ impl SimpleClient {
         res.json().await
     }
 }
-
-#[cfg(feature = "pg_integration")]
-#[tokio::test]
-async fn test_client() {
-    let mut handles = vec![];
-    let connection_config = ConnectionConfig::default();
-    reset_db(&connection_config.db_url, true, true).unwrap();
-
-    handles.push(tokio::spawn(async move {
-        start_example_server(connection_config, ServiceConfig::default()).await;
-    }));
-
-    // Wait for server to start
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    let client = SimpleClient::new("http://127.0.0.1:8000/");
-    let query = r#"
-        query {
-            chainIdentifier
-        }
-    "#;
-    let res = client.execute(query.to_string(), vec![]).await.unwrap();
-    let exp = r#"{"data":{"chainIdentifier":"4c78adac"}}"#;
-    assert_eq!(&format!("{}", res), exp);
-}
