@@ -57,14 +57,15 @@ pub(crate) struct MoveModuleId {
 #[ComplexObject]
 impl MoveModuleId {
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
-        let result = ctx.data_unchecked::<PgManager>()
+        let result = ctx
+            .data_unchecked::<PgManager>()
             .fetch_move_package(self.package, None)
             .await
             .extend()?;
 
         match result {
             Some(result) => Ok(result),
-            None => Err(Error::Internal("Package not found".to_string()).extend())
+            None => Err(Error::Internal("Package not found".to_string()).extend()),
         }
     }
 }
