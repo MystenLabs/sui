@@ -57,26 +57,26 @@ export const UseAccountsExample = withProviders(() => {
 });
 
 export const UseCurrentWalletExample = withProviders(() => {
-	const wallet = useCurrentWallet();
+	const { currentWallet, connectionStatus } = useCurrentWallet();
 
 	return (
 		<div style={{ padding: 20 }}>
 			<ConnectButton />
-			{!wallet ? (
-				<div>No wallet connected</div>
-			) : (
+			{connectionStatus === 'connected' ? (
 				<div>
 					<h2>Current wallet:</h2>
-					<div>Name: {wallet.name}</div>
+					<div>Name: {currentWallet.name}</div>
 					<div>
 						Accounts:
 						<ul>
-							{wallet.accounts.map((account) => (
+							{currentWallet.accounts.map((account) => (
 								<li key={account.address}>- {account.address}</li>
 							))}
 						</ul>
 					</div>
 				</div>
+			) : (
+				<div>Connection status: ${connectionStatus}</div>
 			)}
 		</div>
 	);
