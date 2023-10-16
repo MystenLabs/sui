@@ -15,8 +15,12 @@ use crate::{
         digest::Digest,
         end_of_epoch_data::EndOfEpochData,
         epoch::Epoch,
+        event::{Event, EventFilter},
         gas::{GasCostSummary, GasInput},
+        move_module::MoveModuleId,
         move_object::MoveObject,
+        move_package::MovePackage,
+        move_type::MoveType,
         object::{Object, ObjectFilter, ObjectKind},
         protocol_config::{ProtocolConfigAttr, ProtocolConfigFeatureFlag, ProtocolConfigs},
         safe_mode::SafeMode,
@@ -44,6 +48,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
+use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -58,8 +63,9 @@ use sui_indexer::{
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
-use sui_json_rpc_types::ProtocolConfigResponse;
-use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::{
+    EventFilter as RpcEventFilter, ProtocolConfigResponse, SuiTransactionBlockEffects,
+};
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
     base_types::SuiAddress as NativeSuiAddress,
@@ -77,8 +83,11 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::dynamic_field::Field;
 use sui_types::{base_types::MoveObjectType, governance::StakedSui};
+use sui_types::{
+    base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
+    Identifier,
+};
 
 use super::DEFAULT_PAGE_SIZE;
 
@@ -277,7 +286,7 @@ impl PgManager {
                 .order(objects::dsl::checkpoint_sequence_number.desc());
         }
 
-        let limit = first.or(last).unwrap_or(10) as i64;
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredObject>> = self
@@ -615,22 +624,26 @@ impl PgManager {
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid transaction cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("tx".to_string()))?;
         Ok(tx_sequence_number)
     }
 
     pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let checkpoint_sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid object cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("obj".to_string()))?;
         Ok(checkpoint_sequence_number)
     }
 
     pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let sequence_number = cursor
             .parse::<i64>()
-            .map_err(|_| Error::Internal("Invalid checkpoint cursor".to_string()))?;
+            .map_err(|_| Error::InvalidCursor("checkpoint".to_string()))?;
         Ok(sequence_number)
+    }
+
+    pub(crate) fn parse_event_cursor(&self, cursor: String) -> Result<EventID, Error> {
+        EventID::try_from(cursor).map_err(|_| Error::InvalidCursor("event".to_string()))
     }
 
     pub(crate) fn validate_package_dependencies(
@@ -858,6 +871,21 @@ impl PgManager {
         let move_object = sui_object.map(|o| MoveObject { native_object: o });
 
         Ok(move_object)
+    }
+
+    pub(crate) async fn fetch_move_package(
+        &self,
+        address: SuiAddress,
+        version: Option<u64>,
+    ) -> Result<Option<MovePackage>, Error> {
+        let address = address.into_vec();
+        let version = version.map(|v| v as i64);
+
+        let stored_obj = self.get_obj(address, version).await?;
+        let sui_object = stored_obj.map(SuiObject::try_from).transpose()?;
+        let move_package = sui_object.map(|o| MovePackage { native_object: o });
+
+        Ok(move_package)
     }
 
     pub(crate) async fn fetch_owned_objs(
@@ -1200,6 +1228,92 @@ impl PgManager {
             Ok(Some(connection))
         } else {
             Ok(None)
+        }
+    }
+
+    pub(crate) async fn fetch_events(
+        &self,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: EventFilter,
+    ) -> Result<Option<Connection<String, Event>>, Error> {
+        let event_filter: Result<RpcEventFilter, Error> = if let Some(sender) = filter.sender {
+            let sender = NativeSuiAddress::from_bytes(sender.into_array())
+                .map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::Sender(sender))
+        } else if let Some(digest) = filter.transaction_digest {
+            let digest = TransactionDigest::from_str(&digest).map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::Transaction(digest))
+        } else if let Some(package) = filter.emitting_package {
+            if let Some(module) = filter.emitting_module {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::MoveModule { package, module })
+            } else {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::Package(package))
+            }
+        } else if let Some(event_type) = filter.event_type {
+            let event_type = StructTag::from_str(&event_type).map_err(|_| Error::InvalidFilter)?;
+            Ok(RpcEventFilter::MoveEventType(event_type))
+        } else if let Some(package) = filter.event_package {
+            if let Some(module) = filter.event_module {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                let module = Identifier::from_str(&module).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::MoveModule { package, module })
+            } else {
+                let package =
+                    ObjectID::from_bytes(package.into_array()).map_err(|_| Error::InvalidFilter)?;
+                Ok(RpcEventFilter::Package(package))
+            }
+        } else {
+            return Err(Error::InvalidFilter);
+        };
+
+        let descending_order = before.is_some();
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as usize;
+        let cursor = after
+            .or(before)
+            .map(|c| self.parse_event_cursor(c))
+            .transpose()?;
+        if let Ok(event_filter) = event_filter {
+            let results = self
+                .inner
+                .query_events_in_blocking_task(event_filter, cursor, limit, descending_order)
+                .await?;
+
+            let has_next_page = results.len() > limit;
+
+            let mut connection = Connection::new(false, has_next_page);
+            connection.edges.extend(results.into_iter().map(|e| {
+                let cursor = String::from(e.id);
+                let event = Event {
+                    id: ID::from(cursor.clone()),
+                    sending_module_id: Some(MoveModuleId {
+                        package: SuiAddress::from_array(**e.package_id),
+                        name: e.transaction_module.to_string(),
+                    }),
+                    event_type: Some(MoveType {
+                        repr: e.type_.to_string(),
+                    }),
+                    senders: Some(vec![Address {
+                        address: SuiAddress::from_array(e.sender.to_inner()),
+                    }]),
+                    timestamp: e.timestamp_ms.and_then(|t| DateTime::from_ms(t as i64)),
+                    json: Some(e.parsed_json.to_string()),
+                    bcs: Some(Base64::from(e.bcs)),
+                };
+
+                Edge::new(cursor, event)
+            }));
+            Ok(Some(connection))
+        } else {
+            Err(Error::InvalidFilter)
         }
     }
 }
