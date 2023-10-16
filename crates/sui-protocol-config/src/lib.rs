@@ -179,71 +179,100 @@ impl Default for Chain {
     }
 }
 
+fn bool_default() -> bool {
+    false
+}
+
+fn consensus_transaction_ordering_default() -> ConsensusTransactionOrdering {
+    ConsensusTransactionOrdering::None
+}
+
+fn zklogin_supported_providers_default() -> BTreeSet<String> {
+    BTreeSet::new()
+}
+
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     package_upgrades: bool,
     // If true, validators will commit to the root state digest
     // in end of epoch checkpoint proposals
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     commit_root_state_digest: bool,
     // Pass epoch start time to advance_epoch safe mode function.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     advance_epoch_start_time_in_safe_mode: bool,
     // If true, apply the fix to correctly capturing loaded child object versions in execution's
     // object runtime.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     loaded_child_objects_fixed: bool,
     // If true, treat missing types in the upgraded modules when creating an upgraded package as a
     // compatibility error.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     missing_type_is_compatibility_error: bool,
     // If true, then the scoring decision mechanism will not get disabled when we do have more than
     // f low scoring authorities, but it will simply flag as low scoring only up to f authorities.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     scoring_decision_with_validity_cutoff: bool,
 
     // DEPRECATED: this was an ephemeral feature flag only used by consensus handler, which has now
     // been deployed everywhere.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     consensus_order_end_of_epoch_last: bool,
 
     // Disallow adding abilities to types during package upgrades.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     disallow_adding_abilities_on_upgrade: bool,
     // Disables unnecessary invariant check in the Move VM when swapping the value out of a local
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     disable_invariant_violation_check_in_swap_loc: bool,
     // advance to highest supported protocol version at epoch change, instead of the next consecutive
     // protocol version.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     advance_to_highest_supported_protocol_version: bool,
     // If true, disallow entry modifiers on entry functions
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     ban_entry_init: bool,
     // If true, hash module bytes individually when calculating package digests for upgrades
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     package_digest_hash_module: bool,
     // If true, disallow changing struct type parameters during package upgrades
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     disallow_change_struct_type_params_on_upgrade: bool,
     // If true, checks no extra bytes in a compiled module
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     no_extraneous_module_bytes: bool,
     // If true, then use the versioned metadata format in narwhal entities.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     narwhal_versioned_metadata: bool,
 
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     zklogin_auth: bool,
     // How we order transactions coming out of consensus before sending to execution.
     #[serde(skip_serializing_if = "ConsensusTransactionOrdering::is_none")]
+    #[serde(default = "consensus_transaction_ordering_default")]
     consensus_transaction_ordering: ConsensusTransactionOrdering,
 
     // Previously, the unwrapped_then_deleted field in TransactionEffects makes a distinction between
@@ -254,50 +283,63 @@ struct FeatureFlags {
     // unwrapped_then_deleted to always include unwrapped then deleted objects,
     // regardless of their previous state in the store.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     simplified_unwrap_then_delete: bool,
     // Enable upgraded multisig support
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     upgraded_multisig_supported: bool,
     // If true minimum txn charge is a multiplier of the gas price
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     txn_base_cost_as_multiplier: bool,
 
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     narwhal_new_leader_election_schedule: bool,
 
     // A list of supported OIDC providers that can be used for zklogin.
     #[serde(skip_serializing_if = "is_empty")]
+    #[serde(default = "zklogin_supported_providers_default")]
     zklogin_supported_providers: BTreeSet<String>,
 
     // If true, use the new child object format
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     loaded_child_object_format: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     enable_jwk_consensus_updates: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     end_of_epoch_transaction_supported: bool,
 
     // Perform simple conservation checks keeping into account out of gas scenarios
     // while charging for storage.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     simple_conservation_checks: bool,
 
     // If true, use the new child object format type logging
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     loaded_child_object_format_type: bool,
 
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     receive_objects: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     enable_effects_v2: bool,
 
     // If true, then use CertificateV2 in narwhal.
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     narwhal_certificate_v2: bool,
 }
 
@@ -310,7 +352,7 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
-#[derive(Default, Copy, Clone, Serialize, Debug)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum ConsensusTransactionOrdering {
     /// No ordering. Transactions are processed in the order they appear in the consensus output.
     #[default]
@@ -357,7 +399,7 @@ impl ConsensusTransactionOrdering {
 /// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug, ProtocolConfigAccessors)]
+#[derive(Clone, Serialize, Deserialize, Debug, ProtocolConfigAccessors)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 

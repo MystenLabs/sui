@@ -17,6 +17,7 @@ use move_core_types::{
     resolver::{ModuleResolver, ResourceResolver},
 };
 use prometheus::Registry;
+use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -65,7 +66,7 @@ use tracing::{error, info, warn};
 
 // TODO: add persistent cache. But perf is good enough already.
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExecutionSandboxState {
     /// Information describing the transaction
     pub transaction_info: OnChainTransactionInfo,
@@ -76,7 +77,8 @@ pub struct ExecutionSandboxState {
     /// Effects from executing this locally in `execute_transaction_to_effects`
     pub local_exec_effects: SuiTransactionBlockEffects,
     /// Status from executing this locally in `execute_transaction_to_effects`
-    pub local_exec_status: Result<(), ExecutionError>,
+    #[serde(skip)]
+    pub local_exec_status: Option<Result<(), ExecutionError>>,
     /// Pre exec diag info
     pub pre_exec_diag: DiagInfo,
 }
@@ -695,7 +697,7 @@ impl LocalExec {
                 required_objects: vec![],
                 local_exec_temporary_store: None,
                 local_exec_effects: effects,
-                local_exec_status: Ok(()),
+                local_exec_status: Some(Ok(())),
                 pre_exec_diag: self.diag.clone(),
             });
         }
@@ -761,7 +763,7 @@ impl LocalExec {
             required_objects: all_required_objects,
             local_exec_temporary_store: Some(res.0),
             local_exec_effects: effects,
-            local_exec_status: res.2,
+            local_exec_status: Some(res.2),
             pre_exec_diag: self.diag.clone(),
         })
     }
@@ -799,9 +801,9 @@ impl LocalExec {
     /// If no transaction is provided, the transaction in the sandbox state is used
     /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
     pub async fn certificate_execute_with_sandbox_state(
-        &mut self,
         pre_run_sandbox: &ExecutionSandboxState,
         override_transaction_data: Option<TransactionData>,
+        pre_exec_diag: &DiagInfo,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         assert!(
             override_transaction_data.is_none(),
@@ -914,8 +916,8 @@ impl LocalExec {
             required_objects,
             local_exec_temporary_store: None, // We dont capture it for cert exec run
             local_exec_effects: effects,
-            local_exec_status: exec_res,
-            pre_exec_diag: self.diag.clone(),
+            local_exec_status: Some(exec_res),
+            pre_exec_diag: pre_exec_diag.clone(),
         })
     }
 
@@ -930,8 +932,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
-        self.certificate_execute_with_sandbox_state(&pre_run_sandbox, None)
-            .await
+        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, None, &self.diag).await
     }
 
     /// Must be called after `init_for_execution`

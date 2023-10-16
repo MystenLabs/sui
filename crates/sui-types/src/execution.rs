@@ -19,7 +19,7 @@ use move_core_types::{
 };
 use move_vm_types::loaded_data::runtime_types::Type;
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 pub trait SuiResolver:
@@ -180,7 +180,7 @@ pub enum InputObjectMetadata {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct DynamicallyLoadedObjectMetadata {
     pub version: SequenceNumber,
     pub digest: ObjectDigest,

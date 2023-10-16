@@ -5,6 +5,8 @@ use jsonrpsee::core::Error as JsonRpseeError;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
@@ -32,7 +34,7 @@ pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
 
 pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
     pub sender_signed_data: SenderSignedData,
@@ -52,7 +54,7 @@ pub struct OnChainTransactionInfo {
     pub reference_gas_price: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct DiagInfo {
     pub loaded_child_objects: Vec<(ObjectID, VersionNumber)>,
 }
