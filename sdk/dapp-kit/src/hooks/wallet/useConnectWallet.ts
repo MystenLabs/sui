@@ -42,15 +42,21 @@ export function useConnectWallet({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async (connectWalletArgs) => {
+		mutationFn: async ({ wallet, accountAddress, ...connectArgs }) => {
 			try {
-				const isReconnecting =
-					connectWalletArgs.wallet.name === lastConnectedWalletName &&
-					connectWalletArgs.accountAddress === lastConnectedAccountAddress;
+				setWalletConnectionStatus(
+					wallet.name === lastConnectedWalletName && accountAddress === lastConnectedAccountAddress
+						? 'reconnecting'
+						: 'connecting',
+				);
 
-				setWalletConnectionStatus(isReconnecting ? 'reconnecting' : 'connecting');
-				const { connectedSuiAccounts, selectedAccount } = await connectWallet(connectWalletArgs);
-				setWalletConnected(connectWalletArgs.wallet, connectedSuiAccounts, selectedAccount);
+				const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
+				const connectedSuiAccounts = connectResult.accounts.filter((account) =>
+					account.chains.some((chain) => chain.split(':')[0] === 'sui'),
+				);
+				const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
+
+				setWalletConnected(wallet, connectedSuiAccounts, selectedAccount);
 
 				return { accounts: connectedSuiAccounts };
 			} catch (error) {
@@ -60,19 +66,6 @@ export function useConnectWallet({
 		},
 		...mutationOptions,
 	});
-}
-
-export async function connectWallet({ wallet, accountAddress, ...connectArgs }: ConnectWalletArgs) {
-	const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
-	const connectedSuiAccounts = connectResult.accounts.filter((account) =>
-		account.chains.some((chain) => chain.split(':')[0] === 'sui'),
-	);
-	const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
-
-	return {
-		connectedSuiAccounts,
-		selectedAccount,
-	};
 }
 
 function getSelectedAccount(connectedAccounts: readonly WalletAccount[], accountAddress?: string) {
