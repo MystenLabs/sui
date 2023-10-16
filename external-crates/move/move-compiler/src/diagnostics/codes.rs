@@ -180,6 +180,8 @@ codes!(
         SpecContextRestricted:
             { msg: "syntax item restricted to spec contexts", severity: BlockingError },
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
+        InvalidRestrictedIdentifier:
+            { msg: "invalid identifier escape", severity: NonblockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
@@ -220,6 +222,7 @@ codes!(
         UnboundField: { msg: "unbound field", severity: BlockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
+        PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -252,6 +255,8 @@ codes!(
             severity: Warning
         },
         InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
+        InvalidImmVariableUsage:
+            { msg: "invalid usage of immutable variable", severity: NonblockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -292,6 +297,7 @@ codes!(
         StructField: { msg: "unused struct field", severity: Warning },
         FunTypeParam: { msg: "unused function type parameter", severity: Warning },
         Constant: { msg: "unused constant", severity: Warning },
+        MutModifier: { msg: "unused 'mut' modifiers", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

@@ -46,27 +46,43 @@ impl SimpleClient {
     }
 }
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_client() {
-    let mut handles = vec![];
-    let connection_config = ConnectionConfig::default();
-    reset_db(&connection_config.db_url, true, true).unwrap();
+    let mut connection_config = if cfg!(feature = "pg_integration") {
+        ConnectionConfig::ci_integration_test_cfg()
+    } else {
+        ConnectionConfig::default()
+    };
 
-    handles.push(tokio::spawn(async move {
-        start_example_server(connection_config, ServiceConfig::default()).await;
-    }));
+    connection_config.db_url = "postgres://postgres:postgres@0.0.0.0:5432/postgres".to_owned();
+    let cluster = crate::cluster::start_cluster(connection_config).await;
 
-    // Wait for server to start
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    let client = SimpleClient::new("http://127.0.0.1:8000/");
+    // Wait for servers to start and catchup
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let query = r#"
         query {
             chainIdentifier
         }
     "#;
-    let res = client.execute(query.to_string(), vec![]).await.unwrap();
-    let exp =
-        r#"{"data":{"chainIdentifier":"4c78adac"},"extensions":{"usage":{"nodes":1,"depth":1}}}"#;
-    assert_eq!(&format!("{}", res), exp);
+    let res = cluster
+        .graphql_client
+        .execute(query.to_string(), vec![])
+        .await
+        .unwrap();
+    let chain_id_actual = cluster
+        .validator_fullnode_handle
+        .fullnode_handle
+        .sui_client
+        .read_api()
+        .get_chain_identifier()
+        .await
+        .unwrap();
+
+    let exp = format!(
+        "{{\"data\":{{\"chainIdentifier\":\"{}\"}}}}",
+        chain_id_actual
+    );
+    assert_eq!(&format!("{}", res), &exp);
 }

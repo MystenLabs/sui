@@ -66,6 +66,9 @@ use sui_core::consensus_adapter::{
     CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
 };
 use sui_core::consensus_handler::ConsensusHandler;
+use sui_core::consensus_throughput_calculator::{
+    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
+};
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -278,10 +281,12 @@ impl SuiNode {
             let Ok(iss_provider) = OIDCProvider::from_iss(&id.iss) else {
                 warn!(
                     "JWK iss {:?} (retrieved from {:?}) is not a valid provider",
-                    id.iss,
-                    provider
+                    id.iss, provider
                 );
-                metrics.invalid_jwks.with_label_values(&[&provider.to_string()]).inc();
+                metrics
+                    .invalid_jwks
+                    .with_label_values(&[&provider.to_string()])
+                    .inc();
                 return false;
             };
 
@@ -1058,6 +1063,21 @@ impl SuiNode {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
+        let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
+            None,
+            state.metrics.clone(),
+        ));
+
+        let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
+            throughput_calculator.clone(),
+            None,
+            None,
+            state.metrics.clone(),
+            ThroughputProfileRanges::default(), // TODO: move configuration to protocol-config and potentially differentiate for each environment.
+        ));
+
+        consensus_adapter.swap_throughput_profiler(throughput_profiler);
+
         let consensus_handler_initializer = || {
             ConsensusHandler::new(
                 epoch_store.clone(),
@@ -1067,6 +1087,7 @@ impl SuiNode {
                 low_scoring_authorities.clone(),
                 committee.clone(),
                 state.metrics.clone(),
+                throughput_calculator.clone(),
             )
         };
 
@@ -1689,13 +1710,26 @@ pub fn build_http_server(
             ))?;
         }
 
+        let name_service_config =
+            if let (Some(package_address), Some(registry_id), Some(reverse_registry_id)) = (
+                config.name_service_package_address,
+                config.name_service_registry_id,
+                config.name_service_reverse_registry_id,
+            ) {
+                sui_json_rpc::name_service::NameServiceConfig::new(
+                    package_address,
+                    registry_id,
+                    reverse_registry_id,
+                )
+            } else {
+                sui_json_rpc::name_service::NameServiceConfig::default()
+            };
+
         server.register_module(IndexerApi::new(
             state.clone(),
             ReadApi::new(state.clone(), kv_store.clone(), metrics.clone()),
             kv_store,
-            config.name_service_package_address,
-            config.name_service_registry_id,
-            config.name_service_reverse_registry_id,
+            name_service_config,
             metrics,
             config.indexer_max_subscriptions,
         ))?;

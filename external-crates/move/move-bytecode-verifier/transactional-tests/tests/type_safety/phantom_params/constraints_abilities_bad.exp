@@ -1,7 +1,7 @@
 processed 6 tasks
 
 task 1 'publish'. lines 7-15:
-Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M2,
@@ -10,7 +10,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M2'. Got VMEr
 }
 
 task 2 'publish'. lines 17-34:
-Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M3,
@@ -19,7 +19,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M3'. Got VMEr
 }
 
 task 3 'publish'. lines 36-46:
-Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M4'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M4,
@@ -28,7 +28,7 @@ Error: Unable to publish module '00000000000000000000000000000001::M4'. Got VMEr
 }
 
 task 5 'publish'. lines 60-75:
-Error: Unable to publish module '00000000000000000000000000000001::M5'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M5'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
     location: 0x1::M5,

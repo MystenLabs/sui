@@ -4,7 +4,7 @@
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use crate::checkpoints::CheckpointServiceNoop;
-use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
+use crate::consensus_handler::SequencedConsensusTransaction;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
@@ -124,11 +124,10 @@ async fn submit_transaction_to_consensus_adapter() {
         ) -> SuiResult {
             epoch_store
                 .process_consensus_transactions_for_tests(
-                    vec![VerifiedSequencedConsensusTransaction::new_test(
-                        transaction.clone(),
-                    )],
+                    vec![SequencedConsensusTransaction::new_test(transaction.clone())],
                     &Arc::new(CheckpointServiceNoop {}),
                     self.0.db(),
+                    &self.0.metrics.skipped_consensus_txns,
                 )
                 .await?;
             Ok(())

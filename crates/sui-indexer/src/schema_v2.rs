@@ -3,6 +3,37 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    active_addresses (address) {
+        address -> Bytea,
+        first_appearance_tx -> Int8,
+        first_appearance_time -> Int8,
+        last_appearance_tx -> Int8,
+        last_appearance_time -> Int8,
+    }
+}
+
+diesel::table! {
+    address_metrics (checkpoint) {
+        checkpoint -> Int8,
+        epoch -> Int8,
+        timestamp_ms -> Int8,
+        cumulative_addresses -> Int8,
+        cumulative_active_addresses -> Int8,
+        daily_active_addresses -> Int8,
+    }
+}
+
+diesel::table! {
+    addresses (address) {
+        address -> Bytea,
+        first_appearance_tx -> Int8,
+        first_appearance_time -> Int8,
+        last_appearance_tx -> Int8,
+        last_appearance_time -> Int8,
+    }
+}
+
+diesel::table! {
     checkpoints (sequence_number) {
         sequence_number -> Int8,
         checkpoint_digest -> Bytea,
@@ -20,6 +51,15 @@ diesel::table! {
         checkpoint_commitments -> Bytea,
         validator_signature -> Bytea,
         end_of_epoch_data -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
+    display (object_type) {
+        object_type -> Text,
+        id -> Bytea,
+        version -> Int2,
+        bcs -> Bytea,
     }
 }
 
@@ -65,6 +105,44 @@ diesel::table! {
 }
 
 diesel::table! {
+    move_call_metrics (id) {
+        id -> Int8,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        day -> Int8,
+        move_package -> Text,
+        move_module -> Text,
+        move_function -> Text,
+        count -> Int8,
+    }
+}
+
+diesel::table! {
+    move_calls (id) {
+        id -> Int8,
+        transaction_sequence_number -> Int8,
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        move_package -> Bytea,
+        move_module -> Text,
+        move_function -> Text,
+    }
+}
+
+diesel::table! {
+    network_metrics (checkpoint) {
+        checkpoint -> Int8,
+        epoch -> Int8,
+        timestamp_ms -> Int8,
+        real_time_tps -> Float8,
+        peak_tps_30d -> Float8,
+        total_addresses -> Int8,
+        total_objects -> Int8,
+        total_packages -> Int8,
+    }
+}
+
+diesel::table! {
     objects (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -72,6 +150,7 @@ diesel::table! {
         checkpoint_sequence_number -> Int8,
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
+        object_type -> Nullable<Text>,
         serialized_object -> Bytea,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -105,6 +184,57 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_calls (package, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        package -> Bytea,
+        module -> Text,
+        func -> Text,
+    }
+}
+
+diesel::table! {
+    tx_changed_objects (object_id, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_count_metrics (checkpoint_sequence_number) {
+        checkpoint_sequence_number -> Int8,
+        epoch -> Int8,
+        timestamp_ms -> Int8,
+        total_transaction_blocks -> Int8,
+        total_successful_transaction_blocks -> Int8,
+        total_successful_transactions -> Int8,
+        network_total_transaction_blocks -> Int8,
+        network_total_successful_transactions -> Int8,
+        network_total_successful_transaction_blocks -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_input_objects (object_id, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_recipients (recipient, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        recipient -> Bytea,
+    }
+}
+
+diesel::table! {
+    tx_senders (sender, tx_sequence_number) {
+        tx_sequence_number -> Int8,
+        sender -> Bytea,
+    }
+}
+
+diesel::table! {
     tx_indices (tx_sequence_number) {
         tx_sequence_number -> Int8,
         checkpoint_sequence_number -> Int8,
@@ -121,11 +251,24 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    active_addresses,
+    address_metrics,
+    addresses,
     checkpoints,
+    display,
     epochs,
     events,
+    move_call_metrics,
+    move_calls,
+    network_metrics,
     objects,
     packages,
     transactions,
+    tx_calls,
+    tx_changed_objects,
+    tx_count_metrics,
+    tx_input_objects,
+    tx_recipients,
+    tx_senders,
     tx_indices,
 );

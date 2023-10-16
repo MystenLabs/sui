@@ -532,7 +532,7 @@ impl TransactionManager {
             )
             .expect("Checking object existence cannot fail!")
             .into_iter()
-            .zip(input_object_cache_misses.into_iter());
+            .zip(input_object_cache_misses);
 
         // After this point, the function cannot return early and must run to the end. Otherwise,
         // it can lead to data inconsistencies and potentially some transactions will never get
@@ -710,20 +710,6 @@ impl TransactionManager {
         inner.maybe_reserve_capacity();
 
         Ok(())
-    }
-
-    /// Notifies TransactionManager that the given objects are available in the objects table.
-    /// Useful when transactions associated with the objects are not known, e.g. after checking
-    /// object availability from storage, or for testing.
-    pub(crate) fn _fastpath_objects_available(
-        &self,
-        input_keys: Vec<InputKey>,
-        epoch_store: &AuthorityPerEpochStore,
-    ) {
-        let mut inner = self.inner.write();
-        let _scope = monitored_scope("TransactionManager::objects_available::wlock");
-        self.objects_available_locked(&mut inner, epoch_store, input_keys, false);
-        inner.maybe_shrink_capacity();
     }
 
     #[cfg(test)]

@@ -19,7 +19,6 @@ use sui_indexer::framework::Handler;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
-use sui_types::base_types::EpochId;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;
@@ -53,14 +52,9 @@ impl<S: Serialize + 'static> Handler for AnalyticsProcessor<S> {
         let checkpoint_num: u64 = *checkpoint_data.checkpoint_summary.sequence_number();
         let timestamp: u64 = checkpoint_data.checkpoint_summary.data().timestamp_ms;
         info!("Processing checkpoint {checkpoint_num}, epoch {epoch}, timestamp {timestamp}");
-        if epoch
-            == self
-                .current_epoch
-                .checked_add(1)
-                .context("Epoch num overflow")?
-        {
+        if epoch > self.current_epoch {
             self.cut().await?;
-            self.update_to_next_epoch();
+            self.update_to_next_epoch(epoch);
             self.create_epoch_dirs()?;
             self.reset()?;
         }
@@ -98,7 +92,6 @@ impl<S: Serialize + 'static> AnalyticsProcessor<S> {
     pub async fn new(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
-        epoch: EpochId,
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
@@ -113,19 +106,21 @@ impl<S: Serialize + 'static> AnalyticsProcessor<S> {
         let (kill_sender, kill_receiver) = oneshot::channel::<()>();
         let (sender, receiver) = mpsc::channel::<FileMetadata>(100);
         let name: String = handler.name().parse()?;
-        tokio::spawn(Self::start_syncing_with_remote(
+        let checkpoint_dir = config.checkpoint_dir.clone();
+        let cloned_metrics = metrics.clone();
+        tokio::task::spawn(Self::start_syncing_with_remote(
             remote_object_store,
             local_object_store.clone(),
-            config.checkpoint_dir.clone(),
+            checkpoint_dir,
             receiver,
             kill_receiver,
-            metrics.clone(),
+            cloned_metrics,
             name,
         ));
         Ok(Self {
             handler,
             writer,
-            current_epoch: epoch,
+            current_epoch: 0,
             current_checkpoint_range: next_checkpoint_seq_num..next_checkpoint_seq_num,
             last_commit_instant: Instant::now(),
             kill_sender,
@@ -149,12 +144,13 @@ impl<S: Serialize + 'static> AnalyticsProcessor<S> {
                 self.current_checkpoint_range.clone(),
             );
             self.sender.send(file_metadata).await?;
+            tokio::task::yield_now().await;
         }
         Ok(())
     }
 
-    fn update_to_next_epoch(&mut self) {
-        self.current_epoch = self.current_epoch.saturating_add(1);
+    fn update_to_next_epoch(&mut self, epoch: u64) {
+        self.current_epoch = epoch;
     }
 
     fn epoch_dir(&self) -> Result<PathBuf> {

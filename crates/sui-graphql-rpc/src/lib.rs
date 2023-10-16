@@ -8,9 +8,11 @@ pub mod server;
 pub(crate) mod functional_group;
 
 mod client;
+mod cluster;
 mod context_data;
 mod error;
 mod extensions;
+mod metrics;
 mod types;
 mod utils;
 

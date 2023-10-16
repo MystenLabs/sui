@@ -192,7 +192,7 @@ impl ApplyOutOfBoundsContext {
         {
             mutation_map
                 .entry((mutation.src_kind, mutation.dst_kind))
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(mutation);
         }
 

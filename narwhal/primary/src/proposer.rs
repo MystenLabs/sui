@@ -10,6 +10,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use std::collections::{BTreeMap, VecDeque};
 use std::{cmp::Ordering, sync::Arc};
 use storage::ProposerStore;
+use sui_protocol_config::ProtocolConfig;
 use tokio::time::{sleep_until, Instant};
 use tokio::{
     sync::{oneshot, watch},
@@ -106,6 +107,7 @@ impl Proposer {
     pub fn spawn(
         authority_id: AuthorityIdentifier,
         committee: Committee,
+        protocol_config: &ProtocolConfig,
         proposer_store: ProposerStore,
         header_num_of_batches_threshold: usize,
         max_header_num_of_batches: usize,
@@ -121,7 +123,7 @@ impl Proposer {
         metrics: Arc<PrimaryMetrics>,
         leader_schedule: LeaderSchedule,
     ) -> JoinHandle<()> {
-        let genesis = Certificate::genesis(&committee);
+        let genesis = Certificate::genesis(protocol_config, &committee);
         spawn_logged_monitored_task!(
             async move {
                 Self {

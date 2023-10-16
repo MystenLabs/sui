@@ -24,24 +24,24 @@ module 0xA::type_name_tests {
     // Note: these tests assume a 16 byte address length, and will fail on platforms where addresses are 20 or 32 bytes
     #[test]
     fun test_structs() {
-        assert!(into_string(get<TestStruct>()) == string(b"0000000000000000000000000000000a::type_name_tests::TestStruct"), 0);
-        assert!(into_string(get<std::ascii::String>()) == string(b"00000000000000000000000000000001::ascii::String"), 0);
-        assert!(into_string(get<std::option::Option<u64>>()) == string(b"00000000000000000000000000000001::option::Option<u64>"), 0);
-        assert!(into_string(get<std::string::String>()) == string(b"00000000000000000000000000000001::string::String"), 0);
+        assert!(into_string(get<TestStruct>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestStruct"), 0);
+        assert!(into_string(get<std::ascii::String>()) == string(b"0000000000000000000000000000000000000000000000000000000000000001::ascii::String"), 0);
+        assert!(into_string(get<std::option::Option<u64>>()) == string(b"0000000000000000000000000000000000000000000000000000000000000001::option::Option<u64>"), 0);
+        assert!(into_string(get<std::string::String>()) == string(b"0000000000000000000000000000000000000000000000000000000000000001::string::String"), 0);
     }
 
     // Note: these tests assume a 16 byte address length, and will fail on platforms where addresses are 20 or 32 bytes
     #[test]
     fun test_generics() {
-        assert!(into_string(get<TestGenerics<std::string::String>>()) == string(b"0000000000000000000000000000000a::type_name_tests::TestGenerics<00000000000000000000000000000001::string::String>"), 0);
-        assert!(into_string(get<vector<TestGenerics<u64>>>()) == string(b"vector<0000000000000000000000000000000a::type_name_tests::TestGenerics<u64>>"), 0);
-        assert!(into_string(get<std::option::Option<TestGenerics<u8>>>()) == string(b"00000000000000000000000000000001::option::Option<0000000000000000000000000000000a::type_name_tests::TestGenerics<u8>>"), 0);
+        assert!(into_string(get<TestGenerics<std::string::String>>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<0000000000000000000000000000000000000000000000000000000000000001::string::String>"), 0);
+        assert!(into_string(get<vector<TestGenerics<u64>>>()) == string(b"vector<000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<u64>>"), 0);
+        assert!(into_string(get<std::option::Option<TestGenerics<u8>>>()) == string(b"0000000000000000000000000000000000000000000000000000000000000001::option::Option<000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<u8>>"), 0);
     }
 
     // Note: these tests assume a 16 byte address length, and will fail on platforms where addresses are 20 or 32 bytes
     #[test]
     fun test_multi_generics() {
-        assert!(into_string(get<TestMultiGenerics<bool, u64, u128>>()) == string(b"0000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,u64,u128>"), 0);
-        assert!(into_string(get<TestMultiGenerics<bool, vector<u64>, TestGenerics<u128>>>()) == string(b"0000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,vector<u64>,0000000000000000000000000000000a::type_name_tests::TestGenerics<u128>>"), 0);
+        assert!(into_string(get<TestMultiGenerics<bool, u64, u128>>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,u64,u128>"), 0);
+        assert!(into_string(get<TestMultiGenerics<bool, vector<u64>, TestGenerics<u128>>>()) == string(b"000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestMultiGenerics<bool,vector<u64>,000000000000000000000000000000000000000000000000000000000000000a::type_name_tests::TestGenerics<u128>>"), 0);
     }
 }

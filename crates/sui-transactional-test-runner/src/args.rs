@@ -15,7 +15,6 @@ use sui_types::base_types::{SequenceNumber, SuiAddress};
 use sui_types::move_package::UpgradePolicy;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::storage::ObjectStore;
 use sui_types::transaction::{Argument, CallArg, ObjectArg};
 
 use crate::test_adapter::{FakeID, SuiTestAdapter};
@@ -254,9 +253,9 @@ impl SuiValue {
             None => bail!("INVALID TEST. Unknown object, object({})", fake_id),
         };
         let obj_res = if let Some(v) = version {
-            test_adapter.validator.database.get_object_by_key(&id, v)
+            test_adapter.executor.get_object_by_key(&id, v)
         } else {
-            test_adapter.validator.database.get_object(&id)
+            test_adapter.executor.get_object(&id)
         };
         let obj = match obj_res {
             Ok(Some(obj)) => obj,

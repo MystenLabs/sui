@@ -5,7 +5,7 @@ module a::m {
         let _: address = s.to_address();
         let _: u64 = 0u64.max(1);
 
-        let v = vector[];
+        let mut v = vector[];
         let _: u64 = v.length();
         v.push_back(S {});
         let _: &S = v.borrow(0);

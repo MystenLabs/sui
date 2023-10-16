@@ -17,4 +17,4 @@ move-abstract-stack.workspace = true
 move-bytecode-verifier = { path = "../../../external-crates/move/move-bytecode-verifier" }
 
 sui-types.workspace = true
-workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+workspace-hack.workspace = true

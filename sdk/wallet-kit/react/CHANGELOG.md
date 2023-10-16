@@ -1,5 +1,37 @@
 # @mysten/wallet-kit
 
+## 0.8.0
+
+### Minor Changes
+
+- 11cf4e68b: Remove deprecated methods.
+
+### Patch Changes
+
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/wallet-standard@0.8.5
+  - @mysten/sui.js@0.44.0
+  - @mysten/wallet-kit-core@0.6.8
+
+## 0.7.7
+
+### Patch Changes
+
+- Updated dependencies [004fb1991]
+  - @mysten/sui.js@0.43.3
+  - @mysten/wallet-kit-core@0.6.7
+  - @mysten/wallet-standard@0.8.4
+
+## 0.7.6
+
+### Patch Changes
+
+- Updated dependencies [9b052166d]
+  - @mysten/sui.js@0.43.2
+  - @mysten/wallet-kit-core@0.6.6
+  - @mysten/wallet-standard@0.8.3
+
 ## 0.7.5
 
 ### Patch Changes

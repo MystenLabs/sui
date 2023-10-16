@@ -1,21 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use strum::IntoEnumIterator;
 use sui_macros::sim_test;
-use sui_single_node_benchmark::execution::{
-    benchmark_move_transactions, benchmark_simple_transfer,
-};
+use sui_single_node_benchmark::command::{Component, WorkloadKind};
+use sui_single_node_benchmark::execution::run_benchmark;
+use sui_single_node_benchmark::workload::Workload;
 
 #[sim_test]
 async fn benchmark_simple_transfer_smoke_test() {
     // This test makes sure that the benchmark runs.
-    benchmark_simple_transfer(10, false).await;
-    benchmark_simple_transfer(10, true).await;
+    for component in Component::iter() {
+        run_benchmark(Workload::new(10, WorkloadKind::NoMove), component).await;
+    }
 }
 
 #[sim_test]
 async fn benchmark_move_transactions_smoke_test() {
     // This test makes sure that the benchmark runs.
-    benchmark_move_transactions(10, false, 2, 1, 1).await;
-    benchmark_move_transactions(10, true, 2, 1, 1).await;
+    for component in Component::iter() {
+        run_benchmark(
+            Workload::new(
+                10,
+                WorkloadKind::Move {
+                    num_input_objects: 2,
+                    num_dynamic_fields: 1,
+                    computation: 1,
+                },
+            ),
+            component,
+        )
+        .await;
+    }
 }

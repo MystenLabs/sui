@@ -4,6 +4,9 @@
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, ServerError};
 use async_graphql_axum::GraphQLResponse;
 use sui_indexer::errors::IndexerError;
+use sui_json_rpc::name_service::DomainParseError;
+
+use crate::context_data::db_data_provider::DbValidationError;
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -43,6 +46,12 @@ pub(crate) fn graphql_error(code: &str, message: impl Into<String>) -> ServerErr
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Unsupported protocol version requested. Min supported: {0}, max supported: {1}")]
+    ProtocolVersionUnsupported(u64, u64),
+    #[error(transparent)]
+    DomainParse(#[from] DomainParseError),
+    #[error(transparent)]
+    DbValidation(#[from] DbValidationError),
     #[error("Provide one of digest or sequence_number, not both")]
     InvalidCheckpointQuery,
     #[error("String is not valid base58: {0}")]
@@ -54,26 +63,29 @@ pub enum Error {
     #[error("'first' and 'last' must not be used together")]
     CursorNoFirstLast,
     #[error("reverse pagination is not supported")]
-    CursorNoReversePagination,
+    _CursorNoReversePagination,
     #[error("Invalid cursor: {0}")]
-    InvalidCursor(String),
+    _InvalidCursor(String),
     #[error("Data has changed since cursor was generated: {0}")]
-    CursorConnectionFetchFailed(String),
+    _CursorConnectionFetchFailed(String),
     #[error("Error received in multi-get query: {0}")]
     MultiGet(String),
-    #[error("Internal error occurred while processing request")]
+    #[error("Internal error occurred while processing request: {0}")]
     Internal(String),
 }
 
 impl ErrorExtensions for Error {
     fn extend(&self) -> async_graphql::Error {
         async_graphql::Error::new(format!("{}", self)).extend_with(|_err, e| match self {
-            Error::InvalidCheckpointQuery
+            Error::ProtocolVersionUnsupported { .. }
+            | Error::DomainParse(_)
+            | Error::DbValidation(_)
+            | Error::InvalidCheckpointQuery
             | Error::CursorNoBeforeAfter
             | Error::CursorNoFirstLast
-            | Error::CursorNoReversePagination
-            | Error::InvalidCursor(_)
-            | Error::CursorConnectionFetchFailed(_)
+            | Error::_CursorNoReversePagination
+            | Error::_InvalidCursor(_)
+            | Error::_CursorConnectionFetchFailed(_)
             | Error::MultiGet(_)
             | Error::InvalidBase58(_)
             | Error::InvalidDigestLength { .. } => {

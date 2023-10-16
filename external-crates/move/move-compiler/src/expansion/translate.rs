@@ -12,7 +12,8 @@ use crate::{
         byte_string, hex_string,
     },
     parser::ast::{
-        self as P, Ability, ConstantName, Field, FunctionName, ModuleName, StructName, Var,
+        self as P, Ability, ConstantName, Field, FieldBindings, FunctionName, ModuleName,
+        Mutability, StructName, Var,
     },
     shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -503,7 +504,6 @@ fn module_(
             .add_diag(diag!(Declarations::InvalidName, (name.loc(), msg)));
     }
 
-    let name = name;
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 
@@ -1461,6 +1461,10 @@ fn struct_fields(
 ) -> E::StructFields {
     let pfields_vec = match pfields {
         P::StructFields::Native(loc) => return E::StructFields::Native(loc),
+        P::StructFields::Positional(tys) => {
+            let field_tys = tys.into_iter().map(|fty| type_(context, fty)).collect();
+            return E::StructFields::Positional(field_tys);
+        }
         P::StructFields::Defined(v) => v,
     };
     let mut field_map = UniqueMap::new();
@@ -1480,7 +1484,7 @@ fn struct_fields(
             ));
         }
     }
-    E::StructFields::Defined(field_map)
+    E::StructFields::Named(field_map)
 }
 
 //**************************************************************************************************
@@ -1671,9 +1675,9 @@ fn function_signature(
         .shadow_for_type_parameters(type_parameters.iter().map(|(name, _)| name));
     let parameters = pparams
         .into_iter()
-        .map(|(v, t)| (v, type_(context, t)))
+        .map(|(pmut, v, t)| (mutability(context, v.loc(), pmut), v, type_(context, t)))
         .collect::<Vec<_>>();
-    for (v, _) in &parameters {
+    for (_, v, _) in &parameters {
         check_valid_local_name(context, v)
     }
     let return_type = type_(context, pret_ty);
@@ -2278,7 +2282,7 @@ fn exp_(context: &mut Context, sp!(loc, pe_): P::Exp) -> E::Exp {
                 .into_iter()
                 .map(|(f, pe)| (f, exp_(context, pe)))
                 .collect();
-            let efields = fields(context, loc, "construction", "argument", efields_vec);
+            let efields = named_fields(context, loc, "construction", "argument", efields_vec);
             match en_opt {
                 Some(en) => EE::Pack(en, tys_opt, efields),
                 None => {
@@ -2562,7 +2566,7 @@ fn num_too_big_error(loc: Loc, type_description: &'static str) -> Diagnostic {
 // Fields
 //**************************************************************************************************
 
-fn fields<T>(
+fn named_fields<T>(
     context: &mut Context,
     loc: Loc,
     case: &str,
@@ -2614,18 +2618,32 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
     use E::LValue_ as EL;
     use P::Bind_ as PB;
     let b_ = match pb_ {
-        PB::Var(v) => {
+        PB::Var(pmut, v) => {
+            let emut = mutability(context, v.loc(), pmut);
             check_valid_local_name(context, &v);
-            EL::Var(sp(loc, E::ModuleAccess_::Name(v.0)), None)
+            EL::Var(emut, sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
         PB::Unpack(ptn, ptys_opt, pfields) => {
             let tn = name_access_chain(context, Access::ApplyNamed, *ptn)?;
             let tys_opt = optional_types(context, ptys_opt);
-            let vfields: Option<Vec<(Field, E::LValue)>> = pfields
-                .into_iter()
-                .map(|(f, pb)| Some((f, bind(context, pb)?)))
-                .collect();
-            let fields = fields(context, loc, "deconstruction binding", "binding", vfields?);
+            let fields = match pfields {
+                FieldBindings::Named(named_bindings) => {
+                    let vfields: Option<Vec<(Field, E::LValue)>> = named_bindings
+                        .into_iter()
+                        .map(|(f, pb)| Some((f, bind(context, pb)?)))
+                        .collect();
+                    let fields =
+                        named_fields(context, loc, "deconstruction binding", "binding", vfields?);
+                    E::FieldBindings::Named(fields)
+                }
+                FieldBindings::Positional(positional_bindings) => {
+                    let fields: Option<Vec<E::LValue>> = positional_bindings
+                        .into_iter()
+                        .map(|b| bind(context, b))
+                        .collect();
+                    E::FieldBindings::Positional(fields?)
+                }
+            };
             EL::Unpack(tn, tys_opt, fields)
         }
     };
@@ -2715,7 +2733,7 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
                 }
                 _ => {
                     let tys_opt = optional_types(context, ptys_opt);
-                    EL::Var(en, tys_opt)
+                    EL::Var(None, en, tys_opt)
                 }
             }
         }
@@ -2723,7 +2741,16 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
             let en = name_access_chain(context, Access::ApplyNamed, pn)?;
             let tys_opt = optional_types(context, ptys_opt);
             let efields = assign_unpack_fields(context, loc, pfields)?;
-            EL::Unpack(en, tys_opt, efields)
+            EL::Unpack(en, tys_opt, E::FieldBindings::Named(efields))
+        }
+        PE::Call(pn, false, ptys_opt, sp!(_, exprs)) => {
+            context
+                .env
+                .check_feature(FeatureGate::PositionalFields, context.current_package, loc);
+            let en = name_access_chain(context, Access::ApplyNamed, pn)?;
+            let tys_opt = optional_types(context, ptys_opt);
+            let pfields: Option<_> = exprs.into_iter().map(|e| assign(context, e)).collect();
+            EL::Unpack(en, tys_opt, E::FieldBindings::Positional(pfields?))
         }
         _ => {
             context.env.add_diag(diag!(
@@ -2749,13 +2776,28 @@ fn assign_unpack_fields(
         .into_iter()
         .map(|(f, e)| Some((f, assign(context, e)?)))
         .collect::<Option<_>>()?;
-    Some(fields(
+    Some(named_fields(
         context,
         loc,
         "deconstructing assignment",
         "assignment binding",
         afields,
     ))
+}
+
+fn mutability(context: &mut Context, loc: Loc, pmut: Mutability) -> Mutability {
+    let supports_let_mut = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::LetMut);
+    match pmut {
+        Some(loc) => {
+            assert!(supports_let_mut, "ICE mut should not parse without let mut");
+            Some(loc)
+        }
+        None if supports_let_mut => None,
+        // without let mut enabled, all locals are mutable and do not need the annotation
+        None => Some(loc),
+    }
 }
 
 //**************************************************************************************************
@@ -2918,15 +2960,20 @@ fn unbound_names_binds_with_range(
 fn unbound_names_bind(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
     use E::LValue_ as EL;
     match l_ {
-        EL::Var(sp!(_, E::ModuleAccess_::Name(n)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
             unbound.remove(n);
         }
-        EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_bind(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_bind(unbound, l))
+            }
+        },
     }
 }
 
@@ -2939,15 +2986,20 @@ fn unbound_names_assigns(unbound: &mut BTreeSet<Name>, sp!(_, ls_): &E::LValueLi
 fn unbound_names_assign(unbound: &mut BTreeSet<Name>, sp!(_, l_): &E::LValue) {
     use E::LValue_ as EL;
     match l_ {
-        EL::Var(sp!(_, E::ModuleAccess_::Name(n)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::Name(n)), _) => {
             unbound.insert(*n);
         }
-        EL::Var(sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
+        EL::Var(_, sp!(_, E::ModuleAccess_::ModuleAccess(..)), _) => {
             // Qualified vars are not considered in unbound set.
         }
-        EL::Unpack(_, _, efields) => efields
-            .iter()
-            .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+        EL::Unpack(_, _, efields) => match efields {
+            E::FieldBindings::Named(efields) => efields
+                .iter()
+                .for_each(|(_, _, (_, l))| unbound_names_assign(unbound, l)),
+            E::FieldBindings::Positional(lvals) => {
+                lvals.iter().for_each(|l| unbound_names_assign(unbound, l))
+            }
+        },
     }
 }
 

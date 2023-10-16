@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 27;
+const MAX_PROTOCOL_VERSION: u64 = 28;
 
 // Record history of protocol version allocations here:
 //
@@ -76,7 +76,7 @@ const MAX_PROTOCOL_VERSION: u64 = 27;
 // Version 25: Add sui::table_vec::swap and sui::table_vec::swap_remove to system packages.
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
-// Version 27: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+// Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -292,6 +292,13 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    enable_effects_v2: bool,
+
+    // If true, then use CertificateV2 in narwhal.
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_certificate_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -945,6 +952,14 @@ impl ProtocolConfig {
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
     }
+
+    pub fn enable_effects_v2(&self) -> bool {
+        self.feature_flags.enable_effects_v2
+    }
+
+    pub fn narwhal_certificate_v2(&self) -> bool {
+        self.feature_flags.narwhal_certificate_v2
+    }
 }
 
 #[cfg(not(msim))]
@@ -1507,10 +1522,17 @@ impl ProtocolConfig {
                     }
                 }
                 27 => {
+                    cfg.gas_model_version = Some(8);
+                }
+                28 => {
                     // zklogin::check_zklogin_id
                     cfg.check_zklogin_id_cost_base = Some(200);
                     // zklogin::check_zklogin_issuer
                     cfg.check_zklogin_issuer_cost_base = Some(200);
+                    // Only enable effects v2 on devnet.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_effects_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -1581,6 +1603,9 @@ impl ProtocolConfig {
     }
     pub fn set_receive_object_for_testing(&mut self, val: bool) {
         self.feature_flags.receive_objects = val
+    }
+    pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
+        self.feature_flags.narwhal_certificate_v2 = val
     }
 }
 

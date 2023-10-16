@@ -738,7 +738,7 @@ fn mark_verified(
     // The user can override with `pragma verify = false`, so respect this.
     let options = ProverOptions::get(fun_env.module_env.env);
     if !actual_env.is_explicitly_not_verified(&options.verify_scope) {
-        let mut info = targets
+        let info = targets
             .get_data_mut(&actual_env.get_qualified_id(), &variant)
             .expect("function data available")
             .annotations

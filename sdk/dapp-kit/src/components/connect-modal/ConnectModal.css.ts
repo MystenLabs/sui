@@ -20,6 +20,7 @@ export const title = style({
 export const content = style({
 	backgroundColor: themeVars.backgroundColors.modalPrimary,
 	borderRadius: themeVars.radii.xlarge,
+	color: themeVars.colors.body,
 	position: 'fixed',
 	bottom: 16,
 	left: 16,

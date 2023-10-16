@@ -158,3 +158,111 @@ const page2 =
 		limit: 10,
 	});
 ```
+
+## Methods
+
+In addition to the RPC methods mentioned above, `SuiClient` also exposes some methods for working
+with Transaction Blocks.
+
+### `executeTransactionBlock`
+
+```tsx
+const txb = new TransactionBlock();
+
+// add transaction data to txb...
+
+const { bytes, signature } = txb.sign({ client, signer: keypair });
+
+const result = await client.executeTransactionBlock({
+	transactionBlock: bytes,
+	signature,
+	requestType: 'WaitForLocalExecution',
+	options: {
+		showEffects: true,
+	},
+});
+```
+
+#### Arguments
+
+- `transactionBlock` - either a TransactionBlock or BCS serialized transaction data bytes as a
+  Uint8Array or as a base-64 encoded string.
+- `signer` - A `Keypair` instance to sign the transaction block
+- `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
+  should return the response. Default to be `WaitForLocalExecution`
+- `options`:
+  - `showBalanceChanges`: Whether to show balance_changes. Default to be False
+  - `showEffects`: Whether to show transaction effects. Default to be False
+  - `showEvents`: Whether to show transaction events. Default to be False
+  - `showInput`: Whether to show transaction input data. Default to be False
+  - `showObjectChanges`: Whether to show object_changes. Default to be False
+  - `showRawInput`: Whether to show bcs-encoded transaction input data
+
+### `signAndExecuteTransactionBlock`
+
+```tsx
+const txb = new TransactionBlock();
+// add transaction data to txb
+
+const result = await client.signAndExecuteTransactionBlock({
+	transactionBlock: txb,
+	signer: keypair,
+	requestType: 'WaitForLocalExecution',
+	options: {
+		showEffects: true,
+	},
+});
+```
+
+#### Arguments
+
+- `transactionBlock` - BCS serialized transaction data bytes as a Uint8Array or as a base-64 encoded
+  string.
+- `signature` - A signature, or list of signatures committed to the intent message of the
+  transaction data, as a base-64 encoded string.
+- `requestType`: `WaitForEffectsCert` or `WaitForLocalExecution`. Determines when the RPC node
+  should return the response. Default to be `WaitForLocalExecution`
+- `options`:
+  - `showBalanceChanges`: Whether to show balance_changes. Default to be False
+  - `showEffects`: Whether to show transaction effects. Default to be False
+  - `showEvents`: Whether to show transaction events. Default to be False
+  - `showInput`: Whether to show transaction input data. Default to be False
+  - `showObjectChanges`: Whether to show object_changes. Default to be False
+  - `showRawInput`: Whether to show bcs-encoded transaction input data
+
+### `waitForTransactionBlock`
+
+Wait for a transaction block result to be available over the API. This can be used in conjunction
+with `executeTransactionBlock` to wait for the transaction to be available via the API. This
+currently polls the `getTransactionBlock` API to check for the transaction.
+
+```tsx
+const txb = new TransactionBlock();
+
+const result = await client.signAndExecuteTransactionBlock({
+	transactionBlock: txb,
+	signer: keypair,
+});
+
+const transactionBlock = await client.waitForTransactionBlock({
+	digest: result.digest,
+	options: {
+		showEffects: true,
+	},
+});
+```
+
+#### Arguments
+
+- `digest` - the digest of the queried transaction
+- `signal` - An optional abort signal that can be used to cancel the request
+- `timeout` - The amount of time to wait for a transaction block. Defaults to one minute.
+- `pollInterval` - The amount of time to wait between checks for the transaction block. Defaults to
+  2 seconds.
+- `options`:
+  - `showBalanceChanges`: Whether to show balance_changes. Default to be False
+  - `showEffects`: Whether to show transaction effects. Default to be False
+  - `showEvents`: Whether to show transaction events. Default to be False
+  - `showInput`: Whether to show transaction input data. Default to be False
+  - `showObjectChanges`: Whether to show object_changes. Default to be False
+  - `showRawInput`: Whether to show bcs-encoded transaction input data

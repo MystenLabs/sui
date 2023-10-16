@@ -1,5 +1,29 @@
 # @mysten/sui.js
 
+## 0.44.0
+
+### Minor Changes
+
+- 11cf4e68b: Remove deprecated methods.
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+  - @mysten/bcs@0.8.1
+
+## 0.43.3
+
+### Patch Changes
+
+- 004fb1991: Export TransactionResult type
+
+## 0.43.2
+
+### Patch Changes
+
+- 9b052166d: Register Option enum to sdk bcs registry
+
 ## 0.43.1
 
 ### Patch Changes
@@ -664,7 +688,7 @@
 ### Minor Changes
 
 - e0b173b9e: Standardize Ed25519KeyPair key derivation with SLIP10
-- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the Typescript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
+- 059ede517: Flip the default value of `skipDataValidation` to true in order to mitigate the impact of breaking changes on applications. When there's a mismatch between the TypeScript definitions and RPC response, the SDK now log a console warning instead of throwing an error.
 - 03e6b552b: Add util function to get coin balances
 - 4575c0a02: Fix type definition of SuiMoveNormalizedType
 - ccf7f148d: Added generic signAndExecuteTransaction method to the SDK, which can be used with any supported type of transaction.

@@ -17,7 +17,7 @@ sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true

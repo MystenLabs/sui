@@ -16,7 +16,7 @@ Command `coverage summary --summarize-functions`:
 +-------------------------+
 | Move Coverage Summary   |
 +-------------------------+
-Module 00000000000000000000000000000001::AModule
+Module 0000000000000000000000000000000000000000000000000000000000000001::AModule
 	fun double_except_three
 		total: 11
 		covered: 11

@@ -1,9 +1,9 @@
 {
 	"name": "@mysten/dapp-kit",
 	"author": "Mysten Labs <build@mystenlabs.com>",
-	"description": "A collection of React hooks for querying and interacting with the Sui blockchain.",
-	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.2.1",
+	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
+	"homepage": "https://sui-typescript-docs.vercel.app/typescript",
+	"version": "0.3.0",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -95,5 +95,8 @@
 		"@tanstack/react-query": "^4.0.0",
 		"react": "*"
 	},
-	"sideEffects": false
+	"sideEffects": [
+		"*.css.ts",
+		"*.css"
+	]
 }

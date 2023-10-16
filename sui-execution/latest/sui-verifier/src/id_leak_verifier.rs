@@ -212,7 +212,7 @@ impl<'a> IDLeakAnalysis<'a> {
 
     fn stack_popn(&mut self, n: u64) -> Result<(), PartialVMError> {
         let Some(n) = NonZeroU64::new(n) else {
-            return Ok(())
+            return Ok(());
         };
         self.stack.pop_any_n(n).map_err(|e| {
             PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)

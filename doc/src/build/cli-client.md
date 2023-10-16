@@ -199,7 +199,7 @@ sui client objects 0x338567a5fe29132d68fade5172870d8ac1b607fd00eaace1e0aa42896d7
 To view more information about an object, use the `object` command and specify the `objectId`.
 
 ```shell
-sui client object <OBJECT_ID>
+sui client object <OBJECT-ID>
 ```
 
 The result shows some basic information about the object, the owner,
@@ -219,7 +219,7 @@ id: 0x3fd0e889ee56152cdbd5fa5b5dab78ddc66d127930f5173ae7b5a9ac3e17dd6d
 To view the JSON representation of the object, include `--json` in the command.
 
 ```shell
-sui client object <OBJECT_ID> --json
+sui client object <OBJECT-ID> --json
 ```
 
 The response resembles the following:
@@ -253,16 +253,16 @@ The response resembles the following:
 You can transfer mutable objects you own to another address using the command below
 
 ```shell
-sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT_ID> --gas-budget <GAS_BUDGET>
+sui client transfer [OPTIONS] --to <TO> --object-id <OBJECT-ID> --gas-budget <GAS-BUDGET-AMOUNT>
 
 OPTIONS:
-        --object-id <OBJECT_ID>
+        --object-id <OBJECT-ID>
             Object to transfer, in 32 bytes Hex string
 
         --gas <GAS>
             ID of the gas object for gas payment, in 32 bytes Hex string If not provided, a gas object with at least gas_budget value will be selected
 
-        --gas-budget <GAS_BUDGET>
+        --gas-budget <GAS-BUDGET-AMOUNT>
             Gas budget for this transfer
 
     -h, --help
@@ -279,7 +279,7 @@ To transfer an object to a recipient, you need the recipient's address,
 the object ID of the object to transfer, and, optionally, the ID of the coin object for the transaction fee payment. If not specified, the client uses a coin that meets the budget. Gas budget sets a cap for how much gas to spend.
 
 ```shell
-sui client transfer --to 0xcd2630011f6cb9aef960ed42d95b04e063c44a6143083ef89a35ea02b85c61b7 --object-id 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget 1000
+sui client transfer --to 0xcd2630011f6cb9aef960ed42d95b04e063c44a6143083ef89a35ea02b85c61b7 --object-id 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 ## Merge and split coin objects
@@ -291,17 +291,17 @@ You can use the `merge-coin` command and `split-coin` command to consolidate or 
 ### Merge coins
 
 ```shell
-sui client merge-coin [OPTIONS] --primary-coin <PRIMARY_COIN> --coin-to-merge <COIN_TO_MERGE> --gas-budget <GAS_BUDGET>
+sui client merge-coin [OPTIONS] --primary-coin <PRIMARY-COIN> --coin-to-merge <COIN-TO-MERGE> --gas-budget <GAS-BUDGET-AMOUNT>
 
 OPTIONS:
-        --coin-to-merge <COIN_TO_MERGE>
+        --coin-to-merge <COIN-TO-MERGE>
             Coin to be merged, in 32 bytes Hex string
 
         --gas <GAS>
             ID of the gas object for gas payment, in 32 bytes Hex string If not provided, a gas
             object with at least gas_budget value will be selected
 
-        --gas-budget <GAS_BUDGET>
+        --gas-budget <GAS-BUDGET>
             Gas budget for this call
 
     -h, --help
@@ -310,7 +310,7 @@ OPTIONS:
         --json
             Return command outputs in json format
 
-        --primary-coin <PRIMARY_COIN>
+        --primary-coin <PRIMARY-COIN>
             Coin to merge into, in 32 bytes Hex string
 ```
 
@@ -325,22 +325,22 @@ sui client objects 0x8f603d8a00ae87c43dc090e52bffc29a4b312c28ff3afd81c498caffa2a
 Use the IDs returned from the previous command in the `merge-coin` command.
 
 ```shell
-sui client merge-coin --primary-coin 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --coin-to-merge 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --gas-budget 1000
+sui client merge-coin --primary-coin 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --coin-to-merge 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 ### Split coins
 
 ```shell
-sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> (--amounts <AMOUNTS>... | --count <COUNT>)
+sui client split-coin [OPTIONS] --coin-id <COIN-ID> --gas-budget <GAS-BUDGET-AMOUNT> (--amounts <AMOUNTS>... | --count <COUNT>)
 
 OPTIONS:
         --amounts <AMOUNTS>...       Specific amounts to split out from the coin
-        --coin-id <COIN_ID>          Coin to Split, in 32 bytes Hex string
+        --coin-id <COIN-ID>          Coin to Split, in 32 bytes Hex string
         --count <COUNT>              Count of equal-size coins to split into
         --gas <GAS>                  ID of the gas object for gas payment, in 32 bytes Hex string If
-                                     not provided, a gas object with at least gas_budget value will
+                                     not provided, a gas object with at least gas-budget value will
                                      be selected
-        --gas-budget <GAS_BUDGET>    Gas budget for this call
+        --gas-budget <GAS-BUDGET>    Gas budget for this call
     -h, --help                       Print help information
         --json                       Return command outputs in json format
 ```
@@ -357,7 +357,7 @@ Then use the IDs returned in the `split-coin` command.
 The following example splits one coin into three coins of different amounts, 1000, 5000, and 3000. The `--amounts` argument accepts a list of values.
 
 ```shell
-sui client split-coin --coin-id 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --amounts 1000 5000 3000 --gas-budget 1000
+sui client split-coin --coin-id 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --amounts 1000 5000 3000 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 Use the `objects` command to view the new coin objects.
@@ -369,7 +369,7 @@ sui client objects 0x08da15bee6a3f5b01edbbd402654a75421d81397
 The following example splits a coin into three equal parts. To split a coin evenly, run the command without the `--amount` argument.
 
 ```shell
-sui client split-coin --coin-id 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --count 3 --gas-budget 1000
+sui client split-coin --coin-id 0x11af4b844ff94b3fbef6e36b518da3ad4c5856fa686464524a876b463d129760 --count 3 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 ## Calling Move code
@@ -388,7 +388,7 @@ coins as this can be accomplished with a built-in Sui client
 [command](#transfer-objects).
 
 ```shell
-sui client call --function transfer --module sui --package 0x2 --args 0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget 1000
+sui client call --function transfer --module sui --package 0x2 --args 0x1b9c00a93345ce5f12bea9ffe04748d6696c30631735193aea95b8f9082c1062 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 You can also use environment variables:
@@ -403,7 +403,7 @@ echo $RECIPIENT
 ```
 
 ```shell
-sui client call --function transfer --module sui --package 0x2 --args $OBJECT_ID $RECIPIENT --gas-budget 1000
+sui client call --function transfer --module sui --package 0x2 --args $OBJECT_ID $RECIPIENT --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 The command parameters include:
@@ -491,7 +491,7 @@ The whole command to publish a package for address
 environment variable):
 
 ```shell
-sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget 30000
+sui client publish $PATH_TO_PACKAGE/my_move_package --gas 0x33e3e1d64f76b71a80ec4f332f4d1a6742c537f2bb32473b01b1dcb1caac9427 --gas-budget <GAS-BUDGET-AMOUNT>
 ```
 
 The publish command accepts the path to your package as an optional positional parameter (`$PATH_TO_PACKAGE/my_move_package` in the previous call). If you do not supply the path, the command uses the current working directory as the default path value. The call also provides the following data:

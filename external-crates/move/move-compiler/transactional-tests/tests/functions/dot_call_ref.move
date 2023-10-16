@@ -30,8 +30,8 @@ public fun tmp(x: &X, y: &Y) {
 }
 
 public fun test() {
-    let x = X{};
-    let y = Y { x };
+    let mut x = X{};
+    let mut y = Y { x };
     ref(&x, &y);
     mut_ref(&mut x, &mut y);
     owned(x, y)

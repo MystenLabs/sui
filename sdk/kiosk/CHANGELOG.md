@@ -1,5 +1,29 @@
 # @mysten/kiosk
 
+## 0.7.6
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- 3699dd364: Adds support for extensions (on `getKiosk()`), and exports a `getKioskExtension()` function on kioskClient to get extension's content
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/sui.js@0.44.0
+
+## 0.7.5
+
+### Patch Changes
+
+- Updated dependencies [004fb1991]
+  - @mysten/sui.js@0.43.3
+
+## 0.7.4
+
+### Patch Changes
+
+- Updated dependencies [9b052166d]
+  - @mysten/sui.js@0.43.2
+
 ## 0.7.3
 
 ### Patch Changes

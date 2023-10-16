@@ -25,7 +25,7 @@ pub fn function_body_(context: &mut Context, b_: &mut T::FunctionBody_) {
 }
 
 pub fn function_signature(context: &mut Context, sig: &mut FunctionSignature) {
-    for (_, st) in &mut sig.parameters {
+    for (_, _, st) in &mut sig.parameters {
         type_(context, st);
     }
     type_(context, &mut sig.return_type);

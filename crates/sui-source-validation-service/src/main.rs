@@ -1,14 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::sync::Arc;
+use std::{path::PathBuf, sync::RwLock};
 use tracing::info;
 
 use clap::Parser;
 
 use telemetry_subscribers::TelemetryConfig;
 
-use sui_source_validation_service::{host_port, initialize, parse_config, serve, AppState};
+use sui_source_validation_service::{
+    host_port, initialize, parse_config, serve, watch_for_upgrades, AppState,
+};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -24,8 +27,21 @@ pub async fn main() -> anyhow::Result<()> {
     let start = tokio::time::Instant::now();
     let sources = initialize(&package_config, tmp_dir.path()).await?;
     info!("verification complete in {:?}", start.elapsed());
+
+    let app_state = Arc::new(RwLock::new(AppState { sources }));
+    let app_state_copy = app_state.clone();
+    let mut threads = vec![];
+    let watcher =
+        tokio::spawn(
+            async move { watch_for_upgrades(package_config.packages, app_state, None).await },
+        );
+    threads.push(watcher);
+    let server = tokio::spawn(async { serve(app_state_copy)?.await.map_err(anyhow::Error::from) });
+    threads.push(server);
+
     info!("serving on {}", host_port());
-    serve(AppState { sources })?
-        .await
-        .map_err(anyhow::Error::from)
+    for t in threads {
+        t.await.unwrap()?;
+    }
+    Ok(())
 }

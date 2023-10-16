@@ -4,10 +4,12 @@
 use core::result::Result::Ok;
 use itertools::Itertools;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 use tap::Tap;
 
 use async_trait::async_trait;
@@ -28,13 +30,16 @@ use crate::handlers::TransactionObjectChangesToCommit;
 use crate::metrics::IndexerMetrics;
 
 use crate::models_v2::checkpoints::StoredCheckpoint;
+use crate::models_v2::display::StoredDisplay;
 use crate::models_v2::epoch::StoredEpochInfo;
 use crate::models_v2::events::StoredEvent;
 use crate::models_v2::objects::StoredObject;
 use crate::models_v2::packages::StoredPackage;
 use crate::models_v2::transactions::StoredTransaction;
-use crate::models_v2::tx_indices::StoredTxIndex;
-use crate::schema_v2::{checkpoints, epochs, events, objects, packages, transactions, tx_indices};
+use crate::schema_v2::{
+    checkpoints, display, epochs, events, objects, packages, transactions, tx_calls,
+    tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+};
 use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
 use crate::store::module_resolver_v2::IndexerStoreModuleResolver;
 use crate::types_v2::{
@@ -134,6 +139,33 @@ impl PgIndexerStoreV2 {
         .context("Failed to read object from PostgresDB")
     }
 
+    fn persist_display_updates(
+        &self,
+        display_updates: BTreeMap<String, StoredDisplay>,
+    ) -> Result<(), IndexerError> {
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| {
+                diesel::insert_into(display::table)
+                    .values(display_updates.values().collect::<Vec<_>>())
+                    .on_conflict(display::object_type)
+                    .do_update()
+                    .set((
+                        display::id.eq(excluded(display::id)),
+                        display::version.eq(excluded(display::version)),
+                        display::bcs.eq(excluded(display::bcs)),
+                    ))
+                    .execute(conn)
+                    .map_err(IndexerError::from)
+                    .context("Failed to write display updates to PostgresDB")?;
+                Ok::<(), IndexerError>(())
+            },
+            Duration::from_secs(60)
+        )?;
+
+        Ok(())
+    }
+
     fn persist_objects_chunk(
         &self,
         objects: Vec<ObjectChangeToCommit>,
@@ -175,6 +207,7 @@ impl PgIndexerStoreV2 {
                                 .eq(excluded(objects::checkpoint_sequence_number)),
                             objects::owner_type.eq(excluded(objects::owner_type)),
                             objects::owner_id.eq(excluded(objects::owner_id)),
+                            objects::object_type.eq(excluded(objects::object_type)),
                             objects::serialized_object.eq(excluded(objects::serialized_object)),
                             objects::coin_type.eq(excluded(objects::coin_type)),
                             objects::coin_balance.eq(excluded(objects::coin_balance)),
@@ -303,10 +336,12 @@ impl PgIndexerStoreV2 {
             .metrics
             .checkpoint_db_commit_latency_events_chunks
             .start_timer();
+        let len = events.len();
         let events = events
             .into_iter()
             .map(StoredEvent::from)
             .collect::<Vec<_>>();
+
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
@@ -324,7 +359,7 @@ impl PgIndexerStoreV2 {
         )
         .tap(|_| {
             let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked events", events.len())
+            info!(elapsed, "Persisted {} chunked events", len)
         })
     }
 
@@ -366,34 +401,166 @@ impl PgIndexerStoreV2 {
         })
     }
 
-    fn persist_tx_indices_chunk(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
+    async fn persist_tx_indices_chunk(&self, indices: Vec<TxIndex>) -> Result<(), IndexerError> {
         let guard = self
             .metrics
             .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
-        let indices = indices
+        let len = indices.len();
+        let (senders, recipients, input_objects, changed_objects, calls) =
+            indices.into_iter().map(|i| i.split()).fold(
+                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+                |(
+                    mut tx_senders,
+                    mut tx_recipients,
+                    mut tx_input_objects,
+                    mut tx_changed_objects,
+                    mut tx_calls,
+                ),
+                 index| {
+                    tx_senders.extend(index.0);
+                    tx_recipients.extend(index.1);
+                    tx_input_objects.extend(index.2);
+                    tx_changed_objects.extend(index.3);
+                    tx_calls.extend(index.4);
+
+                    (
+                        tx_senders,
+                        tx_recipients,
+                        tx_input_objects,
+                        tx_changed_objects,
+                        tx_calls,
+                    )
+                },
+            );
+
+        let mut futures = vec![];
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let senders_len = senders.len();
+            let recipients_len = recipients.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_senders::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_senders to PostgresDB")?;
+                    }
+                    for chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_recipients::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_recipients to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(
+                    elapsed,
+                    "Persisted {} rows to tx_senders and {} rows to tx_recipients",
+                    senders_len,
+                    recipients_len,
+                );
+            })
+        }));
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let input_objects_len = input_objects.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_input_objects::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_input_objects chunk to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(
+                    elapsed,
+                    "Persisted {} rows to tx_input_objects", input_objects_len,
+                );
+            })
+        }));
+
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let changed_objects_len = changed_objects.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_changed_objects::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_changed_objects chunk to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(
+                    elapsed,
+                    "Persisted {} rows to tx_changed_objects table", changed_objects_len,
+                );
+            })
+        }));
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let calls_len = calls.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in calls.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_calls::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_calls chunk to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_calls tables", calls_len);
+            })
+        }));
+        futures::future::join_all(futures)
+            .await
             .into_iter()
-            .map(StoredTxIndex::from)
-            .collect::<Vec<_>>();
-        transactional_blocking_with_retry!(
-            &self.blocking_cp,
-            |conn| {
-                for indices_chunk in indices.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(tx_indices::table)
-                        .values(indices_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write tx_indices to PostgresDB")?;
-                }
-                Ok::<(), IndexerError>(())
-            },
-            Duration::from_secs(60)
-        )
-        .tap(|_| {
-            let elapsed = guard.stop_and_record();
-            info!(elapsed, "Persisted {} chunked tx_indices", indices.len())
-        })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                IndexerError::PostgresWriteError(format!(
+                    "Failed to persist all tx_indices chunks: {:?}",
+                    e
+                ))
+            })?;
+        let elapsed = guard.stop_and_record();
+        info!(elapsed, "Persisted {} chunked tx_indices", len);
+        Ok(())
     }
 
     fn persist_epoch(&self, data: &Vec<EpochToCommit>) -> Result<(), IndexerError> {
@@ -511,6 +678,16 @@ impl PgIndexerStoreV2 {
             let _guard = current_span.enter();
             f(this)
         })
+    }
+
+    fn spawn_task<F, Fut, R>(&self, f: F) -> tokio::task::JoinHandle<Result<R, IndexerError>>
+    where
+        F: FnOnce(Self) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<R, IndexerError>> + Send + 'static,
+        R: Send + 'static,
+    {
+        let this = self.clone();
+        tokio::task::spawn(async move { f(this).await })
     }
 }
 
@@ -635,6 +812,18 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
         Ok(())
     }
 
+    async fn persist_displays(
+        &self,
+        display_updates: BTreeMap<String, StoredDisplay>,
+    ) -> Result<(), IndexerError> {
+        if display_updates.is_empty() {
+            return Ok(());
+        }
+
+        self.spawn_blocking_task(move |this| this.persist_display_updates(display_updates))
+            .await?
+    }
+
     async fn persist_packages(&self, packages: Vec<IndexedPackage>) -> Result<(), IndexerError> {
         if packages.is_empty() {
             return Ok(());
@@ -656,7 +845,11 @@ impl IndexerStoreV2 for PgIndexerStoreV2 {
 
         let futures = chunks
             .into_iter()
-            .map(|c| self.spawn_blocking_task(move |this| this.persist_tx_indices_chunk(c)))
+            .map(|chunk| {
+                self.spawn_task(move |this: Self| async move {
+                    this.persist_tx_indices_chunk(chunk).await
+                })
+            })
             .collect::<Vec<_>>();
         futures::future::join_all(futures)
             .await
@@ -736,6 +929,7 @@ fn make_final_list_of_objects_to_commit(
         .collect()
 }
 
+#[allow(clippy::large_enum_variant)]
 enum ObjectChangeToCommit {
     MutatedObject(StoredObject),
     DeletedObject(ObjectID),

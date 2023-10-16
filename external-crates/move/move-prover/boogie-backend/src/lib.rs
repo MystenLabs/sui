@@ -188,7 +188,7 @@ pub fn add_prelude(
         .vec_inst
         .iter()
         .map(|ty| TypeInfo::new(env, options, ty, false))
-        .chain(implicit_vec_inst.into_iter())
+        .chain(implicit_vec_inst)
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect_vec();

@@ -5,8 +5,9 @@ use futures::FutureExt;
 use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
-use sui_node::{metrics, SuiNode, SuiNodeHandle};
+use sui_node::{SuiNode, SuiNodeHandle};
 use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
+use telemetry_subscribers::get_global_telemetry_config;
 use tracing::{info, trace};
 
 use super::node::RuntimeType;
@@ -44,12 +45,21 @@ impl Container {
         let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
 
         let thread = thread::spawn(move || {
-            let span = tracing::span!(
-                tracing::Level::INFO,
-                "node",
-                name =% AuthorityPublicKeyBytes::from(config.protocol_key_pair().public()).concise(),
-            );
-            let _guard = span.enter();
+            let span = if get_global_telemetry_config()
+                .map(|c| c.enable_otlp_tracing)
+                .unwrap_or(false)
+            {
+                // we cannot have long-lived root spans when exporting trace data to otlp
+                None
+            } else {
+                Some(tracing::span!(
+                    tracing::Level::INFO,
+                    "node",
+                    name =% AuthorityPublicKeyBytes::from(config.protocol_key_pair().public()).concise(),
+                ))
+            };
+
+            let _guard = span.as_ref().map(|span| span.enter());
 
             let mut builder = match runtime {
                 RuntimeType::SingleThreaded => tokio::runtime::Builder::new_current_thread(),
@@ -63,7 +73,9 @@ impl Container {
                     builder
                         .on_thread_start(move || {
                             SPAN.with(|maybe_entered_span| {
-                                *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
+                                if let Some(span) = &span {
+                                    *maybe_entered_span.borrow_mut() = Some(span.clone().entered());
+                                }
                             });
                         })
                         .on_thread_stop(|| {
@@ -78,7 +90,7 @@ impl Container {
             let runtime = builder.enable_all().build().unwrap();
 
             runtime.block_on(async move {
-                let registry_service = metrics::start_prometheus_server(config.metrics_address);
+                let registry_service = mysten_metrics::start_prometheus_server(config.metrics_address);
                 info!(
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
