@@ -12,8 +12,8 @@ type WalletAutoConnectionStatus = 'disabled' | 'idle' | 'settled';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
-	setWalletConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
-	setWalletAutoConnectionStatus: (autoConnectionStatus: WalletAutoConnectionStatus) => void;
+	setConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
+	setAutoConnectionStatus: (autoConnectionStatus: WalletAutoConnectionStatus) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		connectedAccounts: readonly WalletAccount[],
@@ -65,12 +65,12 @@ export function createWalletStore({
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
 				autoConnectionStatus: autoConnect ? 'idle' : 'disabled',
-				setWalletConnectionStatus(connectionStatus) {
+				setConnectionStatus(connectionStatus) {
 					set(() => ({
 						connectionStatus,
 					}));
 				},
-				setWalletAutoConnectionStatus(autoConnectionStatus) {
+				setAutoConnectionStatus(autoConnectionStatus) {
 					set(() => ({
 						autoConnectionStatus,
 					}));

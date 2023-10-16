@@ -10,7 +10,7 @@ import { useWalletStore } from './useWalletStore.js';
 export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const { mutate: connectWallet } = useConnectWallet();
 	const wallets = useWallets();
-	const setAutoConnectionStatus = useWalletStore((state) => state.autoConnectionStatus);
+	const setAutoConnectionStatus = useWalletStore((state) => state.setAutoConnectionStatus);
 	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
 	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 

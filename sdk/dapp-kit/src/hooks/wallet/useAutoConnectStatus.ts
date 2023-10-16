@@ -7,5 +7,5 @@ import { useWalletStore } from './useWalletStore.js';
  * WIP will fill this out before landing lol (pinky promise)
  */
 export function useAutoConnectStatus() {
-	return useWalletStore((state) => state.autoConnectStatus);
+	return useWalletStore((state) => state.autoConnectionStatus);
 }
