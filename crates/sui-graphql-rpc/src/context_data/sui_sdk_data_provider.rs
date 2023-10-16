@@ -212,14 +212,13 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
     }
 }
 
-pub(crate) fn convert_to_epoch(
+pub(crate) fn _convert_to_epoch(
     system_state: &SuiSystemStateSummary,
     protocol_configs: &ProtocolConfigs,
 ) -> Result<Epoch> {
     let epoch_id = system_state.epoch;
     let active_validators =
         convert_to_validators(system_state.active_validators.clone(), Some(system_state));
-
     let start_timestamp = i64::try_from(system_state.epoch_start_timestamp_ms).map_err(|_| {
         Error::Internal(format!(
             "Cannot convert start timestamp u64 ({}) of epoch ({epoch_id}) into i64 required by DateTime",
