@@ -106,7 +106,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
 use sui_types::object::{MoveObject, Owner, PastObjectRead, OBJECT_START_VERSION};
-use sui_types::storage::{ObjectKey, ObjectStore, WriteKind};
+use sui_types::storage::{GetSharedLocks, ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
@@ -138,7 +138,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::stake_aggregator::StakeAggregator;
 use crate::state_accumulator::{StateAccumulator, WrappedObject};
 use crate::subscription_handler::SubscriptionHandler;
-use crate::{transaction_input_checker, transaction_manager::TransactionManager};
+use crate::transaction_manager::TransactionManager;
 
 #[cfg(test)]
 #[path = "unit_tests/authority_tests.rs"]
@@ -699,7 +699,7 @@ impl AuthorityState {
         transaction: VerifiedTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        let (_gas_status, input_objects) = transaction_input_checker::check_transaction_input(
+        let (_gas_status, input_objects) = sui_transaction_checks::check_transaction_input(
             &self.database,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
@@ -1244,10 +1244,12 @@ impl AuthorityState {
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
 
         // check_certificate_input also checks shared object locks when loading the shared objects.
-        let (gas_status, input_objects) = transaction_input_checker::check_certificate_input(
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             &self.database,
-            epoch_store,
+            epoch_store.as_ref(),
             certificate,
+            epoch_store.protocol_config(),
+            epoch_store.reference_gas_price(),
         )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();
@@ -1322,7 +1324,7 @@ impl AuthorityState {
             let gas_object_ref = gas_object.compute_object_reference();
             gas_object_refs = vec![gas_object_ref];
             (
-                transaction_input_checker::check_transaction_input_with_given_gas(
+                sui_transaction_checks::check_transaction_input_with_given_gas(
                     &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
@@ -1335,7 +1337,7 @@ impl AuthorityState {
             )
         } else {
             (
-                transaction_input_checker::check_transaction_input(
+                sui_transaction_checks::check_transaction_input(
                     &self.database,
                     epoch_store.protocol_config(),
                     epoch_store.reference_gas_price(),
@@ -1478,7 +1480,7 @@ impl AuthorityState {
             Owner::AddressOwner(sender),
             TransactionDigest::genesis(),
         );
-        let (gas_object_ref, input_objects) = transaction_input_checker::check_dev_inspect_input(
+        let (gas_object_ref, input_objects) = sui_transaction_checks::check_dev_inspect_input(
             &self.database,
             protocol_config,
             &transaction_kind,
