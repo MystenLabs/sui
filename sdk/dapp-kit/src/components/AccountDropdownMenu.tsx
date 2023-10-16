@@ -23,7 +23,7 @@ type AccountDropdownMenuProps = {
 
 export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps) {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
-	const { mutate: switchAccount } = useSwitchAccount();
+
 	const { data: domain } = useResolveSuiNSName(
 		currentAccount.label ? null : currentAccount.address,
 	);
@@ -45,14 +45,11 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				<StyleMarker>
 					<DropdownMenu.Content className={styles.menuContent}>
 						{accounts.map((account) => (
-							<DropdownMenu.Item
+							<AccountDropdownMenuItem
 								key={account.address}
-								className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
-								onSelect={() => switchAccount({ account })}
-							>
-								<Text mono>{account.label ?? formatAddress(account.address)}</Text>
-								{currentAccount.address === account.address ? <CheckIcon /> : null}
-							</DropdownMenu.Item>
+								account={account}
+								active={currentAccount.address === account.address}
+							/>
 						))}
 						<DropdownMenu.Separator className={styles.separator} />
 						<DropdownMenu.Item
@@ -65,5 +62,26 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				</StyleMarker>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
+	);
+}
+
+export function AccountDropdownMenuItem({
+	account,
+	active,
+}: {
+	account: WalletAccount;
+	active?: boolean;
+}) {
+	const { mutate: switchAccount } = useSwitchAccount();
+	const { data: domain } = useResolveSuiNSName(account.label ? null : account.address);
+
+	return (
+		<DropdownMenu.Item
+			className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
+			onSelect={() => switchAccount({ account })}
+		>
+			<Text mono>{account.label ?? domain ?? formatAddress(account.address)}</Text>
+			{active ? <CheckIcon /> : null}
+		</DropdownMenu.Item>
 	);
 }

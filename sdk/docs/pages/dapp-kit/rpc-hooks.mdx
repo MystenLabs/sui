@@ -84,3 +84,25 @@ function MyComponent() {
 	);
 }
 ```
+
+## `useResolveSuiNSName`
+
+To get the SuiNS name for a given address, use the `useResolveSuiNSName` hook.
+
+```tsx
+import { useResolveSuiNSName } from '@mysten/dapp-kit';
+
+function MyComponent() {
+	const { data, isLoading } = useResolveSuiNSName('0x123');
+
+	if (isLoading) {
+		return <div>Loading...</div>;
+	}
+
+	if (data) {
+		return <div>Domain name is: {data}</div>;
+	}
+
+	return <div>Domain name not found</div>;
+}
+```
