@@ -773,7 +773,8 @@ fn create_genesis_checkpoint(
         transaction: *transaction.digest(),
         effects: effects.digest(),
     };
-    let contents = CheckpointContents::new_with_causally_ordered_transactions([execution_digests]);
+    let contents =
+        CheckpointContents::new_with_digests_and_signatures([execution_digests], vec![vec![]]);
     let checkpoint = CheckpointSummary {
         epoch: 0,
         sequence_number: 0,
