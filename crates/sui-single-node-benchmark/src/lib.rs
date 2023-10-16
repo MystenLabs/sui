@@ -9,6 +9,7 @@ pub(crate) mod benchmark_context;
 pub mod command;
 pub(crate) mod mock_account;
 pub(crate) mod mock_consensus;
+pub(crate) mod mock_storage;
 pub(crate) mod single_node;
 pub(crate) mod tx_generator;
 pub mod workload;
@@ -27,6 +28,10 @@ pub async fn run_benchmark(workload: Workload, component: Component, checkpoint_
         }
         Component::CheckpointExecutor => {
             ctx.benchmark_checkpoint_executor(transactions, checkpoint_size)
+                .await;
+        }
+        Component::ExecutionOnly => {
+            ctx.benchmark_transaction_execution_in_memory(transactions)
                 .await;
         }
         _ => {

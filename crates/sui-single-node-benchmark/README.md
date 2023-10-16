@@ -36,6 +36,7 @@ cargo run --release --bin sui-single-node-benchmark -- --component baseline <mov
 ```
 The benchmark supports various component:
 - `baseline`: this is the default component, which includes the execution layer as well as the interaction with the DB.
+- `execution-only`: compared to baseline, this doesn't interact with RocksDB at all, and only does execution.
 - `with-tx-manager`: on top of baseline, it schedules transactions into the transaction manager, instead of executing them immediately. It also goes through the execution driver.
 - `validator-without-consensus`: in this mode, transactions are sent to the `handle_certificate` GRPC entry point of the validator service. On top of `with-tx-manager`, it also includes the verification of the certificate.
 - `validator-with-fake-consensus`: in this mode, on top of `validator-without-consensus`, it also submits the transactions to a simple consensus layer, which sequences transactions in the order as it receives it directly back to the store. It covers part of the cost in consensus handler. The commit size can be controlled with `--checkpoint-size`.

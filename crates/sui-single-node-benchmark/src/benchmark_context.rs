@@ -3,6 +3,7 @@
 
 use crate::command::Component;
 use crate::mock_account::{batch_create_account_and_gas, Account};
+use crate::mock_storage::InMemoryObjectStore;
 use crate::single_node::SingleValidator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
 use crate::workload::Workload;
@@ -12,7 +13,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
@@ -102,7 +103,7 @@ impl BenchmarkContext {
             )))
             .await;
         let results = self
-            .execute_transactions_immediately(root_object_create_transactions)
+            .execute_raw_transactions(root_object_create_transactions)
             .await;
         let mut new_gas_objects = HashMap::new();
         for effects in results {
@@ -171,7 +172,7 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution(&self, transactions: Vec<Transaction>) {
         let mut transactions = self.certify_transactions(transactions).await;
-        self.execute_sample_transaction(transactions.pop().unwrap())
+        self.execute_sample_transaction(transactions.pop().unwrap().into_unsigned())
             .await;
 
         let tx_count = transactions.len();
@@ -180,7 +181,20 @@ impl BenchmarkContext {
             "Started executing {} transactions. You can now attach a profiler",
             transactions.len()
         );
-        self.execute_transactions(transactions).await;
+
+        let tasks: FuturesUnordered<_> = transactions
+            .into_iter()
+            .map(|tx| {
+                let validator = self.validator();
+                let component = self.benchmark_component;
+                tokio::spawn(async move { validator.execute_certificate(tx, component).await })
+            })
+            .collect();
+        let results: Vec<_> = tasks.collect().await;
+        results.into_iter().for_each(|r| {
+            r.unwrap();
+        });
+
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
         info!(
             "Execution finished in {}s, TPS={}",
@@ -189,13 +203,54 @@ impl BenchmarkContext {
         );
     }
 
+    pub(crate) async fn benchmark_transaction_execution_in_memory(
+        &self,
+        mut transactions: Vec<Transaction>,
+    ) {
+        self.execute_sample_transaction(transactions.pop().unwrap())
+            .await;
+
+        let tx_count = transactions.len();
+        let in_memory_store = self.validator.create_in_memory_store();
+        let start_time = std::time::Instant::now();
+        info!(
+            "Started executing {} transactions. You can now attach a profiler",
+            transactions.len()
+        );
+
+        let tasks: FuturesUnordered<_> = transactions
+            .into_iter()
+            .map(|tx| {
+                let validator = self.validator();
+                let in_memory_store = in_memory_store.clone();
+                tokio::spawn(async move {
+                    validator
+                        .execute_transaction_in_memory(in_memory_store, tx)
+                        .await
+                })
+            })
+            .collect();
+        let results: Vec<_> = tasks.collect().await;
+        results.into_iter().for_each(|r| {
+            r.unwrap();
+        });
+
+        let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
+        info!(
+            "Execution finished in {}s, TPS={}, number of DB object reads per transaction: {}",
+            elapsed,
+            tx_count as f64 / elapsed,
+            in_memory_store.get_num_object_reads() as f64 / tx_count as f64
+        );
+    }
+
     /// Print out a sample transaction and its effects so that we can get a rough idea
     /// what we are measuring.
-    async fn execute_sample_transaction(&self, sample_transaction: CertifiedTransaction) {
+    async fn execute_sample_transaction(&self, sample_transaction: Transaction) {
         info!("Sample transaction: {:?}", sample_transaction.data());
         let effects = self
             .validator()
-            .execute_tx_immediately(sample_transaction.into_unsigned())
+            .execute_raw_transaction(sample_transaction)
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
@@ -219,29 +274,26 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_checkpoint_executor(
         &self,
-        transactions: Vec<Transaction>,
+        mut transactions: Vec<Transaction>,
         checkpoint_size: usize,
     ) {
-        let mut transactions = self.certify_transactions(transactions).await;
-
         self.execute_sample_transaction(transactions.pop().unwrap())
             .await;
 
         info!("Executing all transactions to generate effects");
         let tx_count = transactions.len();
+        let in_memory_store = self.validator.create_in_memory_store();
         let effects: BTreeMap<_, _> = self
-            .execute_transactions(transactions.clone())
+            .execute_transactions_in_memory(in_memory_store.clone(), transactions.clone())
             .await
             .into_iter()
             .map(|e| (*e.transaction_digest(), e))
             .collect();
-        info!("Reverting all transactions so that we could re-execute through checkpoint executor");
-        self.revert_transactions(effects.keys()).await;
 
         info!("Building checkpoints");
         let validator = self.validator();
         let checkpoints = validator
-            .build_checkpoints(transactions, effects, checkpoint_size)
+            .build_checkpoints(in_memory_store, transactions, effects, checkpoint_size)
             .await;
         info!("Built {} checkpoints", checkpoints.len());
         let (mut checkpoint_executor, checkpoint_sender) = validator.create_checkpoint_executor();
@@ -278,23 +330,7 @@ impl BenchmarkContext {
         );
     }
 
-    pub(crate) async fn execute_transactions(
-        &self,
-        transactions: Vec<CertifiedTransaction>,
-    ) -> Vec<TransactionEffects> {
-        let tasks: FuturesUnordered<_> = transactions
-            .into_iter()
-            .map(|tx| {
-                let validator = self.validator();
-                let component = self.benchmark_component;
-                tokio::spawn(async move { validator.execute_transaction(tx, component).await })
-            })
-            .collect();
-        let results: Vec<_> = tasks.collect().await;
-        results.into_iter().map(|r| r.unwrap()).collect()
-    }
-
-    async fn execute_transactions_immediately(
+    async fn execute_raw_transactions(
         &self,
         transactions: Vec<Transaction>,
     ) -> Vec<TransactionEffects> {
@@ -302,33 +338,30 @@ impl BenchmarkContext {
             .into_iter()
             .map(|tx| {
                 let validator = self.validator();
-                tokio::spawn(async move { validator.execute_tx_immediately(tx).await })
+                tokio::spawn(async move { validator.execute_raw_transaction(tx).await })
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
-    pub(crate) async fn revert_transactions(
+    async fn execute_transactions_in_memory(
         &self,
-        transactions: impl Iterator<Item = &TransactionDigest>,
-    ) {
+        store: InMemoryObjectStore,
+        transactions: Vec<Transaction>,
+    ) -> Vec<TransactionEffects> {
         let tasks: FuturesUnordered<_> = transactions
-            .map(|digest| {
+            .into_iter()
+            .map(|tx| {
+                let store = store.clone();
                 let validator = self.validator();
-                let digest = *digest;
-                tokio::spawn(async move {
-                    validator
-                        .get_validator()
-                        .db()
-                        .revert_state_update(&digest)
-                        .await
-                        .unwrap()
-                })
+                tokio::spawn(
+                    async move { validator.execute_transaction_in_memory(store, tx).await },
+                )
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
-        results.into_iter().all(|r| r.is_ok());
+        results.into_iter().map(|r| r.unwrap()).collect()
     }
 
     fn refresh_gas_objects(&mut self, mut new_gas_objects: HashMap<ObjectID, ObjectRef>) {
