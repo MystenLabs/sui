@@ -48,7 +48,7 @@ impl SimpleClient {
 
 //#[cfg(feature = "pg_integration")]
 #[tokio::test]
-async fn test_client() {
+async fn test_simple_client() {
     let mut connection_config = if cfg!(feature = "pg_integration") {
         ConnectionConfig::ci_integration_test_cfg()
     } else {

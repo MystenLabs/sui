@@ -19,8 +19,8 @@ use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::task::JoinHandle;
 
-const _VALIDATOR_COUNT: usize = 7;
-const _EPOCH_DURATION_MS: u64 = 15000;
+const VALIDATOR_COUNT: usize = 7;
+const EPOCH_DURATION_MS: u64 = 15000;
 
 const _ACCOUNT_NUM: usize = 20;
 const _GAS_OBJECT_COUNT: usize = 3;
@@ -81,8 +81,8 @@ async fn start_test_cluster(
     });
 
     let test_cluster = TestClusterBuilder::new()
-        .with_num_validators(_VALIDATOR_COUNT)
-        .with_epoch_duration_ms(_EPOCH_DURATION_MS)
+        .with_num_validators(VALIDATOR_COUNT)
+        .with_epoch_duration_ms(EPOCH_DURATION_MS)
         .with_accounts(vec![
             AccountConfig {
                 address: None,
