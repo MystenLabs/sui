@@ -27,7 +27,7 @@ module counter::counter {
     }
 
     /// Create and share a Counter object.
-    public entry fun create(ctx: &mut TxContext) {
+    public fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
             id: object::new(ctx),
             owner: tx_context::sender(ctx),
@@ -36,18 +36,18 @@ module counter::counter {
     }
 
     /// Increment a counter by 1.
-    public entry fun increment(counter: &mut Counter) {
+    public fun increment(counter: &mut Counter) {
         counter.value = counter.value + 1;
     }
 
     /// Set value (only runnable by the Counter owner)
-    public entry fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
+    public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
         assert!(counter.owner == tx_context::sender(ctx), 0);
         counter.value = value;
     }
 
     /// Assert a value for the counter.
-    public entry fun assert_value(counter: &Counter, value: u64) {
+    public fun assert_value(counter: &Counter, value: u64) {
         assert!(counter.value == value, 0)
     }
 }
