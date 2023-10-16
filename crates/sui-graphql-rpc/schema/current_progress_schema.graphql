@@ -350,7 +350,7 @@ type MoveModuleEdge {
 
 type MoveModuleId {
 	name: String!
-	package: MovePackage
+	package: MovePackage!
 }
 
 type MoveObject {

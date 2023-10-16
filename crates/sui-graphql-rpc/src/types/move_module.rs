@@ -4,7 +4,7 @@
 use async_graphql::*;
 use move_binary_format::CompiledModule;
 
-use crate::context_data::db_data_provider::PgManager;
+use crate::{context_data::db_data_provider::PgManager, error::Error};
 
 use super::{move_package::MovePackage, sui_address::SuiAddress};
 
@@ -56,10 +56,15 @@ pub(crate) struct MoveModuleId {
 
 #[ComplexObject]
 impl MoveModuleId {
-    async fn package(&self, ctx: &Context<'_>) -> Result<Option<MovePackage>> {
-        ctx.data_unchecked::<PgManager>()
+    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
+        let result = ctx.data_unchecked::<PgManager>()
             .fetch_move_package(self.package, None)
             .await
-            .extend()
+            .extend()?;
+
+        match result {
+            Some(result) => Ok(result),
+            None => Err(Error::Internal("Package not found".to_string()).extend())
+        }
     }
 }
