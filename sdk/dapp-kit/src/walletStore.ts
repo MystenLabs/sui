@@ -6,7 +6,7 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-type WalletConnectionStatus = 'disconnected' | 'reconnecting' | 'connecting' | 'connected';
+type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;

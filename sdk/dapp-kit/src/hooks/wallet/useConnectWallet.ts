@@ -37,18 +37,12 @@ export function useConnectWallet({
 }: UseConnectWalletMutationOptions = {}) {
 	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
 	const setWalletConnectionStatus = useWalletStore((state) => state.setWalletConnectionStatus);
-	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
-	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
 		mutationFn: async ({ wallet, accountAddress, ...connectArgs }) => {
 			try {
-				setWalletConnectionStatus(
-					wallet.name === lastConnectedWalletName && accountAddress === lastConnectedAccountAddress
-						? 'reconnecting'
-						: 'connecting',
-				);
+				setWalletConnectionStatus('connecting');
 
 				const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
 				const connectedSuiAccounts = connectResult.accounts.filter((account) =>
