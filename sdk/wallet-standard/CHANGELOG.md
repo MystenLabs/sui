@@ -1,5 +1,14 @@
 # @mysten/wallet-standard
 
+## 0.8.5
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+- Updated dependencies [b48289346]
+- Updated dependencies [11cf4e68b]
+  - @mysten/sui.js@0.44.0
+
 ## 0.8.4
 
 ### Patch Changes

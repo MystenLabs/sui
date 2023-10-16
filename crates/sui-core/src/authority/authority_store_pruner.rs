@@ -339,7 +339,12 @@ impl AuthorityStorePruner {
         let mut effects_to_prune = vec![];
 
         loop {
-            let Some(ckpt) = checkpoint_store.certified_checkpoints.get(&(checkpoint_number + 1))? else {break;};
+            let Some(ckpt) = checkpoint_store
+                .certified_checkpoints
+                .get(&(checkpoint_number + 1))?
+            else {
+                break;
+            };
             let checkpoint = ckpt.into_inner();
             // Skipping because  checkpoint's epoch or checkpoint number is too new.
             // We have to respect the highest executed checkpoint watermark because there might be
@@ -450,7 +455,9 @@ impl AuthorityStorePruner {
             }
             sst_file_for_compaction = Some(sst_file);
         }
-        let Some(sst_file) = sst_file_for_compaction else {return Ok(None);};
+        let Some(sst_file) = sst_file_for_compaction else {
+            return Ok(None);
+        };
         info!(
             "Manual compaction of sst file {:?}. Size: {:?}, level: {:?}",
             sst_file.name, sst_file.size, sst_file.level

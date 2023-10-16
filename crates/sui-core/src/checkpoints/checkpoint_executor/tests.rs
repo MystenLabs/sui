@@ -38,12 +38,10 @@ pub async fn test_checkpoint_executor_crash_recovery() {
         CommitteeFixture,
     ) = init_executor_test(buffer_size, checkpoint_store.clone()).await;
 
-    assert!(matches!(
-        checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap(),
-        None,
-    ));
+    assert!(checkpoint_store
+        .get_highest_executed_checkpoint_seq_number()
+        .unwrap()
+        .is_none());
     let checkpoints = sync_new_checkpoints(
         &checkpoint_store,
         &checkpoint_sender,
@@ -127,12 +125,10 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let epoch = epoch_store.epoch();
     assert_eq!(epoch, 0);
 
-    assert!(matches!(
-        checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap(),
-        None,
-    ));
+    assert!(checkpoint_store
+        .get_highest_executed_checkpoint_seq_number()
+        .unwrap()
+        .is_none());
 
     // sync 20 checkpoints
     let cold_start_checkpoints = sync_new_checkpoints(
@@ -291,12 +287,10 @@ pub async fn test_reconfig_crash_recovery() {
     )
     .await;
 
-    assert!(matches!(
-        checkpoint_store
-            .get_highest_executed_checkpoint_seq_number()
-            .unwrap(),
-        None,
-    ));
+    assert!(checkpoint_store
+        .get_highest_executed_checkpoint_seq_number()
+        .unwrap()
+        .is_none());
 
     // sync 1 checkpoint
     let checkpoint = sync_new_checkpoints(

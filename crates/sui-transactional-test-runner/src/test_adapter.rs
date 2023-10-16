@@ -4,6 +4,7 @@
 //! This module contains the transactional test runner instantiation for the Sui adapter
 
 use crate::{args::*, programmable_transaction_test_parser::parser::ParsedCommand};
+use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
@@ -38,10 +39,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_core::authority::{
-    authority_test_utils::send_and_confirm_transaction_with_execution_error,
-    test_authority_builder::TestAuthorityBuilder, AuthorityState,
-};
+use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
@@ -52,11 +50,13 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
+use sui_types::base_types::SequenceNumber;
+use sui_types::crypto::get_authority_key_pair;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
 use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
-use sui_types::{base_types::SequenceNumber, effects::TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
@@ -68,7 +68,6 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{clock::Clock, SUI_SYSTEM_ADDRESS};
-use sui_types::{crypto::get_authority_key_pair, storage::ObjectStore};
 use sui_types::{execution_status::ExecutionStatus, transaction::TransactionKind};
 use sui_types::{gas::GasCostSummary, object::GAS_VALUE_FOR_TESTING};
 use sui_types::{id::UID, DEEPBOOK_ADDRESS};
@@ -106,9 +105,6 @@ const DEFAULT_GAS_BUDGET: u64 = 5_000_000_000;
 const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 pub struct SuiTestAdapter<'a> {
-    pub(crate) validator: Arc<AuthorityState>,
-    pub(crate) kv_store: Arc<TransactionKeyValueStore>,
-    pub(crate) fullnode: Arc<AuthorityState>,
     pub(crate) compiled_state: CompiledState<'a>,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
@@ -119,6 +115,7 @@ pub struct SuiTestAdapter<'a> {
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
+    pub(crate) executor: Box<dyn TransactionalAdapter>,
 }
 
 pub(crate) struct StagedPackage {
@@ -356,9 +353,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         ));
 
         let mut test_adapter = Self {
-            validator,
-            kv_store,
-            fullnode,
+            executor: Box::new(ValidatorWithFullnode {
+                validator,
+                fullnode,
+                kv_store,
+            }),
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -764,8 +763,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let before_upgrade = {
                     // not binding `m` separately results in some strange async capture error
                     let m = &mut self.compiled_state.named_address_mapping;
-                    let Some(before) = m.insert(package.clone(), zero)
-                    else {
+                    let Some(before) = m.insert(package.clone(), zero) else {
                         panic!("Unbound package '{package}' for upgrade");
                     };
                     before
@@ -780,8 +778,14 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 for dep in dependencies.iter() {
                     let named_address_mapping = &mut self.compiled_state.named_address_mapping;
                     let dep = &Symbol::from(dep.as_str());
-                    let Some(orig_package) = self.package_upgrade_mapping.get(dep) else { continue };
-                    let Some(orig_package_address) = named_address_mapping.insert(orig_package.to_string(), zero) else { continue };
+                    let Some(orig_package) = self.package_upgrade_mapping.get(dep) else {
+                        continue;
+                    };
+                    let Some(orig_package_address) =
+                        named_address_mapping.insert(orig_package.to_string(), zero)
+                    else {
+                        continue;
+                    };
                     original_package_addrs.push((*orig_package, orig_package_address));
                     let dep_address = named_address_mapping
                         .insert(dep.to_string(), orig_package_address)
@@ -1106,13 +1110,8 @@ impl<'a> SuiTestAdapter<'a> {
             .intent_message()
             .value
             .contains_shared_object();
-        let (txn, effects, error_opt) = send_and_confirm_transaction_with_execution_error(
-            &self.validator,
-            Some(&self.fullnode),
-            transaction,
-            with_shared,
-        )
-        .await?;
+        let (effects, error_opt) = self.executor.execute_txn(transaction).await?;
+        let digest = effects.transaction_digest();
         let mut created_ids: Vec<_> = effects
             .created()
             .iter()
@@ -1164,10 +1163,9 @@ impl<'a> SuiTestAdapter<'a> {
         match effects.status() {
             ExecutionStatus::Success { .. } => {
                 let events = self
-                    .validator
+                    .executor
                     .query_events(
-                        &self.kv_store,
-                        EventFilter::Transaction(*txn.digest()),
+                        EventFilter::Transaction(*digest),
                         None,
                         *QUERY_MAX_RESULT_LIMIT,
                         /* descending */ false,
@@ -1211,7 +1209,7 @@ impl<'a> SuiTestAdapter<'a> {
         gas_price: Option<u64>,
     ) -> anyhow::Result<TxnSummary> {
         let results = self
-            .fullnode
+            .executor
             .dev_inspect_transaction_block(sender, transaction_kind, gas_price)
             .await?;
         let DevInspectResults {
@@ -1279,9 +1277,9 @@ impl<'a> SuiTestAdapter<'a> {
 
     fn get_object(&self, id: &ObjectID, version: Option<SequenceNumber>) -> anyhow::Result<Object> {
         let obj_res = if let Some(v) = version {
-            self.validator.database.get_object_by_key(id, v)
+            self.executor.get_object_by_key(id, v)
         } else {
-            self.validator.database.get_object(id)
+            self.executor.get_object(id)
         };
         match obj_res {
             Ok(Some(obj)) => Ok(obj),
@@ -1499,8 +1497,8 @@ impl<'a> SuiTestAdapter<'a> {
             .into_iter()
             .map(|d| {
                 let Some(addr) = self.compiled_state.named_address_mapping.get(&d) else {
-                bail!("There is no published module address corresponding to name address {d}");
-            };
+                    bail!("There is no published module address corresponding to name address {d}");
+                };
                 let id: ObjectID = addr.into_inner().into();
                 Ok(id)
             })

@@ -5,5 +5,5 @@ use async_graphql::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-pub(crate) struct NameService(String);
+pub(crate) struct NameService(pub String);
 scalar!(NameService, "NameService");

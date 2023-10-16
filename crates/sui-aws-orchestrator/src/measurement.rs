@@ -198,7 +198,7 @@ impl<T: BenchmarkType> MeasurementsCollection<T> {
     pub fn add(&mut self, scraper_id: ScraperId, measurement: Measurement) {
         self.scrapers
             .entry(scraper_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(measurement);
     }
 

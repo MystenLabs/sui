@@ -15,7 +15,7 @@ error[E04006]: invalid subtype
 10 │         (x, y) = (&0, &0);
    │          ^        -- Given: '&{integer}'
    │          │         
-   │          Invalid assignment to local 'x'
+   │          Invalid assignment to variable 'x'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/subtype_assign_invalid.move:10:13
@@ -25,7 +25,7 @@ error[E04006]: invalid subtype
 10 │         (x, y) = (&0, &0);
    │             ^         -- Given: '&{integer}'
    │             │          
-   │             Invalid assignment to local 'y'
+   │             Invalid assignment to variable 'y'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/subtype_assign_invalid.move:13:10
@@ -35,7 +35,7 @@ error[E04006]: invalid subtype
 13 │         (x, y) = (&0, &0);
    │          ^        -- Given: '&{integer}'
    │          │         
-   │          Invalid assignment to local 'x'
+   │          Invalid assignment to variable 'x'
 
 error[E04006]: invalid subtype
    ┌─ tests/move_check/typing/subtype_assign_invalid.move:16:13
@@ -45,5 +45,5 @@ error[E04006]: invalid subtype
 16 │         (x, y)= (&0, &0);
    │             ^        -- Given: '&{integer}'
    │             │         
-   │             Invalid assignment to local 'y'
+   │             Invalid assignment to variable 'y'
 

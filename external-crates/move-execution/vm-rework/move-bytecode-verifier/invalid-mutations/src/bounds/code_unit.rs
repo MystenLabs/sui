@@ -156,10 +156,7 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
             .expect("mutations should always be present")
         {
             let picked_idx = mutation.function_def.index(function_def_len);
-            mutation_map
-                .entry(picked_idx)
-                .or_insert_with(Vec::new)
-                .push(mutation);
+            mutation_map.entry(picked_idx).or_default().push(mutation);
         }
 
         let mut results = vec![];

@@ -16,7 +16,7 @@ use tracing::warn;
 use types::{
     ensure,
     error::{DagError, DagResult},
-    Certificate, CertificateAPI, Header, Vote, VoteAPI,
+    Certificate, CertificateAPI, Header, SignatureVerificationState, Vote, VoteAPI,
 };
 
 /// Aggregates votes for a particular header into a certificate.
@@ -62,7 +62,7 @@ impl VotesAggregator {
             .votes_received_last_round
             .set(self.votes.len() as i64);
         if self.weight >= committee.quorum_threshold() {
-            let cert = Certificate::new_unverified(
+            let mut cert = Certificate::new_unverified(
                 &self.protocol_config,
                 committee,
                 header.clone(),
@@ -83,9 +83,7 @@ impl VotesAggregator {
                         "Failed to verify aggregated sig on certificate: {} error: {}",
                         certificate_digest, err
                     );
-                    let mut i = 0;
-                    while i < self.votes.len() {
-                        let (id, sig) = &self.votes[i];
+                    self.votes.retain(|(id, sig)| {
                         let pk = committee.authority_safe(id).protocol_key();
                         if sig
                             .verify_secure(&to_intent_message(certificate_digest), pk)
@@ -93,14 +91,26 @@ impl VotesAggregator {
                         {
                             warn!("Invalid signature on header from authority: {}", id);
                             self.weight -= committee.stake(pk);
-                            self.votes.remove(i);
+                            false
                         } else {
-                            i += 1;
+                            true
                         }
-                    }
+                    });
                     return Ok(None);
                 }
-                Ok(_) => return Ok(Some(cert)),
+                Ok(_) => {
+                    // TODO: Move this block and the AggregateSignature verification into Certificate
+                    if self.protocol_config.narwhal_certificate_v2() {
+                        cert.set_signature_verification_state(
+                            SignatureVerificationState::VerifiedDirectly(
+                                cert.aggregated_signature()
+                                    .ok_or(DagError::InvalidSignature)?
+                                    .clone(),
+                            ),
+                        );
+                    }
+                    return Ok(Some(cert));
+                }
             }
         }
         Ok(None)

@@ -255,6 +255,8 @@ codes!(
             severity: Warning
         },
         InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
+        InvalidImmVariableUsage:
+            { msg: "invalid usage of immutable variable", severity: NonblockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
@@ -295,6 +297,7 @@ codes!(
         StructField: { msg: "unused struct field", severity: Warning },
         FunTypeParam: { msg: "unused function type parameter", severity: Warning },
         Constant: { msg: "unused constant", severity: Warning },
+        MutModifier: { msg: "unused 'mut' modifiers", severity: Warning },
     ],
     Attributes: [
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },

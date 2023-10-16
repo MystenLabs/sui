@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.8.1
+
+### Patch Changes
+
+- b48289346: Mark packages as being side-effect free.
+
 ## 0.8.0
 
 ### Minor Changes

@@ -471,8 +471,8 @@ impl TestDBWriteBatch {
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {
-        let raw_from = be_fix_int_ser(from.borrow()).unwrap();
-        let raw_to = be_fix_int_ser(to.borrow()).unwrap();
+        let raw_from = be_fix_int_ser(from).unwrap();
+        let raw_to = be_fix_int_ser(to).unwrap();
         self.ops.push_back(WriteBatchOp::DeleteRange((
             db.rows.clone(),
             db.name.clone(),

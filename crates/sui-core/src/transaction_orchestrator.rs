@@ -201,10 +201,7 @@ where
             ExecuteTransactionRequestType::WaitForLocalExecution
         );
 
-        let Ok(result) = timeout(
-            WAIT_FOR_FINALITY_TIMEOUT,
-            ticket,
-        ).await else {
+        let Ok(result) = timeout(WAIT_FOR_FINALITY_TIMEOUT, ticket).await else {
             debug!(?tx_digest, "Timeout waiting for transaction finality.");
             self.metrics.wait_for_finality_timeout.inc();
             return Err(QuorumDriverError::TimeoutBeforeFinality);
