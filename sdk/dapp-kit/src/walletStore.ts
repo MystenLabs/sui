@@ -8,16 +8,6 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 type WalletConnectionStatus = 'disconnected' | 'reconnecting' | 'connecting' | 'connected';
 
-type ConnectedWalletState = {
-	connectionStatus: 'connected';
-	currentWallet: WalletWithRequiredFeatures;
-};
-
-type NotConnectedWalletState = {
-	connectionStatus: 'disconnected' | 'reconnecting' | 'connecting';
-	currentWallet: null;
-};
-
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setWalletConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
@@ -44,6 +34,7 @@ export type StoreState = {
 	currentAccount: WalletAccount | null;
 	lastConnectedAccountAddress: string | null;
 	lastConnectedWalletName: string | null;
+	connectionStatus: WalletConnectionStatus;
 } & WalletActions;
 
 type WalletConfiguration = {
@@ -75,6 +66,7 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 						currentAccount: selectedAccount,
 						lastConnectedWalletName: wallet.name,
 						lastConnectedAccountAddress: selectedAccount?.address,
+						connectionStatus: 'connected',
 					}));
 				},
 				setWalletDisconnected() {
@@ -84,6 +76,7 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 						currentAccount: null,
 						lastConnectedWalletName: null,
 						lastConnectedAccountAddress: null,
+						connectionStatus: 'disconnected',
 					}));
 				},
 				setAccountSwitched(selectedAccount) {
@@ -104,6 +97,7 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 							currentAccount: null,
 							lastConnectedWalletName: null,
 							lastConnectedAccountAddress: null,
+							connectionStatus: 'disconnected',
 						}));
 					} else {
 						set(() => ({ wallets: updatedWallets }));

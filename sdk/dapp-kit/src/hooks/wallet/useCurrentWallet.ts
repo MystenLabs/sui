@@ -17,15 +17,15 @@ export function useCurrentWallet() {
 				currentWallet: null,
 				isDisconnected: false,
 				isConnecting: true,
-				isAutoConnecting: false,
+				isReconnecting: false,
 				isConnected: false,
 			} as const;
-		case 'autoconnecting':
+		case 'reconnecting':
 			return {
 				connectionStatus,
 				currentWallet: null,
 				isDisconnected: false,
-				isAutoConnecting: true,
+				isReconnecting: true,
 				isConnecting: false,
 				isConnected: false,
 			} as const;
@@ -35,7 +35,7 @@ export function useCurrentWallet() {
 				currentWallet: null,
 				isDisconnected: true,
 				isConnecting: false,
-				isAutoConnecting: true,
+				isReconnecting: true,
 				isConnected: false,
 			} as const;
 		case 'connected': {
@@ -44,7 +44,7 @@ export function useCurrentWallet() {
 				currentWallet: currentWallet!,
 				isDisconnected: false,
 				isConnecting: false,
-				isAutoConnecting: false,
+				isReconnecting: false,
 				isConnected: true,
 			} as const;
 		}

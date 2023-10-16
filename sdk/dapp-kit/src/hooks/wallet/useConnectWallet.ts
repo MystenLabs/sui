@@ -55,8 +55,8 @@ export function useConnectWallet({
 				return { accounts: connectedSuiAccounts };
 			} catch (error) {
 				setWalletConnectionStatus('disconnected');
+				throw error;
 			}
-			return { accounts: [] };
 		},
 		...mutationOptions,
 	});
