@@ -9,7 +9,7 @@ import { base64url } from 'jose';
 import { poseidonHash } from './poseidon.js';
 import { toBigIntBE } from './utils.js';
 
-const NONCE_LENGTH = 27;
+export const NONCE_LENGTH = 27;
 
 export function generateRandomness() {
 	// Once Node 20 enters LTS, we can just use crypto.getRandomValues(new Uint8Array(16)), but until then this improves compatibility:
