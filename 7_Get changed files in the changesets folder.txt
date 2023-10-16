@@ -1,0 +1,35 @@
+2023-05-30T11:24:42.6696979Z ##[group]Run tj-actions/changed-files@cf4fe8759a45edd76ed6215da3529d2dbd2a3c68
+2023-05-30T11:24:42.6698530Z with:
+2023-05-30T11:24:42.6698801Z   files: .changeset/**
+
+2023-05-30T11:24:42.6699048Z   separator:  
+2023-05-30T11:24:42.6699328Z   include_all_old_new_renamed_files: false
+2023-05-30T11:24:42.6699619Z   old_new_separator: ,
+2023-05-30T11:24:42.6699886Z   old_new_files_separator:  
+2023-05-30T11:24:42.6700178Z   files_from_source_file_separator: 
+
+2023-05-30T11:24:42.6700450Z   files_separator: 
+
+2023-05-30T11:24:42.6700717Z   files_ignore_separator: 
+
+2023-05-30T11:24:42.6701021Z   files_ignore_from_source_file_separator: 
+
+2023-05-30T11:24:42.6701443Z   path: .
+2023-05-30T11:24:42.6701648Z   quotepath: true
+2023-05-30T11:24:42.6701854Z   diff_relative: true
+2023-05-30T11:24:42.6702553Z   dir_names: false
+2023-05-30T11:24:42.6703527Z   dir_names_exclude_root: false
+2023-05-30T11:24:42.6703760Z   json: false
+2023-05-30T11:24:42.6703975Z   escape_json: true
+2023-05-30T11:24:42.6704176Z   fetch_depth: 50
+2023-05-30T11:24:42.6704476Z   since_last_remote_commit: false
+2023-05-30T11:24:42.6704709Z   write_output_files: false
+2023-05-30T11:24:42.6704954Z   output_dir: .github/outputs
+2023-05-30T11:24:42.6705175Z env:
+2023-05-30T11:24:42.6705438Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2023-05-30T11:24:42.6705710Z ##[endgroup]
+2023-05-30T11:24:42.7548385Z ##[group]changed-files
+2023-05-30T11:24:42.8242258Z Running on a pull request event...
+2023-05-30T11:24:42.8634314Z Retrieving changes between cde2613a974be9a1f69dcf87f598c3ccde1afb76 (main) → bf6d8e7f47f5a3bcf1e0cc6c48ee72fa39031877 (kiosk/extensions-api)
+2023-05-30T11:24:42.9898152Z All Done!
+2023-05-30T11:24:42.9899037Z ##[endgroup]
