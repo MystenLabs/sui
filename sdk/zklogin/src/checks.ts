@@ -69,8 +69,8 @@ export function lengthChecks(
 	/// Check that nonce extended nonce length is as expected.
 	const nonce_claim_details = processor.process('nonce');
 	const nonce_value_len = nonce_claim_details.offsets.value_length;
-	if (nonce_value_len !== 27) {
-		throw new Error(`Nonce value length is not 27`);
+	if (nonce_value_len !== 29) {
+		throw new Error(`Nonce value length is not 29`);
 	}
 	const extended_nonce_claim_len = nonce_claim_details.ext_claim.length;
 	if (extended_nonce_claim_len < 38) {
