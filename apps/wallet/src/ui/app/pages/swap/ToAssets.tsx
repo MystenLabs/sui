@@ -8,13 +8,7 @@ import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Fragment } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-function QuoteAsset({
-	coinType,
-	onClick,
-}: {
-	coinType: string;
-	onClick: (coinType: string) => void;
-}) {
+function ToAsset({ coinType, onClick }: { coinType: string; onClick: (coinType: string) => void }) {
 	const accountAddress = useActiveAddress();
 	const [searchParams] = useSearchParams();
 	const activeCoinType = searchParams.get('type');
@@ -41,7 +35,7 @@ function QuoteAsset({
 	);
 }
 
-export function QuoteAssets({
+export function ToAssets({
 	onClose,
 	isOpen,
 	onRowClick,
@@ -57,7 +51,7 @@ export function QuoteAssets({
 			<div className="flex flex-shrink-0 justify-start flex-col w-full">
 				{recognizedCoins.map((coinType, index) => (
 					<Fragment key={coinType}>
-						<QuoteAsset coinType={coinType} onClick={onRowClick} />
+						<ToAsset coinType={coinType} onClick={onRowClick} />
 						{index !== recognizedCoins.length - 1 && <div className="bg-gray-45 h-px w-full" />}
 					</Fragment>
 				))}

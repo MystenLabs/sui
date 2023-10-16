@@ -6,8 +6,7 @@ export const FEES_PERCENTAGE = 0.03;
 
 export const initialValues = {
 	amount: '',
-	isPayAll: false,
-	quoteAssetType: '',
+	toAssetType: '',
 	allowedMaxSlippagePercentage: DEFAULT_MAX_SLIPPAGE_PERCENTAGE,
 };
 

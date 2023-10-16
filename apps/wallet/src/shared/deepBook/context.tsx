@@ -38,25 +38,21 @@ export function DeepBookContextProvider({ children }: DeepBookContextProviderPro
 		1,
 	);
 
-	const accountCapId = useMemo(() => {
-		const objectContent = data?.pages?.[0]?.data?.[0]?.data?.content;
-		const objectFields = objectContent?.dataType === 'moveObject' ? objectContent?.fields : null;
+	const objectContent = data?.pages?.[0]?.data?.[0]?.data?.content;
+	const objectFields = objectContent?.dataType === 'moveObject' ? objectContent?.fields : null;
 
-		return (objectFields as Record<string, string | number | object>)?.owner as string;
-	}, [data?.pages]);
+	const accountCapId = (objectFields as Record<string, string | number | object>)?.owner as string;
 
 	const deepBookClient = useMemo(() => {
 		return new DeepBookClient(suiClient, accountCapId);
 	}, [accountCapId, suiClient]);
 
-	return (
-		<DeepBookContext.Provider
-			value={{
-				client: deepBookClient,
-				accountCapId,
-			}}
-		>
-			{children}
-		</DeepBookContext.Provider>
-	);
+	const contextValue = useMemo(() => {
+		return {
+			client: deepBookClient,
+			accountCapId,
+		};
+	}, [accountCapId, deepBookClient]);
+
+	return <DeepBookContext.Provider value={contextValue}>{children}</DeepBookContext.Provider>;
 }

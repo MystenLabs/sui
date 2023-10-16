@@ -28,6 +28,7 @@ export function GasFeeSection({
 	totalGas: string;
 }) {
 	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
+	const isAsk = activeCoinType === SUI_TYPE_ARG;
 
 	const estimatedFees = useMemo(() => {
 		if (!amount || !isValid) {
@@ -39,9 +40,9 @@ export function GasFeeSection({
 
 	const { rawValue } = useBalanceConversion(
 		estimatedFees,
-		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
-		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
-		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+		isAsk ? Coins.SUI : Coins.USDC,
+		isAsk ? Coins.USDC : Coins.SUI,
+		isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	);
 
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);

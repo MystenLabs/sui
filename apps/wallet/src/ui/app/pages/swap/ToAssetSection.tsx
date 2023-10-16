@@ -17,7 +17,7 @@ import { useCoinsReFetchingConfig } from '_hooks';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { AssetData } from '_pages/swap/AssetData';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
-import { QuoteAssets } from '_pages/swap/QuoteAssets';
+import { ToAssets } from '_pages/swap/ToAssets';
 import { useCoinMetadata, useFormatCoin } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Refresh16 } from '@mysten/icons';
@@ -41,8 +41,9 @@ export function ToAssetSection({
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
 	const recognizedCoins = useRecognizedCoins();
-	const [isQuoteAssetOpen, setQuoteAssetOpen] = useState(false);
+	const [isToAssetOpen, setToAssetOpen] = useState(false);
 	const [isSlippageModalOpen, setSlippageModalOpen] = useState(false);
+	const isAsk = activeCoinType === SUI_TYPE_ARG;
 
 	const {
 		watch,
@@ -50,47 +51,46 @@ export function ToAssetSection({
 		formState: { isValid },
 	} = useFormContext<FormValues>();
 	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
-	const quoteAssetType = watch('quoteAssetType');
-	const rawQuoteAssetAmount = balanceChanges.find(
-		(balanceChange) => balanceChange.coinType === quoteAssetType,
+	const toAssetType = watch('toAssetType');
+
+	const rawToAssetAmount = balanceChanges.find(
+		(balanceChange) => balanceChange.coinType === toAssetType,
 	)?.amount;
 
-	const quotedAssetAmount = new BigNumber(rawQuoteAssetAmount || '0').shiftedBy(
-		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : -USDC_DECIMALS,
-	);
-
-	const quotedAssetAmountAsNum = quotedAssetAmount.toNumber();
+	const toAssetAmountAsNum = new BigNumber(rawToAssetAmount || '0')
+		.shiftedBy(isAsk ? -SUI_CONVERSION_RATE : -USDC_DECIMALS)
+		.toNumber();
 
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 
 	useEffect(() => {
-		const newQuoteAsset = activeCoinType === SUI_TYPE_ARG ? coinsMap[Coins.USDC] : SUI_TYPE_ARG;
-		setValue('quoteAssetType', newQuoteAsset);
-	}, [activeCoinType, coinsMap, quoteAssetType, setValue]);
+		const newToAsset = isAsk ? coinsMap[Coins.USDC] : SUI_TYPE_ARG;
+		setValue('toAssetType', newToAsset);
+	}, [coinsMap, isAsk, setValue]);
 
 	const { data: coinBalanceData } = useSuiClientQuery(
 		'getBalance',
-		{ coinType: quoteAssetType, owner: activeAccountAddress! },
+		{ coinType: toAssetType, owner: activeAccountAddress! },
 		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
 	);
 
 	const coinBalance = coinBalanceData?.totalBalance;
 
-	const [quoteAssetBalance, _, quotedAssetMetaData] = useFormatCoin(coinBalance, quoteAssetType);
+	const [toAssetBalance, _, toAssetMetaData] = useFormatCoin(coinBalance, toAssetType);
 
-	const quotedAssetSymbol = quotedAssetMetaData.data?.symbol ?? '';
+	const toAssetSymbol = toAssetMetaData.data?.symbol ?? '';
 	const amount = watch('amount');
 
 	const { rawValue, averagePrice, refetch, isRefetching } = useBalanceConversion(
 		new BigNumber(amount),
-		activeCoinType === SUI_TYPE_ARG ? Coins.SUI : Coins.USDC,
-		activeCoinType === SUI_TYPE_ARG ? Coins.USDC : Coins.SUI,
-		activeCoinType === SUI_TYPE_ARG ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+		isAsk ? Coins.SUI : Coins.USDC,
+		isAsk ? Coins.USDC : Coins.SUI,
+		isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	);
 
 	const averagePriceAsString = averagePrice.toFixed(MAX_FLOAT).toString();
 
-	if (!quotedAssetMetaData.data) {
+	if (!toAssetMetaData.data) {
 		return null;
 	}
 
@@ -101,21 +101,21 @@ export function ToAssetSection({
 				isValid && 'bg-sui-primaryBlue2023/10',
 			)}
 		>
-			<QuoteAssets
+			<ToAssets
 				recognizedCoins={recognizedCoins}
-				isOpen={isQuoteAssetOpen}
-				onClose={() => setQuoteAssetOpen(false)}
+				isOpen={isToAssetOpen}
+				onClose={() => setToAssetOpen(false)}
 				onRowClick={(coinType) => {
-					setQuoteAssetOpen(false);
+					setToAssetOpen(false);
 				}}
 			/>
 			<AssetData
 				disabled
-				tokenBalance={quoteAssetBalance}
-				coinType={quoteAssetType}
-				symbol={quotedAssetSymbol}
+				tokenBalance={toAssetBalance}
+				coinType={toAssetType}
+				symbol={toAssetSymbol}
 				onClick={() => {
-					setQuoteAssetOpen(true);
+					setToAssetOpen(true);
 				}}
 			/>
 			<div
@@ -124,13 +124,13 @@ export function ToAssetSection({
 					isValid && 'border-solid border-hero-darkest/10',
 				)}
 			>
-				{quotedAssetAmountAsNum && !isRefetching ? (
+				{toAssetAmountAsNum && !isRefetching ? (
 					<>
 						<Text variant="body" weight="semibold" color="steel-darker">
-							{quotedAssetAmountAsNum}
+							{toAssetAmountAsNum}
 						</Text>
 						<Text variant="body" weight="semibold" color="steel">
-							{quotedAssetSymbol}
+							{toAssetSymbol}
 						</Text>
 					</>
 				) : (
@@ -144,18 +144,14 @@ export function ToAssetSection({
 					<DescriptionItem
 						title={
 							<Text variant="bodySmall" color="steel-dark">
-								{isRefetching
-									? '--'
-									: getUSDCurrency(
-											activeCoinType === SUI_TYPE_ARG ? quotedAssetAmountAsNum : Number(amount),
-									  )}
+								{isRefetching ? '--' : getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
 							</Text>
 						}
 					>
 						<div className="flex gap-1 items-center">
 							<Text variant="bodySmall" weight="medium" color="steel-dark">
 								1 {activeCoinData?.symbol} = {isRefetching ? '--' : averagePriceAsString}{' '}
-								{quotedAssetSymbol}
+								{toAssetSymbol}
 							</Text>
 							<IconButton
 								icon={<Refresh16 className="h-4 w-4 text-steel-dark hover:text-hero-dark" />}
