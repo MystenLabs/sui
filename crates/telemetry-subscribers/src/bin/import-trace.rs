@@ -23,6 +23,9 @@ struct Args {
 
     #[arg(long)]
     service_name: Option<String>,
+
+    #[arg(long)]
+    dump_spans: bool,
 }
 
 #[tokio::main]
@@ -31,6 +34,15 @@ async fn main() {
     let file = std::fs::File::open(args.trace_file).unwrap();
 
     let messages = decode_all_length_delimited::<_, ExportTraceServiceRequest>(file).unwrap();
+
+    if args.dump_spans {
+        for message in messages.iter() {
+            for span in &message.resource_spans {
+                println!("{:?}", span);
+            }
+        }
+        return;
+    }
 
     let endpoint = format!("{}{}", args.otlp_endpoint, "/v1/traces");
     let mut trace_exporter = TraceServiceClient::connect(endpoint).await.unwrap();
