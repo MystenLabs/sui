@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::prelude::*;
 use serde::de::DeserializeOwned;
-use sui_types::digests::ObjectDigest;
+use std::collections::HashMap;
 
+use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
+use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
 use sui_types::object::{ObjectFormatOptions, ObjectRead};
@@ -238,5 +240,56 @@ impl StoredObject {
         }
 
         bcs::from_bytes(object.contents()).ok()
+    }
+}
+
+impl TryFrom<StoredObject> for SuiCoin {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
+        let object: Object = o.clone().try_into()?;
+        let (coin_object_id, version, digest) = o.get_object_ref()?;
+        let coin_type = o
+            .coin_type
+            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Object {} is supposed to be a coin but has an empty coin_type column",
+                coin_object_id,
+            )))?;
+        let balance = o
+            .coin_balance
+            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Object {} is supposed to be a coin but has an empy coin_balance column",
+                coin_object_id,
+            )))?;
+        Ok(SuiCoin {
+            coin_type,
+            coin_object_id,
+            version,
+            digest,
+            balance: balance as u64,
+            previous_transaction: object.previous_transaction,
+        })
+    }
+}
+
+#[derive(QueryableByName)]
+pub struct CoinBalance {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub coin_type: String,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub coin_num: i64,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub coin_balance: i64,
+}
+
+impl From<CoinBalance> for Balance {
+    fn from(c: CoinBalance) -> Self {
+        Self {
+            coin_type: c.coin_type,
+            coin_object_count: c.coin_num as usize,
+            // TODO: deal with overflow
+            total_balance: c.coin_balance as u128,
+            locked_balance: HashMap::default(),
+        }
     }
 }

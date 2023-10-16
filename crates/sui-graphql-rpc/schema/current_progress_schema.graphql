@@ -187,6 +187,55 @@ type Epoch {
 	protocolConfigs: ProtocolConfigs
 }
 
+type Event {
+	id: ID!
+	sendingModuleId: MoveModuleId
+	eventType: MoveType
+	senders: [Address!]
+	timestamp: DateTime
+	json: String
+	bcs: Base64
+}
+
+type EventConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EventEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Event!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EventEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Event!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input EventFilter {
+	sender: SuiAddress
+	transactionDigest: String
+	emittingPackage: SuiAddress
+	emittingModule: String
+	eventPackage: SuiAddress
+	eventModule: String
+	eventType: String
+}
+
 enum ExecutionStatus {
 	SUCCESS
 	FAILURE
@@ -299,6 +348,11 @@ type MoveModuleEdge {
 	cursor: String!
 }
 
+type MoveModuleId {
+	name: String!
+	package: MovePackage!
+}
+
 type MoveObject {
 	contents: MoveValue
 	hasPublicTransfer: Boolean
@@ -311,6 +365,10 @@ type MovePackage {
 	module(name: String!): MoveModule
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
 	asObject: Object
+}
+
+type MoveType {
+	repr: String!
 }
 
 type MoveValue {
@@ -504,6 +562,7 @@ type Query {
 	transactionBlock(digest: String!): TransactionBlock
 	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
 	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
+	eventConnection(first: Int, after: String, last: Int, before: String, filter: EventFilter!): EventConnection
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	protocolConfig(protocolVersion: Int): ProtocolConfigs!
 	resolveNameServiceAddress(name: String!): Address

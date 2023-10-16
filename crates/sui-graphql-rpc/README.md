@@ -8,7 +8,7 @@ Rpc 1.5 backs the graphql schema with a db based on IndexerV2 schema. To spin up
 
 If you have not created a db yet, you can do so as follows:
 ```sh
-PSQL -U POSTGRES
+psql -U postgres
 CREATE DATABASE sui_indexer_v2;
 ```
 
@@ -35,3 +35,6 @@ This will build sui-graphql-rpc and start an IDE:
 Starting server...
 Launch GraphiQL IDE at: http://127.0.0.1:8000
 ```
+
+### Launching the server w/ indexer
+For local dev, it might be useful to spin up an indexer as well. Instructions are at [Running standalone indexer](../sui-indexer/README.md#running-standalone-indexer).

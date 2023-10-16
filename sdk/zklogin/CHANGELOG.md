@@ -1,5 +1,11 @@
 # @mysten/zklogin
 
+## 0.3.0
+
+### Minor Changes
+
+- 28ee0ff2f: Fix bug in nonce length check
+
 ## 0.2.1
 
 ### Patch Changes

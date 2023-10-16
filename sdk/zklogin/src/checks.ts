@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { JSONProcessor } from './jsonprocessor.js';
+import { NONCE_LENGTH } from './nonce.js';
 import { MAX_AUD_VALUE_LENGTH, MAX_KEY_CLAIM_VALUE_LENGTH } from './utils.js';
 
 const MAX_HEADER_LEN_B64 = 248;
@@ -69,8 +70,9 @@ export function lengthChecks(
 	/// Check that nonce extended nonce length is as expected.
 	const nonce_claim_details = processor.process('nonce');
 	const nonce_value_len = nonce_claim_details.offsets.value_length;
-	if (nonce_value_len !== 27) {
-		throw new Error(`Nonce value length is not 27`);
+	const NONCE_LEN_WITH_QUOTES = NONCE_LENGTH + 2;
+	if (nonce_value_len !== NONCE_LEN_WITH_QUOTES) {
+		throw new Error(`Nonce value length is not ${NONCE_LEN_WITH_QUOTES}`);
 	}
 	const extended_nonce_claim_len = nonce_claim_details.ext_claim.length;
 	if (extended_nonce_claim_len < 38) {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) use coin_api::CoinReadApi;
+pub(crate) use coin_api_v2::CoinReadApiV2;
 pub(crate) use extended_api::ExtendedApi;
 pub(crate) use governance_api::GovernanceReadApi;
 pub(crate) use governance_api_v2::GovernanceReadApiV2;

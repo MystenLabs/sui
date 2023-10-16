@@ -1,5 +1,11 @@
 # @mysten/create-dapp
 
+## 0.0.3
+
+### Patch Changes
+
+- de5fdf738: Remove entry keyword from counter example move code
+
 ## 0.0.2
 
 ### Patch Changes

@@ -36,12 +36,12 @@ use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
 
-fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, SuiRpcInputError> {
+pub fn parse_to_struct_tag(coin_type: &str) -> Result<StructTag, SuiRpcInputError> {
     parse_sui_struct_tag(coin_type)
         .map_err(|e| SuiRpcInputError::CannotParseSuiStructTag(format!("{e}")))
 }
 
-fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, SuiRpcInputError> {
+pub fn parse_to_type_tag(coin_type: Option<String>) -> Result<TypeTag, SuiRpcInputError> {
     Ok(TypeTag::Struct(Box::new(match coin_type {
         Some(c) => parse_to_struct_tag(&c)?,
         None => GAS::type_(),

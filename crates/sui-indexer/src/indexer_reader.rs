@@ -8,7 +8,7 @@ use crate::{
         display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
-        objects::{ObjectRefColumn, StoredObject},
+        objects::{CoinBalance, ObjectRefColumn, StoredObject},
         packages::StoredPackage,
         transactions::StoredTransaction,
         tx_indices::TxSequenceNumber,
@@ -29,6 +29,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
+use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{
     CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
 };
@@ -1244,6 +1245,92 @@ impl IndexerReader {
         let display_update = stored_display.to_display_update_event()?;
 
         Ok(Some(display_update))
+    }
+
+    pub async fn get_owned_coins_in_blocking_task(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+        cursor: ObjectID,
+        limit: usize,
+    ) -> Result<Vec<SuiCoin>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_owned_coins(owner, coin_type, cursor, limit))
+            .await
+    }
+
+    fn get_owned_coins(
+        &self,
+        owner: SuiAddress,
+        // If coin_type is None, look for all coins.
+        coin_type: Option<String>,
+        cursor: ObjectID,
+        limit: usize,
+    ) -> Result<Vec<SuiCoin>, IndexerError> {
+        let mut query = objects::dsl::objects
+            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
+            .filter(objects::dsl::owner_id.eq(owner.to_vec()))
+            .filter(objects::dsl::object_id.gt(cursor.to_vec()))
+            .into_boxed();
+        if let Some(coin_type) = coin_type {
+            query = query.filter(objects::dsl::coin_type.eq(Some(coin_type)));
+        } else {
+            query = query.filter(objects::dsl::coin_type.is_not_null());
+        }
+        query = query
+            .order((objects::dsl::coin_type.asc(), objects::dsl::object_id.asc()))
+            .limit(limit as i64);
+
+        let stored_objects = self.run_query(|conn| query.load::<StoredObject>(conn))?;
+
+        stored_objects
+            .into_iter()
+            .map(|o| o.try_into())
+            .collect::<IndexerResult<Vec<_>>>()
+    }
+
+    pub async fn get_coin_balances_in_blocking_task(
+        &self,
+        owner: SuiAddress,
+        // If coin_type is None, look for all coins.
+        coin_type: Option<String>,
+    ) -> Result<Vec<Balance>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_coin_balances(owner, coin_type))
+            .await
+    }
+
+    fn get_coin_balances(
+        &self,
+        owner: SuiAddress,
+        // If coin_type is None, look for all coins.
+        coin_type: Option<String>,
+    ) -> Result<Vec<Balance>, IndexerError> {
+        let coin_type_filter = if let Some(coin_type) = coin_type {
+            format!("= '{}'", coin_type)
+        } else {
+            "IS NOT NULL".to_string()
+        };
+        // Note: important to cast to BIGINT to avoid deserialize confusion
+        let query = format!(
+            "
+            SELECT coin_type, \
+            CAST(COUNT(*) AS BIGINT) AS coin_num, \
+            CAST(SUM(coin_balance) AS BIGINT) AS coin_balance \
+            FROM objects \
+            WHERE owner_type = {} \
+            AND owner_id = '\\x{}'::BYTEA \
+            AND coin_type {} \
+            GROUP BY coin_type \
+            ORDER BY coin_type ASC
+        ",
+            OwnerType::Address as i16,
+            Hex::encode(owner.to_vec()),
+            coin_type_filter,
+        );
+
+        tracing::debug!("get coin balances query: {query}");
+        let coin_balances =
+            self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
+        Ok(coin_balances.into_iter().map(|cb| cb.into()).collect())
     }
 }
 
