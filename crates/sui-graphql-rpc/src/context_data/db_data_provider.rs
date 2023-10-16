@@ -851,12 +851,7 @@ impl PgManager {
             paid_address: None,
             input_object: None,
             changed_object: None,
-            transaction_ids: Some(
-                digests
-                    .into_iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>(),
-            ),
+            transaction_ids: Some(digests.iter().map(|x| x.to_string()).collect::<Vec<_>>()),
         };
         let txs = self
             .multi_get_txs(None, None, None, None, Some(tx_block_filter))
