@@ -46,16 +46,11 @@ impl SimpleClient {
     }
 }
 
-//#[cfg(feature = "pg_integration")]
+#[cfg(feature = "pg_integration")]
 #[tokio::test]
 async fn test_simple_client() {
-    let mut connection_config = if cfg!(feature = "pg_integration") {
-        ConnectionConfig::ci_integration_test_cfg()
-    } else {
-        ConnectionConfig::default()
-    };
+    let mut connection_config = ConnectionConfig::ci_integration_test_cfg();
 
-    connection_config.db_url = "postgres://postgres:postgres@0.0.0.0:5432/postgres".to_owned();
     let cluster = crate::cluster::start_cluster(connection_config).await;
 
     // Wait for servers to start and catchup

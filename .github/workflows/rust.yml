@@ -412,7 +412,7 @@ jobs:
           POSTGRES_PASSWORD: postgrespw
      - name: tests-requiring-postgres
        run: |
-         cargo test --package sui-graphql-rpc --test e2e_tests --features pg_integration
+         cargo test --package sui-graphql-rpc --test test_simple_client --features pg_integration
        env:
          POSTGRES_HOST: localhost
          POSTGRES_PORT: 5432
