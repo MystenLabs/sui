@@ -8,7 +8,7 @@ import { lengthChecks } from './checks';
 import { JSONProcessor } from './jsonprocessor.js';
 import { genAddressSeed } from './utils.js';
 
-export function jwtToAddress(jwt: string, userSalt: bigint) {
+export function jwtToAddress(jwt: string, userSalt: string | bigint) {
 	const decodedJWT = decodeJwt(jwt);
 	if (!decodedJWT.iss) {
 		throw new Error('Missing iss');
@@ -41,7 +41,7 @@ export function jwtToAddress(jwt: string, userSalt: bigint) {
 export interface ComputeZkLoginAddressOptions {
 	claimName: string;
 	claimValue: string;
-	userSalt: bigint;
+	userSalt: string | bigint;
 	iss: string;
 	aud: string;
 }

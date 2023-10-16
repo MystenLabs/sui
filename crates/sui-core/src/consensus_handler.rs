@@ -7,6 +7,7 @@ use crate::authority::authority_per_epoch_store::{
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityMetrics;
 use crate::checkpoints::CheckpointServiceNotify;
+use crate::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use crate::scoring_decision::update_low_scoring_authorities;
 use crate::transaction_manager::TransactionManager;
 use arc_swap::ArcSwap;
@@ -27,13 +28,12 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, EpochId, TransactionDigest};
-use sui_types::storage::ObjectStore;
-use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
-
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind,
 };
+use sui_types::storage::ObjectStore;
+use sui_types::transaction::{SenderSignedData, VerifiedTransaction};
 use tracing::{debug, error, info, instrument};
 
 pub struct ConsensusHandler<T, C> {
@@ -57,6 +57,8 @@ pub struct ConsensusHandler<T, C> {
     /// Lru cache to quickly discard transactions processed by consensus
     processed_cache: LruCache<SequencedConsensusTransactionKey, ()>,
     transaction_scheduler: AsyncTransactionScheduler,
+    /// Using the throughput calculator to record the current consensus throughput
+    throughput_calculator: Arc<ConsensusThroughputCalculator>,
 }
 
 const PROCESSED_CACHE_CAP: usize = 1024 * 1024;
@@ -70,6 +72,7 @@ impl<T, C> ConsensusHandler<T, C> {
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
+        throughput_calculator: Arc<ConsensusThroughputCalculator>,
     ) -> Self {
         // Recover last_consensus_stats so it is consistent across validators.
         let mut last_consensus_stats = epoch_store
@@ -91,6 +94,7 @@ impl<T, C> ConsensusHandler<T, C> {
             metrics,
             processed_cache: LruCache::new(NonZeroUsize::new(PROCESSED_CACHE_CAP).unwrap()),
             transaction_scheduler,
+            throughput_calculator,
         }
     }
 
@@ -370,6 +374,10 @@ impl<T: ObjectStore + Send + Sync, C: CheckpointServiceNotify + Send + Sync> Exe
             .await
             .expect("Unrecoverable error in consensus handler");
 
+        // update the calculated throughput
+        self.throughput_calculator
+            .add_transactions(timestamp, transactions_to_schedule.len() as u64);
+
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
@@ -636,6 +644,10 @@ mod tests {
         let new_epoch_start_state = epoch_store.epoch_start_state();
         let committee = new_epoch_start_state.get_narwhal_committee();
 
+        let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
+
+        let throughput_calculator = ConsensusThroughputCalculator::new(None, metrics.clone());
+
         let mut consensus_handler = ConsensusHandler::new(
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
@@ -643,7 +655,8 @@ mod tests {
             state.db(),
             Arc::new(ArcSwap::default()),
             committee.clone(),
-            Arc::new(AuthorityMetrics::new(&Registry::new())),
+            metrics,
+            Arc::new(throughput_calculator),
         );
 
         // AND

@@ -74,7 +74,7 @@ impl ModelBuilder {
         )?;
         let (all_targets, all_deps) = if self.model_config.all_files_as_targets {
             let mut targets = vec![target];
-            targets.extend(deps.into_iter());
+            targets.extend(deps);
             (targets, vec![])
         } else {
             (vec![target], deps)

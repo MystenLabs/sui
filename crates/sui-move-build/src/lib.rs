@@ -515,7 +515,7 @@ impl CompiledPackage {
     pub fn is_system_package(&self) -> bool {
         // System packages always have "published-at" addresses
         let Ok(published_at) = self.published_at else {
-            return false
+            return false;
         };
 
         is_system_package(published_at)

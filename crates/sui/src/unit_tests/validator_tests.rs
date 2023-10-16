@@ -40,7 +40,11 @@ async fn test_print_raw_rgp_txn() -> Result<(), anyhow::Error> {
     }
     .execute(&mut context)
     .await?;
-    let SuiValidatorCommandResponse::DisplayGasPriceUpdateRawTxn { data, serialized_data } = response else {
+    let SuiValidatorCommandResponse::DisplayGasPriceUpdateRawTxn {
+        data,
+        serialized_data,
+    } = response
+    else {
         panic!("Expected DisplayGasPriceUpdateRawTxn");
     };
 

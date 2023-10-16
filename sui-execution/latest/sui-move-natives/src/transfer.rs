@@ -67,11 +67,11 @@ pub fn receive_object_internal(
         .into();
     assert!(ty_args.is_empty());
 
-    let Some((tag, layout, annotated_layout)) = get_tag_and_layouts(context, &child_ty)?  else {
+    let Some((tag, layout, annotated_layout)) = get_tag_and_layouts(context, &child_ty)? else {
         return Ok(NativeResult::err(
-                context.gas_used(),
-                E_BCS_SERIALIZATION_FAILURE,
-        ))
+            context.gas_used(),
+            E_BCS_SERIALIZATION_FAILURE,
+        ));
     };
 
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();

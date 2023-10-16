@@ -15,6 +15,7 @@ import {
 	WalletNotConnectedError,
 } from '../../errors/walletErrors.js';
 import type { PartialBy } from '../../types/utilityTypes.js';
+import { useSuiClient } from '../useSuiClient.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
@@ -39,43 +40,71 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 		unknown
 	>,
 	'mutationFn'
->;
+> & {
+	executeFromWallet?: boolean;
+};
 
 /**
  * Mutation hook for prompting the user to sign and execute a transaction block.
  */
 export function useSignAndExecuteTransactionBlock({
 	mutationKey,
+	executeFromWallet,
 	...mutationOptions
 }: UseSignAndExecuteTransactionBlockMutationOptions = {}) {
 	const currentWallet = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
+	const client = useSuiClient();
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signAndExecuteTransactionBlock(mutationKey),
-		mutationFn: async (signAndExecuteTransactionBlockArgs) => {
+		mutationFn: async ({ requestType, options, ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
 
-			const signerAccount = signAndExecuteTransactionBlockArgs.account ?? currentAccount;
+			const signerAccount = signTransactionBlockArgs.account ?? currentAccount;
 			if (!signerAccount) {
 				throw new WalletNoAccountSelectedError(
 					'No wallet account is selected to sign and execute the transaction block with.',
 				);
 			}
 
-			const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock'];
+			if (executeFromWallet) {
+				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock'];
+				if (!walletFeature) {
+					throw new WalletFeatureNotSupportedError(
+						"This wallet doesn't support the `signAndExecuteTransactionBlock` feature.",
+					);
+				}
+
+				return walletFeature.signAndExecuteTransactionBlock({
+					...signTransactionBlockArgs,
+					account: signerAccount,
+					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
+					requestType,
+					options,
+				});
+			}
+
+			const walletFeature = currentWallet.features['sui:signTransactionBlock'];
 			if (!walletFeature) {
 				throw new WalletFeatureNotSupportedError(
-					"This wallet doesn't support the `signAndExecuteTransactionBlock` feature.",
+					"This wallet doesn't support the `signTransactionBlock` feature.",
 				);
 			}
 
-			return await walletFeature.signAndExecuteTransactionBlock({
-				...signAndExecuteTransactionBlockArgs,
+			const { signature, transactionBlockBytes } = await walletFeature.signTransactionBlock({
+				...signTransactionBlockArgs,
 				account: signerAccount,
-				chain: signAndExecuteTransactionBlockArgs.chain ?? signerAccount.chains[0],
+				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
+			});
+
+			return client.executeTransactionBlock({
+				transactionBlock: transactionBlockBytes,
+				signature,
+				requestType,
+				options,
 			});
 		},
 		...mutationOptions,

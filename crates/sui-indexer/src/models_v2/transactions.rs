@@ -6,6 +6,7 @@ use sui_json_rpc_types::BalanceChange;
 use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlock;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_json_rpc_types::SuiTransactionBlockEvents;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -80,15 +81,16 @@ impl StoredTransaction {
             })?;
 
         let transaction = if options.show_input {
-            let sender_signed_data: SenderSignedData = bcs::from_bytes(&self.raw_transaction)
-                .map_err(|e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "Can't convert raw_transaction of {} into SenderSignedData. Error: {e}",
-                        tx_digest
-                    ))
-                })?;
+            let sender_signed_data = self.try_into_sender_signed_data()?;
             let tx_block = SuiTransactionBlock::try_from(sender_signed_data, module)?;
             Some(tx_block)
+        } else {
+            None
+        };
+
+        let effects = if options.show_effects {
+            let effects = self.try_into_sui_transaction_effects()?;
+            Some(effects)
         } else {
             None
         };
@@ -97,19 +99,6 @@ impl StoredTransaction {
             self.raw_transaction
         } else {
             Vec::new()
-        };
-
-        let effects = if options.show_effects {
-            let effects: TransactionEffects = bcs::from_bytes(&self.raw_effects).map_err(|e| {
-                IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "Can't convert raw_effects of {} into TransactionEffects. Error: {e}",
-                    tx_digest
-                ))
-            })?;
-            let effects = SuiTransactionBlockEffects::try_from(effects)?;
-            Some(effects)
-        } else {
-            None
         };
 
         let events = if options.show_events {
@@ -192,5 +181,43 @@ impl StoredTransaction {
             confirmed_local_execution: None,
             errors: vec![],
         })
+    }
+
+    fn try_into_sender_signed_data(&self) -> IndexerResult<SenderSignedData> {
+        let sender_signed_data: SenderSignedData =
+            bcs::from_bytes(&self.raw_transaction).map_err(|e| {
+                IndexerError::PersistentStorageDataCorruptionError(format!(
+                    "Can't convert raw_transaction of {} into SenderSignedData. Error: {e}",
+                    self.tx_sequence_number
+                ))
+            })?;
+        Ok(sender_signed_data)
+    }
+
+    pub fn try_into_sui_transaction_effects(&self) -> IndexerResult<SuiTransactionBlockEffects> {
+        let effects: TransactionEffects = bcs::from_bytes(&self.raw_effects).map_err(|e| {
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Can't convert raw_effects of {} into TransactionEffects. Error: {e}",
+                self.tx_sequence_number
+            ))
+        })?;
+        let effects = SuiTransactionBlockEffects::try_from(effects)?;
+        Ok(effects)
+    }
+
+    pub fn get_successful_tx_num(&self) -> IndexerResult<u64> {
+        let tx_cmd_num = self
+            .try_into_sender_signed_data()?
+            .intent_message()
+            .value
+            .execution_parts()
+            .0
+            .num_commands() as u64;
+
+        if self.try_into_sui_transaction_effects()?.status().is_ok() {
+            Ok(tx_cmd_num)
+        } else {
+            Ok(0)
+        }
     }
 }

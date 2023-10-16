@@ -328,11 +328,11 @@ async fn package_not_found() -> anyhow::Result<()> {
 
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
-    let Err(err) = verifier.verify_package_root_and_deps(
-	&a_pkg,
-	package_root,
-    ).await else {
-	panic!("Expected verification to fail");
+    let Err(err) = verifier
+        .verify_package_root_and_deps(&a_pkg, package_root)
+        .await
+    else {
+        panic!("Expected verification to fail");
     };
 
     // <id> below may refer to either the package_root or dependent package `b`
@@ -343,11 +343,8 @@ async fn package_not_found() -> anyhow::Result<()> {
 
     let package_root = AccountAddress::random();
     stable_addrs.insert(SuiAddress::from(package_root), "<id>");
-    let Err(err) = verifier.verify_package_root(
-	&a_pkg,
-	package_root,
-    ).await else {
-	panic!("Expected verification to fail");
+    let Err(err) = verifier.verify_package_root(&a_pkg, package_root).await else {
+        panic!("Expected verification to fail");
     };
 
     let expected =

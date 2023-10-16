@@ -44,6 +44,7 @@ pub mod metrics;
 pub mod models;
 pub mod models_v2;
 pub mod processors;
+pub mod processors_v2;
 pub mod schema;
 pub mod schema_v2;
 pub mod store;
@@ -110,10 +111,11 @@ pub struct IndexerConfig {
     pub fullnode_sync_worker: bool,
     #[clap(long)]
     pub rpc_server_worker: bool,
+    #[clap(long)]
+    pub analytical_worker: bool,
     // NOTE: experimental only, do not use in production.
     #[clap(long)]
     pub skip_db_commit: bool,
-
     #[clap(long)]
     pub use_v2: bool,
 }
@@ -169,6 +171,7 @@ impl Default for IndexerConfig {
             reset_db: false,
             fullnode_sync_worker: true,
             rpc_server_worker: true,
+            analytical_worker: false,
             skip_db_commit: false,
             use_v2: false,
         }
@@ -198,7 +201,8 @@ impl Indexer {
             handle.stopped().await;
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            let mut processor_orchestrator =
+                ProcessorOrchestrator::new(store.clone(), metrics.clone());
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             // -1 will be returned when checkpoints table is empty.

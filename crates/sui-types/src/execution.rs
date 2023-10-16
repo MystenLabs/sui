@@ -123,7 +123,7 @@ impl ExecutionResultsV2 {
         lamport_version: SequenceNumber,
         prev_tx: TransactionDigest,
     ) {
-        for (id, mut obj) in self.written_objects.iter_mut() {
+        for (id, obj) in self.written_objects.iter_mut() {
             // TODO: We can now get rid of the following logic by passing in lamport version
             // into the execution layer, and create new objects using the lamport version directly.
 

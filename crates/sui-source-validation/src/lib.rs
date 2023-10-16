@@ -203,10 +203,8 @@ impl<'a> BytecodeSourceVerifier<'a> {
         let mut errors = Vec::new();
         for ((address, module), (package, local_module)) in local_modules {
             let Some(on_chain_module) = on_chain_modules.remove(&(address, module)) else {
-                errors.push(SourceVerificationError::OnChainDependencyNotFound {
-                    package, module,
-                });
-		continue;
+                errors.push(SourceVerificationError::OnChainDependencyNotFound { package, module });
+                continue;
             };
 
             // compare local bytecode to on-chain bytecode to ensure integrity of our
@@ -278,10 +276,12 @@ impl<'a> BytecodeSourceVerifier<'a> {
             let SuiRawMovePackage { module_map, .. } = pkg?;
             for (name, bytes) in module_map {
                 let Ok(module) = CompiledModule::deserialize_with_defaults(&bytes) else {
-                    err.push(SourceVerificationError::OnChainDependencyDeserializationError {
-                        address: storage_id,
-                        module: name.into(),
-                    });
+                    err.push(
+                        SourceVerificationError::OnChainDependencyDeserializationError {
+                            address: storage_id,
+                            module: name.into(),
+                        },
+                    );
                     continue;
                 };
 

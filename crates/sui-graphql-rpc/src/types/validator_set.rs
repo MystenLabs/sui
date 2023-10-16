@@ -5,7 +5,7 @@ use super::big_int::BigInt;
 use super::validator::Validator;
 use async_graphql::*;
 
-#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject, Default)]
 pub(crate) struct ValidatorSet {
     pub total_stake: Option<BigInt>,
     pub active_validators: Option<Vec<Validator>>,

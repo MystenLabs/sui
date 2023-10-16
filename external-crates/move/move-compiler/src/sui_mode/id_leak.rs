@@ -89,7 +89,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let Some(module) = &context.module else {
-            return None
+            return None;
         };
         let package_name = program.modules.get(module).unwrap().package_name;
         let config = env.package_config(package_name);

@@ -88,7 +88,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let Some(_) = &context.module else {
-            return None
+            return None;
         };
         Some(ShareOwnedVerifierAI)
     }

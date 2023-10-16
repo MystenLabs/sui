@@ -45,7 +45,8 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
         format: ObjectFormatOptions,
     ) -> Result<MoveStructLayout, SuiError> {
         let struct_tag: StructTag = object.type_().clone().into();
-        let Ok(ty) = load_type_from_struct(self.vm, &mut self.linkage_view, &[], &struct_tag) else {
+        let Ok(ty) = load_type_from_struct(self.vm, &mut self.linkage_view, &[], &struct_tag)
+        else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),
             });
@@ -58,7 +59,7 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
         let Ok(MoveTypeLayout::Struct(layout)) = layout else {
             return Err(SuiError::FailObjectLayout {
                 st: format!("{}", struct_tag),
-            })
+            });
         };
         Ok(layout)
     }
