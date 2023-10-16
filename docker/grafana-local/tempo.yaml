@@ -50,6 +50,9 @@ storage:
       path: /tmp/tempo/blocks
 
 overrides:
-  defaults:
-    metrics_generator:
-      processors: [service-graphs, span-metrics] # enables metrics generator
+  max_global_traces_per_user: 10000000
+  max_traces_per_user: 10000000
+  ingestion_rate_strategy: local
+  ingestion_rate_limit_bytes: 1500000000
+  max_bytes_per_trace: 500000000
+
