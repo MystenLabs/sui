@@ -444,16 +444,10 @@ type DisplayEntry {
 
 type Epoch {
   epochId: Int!
-  systemStateVersion: Int
   protocolConfigs: ProtocolConfigs
   referenceGasPrice: BigInt
 
-  systemParameters: SystemParameters
-  stakeSubsidy: StakeSubsidy
   validatorSet: ValidatorSet
-  storageFund: StorageFund
-  safeMode: SafeMode
-
   startTimestamp: DateTime
   endTimestamp: DateTime
 
@@ -476,10 +470,23 @@ type Epoch {
   ): TransactionBlockConnection
 }
 
+type SuiSystemStateSummary {
+  epoch: Epoch
+  protocolConfigs: ProtocolConfigs
+  systemStateVersion: Int
+  referenceGasPrice: BigInt
+
+  systemParameters: SystemParameters
+  stakeSubsidy: StakeSubsidy
+  validatorSet: ValidatorSet
+  storageFund: StorageFund
+  safeMode: SafeMode
+}
+
 type ProtocolConfigs {
   protocolVersion: Int!
-  featureFlags: [ProtocolConfigFeatureFlag]
-  configs: [ProtocolConfigAttr]
+  featureFlags: [ProtocolConfigFeatureFlag!]!
+  configs: [ProtocolConfigAttr!]!
   config(key: String!): ProtocolConfigAttr
   featureFlag(key: String!): ProtocolConfigFeatureFlag
 }

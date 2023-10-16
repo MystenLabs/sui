@@ -10,7 +10,7 @@ use crate::{
         self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
         TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
     },
-    parser::ast::{Ability_, ConstantName, Field, FunctionName, StructName},
+    parser::ast::{Ability_, ConstantName, Field, FunctionName, Mutability, StructName},
     shared::{program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -52,16 +52,23 @@ enum LoopInfo_ {
     BreakType(Box<Type>),
 }
 
+pub struct Local {
+    pub mut_: Mutability,
+    pub ty: Type,
+    pub used_mut: Option<Loc>,
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     pub env: &'env mut CompilationEnv,
 
     use_funs: Vec<UseFunsScope>,
+    pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
     pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
     pub return_type: Option<Type>,
-    locals: UniqueMap<Var, Type>,
+    locals: UniqueMap<Var, Local>,
 
     pub subst: Subst,
     pub constraints: Constraints,
@@ -126,6 +133,7 @@ impl<'env> Context<'env> {
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
+            current_package: None,
             current_module: None,
             current_function: None,
             current_script_constants: None,
@@ -292,13 +300,30 @@ impl<'env> Context<'env> {
             .push(Constraint::OrderedConstraint(loc, op, t))
     }
 
-    pub fn declare_local(&mut self, var: Var, ty: Type) {
-        self.locals.add(var, ty).unwrap()
+    pub fn declare_local(&mut self, mut_: Mutability, var: Var, ty: Type) {
+        let local = Local {
+            mut_,
+            ty,
+            used_mut: None,
+        };
+        self.locals.add(var, local).unwrap()
     }
 
-    pub fn get_local(&mut self, var: &Var) -> Type {
+    pub fn get_local_type(&mut self, var: &Var) -> Type {
         // should not fail, already checked in naming
-        self.locals.get(var).unwrap().clone()
+        self.locals.get(var).unwrap().ty.clone()
+    }
+
+    pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
+        // should not fail, already checked in naming
+        let decl_loc = *self.locals.get_loc(var).unwrap();
+        let local = self.locals.get_mut(var).unwrap();
+        local.used_mut = Some(loc);
+        (decl_loc, local.mut_)
+    }
+
+    pub fn take_locals(&mut self) -> UniqueMap<Var, Local> {
+        std::mem::take(&mut self.locals)
     }
 
     pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
@@ -830,11 +855,15 @@ pub fn make_method_call_type(
         });
         // if we found a function with the method name, it must have the wrong type
         if let Some((m, finfo)) = finfo_opt {
-            let (first_ty_loc, first_ty) =
-                match finfo.signature.parameters.first().map(|(_, t)| t.clone()) {
-                    None => (finfo.defined_loc, None),
-                    Some(t) => (t.loc, Some(t)),
-                };
+            let (first_ty_loc, first_ty) = match finfo
+                .signature
+                .parameters
+                .first()
+                .map(|(_, _, t)| t.clone())
+            {
+                None => (finfo.defined_loc, None),
+                Some(t) => (t.loc, Some(t)),
+            };
             let arg_msg = match first_ty {
                 Some(ty) => {
                     let tys_str = error_format(&ty, &Subst::empty());
@@ -943,7 +972,7 @@ pub fn make_function_type(
         .signature
         .parameters
         .iter()
-        .map(|(n, t)| (*n, subst_tparams(tparam_subst, t.clone())))
+        .map(|(_, n, t)| (*n, subst_tparams(tparam_subst, t.clone())))
         .collect();
     let return_ty = subst_tparams(tparam_subst, finfo.signature.return_type.clone());
     let acquires = if in_current_module {

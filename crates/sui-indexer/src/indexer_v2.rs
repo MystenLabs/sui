@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::apis::IndexerApiV2;
+use crate::apis::{
+    CoinReadApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
+    TransactionBuilderApiV2,
+};
 use crate::errors::IndexerError;
 use crate::indexer_reader::IndexerReader;
 use crate::metrics::IndexerMetrics;
@@ -18,7 +21,8 @@ use tracing::info;
 
 use crate::framework::fetcher::CheckpointFetcher;
 use crate::handlers::checkpoint_handler_v2::new_handlers;
-use crate::store::IndexerStoreV2;
+use crate::processors_v2::processor_orchestrator_v2::ProcessorOrchestratorV2;
+use crate::store::{IndexerStoreV2, PgIndexerAnalyticalStore};
 
 pub struct IndexerV2;
 
@@ -90,6 +94,18 @@ impl IndexerV2 {
 
         Ok(())
     }
+
+    pub async fn start_analytical_worker(
+        store: PgIndexerAnalyticalStore,
+    ) -> Result<(), IndexerError> {
+        info!(
+            "Sui indexerV2 Analytical Worker (version {:?}) started...",
+            env!("CARGO_PKG_VERSION")
+        );
+        let mut processor_orchestrator_v2 = ProcessorOrchestratorV2::new(store);
+        processor_orchestrator_v2.run_forever().await;
+        Ok(())
+    }
 }
 
 pub async fn build_json_rpc_server(
@@ -103,6 +119,11 @@ pub async fn build_json_rpc_server(
     // TODO: Register modules here
 
     builder.register_module(IndexerApiV2::new(reader.clone()))?;
+    builder.register_module(TransactionBuilderApiV2::new(reader.clone()))?;
+    builder.register_module(MoveUtilsApiV2::new(reader.clone()))?;
+    builder.register_module(GovernanceReadApiV2::new(reader.clone()))?;
+    builder.register_module(ReadApiV2::new(reader.clone()))?;
+    builder.register_module(CoinReadApiV2::new(reader.clone()))?;
     // builder.register_module()...
 
     let default_socket_addr: SocketAddr = SocketAddr::new(

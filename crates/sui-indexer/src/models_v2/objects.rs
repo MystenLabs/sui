@@ -1,12 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use diesel::prelude::*;
-use sui_types::digests::ObjectDigest;
+use serde::de::DeserializeOwned;
+use std::collections::HashMap;
 
+use diesel::prelude::*;
 use move_bytecode_utils::module_cache::GetModule;
+use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
-use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldType};
+use sui_types::digests::ObjectDigest;
+use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
 use sui_types::object::{ObjectFormatOptions, ObjectRead};
 
@@ -110,8 +113,11 @@ impl StoredObject {
         Ok(ObjectRead::Exists(oref, object, layout))
     }
 
-    pub fn try_into_expectant_dynamic_field_info(self) -> Result<DynamicFieldInfo, IndexerError> {
-        match self.try_into_dynamic_field_info().transpose() {
+    pub fn try_into_expectant_dynamic_field_info(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<DynamicFieldInfo, IndexerError> {
+        match self.try_into_dynamic_field_info(module_cache).transpose() {
             Some(Ok(info)) => Ok(info),
             Some(Err(e)) => Err(e),
             None => Err(IndexerError::PersistentStorageDataCorruptionError(
@@ -120,7 +126,10 @@ impl StoredObject {
         }
     }
 
-    pub fn try_into_dynamic_field_info(self) -> Result<Option<DynamicFieldInfo>, IndexerError> {
+    pub fn try_into_dynamic_field_info(
+        self,
+        module_cache: &impl GetModule,
+    ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
         if self.df_kind.is_none() {
             return Ok(None);
         }
@@ -161,20 +170,26 @@ impl StoredObject {
                 )))
             }
         };
-        let (name, bcs_name) = if let Some(bcs_name) = self.df_name {
-            let name = bcs::from_bytes(&bcs_name).map_err(|e| {
+        let name = if let Some(field_name) = self.df_name {
+            let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_name. Error: {e}",
                     object_id
                 ))
             })?;
-            Ok::<_, IndexerError>((name, bcs_name))
+            name
         } else {
             return Err(IndexerError::PersistentStorageDataCorruptionError(format!(
                 "object {} has incompatible dynamic field type: empty df_name",
                 object_id
             )));
-        }?;
+        };
+        let layout = move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(
+            &name.type_,
+            module_cache,
+        )?;
+        let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
+        let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
         let object_type =
             self.df_object_type
                 .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -186,7 +201,7 @@ impl StoredObject {
             digest: object_digest,
             type_,
             name,
-            bcs_name: bcs_name.to_vec(),
+            bcs_name,
             object_type,
             object_id: df_object_id,
         }))
@@ -208,5 +223,73 @@ impl StoredObject {
             (self.object_version as u64).into(),
             object_digest,
         ))
+    }
+
+    pub fn to_dynamic_field<K, V>(&self) -> Option<Field<K, V>>
+    where
+        K: DeserializeOwned,
+        V: DeserializeOwned,
+    {
+        let object: Object = bcs::from_bytes(&self.serialized_object).ok()?;
+
+        let object = object.data.try_as_move()?;
+        let ty = object.type_();
+
+        if !ty.is_dynamic_field() {
+            return None;
+        }
+
+        bcs::from_bytes(object.contents()).ok()
+    }
+}
+
+impl TryFrom<StoredObject> for SuiCoin {
+    type Error = IndexerError;
+
+    fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
+        let object: Object = o.clone().try_into()?;
+        let (coin_object_id, version, digest) = o.get_object_ref()?;
+        let coin_type = o
+            .coin_type
+            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Object {} is supposed to be a coin but has an empty coin_type column",
+                coin_object_id,
+            )))?;
+        let balance = o
+            .coin_balance
+            .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
+                "Object {} is supposed to be a coin but has an empy coin_balance column",
+                coin_object_id,
+            )))?;
+        Ok(SuiCoin {
+            coin_type,
+            coin_object_id,
+            version,
+            digest,
+            balance: balance as u64,
+            previous_transaction: object.previous_transaction,
+        })
+    }
+}
+
+#[derive(QueryableByName)]
+pub struct CoinBalance {
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub coin_type: String,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub coin_num: i64,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    pub coin_balance: i64,
+}
+
+impl From<CoinBalance> for Balance {
+    fn from(c: CoinBalance) -> Self {
+        Self {
+            coin_type: c.coin_type,
+            coin_object_count: c.coin_num as usize,
+            // TODO: deal with overflow
+            total_balance: c.coin_balance as u128,
+            locked_balance: HashMap::default(),
+        }
     }
 }

@@ -1,193 +1,73 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO remove after the functions are implemented
-#![allow(unused_variables)]
-#![allow(dead_code)]
-
+use super::governance_api_v2::GovernanceReadApiV2;
+use crate::indexer_reader::IndexerReader;
 use async_trait::async_trait;
-use fastcrypto::encoding::Base64;
-use jsonrpsee::core::RpcResult;
-use jsonrpsee::RpcModule;
-
-use sui_json::SuiJsonValue;
-use sui_json_rpc::api::TransactionBuilderServer;
-use sui_json_rpc::SuiRpcModule;
-use sui_json_rpc_types::{
-    RPCTransactionRequestParams, SuiTransactionBlockBuilderMode, SuiTypeTag, TransactionBlockBytes,
-};
-use sui_open_rpc::Module;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::sui_serde::BigInt;
-
-use crate::store::PgIndexerStoreV2;
+use move_core_types::language_storage::StructTag;
+use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
+use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse};
+use sui_transaction_builder::DataReader;
+use sui_types::base_types::{ObjectID, ObjectInfo, SuiAddress};
+use sui_types::object::Object;
 
 pub(crate) struct TransactionBuilderApiV2 {
-    pg_store: PgIndexerStoreV2,
+    inner: IndexerReader,
 }
 
 impl TransactionBuilderApiV2 {
-    pub fn new(pg_store: PgIndexerStoreV2) -> Self {
-        Self { pg_store }
+    #[allow(clippy::new_ret_no_self)]
+    pub fn new(inner: IndexerReader) -> TransactionBuilderApi {
+        TransactionBuilderApi::new_with_data_reader(std::sync::Arc::new(Self { inner }))
     }
 }
 
 #[async_trait]
-impl TransactionBuilderServer for TransactionBuilderApiV2 {
-    async fn transfer_object(
+impl DataReader for TransactionBuilderApiV2 {
+    async fn get_owned_objects(
         &self,
-        signer: SuiAddress,
+        address: SuiAddress,
+        object_type: StructTag,
+    ) -> Result<Vec<ObjectInfo>, anyhow::Error> {
+        let stored_objects = self
+            .inner
+            .get_owned_objects_in_blocking_task(
+                address,
+                Some(object_type.to_canonical_string()),
+                None,
+                50, // Limit the number of objects returned to 50
+            )
+            .await?;
+
+        stored_objects
+            .into_iter()
+            .map(|object| {
+                let object = Object::try_from(object)?;
+                let object_ref = object.compute_object_reference();
+                let info = ObjectInfo::new(&object_ref, &object);
+                Ok(info)
+            })
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    async fn get_object_with_options(
+        &self,
         object_id: ObjectID,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-        recipient: SuiAddress,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
+        options: SuiObjectDataOptions,
+    ) -> Result<SuiObjectResponse, anyhow::Error> {
+        let result = self
+            .inner
+            .get_object_read_in_blocking_task(object_id)
+            .await?;
+        Ok((result, options).try_into()?)
     }
 
-    async fn transfer_sui(
-        &self,
-        signer: SuiAddress,
-        sui_object_id: ObjectID,
-        gas_budget: BigInt<u64>,
-        recipient: SuiAddress,
-        amount: Option<BigInt<u64>>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn pay(
-        &self,
-        signer: SuiAddress,
-        input_coins: Vec<ObjectID>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt<u64>>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn pay_sui(
-        &self,
-        signer: SuiAddress,
-        input_coins: Vec<ObjectID>,
-        recipients: Vec<SuiAddress>,
-        amounts: Vec<BigInt<u64>>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn pay_all_sui(
-        &self,
-        signer: SuiAddress,
-        input_coins: Vec<ObjectID>,
-        recipient: SuiAddress,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn publish(
-        &self,
-        sender: SuiAddress,
-        compiled_modules: Vec<Base64>,
-        dep_ids: Vec<ObjectID>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn split_coin(
-        &self,
-        signer: SuiAddress,
-        coin_object_id: ObjectID,
-        split_amounts: Vec<BigInt<u64>>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn split_coin_equal(
-        &self,
-        signer: SuiAddress,
-        coin_object_id: ObjectID,
-        split_count: BigInt<u64>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn merge_coin(
-        &self,
-        signer: SuiAddress,
-        primary_coin: ObjectID,
-        coin_to_merge: ObjectID,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn move_call(
-        &self,
-        signer: SuiAddress,
-        package_object_id: ObjectID,
-        module: String,
-        function: String,
-        type_arguments: Vec<SuiTypeTag>,
-        rpc_arguments: Vec<SuiJsonValue>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn batch_transaction(
-        &self,
-        signer: SuiAddress,
-        params: Vec<RPCTransactionRequestParams>,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-        tx_builder_mode: Option<SuiTransactionBlockBuilderMode>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn request_add_stake(
-        &self,
-        signer: SuiAddress,
-        coins: Vec<ObjectID>,
-        amount: Option<BigInt<u64>>,
-        validator: SuiAddress,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-
-    async fn request_withdraw_stake(
-        &self,
-        signer: SuiAddress,
-        staked_sui: ObjectID,
-        gas: Option<ObjectID>,
-        gas_budget: BigInt<u64>,
-    ) -> RpcResult<TransactionBlockBytes> {
-        unimplemented!()
-    }
-}
-
-impl SuiRpcModule for TransactionBuilderApiV2 {
-    fn rpc(self) -> RpcModule<Self> {
-        self.into_rpc()
-    }
-
-    fn rpc_doc_module() -> Module {
-        sui_json_rpc::api::TransactionBuilderOpenRpc::module_doc()
+    async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
+        let epoch_info = GovernanceReadApiV2::new(self.inner.clone())
+            .get_epoch_info(None)
+            .await?;
+        Ok(epoch_info
+            .reference_gas_price
+            .ok_or_else(|| anyhow::anyhow!("missing latest reference_gas_price"))?)
     }
 }

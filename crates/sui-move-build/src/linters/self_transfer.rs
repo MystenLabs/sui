@@ -86,7 +86,7 @@ impl SimpleAbsIntConstructor for SelfTransferVerifier {
         _init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>> {
         let Some(_) = &context.module else {
-            return None
+            return None;
         };
 
         let MemberName::Function(name) = context.member else {

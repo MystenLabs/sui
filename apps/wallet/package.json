@@ -82,7 +82,7 @@
 		"html-webpack-plugin": "^5.5.3",
 		"mini-css-extract-plugin": "^2.7.6",
 		"onchange": "^7.1.0",
-		"postcss": "^8.4.26",
+		"postcss": "^8.4.31",
 		"postcss-loader": "^7.3.3",
 		"postcss-preset-env": "^9.0.0",
 		"sass": "^1.63.6",

@@ -6,7 +6,7 @@ use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, ConstantName, Field, FunctionName, ModuleName,
-        QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
+        Mutability, QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -230,7 +230,7 @@ pub enum Visibility {
 #[derive(PartialEq, Clone, Debug)]
 pub struct FunctionSignature {
     pub type_parameters: Vec<(Name, AbilitySet)>,
-    pub parameters: Vec<(Var, Type)>,
+    pub parameters: Vec<(Mutability, Var, Type)>,
     pub return_type: Type,
 }
 
@@ -412,7 +412,7 @@ pub enum FieldBindings {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
-    Var(ModuleAccess, Option<Vec<Type>>),
+    Var(Mutability, ModuleAccess, Option<Vec<Type>>),
     Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
@@ -1457,7 +1457,10 @@ impl AstDebug for FunctionSignature {
         } = self;
         type_parameters.ast_debug(w);
         w.write("(");
-        w.comma(parameters, |w, (v, st)| {
+        w.comma(parameters, |w, (mutability, v, st)| {
+            if mutability.is_some() {
+                w.write("mut ");
+            }
             w.write(&format!("{}: ", v));
             st.ast_debug(w);
         });
@@ -1870,7 +1873,10 @@ impl AstDebug for LValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use LValue_ as L;
         match self {
-            L::Var(v, tys_opt) => {
+            L::Var(mutability, v, tys_opt) => {
+                if mutability.is_some() {
+                    w.write("mut ");
+                }
                 w.write(&format!("{}", v));
                 if let Some(ss) = tys_opt {
                     w.write("<");

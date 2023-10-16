@@ -6,7 +6,7 @@ use axum::{http::StatusCode, routing::get, Router};
 mod checkpoints;
 mod client;
 pub mod headers;
-mod node_state_getter;
+pub mod node_state_getter;
 mod objects;
 
 pub use checkpoints::{CheckpointData, CheckpointTransaction};

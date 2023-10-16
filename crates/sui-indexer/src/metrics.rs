@@ -95,6 +95,9 @@ pub struct IndexerMetrics {
     // indexer state metrics
     pub db_conn_pool_size: IntGauge,
     pub idle_db_conn: IntGauge,
+
+    pub address_processor_failure: IntCounter,
+    pub checkpoint_metrics_processor_failure: IntCounter,
 }
 
 impl IndexerMetrics {
@@ -539,6 +542,18 @@ impl IndexerMetrics {
                 "Number of idle database connections",
                 registry
             ).unwrap(),
+            address_processor_failure: register_int_counter_with_registry!(
+                "address_processor_failure",
+                "Total number of address processor failure",
+                registry,
+            )
+            .unwrap(),
+            checkpoint_metrics_processor_failure: register_int_counter_with_registry!(
+                "checkpoint_metrics_processor_failure",
+                "Total number of checkpoint metrics processor failure",
+                registry,
+            )
+            .unwrap(),
         }
     }
 }

@@ -738,7 +738,7 @@ impl<'env> Evaluator<'env> {
                 let choose_val_range_vec = choose_val_range.unwrap();
                 let mut v_results: Vec<_> = choose_val_range_vec
                     .into_iter()
-                    .zip(loop_results.into_iter())
+                    .zip(loop_results)
                     .filter_map(|(val, r)| if r.into_bool() { Some(val) } else { None })
                     .collect();
 
@@ -754,7 +754,7 @@ impl<'env> Evaluator<'env> {
                 let choose_val_range_vec = choose_val_range.unwrap();
                 let mut v_results: Vec<_> = choose_val_range_vec
                     .into_iter()
-                    .zip(loop_results.into_iter())
+                    .zip(loop_results)
                     .filter_map(|(val, r)| if r.into_bool() { Some(val) } else { None })
                     .collect();
 
@@ -912,7 +912,7 @@ impl<'env> Evaluator<'env> {
         let typed_args = decl
             .params
             .iter()
-            .zip(arg_vals.into_iter())
+            .zip(arg_vals)
             .map(|((_, arg_ty), arg_val)| {
                 let converted = convert_model_base_type(env, arg_ty, &ty_args);
                 TypedValue::fuse_base(converted, arg_val)

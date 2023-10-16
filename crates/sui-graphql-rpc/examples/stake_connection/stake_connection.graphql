@@ -1,0 +1,21 @@
+{
+  address(
+    address: "0x5f63d0b78e14d054568564c34023cde0f862271d587df7bd308b1aa7c46b8940"
+  ) {
+    balanceConnection {
+      edges {
+        node {
+          coinType
+          totalBalance
+        }
+      }
+    }
+    stakeConnection {
+      edges {
+        node {
+          status
+        }
+      }
+    }
+  }
+}

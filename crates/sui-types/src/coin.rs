@@ -111,8 +111,7 @@ impl Coin {
 
     /// Add balance to this coin, erroring if the new total balance exceeds the maximum
     pub fn add(&mut self, balance: Balance) -> Result<(), ExecutionError> {
-        let Some(new_value) = self.value().checked_add(balance.value())
-        else {
+        let Some(new_value) = self.value().checked_add(balance.value()) else {
             return Err(ExecutionError::from_kind(
                 ExecutionErrorKind::CoinBalanceOverflow,
             ));

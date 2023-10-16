@@ -764,10 +764,10 @@ pub(crate) fn get_tag_and_layouts(
         }
     };
     let Some(layout) = context.type_to_type_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     let Some(annotated_layout) = context.type_to_fully_annotated_layout(ty)? else {
-        return Ok(None)
+        return Ok(None);
     };
     Ok(Some((*tag, layout, annotated_layout)))
 }

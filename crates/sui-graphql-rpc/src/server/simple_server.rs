@@ -14,9 +14,9 @@ use crate::server::builder::ServerBuilder;
 
 use prometheus::Registry;
 use std::default::Default;
-use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
 
@@ -30,13 +30,14 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
     let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
     // TODO (wlmyng): Allow users to choose which data sources to back graphql
-    let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+    let db_url = conn.db_url;
     let pg_conn_pool = PgManager::new(db_url, None)
         .map_err(|e| {
             println!("Failed to create pg connection pool: {}", e);
             e
         })
         .unwrap();
+    let name_service_config = NameServiceConfig::default();
 
     let prom_addr: SocketAddr = PROM_ADDR.parse().unwrap();
     let registry = start_prom(prom_addr);
@@ -52,6 +53,7 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .context_data(data_loader)
         .context_data(service_config)
         .context_data(pg_conn_pool)
+        .context_data(name_service_config)
         .context_data(Arc::new(metrics))
         .extension(QueryLimitsChecker::default())
         .extension(FeatureGate)

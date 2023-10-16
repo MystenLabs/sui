@@ -55,7 +55,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
         let mut needs_wait = false;
         let mut results: FuturesUnordered<_> = effects
             .into_iter()
-            .zip(registrations.into_iter())
+            .zip(registrations)
             .map(|(e, r)| match e {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),
@@ -100,7 +100,7 @@ impl EffectsNotifyRead for Arc<AuthorityStore> {
 
         let results = effects_digests
             .into_iter()
-            .zip(registrations.into_iter())
+            .zip(registrations)
             .map(|(a, r)| match a {
                 // Note that Some() clause also drops registration that is already fulfilled
                 Some(ready) => Either::Left(futures::future::ready(ready)),

@@ -563,8 +563,8 @@ mod checked {
         }
 
         let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() else {
-        return Ok(());
-    };
+            return Ok(());
+        };
 
         // We use a custom config with metering enabled
         let is_metered = true;
