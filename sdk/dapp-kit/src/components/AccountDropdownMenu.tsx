@@ -24,7 +24,9 @@ type AccountDropdownMenuProps = {
 export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps) {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
 	const { mutate: switchAccount } = useSwitchAccount();
-	const { data: domain } = useResolveSuiNSName(currentAccount.address);
+	const { data: domain } = useResolveSuiNSName(
+		currentAccount.label ? null : currentAccount.address,
+	);
 	const accounts = useAccounts();
 
 	return (
