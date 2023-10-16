@@ -1,36 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect } from 'react';
-
-import { useConnectWallet } from './useConnectWallet.js';
-import { useWallets } from './useWallets.js';
 import { useWalletStore } from './useWalletStore.js';
 
-export function useAutoConnectWallet(autoConnectEnabled: boolean) {
-	const { mutate: connectWallet } = useConnectWallet();
-	const wallets = useWallets();
-	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
-	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
-
-	useEffect(() => {
-		console.log('RUNNING EFFECT');
-		if (!autoConnectEnabled || !lastConnectedWalletName || !lastConnectedAccountAddress) return;
-
-		console.log('CONNECTING');
-		const wallet = wallets.find((wallet) => wallet.name === lastConnectedWalletName);
-		if (wallet) {
-			connectWallet({
-				wallet,
-				accountAddress: lastConnectedAccountAddress,
-				silent: true,
-			});
-		}
-	}, [
-		autoConnectEnabled,
-		connectWallet,
-		lastConnectedAccountAddress,
-		lastConnectedWalletName,
-		wallets,
-	]);
+/**
+ * WIP will fill this out before landing lol (pinky promise)
+ */
+export function useAutoConnectStatus() {
+	return useWalletStore((state) => state.autoConnectStatus);
 }
