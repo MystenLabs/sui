@@ -58,6 +58,9 @@ pub enum DagError {
     #[error("Invalid system message")]
     InvalidSystemMessage,
 
+    #[error("Invalid certificate version")]
+    InvalidCertificateVersion,
+
     #[error("Header {0} has bad worker IDs")]
     HeaderHasBadWorkerIds(HeaderDigest),
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/bcs';
+import { toHEX } from '@mysten/bcs';
 import { PublicKey } from '@mysten/sui.js/cryptography';
 
 import { poseidonHash } from './poseidon.js';
@@ -12,7 +12,15 @@ export const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
 export function getExtendedEphemeralPublicKey(publicKey: PublicKey) {
-	return toB64(publicKey.toSuiBytes());
+	return String(toBigIntBE(publicKey.toSuiBytes()));
+}
+
+export function toBigIntBE(bytes: Uint8Array) {
+	const hex = toHEX(bytes);
+	if (hex.length === 0) {
+		return BigInt(0);
+	}
+	return BigInt(`0x${hex}`);
 }
 
 /**
@@ -71,6 +79,6 @@ export function genAddressSeed(
 		hashASCIIStrToField(name, max_name_length),
 		hashASCIIStrToField(value, max_value_length),
 		hashASCIIStrToField(aud, max_aud_length),
-		poseidonHash([salt]),
+		poseidonHash([BigInt(salt)]),
 	]);
 }

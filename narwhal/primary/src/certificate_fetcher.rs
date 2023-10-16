@@ -493,8 +493,8 @@ async fn process_certificates_v1_helper(
         // should cancel processing for the entire batch of fetched certificates.
         all_certificates.push(
             validate_received_certificate_version(cert, protocol_config).map_err(|err| {
-                error!("{err}");
-                DagError::Canceled
+                error!("fetched certficate processing error: {err}");
+                DagError::InvalidCertificateVersion
             })?,
         );
     }
@@ -552,8 +552,8 @@ async fn process_certificates_v2_helper(
         all_certificates.push(
             validate_received_certificate_version(cert.clone(), protocol_config).map_err(
                 |err| {
-                    error!("{err}");
-                    DagError::Canceled
+                    error!("fetched certficate processing error: {err}");
+                    DagError::InvalidCertificateVersion
                 },
             )?,
         );

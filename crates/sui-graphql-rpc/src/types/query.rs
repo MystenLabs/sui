@@ -8,6 +8,7 @@ use super::{
     address::Address,
     checkpoint::{Checkpoint, CheckpointId},
     epoch::Epoch,
+    event::{Event, EventFilter},
     object::{Object, ObjectFilter},
     owner::ObjectOwner,
     protocol_config::ProtocolConfigs,
@@ -160,6 +161,21 @@ impl Query {
     ) -> Result<Option<Connection<String, TransactionBlock>>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_txs(first, after, last, before, filter)
+            .await
+            .extend()
+    }
+
+    async fn event_connection(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<String>,
+        last: Option<u64>,
+        before: Option<String>,
+        filter: EventFilter,
+    ) -> Result<Option<Connection<String, Event>>> {
+        ctx.data_unchecked::<PgManager>()
+            .fetch_events(first, after, last, before, filter)
             .await
             .extend()
     }

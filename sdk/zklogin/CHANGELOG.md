@@ -1,5 +1,11 @@
 # @mysten/zklogin
 
+## 0.2.1
+
+### Patch Changes
+
+- 9a1c8105e: Fix usage of string values in the SDK
+
 ## 0.2.0
 
 ### Minor Changes

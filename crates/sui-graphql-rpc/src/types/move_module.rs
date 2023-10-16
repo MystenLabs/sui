@@ -4,6 +4,10 @@
 use async_graphql::*;
 use move_binary_format::CompiledModule;
 
+use crate::{context_data::db_data_provider::PgManager, error::Error};
+
+use super::{move_package::MovePackage, sui_address::SuiAddress};
+
 #[derive(Clone)]
 pub(crate) struct MoveModule {
     pub native_module: CompiledModule,
@@ -40,4 +44,28 @@ impl MoveModule {
 
     // bytes: Base64
     // disassembly: String
+}
+
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub(crate) struct MoveModuleId {
+    #[graphql(skip)]
+    pub package: SuiAddress,
+    pub name: String,
+}
+
+#[ComplexObject]
+impl MoveModuleId {
+    async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
+        let result = ctx
+            .data_unchecked::<PgManager>()
+            .fetch_move_package(self.package, None)
+            .await
+            .extend()?;
+
+        match result {
+            Some(result) => Ok(result),
+            None => Err(Error::Internal("Package not found".to_string()).extend()),
+        }
+    }
 }

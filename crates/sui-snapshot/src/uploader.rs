@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-use sui_core::db_checkpoint_handler::{STATE_SNAPSHOT_COMPLETED_MARKER, SUCCESS_MARKER};
+use sui_core::db_checkpoint_handler::{
+    STATE_SNAPSHOT_COMPLETED_MARKER, SUCCESS_MARKER, UPLOAD_COMPLETED_MARKER,
+};
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs, path_to_filesystem, put,
 };
@@ -121,6 +123,12 @@ impl StateSnapshotUploader {
         dirs.sort_by_key(|(epoch_num, _path)| *epoch_num);
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                let dir_path = path_to_filesystem(self.db_checkpoint_path.clone(), db_path)?;
+                let upload_completed_path = dir_path.join(UPLOAD_COMPLETED_MARKER);
+                if !upload_completed_path.exists() {
+                    info!("State snapshot creation for epoch: {} to wait until db checkpoint uploaded", *epoch);
+                    continue;
+                }
                 info!("Starting state snapshot creation for epoch: {}", *epoch);
                 let state_snapshot_writer = StateSnapshotWriterV1::new_from_store(
                     &self.staging_path,
