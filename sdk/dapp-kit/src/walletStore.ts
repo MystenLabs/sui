@@ -6,8 +6,21 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+type WalletConnectionStatus = 'disconnected' | 'reconnecting' | 'connecting' | 'connected';
+
+type ConnectedWalletState = {
+	connectionStatus: 'connected';
+	currentWallet: WalletWithRequiredFeatures;
+};
+
+type NotConnectedWalletState = {
+	connectionStatus: 'disconnected' | 'reconnecting' | 'connecting';
+	currentWallet: null;
+};
+
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
+	setWalletConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		connectedAccounts: readonly WalletAccount[],
@@ -33,7 +46,7 @@ export type StoreState = {
 	lastConnectedWalletName: string | null;
 } & WalletActions;
 
-export type WalletConfiguration = {
+type WalletConfiguration = {
 	wallets: WalletWithRequiredFeatures[];
 	storage: StateStorage;
 	storageKey: string;
@@ -50,6 +63,11 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 				lastConnectedAccountAddress: null,
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
+				setWalletConnectionStatus(connectionStatus) {
+					set(() => ({
+						connectionStatus,
+					}));
+				},
 				setWalletConnected(wallet, connectedAccounts, selectedAccount) {
 					set(() => ({
 						accounts: connectedAccounts,

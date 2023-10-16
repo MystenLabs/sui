@@ -14,13 +14,13 @@ export function useAutoConnectWallet(autoConnectEnabled: boolean) {
 	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 
 	useEffect(() => {
-		if (!autoConnectEnabled || !lastConnectedWalletName) return;
+		if (!autoConnectEnabled || !lastConnectedWalletName || !lastConnectedAccountAddress) return;
 
 		const wallet = wallets.find((wallet) => wallet.name === lastConnectedWalletName);
 		if (wallet) {
 			connectWallet({
 				wallet,
-				accountAddress: lastConnectedAccountAddress || undefined,
+				accountAddress: lastConnectedAccountAddress,
 				silent: true,
 			});
 		}

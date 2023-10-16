@@ -36,21 +36,43 @@ export function useConnectWallet({
 	...mutationOptions
 }: UseConnectWalletMutationOptions = {}) {
 	const setWalletConnected = useWalletStore((state) => state.setWalletConnected);
+	const setWalletConnectionStatus = useWalletStore((state) => state.setWalletConnectionStatus);
+	const lastConnectedWalletName = useWalletStore((state) => state.lastConnectedWalletName);
+	const lastConnectedAccountAddress = useWalletStore((state) => state.lastConnectedAccountAddress);
 
 	return useMutation({
 		mutationKey: walletMutationKeys.connectWallet(mutationKey),
-		mutationFn: async ({ wallet, accountAddress, ...standardConnectInput }) => {
-			const connectResult = await wallet.features['standard:connect'].connect(standardConnectInput);
-			const connectedSuiAccounts = connectResult.accounts.filter((account) =>
-				account.chains.some((chain) => chain.split(':')[0] === 'sui'),
-			);
-			const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
+		mutationFn: async (connectWalletArgs) => {
+			try {
+				const isReconnecting =
+					connectWalletArgs.wallet.name === lastConnectedWalletName &&
+					connectWalletArgs.accountAddress === lastConnectedAccountAddress;
 
-			setWalletConnected(wallet, connectedSuiAccounts, selectedAccount);
-			return { accounts: connectedSuiAccounts };
+				setWalletConnectionStatus(isReconnecting ? 'reconnecting' : 'connecting');
+				const { connectedSuiAccounts, selectedAccount } = await connectWallet(connectWalletArgs);
+				setWalletConnected(connectWalletArgs.wallet, connectedSuiAccounts, selectedAccount);
+
+				return { accounts: connectedSuiAccounts };
+			} catch (error) {
+				setWalletConnectionStatus('disconnected');
+			}
+			return { accounts: [] };
 		},
 		...mutationOptions,
 	});
+}
+
+export async function connectWallet({ wallet, accountAddress, ...connectArgs }: ConnectWalletArgs) {
+	const connectResult = await wallet.features['standard:connect'].connect(connectArgs);
+	const connectedSuiAccounts = connectResult.accounts.filter((account) =>
+		account.chains.some((chain) => chain.split(':')[0] === 'sui'),
+	);
+	const selectedAccount = getSelectedAccount(connectedSuiAccounts, accountAddress);
+
+	return {
+		connectedSuiAccounts,
+		selectedAccount,
+	};
 }
 
 function getSelectedAccount(connectedAccounts: readonly WalletAccount[], accountAddress?: string) {
