@@ -1,5 +1,5 @@
 ---
-'@mysten/dapp-kit': major
+'@mysten/dapp-kit': minor
 ---
 
 Add global connection status info to useCurrentWallet and change the hook interface to an object
