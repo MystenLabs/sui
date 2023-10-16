@@ -835,7 +835,7 @@ impl PgManager {
 
     pub(crate) async fn fetch_txs_by_digests(
         &self,
-        digests: &Vec<TransactionDigest>,
+        digests: &[TransactionDigest],
     ) -> Result<Option<Vec<Option<TransactionBlock>>>, Error> {
         let tx_block_filter = TransactionBlockFilter {
             package: None,
