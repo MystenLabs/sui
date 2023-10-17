@@ -346,6 +346,7 @@ struct FeatureFlags {
 
     // If true, allow verify with legacy zklogin address
     #[serde(skip_serializing_if = "is_false")]
+    #[serde(default = "bool_default")]
     verify_legacy_zklogin_address: bool,
 }
 
