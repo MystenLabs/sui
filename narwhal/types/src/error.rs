@@ -46,11 +46,17 @@ pub enum DagError {
     #[error("Invalid signature")]
     InvalidSignature,
 
+    #[error("Invalid randomness signature")]
+    InvalidRandomnessSignature,
+
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 
     #[error("Invalid header digest")]
     InvalidHeaderDigest,
+
+    #[error("Invalid system message")]
+    InvalidSystemMessage,
 
     #[error("Invalid certificate version")]
     InvalidCertificateVersion,

@@ -30,7 +30,7 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, Metadata,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV1, Metadata,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
     SignatureVerificationState,
@@ -439,10 +439,11 @@ async fn fetch_certificates_v1_basic() {
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
-    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header().clone()) };
+    let cert_header =
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
-    cert.update_header(wolf_header);
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    cert.update_header(wolf_header.into());
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());
@@ -734,10 +735,11 @@ async fn fetch_certificates_v2_basic() {
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
-    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header().clone()) };
+    let cert_header =
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
-    cert.update_header(wolf_header);
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    cert.update_header(Header::from(wolf_header));
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());

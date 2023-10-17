@@ -80,6 +80,7 @@ const MAX_PROTOCOL_VERSION: u64 = 29;
 // Version 29: Add verify_legacy_zklogin_address flag to sui framework, this add ability to verify
 //             transactions from a legacy zklogin address.
 //             Enable Narwhal CertificateV2
+//             Add support for random beacon.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -295,6 +296,14 @@ struct FeatureFlags {
     // Enable receiving sent objects
     #[serde(skip_serializing_if = "is_false")]
     receive_objects: bool,
+
+    // Enable v2 of Headers for Narwhal
+    #[serde(skip_serializing_if = "is_false")]
+    narwhal_header_v2: bool,
+
+    // Enable random beacon protocol
+    #[serde(skip_serializing_if = "is_false")]
+    random_beacon: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -803,6 +812,12 @@ pub struct ProtocolConfig {
     // Applied at the end of an epoch as a delta from the new epoch value, so setting this to 1
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
+
+    /// === random beacon ===
+
+    /// Maximum allowed precision loss when reducing voting weights for the random beacon
+    /// protocol.
+    random_beacon_reduction_allowed_delta: Option<u16>,
 }
 
 // feature flags
@@ -958,6 +973,19 @@ impl ProtocolConfig {
     // this function only exists for readability in the genesis code.
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
+    }
+
+    pub fn narwhal_header_v2(&self) -> bool {
+        self.feature_flags.narwhal_header_v2
+    }
+
+    pub fn random_beacon(&self) -> bool {
+        let ret = self.feature_flags.random_beacon;
+        if ret {
+            // random beacon requires narwhal v2 headers
+            assert!(self.feature_flags.narwhal_header_v2);
+        }
+        ret
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -1343,7 +1371,9 @@ impl ProtocolConfig {
 
             max_jwk_votes_per_validator_per_epoch: None,
 
-                max_age_of_jwk_in_epochs: None,
+            max_age_of_jwk_in_epochs: None,
+
+            random_beacon_reduction_allowed_delta: None,
 
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
@@ -1547,9 +1577,17 @@ impl ProtocolConfig {
                 }
                 29 => {
                     cfg.feature_flags.verify_legacy_zklogin_address = true;
+
                     // Only enable nw certificate v2 on devnet.
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_certificate_v2 = true;
+                    }
+
+                    cfg.random_beacon_reduction_allowed_delta = Some(800);
+                    // Only enable random beacon on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.narwhal_header_v2 = true;
+                        cfg.feature_flags.random_beacon = true;
                     }
                 }
                 // Use this template when making changes:
