@@ -871,6 +871,7 @@ impl KeyToolCommand {
                                 OIDCProvider::Google,
                             ],
                             ZkLoginEnv::Prod,
+                            true,
                         );
                         let res = zk.verify_authenticator(
                             &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
