@@ -311,7 +311,11 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		setInterstitialDismissed(dismissed === 'true');
 	}, [walletInterstitialConfig?.dismissKey]);
 
-	if (walletInterstitialConfig?.enabled && !interstitialDismissed) {
+	if (
+		navigator.userAgent !== 'Playwright' &&
+		walletInterstitialConfig?.enabled &&
+		!interstitialDismissed
+	) {
 		return (
 			<Interstitial
 				{...walletInterstitialConfig}

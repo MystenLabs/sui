@@ -18,7 +18,7 @@
 		"start": "concurrently --restart-tries 10 --raw \"pnpm:build:dev --watch\" \"pnpm:prettier:fix:watch\"",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"playwright": "playwright",
+		"playwright": "cross-env PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS=\"1\" playwright",
 		"pack:zip": "web-ext build --source-dir ./dist --overwrite-dest",
 		"storybook": "storybook dev -p 6007",
 		"build-storybook": "storybook build",
