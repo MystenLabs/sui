@@ -4,7 +4,7 @@
 import { computeZkLoginAddressFromSeed } from '@mysten/sui.js/zklogin';
 import { base64url, decodeJwt } from 'jose';
 
-import { lengthChecks } from './checks';
+import { lengthChecks } from './checks.js';
 import { JSONProcessor } from './jsonprocessor.js';
 import { genAddressSeed } from './utils.js';
 

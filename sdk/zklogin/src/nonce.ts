@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey } from '@mysten/sui.js/cryptography';
+import type { PublicKey } from '@mysten/sui.js/cryptography';
 import { toBigEndianBytes } from '@mysten/sui.js/zklogin';
 import { randomBytes } from '@noble/hashes/utils';
 import { base64url } from 'jose';
