@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { JSONProcessor } from './jsonprocessor.js';
+import type { JSONProcessor } from './jsonprocessor.js';
 import { NONCE_LENGTH } from './nonce.js';
 import { MAX_AUD_VALUE_LENGTH, MAX_KEY_CLAIM_VALUE_LENGTH } from './utils.js';
 
