@@ -629,7 +629,9 @@ impl PgManager {
     }
 
     pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<Vec<u8>, Error> {
-        Ok(Digest::from_str(cursor)?.into_vec())
+        Ok(SuiAddress::from_str(cursor)
+            .map_err(|e| Error::InvalidCursor(e.to_string()))?
+            .into_vec())
     }
 
     pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
