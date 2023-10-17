@@ -95,14 +95,14 @@ pub struct Package {
     pub watch: Option<ObjectID>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct SourceInfo {
     pub path: PathBuf,
     // Is Some when content is hydrated from disk.
     pub source: Option<String>,
 }
 
-#[derive(Eq, PartialEq, Clone, Default, Deserialize, Debug, Ord, PartialOrd)]
+#[derive(Eq, PartialEq, Clone, Default, Serialize, Deserialize, Debug, Ord, PartialOrd)]
 #[serde(rename_all = "lowercase")]
 pub enum Network {
     #[default]
@@ -463,6 +463,7 @@ pub fn serve(
 ) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
     let app = Router::new()
         .route("/api", get(api_route))
+        .route("/api/list", get(list_route))
         .layer(
             ServiceBuilder::new()
                 .layer(
@@ -470,7 +471,7 @@ pub fn serve(
                         .allow_methods([Method::GET])
                         .allow_origin(tower_http::cors::Any),
                 )
-                .layer(middleware::from_fn(check_version)),
+                .layer(middleware::from_fn(check_version_header)),
         )
         .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
@@ -509,7 +510,6 @@ async fn api_route(
         let error = format!("Invalid hex address {address}");
         return (
             StatusCode::BAD_REQUEST,
-            //            headers,
             Json(ErrorResponse { error }).into_response(),
         );
     };
@@ -527,28 +527,29 @@ async fn api_route(
     {
         (
             StatusCode::OK,
-            //            headers,
             Json(SourceResponse {
                 source: source.to_owned(),
             })
             .into_response(),
         )
     } else {
-        let x: (StatusCode, HeaderMap, Response) = (
+        (
             StatusCode::NOT_FOUND,
-            //            headers,
             Json(ErrorResponse {
                 error: format!(
                     "No source found for {symbol} at address {address} on network {network}"
                 ),
             })
             .into_response(),
-        );
-        x
+        )
     }
 }
 
-async fn check_version<B>(headers: HeaderMap, req: hyper::Request<B>, next: Next<B>) -> Response {
+async fn check_version_header<B>(
+    headers: HeaderMap,
+    req: hyper::Request<B>,
+    next: Next<B>,
+) -> Response {
     let version = headers
         .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
         .as_ref()
@@ -588,4 +589,12 @@ async fn check_version<B>(headers: HeaderMap, req: hyper::Request<B>, next: Next
             response
         }
     }
+}
+
+async fn list_route(State(app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    let app_state = app_state.read().unwrap();
+    (
+        StatusCode::OK,
+        Json(app_state.sources.clone()).into_response(), // FIX: precompute and serve :D
+    )
 }
