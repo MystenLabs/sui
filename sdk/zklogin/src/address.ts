@@ -2,38 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { computeZkLoginAddressFromSeed } from '@mysten/sui.js/zklogin';
-import { base64url, decodeJwt } from 'jose';
+import { decodeJwt } from 'jose';
 
-import { lengthChecks } from './checks.js';
-import { JSONProcessor } from './jsonprocessor.js';
 import { genAddressSeed } from './utils.js';
 
 export function jwtToAddress(jwt: string, userSalt: string | bigint) {
 	const decodedJWT = decodeJwt(jwt);
-	if (!decodedJWT.iss) {
-		throw new Error('Missing iss');
+	if (!decodedJWT.sub || !decodedJWT.iss || !decodedJWT.aud) {
+		throw new Error('Missing jwt data');
 	}
 
-	const keyClaimName = 'sub';
-	const [header, payload] = jwt.split('.');
-	const decoded_payload = base64url.decode(payload).toString();
-	const processor = new JSONProcessor(decoded_payload);
-	const keyClaimDetails = processor.process(keyClaimName); // throws an error if key claim name is not found
-	if (typeof keyClaimDetails.value !== 'string') {
-		throw new Error('Key claim value must be a string');
+	if (Array.isArray(decodedJWT.aud)) {
+		throw new Error('Not supported aud. Aud is an array, string was expected.');
 	}
-	const audDetails = processor.process('aud');
-	if (typeof audDetails.value !== 'string') {
-		throw new Error('Aud claim value must be a string');
-	}
-
-	lengthChecks(header, payload, keyClaimName, processor);
 
 	return computeZkLoginAddress({
 		userSalt,
-		claimName: keyClaimName,
-		claimValue: keyClaimDetails.value,
-		aud: audDetails.value,
+		claimName: 'sub',
+		claimValue: decodedJWT.sub,
+		aud: decodedJWT.aud,
 		iss: decodedJWT.iss,
 	});
 }
