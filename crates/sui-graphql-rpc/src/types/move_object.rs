@@ -9,7 +9,6 @@ use crate::context_data::db_data_provider::PgManager;
 use crate::types::stake::Stake;
 use async_graphql::Error;
 use async_graphql::*;
-use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use sui_types::governance::StakedSui;
 use sui_types::object::Object as NativeSuiObject;
@@ -28,9 +27,10 @@ impl MoveObject {
         let resolver = ctx.data_unchecked::<PgManager>();
 
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
-            let type_tag = TypeTag::Struct(Box::new(struct_tag));
-            let type_layout = TypeLayoutBuilder::build_with_types(&type_tag, &resolver.inner)
-                .map_err(|e| Error::new(e.to_string()))?;
+            let type_layout = resolver
+                .build_with_types_in_blocking_task(TypeTag::Struct(Box::new(struct_tag)))
+                .await
+                .extend()?;
 
             return Ok(Some(MoveValue::new(
                 type_layout,

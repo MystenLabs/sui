@@ -48,7 +48,8 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
-use move_core_types::language_storage::StructTag;
+use move_bytecode_utils::layout::TypeLayoutBuilder;
+use move_core_types::{language_storage::StructTag, value::MoveTypeLayout};
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
@@ -83,7 +84,7 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::{base_types::MoveObjectType, governance::StakedSui};
+use sui_types::{base_types::MoveObjectType, governance::StakedSui, TypeTag};
 use sui_types::{
     base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
     Identifier,
@@ -621,6 +622,19 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
+    pub(crate) async fn build_with_types_in_blocking_task(
+        &self,
+        type_tag: TypeTag,
+    ) -> Result<MoveTypeLayout, Error> {
+        self.inner
+            .spawn_blocking(move |this| {
+                TypeLayoutBuilder::build_with_types(&type_tag, &this).map_err(|e| {
+                    Error::Internal(format!("Failed to build layout from type tag: {e}"))
+                })
+            })
+            .await
+    }
+
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()
