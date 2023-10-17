@@ -12,6 +12,7 @@ export interface SuiClientProviderContext {
 	client: SuiClient;
 	networks: NetworkConfigs;
 	network: string;
+	config: SuiClientOptions | null;
 	selectNetwork: (network: string) => void;
 }
 
@@ -69,6 +70,10 @@ export function SuiClientProvider<T extends NetworkConfigs>(props: SuiClientProv
 			client,
 			networks,
 			network: currentNetwork,
+			config:
+				networks[currentNetwork] instanceof SuiClient
+					? null
+					: (networks[currentNetwork] as SuiClientOptions),
 			selectNetwork: (newNetwork) => {
 				if (currentNetwork === newNetwork) {
 					return;
