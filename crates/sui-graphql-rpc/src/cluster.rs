@@ -5,7 +5,6 @@ use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::ServiceConfig;
 use crate::server::simple_server::start_example_server;
-use hyper::client::connect;
 use std::env;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
@@ -113,7 +112,7 @@ async fn start_test_cluster(
 pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    let parsed_url = config.base_connection_url().unwrap();
+    let parsed_url = config.get_db_url().unwrap();
     let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(50)).unwrap();
     if config.reset_db {
         reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
