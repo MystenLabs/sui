@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.4.0
+
+### Minor Changes
+
+- b7c304696: Show account label or suiNS domain in connect button
+
 ## 0.3.0
 
 ### Minor Changes
