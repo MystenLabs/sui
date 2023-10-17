@@ -21,8 +21,8 @@ use tokio::task::JoinHandle;
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
 
-const _ACCOUNT_NUM: usize = 20;
-const _GAS_OBJECT_COUNT: usize = 3;
+const ACCOUNT_NUM: usize = 20;
+const GAS_OBJECT_COUNT: usize = 3;
 
 pub struct Cluster {
     pub validator_fullnode_handle: TestCluster,
@@ -85,9 +85,9 @@ async fn start_test_cluster(
         .with_accounts(vec![
             AccountConfig {
                 address: None,
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT; _GAS_OBJECT_COUNT],
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
             };
-            _ACCOUNT_NUM
+            ACCOUNT_NUM
         ])
         .build()
         .await;
