@@ -7,12 +7,12 @@ import {
 import { SuiObjectData } from "@mysten/sui.js/client";
 import { TransactionBlock } from "@mysten/sui.js/transactions";
 import { Button, Flex, Heading, Text } from "@radix-ui/themes";
-import { useNetworkConfig } from "./networkConfig";
+import { useNetworkVariable } from "./networkConfig";
 
 export function Counter({ id }: { id: string }) {
   const client = useSuiClient();
   const currentAccount = useCurrentAccount();
-  const { counterPackageId } = useNetworkConfig();
+  const counterPackageId = useNetworkVariable("counterPackageId");
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
   const { data, isLoading, error, refetch } = useSuiClientQuery("getObject", {
     id,

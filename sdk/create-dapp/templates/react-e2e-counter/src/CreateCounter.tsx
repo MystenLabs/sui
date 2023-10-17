@@ -4,7 +4,7 @@ import {
   useSignAndExecuteTransactionBlock,
   useSuiClient,
 } from "@mysten/dapp-kit";
-import { useNetworkConfig } from "./networkConfig";
+import { useNetworkVariable } from "./networkConfig";
 
 export function CreateCounter({
   onCreated,
@@ -12,7 +12,7 @@ export function CreateCounter({
   onCreated: (id: string) => void;
 }) {
   const client = useSuiClient();
-  const { counterPackageId } = useNetworkConfig();
+  const counterPackageId = useNetworkVariable("counterPackageId");
   const { mutate: signAndExecute } = useSignAndExecuteTransactionBlock();
 
   return (

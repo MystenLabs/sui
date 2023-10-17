@@ -5,14 +5,18 @@ import { getFullnodeUrl, isSuiClient, SuiClient } from '@mysten/sui.js/client';
 import type { SuiClientOptions } from '@mysten/sui.js/client';
 import { createContext, useMemo, useState } from 'react';
 
-type NetworkConfig = SuiClient | SuiClientOptions;
-type NetworkConfigs<T extends NetworkConfig = NetworkConfig> = Record<string, T>;
+import type { NetworkConfig } from '../hooks/networkConfig.js';
+
+type NetworkConfigs<T extends NetworkConfig | SuiClient = NetworkConfig | SuiClient> = Record<
+	string,
+	T
+>;
 
 export interface SuiClientProviderContext {
 	client: SuiClient;
 	networks: NetworkConfigs;
 	network: string;
-	config: SuiClientOptions | null;
+	config: NetworkConfig | null;
 	selectNetwork: (network: string) => void;
 }
 

@@ -5,15 +5,20 @@ import {
 } from "./constants.ts";
 import { createNetworkConfigs } from "@mysten/dapp-kit";
 
-const { networkConfigs, useNetworkConfig } = createNetworkConfigs({
-  devnet: {
-    url: getFullnodeUrl("devnet"),
-    counterPackageId: DEVNET_COUNTER_PACKAGE_ID,
-  },
-  mainnet: {
-    url: getFullnodeUrl("mainnet"),
-    counterPackageId: MAINNET_COUNTER_PACKAGE_ID,
-  },
-});
+const { networkConfigs, useNetworkVariable, useNetworkVariables } =
+  createNetworkConfigs({
+    devnet: {
+      url: getFullnodeUrl("devnet"),
+      variables: {
+        counterPackageId: DEVNET_COUNTER_PACKAGE_ID,
+      },
+    },
+    mainnet: {
+      url: getFullnodeUrl("mainnet"),
+      variables: {
+        counterPackageId: MAINNET_COUNTER_PACKAGE_ID,
+      },
+    },
+  });
 
-export { useNetworkConfig, networkConfigs };
+export { useNetworkVariable, useNetworkVariables, networkConfigs };

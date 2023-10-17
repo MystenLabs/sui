@@ -5,19 +5,41 @@ import type { SuiClientOptions } from '@mysten/sui.js/client';
 
 import { useSuiClientContext } from './useSuiClient.js';
 
-export function createNetworkConfigs<T extends Record<string, SuiClientOptions>>(
-	networkConfigs: T,
-): { networkConfigs: T; useNetworkConfig: () => T[keyof T] } {
+export type NetworkConfig<T extends object = object> = SuiClientOptions & {
+	variables?: T;
+};
+
+export function createNetworkConfigs<
+	const T extends Record<string, Config>,
+	Config extends NetworkConfig<Variables> = T[keyof T],
+	Variables extends object = NonNullable<Config['variables']>,
+>(networkConfigs: T) {
 	return {
 		networkConfigs,
-		useNetworkConfig: () => {
-			const { config } = useSuiClientContext();
-
-			if (!config) {
-				throw new Error('No network config found');
-			}
-
-			return config as T[keyof T];
-		},
+		useNetworkConfig,
+		useNetworkVariables,
+		useNetworkVariable,
 	};
+
+	function useNetworkConfig(): Config {
+		const { config } = useSuiClientContext();
+
+		if (!config) {
+			throw new Error('No network config found');
+		}
+
+		return config as T[keyof T];
+	}
+
+	function useNetworkVariables(): Variables {
+		const { variables } = useNetworkConfig();
+
+		return (variables ?? {}) as Variables;
+	}
+
+	function useNetworkVariable<K extends keyof Variables>(name: K): Variables[K] {
+		const variables = useNetworkVariables();
+
+		return variables[name];
+	}
 }

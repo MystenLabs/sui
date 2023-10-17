@@ -147,27 +147,36 @@ If your dApp runs on multiple networks, the IDs for packages, and potentially ot
 will change depending on which network is being used. You can use `createNetworkConfigs` to create
 per-network config which can be accessed from your components.
 
-the `createNetworkConfigs` function returns the provided config, along with a `useNetworkConfig`
-hook you can use to get the config for the currently active network.
+the `createNetworkConfigs` function returns the provided config, along a few hooks you can use to
+get access the variables defined in your config.
+
+- `useNetworkConfig` returns the full network config object
+- `useNetworkVariables` returns the full variables object from the network config
+- `useNetworkVariable` returns a specific variable from the network config
 
 ```tsx
-import { createNetworkConfigs, SuiClientProvider, useSuiClientContext } from '@mysten/dapp-kit';
+import { createNetworkConfigs, SuiClientProvider } from '@mysten/dapp-kit';
 
 import { createNetworkConfigs, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to
-const { networkConfigs, useNetworkConfig } = createNetworkConfigs({
+const { networkConfigs, useNetworkVariable } = createNetworkConfigs({
 	localnet: {
-		url: getFullnodeUrl('localnet')
-		myMovePackageId: '0x123',
+		url: getFullnodeUrl('localnet'),
+		variables: {
+			myMovePackageId: '0x123',
+		}
 	},
 	mainnet: {
-		url: getFullnodeUrl('mainnet')
-		myMovePackageId: '0x456',
+		url: getFullnodeUrl('mainnet'),
+		variables: {
+			myMovePackageId: '0x456',
+		}
 	},
 });
+
 const queryClient = new QueryClient();
 
 function App() {
@@ -184,8 +193,8 @@ function App() {
 
 
 function YourApp() {
-	const { myMovePackageId } = useSuiClientContext();
+	const id = useNetworkVariable('myMovePackageId');
 
-	return <div>Package ID: {myMovePackageId}</div>;
+	return <div>Package ID: {id}</div>;
 }
 ```
