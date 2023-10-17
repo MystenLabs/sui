@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toHEX } from '@mysten/bcs';
-import { PublicKey } from '@mysten/sui.js/cryptography';
+import type { PublicKey } from '@mysten/sui.js/cryptography';
 
 import { poseidonHash } from './poseidon.js';
 

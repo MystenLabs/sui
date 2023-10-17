@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { JSONVisitor, ParseError, ParseErrorCode, visit } from 'jsonc-parser';
+import type { JSONVisitor, ParseError, ParseErrorCode } from 'jsonc-parser';
+import { visit } from 'jsonc-parser';
 
 // JSON parsing code inspired from https://github.com/microsoft/node-jsonc-parser/blob/main/src/test/json.test.ts#L69
 interface VisitorCallback {

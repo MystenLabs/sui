@@ -73,7 +73,7 @@ module.exports = {
 	},
 	overrides: [
 		{
-			files: ['sdk/typescript/src/**/*', 'sdk/dapp-kit/**/*'],
+			files: ['sdk/typescript/src/**/*', 'sdk/dapp-kit/**/*', 'sdk/zklogin/**/*'],
 			rules: {
 				'require-extensions/require-extensions': 'error',
 				'require-extensions/require-index': 'error',
@@ -250,6 +250,11 @@ module.exports = {
 		{
 			files: ['*.test.*', '*.spec.*'],
 			rules: {
+				// Tests can violate extension rules:
+				'require-extensions/require-extensions': 'off',
+				'require-extensions/require-index': 'off',
+				'@typescript-eslint/consistent-type-imports': ['off'],
+				'import/consistent-type-specifier-style': ['off'],
 				// Reset to defaults to allow `Buffer` usage in tests (given they run in Node and do not impact bundle):
 				'no-restricted-globals': ['off'],
 				'@typescript-eslint/ban-types': ['error'],
