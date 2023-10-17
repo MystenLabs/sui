@@ -105,6 +105,7 @@ async fn start_test_cluster(
     };
 
     let (store, handle) = start_test_indexer(config).await;
+    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
 
     (test_cluster, store, handle, db_url)
 }
