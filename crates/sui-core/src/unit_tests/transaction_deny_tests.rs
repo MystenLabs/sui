@@ -188,7 +188,7 @@ async fn test_zklogin_transaction_disabled() {
             .build(),
     )
     .await;
-    let (_, tx, _) = make_zklogin_tx();
+    let (_, tx, _) = make_zklogin_tx(false);
     assert_denied(&process_zklogin_tx(tx, &state).await);
 
     let (_, state1) = setup_test(
@@ -197,7 +197,7 @@ async fn test_zklogin_transaction_disabled() {
             .build(),
     )
     .await;
-    let (_, tx1, _) = make_zklogin_tx();
+    let (_, tx1, _) = make_zklogin_tx(false);
     assert_denied(&process_zklogin_tx(tx1, &state1).await);
 }
 
