@@ -39,7 +39,7 @@ import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to
-const { networkConfigs } = createNetworkConfigs({
+const { networkConfig } = createNetworkConfigs({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
 });
@@ -48,7 +48,7 @@ const queryClient = new QueryClient();
 function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<SuiClientProvider networks={networkConfigs} defaultNetwork="localnet">
+			<SuiClientProvider networks={networkConfig} defaultNetwork="localnet">
 				<WalletProvider>
 					<YourApp />
 				</WalletProvider>

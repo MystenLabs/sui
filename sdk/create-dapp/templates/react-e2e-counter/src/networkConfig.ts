@@ -3,10 +3,10 @@ import {
   DEVNET_COUNTER_PACKAGE_ID,
   MAINNET_COUNTER_PACKAGE_ID,
 } from "./constants.ts";
-import { createNetworkConfigs } from "@mysten/dapp-kit";
+import { createNetworkConfig } from "@mysten/dapp-kit";
 
-const { networkConfigs, useNetworkVariable, useNetworkVariables } =
-  createNetworkConfigs({
+const { networkConfig, useNetworkVariable, useNetworkVariables } =
+  createNetworkConfig({
     devnet: {
       url: getFullnodeUrl("devnet"),
       variables: {
@@ -21,4 +21,4 @@ const { networkConfigs, useNetworkVariable, useNetworkVariables } =
     },
   });
 
-export { useNetworkVariable, useNetworkVariables, networkConfigs };
+export { useNetworkVariable, useNetworkVariables, networkConfig };
