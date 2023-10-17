@@ -31,6 +31,11 @@ type Balance {
 	totalBalance: BigInt
 }
 
+type BalanceChange {
+	owner: Owner
+	amount: BigInt
+}
+
 type BalanceConnection {
 	"""
 	Information to aid in pagination.
@@ -426,6 +431,13 @@ type Object implements ObjectOwner {
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
 }
 
+type ObjectChange {
+	inputState: Object
+	outputState: Object
+	idCreated: Boolean
+	idDeleted: Boolean
+}
+
 type ObjectConnection {
 	"""
 	Information to aid in pagination.
@@ -720,9 +732,14 @@ type TransactionBlockEdge {
 type TransactionBlockEffects {
 	status: ExecutionStatus!
 	errors: String
-	digest: String!
-	gasEffects: GasEffects
+	lamportVersion: Int
+	balanceChanges: [BalanceChange]
+	checkpoint: Checkpoint
+	dependencies: [TransactionBlock]
 	epoch: Epoch
+	gasEffects: GasEffects
+	objectChanges: [ObjectChange]
+	transactionBlock: TransactionBlock
 }
 
 input TransactionBlockFilter {

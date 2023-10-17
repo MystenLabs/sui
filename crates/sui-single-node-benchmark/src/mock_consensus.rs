@@ -14,9 +14,6 @@ use sui_types::messages_consensus::ConsensusTransaction;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-// TODO: Add tool args to parameterize this value.
-const CONSENSUS_COMMIT_SIZE: usize = 1000;
-
 pub(crate) struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
     // TODO: May want to make sure we flush all pending transactions before benchmark ends.
@@ -27,7 +24,8 @@ pub(crate) enum ConsensusMode {
     // ConsensusClient does absolutely nothing when receiving a transaction
     Noop,
     // ConsensusClient directly sequences the transaction into the store.
-    DirectSequencing,
+    // u64 is the consensus commit size.
+    DirectSequencing(usize),
 }
 
 impl MockConsensusClient {
@@ -64,9 +62,9 @@ impl MockConsensusClient {
         while let Some(tx) = tx_receiver.recv().await {
             match consensus_mode {
                 ConsensusMode::Noop => {}
-                ConsensusMode::DirectSequencing => {
+                ConsensusMode::DirectSequencing(checkpoint_size) => {
                     transactions.push(SequencedConsensusTransaction::new_test(tx));
-                    if transactions.len() == CONSENSUS_COMMIT_SIZE {
+                    if transactions.len() == checkpoint_size {
                         epoch_store
                             .process_consensus_transactions_for_tests(
                                 mem::take(&mut transactions),

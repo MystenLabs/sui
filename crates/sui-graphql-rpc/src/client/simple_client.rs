@@ -11,6 +11,7 @@ use reqwest::RequestBuilder;
 use crate::{
     config::{ConnectionConfig, ServiceConfig},
     server::simple_server::start_example_server,
+    utils::reset_db,
 };
 
 #[derive(Clone)]
@@ -43,24 +44,4 @@ impl SimpleClient {
         let res = builder.send().await?;
         res.json().await
     }
-}
-
-#[ignore]
-#[tokio::test]
-async fn test_client() {
-    let mut handles = vec![];
-    handles.push(tokio::spawn(async move {
-        start_example_server(ConnectionConfig::default(), ServiceConfig::default()).await;
-    }));
-    // Wait for server to start
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    let client = SimpleClient::new("http://127.0.0.1:8000/");
-    let query = r#"
-        query {
-            chainIdentifier
-        }
-    "#;
-    let res = client.execute(query.to_string(), vec![]).await.unwrap();
-    let exp = r#"{"data":{"chainIdentifier":"4c78adac"}}"#;
-    assert_eq!(&format!("{}", res), exp);
 }

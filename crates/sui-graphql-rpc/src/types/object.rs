@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::dataloader::{DataLoader, LruCache};
 use async_graphql::{connection::Connection, *};
 use sui_json_rpc::name_service::NameServiceConfig;
 
@@ -14,7 +13,6 @@ use super::{
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
-use crate::context_data::sui_sdk_data_provider::SuiClientLoader;
 use crate::types::base64::Base64;
 use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
 use sui_types::move_package::MovePackage as NativeSuiMovePackage;
@@ -81,12 +79,14 @@ impl Object {
     async fn previous_transaction_block(
         &self,
         ctx: &Context<'_>,
-    ) -> Result<Option<TransactionBlock>> {
-        if let Some(tx) = &self.previous_transaction {
-            let loader = ctx.data_unchecked::<DataLoader<SuiClientLoader, LruCache>>();
-            Ok(loader.load_one(*tx).await.unwrap_or(None))
-        } else {
-            Ok(None)
+    ) -> Result<Option<TransactionBlock>, crate::error::Error> {
+        match self.previous_transaction {
+            Some(digest) => {
+                ctx.data_unchecked::<PgManager>()
+                    .fetch_tx(digest.to_string().as_str())
+                    .await
+            }
+            None => Ok(None),
         }
     }
 
