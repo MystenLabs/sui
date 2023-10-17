@@ -25,12 +25,13 @@ use anemo_tower::{
     trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer},
 };
 use async_trait::async_trait;
-use config::{Authority, AuthorityIdentifier, Committee, Parameters, WorkerCache};
+use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
-use crypto::traits::EncodeDecodeBase64;
+use crypto::{traits::EncodeDecodeBase64, RandomnessPrivateKey};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
     hash::Hash,
+    serde_helpers::ToFromByteArray,
     signature_service::SignatureService,
     traits::{KeyPair as _, ToFromBytes},
 };
@@ -93,6 +94,7 @@ impl Primary {
         network_signer: NetworkKeyPair,
         committee: Committee,
         worker_cache: WorkerCache,
+        chain_identifier: ChainIdentifier,
         protocol_config: ProtocolConfig,
         parameters: Parameters,
         client: NetworkClient,
@@ -131,6 +133,11 @@ impl Primary {
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_our_digests,
             &primary_channel_metrics.tx_our_digests_total,
+        );
+        let (tx_system_messages, rx_system_messages) = channel_with_total(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_system_messages,
+            &primary_channel_metrics.tx_system_messages_total,
         );
         let (tx_parents, rx_parents) = channel_with_total(
             CHANNEL_CAPACITY,
@@ -184,6 +191,16 @@ impl Primary {
             &primary_channel_metrics,
         ));
 
+        // Convert authority private key into key used for random beacon.
+        let randomness_private_key = fastcrypto::groups::bls12381::Scalar::from_byte_array(
+            signer
+                .copy()
+                .private()
+                .as_bytes()
+                .try_into()
+                .expect("key length should match"),
+        )
+        .expect("should work to convert BLS key to Scalar");
         let signature_service = SignatureService::new(signer);
 
         // Spawn the network receiver listening to messages from the other primaries.
@@ -459,7 +476,7 @@ impl Primary {
         // a new header with new batch digests from our workers and sends it to the `Certifier`.
         let proposer_handle = Proposer::spawn(
             authority.id(),
-            committee,
+            committee.clone(),
             &protocol_config,
             proposer_store,
             parameters.header_num_of_batches_threshold,
@@ -470,6 +487,7 @@ impl Primary {
             tx_shutdown.subscribe(),
             rx_parents,
             rx_our_digests,
+            rx_system_messages,
             tx_headers,
             tx_narwhal_round_updates,
             rx_committed_own_headers,
@@ -487,10 +505,15 @@ impl Primary {
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
+            &chain_identifier,
+            &protocol_config,
             authority.id(),
+            committee,
             rx_committed_certificates,
             tx_shutdown.subscribe(),
             Some(tx_committed_own_headers),
+            tx_system_messages,
+            RandomnessPrivateKey::from(randomness_private_key),
             network,
         );
         handles.push(state_handler_handle);

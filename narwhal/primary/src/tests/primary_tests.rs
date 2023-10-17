@@ -7,7 +7,7 @@ use crate::{
     synchronizer::Synchronizer,
     NUM_SHUTDOWN_RECEIVERS,
 };
-use config::{AuthorityIdentifier, Committee, Parameters};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters};
 use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
@@ -84,6 +84,7 @@ async fn test_get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         test_utils::latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
@@ -198,6 +199,7 @@ async fn test_get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
+        ChainIdentifier::unknown(),
         test_utils::latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),
