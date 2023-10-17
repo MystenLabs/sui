@@ -201,7 +201,8 @@ impl Indexer {
             handle.stopped().await;
         } else if config.fullnode_sync_worker {
             info!("Starting indexer with only fullnode sync");
-            let mut processor_orchestrator = ProcessorOrchestrator::new(store.clone(), registry);
+            let mut processor_orchestrator =
+                ProcessorOrchestrator::new(store.clone(), metrics.clone());
             spawn_monitored_task!(processor_orchestrator.run_forever());
 
             // -1 will be returned when checkpoints table is empty.

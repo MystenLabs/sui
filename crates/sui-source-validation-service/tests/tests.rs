@@ -24,7 +24,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
     host_port, initialize, serve, verify_packages, watch_for_upgrades, AppState, CloneCommand,
-    Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package, PackageSources,
+    Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package, PackageSource,
     RepositorySource, SourceInfo, SourceLookup, SourceResponse,
     SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
@@ -79,7 +79,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
 
     // Set up source service config to watch the upgrade cap.
     let config = Config {
-        packages: vec![PackageSources::Directory(DirectorySource {
+        packages: vec![PackageSource::Directory(DirectorySource {
             packages: vec![Package {
                 path: "unused".into(),
                 watch: Some(cap.reference.object_id), // watch the upgrade cap
@@ -93,7 +93,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
-    tokio::spawn(async move { watch_for_upgrades(&config, app_state, Some(tx)).await });
+    tokio::spawn(async move { watch_for_upgrades(config.packages, app_state, Some(tx)).await });
 
     // Set up to upgrade package.
     let package = effects
@@ -121,7 +121,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Test verify_packages
     //////////////////////////
     let config = Config {
-        packages: vec![PackageSources::Repository(RepositorySource {
+        packages: vec![PackageSource::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
             branch: "main".into(),
             packages: vec![Package {

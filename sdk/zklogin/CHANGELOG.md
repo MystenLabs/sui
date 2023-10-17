@@ -1,5 +1,29 @@
 # @mysten/zklogin
 
+## 0.3.2
+
+### Patch Changes
+
+- c34c3c734: Revert additional JWT checks
+
+## 0.3.1
+
+### Patch Changes
+
+- 4ba17833c: Fixes ESM usage of the SDK.
+
+## 0.3.0
+
+### Minor Changes
+
+- 28ee0ff2f: Fix bug in nonce length check
+
+## 0.2.1
+
+### Patch Changes
+
+- 9a1c8105e: Fix usage of string values in the SDK
+
 ## 0.2.0
 
 ### Minor Changes

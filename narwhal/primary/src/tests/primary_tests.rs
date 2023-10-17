@@ -26,14 +26,13 @@ use std::{
 };
 use storage::{NodeStorage, VoteDigestStore};
 use test_utils::{
-    get_protocol_config, latest_protocol_version, make_optimal_signed_certificates, temp_dir,
-    CommitteeFixture,
+    latest_protocol_version, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
 };
 use tokio::{sync::watch, time::timeout};
 use types::{
     now, Certificate, CertificateAPI, FetchCertificatesRequest, Header, HeaderAPI,
     MockPrimaryToWorker, PreSubscribedBroadcastSender, PrimaryToPrimary, RequestVoteRequest,
-    SignatureVerificationState,
+    SignatureVerificationState, VoteAPI,
 };
 use worker::{metrics::initialise_metrics, TrivialTransactionValidator, Worker};
 
@@ -569,8 +568,47 @@ async fn test_request_vote_accept_missing_parents() {
     let received_missing: HashSet<_> = result.unwrap().into_body().missing.into_iter().collect();
     assert_eq!(expected_missing, received_missing);
 
-    // TEST PHASE 2: Handler should process missing parent certificates and succeed.
+    // TEST PHASE 1.5: Send parents with the incorrect version.
+    let mut cert_v2_round_2_missing = vec![];
+    let mut cert_v2_config = latest_protocol_version();
+    cert_v2_config.set_narwhal_certificate_v2(true);
+    for cert in round_2_missing.iter() {
+        let mut signatures = Vec::new();
+        for authority in fixture.authorities().take(8) {
+            let vote = authority.vote(cert.header());
+            signatures.push((vote.author(), vote.signature().clone()));
+        }
+
+        cert_v2_round_2_missing.push(
+            Certificate::new_unverified(
+                &cert_v2_config,
+                &committee,
+                cert.header().clone(),
+                signatures,
+            )
+            .unwrap(),
+        );
+    }
     let _ = tx_narwhal_round_updates.send(1);
+    let mut request = anemo::Request::new(RequestVoteRequest {
+        header: test_header.clone(),
+        parents: cert_v2_round_2_missing.clone(),
+    });
+    assert!(request
+        .extensions_mut()
+        .insert(network.downgrade())
+        .is_none());
+    assert!(request
+        .extensions_mut()
+        .insert(anemo::PeerId(author.network_public_key().0.to_bytes()))
+        .is_none());
+
+    let result = timeout(Duration::from_secs(5), handler.request_vote(request))
+        .await
+        .unwrap();
+    assert!(result.is_err(), "{:?}", result);
+
+    // TEST PHASE 2: Handler should process missing parent certificates and succeed.
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header,
         parents: round_2_missing.clone(),
@@ -933,7 +971,7 @@ async fn test_request_vote_already_voted() {
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test]
 async fn test_fetch_certificates_v1_handler() {
-    let cert_v1_protocol_config = get_protocol_config(27);
+    let cert_v1_protocol_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -1108,6 +1146,8 @@ async fn test_fetch_certificates_v1_handler() {
 
 #[tokio::test]
 async fn test_fetch_certificates_v2_handler() {
+    let mut cert_v2_config = latest_protocol_version();
+    cert_v2_config.set_narwhal_certificate_v2(true);
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -1131,7 +1171,7 @@ async fn test_fetch_certificates_v2_handler() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
-        latest_protocol_version(),
+        cert_v2_config.clone(),
         worker_cache.clone(),
         /* gc_depth */ 50,
         client,
@@ -1147,7 +1187,7 @@ async fn test_fetch_certificates_v2_handler() {
     let handler = PrimaryReceiverHandler {
         authority_id: id,
         committee: fixture.committee(),
-        protocol_config: latest_protocol_version(),
+        protocol_config: cert_v2_config.clone(),
         worker_cache: worker_cache.clone(),
         synchronizer: synchronizer.clone(),
         signature_service,
@@ -1158,24 +1198,18 @@ async fn test_fetch_certificates_v2_handler() {
         metrics: metrics.clone(),
     };
 
-    let mut current_round: Vec<_> =
-        Certificate::genesis(&latest_protocol_version(), &fixture.committee())
-            .into_iter()
-            .map(|cert| cert.header().clone())
-            .collect();
+    let mut current_round: Vec<_> = Certificate::genesis(&cert_v2_config, &fixture.committee())
+        .into_iter()
+        .map(|cert| cert.header().clone())
+        .collect();
     let mut headers = vec![];
     let total_rounds = 4;
     for i in 0..total_rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| {
-                fixture
-                    .certificate(&latest_protocol_version(), &header)
-                    .digest()
-            })
+            .map(|header| fixture.certificate(&cert_v2_config, &header).digest())
             .collect();
-        (_, current_round) =
-            fixture.headers_round(i, &parents, &test_utils::latest_protocol_version());
+        (_, current_round) = fixture.headers_round(i, &parents, &cert_v2_config);
         headers.extend(current_round.clone());
     }
 
@@ -1184,7 +1218,7 @@ async fn test_fetch_certificates_v2_handler() {
     // Create certificates test data.
     let mut certificates = vec![];
     for header in headers.into_iter() {
-        certificates.push(fixture.certificate(&latest_protocol_version(), &header));
+        certificates.push(fixture.certificate(&cert_v2_config, &header));
     }
     assert_eq!(certificates.len(), total_certificates);
     assert_eq!(16, total_certificates);

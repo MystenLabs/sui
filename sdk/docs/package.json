@@ -1,12 +1,13 @@
 {
 	"name": "@mysten/sdk-docs",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"private": true,
 	"description": "Docs for @mysten npm packages",
 	"main": "index.js",
 	"scripts": {
 		"dev": "next dev",
-		"build": "next build",
+		"#build": "next cache causes issues in vercel: https://github.com/orgs/vercel/discussions/2079",
+		"build": "next build && rm -rf .next/cache",
 		"start": "next start",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",

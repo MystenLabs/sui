@@ -57,7 +57,7 @@ fn gen_ckpts(
                     // AuthoritySignInfos are interchangeable).
                     i as u64,
                     0,
-                    &CheckpointContents::new_with_causally_ordered_transactions(vec![]),
+                    &CheckpointContents::new_with_digests_only_for_tests(vec![]),
                     None,
                     GasCostSummary::default(),
                     None,

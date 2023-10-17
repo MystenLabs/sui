@@ -14,7 +14,7 @@ pub(crate) struct Balance {
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 pub(crate) struct BalanceChange {
-    pub(crate) owner: Owner,
-    pub(crate) amount: BigInt,
+    pub(crate) owner: Option<Owner>,
+    pub(crate) amount: Option<BigInt>,
     // pub(crate) coin_type: MoveType,
 }

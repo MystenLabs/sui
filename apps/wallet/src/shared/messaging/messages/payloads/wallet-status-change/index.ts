@@ -7,7 +7,7 @@ import type { NetworkEnvType } from '_src/shared/api-env';
 
 export type WalletStatusChange = {
 	network?: NetworkEnvType;
-	accounts?: { address: string; publicKey: string | null }[];
+	accounts?: { address: string; publicKey: string | null; nickname: string | null }[];
 };
 
 export interface WalletStatusChangePayload extends BasePayload, WalletStatusChange {

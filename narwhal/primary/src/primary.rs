@@ -636,10 +636,22 @@ impl PrimaryReceiverHandler {
                 });
             }
         } else {
+            let mut validated_received_parents = vec![];
+            for parent in parents {
+                validated_received_parents.push(
+                    validate_received_certificate_version(parent, &self.protocol_config).map_err(
+                        |err| {
+                            error!("request vote parents processing error: {err}");
+                            DagError::InvalidCertificateVersion
+                        },
+                    )?,
+                );
+            }
             // If requester has provided parent certificates, try to accept them.
             // It is ok to not check for additional unknown digests, because certificates can
             // become available asynchronously from broadcast or certificate fetching.
-            self.try_accept_unknown_parents(header, parents).await?;
+            self.try_accept_unknown_parents(header, validated_received_parents)
+                .await?;
         }
 
         // Ensure the header has all parents accepted. If some are missing, waits until they become
