@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::middleware::Next;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::net::TcpListener;
@@ -12,9 +13,9 @@ use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, IntoMakeService};
-use axum::{Json, Router, Server};
+use axum::{middleware, Json, Router, Server};
 use hyper::http::Method;
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
@@ -463,11 +464,13 @@ pub fn serve(
     let app = Router::new()
         .route("/api", get(api_route))
         .layer(
-            ServiceBuilder::new().layer(
-                tower_http::cors::CorsLayer::new()
-                    .allow_methods([Method::GET])
-                    .allow_origin(tower_http::cors::Any),
-            ),
+            ServiceBuilder::new()
+                .layer(
+                    tower_http::cors::CorsLayer::new()
+                        .allow_methods([Method::GET])
+                        .allow_origin(tower_http::cors::Any),
+                )
+                .layer(middleware::from_fn(check_version)),
         )
         .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
@@ -560,7 +563,7 @@ async fn api_route(
             .into_response(),
         )
     } else {
-        (
+        let x: (StatusCode, HeaderMap, Response) = (
             StatusCode::NOT_FOUND,
             headers,
             Json(ErrorResponse {
@@ -569,6 +572,105 @@ async fn api_route(
                 ),
             })
             .into_response(),
-        )
+        );
+        x
     }
 }
+
+async fn check_version<B>(
+    headers: HeaderMap,
+    req: hyper::Request<B>,
+    next: Next<B>,
+) -> Result<Response, Response> {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    match version {
+        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+            let error = format!(
+                "Unsupported version '{v}' specified in header \
+		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+            );
+            return Err((
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(ErrorResponse { error }).into_response(),
+            )
+                .into_response());
+        }
+        Some(_) => (),
+        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+    };
+
+    let response = next.run(req).await;
+    Ok(response)
+}
+
+/*
+async fn check_version(headers: HeaderMap) -> Response {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        SUI_SOURCE_VALIDATION_VERSION_HEADER,
+        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
+    );
+
+    let error = format!("x");
+    let response = Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .header(
+            SUI_SOURCE_VALIDATION_VERSION_HEADER,
+            SUI_SOURCE_VALIDATION_VERSION,
+        )
+        .body(Json(ErrorResponse { error }).into_response());
+    response.unwrap()
+
+    /*
+    let error = format!("x");
+
+    let response = (
+        StatusCode::BAD_REQUEST,
+        headers,
+        Json(ErrorResponse { error }).into_response(),
+    )
+        .into_response();
+    response)
+    */
+
+    /*
+        match version {
+            Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+                let  response = Response::builder()
+                    .header(
+                        SUI_SOURCE_VALIDATION_VERSION_HEADER,
+                        SUI_SOURCE_VALIDATION_VERSION,
+                    )
+                    .status(StatusCode::BAD_REQUEST)
+                    .into()
+                return response.into();
+                /*
+                    let error = format!(
+                        "Unsupported version '{v}' specified in header \
+                 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+                    );
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        headers,
+                        Json(ErrorResponse { error }).into(),
+                );
+                */
+            }
+            Some(_) => panic!("fixme"),
+            None => panic!("fixme"), //info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+    }
+        */
+}
+*/
