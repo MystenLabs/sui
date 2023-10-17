@@ -185,7 +185,7 @@ describe('WalletProvider', () => {
 				{ wrapper },
 			);
 
-			await waitFor(() => expect(updatedResult.current.currentWallet.isConnecting).toBe(true));
+			await waitFor(() => expect(updatedResult.current.currentWallet.isConnected).toBe(true));
 			expect(updatedResult.current.currentWallet.currentWallet!.name).toStrictEqual(
 				'Mock Wallet 1',
 			);

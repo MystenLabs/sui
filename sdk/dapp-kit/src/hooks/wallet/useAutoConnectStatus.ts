@@ -4,7 +4,7 @@
 import { useWalletStore } from './useWalletStore.js';
 
 /**
- * WIP will fill this out before landing lol (pinky promise)
+ * Retrieves the status for the wallet auto-connection process.
  */
 export function useAutoConnectStatus() {
 	return useWalletStore((state) => state.autoConnectionStatus);
