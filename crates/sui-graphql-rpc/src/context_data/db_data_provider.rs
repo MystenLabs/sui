@@ -833,6 +833,37 @@ impl PgManager {
         }
     }
 
+    pub(crate) async fn fetch_txs_by_digests(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> Result<Option<Vec<Option<TransactionBlock>>>, Error> {
+        let tx_block_filter = TransactionBlockFilter {
+            package: None,
+            module: None,
+            function: None,
+            kind: None,
+            after_checkpoint: None,
+            at_checkpoint: None,
+            before_checkpoint: None,
+            sign_address: None,
+            sent_address: None,
+            recv_address: None,
+            paid_address: None,
+            input_object: None,
+            changed_object: None,
+            transaction_ids: Some(digests.iter().map(|x| x.to_string()).collect::<Vec<_>>()),
+        };
+        let txs = self
+            .multi_get_txs(None, None, None, None, Some(tx_block_filter))
+            .await?;
+
+        Ok(txs.map(|x| {
+            x.0.into_iter()
+                .map(|tx| TransactionBlock::try_from(tx).ok())
+                .collect::<Vec<_>>()
+        }))
+    }
+
     pub(crate) async fn fetch_owner(
         &self,
         address: SuiAddress,
@@ -1427,8 +1458,19 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
                 "Can't convert raw_effects into TransactionEffects. Error: {e}",
             ))
         })?;
+
+        let balance_changes = tx.balance_changes;
+        let object_changes = tx.object_changes;
         let effects = match SuiTransactionBlockEffects::try_from(effects) {
-            Ok(effects) => Ok(Some(TransactionBlockEffects::from(&effects))),
+            Ok(effects) => {
+                let transaction_effects = TransactionBlockEffects::from_stored_transaction(
+                    balance_changes,
+                    object_changes,
+                    &effects,
+                    digest,
+                );
+                transaction_effects.map_err(|e| Error::Internal(e.message))
+            }
             Err(e) => Err(Error::Internal(format!(
                 "Can't convert TransactionEffects into SuiTransactionBlockEffects. Error: {e}",
             ))),
@@ -1439,6 +1481,7 @@ impl TryFrom<StoredTransaction> for TransactionBlock {
             TransactionExpiration::Epoch(epoch_id) => Some(*epoch_id),
         };
 
+        // TODO Finish implementing all types of transaction kinds
         let kind = TransactionBlockKind::from(sender_signed_data.transaction_data().kind());
         let signatures = sender_signed_data
             .tx_signatures()
@@ -1637,14 +1680,6 @@ impl TryFrom<NativeSuiSystemStateSummary> for SuiSystemStateSummary {
 impl From<&TransactionKind> for TransactionBlockKind {
     fn from(value: &TransactionKind) -> Self {
         match value {
-            TransactionKind::ConsensusCommitPrologue(x) => {
-                let consensus = ConsensusCommitPrologueTransaction {
-                    epoch_id: x.epoch,
-                    round: Some(x.round),
-                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
-                };
-                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
-            }
             TransactionKind::ChangeEpoch(x) => {
                 let change = ChangeEpochTransaction {
                     epoch_id: x.epoch,
@@ -1654,6 +1689,14 @@ impl From<&TransactionKind> for TransactionBlockKind {
                     storage_rebate: Some(BigInt::from(x.storage_rebate)),
                 };
                 TransactionBlockKind::ChangeEpochTransaction(change)
+            }
+            TransactionKind::ConsensusCommitPrologue(x) => {
+                let consensus = ConsensusCommitPrologueTransaction {
+                    epoch_id: x.epoch,
+                    round: Some(x.round),
+                    timestamp: DateTime::from_ms(x.commit_timestamp_ms as i64),
+                };
+                TransactionBlockKind::ConsensusCommitPrologueTransaction(consensus)
             }
             TransactionKind::Genesis(x) => {
                 let genesis = GenesisTransaction {

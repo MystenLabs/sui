@@ -11,7 +11,7 @@ use sui_single_node_benchmark::workload::Workload;
 async fn benchmark_simple_transfer_smoke_test() {
     // This test makes sure that the benchmark runs.
     for component in Component::iter() {
-        run_benchmark(Workload::new(10, WorkloadKind::NoMove), component).await;
+        run_benchmark(Workload::new(10, WorkloadKind::NoMove), component, 1000).await;
     }
 }
 
@@ -29,6 +29,7 @@ async fn benchmark_move_transactions_smoke_test() {
                 },
             ),
             component,
+            1000,
         )
         .await;
     }

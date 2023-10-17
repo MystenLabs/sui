@@ -507,6 +507,30 @@ impl SuiAddress {
             .map_err(|_| SuiError::InvalidAddress)
             .map(SuiAddress)
     }
+
+    /// A workaround to derive address with padded address_seed when converting it from BigInt to bytes.
+    pub fn legacy_try_from(authenticator: &ZkLoginAuthenticator) -> SuiResult<Self> {
+        let mut hasher = DefaultHash::default();
+        hasher.update([SignatureScheme::ZkLoginAuthenticator.flag()]);
+        let iss_bytes = authenticator.get_iss().as_bytes();
+        hasher.update([iss_bytes.len() as u8]);
+        hasher.update(iss_bytes);
+        let bytes = big_int_str_to_bytes(authenticator.get_address_seed())
+            .map_err(|_| SuiError::InvalidAddress)?;
+        // If the length is shorter than 32, pad 0s in the front.
+        let padded = match bytes.len() {
+            len if len < 32 => {
+                let mut padded = Vec::new();
+                padded.extend(vec![0; 32 - len]);
+                padded.extend(bytes);
+                Ok(padded)
+            }
+            32 => Ok(bytes),
+            _ => Err(SuiError::InvalidAddress),
+        };
+        hasher.update(padded?);
+        Ok(SuiAddress(hasher.finalize().digest))
+    }
 }
 
 impl From<ObjectID> for SuiAddress {

@@ -11,7 +11,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 28;
+const MAX_PROTOCOL_VERSION: u64 = 29;
 
 // Record history of protocol version allocations here:
 //
@@ -77,6 +77,8 @@ const MAX_PROTOCOL_VERSION: u64 = 28;
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
 // Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+// Version 29: Add verify_legacy_zklogin_address flag to sui framework, this add ability to verify
+//             transactions from a legacy zklogin address.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -341,6 +343,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     #[serde(default = "bool_default")]
     narwhal_certificate_v2: bool,
+
+    // If true, allow verify with legacy zklogin address
+    #[serde(skip_serializing_if = "is_false")]
+    verify_legacy_zklogin_address: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1002,6 +1008,10 @@ impl ProtocolConfig {
     pub fn narwhal_certificate_v2(&self) -> bool {
         self.feature_flags.narwhal_certificate_v2
     }
+
+    pub fn verify_legacy_zklogin_address(&self) -> bool {
+        self.feature_flags.verify_legacy_zklogin_address
+    }
 }
 
 #[cfg(not(msim))]
@@ -1576,6 +1586,9 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_effects_v2 = true;
                     }
                 }
+                29 => {
+                    cfg.feature_flags.verify_legacy_zklogin_address = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -1648,6 +1661,9 @@ impl ProtocolConfig {
     }
     pub fn set_narwhal_certificate_v2(&mut self, val: bool) {
         self.feature_flags.narwhal_certificate_v2 = val
+    }
+    pub fn set_verify_legacy_zklogin_address(&mut self, val: bool) {
+        self.feature_flags.verify_legacy_zklogin_address = val
     }
 }
 

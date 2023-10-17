@@ -2,135 +2,83 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::command::Component;
-use crate::mock_consensus::ConsensusMode;
+use crate::mock_account::{batch_create_account_and_gas, Account};
 use crate::single_node::SingleValidator;
 use crate::tx_generator::{RootObjectCreateTxGenerator, TxGenerator};
+use crate::workload::Workload;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH};
-use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::messages_grpc::HandleTransactionResponse;
-use sui_types::object::Object;
+use sui_types::mock_checkpoint_builder::ValidatorKeypairProvider;
 use sui_types::transaction::{CertifiedTransaction, SignedTransaction, Transaction};
 use tracing::info;
 
-type Account = (SuiAddress, Arc<AccountKeyPair>);
-
 pub struct BenchmarkContext {
     validator: SingleValidator,
-    accounts: Vec<Account>,
-    gas_object_refs: Vec<Arc<Vec<ObjectRef>>>,
+    user_accounts: BTreeMap<SuiAddress, Account>,
     admin_account: Account,
-    admin_gas: ObjectID,
     benchmark_component: Component,
 }
 
 impl BenchmarkContext {
     pub(crate) async fn new(
-        num_accounts: u64,
-        gas_object_num_per_account: u64,
+        workload: Workload,
         benchmark_component: Component,
+        checkpoint_size: usize,
     ) -> Self {
-        // Increase by 1 so that we could generate one extra sample transaction before benchmarking.
-        let num_accounts = num_accounts + 1;
+        // Increase by 2 so that we could generate one extra sample transaction before benchmarking.
+        // as well as reserve 1 account for package publishing.
+        let num_accounts = workload.num_accounts() + 2;
+        let gas_object_num_per_account = workload.gas_object_num_per_account();
         let total = num_accounts * gas_object_num_per_account;
 
         info!(
             "Creating {} accounts and {} gas objects",
             num_accounts, total
         );
-        let results =
-            Self::batch_create_account_and_gas(num_accounts, gas_object_num_per_account).await;
-        let mut accounts = vec![];
-        let mut gas_object_refs = vec![];
-        let mut genesis_gas_objects = vec![];
-        results
-            .into_iter()
-            .for_each(|((sender, keypair), gas_objects)| {
-                accounts.push((sender, keypair));
-                gas_object_refs.push(Arc::new(
-                    gas_objects
-                        .iter()
-                        .map(|o| o.compute_object_reference())
-                        .collect(),
-                ));
-                genesis_gas_objects.extend(gas_objects);
-            });
+        let (mut user_accounts, genesis_gas_objects) =
+            batch_create_account_and_gas(num_accounts, gas_object_num_per_account).await;
         assert_eq!(genesis_gas_objects.len() as u64, total);
-
-        // Admin account and gas can be used to publish package and other admin operations.
-        let (admin_addr, admin_keypair) = get_account_key_pair();
-        let admin_account = (admin_addr, Arc::new(admin_keypair));
-        let admin_gas_object = Self::new_gas_object(total, admin_addr);
-        let admin_gas = admin_gas_object.id();
-        genesis_gas_objects.push(admin_gas_object);
+        let (_, admin_account) = user_accounts.pop_last().unwrap();
 
         info!("Initializing validator");
-        let consensus_mode = match benchmark_component {
-            Component::ValidatorWithFakeConsensus => ConsensusMode::DirectSequencing,
-            _ => ConsensusMode::Noop,
-        };
-        let validator = SingleValidator::new(&genesis_gas_objects, consensus_mode).await;
+        let validator =
+            SingleValidator::new(&genesis_gas_objects, benchmark_component, checkpoint_size).await;
 
         Self {
             validator,
-            accounts,
-            gas_object_refs,
+            user_accounts,
             admin_account,
-            admin_gas,
             benchmark_component,
         }
     }
 
-    pub fn validator(&self) -> SingleValidator {
+    pub(crate) fn validator(&self) -> SingleValidator {
         self.validator.clone()
     }
 
-    async fn batch_create_account_and_gas(
-        num_accounts: u64,
-        gas_object_num_per_account: u64,
-    ) -> Vec<(Account, Vec<Object>)> {
-        let tasks: FuturesUnordered<_> = (0..num_accounts)
-            .map(|idx| {
-                let starting_id = idx * gas_object_num_per_account;
-                tokio::spawn(async move {
-                    let (sender, keypair) = get_account_key_pair();
-                    let objects = (0..gas_object_num_per_account)
-                        .map(|i| Self::new_gas_object(starting_id + i, sender))
-                        .collect::<Vec<_>>();
-                    ((sender, Arc::new(keypair)), objects)
-                })
-            })
-            .collect();
-        tasks
-            .collect::<Vec<_>>()
-            .await
-            .into_iter()
-            .map(|r| r.unwrap())
-            .collect()
-    }
-
-    fn new_gas_object(idx: u64, owner: SuiAddress) -> Object {
-        // Predictable and cheaper way of generating object IDs for benchmarking.
-        let mut id_bytes = [0u8; SUI_ADDRESS_LENGTH];
-        let idx_bytes = idx.to_le_bytes();
-        id_bytes[0] = 255;
-        id_bytes[1..idx_bytes.len() + 1].copy_from_slice(&idx_bytes);
-        let object_id = ObjectID::from_bytes(id_bytes).unwrap();
-        Object::with_id_owner_for_testing(object_id, owner)
-    }
-
-    pub(crate) async fn publish_package(&self) -> ObjectRef {
-        let gas = self.validator.get_latest_object_ref(&self.admin_gas).await;
+    pub(crate) async fn publish_package(&mut self) -> ObjectRef {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["move_package"]);
-        self.validator
-            .publish_package(path, self.admin_account.0, &self.admin_account.1, gas)
-            .await
+        let mut gas_objects = self.admin_account.gas_objects.deref().clone();
+        let (package, updated_gas) = self
+            .validator
+            .publish_package(
+                path,
+                self.admin_account.sender,
+                &self.admin_account.keypair,
+                gas_objects[0],
+            )
+            .await;
+        gas_objects[0] = updated_gas;
+        self.admin_account.gas_objects = Arc::new(gas_objects);
+        package
     }
 
     /// In order to benchmark transactions that can read dynamic fields, we must first create
@@ -140,8 +88,10 @@ impl BenchmarkContext {
         move_package: ObjectID,
         num_dynamic_fields: u64,
     ) -> HashMap<SuiAddress, ObjectRef> {
+        let mut root_objects = HashMap::new();
+
         if num_dynamic_fields == 0 {
-            return HashMap::new();
+            return root_objects;
         }
 
         info!("Preparing root object with dynamic fields");
@@ -154,7 +104,6 @@ impl BenchmarkContext {
         let results = self
             .execute_transactions_immediately(root_object_create_transactions)
             .await;
-        let mut root_objects = HashMap::new();
         let mut new_gas_objects = HashMap::new();
         for effects in results {
             let (owner, root_object) = effects
@@ -168,8 +117,8 @@ impl BenchmarkContext {
                 })
                 .next()
                 .unwrap();
-            let gas_object = effects.gas_object().0;
             root_objects.insert(owner, root_object);
+            let gas_object = effects.gas_object().0;
             new_gas_objects.insert(gas_object.0, gas_object);
         }
         self.refresh_gas_objects(new_gas_objects);
@@ -184,18 +133,15 @@ impl BenchmarkContext {
         info!(
             "{}: Creating {} transactions",
             tx_generator.name(),
-            self.accounts.len()
+            self.user_accounts.len()
         );
         let tasks: FuturesUnordered<_> = self
-            .accounts
-            .iter()
-            .zip(self.gas_object_refs.iter())
-            .map(|((sender, keypair), gas)| {
-                let sender = *sender;
-                let keypair = keypair.clone();
-                let gas = gas.clone();
+            .user_accounts
+            .values()
+            .map(|account| {
+                let account = account.clone();
                 let tx_generator = tx_generator.clone();
-                tokio::spawn(async move { tx_generator.generate_tx(sender, keypair, gas) })
+                tokio::spawn(async move { tx_generator.generate_tx(account) })
             })
             .collect();
         let results: Vec<_> = tasks.collect().await;
@@ -227,10 +173,6 @@ impl BenchmarkContext {
         &self,
         transactions: Vec<CertifiedTransaction>,
     ) -> Vec<TransactionEffects> {
-        info!(
-            "Started executing {} transactions. You can now attach a profiler",
-            transactions.len()
-        );
         let tasks: FuturesUnordered<_> = transactions
             .into_iter()
             .map(|tx| {
@@ -258,10 +200,33 @@ impl BenchmarkContext {
         results.into_iter().map(|r| r.unwrap()).collect()
     }
 
+    pub(crate) async fn revert_transactions(
+        &self,
+        transactions: impl Iterator<Item = &TransactionDigest>,
+    ) {
+        let tasks: FuturesUnordered<_> = transactions
+            .map(|digest| {
+                let validator = self.validator();
+                let digest = *digest;
+                tokio::spawn(async move {
+                    validator
+                        .get_validator()
+                        .db()
+                        .revert_state_update(&digest)
+                        .await
+                        .unwrap()
+                })
+            })
+            .collect();
+        let results: Vec<_> = tasks.collect().await;
+        results.into_iter().all(|r| r.is_ok());
+    }
+
     fn refresh_gas_objects(&mut self, mut new_gas_objects: HashMap<ObjectID, ObjectRef>) {
         info!("Refreshing gas objects");
-        for gas_objects in self.gas_object_refs.iter_mut() {
-            let refreshed_gas_objects: Vec<_> = gas_objects
+        for account in self.user_accounts.values_mut() {
+            let refreshed_gas_objects: Vec<_> = account
+                .gas_objects
                 .iter()
                 .map(|oref| {
                     if let Some(new_oref) = new_gas_objects.remove(&oref.0) {
@@ -271,10 +236,9 @@ impl BenchmarkContext {
                     }
                 })
                 .collect();
-            *gas_objects = Arc::new(refreshed_gas_objects);
+            account.gas_objects = Arc::new(refreshed_gas_objects);
         }
     }
-
     pub(crate) async fn validator_sign_transactions(
         &self,
         transactions: Vec<Transaction>,

@@ -1,5 +1,17 @@
 # @mysten/zklogin
 
+## 0.3.2
+
+### Patch Changes
+
+- c34c3c734: Revert additional JWT checks
+
+## 0.3.1
+
+### Patch Changes
+
+- 4ba17833c: Fixes ESM usage of the SDK.
+
 ## 0.3.0
 
 ### Minor Changes

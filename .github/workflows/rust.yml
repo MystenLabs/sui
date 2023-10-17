@@ -383,3 +383,36 @@ jobs:
   #      env:
   #        POSTGRES_HOST: localhost
   #        POSTGRES_PORT: 5432
+
+  graphql-rpc:
+   name: graphql-rpc
+   needs: diff
+   if: needs.diff.outputs.isRust == 'true'
+   timeout-minutes: 45
+   runs-on: [ubuntu-ghcloud]
+   services:
+     postgres:
+       image: postgres
+       env:
+         POSTGRES_PASSWORD: postgrespw
+       options: >-
+         --health-cmd pg_isready
+         --health-interval 10s
+         --health-timeout 5s
+         --health-retries 5
+       ports:
+         - 5432:5432
+   steps:
+     - uses: actions/checkout@v3
+     - name: Setup db
+       run: |
+         PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U $POSTGRES_USER -c 'CREATE DATABASE sui_indexer_v2;'
+       env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespw
+     - name: tests-requiring-postgres
+       run: |
+         cargo test --package sui-graphql-rpc --test e2e_tests --features pg_integration
+       env:
+         POSTGRES_HOST: localhost
+         POSTGRES_PORT: 5432

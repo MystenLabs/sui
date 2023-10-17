@@ -575,6 +575,7 @@ impl AuthorityPerEpochStore {
             signature_verifier_metrics,
             supported_providers,
             zklogin_env,
+            protocol_config.verify_legacy_zklogin_address(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
