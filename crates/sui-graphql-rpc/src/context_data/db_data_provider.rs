@@ -1018,9 +1018,10 @@ impl PgManager {
     pub(crate) async fn fetch_balance(
         &self,
         address: SuiAddress,
-        coin_type: String,
+        coin_type: Option<String>,
     ) -> Result<Option<Balance>, Error> {
         let address = address.into_vec();
+        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
         let balances = self.get_balance(address, coin_type).await?;
 
         if let Some((Some(balance), Some(count), coin_type)) = balances.first() {

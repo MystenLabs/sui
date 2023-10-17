@@ -139,7 +139,11 @@ impl Object {
             .extend()
     }
 
-    pub async fn balance(&self, ctx: &Context<'_>, type_: String) -> Result<Option<Balance>> {
+    pub async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        type_: Option<String>,
+    ) -> Result<Option<Balance>> {
         ctx.data_unchecked::<PgManager>()
             .fetch_balance(self.address, type_)
             .await
