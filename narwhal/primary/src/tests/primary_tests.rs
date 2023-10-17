@@ -26,7 +26,8 @@ use std::{
 };
 use storage::{NodeStorage, VoteDigestStore};
 use test_utils::{
-    latest_protocol_version, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
+    get_protocol_config, latest_protocol_version, make_optimal_signed_certificates, temp_dir,
+    CommitteeFixture,
 };
 use tokio::{sync::watch, time::timeout};
 use types::{
@@ -569,9 +570,8 @@ async fn test_request_vote_accept_missing_parents() {
     assert_eq!(expected_missing, received_missing);
 
     // TEST PHASE 1.5: Send parents with the incorrect version.
-    let mut cert_v2_round_2_missing = vec![];
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let mut cert_v1_round_2_missing = vec![];
+    let cert_v1_config = get_protocol_config(28);
     for cert in round_2_missing.iter() {
         let mut signatures = Vec::new();
         for authority in fixture.authorities().take(8) {
@@ -579,9 +579,9 @@ async fn test_request_vote_accept_missing_parents() {
             signatures.push((vote.author(), vote.signature().clone()));
         }
 
-        cert_v2_round_2_missing.push(
+        cert_v1_round_2_missing.push(
             Certificate::new_unverified(
-                &cert_v2_config,
+                &cert_v1_config,
                 &committee,
                 cert.header().clone(),
                 signatures,
@@ -592,7 +592,7 @@ async fn test_request_vote_accept_missing_parents() {
     let _ = tx_narwhal_round_updates.send(1);
     let mut request = anemo::Request::new(RequestVoteRequest {
         header: test_header.clone(),
-        parents: cert_v2_round_2_missing.clone(),
+        parents: cert_v1_round_2_missing.clone(),
     });
     assert!(request
         .extensions_mut()
@@ -971,7 +971,7 @@ async fn test_request_vote_already_voted() {
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test]
 async fn test_fetch_certificates_v1_handler() {
-    let cert_v1_protocol_config = latest_protocol_version();
+    let cert_v1_protocol_config = get_protocol_config(28);
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
@@ -1146,8 +1146,7 @@ async fn test_fetch_certificates_v1_handler() {
 
 #[tokio::test]
 async fn test_fetch_certificates_v2_handler() {
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder()
         .randomize_ports(true)
         .committee_size(NonZeroUsize::new(4).unwrap())
