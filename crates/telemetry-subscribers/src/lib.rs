@@ -29,7 +29,7 @@ use std::{
 use tracing::metadata::LevelFilter;
 use tracing::{error, info, Level};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
-use tracing_subscriber::{fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
+use tracing_subscriber::{filter, fmt, layer::SubscriberExt, reload, EnvFilter, Layer, Registry};
 
 use crate::file_exporter::{CachedOpenFile, FileExporter};
 
