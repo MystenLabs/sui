@@ -1,5 +1,11 @@
 # @mysten/dapp-kit
 
+## 0.5.0
+
+### Minor Changes
+
+- ade244c3d: Add a new createNetworkConfig helper for managing network specific state
+
 ## 0.4.0
 
 ### Minor Changes
