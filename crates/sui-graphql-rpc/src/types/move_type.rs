@@ -70,7 +70,6 @@ impl MoveType {
 }
 
 impl MoveType {
-    #[allow(dead_code)]
     pub(crate) fn new(repr: String) -> MoveType {
         Self { repr }
     }

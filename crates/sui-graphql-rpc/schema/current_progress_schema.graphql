@@ -316,7 +316,6 @@ type MoveData =
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
   | { Struct:  [{ name: string, value: MoveData }] }
-
 """
 scalar MoveData
 
@@ -387,7 +386,6 @@ type MoveType {
 }
 
 """
-\
 The signature of a concrete Move Type (a type with all its type
 parameters instantiated with concrete types, that contains no
 references), corresponding to the following recursive type:
@@ -405,7 +403,6 @@ type MoveTypeSignature =
         typeParameters: [MoveTypeSignature],
       }
     }
-
 """
 scalar MoveTypeSignature
 
