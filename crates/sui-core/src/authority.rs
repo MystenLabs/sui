@@ -622,7 +622,7 @@ pub struct AuthorityState {
     pub indexes: Option<Arc<IndexStore>>,
 
     pub subscription_handler: Arc<SubscriptionHandler>,
-    pub(crate) checkpoint_store: Arc<CheckpointStore>,
+    checkpoint_store: Arc<CheckpointStore>,
 
     committee_store: Arc<CommitteeStore>,
 
@@ -2960,8 +2960,8 @@ impl AuthorityState {
             .get_transactions(filter, cursor, limit, reverse)
     }
 
-    fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
-        self.checkpoint_store.clone()
+    pub fn get_checkpoint_store(&self) -> &Arc<CheckpointStore> {
+        &self.checkpoint_store
     }
 
     pub fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
