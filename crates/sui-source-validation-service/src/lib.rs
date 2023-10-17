@@ -496,7 +496,6 @@ pub struct ErrorResponse {
 }
 
 async fn api_route(
-    headers: HeaderMap,
     State(app_state): State<Arc<RwLock<AppState>>>,
     Query(Request {
         network,
@@ -505,6 +504,51 @@ async fn api_route(
     }): Query<Request>,
 ) -> impl IntoResponse {
     debug!("request network={network}&address={address}&module={module}");
+    let symbol = Symbol::from(module);
+    let Ok(address) = AccountAddress::from_hex_literal(&address) else {
+        let error = format!("Invalid hex address {address}");
+        return (
+            StatusCode::BAD_REQUEST,
+            //            headers,
+            Json(ErrorResponse { error }).into_response(),
+        );
+    };
+
+    let app_state = app_state.read().unwrap();
+    let source_result = app_state
+        .sources
+        .get(&network)
+        .and_then(|n| n.get(&address))
+        .and_then(|a| a.get(&symbol));
+    if let Some(SourceInfo {
+        source: Some(source),
+        ..
+    }) = source_result
+    {
+        (
+            StatusCode::OK,
+            //            headers,
+            Json(SourceResponse {
+                source: source.to_owned(),
+            })
+            .into_response(),
+        )
+    } else {
+        let x: (StatusCode, HeaderMap, Response) = (
+            StatusCode::NOT_FOUND,
+            //            headers,
+            Json(ErrorResponse {
+                error: format!(
+                    "No source found for {symbol} at address {address} on network {network}"
+                ),
+            })
+            .into_response(),
+        );
+        x
+    }
+}
+
+async fn check_version<B>(headers: HeaderMap, req: hyper::Request<B>, next: Next<B>) -> Response {
     let version = headers
         .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
         .as_ref()
@@ -527,150 +571,21 @@ async fn api_route(
                 StatusCode::BAD_REQUEST,
                 headers,
                 Json(ErrorResponse { error }).into_response(),
-            );
-        }
-        Some(_) => (),
-        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
-    };
-
-    let symbol = Symbol::from(module);
-    let Ok(address) = AccountAddress::from_hex_literal(&address) else {
-        let error = format!("Invalid hex address {address}");
-        return (
-            StatusCode::BAD_REQUEST,
-            headers,
-            Json(ErrorResponse { error }).into_response(),
-        );
-    };
-
-    let app_state = app_state.read().unwrap();
-    let source_result = app_state
-        .sources
-        .get(&network)
-        .and_then(|n| n.get(&address))
-        .and_then(|a| a.get(&symbol));
-    if let Some(SourceInfo {
-        source: Some(source),
-        ..
-    }) = source_result
-    {
-        (
-            StatusCode::OK,
-            headers,
-            Json(SourceResponse {
-                source: source.to_owned(),
-            })
-            .into_response(),
-        )
-    } else {
-        let x: (StatusCode, HeaderMap, Response) = (
-            StatusCode::NOT_FOUND,
-            headers,
-            Json(ErrorResponse {
-                error: format!(
-                    "No source found for {symbol} at address {address} on network {network}"
-                ),
-            })
-            .into_response(),
-        );
-        x
-    }
-}
-
-async fn check_version<B>(
-    headers: HeaderMap,
-    req: hyper::Request<B>,
-    next: Next<B>,
-) -> Result<Response, Response> {
-    let version = headers
-        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
-        .as_ref()
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    match version {
-        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
-            let error = format!(
-                "Unsupported version '{v}' specified in header \
-		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
-            );
-            return Err((
-                StatusCode::BAD_REQUEST,
-                headers,
-                Json(ErrorResponse { error }).into_response(),
             )
-                .into_response());
+                .into_response();
         }
-        Some(_) => (),
-        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
-    };
-
-    let response = next.run(req).await;
-    Ok(response)
-}
-
-/*
-async fn check_version(headers: HeaderMap) -> Response {
-    let version = headers
-        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
-        .as_ref()
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        SUI_SOURCE_VALIDATION_VERSION_HEADER,
-        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
-    );
-
-    let error = format!("x");
-    let response = Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .header(
-            SUI_SOURCE_VALIDATION_VERSION_HEADER,
-            SUI_SOURCE_VALIDATION_VERSION,
-        )
-        .body(Json(ErrorResponse { error }).into_response());
-    response.unwrap()
-
-    /*
-    let error = format!("x");
-
-    let response = (
-        StatusCode::BAD_REQUEST,
-        headers,
-        Json(ErrorResponse { error }).into_response(),
-    )
-        .into_response();
-    response)
-    */
-
-    /*
-        match version {
-            Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
-                let  response = Response::builder()
-                    .header(
-                        SUI_SOURCE_VALIDATION_VERSION_HEADER,
-                        SUI_SOURCE_VALIDATION_VERSION,
-                    )
-                    .status(StatusCode::BAD_REQUEST)
-                    .into()
-                return response.into();
-                /*
-                    let error = format!(
-                        "Unsupported version '{v}' specified in header \
-                 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
-                    );
-                    return (
-                        StatusCode::BAD_REQUEST,
-                        headers,
-                        Json(ErrorResponse { error }).into(),
-                );
-                */
-            }
-            Some(_) => panic!("fixme"),
-            None => panic!("fixme"), //info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
+        Some(_) => {
+            let mut response = next.run(req).await;
+            let response_headers = response.headers_mut();
+            *response_headers = headers;
+            response
+        }
+        None => {
+            info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}");
+            let mut response = next.run(req).await;
+            let response_headers = response.headers_mut();
+            *response_headers = headers;
+            response
+        }
     }
-        */
 }
-*/
