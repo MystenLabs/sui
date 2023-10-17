@@ -13,9 +13,9 @@ use test_cluster::{TestCluster, TestClusterBuilder};
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 
-async fn do_zklogin_test() -> SuiResult {
+async fn do_zklogin_test(legacy: bool) -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let (_, tx, _) = make_zklogin_tx();
+    let (_, tx, _) = make_zklogin_tx(legacy);
 
     test_cluster
         .authority_aggregator()
@@ -38,9 +38,35 @@ async fn test_zklogin_feature_deny() {
         config
     });
 
-    let err = do_zklogin_test().await.unwrap_err();
+    let err = do_zklogin_test(false).await.unwrap_err();
 
     assert!(matches!(err, SuiError::UnsupportedFeatureError { .. }));
+}
+
+#[sim_test]
+async fn test_zklogin_feature_legacy_address_deny() {
+    use sui_protocol_config::ProtocolConfig;
+
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_verify_legacy_zklogin_address(false);
+        config
+    });
+
+    let err = do_zklogin_test(true).await.unwrap_err();
+    assert!(matches!(err, SuiError::SignerSignatureAbsent { .. }));
+}
+
+#[sim_test]
+async fn test_legacy_zklogin_address_accept() {
+    use sui_protocol_config::ProtocolConfig;
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_verify_legacy_zklogin_address(true);
+        config
+    });
+    let err = do_zklogin_test(true).await.unwrap_err();
+
+    // it does not hit the signer absent error.
+    assert!(matches!(err, SuiError::InvalidSignature { .. }));
 }
 
 #[sim_test]
@@ -58,8 +84,7 @@ async fn test_zklogin_provider_not_supported() {
     });
 
     // Doing a Twitch zklogin tx fails because its not in the supported list.
-    let err = do_zklogin_test().await.unwrap_err();
-
+    let err = do_zklogin_test(false).await.unwrap_err();
     assert!(matches!(err, SuiError::InvalidSignature { .. }));
 }
 
@@ -125,7 +150,7 @@ async fn run_zklogin_end_to_end_test(mut test_cluster: TestCluster) {
         .transfer_sui(None, sender)
         .build();
 
-    let (_, signed_txn, _) = sign_zklogin_tx(txn);
+    let (_, signed_txn, _) = sign_zklogin_tx(txn, false);
 
     context.execute_transaction_must_succeed(signed_txn).await;
 

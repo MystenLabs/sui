@@ -117,6 +117,7 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
+    pub verify_legacy_zklogin_address: bool,
 }
 
 impl SignatureVerifier {
@@ -126,6 +127,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
         env: ZkLoginEnv,
+        verify_legacy_zklogin_address: bool,
     ) -> Self {
         Self {
             committee,
@@ -147,6 +149,7 @@ impl SignatureVerifier {
             zk_login_params: ZkLoginParams {
                 supported_providers,
                 env,
+                verify_legacy_zklogin_address,
             },
         }
     }
@@ -156,6 +159,7 @@ impl SignatureVerifier {
         metrics: Arc<SignatureVerifierMetrics>,
         supported_providers: Vec<OIDCProvider>,
         zklogin_env: ZkLoginEnv,
+        verify_legacy_zklogin_address: bool,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -163,6 +167,7 @@ impl SignatureVerifier {
             metrics,
             supported_providers,
             zklogin_env,
+            verify_legacy_zklogin_address,
         )
     }
 
@@ -346,6 +351,7 @@ impl SignatureVerifier {
                     jwks,
                     self.zk_login_params.supported_providers.clone(),
                     self.zk_login_params.env.clone(),
+                    self.zk_login_params.verify_legacy_zklogin_address,
                 );
                 signed_tx
                     .tx_signatures()
@@ -477,7 +483,7 @@ pub fn batch_verify_certificates(
     certs: &[CertifiedTransaction],
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-    let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default());
+    let verify_params = VerifyParams::new(Default::default(), Vec::new(), Default::default(), true);
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 

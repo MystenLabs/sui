@@ -1974,9 +1974,18 @@ impl SenderSignedData {
         self.inner_mut().tx_signatures.push(new_signature.into());
     }
 
-    fn get_signer_sig_mapping(&self) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
+    fn get_signer_sig_mapping(
+        &self,
+        verify_legacy_zklogin_address: bool,
+    ) -> SuiResult<BTreeMap<SuiAddress, &GenericSignature>> {
         let mut mapping = BTreeMap::new();
         for sig in &self.inner().tx_signatures {
+            if verify_legacy_zklogin_address {
+                // Try deriving the address from the legacy way.
+                if let GenericSignature::ZkLoginAuthenticator(z) = sig {
+                    mapping.insert(SuiAddress::legacy_try_from(z)?, sig);
+                };
+            }
             let address = sig.try_into()?;
             mapping.insert(address, sig);
         }
@@ -2076,7 +2085,9 @@ impl Message for SenderSignedData {
 impl AuthenticatedMessage for SenderSignedData {
     // Checks that are required to be done outside cache.
     fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult {
-        for (signer, signature) in self.get_signer_sig_mapping()? {
+        for (signer, signature) in
+            self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?
+        {
             signature.verify_uncached_checks(self.intent_message(), signer, verify_params)?;
         }
         Ok(())
@@ -2105,7 +2116,8 @@ impl AuthenticatedMessage for SenderSignedData {
             }
         );
         // All required signers need to be sign.
-        let present_sigs = self.get_signer_sig_mapping()?;
+        let present_sigs =
+            self.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
         for s in signers {
             if !present_sigs.contains_key(&s) {
                 return Err(SuiError::SignerSignatureAbsent {
