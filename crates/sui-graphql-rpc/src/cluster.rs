@@ -10,7 +10,7 @@ use std::env;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
-use sui_indexer::new_pg_connection_pool;
+use sui_indexer::new_pg_connection_pool_impl;
 use sui_indexer::store::PgIndexerStoreV2;
 use sui_indexer::utils::reset_database;
 use sui_indexer::IndexerConfig;
@@ -113,7 +113,7 @@ pub async fn start_test_indexer(
     config: IndexerConfig,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
     let parsed_url = config.base_connection_url().unwrap();
-    let blocking_pool = new_pg_connection_pool(&parsed_url).unwrap();
+    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(50)).unwrap();
     if config.reset_db {
         reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
     }
