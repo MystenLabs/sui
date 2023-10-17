@@ -20,7 +20,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{get_protocol_config, latest_protocol_version, temp_dir, CommitteeFixture};
+use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -186,7 +186,7 @@ struct BadHeader {
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v1_basic() {
-    let cert_v1_protocol_config = get_protocol_config(27);
+    let cert_v1_protocol_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -457,9 +457,11 @@ async fn fetch_certificates_v1_basic() {
     verify_certificates_not_in_store(&certificate_store, &certificates[num_written..]);
 
     // Send out a batch of certificate V2s.
+    let mut cert_v2_config = latest_protocol_version();
+    cert_v2_config.set_narwhal_certificate_v2(true);
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(8) {
-        certs.push(fixture.certificate(&latest_protocol_version(), cert.header()));
+        certs.push(fixture.certificate(&cert_v2_config, cert.header()));
     }
     tx_fetch_resp
         .try_send(FetchCertificatesResponse {
@@ -473,6 +475,8 @@ async fn fetch_certificates_v1_basic() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v2_basic() {
+    let mut cert_v2_config = latest_protocol_version();
+    cert_v2_config.set_narwhal_certificate_v2(true);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -507,7 +511,7 @@ async fn fetch_certificates_v2_basic() {
     let synchronizer = Arc::new(Synchronizer::new(
         id,
         fixture.committee(),
-        latest_protocol_version(),
+        cert_v2_config.clone(),
         worker_cache.clone(),
         gc_depth,
         client,
@@ -542,7 +546,7 @@ async fn fetch_certificates_v2_basic() {
     let _certificate_fetcher_handle = CertificateFetcher::spawn(
         id,
         fixture.committee(),
-        latest_protocol_version(),
+        cert_v2_config.clone(),
         client_network.clone(),
         certificate_store.clone(),
         rx_consensus_round_updates.clone(),
@@ -553,8 +557,7 @@ async fn fetch_certificates_v2_basic() {
     );
 
     // Generate headers and certificates in successive rounds
-    let genesis_certs: Vec<_> =
-        Certificate::genesis(&latest_protocol_version(), &fixture.committee());
+    let genesis_certs: Vec<_> = Certificate::genesis(&cert_v2_config, &fixture.committee());
     for cert in genesis_certs.iter() {
         certificate_store
             .write(cert.clone())
@@ -570,13 +573,9 @@ async fn fetch_certificates_v2_basic() {
     for i in 0..rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| {
-                fixture
-                    .certificate(&latest_protocol_version(), &header)
-                    .digest()
-            })
+            .map(|header| fixture.certificate(&cert_v2_config, &header).digest())
             .collect();
-        (_, current_round) = fixture.headers_round(i, &parents, &latest_protocol_version());
+        (_, current_round) = fixture.headers_round(i, &parents, &cert_v2_config);
         headers.extend(current_round.clone());
     }
 
@@ -589,7 +588,7 @@ async fn fetch_certificates_v2_basic() {
     // Create certificates test data.
     let mut certificates = vec![];
     for header in headers.into_iter() {
-        certificates.push(fixture.certificate(&latest_protocol_version(), &header));
+        certificates.push(fixture.certificate(&cert_v2_config, &header));
     }
     assert_eq!(certificates.len(), total_certificates); // note genesis is not included
     assert_eq!(400, total_certificates);
@@ -775,7 +774,7 @@ async fn fetch_certificates_v2_basic() {
     // Send out a batch of certificate V1s.
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(204) {
-        certs.push(fixture.certificate(&get_protocol_config(27), cert.header()));
+        certs.push(fixture.certificate(&latest_protocol_version(), cert.header()));
     }
     tx_fetch_resp
         .try_send(FetchCertificatesResponse {

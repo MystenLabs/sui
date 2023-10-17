@@ -85,7 +85,7 @@ export async function getAccountsStatusData(
 	const allAccounts = await (await getDB()).accounts.toArray();
 	return allAccounts
 		.filter(({ address }) => !accountsFilter || accountsFilter.includes(address))
-		.map(({ address, publicKey }) => ({ address, publicKey }));
+		.map(({ address, publicKey, nickname }) => ({ address, publicKey, nickname }));
 }
 
 export async function changeActiveAccount(accountID: string) {

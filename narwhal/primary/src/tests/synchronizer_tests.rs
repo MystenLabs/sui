@@ -825,7 +825,8 @@ async fn sync_batches_drops_old() {
 }
 
 #[tokio::test]
-async fn gc_suspended_certificates() {
+async fn gc_suspended_certificates_v1() {
+    let cert_v1_config = latest_protocol_version();
     const NUM_AUTHORITIES: usize = 4;
     const GC_DEPTH: Round = 5;
 
@@ -850,7 +851,7 @@ async fn gc_suspended_certificates() {
     let synchronizer = Arc::new(Synchronizer::new(
         primary.id(),
         fixture.committee(),
-        latest_protocol_version(),
+        cert_v1_config.clone(),
         worker_cache.clone(),
         /* gc_depth */ GC_DEPTH,
         client,
@@ -866,7 +867,7 @@ async fn gc_suspended_certificates() {
 
     // Make 5 rounds of fake certificates.
     let committee: Committee = fixture.committee();
-    let genesis = Certificate::genesis(&latest_protocol_version(), &committee)
+    let genesis = Certificate::genesis(&cert_v1_config, &committee)
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
@@ -878,7 +879,128 @@ async fn gc_suspended_certificates() {
         1..=5,
         &genesis,
         &committee,
-        &latest_protocol_version(),
+        &cert_v1_config,
+        keys.as_slice(),
+    );
+    let certificates = certificates.into_iter().collect_vec();
+
+    // Try to aceept certificates from round 2 and above. All of them should be suspended.
+    let accept = FuturesUnordered::new();
+    for cert in &certificates[NUM_AUTHORITIES..] {
+        match synchronizer.try_accept_certificate(cert.clone()).await {
+            Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
+            Err(DagError::Suspended(notify)) => {
+                accept.push(async move { notify.wait().await });
+                continue;
+            }
+            Err(e) => panic!("Unexpected error {e}"),
+        }
+    }
+    // Round 2~5 certificates are suspended.
+    // Round 1~4 certificates are missing and referenced as parents.
+    assert_eq!(
+        synchronizer.get_suspended_stats().await,
+        (NUM_AUTHORITIES * 4, NUM_AUTHORITIES * 4)
+    );
+
+    // Re-insertion of missing certificate as fetched certificates should be suspended too.
+    for cert in &certificates[NUM_AUTHORITIES * 2..NUM_AUTHORITIES * 4] {
+        match synchronizer
+            .try_accept_fetched_certificate(cert.clone())
+            .await
+        {
+            Ok(()) => panic!("Unexpected acceptance of {cert:?}"),
+            Err(DagError::Suspended(_)) => {
+                continue;
+            }
+            Err(e) => panic!("Unexpected error {e}"),
+        }
+    }
+    assert_eq!(
+        synchronizer.get_suspended_stats().await,
+        (NUM_AUTHORITIES * 4, NUM_AUTHORITIES * 4)
+    );
+
+    // At commit round 8, round 3 becomes the GC round.
+    let _ = tx_consensus_round_updates.send(ConsensusRound::new(8, gc_round(8, GC_DEPTH)));
+
+    // Wait for all notifications to arrive.
+    accept.collect::<Vec<()>>().await;
+
+    // Expected to receive:
+    // Round 2~4 certificates will be accepted because of GC.
+    // Round 5 certificates will be accepted because of no missing dependencies.
+    let expected_certificates: HashMap<_, _> = certificates[NUM_AUTHORITIES..]
+        .iter()
+        .map(|cert| (cert.digest(), cert.clone()))
+        .collect();
+    let mut received_certificates = HashMap::new();
+    for _ in 0..expected_certificates.len() {
+        let cert = rx_new_certificates.try_recv().unwrap();
+        received_certificates.insert(cert.digest(), cert);
+    }
+    assert_eq!(expected_certificates, received_certificates);
+    // Suspended and missing certificates are cleared.
+    assert_eq!(synchronizer.get_suspended_stats().await, (0, 0));
+}
+
+#[tokio::test]
+async fn gc_suspended_certificates_v2() {
+    let mut cert_v2_config = latest_protocol_version();
+    cert_v2_config.set_narwhal_certificate_v2(true);
+    const NUM_AUTHORITIES: usize = 4;
+    const GC_DEPTH: Round = 5;
+
+    telemetry_subscribers::init_for_testing();
+    let fixture = CommitteeFixture::builder()
+        .randomize_ports(true)
+        .committee_size(NonZeroUsize::new(NUM_AUTHORITIES).unwrap())
+        .build();
+    let worker_cache = fixture.worker_cache();
+    let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let primary = fixture.authorities().next().unwrap();
+    let client = NetworkClient::new_from_keypair(&primary.network_keypair());
+
+    let (certificate_store, payload_store) = create_db_stores();
+    let (tx_certificate_fetcher, _rx_certificate_fetcher) = test_utils::test_channel!(100);
+    let (tx_new_certificates, mut rx_new_certificates) = test_utils::test_channel!(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
+    let (tx_consensus_round_updates, rx_consensus_round_updates) =
+        watch::channel(ConsensusRound::new(1, 0));
+    let primary_channel_metrics = PrimaryChannelMetrics::new(&Registry::new());
+
+    let synchronizer = Arc::new(Synchronizer::new(
+        primary.id(),
+        fixture.committee(),
+        cert_v2_config.clone(),
+        worker_cache.clone(),
+        /* gc_depth */ GC_DEPTH,
+        client,
+        certificate_store.clone(),
+        payload_store.clone(),
+        tx_certificate_fetcher,
+        tx_new_certificates,
+        tx_parents,
+        rx_consensus_round_updates.clone(),
+        metrics.clone(),
+        &primary_channel_metrics,
+    ));
+
+    // Make 5 rounds of fake certificates.
+    let committee: Committee = fixture.committee();
+    let genesis = Certificate::genesis(&cert_v2_config, &committee)
+        .iter()
+        .map(|x| x.digest())
+        .collect::<BTreeSet<_>>();
+    let keys: Vec<_> = fixture
+        .authorities()
+        .map(|a| (a.id(), a.keypair().copy()))
+        .collect();
+    let (certificates, _next_parents) = make_optimal_signed_certificates(
+        1..=5,
+        &genesis,
+        &committee,
+        &cert_v2_config,
         keys.as_slice(),
     );
     let certificates = certificates.into_iter().collect_vec();
