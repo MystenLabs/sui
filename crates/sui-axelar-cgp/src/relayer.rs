@@ -10,7 +10,6 @@ use axum::Router;
 use clap::Parser;
 use futures::future::try_join_all;
 use rxrust::observable::ObservableItem;
-
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -22,7 +21,9 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use telemetry_subscribers::TelemetryConfig;
 
 use crate::handlers::process_commands;
-use crate::listener::{ContractCall, Subject, SuiListener};
+use crate::listener::{
+    ContractCall, OperatorshipTransferred, Subject, SuiAxelarEvent, SuiListener,
+};
 use crate::types::Error;
 
 mod handlers;
@@ -49,11 +50,19 @@ pub struct SuiAxelarRelayer {
     sui_ws_url: String,
     #[clap(long, env, default_value = "127.0.0.1:10000")]
     listen_address: SocketAddr,
-    #[clap(long, env, default_value = "0x2")]
+    #[clap(
+        long,
+        env,
+        default_value = "0x37e8cb0b746891c21f5a09cfc8eaae2c10770e1a367edb57e4b779eed3263314"
+    )]
     gateway_package_id: ObjectID,
-    #[clap(long, env, default_value = "0x2")]
+    #[clap(
+        long,
+        env,
+        default_value = "0x5a444605cda2e01ddee5de4a670be2f20b432b58502c82fae2a3d0a879a8a75f"
+    )]
     validators: ObjectID,
-    #[clap(long, env, default_value = "1")]
+    #[clap(long, env, default_value = "896987")]
     validators_shared_version: u64,
 }
 
@@ -94,25 +103,42 @@ impl SuiAxelarRelayer {
         };
 
         let api = self.start_api_service(state).await;
-        let listener = self
-            .start_sui_listener(sui_client, self.gateway_package_id)
-            .await;
-        try_join_all(vec![api, listener]).await?;
-        Ok(())
-    }
 
-    async fn start_sui_listener(
-        &self,
-        client: SuiClient,
-        gateway_package_id: ObjectID,
-    ) -> JoinHandle<()> {
-        let sui_listener = SuiListener::new(client, gateway_package_id);
-        let sui_contract_call = Subject::<ContractCall>::default();
-        sui_contract_call.clone().subscribe(|call| {
+        let (contract_call_handle, contract_call) = self
+            .start_event_listener::<ContractCall>(sui_client.clone(), self.gateway_package_id)
+            .await;
+
+        contract_call.subscribe(|call| {
             // todo: pass to axelar
             println!("{call:?}")
         });
-        tokio::spawn(sui_listener.listen(sui_contract_call))
+
+        let (operatorship_transferred_handle, operatorship_transferred) = self
+            .start_event_listener::<OperatorshipTransferred>(sui_client, self.gateway_package_id)
+            .await;
+
+        operatorship_transferred.subscribe(|call| {
+            // todo: pass to axelar
+            println!("{call:?}")
+        });
+
+        try_join_all(vec![
+            api,
+            contract_call_handle,
+            operatorship_transferred_handle,
+        ])
+        .await?;
+        Ok(())
+    }
+
+    async fn start_event_listener<T: SuiAxelarEvent + Clone + 'static>(
+        &self,
+        client: SuiClient,
+        gateway_package_id: ObjectID,
+    ) -> (JoinHandle<()>, Subject<T>) {
+        let sui_listener = SuiListener::new(client, gateway_package_id);
+        let event = Subject::<T>::default();
+        (tokio::spawn(sui_listener.listen(event.clone())), event)
     }
 
     async fn start_api_service(&self, state: RelayerState) -> JoinHandle<()> {
@@ -129,7 +155,7 @@ impl SuiAxelarRelayer {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+pub async fn main() -> Result<(), Error> {
     let (_guard, _) = TelemetryConfig::new().with_env().init();
     SuiAxelarRelayer::parse().start().await
 }

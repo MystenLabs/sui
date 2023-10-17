@@ -5,7 +5,8 @@ module axelar::validators {
     use std::string::{Self, String};
     use std::vector;
 
-    use sui::table::{Self, Table};
+    use axelar::channel::{Self, ApprovedCall};
+    use axelar::utils::{normalize_signature, operators_hash};
     use sui::address;
     use sui::bcs;
     use sui::dynamic_field as df;
@@ -13,12 +14,13 @@ module axelar::validators {
     use sui::event;
     use sui::hash;
     use sui::object::{Self, UID};
+    use sui::table::{Self, Table};
     use sui::transfer;
     use sui::tx_context::TxContext;
     use sui::vec_map:: {Self, VecMap};
 
-    use axelar::channel::{Self, ApprovedCall};
-    use axelar::utils::{normalize_signature, operators_hash};
+    #[test_only]
+    use axelar::utils::to_sui_signed;
 
     friend axelar::gateway;
 
@@ -68,9 +70,21 @@ module axelar::validators {
             id: object::new(ctx),
             approvals: table::new(ctx)
         };
-        df::add(&mut validators.id, 1, AxelarValidatorsV1 {
-            epoch: 0,
-            epoch_for_hash: vec_map::empty(),
+
+        // TODO: init validators programatically?
+        // Hardcoded initial validator hash, see `preset/index.js`
+        let operators_hash = operators_hash(
+            &vector[x"037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff599028"],
+            &vector[100],
+            10
+        );
+
+        let epoch_for_hash = vec_map::empty();
+        vec_map::insert(&mut epoch_for_hash, operators_hash, 1);
+
+        df::add(&mut validators.id, 1u8, AxelarValidatorsV1 {
+            epoch: 1,
+            epoch_for_hash,
         });
         transfer::share_object(validators);
     }
@@ -226,19 +240,19 @@ module axelar::validators {
     // === Getters ===
 
     fun epoch_for_hash(axelar: &AxelarValidators): &VecMap<vector<u8>, u64> {
-        &df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1).epoch_for_hash
+        &df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1u8).epoch_for_hash
     }
 
     fun epoch_for_hash_mut(axelar: &mut AxelarValidators): &mut VecMap<vector<u8>, u64> {
-        &mut df::borrow_mut<u8, AxelarValidatorsV1>(&mut axelar.id, 1).epoch_for_hash
+        &mut df::borrow_mut<u8, AxelarValidatorsV1>(&mut axelar.id, 1u8).epoch_for_hash
     }
 
     fun set_epoch(axelar: &mut AxelarValidators, epoch: u64) {
-        df::borrow_mut<u8, AxelarValidatorsV1>(&mut axelar.id, 1).epoch = epoch
+        df::borrow_mut<u8, AxelarValidatorsV1>(&mut axelar.id, 1u8).epoch = epoch
     }
 
     public fun epoch(axelar: &AxelarValidators): u64 {
-        df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1).epoch
+        df::borrow<u8, AxelarValidatorsV1>(&axelar.id, 1u8).epoch
     }
 
     // === Testing ===
@@ -262,20 +276,12 @@ module axelar::validators {
     }
 
     #[test_only]
-    use axelar::utils::to_sui_signed;
-
-    #[test_only]
     public fun drop_for_test(self: AxelarValidators) {
         // validator cleanup
         let AxelarValidators { id, approvals } = self;
         table::destroy_empty(approvals);
         object::delete(id);
     }
-
-    #[test_only]
-    /// Test message for the `test_execute` test.
-    /// Generated via the `presets` script.
-    const MESSAGE: vector<u8> = x"af0101000000000000000209726f6775655f6f6e650a6178656c61725f74776f0213617070726f7665436f6e747261637443616c6c13617070726f7665436f6e747261637443616c6c02310345544803307830000000000000000000000000000000000000000000000000000000000000040000000005000000000034064158454c4152033078310000000000000000000000000000000000000000000000000000000000000400000000050000000000770121037286a4f1177bea06c8e15cf6ec3df0b7747a01ac2329ca2999dfd74eff5990280164000000000000000a000000000000000141dcfc40d95cc89a9c8a0973c3dae95806c5daa5aefe072caafd5541844d62fabf2dc580a8663df7adb846f1ef7d553a13174399e4c4cb55c42bdf7fa8f02c8fa10000";
 
     #[test_only]
     /// Signer PubKey.

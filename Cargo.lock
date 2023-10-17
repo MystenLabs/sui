@@ -9983,6 +9983,7 @@ dependencies = [
  "bcs",
  "clap",
  "futures",
+ "hex",
  "log",
  "rxrust",
  "serde",

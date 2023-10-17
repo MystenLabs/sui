@@ -59,7 +59,7 @@ bcs.registerStructType("GenericMessage", {
     payload_hash: "vector<u8>",
 });
 
-const ZERO_ADDR = "0x".padEnd(62, "0");
+const ZERO_ADDR = "0x".padEnd(64, "0");
 const message = bcs
     .ser("AxelarMessage", {
         chain_id: 1,
@@ -108,7 +108,7 @@ const input = bcs
 console.log("OPERATOR: %s", toHEX(pubKey));
 console.log("DATA LENGTH: %d", message.length);
 console.log("PROOF LENGTH: %d", proof.length);
-console.log("INPUT: %s", input + "00");
+console.log("INPUT: %s", input);
 
 // verify the signature // just to make sure that everything is correct on this end
 console.log(secp256k1.ecdsaVerify(signature, hashed, pubKey));
@@ -151,10 +151,14 @@ console.log(secp256k1.ecdsaVerify(signature, hashed, pubKey));
         })
         .toString("hex");
 
-    console.log("OPERATOR: %s", toHEX(pubKey));
+  console.log("OPERATOR: %s", toHEX(pubKey));
+  console.log("OPERATOR: %s", pubKey);
     console.log("DATA LENGTH: %d", message.length);
     console.log("PROOF LENGTH: %d", proof.length);
-    console.log("INPUT: %s", input + "00");
+  console.log("Message: %s", message);
+  console.log("proof: %s", proof);
+  console.log("INPUT: %s", input);
+  console.log("Sig: %s", new Uint8Array([...signature, recid]));
 
 // verify the signature // just to make sure that everything is correct on this end
     console.log(secp256k1.ecdsaVerify(signature, hashed, pubKey));
