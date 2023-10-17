@@ -83,7 +83,7 @@ export function PasswordModalDialog({
 					onSubmit={async ({ password }) => {
 						try {
 							if (verify) {
-								await backgroundService.verifyPassword(password);
+								await backgroundService.verifyPassword({ password });
 							}
 							try {
 								await onSubmit(password);

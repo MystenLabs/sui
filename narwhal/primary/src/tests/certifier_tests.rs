@@ -13,8 +13,8 @@ use primary::NUM_SHUTDOWN_RECEIVERS;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::num::NonZeroUsize;
-use test_utils::latest_protocol_version;
 use test_utils::CommitteeFixture;
+use test_utils::{get_protocol_config, latest_protocol_version};
 use tokio::sync::watch;
 use tokio::time::Duration;
 use types::{
@@ -25,7 +25,7 @@ use types::{
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn propose_header_and_form_certificate_v1() {
-    let cert_v1_protocol_config = latest_protocol_version();
+    let cert_v1_protocol_config = get_protocol_config(28);
     telemetry_subscribers::init_for_testing();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
@@ -144,8 +144,7 @@ async fn propose_header_and_form_certificate_v1() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn propose_header_and_form_certificate_v2() {
     telemetry_subscribers::init_for_testing();
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.worker_cache();

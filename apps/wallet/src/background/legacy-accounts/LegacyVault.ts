@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { decrypt, encrypt } from '_shared/cryptography/keystore';
+import { decrypt } from '_shared/cryptography/keystore';
 import {
 	entropyToMnemonic,
-	entropyToSerialized,
 	mnemonicToEntropy,
 	toEntropy,
 	validateEntropy,
@@ -12,33 +11,30 @@ import {
 import { fromExportedKeypair } from '_shared/utils/from-exported-keypair';
 import { mnemonicToSeedHex, type ExportedKeypair, type Keypair } from '@mysten/sui.js/cryptography';
 
-export const LATEST_VAULT_VERSION = 2;
+import { getFromLocalStorage } from '../storage-utils';
 
-export type StoredData = string | { v: 1 | 2; data: string };
+type StoredData = string | { v: 1 | 2; data: string };
 
-export type V2DecryptedDataType = {
+type V2DecryptedDataType = {
 	entropy: string;
 	importedKeypairs: ExportedKeypair[];
 	qredoTokens?: Record<string, string>;
 	mnemonicSeedHex?: string;
 };
 
-/**
- * Holds the mnemonic of the wallet and any imported Keypairs.
- * Also provides functionality to create/encrypt/decrypt it.
- * @deprecated
- */
-export class Vault {
+const VAULT_KEY = 'vault';
+
+export class LegacyVault {
 	public readonly entropy: Uint8Array;
 	public readonly importedKeypairs: Keypair[];
 	public readonly qredoTokens: Map<string, string> = new Map();
 	public readonly mnemonicSeedHex: string;
 
-	public static async from(
-		password: string,
-		data: StoredData,
-		onMigrateCallback?: (vault: Vault) => Promise<void>,
-	) {
+	public static async fromLegacyStorage(password: string) {
+		const data = await getFromLocalStorage<StoredData>(VAULT_KEY);
+		if (!data) {
+			throw new Error('Wallet is not initialized');
+		}
 		let entropy: Uint8Array | null = null;
 		let keypairs: Keypair[] = [];
 		let qredoTokens = new Map<string, string>();
@@ -68,13 +64,20 @@ export class Vault {
 		if (!validateEntropy(entropy)) {
 			throw new Error("Can't restore Vault, entropy is invalid.");
 		}
-		const vault = new Vault(entropy, keypairs, qredoTokens, mnemonicSeedHex);
-		const doMigrate =
-			typeof data === 'string' || data.v !== LATEST_VAULT_VERSION || !mnemonicSeedHex;
-		if (doMigrate && typeof onMigrateCallback === 'function') {
-			await onMigrateCallback(vault);
+		return new LegacyVault(entropy, keypairs, qredoTokens, mnemonicSeedHex);
+	}
+
+	public static async isInitialized() {
+		return !!(await getFromLocalStorage<StoredData>(VAULT_KEY));
+	}
+
+	public static async verifyPassword(password: string) {
+		try {
+			await LegacyVault.fromLegacyStorage(password);
+			return true;
+		} catch (e) {
+			return false;
 		}
-		return vault;
 	}
 
 	constructor(
@@ -87,19 +90,6 @@ export class Vault {
 		this.importedKeypairs = importedKeypairs;
 		this.qredoTokens = qredoTokens;
 		this.mnemonicSeedHex = mnemonicSeedHex || mnemonicToSeedHex(entropyToMnemonic(entropy));
-	}
-
-	public async encrypt(password: string) {
-		const dataToEncrypt: V2DecryptedDataType = {
-			entropy: entropyToSerialized(this.entropy),
-			importedKeypairs: this.importedKeypairs.map((aKeypair) => aKeypair.export()),
-			qredoTokens: Object.fromEntries(this.qredoTokens.entries()),
-			mnemonicSeedHex: this.mnemonicSeedHex,
-		};
-		return {
-			v: LATEST_VAULT_VERSION,
-			data: await encrypt(password, dataToEncrypt),
-		};
 	}
 
 	public getMnemonic() {

@@ -11,18 +11,18 @@ It accepts a list of network configs, which will be used to create `SuiClient` i
 currently active network.
 
 ```tsx
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { createNetworkConfigs, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { type SuiClientOptions } from '@mysten/sui.js/client';
 
 // Config options for the networks you want to connect to
-const networks = {
+const { networkConfig  = createNetworkConfig({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
-} satisfies Record<string, SuiClientOptions>;
+});
 
 function App() {
 	return (
-		<SuiClientProvider networks={networks} defaultNetwork="localnet">
+		<SuiClientProvider networks={networkConfig} defaultNetwork="localnet">
 			<YourApp />
 		</SuiClientProvider>
 	);
@@ -45,22 +45,22 @@ function App() {
 ## Using the SuiClientProvider as a controlled component
 
 ```tsx
-import { SuiClientProvider } from '@mysten/dapp-kit';
+import { createNetworkConfigs, SuiClientProvider } from '@mysten/dapp-kit';
 import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { useState } from 'react';
 
 // Config options for the networks you want to connect to
-const networks = {
+const { networkConfig } = createNetworkConfigs({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
-} satisfies Record<string, SuiClientOptions>;
+});
 
 function App() {
 	const [activeNetwork, setActiveNetwork] = useState('localnet' as keyof typeof networks);
 
 	return (
 		<SuiClientProvider
-			networks={networks}
+			networks={networkConfig}
 			network={activeNetwork}
 			onNetworkChange={(network) => {
 				setActiveNetwork(network);
@@ -138,5 +138,63 @@ function NetworkSelector() {
 			))}
 		</div>
 	);
+}
+```
+
+## Using network specific configuration
+
+If your dApp runs on multiple networks, the IDs for packages, and potentially other configuration
+will change depending on which network is being used. You can use `createNetworkConfigs` to create
+per-network config which can be accessed from your components.
+
+the `createNetworkConfigs` function returns the provided config, along a few hooks you can use to
+get access the variables defined in your config.
+
+- `useNetworkConfig` returns the full network config object
+- `useNetworkVariables` returns the full variables object from the network config
+- `useNetworkVariable` returns a specific variable from the network config
+
+```tsx
+import { createNetworkConfigs, SuiClientProvider } from '@mysten/dapp-kit';
+
+import { createNetworkConfigs, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { type SuiClientOptions } from '@mysten/sui.js/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// Config options for the networks you want to connect to
+const { networkConfig, useNetworkVariable } = createNetworkConfigs({
+	localnet: {
+		url: getFullnodeUrl('localnet'),
+		variables: {
+			myMovePackageId: '0x123',
+		}
+	},
+	mainnet: {
+		url: getFullnodeUrl('mainnet'),
+		variables: {
+			myMovePackageId: '0x456',
+		}
+	},
+});
+
+const queryClient = new QueryClient();
+
+function App() {
+	return (
+		<QueryClientProvider client={queryClient}>
+			<SuiClientProvider networks={networkConfig} defaultNetwork="localnet">
+				<WalletProvider>
+					<YourApp />
+				</WalletProvider>
+			</SuiClientProvider>
+		</QueryClientProvider>
+	);
+}
+
+
+function YourApp() {
+	const id = useNetworkVariable('myMovePackageId');
+
+	return <div>Package ID: {id}</div>;
 }
 ```

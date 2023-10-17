@@ -34,21 +34,21 @@ providers. The props available on the providers are covered in more detail in th
 pages.
 
 ```tsx
-import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
+import { createNetworkConfigs, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { type SuiClientOptions } from '@mysten/sui.js/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to
-const networks = {
+const { networkConfig } = createNetworkConfigs({
 	localnet: { url: getFullnodeUrl('localnet') },
 	mainnet: { url: getFullnodeUrl('mainnet') },
-} satisfies Record<string, SuiClientOptions>;
+});
 const queryClient = new QueryClient();
 
 function App() {
 	return (
 		<QueryClientProvider client={queryClient}>
-			<SuiClientProvider networks={networks} defaultNetwork="localnet">
+			<SuiClientProvider networks={networkConfig} defaultNetwork="localnet">
 				<WalletProvider>
 					<YourApp />
 				</WalletProvider>

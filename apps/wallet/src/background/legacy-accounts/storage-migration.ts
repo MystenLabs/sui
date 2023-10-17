@@ -3,24 +3,23 @@
 
 import Dexie from 'dexie';
 
-import { accountSourcesEvents } from './account-sources/events';
+import { accountSourcesEvents } from '../account-sources/events';
 import {
 	deriveKeypairFromSeed,
 	makeDerivationPath,
 	MnemonicAccountSource,
-} from './account-sources/MnemonicAccountSource';
-import { QredoAccountSource } from './account-sources/QredoAccountSource';
-import { type SerializedAccount } from './accounts/Account';
-import { accountsEvents } from './accounts/events';
-import { ImportedAccount } from './accounts/ImportedAccount';
-import { LedgerAccount } from './accounts/LedgerAccount';
-import { MnemonicAccount } from './accounts/MnemonicAccount';
-import { type QredoSerializedAccount } from './accounts/QredoAccount';
-import { backupDB, getDB } from './db';
-import { getSavedLedgerAccounts, STORAGE_LAST_ACCOUNT_INDEX_KEY } from './keyring';
-import { VaultStorage } from './keyring/VaultStorage';
-import { getAllQredoConnections } from './qredo/storage';
-import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from './storage-utils';
+} from '../account-sources/MnemonicAccountSource';
+import { QredoAccountSource } from '../account-sources/QredoAccountSource';
+import { type SerializedAccount } from '../accounts/Account';
+import { accountsEvents } from '../accounts/events';
+import { ImportedAccount } from '../accounts/ImportedAccount';
+import { LedgerAccount } from '../accounts/LedgerAccount';
+import { MnemonicAccount } from '../accounts/MnemonicAccount';
+import { type QredoSerializedAccount } from '../accounts/QredoAccount';
+import { backupDB, getDB } from '../db';
+import { type QredoConnection } from '../qredo/types';
+import { getFromLocalStorage, makeUniqueKey, setToLocalStorage } from '../storage-utils';
+import { LegacyVault } from './LegacyVault';
 
 export type Status = 'required' | 'inProgress' | 'ready';
 
@@ -37,7 +36,7 @@ export async function getStatus() {
 	if (statusCache) {
 		return statusCache;
 	}
-	const vaultInitialized = await VaultStorage.isWalletInitialized();
+	const vaultInitialized = await LegacyVault.isInitialized();
 	if (!vaultInitialized) {
 		return (statusCache = 'ready');
 	}
@@ -52,20 +51,16 @@ export function clearStatus() {
 	statusCache = null;
 }
 
-export async function makeMnemonicAccounts(password: string) {
-	if (!VaultStorage.mnemonicSeedHex || !VaultStorage.entropy) {
-		throw new Error('Missing mnemonic entropy');
-	}
-	const currentMnemonicIndex =
-		(await getFromLocalStorage<number>(STORAGE_LAST_ACCOUNT_INDEX_KEY, 0)) || 0;
+async function makeMnemonicAccounts(password: string, vault: LegacyVault) {
+	const currentMnemonicIndex = (await getFromLocalStorage<number>('last_account_index', 0)) || 0;
 	const mnemonicSource = await MnemonicAccountSource.createNew({
 		password,
-		entropyInput: VaultStorage.entropy,
+		entropyInput: vault.entropy,
 	});
 	const mnemonicAccounts = [];
 	for (let i = 0; i <= currentMnemonicIndex; i++) {
 		const derivationPath = makeDerivationPath(i);
-		const keyPair = deriveKeypairFromSeed(VaultStorage.mnemonicSeedHex, derivationPath);
+		const keyPair = deriveKeypairFromSeed(vault.mnemonicSeedHex, derivationPath);
 		mnemonicAccounts.push(
 			MnemonicAccount.createNew({ keyPair, derivationPath, sourceID: mnemonicSource.id }),
 		);
@@ -73,16 +68,27 @@ export async function makeMnemonicAccounts(password: string) {
 	return { mnemonicSource, mnemonicAccounts };
 }
 
-async function makeImportedAccounts(password: string) {
-	const importedKeyPairs = VaultStorage.getImportedKeys();
-	if (!importedKeyPairs) {
-		throw new Error('Failed to load imported accounts, vault is locked');
-	}
+async function makeImportedAccounts(password: string, vault: LegacyVault) {
 	return Promise.all(
-		importedKeyPairs.map((keyPair) =>
+		vault.importedKeypairs.map((keyPair) =>
 			ImportedAccount.createNew({ password, keyPair: keyPair.export() }),
 		),
 	);
+}
+
+type LegacySerializedLedgerAccount = {
+	type: 'LEDGER';
+	address: string;
+	derivationPath: string;
+	publicKey: string | null;
+};
+
+async function getSavedLedgerAccounts() {
+	const ledgerAccounts = await getFromLocalStorage<LegacySerializedLedgerAccount[]>(
+		'imported_ledger_accounts',
+		[],
+	);
+	return ledgerAccounts || [];
 }
 
 async function makeLedgerAccounts(password: string) {
@@ -94,11 +100,15 @@ async function makeLedgerAccounts(password: string) {
 	);
 }
 
-async function makeQredoAccounts(password: string) {
+async function getAllLegacyStoredQredoConnections() {
+	return (await getFromLocalStorage<QredoConnection[]>('qredo-connections', [])) || [];
+}
+
+async function makeQredoAccounts(password: string, vault: LegacyVault) {
 	const qredoSources = [];
 	const qredoAccounts: Omit<QredoSerializedAccount, 'id'>[] = [];
-	for (const aQredoConnection of await getAllQredoConnections()) {
-		const refreshToken = VaultStorage.getQredoToken(aQredoConnection.id);
+	for (const aQredoConnection of await getAllLegacyStoredQredoConnections()) {
+		const refreshToken = vault.qredoTokens.get(aQredoConnection.id);
 		if (!refreshToken) {
 			throw new Error(
 				`Failed to load qredo account (${aQredoConnection.id}), refresh token not found`,
@@ -137,17 +147,20 @@ function withID<T extends Omit<SerializedAccount, 'id'>>(anAccount: T) {
 }
 
 export async function doMigration(password: string) {
-	await VaultStorage.unlock(password);
+	const legacyVault = await LegacyVault.fromLegacyStorage(password);
 	const currentStatus = await getStatus();
 	if (currentStatus === 'required') {
 		statusCache = 'inProgress';
 		try {
 			const db = await getDB();
 			const currentActiveAccountAddress = await getActiveAccountAddress();
-			const { mnemonicAccounts, mnemonicSource } = await makeMnemonicAccounts(password);
-			const importedAccounts = await makeImportedAccounts(password);
+			const { mnemonicAccounts, mnemonicSource } = await makeMnemonicAccounts(
+				password,
+				legacyVault,
+			);
+			const importedAccounts = await makeImportedAccounts(password, legacyVault);
 			const ledgerAccounts = await makeLedgerAccounts(password);
-			const { qredoAccounts, qredoSources } = await makeQredoAccounts(password);
+			const { qredoAccounts, qredoSources } = await makeQredoAccounts(password, legacyVault);
 			await db.transaction('rw', db.accounts, db.accountSources, async () => {
 				await MnemonicAccountSource.save(mnemonicSource, { skipBackup: true, skipEventEmit: true });
 				await db.accounts.bulkPut(mnemonicAccounts.map(withID));
@@ -180,5 +193,4 @@ export async function doMigration(password: string) {
 			throw e;
 		}
 	}
-	await VaultStorage.lock();
 }

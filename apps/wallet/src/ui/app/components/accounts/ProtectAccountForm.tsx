@@ -14,9 +14,15 @@ import { parseAutoLock, useAutoLockMinutes } from '../../hooks/useAutoLockMinute
 import { CheckboxField } from '../../shared/forms/CheckboxField';
 import { Form } from '../../shared/forms/Form';
 import { TextField } from '../../shared/forms/TextField';
-import { addDot } from '../../shared/input/password/validation';
 import { Link } from '../../shared/Link';
 import { AutoLockSelector, zodSchema } from './AutoLockSelector';
+
+function addDot(str: string | undefined) {
+	if (str && !str.endsWith('.')) {
+		return `${str}.`;
+	}
+	return str;
+}
 
 const formSchema = z
 	.object({
