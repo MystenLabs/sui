@@ -13693,6 +13693,7 @@ dependencies = [
  "async-stream-impl",
  "async-trait",
  "async_once",
+ "atomic_float",
  "atomicwrites",
  "auto_ops",
  "autocfg",
