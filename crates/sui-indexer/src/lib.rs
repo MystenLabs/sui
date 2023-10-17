@@ -266,11 +266,19 @@ fn get_http_client(rpc_client_url: &str) -> Result<HttpClient, IndexerError> {
 }
 
 pub fn new_pg_connection_pool(db_url: &str) -> Result<PgConnectionPool, IndexerError> {
+    new_pg_connection_pool_impl(db_url, None)
+}
+
+pub fn new_pg_connection_pool_impl(
+    db_url: &str,
+    pool_size: Option<u32>,
+) -> Result<PgConnectionPool, IndexerError> {
     let pool_config = PgConnectionPoolConfig::default();
     let manager = ConnectionManager::<PgConnection>::new(db_url);
 
+    let pool_size = pool_size.unwrap_or(pool_config.pool_size);
     diesel::r2d2::Pool::builder()
-        .max_size(pool_config.pool_size)
+        .max_size(pool_size)
         .connection_timeout(pool_config.connection_timeout)
         .connection_customizer(Box::new(pool_config.connection_config()))
         .build(manager)

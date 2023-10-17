@@ -26,10 +26,10 @@ async fn main() {
         }
         Command::StartServer {
             rpc_url,
+            db_url,
             port,
             host,
             config,
-            db_url,
             prom_host,
             prom_port,
         } => {
