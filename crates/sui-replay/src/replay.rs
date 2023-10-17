@@ -1056,7 +1056,7 @@ impl LocalExec {
         match &self.fetcher {
             Fetchers::Remote(_) => Ok(self
                 .protocol_version_system_package_table
-                .get(&epoch)
+                .get(&protocol_version)
                 .ok_or(ReplayEngineError::FrameworkObjectVersionTableNotPopulated {
                     protocol_version,
                 })?
@@ -1194,7 +1194,7 @@ impl LocalExec {
                 self.protocol_version_system_package_table
                     .iter()
                     .rev()
-                    .find(|(ver, ent)| **ver <= prot_ver)
+                    .find(|(ver, _)| **ver <= prot_ver)
                     .expect("Prev entry must exist")
                     .1
                     .clone()

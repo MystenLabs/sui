@@ -129,7 +129,7 @@ pub enum ReplayEngineError {
     #[error(
         "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
     )]
-    FrameworkObjectVersionTableNotPopulated { epoch: u64 },
+    FrameworkObjectVersionTableNotPopulated { protocol_version: u64 },
 
     #[error("Protocol version not found for epoch {epoch}")]
     ProtocolVersionNotFound { epoch: u64 },
