@@ -3,9 +3,9 @@ import {
   DEVNET_COUNTER_PACKAGE_ID,
   MAINNET_COUNTER_PACKAGE_ID,
 } from "./constants.ts";
-import { createNetworkConfig } from "@mysten/dapp-kit";
+import { createNetworkConfigs } from "@mysten/dapp-kit";
 
-const { networkConfigs, useNetworkConfig } = createNetworkConfig({
+const { networkConfigs, useNetworkConfig } = createNetworkConfigs({
   devnet: {
     url: getFullnodeUrl("devnet"),
     counterPackageId: DEVNET_COUNTER_PACKAGE_ID,

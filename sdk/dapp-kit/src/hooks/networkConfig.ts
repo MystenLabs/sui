@@ -5,7 +5,7 @@ import type { SuiClientOptions } from '@mysten/sui.js/client';
 
 import { useSuiClientContext } from './useSuiClient.js';
 
-export function createNetworkConfig<T extends Record<string, SuiClientOptions>>(
+export function createNetworkConfigs<T extends Record<string, SuiClientOptions>>(
 	networkConfigs: T,
 ): { networkConfigs: T; useNetworkConfig: () => T[keyof T] } {
 	return {

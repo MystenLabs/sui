@@ -7,7 +7,7 @@ import { getFullnodeUrl } from "@mysten/sui.js/client";
 import {
   SuiClientProvider,
   WalletProvider,
-  createNetworkConfig,
+  createNetworkConfigs,
 } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
@@ -15,7 +15,7 @@ import App from "./App.tsx";
 
 const queryClient = new QueryClient();
 
-const { networkConfigs } = createNetworkConfig({
+const { networkConfigs } = createNetworkConfigs({
   localnet: { url: getFullnodeUrl("localnet") },
   devnet: { url: getFullnodeUrl("devnet") },
   testnet: { url: getFullnodeUrl("testnet") },
