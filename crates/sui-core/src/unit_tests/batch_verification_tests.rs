@@ -119,6 +119,7 @@ async fn test_async_verifier() {
         metrics,
         vec![],
         ZkLoginEnv::Test,
+        true,
     ));
 
     let tasks: Vec<_> = (0..32)
