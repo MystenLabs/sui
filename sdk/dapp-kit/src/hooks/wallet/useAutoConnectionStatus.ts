@@ -4,8 +4,9 @@
 import { useWalletStore } from './useWalletStore.js';
 
 /**
- * Retrieves the status for the wallet auto-connection process.
+ * Retrieves the status for the initial wallet auto-connection process.
  */
-export function useAutoConnectStatus() {
+export function useAutoConnectionStatus() {
+	// TODO: Replace this with shareable mutation state once we require react-query v5
 	return useWalletStore((state) => state.autoConnectionStatus);
 }

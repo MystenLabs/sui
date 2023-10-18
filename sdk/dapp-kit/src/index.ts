@@ -13,6 +13,7 @@ export * from './hooks/useSuiClientInfiniteQuery.js';
 export * from './hooks/useSuiClientMutation.js';
 export * from './hooks/useSuiClientQuery.js';
 export * from './hooks/wallet/useAccounts.js';
+export * from './hooks/wallet/useAutoConnectionStatus.js';
 export * from './hooks/wallet/useConnectWallet.js';
 export * from './hooks/wallet/useCurrentAccount.js';
 export * from './hooks/wallet/useCurrentWallet.js';
