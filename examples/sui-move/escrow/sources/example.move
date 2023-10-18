@@ -77,14 +77,11 @@ module escrow::example {
     /// The key does not match this lock.
     const ELockKeyMismatch: u64 = 0;
 
-    /// The locked object has already been swapped
-    const EAlreadySwapped: u64 = 1;
-
     /// The `sender` and `recipient` of the two escrowed objects do not match
-    const EMismatchedSenderRecipient: u64 = 2;
+    const EMismatchedSenderRecipient: u64 = 1;
 
     /// The `exchange_for` fields of the two escrowed objects do not match
-    const EMismatchedExchangeObject: u64 = 3;
+    const EMismatchedExchangeObject: u64 = 2;
 
     // === Public Functions ===
 
@@ -212,7 +209,7 @@ module escrow::example {
     // === Tests ===
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::test_scenario::{Self as ts, Scenario};
+    #[test_only] use sui::test_scenario::{Self as ts, Scenario};
 
     #[test_only]
     fun test_coin(ts: &mut Scenario): Coin<SUI> {
