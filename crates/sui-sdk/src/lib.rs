@@ -208,7 +208,7 @@ impl SuiClientBuilder {
         );
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
 
-        let ws = if let Some(url) = self.ws_url {
+        let ws = if let Some(ref url) = self.ws_url {
             let mut builder = WsClientBuilder::default()
                 .max_request_body_size(2 << 30)
                 .max_concurrent_requests(self.max_concurrent_requests)
@@ -219,17 +219,20 @@ impl SuiClientBuilder {
                 builder = builder.ping_interval(duration)
             }
 
+            let url = add_port_to_url(url.as_str())?;
+
             Some(builder.build(url).await?)
         } else {
             None
         };
 
+        let url = add_port_to_url(http.as_ref())?;
         let http = HttpClientBuilder::default()
             .max_request_body_size(2 << 30)
             .max_concurrent_requests(self.max_concurrent_requests)
             .set_headers(headers.clone())
             .request_timeout(self.request_timeout)
-            .build(http)?;
+            .build(url)?;
 
         let info = Self::get_server_info(&http, &ws).await?;
 
@@ -553,5 +556,103 @@ impl DataReader for ReadApi {
     /// Returns the reference gas price as a u64 or an error otherwise
     async fn get_reference_gas_price(&self) -> Result<u64, anyhow::Error> {
         Ok(self.get_reference_gas_price().await?)
+    }
+}
+
+fn add_port_to_url(url: &str) -> Result<String, Error> {
+    let parsed_uri = reqwest::Url::parse(url)
+        .map_err(|_| Error::InvalidURI(format!("{}. Please provide an absolute URI", url)))?;
+
+    // if the URI is name.domain:port_number, then just return an error as the underlying
+    // http connection requires a scheme
+    if parsed_uri.cannot_be_a_base() {
+        return Err(Error::InvalidURI(format!(
+            "{}. URL scheme not supported, expects 'http', 'https' or 'wss'.",
+            url
+        )));
+    }
+
+    let mut port = 80;
+    if (parsed_uri.scheme() == "https" || parsed_uri.scheme() == "wss")
+        && parsed_uri.port().is_none()
+    {
+        port = 443;
+    }
+
+    let url = if parsed_uri.port().is_none() {
+        let uri = parsed_uri.to_string();
+        // the uri is usually http(s)://hostname:port/api_endpoint&params
+        // split this into "scheme+host/authority+port and the rest
+        // because we want to be able to just add the port, and then reconstruct
+        // the whole URI without messing with the scheme/host/authority and the endpoints
+        let splits = uri.splitn(4, "/").collect::<Vec<_>>();
+        // if we have an endpoint path
+        let (host, endpoint_path) = if splits.len() == 4 {
+            (splits[2], splits[3])
+        } else {
+            (splits[2], "")
+        };
+        let host = format!("{}:{}", host, port);
+        let uri = format!("{}://{}/{}", parsed_uri.scheme(), host, endpoint_path);
+        uri
+    } else {
+        parsed_uri.to_string()
+    };
+    Ok(url)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::add_port_to_url;
+
+    #[test]
+    fn test_add_port_to_url() {
+        let url = "http://test.com/api";
+        let expected_url = "http://test.com:80/api";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://test.com";
+        let expected_url = "http://test.com:80/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://username:password@example.com";
+        let expected_url = "http://username:password@example.com:80/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://username:password@example.com";
+        let expected_url = "http://username:password@example.com:80/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "https://test.com";
+        let expected_url = "https://test.com:443/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "wss://fullnode.mainnet.sui.io";
+        let expected_url = "wss://fullnode.mainnet.sui.io:443/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://fullnode.mainnet.sui.io";
+        let expected_url = "http://fullnode.mainnet.sui.io:80/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://fullnode.mainnet.sui.io:999";
+        let expected_url = "http://fullnode.mainnet.sui.io:999/";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "http://fullnode.mainnet.sui.io:999/api/v1";
+        let expected_url = "http://fullnode.mainnet.sui.io:999/api/v1";
+        assert_eq!(expected_url.to_string(), add_port_to_url(url).unwrap());
+
+        let url = "fullnode.mainnet.sui.io:999";
+        assert!(add_port_to_url(url).is_err());
+
+        let url = "fullnode.mainnet.sui.io:999/endpoint";
+        assert!(add_port_to_url(url).is_err());
+
+        let url = "fullnode.mainnet.sui.io";
+        assert!(add_port_to_url(url).is_err());
+
+        let url = "fullnode.mainnet.sui.io/api";
+        assert!(add_port_to_url(url).is_err());
     }
 }
