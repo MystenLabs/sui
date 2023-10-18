@@ -278,13 +278,13 @@ impl PgManager {
         if let Some(after) = after {
             let after = self.parse_obj_cursor(&after)?;
             query = query
-                .filter(objects::dsl::checkpoint_sequence_number.gt(after))
-                .order(objects::dsl::checkpoint_sequence_number.asc());
+                .filter(objects::dsl::object_id.gt(after))
+                .order(objects::dsl::object_id.asc());
         } else if let Some(before) = before {
             let before = self.parse_obj_cursor(&before)?;
             query = query
-                .filter(objects::dsl::checkpoint_sequence_number.lt(before))
-                .order(objects::dsl::checkpoint_sequence_number.desc());
+                .filter(objects::dsl::object_id.lt(before))
+                .order(objects::dsl::object_id.desc());
         }
 
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
@@ -531,7 +531,7 @@ impl PgManager {
                 .filter(checkpoints::dsl::sequence_number.gt(after))
                 .order(checkpoints::dsl::sequence_number.asc());
         } else if let Some(before) = before {
-            let before = self.parse_obj_cursor(&before)?;
+            let before = self.parse_checkpoint_cursor(&before)?;
             query = query
                 .filter(checkpoints::dsl::sequence_number.lt(before))
                 .order(checkpoints::dsl::sequence_number.desc());
@@ -592,13 +592,13 @@ impl PgManager {
         if let Some(after) = after {
             let after = self.parse_obj_cursor(&after)?;
             query = query
-                .filter(objects::dsl::checkpoint_sequence_number.gt(after))
-                .order(objects::dsl::checkpoint_sequence_number.asc());
+                .filter(objects::dsl::object_id.gt(after))
+                .order(objects::dsl::object_id.asc());
         } else if let Some(before) = before {
             let before = self.parse_obj_cursor(&before)?;
             query = query
-                .filter(objects::dsl::checkpoint_sequence_number.lt(before))
-                .order(objects::dsl::checkpoint_sequence_number.desc());
+                .filter(objects::dsl::object_id.lt(before))
+                .order(objects::dsl::object_id.desc());
         }
 
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
@@ -642,11 +642,10 @@ impl PgManager {
         Ok(tx_sequence_number)
     }
 
-    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<i64, Error> {
-        let checkpoint_sequence_number = cursor
-            .parse::<i64>()
-            .map_err(|_| Error::InvalidCursor("obj".to_string()))?;
-        Ok(checkpoint_sequence_number)
+    pub(crate) fn parse_obj_cursor(&self, cursor: &str) -> Result<Vec<u8>, Error> {
+        Ok(SuiAddress::from_str(cursor)
+            .map_err(|e| Error::InvalidCursor(e.to_string()))?
+            .into_vec())
     }
 
     pub(crate) fn parse_checkpoint_cursor(&self, cursor: &str) -> Result<i64, Error> {
@@ -970,11 +969,10 @@ impl PgManager {
             connection
                 .edges
                 .extend(stored_objs.into_iter().filter_map(|stored_obj| {
-                    let cursor = stored_obj.checkpoint_sequence_number.to_string();
                     Object::try_from(stored_obj)
                         .map_err(|e| eprintln!("Error converting object: {:?}", e))
                         .ok()
-                        .map(|obj| Edge::new(cursor, obj))
+                        .map(|obj| Edge::new(obj.address.to_string(), obj))
                 }));
             Ok(Some(connection))
         } else {
@@ -1099,11 +1097,10 @@ impl PgManager {
             connection
                 .edges
                 .extend(stored_objs.into_iter().filter_map(|stored_obj| {
-                    let cursor = stored_obj.checkpoint_sequence_number.to_string();
                     Coin::try_from(stored_obj)
                         .map_err(|e| eprintln!("Error converting object to coin: {:?}", e))
                         .ok()
-                        .map(|obj| Edge::new(cursor, obj))
+                        .map(|coin| Edge::new(coin.id.to_string(), coin))
                 }));
             Ok(Some(connection))
         } else {
