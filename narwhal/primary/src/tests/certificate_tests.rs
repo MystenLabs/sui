@@ -11,7 +11,7 @@ use rand::{
     SeedableRng,
 };
 use std::num::NonZeroUsize;
-use test_utils::{latest_protocol_version, CommitteeFixture};
+use test_utils::{get_protocol_config, latest_protocol_version, CommitteeFixture};
 use types::{Certificate, CertificateAPI, SignatureVerificationState, Vote, VoteAPI};
 
 #[test]
@@ -40,7 +40,7 @@ fn test_empty_certificate_verification() {
 #[test]
 fn test_valid_certificate_v1_verification() {
     let fixture = CommitteeFixture::builder().build();
-    let cert_v1_protocol_config = latest_protocol_version();
+    let cert_v1_protocol_config = get_protocol_config(28);
     let committee = fixture.committee();
     let header = fixture.header(&cert_v1_protocol_config);
 
@@ -63,8 +63,7 @@ fn test_valid_certificate_v1_verification() {
 
 #[test]
 fn test_valid_certificate_v2_verification() {
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let header = fixture.header(&cert_v2_config);

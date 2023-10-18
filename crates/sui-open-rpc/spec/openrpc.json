@@ -1366,11 +1366,13 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "narwhal_certificate_v2": false,
+                "narwhal_header_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
+                "random_beacon": false,
                 "receive_objects": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "simple_conservation_checks": false,
@@ -1821,6 +1823,7 @@
                 "package_publish_cost_per_byte": {
                   "u64": "80"
                 },
+                "random_beacon_reduction_allowed_delta": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
@@ -5223,6 +5226,9 @@
       "BigInt_for_uint128": {
         "type": "string"
       },
+      "BigInt_for_uint16": {
+        "type": "string"
+      },
       "BigInt_for_uint32": {
         "type": "string"
       },
@@ -7683,6 +7689,18 @@
       },
       "ProtocolConfigValue": {
         "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "u16"
+            ],
+            "properties": {
+              "u16": {
+                "$ref": "#/components/schemas/BigInt_for_uint16"
+              }
+            },
+            "additionalProperties": false
+          },
           {
             "type": "object",
             "required": [
