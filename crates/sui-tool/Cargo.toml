@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+num_cpus.workspace = true
 bcs.workspace = true
 clap = { version = "4.1.4", features = ["derive"] }
 colored.workspace = true
