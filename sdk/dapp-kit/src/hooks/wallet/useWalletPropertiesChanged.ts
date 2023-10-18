@@ -10,7 +10,7 @@ import { useWalletStore } from './useWalletStore.js';
  * Internal hook for easily handling various changes in properties for a wallet.
  */
 export function useWalletPropertiesChanged() {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const updateWalletAccounts = useWalletStore((state) => state.updateWalletAccounts);
 
 	useEffect(() => {

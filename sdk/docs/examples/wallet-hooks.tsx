@@ -5,6 +5,7 @@ import {
 	ConnectButton,
 	SuiClientProvider,
 	useAccounts,
+	useAutoConnectionStatus,
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
@@ -19,7 +20,7 @@ import {
 import { getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { ComponentProps, useEffect, useState } from 'react';
 
 import '@mysten/dapp-kit/dist/index.css';
 
@@ -57,26 +58,26 @@ export const UseAccountsExample = withProviders(() => {
 });
 
 export const UseCurrentWalletExample = withProviders(() => {
-	const wallet = useCurrentWallet();
+	const { currentWallet, connectionStatus } = useCurrentWallet();
 
 	return (
 		<div style={{ padding: 20 }}>
 			<ConnectButton />
-			{!wallet ? (
-				<div>No wallet connected</div>
-			) : (
+			{connectionStatus === 'connected' ? (
 				<div>
 					<h2>Current wallet:</h2>
-					<div>Name: {wallet.name}</div>
+					<div>Name: {currentWallet.name}</div>
 					<div>
 						Accounts:
 						<ul>
-							{wallet.accounts.map((account) => (
+							{currentWallet.accounts.map((account) => (
 								<li key={account.address}>- {account.address}</li>
 							))}
 						</ul>
 					</div>
 				</div>
+			) : (
+				<div>Connection status: ${connectionStatus}</div>
 			)}
 		</div>
 	);
@@ -98,6 +99,20 @@ export const UseCurrentAccountExample = withProviders(() => {
 		</div>
 	);
 });
+
+export const UseAutoConnectionStatusExample = withProviders(
+	() => {
+		const autoConnectionStatus = useAutoConnectionStatus();
+
+		return (
+			<div style={{ padding: 20 }}>
+				<ConnectButton />
+				<div>Auto-connection status: {autoConnectionStatus}</div>
+			</div>
+		);
+	},
+	{ autoConnect: true },
+);
 
 export const UseConnectWalletExample = withProviders(() => {
 	const wallets = useWallets();
@@ -284,7 +299,10 @@ export const UseSignAndExecuteTransactionBlockExample = withProviders(() => {
 	);
 });
 
-function withProviders(Component: React.FunctionComponent<object>) {
+function withProviders(
+	Component: React.FunctionComponent<object>,
+	walletProviderProps?: Omit<ComponentProps<typeof WalletProvider>, 'children'>,
+) {
 	// Work around server-side pre-rendering
 	const queryClient = new QueryClient();
 	const networks = {
@@ -304,7 +322,7 @@ function withProviders(Component: React.FunctionComponent<object>) {
 		return (
 			<QueryClientProvider client={queryClient}>
 				<SuiClientProvider networks={networks}>
-					<WalletProvider>
+					<WalletProvider {...walletProviderProps}>
 						<Component />
 					</WalletProvider>
 				</SuiClientProvider>
