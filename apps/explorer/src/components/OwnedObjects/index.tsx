@@ -82,12 +82,12 @@ export function OwnedObjects({ id }: { id: string }) {
 	const isLoading = filter === FILTER_VALUES.ALL ? isFetching : kioskDataFetching;
 
 	useEffect(() => {
-		if (!isLoading && !filter) {
-			if (kioskData?.list?.length) {
-				setFilter(FILTER_VALUES.KIOSKS);
-			} else {
-				setFilter(FILTER_VALUES.ALL);
-			}
+		if (!isLoading) {
+			setFilter(
+				kioskData?.list?.length && filter === FILTER_VALUES.KIOSKS
+					? FILTER_VALUES.KIOSKS
+					: FILTER_VALUES.ALL,
+			);
 		}
 	}, [filter, isLoading, kioskData?.list?.length, setFilter]);
 
