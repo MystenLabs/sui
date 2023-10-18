@@ -23,7 +23,7 @@ export function useDisconnectWallet({
 	mutationKey,
 	...mutationOptions
 }: UseDisconnectWalletMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const setWalletDisconnected = useWalletStore((state) => state.setWalletDisconnected);
 
 	return useMutation({

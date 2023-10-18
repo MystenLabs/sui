@@ -45,7 +45,7 @@ export function useSignPersonalMessage({
 	mutationKey,
 	...mutationOptions
 }: UseSignPersonalMessageMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 
 	return useMutation({

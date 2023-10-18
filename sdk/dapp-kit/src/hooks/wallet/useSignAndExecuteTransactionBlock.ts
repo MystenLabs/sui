@@ -52,7 +52,7 @@ export function useSignAndExecuteTransactionBlock({
 	executeFromWallet,
 	...mutationOptions
 }: UseSignAndExecuteTransactionBlockMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();
 

@@ -45,7 +45,7 @@ export function useSignTransactionBlock({
 	mutationKey,
 	...mutationOptions
 }: UseSignTransactionBlockMutationOptions = {}) {
-	const currentWallet = useCurrentWallet();
+	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 
 	return useMutation({
