@@ -1,5 +1,5 @@
 error[E08001]: cannot compute constant value
-  ┌─ tests/move_2024/typing/const_in_const_circular.move:5:11
+  ┌─ tests/move_check/typing/const_in_const_circular.move:5:11
   │
 3 │     const C0: u64 = C1 + 1;
   │           -- Cyclic constant defined here
@@ -11,19 +11,19 @@ error[E08001]: cannot compute constant value
   │           -- Cyclic constant defined here
 
 error[E08001]: cannot compute constant value
-  ┌─ tests/move_2024/typing/const_in_const_circular.move:9:11
+  ┌─ tests/move_check/typing/const_in_const_circular.move:9:11
   │
 9 │     const C3: u64 = C1 + 1;
   │           ^^ Constant uses constant C1, which has a circular dependency
 
 error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/typing/const_in_const_circular.move:13:11
+   ┌─ tests/move_check/typing/const_in_const_circular.move:13:11
    │
 13 │     const C5: u64 = C1 + C4;
    │           ^^ Constant uses constant C1, which has a circular dependency
 
 error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/typing/const_in_const_circular.move:15:11
+   ┌─ tests/move_check/typing/const_in_const_circular.move:15:11
    │
 15 │     const C6: u64 = C7 + 1;
    │           ^^ Constant definitions form a circular dependency: C6, C9, C7
@@ -35,7 +35,7 @@ error[E08001]: cannot compute constant value
    │           -- Cyclic constant defined here
 
 error[E08001]: cannot compute constant value
-   ┌─ tests/move_2024/typing/const_in_const_circular.move:23:11
+   ┌─ tests/move_check/typing/const_in_const_circular.move:23:11
    │
 23 │     const C10: u64 = C0 + C6;
    │           ^^^ Constant uses constant C0, which has a circular dependency
