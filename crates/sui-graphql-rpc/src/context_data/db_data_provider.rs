@@ -1341,9 +1341,7 @@ impl PgManager {
                         package: SuiAddress::from_array(**e.package_id),
                         name: e.transaction_module.to_string(),
                     }),
-                    event_type: Some(MoveType {
-                        repr: e.type_.to_string(),
-                    }),
+                    event_type: Some(MoveType::new(e.type_.to_string())),
                     senders: Some(vec![Address {
                         address: SuiAddress::from_array(e.sender.to_inner()),
                     }]),

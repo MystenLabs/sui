@@ -320,7 +320,6 @@ type MoveData =
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
   | { Struct:  [{ name: string, value: MoveData }] }
-
 """
 scalar MoveData
 
@@ -376,11 +375,43 @@ type MovePackage {
 	asObject: Object
 }
 
+"""
+Represents concrete types (no type parameters, no references)
+"""
 type MoveType {
+	"""
+	Flat representation of the type signature, as a displayable string.
+	"""
 	repr: String!
+	"""
+	Structured representation of the type signature.
+	"""
+	signature: MoveTypeSignature!
 }
 
+"""
+The signature of a concrete Move Type (a type with all its type
+parameters instantiated with concrete types, that contains no
+references), corresponding to the following recursive type:
+
+type MoveTypeSignature =
+    "address"
+  | "bool"
+  | "u8" | "u16" | ... | "u256"
+  | { vector: MoveTypeSignature }
+  | {
+      struct: {
+        package: string,
+        module: string,
+        type: string,
+        typeParameters: [MoveTypeSignature],
+      }
+    }
+"""
+scalar MoveTypeSignature
+
 type MoveValue {
+	type: MoveType!
 	bcs: Base64!
 	data: MoveData!
 }
