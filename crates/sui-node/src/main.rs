@@ -3,8 +3,6 @@
 
 use clap::Parser;
 use mysten_common::sync::async_once_cell::AsyncOnceCell;
-use std::env;
-use std::env::VarError;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,19 +63,13 @@ fn main() {
     let prometheus_registry = registry_service.default_registry();
 
     // Initialize logging
-    let mut telemetry_config = telemetry_subscribers::TelemetryConfig::new()
+    let (_guard, filter_handle) = telemetry_subscribers::TelemetryConfig::new()
+        // Set a default
+        .with_sample_nth(10)
         .with_target_prefix("sui_json_rpc")
         .with_env()
-        .with_prom_registry(&prometheus_registry);
-
-    match env::var_os("GAS_STATS_FILE") {
-        Some(file_path) => {
-            telemetry_config = telemetry_config.with_log_file(file_path.to_str().unwrap());
-        }
-        _ => {}
-    }
-
-    let (_guard, filter_handle) = telemetry_config.init();
+        .with_prom_registry(&prometheus_registry)
+        .init();
 
     drop(metrics_rt);
 

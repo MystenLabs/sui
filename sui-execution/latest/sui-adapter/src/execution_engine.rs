@@ -8,6 +8,7 @@ mod checked {
 
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
+    use std::collections::BTreeMap;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -24,12 +25,14 @@ mod checked {
         RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
     };
     use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::GAS_STATS_TARGET;
     use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_binary_format::access::ModuleAccess;
+    use move_core_types::account_address::AccountAddress;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -563,6 +566,7 @@ mod checked {
                 Ok(Mode::empty_results())
             }
             TransactionKind::ProgrammableTransaction(pt) => {
+                track_programmable_transaction(temporary_store.tx_digest(), &pt);
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
                     metrics,
@@ -638,6 +642,79 @@ mod checked {
         }?;
         temporary_store.check_execution_results_consistency()?;
         Ok(result)
+    }
+
+    fn track_programmable_transaction(digest: TransactionDigest, pt: &ProgrammableTransaction) {
+        let mut publishes = 0u64;
+        let mut splits = 0u64;
+        let mut merges = 0u64;
+        let mut make_vecs = 0u64;
+        let mut transfers = 0u64;
+        let mut package_bytes = 0u64;
+        let mut packages = BTreeMap::new();
+        let mut modules = BTreeMap::new();
+        let mut functions = BTreeMap::new();
+
+        for command in &pt.commands {
+            match command {
+                Command::MoveCall(mc) => {
+                    let package = format!("{}", mc.package);
+                    let package_count = packages.entry(package.clone()).or_insert(0u64);
+                    *package_count += 1;
+                    let mut module = package;
+                    module.push_str("::");
+                    module.push_str(mc.module.as_str());
+                    let module_count = modules.entry(module.clone()).or_insert(0u64);
+                    *module_count += 1;
+                    let mut function = module;
+                    function.push_str("::");
+                    function.push_str(mc.function.as_str());
+                    let function_count = functions.entry(function).or_insert(0u64);
+                    *function_count += 1;
+                }
+                Command::TransferObjects(_, _) => transfers += 1,
+                Command::SplitCoins(_, _) => splits += 1,
+                Command::MergeCoins(_, _) => merges += 1,
+                Command::Publish(packages, dependencies) => {
+                    publishes += 1;
+                    package_bytes += (dependencies.len() * AccountAddress::LENGTH) as u64;
+                    packages
+                        .iter()
+                        .for_each(|package| package_bytes += package.len() as u64);
+                }
+                Command::MakeMoveVec(_, _) => make_vecs += 1,
+                Command::Upgrade(_, _, _, _) => publishes += 1,
+            }
+        }
+
+        let mut pt_info = format!(
+            "GAS_STATS PT {}: {}, {}, {}, \
+       {}, {}, ",
+            digest, publishes, splits, merges, make_vecs, transfers,
+        );
+        if publishes > 0 {
+            pt_info.push_str(format!("p_b = {}, ", package_bytes).as_str());
+        }
+        if !packages.is_empty() {
+            pt_info.push_str("pgs = [");
+            for (package, count) in packages {
+                pt_info.push_str(format!("{} = {}, ", package, count).as_str());
+            }
+            pt_info.push_str("], mds = [");
+            for (module, count) in modules {
+                pt_info.push_str(format!("{} = {}, ", module, count).as_str());
+            }
+            pt_info.push_str("], fns = [");
+            for (function, count) in functions {
+                pt_info.push_str(format!("{} = {}, ", function, count).as_str());
+            }
+            pt_info.push(']');
+        }
+
+        #[skip_checked_arithmetic]
+        trace!(
+            target: GAS_STATS_TARGET,
+            pt_info);
     }
 
     fn mint_epoch_rewards_in_pt(

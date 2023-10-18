@@ -110,6 +110,7 @@ use sui_types::storage::{GetSharedLocks, ObjectKey, ObjectStore, WriteKind};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
+use sui_types::transaction::TransactionData;
 use sui_types::{
     base_types::*,
     committee::Committee,
@@ -118,7 +119,7 @@ use sui_types::{
     fp_ensure,
     object::{Object, ObjectRead},
     transaction::*,
-    SUI_SYSTEM_ADDRESS,
+    GAS_STATS_TARGET, SUI_SYSTEM_ADDRESS,
 };
 use sui_types::{is_system_package, TypeTag};
 use typed_store::Map;
@@ -1491,26 +1492,42 @@ impl AuthorityState {
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let (inner_temp_store, effects, _execution_error) = executor
-            .execute_transaction_to_effects(
-                &self.database,
-                protocol_config,
-                self.metrics.limits_metrics.clone(),
-                expensive_checks,
-                self.certificate_deny_config.certificate_deny_set(),
-                &epoch_store.epoch_start_config().epoch_data().epoch_id(),
-                epoch_store
-                    .epoch_start_config()
-                    .epoch_data()
-                    .epoch_start_timestamp(),
-                checked_input_objects,
-                gas_object_refs,
-                gas_status,
-                kind,
-                signer,
-                transaction_digest,
-            );
+        let (inner_temp_store, effects, execution_error) = executor.execute_transaction_to_effects(
+            &self.database,
+            protocol_config,
+            self.metrics.limits_metrics.clone(),
+            expensive_checks,
+            self.certificate_deny_config.certificate_deny_set(),
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            checked_input_objects,
+            gas_object_refs,
+            gas_status,
+            kind,
+            signer,
+            transaction_digest,
+        );
+
         let tx_digest = *effects.transaction_digest();
+
+        trace!(
+            target: GAS_STATS_TARGET,
+            "GAS_STATS EFFECTS {}: {:?}, {}, {}, \
+                    {}, {},  {}, {}, {}, {}",
+            tx_digest,
+            execution_error.err(),
+            effects.input_shared_objects().len(),
+            effects.created().len(),
+            effects.mutated().len(),
+            effects.unwrapped().len(),
+            effects.deleted().len(),
+            effects.unwrapped().len(),
+            effects.wrapped().len(),
+            signer,
+        );
 
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
@@ -1599,8 +1616,13 @@ impl AuthorityState {
                 }
             }
         };
-        let gas_status =
-            SuiGasStatus::new(max_tx_gas, gas_price, reference_gas_price, protocol_config)?;
+        let gas_status = SuiGasStatus::new(
+            max_tx_gas,
+            gas_price,
+            reference_gas_price,
+            protocol_config,
+            None,
+        )?;
 
         let gas_object_id = ObjectID::random();
         // give the gas object 2x the max gas to have coin balance to play with during execution

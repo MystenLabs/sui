@@ -97,11 +97,8 @@ struct Args {
 async fn main() -> Result<()> {
     let mut telemetry_config = telemetry_subscribers::TelemetryConfig::new().with_env();
 
-    match env::var_os("GAS_STATS_FILE") {
-        Some(file_path) => {
-            telemetry_config = telemetry_config.with_log_file(file_path.to_str().unwrap());
-        }
-        _ => {}
+    if let Some(file_path) = env::var_os("GAS_STATS_FILE") {
+        telemetry_config = telemetry_config.with_log_file(file_path.to_str().unwrap());
     }
 
     let (_guard, _filter_handle) = telemetry_config.init();

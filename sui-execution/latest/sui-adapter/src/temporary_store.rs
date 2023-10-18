@@ -91,6 +91,10 @@ impl<'backing> TemporaryStore<'backing> {
         &self.input_objects
     }
 
+    pub fn tx_digest(&self) -> TransactionDigest {
+        self.tx_digest
+    }
+
     pub fn update_object_version_and_prev_tx(&mut self) {
         self.execution_results
             .update_version_and_previous_tx(self.lamport_timestamp, self.tx_digest);
