@@ -27,8 +27,9 @@ impl MoveObject {
         let resolver = ctx.data_unchecked::<PgManager>();
 
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
+            let type_tag = TypeTag::Struct(Box::new(struct_tag));
             let type_layout = resolver
-                .build_with_types_in_blocking_task(TypeTag::Struct(Box::new(struct_tag)))
+                .build_with_types_in_blocking_task(type_tag.clone())
                 .await
                 .extend()?;
 
