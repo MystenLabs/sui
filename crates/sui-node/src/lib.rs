@@ -1101,6 +1101,7 @@ impl SuiNode {
         narwhal_manager
             .start(
                 new_epoch_start_state.get_narwhal_committee(),
+                epoch_store.get_chain_identifier(),
                 epoch_store.protocol_config().clone(),
                 worker_cache,
                 consensus_handler_initializer,

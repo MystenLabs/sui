@@ -14,5 +14,10 @@ async fn main() {
         .init();
 
     let args = Command::parse();
-    run_benchmark(Workload::new(args.tx_count, args.workload), args.component).await;
+    run_benchmark(
+        Workload::new(args.tx_count, args.workload),
+        args.component,
+        args.checkpoint_size,
+    )
+    .await;
 }

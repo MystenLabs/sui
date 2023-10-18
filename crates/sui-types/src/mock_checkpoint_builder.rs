@@ -3,19 +3,19 @@
 
 use crate::base_types::{AuthorityName, VerifiedExecutionData};
 use crate::committee::Committee;
-use crate::crypto::{
-    AuthorityKeyPair, AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature,
-};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, EndOfEpochData,
-    VerifiedCheckpoint,
+    FullCheckpointContents, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
 use crate::transaction::VerifiedTransaction;
+use fastcrypto::traits::Signer;
+use std::mem;
 
 pub trait ValidatorKeypairProvider {
-    fn get_validator_key(&self, name: &AuthorityName) -> &AuthorityKeyPair;
+    fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature>;
     fn get_committee(&self) -> &Committee;
 }
 
@@ -43,6 +43,10 @@ impl MockCheckpointBuilder {
         }
     }
 
+    pub fn size(&self) -> usize {
+        self.transactions.len()
+    }
+
     pub fn epoch_rolling_gas_cost_summary(&self) -> &GasCostSummary {
         &self.epoch_rolling_gas_cost_summary
     }
@@ -63,7 +67,11 @@ impl MockCheckpointBuilder {
         &mut self,
         validator_keys: &impl ValidatorKeypairProvider,
         timestamp_ms: u64,
-    ) -> (VerifiedCheckpoint, CheckpointContents) {
+    ) -> (
+        VerifiedCheckpoint,
+        CheckpointContents,
+        VerifiedCheckpointContents,
+    ) {
         self.build_internal(validator_keys, timestamp_ms, None)
     }
 
@@ -73,7 +81,11 @@ impl MockCheckpointBuilder {
         timestamp_ms: u64,
         new_epoch: u64,
         end_of_epoch_data: EndOfEpochData,
-    ) -> (VerifiedCheckpoint, CheckpointContents) {
+    ) -> (
+        VerifiedCheckpoint,
+        CheckpointContents,
+        VerifiedCheckpointContents,
+    ) {
         self.build_internal(
             validator_keys,
             timestamp_ms,
@@ -86,10 +98,20 @@ impl MockCheckpointBuilder {
         validator_keys: &impl ValidatorKeypairProvider,
         timestamp_ms: u64,
         new_epoch_data: Option<(u64, EndOfEpochData)>,
-    ) -> (VerifiedCheckpoint, CheckpointContents) {
+    ) -> (
+        VerifiedCheckpoint,
+        CheckpointContents,
+        VerifiedCheckpointContents,
+    ) {
         let contents =
             CheckpointContents::new_with_causally_ordered_execution_data(self.transactions.iter());
-        self.transactions.clear();
+        let full_contents = VerifiedCheckpointContents::new_unchecked(
+            FullCheckpointContents::new_with_causally_ordered_transactions(
+                mem::take(&mut self.transactions)
+                    .into_iter()
+                    .map(|e| e.into_inner()),
+            ),
+        );
 
         let (epoch, epoch_rolling_gas_cost_summary, end_of_epoch_data) =
             if let Some((next_epoch, end_of_epoch_data)) = new_epoch_data {
@@ -127,7 +149,7 @@ impl MockCheckpointBuilder {
 
         let checkpoint = Self::create_certified_checkpoint(validator_keys, summary);
         self.previous_checkpoint = checkpoint.clone();
-        (checkpoint, contents)
+        (checkpoint, contents, full_contents)
     }
 
     fn create_certified_checkpoint(

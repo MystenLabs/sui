@@ -11,9 +11,12 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::error::{code, graphql_error};
+use crate::{
+    error::{code, graphql_error},
+    types::move_type::unexpected_signer_error,
+};
 
-use super::{base64::Base64, big_int::BigInt, sui_address::SuiAddress};
+use super::{base64::Base64, big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
 
 const STD: AccountAddress = AccountAddress::ONE;
 const SUI: AccountAddress = AccountAddress::TWO;
@@ -31,6 +34,8 @@ const TYP_UID: &IdentStr = ident_str!("UID");
 #[derive(SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveValue {
+    #[graphql(name = "type")]
+    type_: MoveType,
     #[graphql(skip)]
     layout: MoveTypeLayout,
     bcs: Base64,
@@ -49,8 +54,7 @@ type MoveData =
   | { String:  string }
   | { Vector:  [MoveData] }
   | { Option:   MoveData? }
-  | { Struct:  [{ name: string, value: MoveData }] }
-"#
+  | { Struct:  [{ name: string, value: MoveData }] }"#
 );
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -81,8 +85,9 @@ impl MoveValue {
 }
 
 impl MoveValue {
-    pub fn new(layout: MoveTypeLayout, bcs: Base64) -> Self {
-        Self { layout, bcs }
+    pub fn new(repr: String, layout: MoveTypeLayout, bcs: Base64) -> Self {
+        let type_ = MoveType::new(repr);
+        Self { type_, layout, bcs }
     }
 
     fn data_impl(&self) -> Result<MoveData> {
@@ -149,13 +154,7 @@ impl TryFrom<value::MoveValue> for MoveData {
             }
 
             // Sui does not support `signer` as a type.
-            V::Signer(_) => {
-                return Err(graphql_error(
-                    code::INTERNAL_SERVER_ERROR,
-                    "Unexpected value of type: signer.",
-                )
-                .into())
-            }
+            V::Signer(_) => return Err(unexpected_signer_error()),
         })
     }
 }
@@ -367,8 +366,22 @@ mod tests {
     }
 
     fn data<T: Serialize>(layout: MoveTypeLayout, data: T) -> Result<MoveData> {
+        let tag: TypeTag = (&layout).try_into().expect("Error fetching type tag");
+
+        // The format for type from its `Display` impl does not technically match the format that
+        // the RPC expects from the data layer (where a type's package should be canonicalized), but
+        // it will suffice.
+        data_with_tag(format!("{}", tag), layout, data)
+    }
+
+    fn data_with_tag<T: Serialize>(
+        tag: impl Into<String>,
+        layout: MoveTypeLayout,
+        data: T,
+    ) -> Result<MoveData> {
+        let type_ = MoveType::new(tag.into());
         let bcs = Base64(bcs::to_bytes(&data).unwrap());
-        MoveValue { layout, bcs }.data_impl()
+        MoveValue { type_, layout, bcs }.data_impl()
     }
 
     #[test]
@@ -666,7 +679,7 @@ mod tests {
             layout: vector_layout!(L::U8),
         }]));
 
-        let v = data(l, "Hello, world!");
+        let v = data_with_tag("0x1::string::String", l, "Hello, world!");
         let expect = expect![[r#"
             Err(
                 Error {
@@ -681,7 +694,7 @@ mod tests {
     fn no_field_information() {
         // Even less information about the layout -- even less likely to succeed.
         let l = L::Struct(S::Runtime(vec![vector_layout!(L::U8)]));
-        let v = data(l, "Hello, world!");
+        let v = data_with_tag("0x1::string::String", l, "Hello, world!");
         let expect = expect![[r#"
             Err(
                 Error {

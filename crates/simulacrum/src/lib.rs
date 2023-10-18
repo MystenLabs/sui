@@ -13,6 +13,7 @@
 use std::num::NonZeroUsize;
 
 use anyhow::{anyhow, Result};
+use fastcrypto::traits::Signer;
 use rand::rngs::OsRng;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
 use sui_protocol_config::ProtocolVersion;
@@ -20,7 +21,7 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::AuthorityName;
-use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::AuthoritySignature;
 use sui_types::{
     base_types::SuiAddress,
     committee::Committee,
@@ -179,7 +180,7 @@ impl<R> Simulacrum<R> {
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
-        let (checkpoint, contents) = self
+        let (checkpoint, contents, _) = self
             .checkpoint_builder
             .build(&committee, self.store.get_clock().timestamp_ms());
         self.store.insert_checkpoint(checkpoint.clone());
@@ -238,7 +239,7 @@ impl<R> Simulacrum<R> {
             epoch_commitments: vec![],
         };
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
-        let (checkpoint, contents) = self.checkpoint_builder.build_end_of_epoch(
+        let (checkpoint, contents, _) = self.checkpoint_builder.build_end_of_epoch(
             &committee,
             self.store.get_clock().timestamp_ms(),
             next_epoch,
@@ -348,7 +349,7 @@ impl<'a> CommitteeWithKeys<'a> {
 }
 
 impl ValidatorKeypairProvider for CommitteeWithKeys<'_> {
-    fn get_validator_key(&self, name: &AuthorityName) -> &AuthorityKeyPair {
+    fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature> {
         self.keystore.validator(name).unwrap()
     }
 

@@ -24,6 +24,7 @@ pub struct VerifyParams {
     pub oidc_provider_jwks: ImHashMap<JwkId, JWK>,
     pub supported_providers: Vec<OIDCProvider>,
     pub zk_login_env: ZkLoginEnv,
+    pub verify_legacy_zklogin_address: bool,
 }
 
 impl VerifyParams {
@@ -31,11 +32,13 @@ impl VerifyParams {
         oidc_provider_jwks: ImHashMap<JwkId, JWK>,
         supported_providers: Vec<OIDCProvider>,
         zk_login_env: ZkLoginEnv,
+        verify_legacy_zklogin_address: bool,
     ) -> Self {
         Self {
             oidc_provider_jwks,
             supported_providers,
             zk_login_env,
+            verify_legacy_zklogin_address,
         }
     }
 }

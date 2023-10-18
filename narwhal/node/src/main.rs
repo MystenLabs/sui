@@ -9,7 +9,7 @@
 )]
 
 use clap::{Parser, Subcommand};
-use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
+use config::{ChainIdentifier, Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::{KeyPair, NetworkKeyPair};
 use eyre::Context;
 use fastcrypto::traits::KeyPair as _;
@@ -311,6 +311,7 @@ async fn run(
                     primary_keypair,
                     primary_network_keypair,
                     committee,
+                    ChainIdentifier::unknown(),
                     ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown),
                     worker_cache,
                     client.clone(),

@@ -3,7 +3,7 @@
 use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
-use config::{AuthorityIdentifier, Committee, Parameters, WorkerCache};
+use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
 use consensus::bullshark::Bullshark;
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
@@ -60,6 +60,7 @@ impl PrimaryNodeInner {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        chain: ChainIdentifier,
         protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
@@ -94,6 +95,7 @@ impl PrimaryNodeInner {
             worker_cache,
             client,
             store,
+            chain,
             protocol_config.clone(),
             self.parameters.clone(),
             execution_state,
@@ -189,6 +191,7 @@ impl PrimaryNodeInner {
         client: NetworkClient,
         // The node's storage.
         store: &NodeStorage,
+        chain: ChainIdentifier,
         protocol_config: ProtocolConfig,
         // The configuration parameters.
         parameters: Parameters,
@@ -260,6 +263,7 @@ impl PrimaryNodeInner {
             network_keypair,
             committee.clone(),
             worker_cache.clone(),
+            chain,
             protocol_config.clone(),
             parameters.clone(),
             client,
@@ -406,6 +410,7 @@ impl PrimaryNode {
         network_keypair: NetworkKeyPair,
         // The committee information.
         committee: Committee,
+        chain: ChainIdentifier,
         protocol_config: ProtocolConfig,
         // The worker information cache.
         worker_cache: WorkerCache,
@@ -427,6 +432,7 @@ impl PrimaryNode {
                 keypair,
                 network_keypair,
                 committee,
+                chain,
                 protocol_config,
                 worker_cache,
                 client,

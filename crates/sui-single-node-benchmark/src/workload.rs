@@ -6,9 +6,10 @@ use crate::command::WorkloadKind;
 use crate::tx_generator::{MoveTxGenerator, NonMoveTxGenerator, TxGenerator};
 use std::sync::Arc;
 
+#[derive(Clone, Copy)]
 pub struct Workload {
-    tx_count: u64,
-    workload_kind: WorkloadKind,
+    pub tx_count: u64,
+    pub workload_kind: WorkloadKind,
 }
 
 impl Workload {

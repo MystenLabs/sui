@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toHEX } from '@mysten/bcs';
-import { PublicKey } from '@mysten/sui.js/cryptography';
+import type { PublicKey } from '@mysten/sui.js/cryptography';
 
 import { poseidonHash } from './poseidon.js';
 
 const MAX_KEY_CLAIM_NAME_LENGTH = 32;
-export const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
-export const MAX_AUD_VALUE_LENGTH = 145;
+const MAX_KEY_CLAIM_VALUE_LENGTH = 115;
+const MAX_AUD_VALUE_LENGTH = 145;
 const PACK_WIDTH = 248;
 
 export function getExtendedEphemeralPublicKey(publicKey: PublicKey) {
