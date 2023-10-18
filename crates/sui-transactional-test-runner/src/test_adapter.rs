@@ -609,8 +609,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
-            SuiSubcommand::AdvanceCheckpoint => {
-                self.executor.advance_epoch().await?;
+            SuiSubcommand::CreateCheckpoint => {
+                self.executor.create_checkpoint().await?;
                 Ok(None)
             }
             SuiSubcommand::AdvanceEpoch => {
@@ -619,7 +619,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }
             SuiSubcommand::AdvanceClock(AdvanceClockCommand { duration_ns }) => {
                 self.executor
-                    .advance_clock(Duration::from_nanos(duration_ns)).await?;
+                    .advance_clock(Duration::from_nanos(duration_ns))
+                    .await?;
                 Ok(None)
             }
 
