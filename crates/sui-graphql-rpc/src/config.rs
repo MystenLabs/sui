@@ -5,7 +5,6 @@ use std::{collections::BTreeSet, path::PathBuf};
 
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
-use std::env;
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
@@ -76,6 +75,13 @@ impl ConnectionConfig {
             prom_port: prom_port.unwrap_or(default.prom_port),
         }
     }
+
+    pub fn ci_integration_test_cfg() -> Self {
+        Self {
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
+            ..Default::default()
+        }
+    }
 }
 
 impl ServiceConfig {
@@ -117,8 +123,7 @@ impl Default for ConnectionConfig {
             port: 8000,
             host: "127.0.0.1".to_string(),
             rpc_url: "https://fullnode.testnet.sui.io:443/".to_string(),
-            db_url: env::var("PG_DB_URL")
-                .expect("PG_DB_URL must be set if db_url not provided in config"),
+            db_url: "postgres://postgres:postgrespw@localhost:5432/sui_indexer_v2".to_string(),
             prom_url: "0.0.0.0".to_string(),
             prom_port: 9184,
         }

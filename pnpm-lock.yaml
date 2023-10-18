@@ -1767,9 +1767,6 @@ importers:
       jose:
         specifier: ^4.14.4
         version: 4.14.4
-      jsonc-parser:
-        specifier: ^3.2.0
-        version: 3.2.0
       poseidon-lite:
         specifier: ^0.2.0
         version: 0.2.0

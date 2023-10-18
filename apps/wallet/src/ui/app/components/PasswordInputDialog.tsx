@@ -51,7 +51,7 @@ export function PasswordInputDialog({
 			initialValues={{ password: '' }}
 			onSubmit={async ({ password }, { setFieldError }) => {
 				try {
-					await backgroundService.verifyPassword(password, legacyAccounts);
+					await backgroundService.verifyPassword({ password, legacyAccounts });
 					try {
 						await onPasswordVerified(password);
 					} catch (e) {

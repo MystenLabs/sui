@@ -35,6 +35,11 @@ pub(crate) struct EndOfEpochTransaction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
+pub(crate) struct TxBlockKindNotImplementedYet {
+    pub(crate) text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct ConsensusCommitPrologueTransaction {
     #[graphql(skip)]

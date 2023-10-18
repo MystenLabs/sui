@@ -21,6 +21,12 @@ pub struct Command {
     pub tx_count: u64,
     #[arg(
         long,
+        default_value_t = 100,
+        help = "Number of transactions in a consensus commit/checkpoint"
+    )]
+    pub checkpoint_size: usize,
+    #[arg(
+        long,
         default_value = "baseline",
         ignore_case = true,
         help = "Which component to benchmark"
@@ -47,9 +53,12 @@ pub enum Component {
     ValidatorWithFakeConsensus,
     /// Benchmark only validator signing component: `handle_transaction`.
     TxnSigning,
+    /// Benchmark the checkpoint executor by constructing a full epoch of checkpoints, execute
+    /// all transactions in them and measure time.
+    CheckpointExecutor,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone, Copy)]
 pub enum WorkloadKind {
     NoMove,
     Move {

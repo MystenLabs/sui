@@ -6,6 +6,7 @@ import type { WalletAccount } from '@mysten/wallet-standard';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import clsx from 'clsx';
 
+import { useResolveSuiNSName } from '../hooks/useResolveSuiNSNames.js';
 import { useAccounts } from '../hooks/wallet/useAccounts.js';
 import { useDisconnectWallet } from '../hooks/wallet/useDisconnectWallet.js';
 import { useSwitchAccount } from '../hooks/wallet/useSwitchAccount.js';
@@ -22,7 +23,10 @@ type AccountDropdownMenuProps = {
 
 export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps) {
 	const { mutate: disconnectWallet } = useDisconnectWallet();
-	const { mutate: switchAccount } = useSwitchAccount();
+
+	const { data: domain } = useResolveSuiNSName(
+		currentAccount.label ? null : currentAccount.address,
+	);
 	const accounts = useAccounts();
 
 	return (
@@ -31,7 +35,7 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				<DropdownMenu.Trigger asChild>
 					<Button size="lg" className={styles.connectedAccount}>
 						<Text mono weight="bold">
-							{formatAddress(currentAccount.address)}
+							{currentAccount.label ?? domain ?? formatAddress(currentAccount.address)}
 						</Text>
 						<ChevronIcon />
 					</Button>
@@ -41,14 +45,11 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				<StyleMarker>
 					<DropdownMenu.Content className={styles.menuContent}>
 						{accounts.map((account) => (
-							<DropdownMenu.Item
+							<AccountDropdownMenuItem
 								key={account.address}
-								className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
-								onSelect={() => switchAccount({ account })}
-							>
-								<Text mono>{formatAddress(account.address)}</Text>
-								{currentAccount.address === account.address ? <CheckIcon /> : null}
-							</DropdownMenu.Item>
+								account={account}
+								active={currentAccount.address === account.address}
+							/>
 						))}
 						<DropdownMenu.Separator className={styles.separator} />
 						<DropdownMenu.Item
@@ -61,5 +62,26 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				</StyleMarker>
 			</DropdownMenu.Portal>
 		</DropdownMenu.Root>
+	);
+}
+
+export function AccountDropdownMenuItem({
+	account,
+	active,
+}: {
+	account: WalletAccount;
+	active?: boolean;
+}) {
+	const { mutate: switchAccount } = useSwitchAccount();
+	const { data: domain } = useResolveSuiNSName(account.label ? null : account.address);
+
+	return (
+		<DropdownMenu.Item
+			className={clsx(styles.menuItem, styles.switchAccountMenuItem)}
+			onSelect={() => switchAccount({ account })}
+		>
+			<Text mono>{account.label ?? domain ?? formatAddress(account.address)}</Text>
+			{active ? <CheckIcon /> : null}
+		</DropdownMenu.Item>
 	);
 }

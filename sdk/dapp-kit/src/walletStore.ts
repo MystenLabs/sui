@@ -93,13 +93,12 @@ export function createWalletStore({ wallets, storage, storageKey }: WalletConfig
 				},
 				updateWalletAccounts(accounts) {
 					const currentAccount = get().currentAccount;
-					const isCurrentAccountStillAuthorized = currentAccount
-						? accounts.some(({ address }) => address === currentAccount.address)
-						: false;
 
 					set(() => ({
 						accounts,
-						currentAccount: isCurrentAccountStillAuthorized ? currentAccount : accounts[0],
+						currentAccount: currentAccount
+							? accounts.find(({ address }) => address === currentAccount.address)
+							: accounts[0],
 					}));
 				},
 			}),

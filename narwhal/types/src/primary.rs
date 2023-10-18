@@ -18,9 +18,10 @@ use fastcrypto::{
     signature_service::SignatureService,
     traits::{AggregateAuthenticator, Signer, VerifyingKey},
 };
+use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
 use indexmap::IndexMap;
 use mysten_util_mem::MallocSizeOf;
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 use proptest_derive::Arbitrary;
 use roaring::RoaringBitmap;
 use serde::{Deserialize, Serialize};
@@ -367,10 +368,30 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for BatchV2 {
     }
 }
 
+// Messages generated internally by Narwhal that are included in headers for sequencing.
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
+pub enum SystemMessage {
+    // DKG is used to generate keys for use in the random beacon protocol.
+    // `DkgMessage` is sent out at start-of-epoch to initiate the process.
+    DkgMessage(
+        fastcrypto_tbls::dkg::Message<
+            <ThresholdBls12381MinSig as ThresholdBls>::Public,
+            <ThresholdBls12381MinSig as ThresholdBls>::Public,
+        >,
+    ),
+    // `DkgConfirmation` is the second DKG message, sent as soon as a threshold amount of
+    // `DkgMessages` have been received locally, to complete the key generation process.
+    DkgConfirmation(
+        fastcrypto_tbls::dkg::Confirmation<<ThresholdBls12381MinSig as ThresholdBls>::Public>,
+    ),
+}
+
 #[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
 #[enum_dispatch(HeaderAPI)]
 pub enum Header {
     V1(HeaderV1),
+    V2(HeaderV2),
 }
 
 // TODO: Revisit if we should not impl Default for Header and just use
@@ -382,26 +403,24 @@ impl Default for Header {
 }
 
 impl Header {
-    // TODO: Add version number and match on that.
-    pub async fn new(
-        author: AuthorityIdentifier,
-        round: Round,
-        epoch: Epoch,
-        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
-        parents: BTreeSet<CertificateDigest>,
-    ) -> Self {
-        Header::V1(HeaderV1::new(author, round, epoch, payload, parents).await)
-    }
-
     pub fn digest(&self) -> HeaderDigest {
         match self {
             Header::V1(data) => data.digest(),
+            Header::V2(data) => data.digest(),
         }
     }
 
     pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
         match self {
             Header::V1(data) => data.validate(committee, worker_cache),
+            Header::V2(data) => data.validate(committee, worker_cache),
+        }
+    }
+
+    pub fn unwrap_v1(self) -> HeaderV1 {
+        match self {
+            Header::V1(data) => data,
+            Header::V2(_) => panic!("called into_v1 on Header::V2"),
         }
     }
 }
@@ -412,6 +431,7 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for Header {
     fn digest(&self) -> HeaderDigest {
         match self {
             Header::V1(data) => data.digest(),
+            Header::V2(data) => data.digest(),
         }
     }
 }
@@ -423,6 +443,7 @@ pub trait HeaderAPI {
     fn epoch(&self) -> Epoch;
     fn created_at(&self) -> &TimestampMs;
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)>;
+    fn system_messages(&self) -> &Vec<SystemMessage>;
     fn parents(&self) -> &BTreeSet<CertificateDigest>;
 
     // Used for testing.
@@ -462,6 +483,11 @@ impl HeaderAPI for HeaderV1 {
     }
     fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
         &self.payload
+    }
+    fn system_messages(&self) -> &Vec<SystemMessage> {
+        static EMPTY_SYSTEM_MESSAGES: Lazy<Vec<SystemMessage>> =
+            Lazy::new(|| Vec::with_capacity(0));
+        &EMPTY_SYSTEM_MESSAGES
     }
     fn parents(&self) -> &BTreeSet<CertificateDigest> {
         &self.parents
@@ -576,6 +602,170 @@ impl HeaderV1 {
     }
 }
 
+#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
+#[builder(pattern = "owned", build_fn(skip))]
+pub struct HeaderV2 {
+    // Primary that created the header. Must be the same primary that broadcasted the header.
+    // Validation is at: https://github.com/MystenLabs/sui/blob/f0b80d9eeef44edd9fbe606cee16717622b68651/narwhal/primary/src/primary.rs#L713-L719
+    pub author: AuthorityIdentifier,
+    pub round: Round,
+    pub epoch: Epoch,
+    pub created_at: TimestampMs,
+    #[serde(with = "indexmap::serde_seq")]
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+    pub system_messages: Vec<SystemMessage>,
+    pub parents: BTreeSet<CertificateDigest>,
+    #[serde(skip)]
+    digest: OnceCell<HeaderDigest>,
+}
+
+impl HeaderAPI for HeaderV2 {
+    fn author(&self) -> AuthorityIdentifier {
+        self.author
+    }
+    fn round(&self) -> Round {
+        self.round
+    }
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+    fn created_at(&self) -> &TimestampMs {
+        &self.created_at
+    }
+    fn payload(&self) -> &IndexMap<BatchDigest, (WorkerId, TimestampMs)> {
+        &self.payload
+    }
+    fn system_messages(&self) -> &Vec<SystemMessage> {
+        &self.system_messages
+    }
+    fn parents(&self) -> &BTreeSet<CertificateDigest> {
+        &self.parents
+    }
+
+    // Used for testing.
+    fn update_payload(&mut self, new_payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>) {
+        self.payload = new_payload;
+    }
+    fn update_round(&mut self, new_round: Round) {
+        self.round = new_round;
+    }
+    fn clear_parents(&mut self) {
+        self.parents.clear();
+    }
+}
+
+impl HeaderV2Builder {
+    pub fn build(self) -> Result<HeaderV2, fastcrypto::error::FastCryptoError> {
+        let h = HeaderV2 {
+            author: self.author.unwrap(),
+            round: self.round.unwrap(),
+            epoch: self.epoch.unwrap(),
+            created_at: self.created_at.unwrap_or(0),
+            payload: self.payload.unwrap(),
+            system_messages: self.system_messages.unwrap_or_default(),
+            parents: self.parents.unwrap(),
+            digest: OnceCell::default(),
+        };
+        h.digest.set(Hash::digest(&h)).unwrap();
+
+        Ok(h)
+    }
+
+    // helper method to set directly values to the payload
+    pub fn with_payload_batch(
+        mut self,
+        batch: Batch,
+        worker_id: WorkerId,
+        created_at: TimestampMs,
+    ) -> Self {
+        if self.payload.is_none() {
+            self.payload = Some(Default::default());
+        }
+        let payload = self.payload.as_mut().unwrap();
+
+        payload.insert(batch.digest(), (worker_id, created_at));
+
+        self
+    }
+}
+
+impl HeaderV2 {
+    pub async fn new(
+        author: AuthorityIdentifier,
+        round: Round,
+        epoch: Epoch,
+        payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
+        system_messages: Vec<SystemMessage>,
+        parents: BTreeSet<CertificateDigest>,
+    ) -> Self {
+        let header = Self {
+            author,
+            round,
+            epoch,
+            created_at: now(),
+            payload,
+            system_messages,
+            parents,
+            digest: OnceCell::default(),
+        };
+        let digest = Hash::digest(&header);
+        header.digest.set(digest).unwrap();
+        header
+    }
+
+    pub fn digest(&self) -> HeaderDigest {
+        *self.digest.get_or_init(|| Hash::digest(self))
+    }
+
+    pub fn validate(&self, committee: &Committee, worker_cache: &WorkerCache) -> DagResult<()> {
+        // Ensure the header is from the correct epoch.
+        ensure!(
+            self.epoch == committee.epoch(),
+            DagError::InvalidEpoch {
+                expected: committee.epoch(),
+                received: self.epoch
+            }
+        );
+
+        // Ensure the header digest is well formed.
+        ensure!(
+            Hash::digest(self) == self.digest(),
+            DagError::InvalidHeaderDigest
+        );
+
+        // Ensure the authority has voting rights.
+        let voting_rights = committee.stake_by_id(self.author);
+        ensure!(
+            voting_rights > 0,
+            DagError::UnknownAuthority(self.author.to_string())
+        );
+
+        // Ensure all worker ids are correct.
+        for (worker_id, _) in self.payload.values() {
+            worker_cache
+                .worker(
+                    committee.authority(&self.author).unwrap().protocol_key(),
+                    worker_id,
+                )
+                .map_err(|_| DagError::HeaderHasBadWorkerIds(self.digest()))?;
+        }
+
+        // Ensure system messages are valid.
+        for m in self.system_messages.iter() {
+            match m {
+                SystemMessage::DkgMessage(msg) => {
+                    ensure!(msg.sender == self.author.0, DagError::InvalidSystemMessage);
+                }
+                SystemMessage::DkgConfirmation(conf) => {
+                    ensure!(conf.sender == self.author.0, DagError::InvalidSystemMessage);
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(
     Clone,
     Copy,
@@ -630,24 +820,30 @@ impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV1 {
     }
 }
 
+impl Hash<{ crypto::DIGEST_LENGTH }> for HeaderV2 {
+    type TypedDigest = HeaderDigest;
+
+    fn digest(&self) -> HeaderDigest {
+        let mut hasher = crypto::DefaultHashFunction::new();
+        hasher.update(bcs::to_bytes(&self).expect("Serialization should not fail"));
+        HeaderDigest(hasher.finalize().into())
+    }
+}
+
 impl fmt::Debug for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        match self {
-            Self::V1(data) => {
-                write!(
-                    f,
-                    "{}: B{}({}, E{}, {}B)",
-                    data.digest.get().cloned().unwrap_or_default(),
-                    data.round,
-                    data.author,
-                    data.epoch,
-                    data.payload
-                        .keys()
-                        .map(|x| Digest::from(*x).size())
-                        .sum::<usize>(),
-                )
-            }
-        }
+        write!(
+            f,
+            "{}: B{}({}, E{}, {}B)",
+            self.digest(),
+            self.round(),
+            self.author(),
+            self.epoch(),
+            self.payload()
+                .keys()
+                .map(|x| Digest::from(*x).size())
+                .sum::<usize>(),
+        )
     }
 }
 
@@ -655,6 +851,9 @@ impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
             Self::V1(data) => {
+                write!(f, "B{}({})", data.round, data.author)
+            }
+            Self::V2(data) => {
                 write!(f, "B{}({})", data.round, data.author)
             }
         }
@@ -665,6 +864,7 @@ impl PartialEq for Header {
     fn eq(&self, other: &Self) -> bool {
         match self {
             Self::V1(data) => data.digest() == other.digest(),
+            Self::V2(data) => data.digest() == other.digest(),
         }
     }
 }

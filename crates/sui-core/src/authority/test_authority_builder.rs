@@ -48,6 +48,8 @@ pub struct TestAuthorityBuilder<'a> {
     starting_objects: Option<&'a [Object]>,
     expensive_safety_checks: Option<ExpensiveSafetyCheckConfig>,
     disable_indexer: bool,
+    /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
+    insert_genesis_checkpoint: bool,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -121,6 +123,11 @@ impl<'a> TestAuthorityBuilder<'a> {
 
     pub fn disable_indexer(mut self) -> Self {
         self.disable_indexer = true;
+        self
+    }
+
+    pub fn insert_genesis_checkpoint(mut self) -> Self {
+        self.insert_genesis_checkpoint = true;
         self
     }
 
@@ -201,6 +208,13 @@ impl<'a> TestAuthorityBuilder<'a> {
         ));
 
         let checkpoint_store = CheckpointStore::new(&path.join("checkpoints"));
+        if self.insert_genesis_checkpoint {
+            checkpoint_store.insert_genesis_checkpoint(
+                genesis.checkpoint(),
+                genesis.checkpoint_contents().clone(),
+                &epoch_store,
+            );
+        }
         let index_store = if self.disable_indexer {
             None
         } else {

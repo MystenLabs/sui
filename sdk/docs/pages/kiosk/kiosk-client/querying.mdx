@@ -130,6 +130,37 @@ console.log(res);
  */
 ```
 
+## Query kiosk extension
+
+Queries an extension's data. Returns `null` if there's no extension with that type installed.
+
+```typescript
+// Assuming we have a kioskClient instance.
+const kioskClient = new KioskClient({...});
+
+// The type of the custom extension.
+const type = '0xAddress::custom_extension::ACustomExtensionType';
+
+const extension = await kioskClient.getKioskExtension({
+  kioskId: '0xAKioskId',
+  type
+});
+
+console.log(extension);
+
+/**
+ * An example output of the response
+{
+  objectId: 'extensionObjectId',
+  type: '0xAddress::custom_extension::ACustomExtensionType',
+  isEnabled: true,
+  permissions: "3",
+  storageId: '0xExampleStorageId',
+  storageSize: "0",
+}
+*/
+```
+
 ## Querying transfer policy for type
 
 ```typescript

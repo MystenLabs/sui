@@ -20,8 +20,8 @@ use std::{
     time::Duration,
 };
 use test_utils::{
-    latest_protocol_version, make_optimal_signed_certificates, mock_signed_certificate,
-    CommitteeFixture,
+    get_protocol_config, latest_protocol_version, make_optimal_signed_certificates,
+    mock_signed_certificate, CommitteeFixture,
 };
 use tokio::sync::watch;
 use types::{
@@ -826,7 +826,7 @@ async fn sync_batches_drops_old() {
 
 #[tokio::test]
 async fn gc_suspended_certificates_v1() {
-    let cert_v1_config = latest_protocol_version();
+    let cert_v1_config = get_protocol_config(28);
     const NUM_AUTHORITIES: usize = 4;
     const GC_DEPTH: Round = 5;
 
@@ -946,8 +946,7 @@ async fn gc_suspended_certificates_v1() {
 
 #[tokio::test]
 async fn gc_suspended_certificates_v2() {
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     const NUM_AUTHORITIES: usize = 4;
     const GC_DEPTH: Round = 5;
 

@@ -16,6 +16,8 @@ use prometheus::Registry;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::digests::ChainIdentifier;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use tokio::sync::broadcast;
@@ -135,6 +137,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                ChainIdentifier::from(CheckpointDigest::default()),
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,
@@ -197,6 +200,7 @@ async fn test_narwhal_manager() {
         narwhal_manager
             .start(
                 narwhal_committee.clone(),
+                ChainIdentifier::from(CheckpointDigest::default()),
                 latest_protocol_version(),
                 worker_cache.clone(),
                 execution_state,

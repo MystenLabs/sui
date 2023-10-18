@@ -353,7 +353,6 @@ checksum = "1f3a13b34da09176a8baba701233fdffbaa7c1b1192ce031a3da4e55ce1f1a56"
 dependencies = [
  "ark-ec",
  "ark-ff",
- "ark-r1cs-std",
  "ark-relations",
  "ark-serialize",
  "ark-snark",
@@ -361,9 +360,7 @@ dependencies = [
  "blake2",
  "derivative",
  "digest 0.10.6",
- "rayon",
  "sha2 0.10.6",
- "tracing",
 ]
 
 [[package]]
@@ -380,7 +377,6 @@ dependencies = [
  "hashbrown 0.13.2",
  "itertools",
  "num-traits",
- "rayon",
  "zeroize",
 ]
 
@@ -400,7 +396,6 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "paste",
- "rayon",
  "rustc_version",
  "zeroize",
 ]
@@ -441,7 +436,6 @@ dependencies = [
  "ark-relations",
  "ark-serialize",
  "ark-std",
- "rayon",
 ]
 
 [[package]]
@@ -455,24 +449,6 @@ dependencies = [
  "ark-std",
  "derivative",
  "hashbrown 0.13.2",
- "rayon",
-]
-
-[[package]]
-name = "ark-r1cs-std"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de1d1472e5cb020cb3405ce2567c91c8d43f21b674aef37b0202f5c3304761db"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-relations",
- "ark-std",
- "derivative",
- "num-bigint",
- "num-integer",
- "num-traits",
- "tracing",
 ]
 
 [[package]]
@@ -484,7 +460,6 @@ dependencies = [
  "ark-ff",
  "ark-std",
  "tracing",
- "tracing-subscriber 0.2.25",
 ]
 
 [[package]]
@@ -541,7 +516,6 @@ checksum = "94893f1e0c6eeab764ade8dc4c0db24caf4fe7cbbaafc0eba0a9030f447b5185"
 dependencies = [
  "num-traits",
  "rand 0.8.5",
- "rayon",
 ]
 
 [[package]]
@@ -2264,7 +2238,7 @@ dependencies = [
  "tonic 0.10.0",
  "tracing",
  "tracing-core",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3524,8 +3498,8 @@ dependencies = [
 
 [[package]]
 name = "fastcrypto"
-version = "0.1.6"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+version = "0.1.7"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=05fadba13a51dc603de0147b4c119dbd34e654f5#05fadba13a51dc603de0147b4c119dbd34e654f5"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -3581,7 +3555,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=05fadba13a51dc603de0147b4c119dbd34e654f5#05fadba13a51dc603de0147b4c119dbd34e654f5"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2 1.0.66",
@@ -3590,18 +3564,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastcrypto-tbls"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=05fadba13a51dc603de0147b4c119dbd34e654f5#05fadba13a51dc603de0147b4c119dbd34e654f5"
+dependencies = [
+ "bcs",
+ "bincode",
+ "digest 0.10.6",
+ "fastcrypto",
+ "fastcrypto-derive",
+ "hex",
+ "itertools",
+ "rand 0.8.5",
+ "serde",
+ "sha3 0.10.6",
+ "typenum",
+ "zeroize",
+]
+
+[[package]]
 name = "fastcrypto-zkp"
-version = "0.1.1"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=59e15ab83999b464a6da37b6cdf0910fedd1216c#59e15ab83999b464a6da37b6cdf0910fedd1216c"
+version = "0.1.2"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=05fadba13a51dc603de0147b4c119dbd34e654f5#05fadba13a51dc603de0147b4c119dbd34e654f5"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
- "ark-crypto-primitives",
  "ark-ec",
  "ark-ff",
  "ark-groth16",
  "ark-relations",
  "ark-serialize",
+ "ark-snark",
  "bcs",
  "blst",
  "byte-slice-cast",
@@ -6075,7 +6068,7 @@ dependencies = [
  "tokio-util 0.7.7",
  "toml 0.5.10",
  "tracing",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -6227,6 +6220,7 @@ dependencies = [
  "cfg-if",
  "ed25519-consensus",
  "fastcrypto",
+ "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
  "indexmap 1.9.3",
@@ -6273,6 +6267,7 @@ name = "narwhal-config"
 version = "0.1.0"
 dependencies = [
  "fastcrypto",
+ "fastcrypto-tbls",
  "insta",
  "match_opt",
  "mysten-network",
@@ -6326,6 +6321,7 @@ dependencies = [
  "bincode",
  "criterion",
  "fastcrypto",
+ "fastcrypto-tbls",
  "hex-literal 0.3.4",
  "proptest",
  "proptest-derive",
@@ -6442,7 +6438,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
  "url",
  "workspace-hack",
 ]
@@ -6461,6 +6457,7 @@ dependencies = [
  "bytes",
  "dashmap",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "governor",
  "indexmap 1.9.3",
@@ -6567,6 +6564,7 @@ dependencies = [
  "derive_builder",
  "enum_dispatch",
  "fastcrypto",
+ "fastcrypto-tbls",
  "futures",
  "indexmap 1.9.3",
  "mockall",
@@ -12021,7 +12019,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-opentelemetry",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -12698,7 +12696,7 @@ checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
  "time 0.3.17",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -12729,7 +12727,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d686ec1c0f384b1277f097b2f279a2ecc11afe8c133c1aabf036a27cb4cd206e"
 dependencies = [
  "tracing",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -12756,7 +12754,7 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -12766,15 +12764,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc6b213177105856957181934e4920de57730fc69bf42c37ee5bb664d406d9e1"
 dependencies = [
  "serde",
- "tracing-core",
-]
-
-[[package]]
-name = "tracing-subscriber"
-version = "0.2.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0d2eaa99c3c2e41547cfa109e910a68ea03823cccad4a0525dcbc9b01e8c71"
-dependencies = [
  "tracing-core",
 ]
 
@@ -13661,7 +13650,6 @@ dependencies = [
  "ark-ff-macros",
  "ark-groth16",
  "ark-poly",
- "ark-r1cs-std",
  "ark-relations",
  "ark-secp256r1",
  "ark-serialize",
@@ -13922,6 +13910,7 @@ dependencies = [
  "fast_chemail",
  "fastcrypto",
  "fastcrypto-derive",
+ "fastcrypto-tbls",
  "fastcrypto-zkp",
  "fastrand 1.8.0",
  "fastrand 2.0.0",
@@ -14476,8 +14465,7 @@ dependencies = [
  "tracing-log",
  "tracing-opentelemetry",
  "tracing-serde",
- "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.17",
+ "tracing-subscriber",
  "treeline",
  "try-lock",
  "ttl_cache",

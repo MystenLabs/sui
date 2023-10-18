@@ -20,7 +20,7 @@ use storage::CertificateStore;
 use storage::NodeStorage;
 
 use consensus::consensus::ConsensusRound;
-use test_utils::{latest_protocol_version, temp_dir, CommitteeFixture};
+use test_utils::{get_protocol_config, latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
         mpsc::{self, error::TryRecvError, Receiver, Sender},
@@ -30,7 +30,7 @@ use tokio::{
 };
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, Metadata,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV1, Metadata,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
     SignatureVerificationState,
@@ -186,7 +186,7 @@ struct BadHeader {
 // TODO: Remove after network has moved to CertificateV2
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v1_basic() {
-    let cert_v1_protocol_config = latest_protocol_version();
+    let cert_v1_protocol_config = get_protocol_config(28);
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -439,10 +439,11 @@ async fn fetch_certificates_v1_basic() {
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
-    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header().clone()) };
+    let cert_header =
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
-    cert.update_header(wolf_header);
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    cert.update_header(wolf_header.into());
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());
@@ -475,8 +476,7 @@ async fn fetch_certificates_v1_basic() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn fetch_certificates_v2_basic() {
-    let mut cert_v2_config = latest_protocol_version();
-    cert_v2_config.set_narwhal_certificate_v2(true);
+    let cert_v2_config = latest_protocol_version();
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let worker_cache = fixture.worker_cache();
     let primary = fixture.authorities().next().unwrap();
@@ -735,10 +735,11 @@ async fn fetch_certificates_v2_basic() {
     // Add cert with incorrect digest.
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
-    let cert_header = unsafe { std::mem::transmute::<Header, BadHeader>(cert.header().clone()) };
+    let cert_header =
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().clone().unwrap_v1()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, Header>(wrong_header) };
-    cert.update_header(wolf_header);
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
+    cert.update_header(Header::from(wolf_header));
     certs.push(cert);
     // Add cert without all parents in storage.
     certs.push(certificates[num_written + 1].clone());
@@ -774,7 +775,7 @@ async fn fetch_certificates_v2_basic() {
     // Send out a batch of certificate V1s.
     let mut certs = Vec::new();
     for cert in certificates.iter().skip(num_written).take(204) {
-        certs.push(fixture.certificate(&latest_protocol_version(), cert.header()));
+        certs.push(fixture.certificate(&get_protocol_config(28), cert.header()));
     }
     tx_fetch_resp
         .try_send(FetchCertificatesResponse {
