@@ -73,6 +73,7 @@ pub struct ExecutionSandboxState {
     /// All the obejcts that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
     /// Temporary store from executing this locally in `execute_transaction_to_effects`
+    #[serde(skip)]
     pub local_exec_temporary_store: Option<InnerTemporaryStore>,
     /// Effects from executing this locally in `execute_transaction_to_effects`
     pub local_exec_effects: SuiTransactionBlockEffects,

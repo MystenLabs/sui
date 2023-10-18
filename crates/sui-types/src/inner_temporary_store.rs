@@ -11,8 +11,6 @@ use crate::{
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
-use serde::Deserialize;
-use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -20,7 +18,7 @@ pub type WrittenObjects = BTreeMap<ObjectID, Object>;
 pub type ObjectMap = BTreeMap<ObjectID, Object>;
 pub type TxCoins = (ObjectMap, WrittenObjects);
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
