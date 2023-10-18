@@ -114,16 +114,11 @@ pub const SUI_AUTHENTICATOR_STATE_ADDRESS: AccountAddress = address_from_single_
 pub const SUI_AUTHENTICATOR_STATE_OBJECT_ID: ObjectID =
     ObjectID::from_address(SUI_AUTHENTICATOR_STATE_ADDRESS);
 
-/// Return `true` if `id` is a special system package that can be upgraded at epoch boundaries.
-pub fn is_system_package(id: ObjectID) -> bool {
-    is_system_package_address(id.into())
-}
-
 /// Return `true` if `addr` is a special system package that can be upgraded at epoch boundaries.
 /// All new system package ID's must be added here.
-pub fn is_system_package_address(addr: AccountAddress) -> bool {
+pub fn is_system_package(addr: impl Into<AccountAddress>) -> bool {
     matches!(
-        addr,
+        addr.into(),
         MOVE_STDLIB_ADDRESS | SUI_FRAMEWORK_ADDRESS | SUI_SYSTEM_ADDRESS | DEEPBOOK_ADDRESS
     )
 }
