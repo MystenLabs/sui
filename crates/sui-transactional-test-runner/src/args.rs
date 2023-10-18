@@ -128,6 +128,20 @@ pub struct SetAddressCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct AdvanceCheckpointCommand {
+    #[clap(long = "url")]
+    pub url: String,
+    #[clap(long = "port")]
+    pub port: u16,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct AdvanceClockCommand {
+    #[clap(long = "duration-ns")]
+    pub duration_ns: u64,
+}
+
+#[derive(Debug, clap::Parser)]
 pub enum SuiSubcommand {
     #[clap(name = "view-object")]
     ViewObject(ViewObjectCommand),
@@ -143,6 +157,12 @@ pub enum SuiSubcommand {
     StagePackage(StagePackageCommand),
     #[clap(name = "set-address")]
     SetAddress(SetAddressCommand),
+    #[clap(name = "advance-checkpoint")]
+    AdvanceCheckpoint,
+    #[clap(name = "advance-epoch")]
+    AdvanceEpoch,
+    #[clap(name = "advance-clock")]
+    AdvanceClock(AdvanceClockCommand),
 }
 
 #[derive(Clone, Debug)]
