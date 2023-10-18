@@ -18,12 +18,14 @@ use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_network::default_mysten_network_config;
+use sui_protocol_config::Chain;
 use sui_sdk::SuiClientBuilder;
+use sui_types::accumulator::Accumulator;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::object::ObjectFormatOptions;
 use sui_types::{base_types::*, object::Owner};
-use tokio::sync::oneshot;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
@@ -54,7 +56,7 @@ use sui_types::messages_grpc::{
     TransactionStatus,
 };
 
-use tracing::{info, warn};
+use tracing::info;
 use typed_store::rocks::MetricConf;
 
 pub mod commands;
@@ -724,9 +726,11 @@ fn start_summary_sync(
             .await?;
         sync_progress_bar.finish_with_message("Checkpoint summary sync is complete");
 
+        // verify checkpoint summaries
         if verify {
-            // reset highest verified
             let v_start = s_start;
+            // update highest verified to be highest synced. We will move back
+            // iff parallel verification succeeds
             let latest_verified = checkpoint_store
                 .get_checkpoint_by_sequence_number(latest_synced)
                 .expect("Failed to get checkpoint")
@@ -794,9 +798,17 @@ pub async fn download_formal_snapshot(
     snapshot_store_config: ObjectStoreConfig,
     archive_store_config: ObjectStoreConfig,
     num_parallel_downloads: usize,
+    network: Chain,
     verify: bool,
 ) -> Result<(), anyhow::Error> {
+    eprintln!(
+        "Beginning formal snapshot restore to end of epoch {}, network: {:?}",
+        epoch, network,
+    );
     let path = path.join("staging").to_path_buf();
+    if path.exists() {
+        fs::remove_dir_all(path.clone())?;
+    }
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
     let genesis = Genesis::load(genesis).unwrap();
     let genesis_committee = genesis.committee()?;
@@ -827,11 +839,14 @@ pub async fn download_formal_snapshot(
     let (_abort_handle, abort_registration) = AbortHandle::new_pair();
     let perpetual_db_clone = perpetual_db.clone();
     let snapshot_dir = path.parent().unwrap().join("snapshot");
+    if snapshot_dir.exists() {
+        fs::remove_dir_all(snapshot_dir.clone())?;
+    }
     let snapshot_dir_clone = snapshot_dir.clone();
 
     // TODO if verify is false, we should skip generating these and
     // not pass in a channel to the reader
-    let (sender, receiver) = oneshot::channel();
+    let (sender, mut receiver) = mpsc::channel(num_parallel_downloads);
 
     let snapshot_handle = tokio::spawn(async move {
         let local_store_config = ObjectStoreConfig {
@@ -850,19 +865,24 @@ pub async fn download_formal_snapshot(
         .await
         .unwrap_or_else(|err| panic!("Failed to create reader: {}", err));
         reader
-            .read(&perpetual_db_clone, abort_registration, Some(sender))
+            .read(
+                &perpetual_db_clone,
+                abort_registration,
+                Some(sender),
+                num_parallel_downloads,
+            )
             .await
             .unwrap_or_else(|err| panic!("Failed during read: {}", err));
         Ok::<(), anyhow::Error>(())
     });
-    let accumulator = receiver.await?;
-    let tasks: Vec<_> = vec![Box::pin(snapshot_handle), Box::pin(summaries_handle)];
-    join_all(tasks)
+    let mut root_accumulator = Accumulator::default();
+    while let Some(partial_acc) = receiver.recv().await {
+        root_accumulator.union(&partial_acc);
+    }
+    summaries_handle
         .await
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?
-        .into_iter()
-        .for_each(|result| result.expect("Task failed"));
+        .expect("Task join failed")
+        .expect("Summaries task failed");
 
     let last_checkpoint = checkpoint_store
         .get_highest_verified_checkpoint()?
@@ -886,25 +906,34 @@ pub async fn download_formal_snapshot(
             .last()
             .expect(
                 "End of epoch has no commitments. This likely means that the epoch \
-                you are attempting to restore from does not support state accumulation. \
-                If restoring from mainnet, `--epoch` must be > 20, and for testnet, \
-                `--epoch` must be > 12.",
+                you are attempting to restore from does not support end of epoch state \
+                digest commitment. If restoring from mainnet, `--epoch` must be > 20, \
+                and for testnet, `--epoch` must be > 12.",
             );
         match commitment {
             CheckpointCommitment::ECMHLiveObjectSetDigest(consensus_digest) => {
-                let local_digest: ECMHLiveObjectSetDigest = accumulator.digest().into();
+                let local_digest: ECMHLiveObjectSetDigest = root_accumulator.digest().into();
                 assert_eq!(
                     *consensus_digest, local_digest,
                     "End of epoch {} root state digest {} does not match \
                     local root state hash {} after restoring from formal snapshot",
                     epoch, consensus_digest.digest, local_digest.digest,
                 );
-                info!("Formal snapshot state verification complete!");
+                eprintln!("Formal snapshot state verification completed successfully!");
             }
         };
     } else {
-        warn!("Skipping snapshot verification");
+        eprintln!(
+            "WARNING: Skipping snapshot verification! \
+            This is highly discouraged unless you fully trust the source of this snapshot and its contents. 
+            If this was unintentional, rerun with `--verify` set to `true`"
+        );
     }
+
+    snapshot_handle
+        .await
+        .expect("Task join failed")
+        .expect("Snapshot restore task failed");
 
     // TODO we should ensure this map is being updated for all end of epoch
     // checkpoints during summary sync. This happens in `insert_{verified|certified}_checkpoint`
@@ -913,7 +942,7 @@ pub async fn download_formal_snapshot(
 
     setup_db_state(
         epoch,
-        accumulator,
+        root_accumulator,
         perpetual_db,
         checkpoint_store,
         committee_store,

@@ -14,6 +14,7 @@ use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
+use telemetry_subscribers::Filters;
 
 use sui_types::{base_types::*, object::Owner};
 
@@ -251,6 +252,10 @@ pub enum ToolCommand {
         archive_bucket: Option<String>,
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
+        /// If false (default), log level will be overridden to "off",
+        /// and output will be reduced to necessary status information.
+        #[clap(long = "formal")]
+        verbose: bool,
     },
 
     #[clap(name = "replay")]
@@ -336,7 +341,7 @@ impl std::fmt::Display for OwnerOutput {
 
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
-    pub async fn execute(self) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, filters: Filters) -> Result<(), anyhow::Error> {
         match self {
             ToolCommand::FetchObject {
                 id,
@@ -454,7 +459,13 @@ impl ToolCommand {
                 snapshot_path,
                 archive_bucket,
                 archive_bucket_type,
+                verbose,
             } => {
+                if !verbose {
+                    filters
+                        .update_log("off")
+                        .expect("Failed to update log level");
+                }
                 let snapshot_bucket = snapshot_bucket.unwrap_or_else(|| match (formal, network) {
                     (true, Chain::Mainnet) => "mysten-mainnet-formal".to_string(),
                     (false, Chain::Mainnet) => "mysten-mainnet-snapshots".to_string(),
@@ -596,6 +607,7 @@ impl ToolCommand {
                         snapshot_store_config,
                         archive_store_config,
                         num_parallel_downloads,
+                        network,
                         verify,
                     )
                     .await?;
