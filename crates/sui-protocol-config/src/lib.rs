@@ -303,11 +303,11 @@ struct FeatureFlags {
     receive_objects: bool,
 
     // Enable v2 of Headers for Narwhal
-    #[serde(skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "is_false", default)]
     narwhal_header_v2: bool,
 
     // Enable random beacon protocol
-    #[serde(skip_serializing_if = "is_false")]
+    #[serde(skip_serializing_if = "is_false", default)]
     random_beacon: bool,
 
     #[serde(skip_serializing_if = "is_false", default)]
