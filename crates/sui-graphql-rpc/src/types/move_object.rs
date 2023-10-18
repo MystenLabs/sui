@@ -33,6 +33,7 @@ impl MoveObject {
                 .extend()?;
 
             return Ok(Some(MoveValue::new(
+                type_tag.to_string(),
                 type_layout,
                 self.native_object
                     .data
