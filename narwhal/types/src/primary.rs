@@ -751,13 +751,21 @@ impl HeaderV2 {
         }
 
         // Ensure system messages are valid.
+        let mut has_dkg_message = false;
+        let mut has_dkg_confirmation = false;
         for m in self.system_messages.iter() {
             match m {
                 SystemMessage::DkgMessage(msg) => {
                     ensure!(msg.sender == self.author.0, DagError::InvalidSystemMessage);
+                    // A header must have no more than one DkgMessage.
+                    ensure!(!has_dkg_message, DagError::DuplicateSystemMessage);
+                    has_dkg_message = true;
                 }
                 SystemMessage::DkgConfirmation(conf) => {
                     ensure!(conf.sender == self.author.0, DagError::InvalidSystemMessage);
+                    // A header must have no more than one DkgConfirmation.
+                    ensure!(!has_dkg_confirmation, DagError::DuplicateSystemMessage);
+                    has_dkg_confirmation = true;
                 }
             }
         }
