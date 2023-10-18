@@ -249,6 +249,7 @@ pub struct Key {
     public_base64_key: String,
     key_scheme: String,
     flag: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
     mnemonic: Option<String>,
     peer_id: Option<String>,
 }
