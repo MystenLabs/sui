@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -258,9 +258,11 @@ impl SuiNode {
         consensus_adapter: Arc<ConsensusAdapter>,
     ) {
         let epoch = epoch_store.epoch();
-        let supported_providers = epoch_store
-            .protocol_config()
-            .zklogin_supported_providers()
+
+        let supported_providers = config
+            .zklogin_oauth_providers
+            .get(&epoch_store.get_chain_identifier().chain())
+            .unwrap_or(&BTreeSet::new())
             .iter()
             .map(|s| OIDCProvider::from_str(s).expect("Invalid provider string"))
             .collect::<Vec<_>>();
@@ -338,7 +340,7 @@ impl SuiNode {
                         match Self::fetch_jwks(authority, &p).await {
                             Err(e) => {
                                 metrics.jwk_request_errors.with_label_values(&[&provider_str]).inc();
-                                warn!("Error when fetching JWK {:?}", e);
+                                warn!("Error when fetching JWK for provider {:?} {:?}", p, e);
                                 // Retry in 30 seconds
                                 tokio::time::sleep(Duration::from_secs(30)).await;
                                 continue;

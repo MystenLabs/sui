@@ -561,7 +561,8 @@ impl AuthorityPerEpochStore {
         );
 
         let zklogin_env = match chain_identifier.chain() {
-            Chain::Mainnet => ZkLoginEnv::Prod,
+            // Testnet and mainnet are treated the same since it is permanent.
+            Chain::Mainnet | Chain::Testnet => ZkLoginEnv::Prod,
             _ => ZkLoginEnv::Test,
         };
 
