@@ -1,33 +1,38 @@
 use core::panic;
-use std::collections::{HashSet, HashMap, BTreeMap};
+use dashmap::DashMap;
+use move_binary_format::CompiledModule;
+use move_vm_runtime::move_vm::MoveVM;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
-use move_vm_runtime::move_vm::MoveVM;
 use sui_types::error::SuiError;
 use sui_types::execution_mode;
-use move_binary_format::CompiledModule;
-use dashmap::DashMap;
+use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_types::multiaddr::Protocol;
 // use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
-use sui_config::genesis::Genesis;
+use move_bytecode_utils::module_cache::GetModule;
+use sui_config::genesis::{self, Genesis};
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
-use sui_protocol_config::ProtocolConfig;
-use sui_types::storage::{BackingPackageStore, ParentSync, ChildObjectResolver, ObjectStore, WriteKind, DeleteKind};
+use sui_move_natives;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
+use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
+use sui_types::gas::{GasCharger, SuiGasStatus};
 use sui_types::message_envelope::Message;
-use sui_types::transaction::{InputObjectKind, InputObjects, TransactionDataAPI, VerifiedTransaction};
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::Object;
-use sui_types::temporary_store::TemporaryStore;
+use sui_types::storage::{
+    BackingPackageStore, ChildObjectResolver, DeleteKind, ObjectStore, ParentSync, WriteKind,
+};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
-use sui_types::digests::{ObjectDigest, TransactionDigest};
-use sui_types::effects::TransactionEffects;
-use sui_move_natives;
-use move_bytecode_utils::module_cache::GetModule;
+use sui_types::temporary_store::TemporaryStore;
+use sui_types::transaction::{InputObjectKind, InputObjects, SenderSignedData, TransactionDataAPI};
 use tokio::sync::mpsc;
-use sui_types::gas::{SuiGasStatus, GasCharger};
 use tokio::task::JoinSet;
 use tokio::time::Instant;
+use tokio::time::{sleep, Duration};
 
 use crate::storage::WritableObjectStore;
 
@@ -45,8 +50,8 @@ pub struct QueuesManager {
 
 impl QueuesManager {
     fn new(manager_sender: mpsc::Sender<TransactionDigest>) -> QueuesManager {
-        QueuesManager { 
-            tx_store: HashMap::new(), 
+        QueuesManager {
+            tx_store: HashMap::new(),
             writing_tx: HashMap::new(),
             wait_table: HashMap::new(),
             reverse_wait_table: HashMap::new(),
@@ -56,19 +61,22 @@ impl QueuesManager {
 
     /// Enqueues a transaction on the manager
     async fn queue_tx(&mut self, full_tx: Transaction) {
-        let txid = *full_tx.tx.digest();
+        let txid = full_tx.tx.digest();
 
         // Get RW set
         let r_set = full_tx.get_read_set();
         let w_set = full_tx.get_write_set();
         let mut wait_ctr = 0;
-        
+
         // Add tx to wait lists
         for obj in r_set.union(&w_set) {
             let prev_write = self.writing_tx.insert(*obj, txid);
             if let Some(other_txid) = prev_write {
                 self.wait_table.entry(txid).or_default().insert(other_txid);
-                self.reverse_wait_table.entry(other_txid).or_default().insert(txid);
+                self.reverse_wait_table
+                    .entry(other_txid)
+                    .or_default()
+                    .insert(txid);
                 wait_ctr += 1;
             }
         }
@@ -78,22 +86,22 @@ impl QueuesManager {
             self.writing_tx.insert(*obj, txid);
         }
 
-		// Store tx
-		self.tx_store.insert(txid, full_tx);
+        // Store tx
+        self.tx_store.insert(txid, full_tx);
 
         // Set the wait table and check if tx is ready
         if wait_ctr == 0 {
             self.ready.send(txid).await.expect("send failed");
         }
-	}
+    }
 
     /// Cleans up after a completed transaction
-	async fn clean_up(&mut self, txid: &TransactionDigest) {
+    async fn clean_up(&mut self, txid: &TransactionDigest) {
         let completed_tx = self.tx_store.remove(txid).unwrap();
         assert!(self.wait_table.get(txid).is_none());
 
         // Remove tx itself from objects where it is still marked as their current writer
-		for obj in completed_tx.get_read_write_set().iter() {
+        for obj in completed_tx.get_read_write_set().iter() {
             if let Some(t) = self.writing_tx.get(obj) {
                 if t == txid {
                     self.writing_tx.remove(obj);
@@ -117,33 +125,43 @@ impl QueuesManager {
     }
 }
 
-
 /*****************************************************************************************
  *                                    Execution Worker                                   *
  *****************************************************************************************/
 
-pub struct ExecutionWorkerState
-    <S: ObjectStore 
-        + WritableObjectStore 
-        + BackingPackageStore 
-        + ParentSync 
-        + ChildObjectResolver 
+pub struct ExecutionWorkerState<
+    S: ObjectStore
+        + WritableObjectStore
+        + BackingPackageStore
+        + ParentSync
+        + ChildObjectResolver
         + GetModule<Error = SuiError, Item = CompiledModule>
         + Send
         + Sync
-        + 'static> 
-{
+        + 'static,
+> {
     pub memory_store: Arc<S>,
     pub ready_txs: DashMap<TransactionDigest, ()>,
     pub waiting_child_objs: DashMap<TransactionDigest, HashSet<ObjectID>>,
     pub received_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
     pub received_child_objs: DashMap<TransactionDigest, Vec<Option<(ObjectRef, Object)>>>,
     pub locked_exec_count: DashMap<TransactionDigest, u8>,
+    pub genesis_digest: CheckpointDigest,
 }
 
-impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + ChildObjectResolver + GetModule<Error = SuiError, Item = CompiledModule> + Send + Sync + 'static> 
-    ExecutionWorkerState<S> {
-    pub fn new(new_store: S) -> Self {
+impl<
+        S: ObjectStore
+            + WritableObjectStore
+            + BackingPackageStore
+            + ParentSync
+            + ChildObjectResolver
+            + GetModule<Error = SuiError, Item = CompiledModule>
+            + Send
+            + Sync
+            + 'static,
+    > ExecutionWorkerState<S>
+{
+    pub fn new(new_store: S, genesis: Arc<&Genesis>) -> Self {
         Self {
             memory_store: Arc::new(new_store),
             ready_txs: DashMap::new(),
@@ -151,10 +169,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             received_objs: DashMap::new(),
             received_child_objs: DashMap::new(),
             locked_exec_count: DashMap::new(),
+            genesis_digest: *genesis.checkpoint().digest(),
         }
     }
 
-    pub fn init_store(&mut self, genesis: &Genesis) {
+    pub fn init_store(&mut self, genesis: Arc<&Genesis>) {
         for obj in genesis.objects() {
             self.memory_store
                 .insert(obj.id(), (obj.compute_object_reference(), obj.clone()));
@@ -163,10 +182,10 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
     // Helper: Returns Input objects by reading from the memory_store
     async fn read_input_objects_from_store(
-        memory_store: Arc<S>, 
-        tx: &VerifiedTransaction
+        memory_store: Arc<S>,
+        tx: &SenderSignedData,
     ) -> InputObjects {
-        let tx_data = tx.data().transaction_data();
+        let tx_data = tx.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
             .expect("Cannot get input object kinds");
@@ -175,12 +194,9 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         for kind in &input_object_kinds {
             let obj = match kind {
                 InputObjectKind::MovePackage(id)
-                | InputObjectKind::SharedMoveObject {id, .. }
+                | InputObjectKind::SharedMoveObject { id, .. }
                 | InputObjectKind::ImmOrOwnedMoveObject((id, _, _)) => {
-                    memory_store
-                        .get_object(&id)
-                        .unwrap()
-                        .unwrap()
+                    memory_store.get_object(&id).unwrap().unwrap()
                 }
             };
             input_object_data.push(obj);
@@ -194,18 +210,17 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         )
     }
 
-    // Helper: Returns gas status  
+    // Helper: Returns gas status
     async fn get_gas_status(
-        tx: &VerifiedTransaction,
+        tx: &SenderSignedData,
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
-    ) -> SuiGasStatus
-    {
-        let tx_data = tx.data().transaction_data();
+    ) -> SuiGasStatus {
+        let tx_data = tx.transaction_data();
 
-        let input_object_data = 
-            input_objects.clone()
+        let input_object_data = input_objects
+            .clone()
             .into_objects()
             .into_iter()
             .map(|(_kind, object)| object)
@@ -227,22 +242,26 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         memory_store: Arc<S>,
         deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
         written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-
     ) {
         // And now we mutate the store.
         // First delete:
         for (id, (ver, kind)) in deleted {
             let old_obj_opt = memory_store.get_object(&id).unwrap();
-            assert!(old_obj_opt.is_some(), "Trying to delete non-existant obj {}", id);
+            assert!(
+                old_obj_opt.is_some(),
+                "Trying to delete non-existant obj {}",
+                id
+            );
             let old_object = old_obj_opt.unwrap();
             match kind {
                 sui_types::storage::DeleteKind::Wrap => {
                     // insert the old object with a wrapped tombstone
-                    let wrap_tombstone =
-                        (id, ver, ObjectDigest::OBJECT_DIGEST_WRAPPED);
+                    let wrap_tombstone = (id, ver, ObjectDigest::OBJECT_DIGEST_WRAPPED);
                     memory_store.insert(id, (wrap_tombstone, old_object));
                 }
-                _ => { memory_store.remove(id); }
+                _ => {
+                    memory_store.remove(id);
+                }
             }
         }
         for (id, (oref, obj, _)) in written {
@@ -253,7 +272,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
     fn check_effects_match(full_tx: &Transaction, effects: &TransactionEffects) -> bool {
         let ground_truth_effects = &full_tx.ground_truth_effects;
         if effects.digest() != ground_truth_effects.digest() {
-            println!("EW effects mismatch for tx {} (CP {})", full_tx.tx.digest(), full_tx.checkpoint_seq);
+            println!(
+                "EW effects mismatch for tx {} (CP {})",
+                full_tx.tx.digest(),
+                full_tx.checkpoint_seq
+            );
             let old_effects = ground_truth_effects.clone();
             println!("Past effects: {:?}", old_effects);
             println!("New effects: {:?}", effects);
@@ -271,21 +294,22 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         epoch_data: &EpochData,
         reference_gas_price: u64,
         metrics: Arc<LimitsMetrics>,
-        ew_id: u8,
     ) {
         let tx = &full_tx.tx;
-        let tx_data = tx.data().transaction_data();
+        let tx_data = tx.transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
-        let input_objects = Self::read_input_objects_from_store(self.memory_store.clone(), tx).await;
-        let gas_status = Self::get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
+        let input_objects =
+            Self::read_input_objects_from_store(self.memory_store.clone(), tx).await;
+        let gas_status =
+            Self::get_gas_status(tx, &input_objects, protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
+        let mut gas_charger = GasCharger::new(tx.digest(), gas, gas_status, &protocol_config);
 
         let temporary_store = TemporaryStore::new(
             self.memory_store.clone(),
             input_objects.clone(),
-            *tx.digest(),
+            tx.digest(),
             protocol_config,
         );
 
@@ -296,7 +320,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 kind,
                 signer,
                 &mut gas_charger,
-                *tx.digest(),
+                tx.digest(),
                 transaction_dependencies,
                 &move_vm,
                 &epoch_data.epoch_id(),
@@ -311,7 +335,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         Self::check_effects_match(&full_tx, &effects);
 
         // And now we mutate the store.
-        Self::write_updates_to_store(self.memory_store.clone(), inner_temp_store.deleted, inner_temp_store.written);
+        Self::write_updates_to_store(
+            self.memory_store.clone(),
+            inner_temp_store.deleted,
+            inner_temp_store.written,
+        );
     }
 
     async fn async_exec(
@@ -323,26 +351,30 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         epoch_data: EpochData,
         protocol_config: ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        ew_id: u8,
-    ) -> TransactionWithResults
-    {
+        my_id: u8,
+        ew_ids: &Vec<UniqueId>,
+    ) -> TransactionWithResults {
         let tx = &full_tx.tx;
-        let txid = *tx.digest();
-        let tx_data = tx.data().transaction_data();
+        let txid = tx.digest();
+        let tx_data = tx.transaction_data();
         let (kind, signer, gas) = tx_data.execution_parts();
         let input_objects = Self::read_input_objects_from_store(memory_store.clone(), &tx).await;
-        let gas_status = Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
+        let gas_status =
+            Self::get_gas_status(&tx, &input_objects, &protocol_config, reference_gas_price).await;
         let shared_object_refs = input_objects.filter_shared_objects();
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut gas_charger = GasCharger::new(*tx.digest(), gas, gas_status, &protocol_config);
-
+        let mut gas_charger = GasCharger::new(tx.digest(), gas, gas_status, &protocol_config);
+        println!(
+            "Dependencies for tx {}: {:?}",
+            txid, transaction_dependencies
+        );
         let temporary_store = TemporaryStore::new(
             memory_store.clone(),
             input_objects.clone(),
             txid,
             &protocol_config,
         );
-    
+
         let (inner_temp_store, tx_effects, _execution_error) =
             execution_engine::execute_transaction_to_effects::<execution_mode::Normal>(
                 shared_object_refs,
@@ -369,82 +401,103 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             }
         }
 
-        if missing_objs.is_empty() && ew_id == 0 {
-            Self::write_updates_to_store(memory_store, inner_temp_store.deleted.clone(), inner_temp_store.written.clone());
+        if missing_objs.is_empty() && my_id as UniqueId == ew_ids[0] {
+            Self::write_updates_to_store(
+                memory_store,
+                inner_temp_store.deleted.clone(),
+                inner_temp_store.written.clone(),
+            );
         }
-        
+
         return TransactionWithResults {
             full_tx,
             tx_effects,
             deleted: BTreeMap::from_iter(inner_temp_store.deleted),
             written: BTreeMap::from_iter(inner_temp_store.written),
             missing_objs,
-        }
+        };
     }
 
     /// Helper: Receive and process an EpochStart message.
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
-    async fn process_epoch_start(&self,
-        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
-    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
-    {
+    async fn process_epoch_start(
+        &self,
+        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
+        let msg = in_channel.recv().await.expect("Receiving doesn't work");
         let SailfishMessage::EpochStart{
-            conf: protocol_config,
+            version: protocol_version,
             data: epoch_data,
             ref_gas_price: reference_gas_price,
-        } = sw_receiver.recv().await.unwrap() 
+        } = msg.payload
         else {
+            eprintln!("EW got unexpected message: {:?}", msg.payload);
             panic!("unexpected message");
         };
         println!("EW got epoch start message");
 
         let native_functions = sui_move_natives::all_natives(/* silent */ true);
+        let chain = ChainIdentifier::chain(&ChainIdentifier::from(self.genesis_digest));
+        let conf = ProtocolConfig::get_for_version(protocol_version, chain);
         let move_vm = Arc::new(
-            adapter::new_move_vm(native_functions, &protocol_config, false)
+            adapter::new_move_vm(native_functions, &conf, false)
                 .expect("We defined natives to not fail here"),
         );
-        return (move_vm, protocol_config, epoch_data, reference_gas_price)
+        return (move_vm, conf, epoch_data, reference_gas_price);
     }
 
     /// Helper: Process an epoch change
-    async fn process_epoch_change(&self,
-        ew_sender: &mpsc::Sender<SailfishMessage>,
-        sw_receiver: &mut mpsc::Receiver<SailfishMessage>,
-    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64)
-    {
+    async fn process_epoch_change(
+        &self,
+        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+        sw_id: UniqueId,
+    ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
         // First send end of epoch message to sequence worker
         let latest_state = get_sui_system_state(&self.memory_store.clone())
             .expect("Read Sui System State object cannot fail");
         let new_epoch_start_state = latest_state.into_epoch_start_state();
-        ew_sender
-            .send(SailfishMessage::EpochEnd{
-                new_epoch_start_state,
-            }).await
+        out_channel
+            .send(NetworkMessage {
+                src: 0,
+                dst: sw_id,
+                payload: SailfishMessage::EpochEnd {
+                    new_epoch_start_state,
+                },
+            })
+            .await
             .expect("Sending doesn't work");
 
         // Then wait for start epoch message from sequence worker and update local state
-        let (new_move_vm, protocol_config, epoch_data, reference_gas_price)
-            = self.process_epoch_start(sw_receiver).await;
+        let msg = in_channel.recv().await.expect("Receiving doesn't work");
+        let (new_move_vm, protocol_config, epoch_data, reference_gas_price) =
+            self.process_epoch_start(in_channel).await;
 
-        return (new_move_vm, protocol_config, epoch_data, reference_gas_price);
+        return (
+            new_move_vm,
+            protocol_config,
+            epoch_data,
+            reference_gas_price,
+        );
     }
 
     /// ExecutionWorker main
-    pub async fn run(&mut self,
+    pub async fn run(
+        &mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
-        mut sw_receiver: mpsc::Receiver<SailfishMessage>,
-        sw_sender: mpsc::Sender<SailfishMessage>,
-        mut ew_receiver: mpsc::Receiver<SailfishMessage>,
-        ew_senders: Vec<mpsc::Sender<SailfishMessage>>,
-        ew_id: u8,
+        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        ew_ids: Vec<UniqueId>,
+        sw_id: UniqueId,
+        my_id: UniqueId,
     ) {
         // Initialize channels
         let (manager_sender, mut manager_receiver) = mpsc::channel(MANAGER_CHANNEL_SIZE);
         let mut manager = QueuesManager::new(manager_sender);
         let mut tasks_queue: JoinSet<TransactionWithResults> = JoinSet::new();
 
-        let num_ews = ew_senders.len() as u8;
+        let num_ews = ew_ids.len() as u8;
 
         /* Semaphore to keep track of un-executed transactions in the current epoch, used
         * to schedule epoch change:
@@ -461,8 +514,8 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
         let now = Instant::now();
 
         // Start the initial epoch
-        let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price)
-            = self.process_epoch_start(&mut sw_receiver).await;
+        let (mut move_vm, mut protocol_config, mut epoch_data, mut reference_gas_price) =
+            self.process_epoch_start(in_channel).await;
 
         // Main loop
         loop {
@@ -470,20 +523,20 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                 biased;
                 Some(tx_with_results) = tasks_queue.join_next() => {
                     let tx_with_results = tx_with_results.expect("tx task failed");
-                    let txid = *tx_with_results.full_tx.tx.digest();
+                    let txid = tx_with_results.full_tx.tx.digest();
 
                     if !tx_with_results.missing_objs.is_empty() {
                         self.waiting_child_objs.entry(txid).or_default().extend(tx_with_results.missing_objs.iter());
                         self.ready_txs.insert(txid, ());
-
-                        for (i, sender) in ew_senders.iter().enumerate() {
-                            let msg = SailfishMessage::MissingObjects {
+                        println!("Sending MissingObjects message for tx {}", txid);
+                        for ew_id in &ew_ids {
+                            let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::MissingObjects {
                                 txid,
-                                ew: ew_id,
+                                ew: my_id as u8,
                                 missing_objects: tx_with_results.missing_objs.clone()
-                            };
-                            if sender.send(msg).await.is_err() {
-                                eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, i);
+                            }};
+                            if out_channel.send(msg).await.is_err() {
+                                eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
                             }
                         }
                         continue;
@@ -497,11 +550,11 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     num_tx += 1;
                     epoch_txs_semaphore -= 1;
                     assert!(epoch_txs_semaphore >= 0);
-                    
+
                     let full_tx = &tx_with_results.full_tx;
-                    if full_tx.checkpoint_seq % 10_000 == 0 {
-                        println!("EW {} executed {}", ew_id, full_tx.checkpoint_seq);
-                    }
+                    // if full_tx.checkpoint_seq % 10_000 == 0 {
+                        println!("EW {} executed {}", my_id, full_tx.checkpoint_seq);
+                    // }
 
                     // 1. Critical check: are the effects the same?
                     let tx_effects = &tx_with_results.tx_effects;
@@ -510,22 +563,23 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                     // 2. Update object queues
                     manager.clean_up(&txid).await;
 
-                    for (i, sender) in ew_senders.iter().enumerate() {
-                        if i as u8 == ew_id {
+                    println!("Sending TxResults message for tx {}", txid);
+                    for ew_id in &ew_ids {
+                        if *ew_id == my_id {
                             continue;
                         }
-                        let msg = SailfishMessage::TxResults {
+                        let msg = NetworkMessage { src: 0, dst: *ew_id, payload: SailfishMessage::TxResults {
                             txid,
                             deleted: tx_with_results.deleted.clone(),
                             written: tx_with_results.written.clone(),
-                        };
-                        if sender.send(msg).await.is_err() {
-                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, i);
+                        }};
+                        if out_channel.send(msg).await.is_err() {
+                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew_id);
                         }
                     }
 
                     // Stop executing when I hit the watermark
-                    // Note that this is the high watermark; there may be lower txns not 
+                    // Note that this is the high watermark; there may be lower txns not
                     // completed still left in the tasks_queue
                     if full_tx.checkpoint_seq == exec_watermark-1 {
                         break;
@@ -538,7 +592,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
                     let mut locked_objs = Vec::new();
                     for obj_id in full_tx.get_read_set() {
-                        if ew_id != select_ew_for_object(obj_id) {
+                        if my_id != select_ew_for_object(obj_id, &ew_ids) {
                             continue;
                         }
                         let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(obj_id).unwrap();
@@ -550,17 +604,23 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                         }
                     }
 
-                    let execute_on_ew = select_ew_for_execution(txid, full_tx);
-                    let msg = SailfishMessage::LockedExec { txid, objects: locked_objs.clone(), child_objects: Vec::new() };
-                    if ew_senders[execute_on_ew as usize].send(msg).await.is_err() {
-                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, execute_on_ew);
+                    let execute_on_ew = select_ew_for_execution(txid, full_tx,&ew_ids);
+                    let msg = NetworkMessage{
+                        src:0,
+                        dst:execute_on_ew as u16,
+                        payload: SailfishMessage::LockedExec { txid, objects: locked_objs.clone(), child_objects: Vec::new() }};
+                    println!("Sending LockedExec for tx {} to EW {}", txid, execute_on_ew);
+                    if out_channel.send(msg).await.is_err() {
+                        eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, execute_on_ew);
                     }
                 },
-                Some(msg) = ew_receiver.recv() => {
+                Some(msg) = in_channel.recv() => {
+                    let msg = msg.payload;
+                    // println!("EW {} received {:?}", my_id, msg);
                     if let SailfishMessage::MissingObjects { txid, ew, missing_objects } = msg {
                         let mut locked_objs = Vec::new();
                         for obj_id in &missing_objects {
-                            if ew_id != select_ew_for_object(*obj_id) {
+                            if my_id != select_ew_for_object(*obj_id, &ew_ids) {
                                 continue;
                             }
                             let obj_ref_opt = self.memory_store.get_latest_parent_entry_ref(*obj_id).unwrap();
@@ -571,9 +631,13 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                                 locked_objs.push(None);
                             }
                         }
-                        let msg = SailfishMessage::LockedExec { txid, objects: Vec::new(), child_objects: locked_objs.clone() };
-                        if ew_senders[ew as usize].send(msg).await.is_err() {
-                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", ew_id, ew);
+                        println!("Sending LockedExec for tx {} in response to MissingObjects", txid);
+                        let msg = NetworkMessage{
+                            src:0,
+                            dst:ew as u16,
+                            payload:SailfishMessage::LockedExec { txid, objects: Vec::new(), child_objects: locked_objs.clone() }};
+                        if out_channel.send(msg).await.is_err() {
+                            eprintln!("EW {} could not send LockedExec; EW {} already stopped.", my_id, ew);
                         }
                     } else if let SailfishMessage::LockedExec { txid, mut objects, mut child_objects } = msg {
                         // TODO: deal with possible duplicate LockedExec messages
@@ -582,6 +646,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
 
                         let mut ctr = self.locked_exec_count.entry(txid).or_insert(0);
                         *ctr += 1;
+                        println!("EW {} received LockedExec for tx {} (ctr={})", my_id, txid, *ctr);
 
                         let mut child_list = self.received_child_objs.entry(txid).or_default();
                         child_list.append(&mut child_objects);
@@ -602,7 +667,8 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                                 .map(|r| r.clone())
                                 .unwrap_or_default();
                             // Push execution task to futures queue
-                            tasks_queue.spawn(Box::pin(async move {
+                            let ew_ids_copy = ew_ids.clone();
+                            tasks_queue.spawn(async move {
                                 if child_list.is_empty() {
                                     for entry_opt in list.into_iter() {
                                         assert!(entry_opt.is_some(), "tx {} aborted, missing obj", txid);
@@ -627,6 +693,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                                     }
                                 }
 
+                                println!("EW {} executing tx {}", my_id, txid);
                                 Self::async_exec(
                                     tx,
                                     mem_store,
@@ -636,13 +703,14 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                                     epoch_data,
                                     protocol_config,
                                     metrics,
-                                    ew_id,
+                                    my_id as u8,
+                                    &ew_ids_copy,
                                 ).await
-                            }));
+                            });
                         }
                     } else if let SailfishMessage::TxResults { txid, deleted, written } = msg {
                         if let Some(_) = self.ready_txs.remove(&txid) {
-                            if ew_id == 0 {
+                            if my_id == ew_ids[0] {
                                 Self::write_updates_to_store(self.memory_store.clone(), deleted, written);
                             }
                             manager.clean_up(&txid).await;
@@ -652,11 +720,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                         } else {
                             unreachable!("tx already executed though we did not send LockedExec");
                         }
-                    }
-                },
-                Some(msg) = sw_receiver.recv() => {
-                    // New tx from sequencer; enqueue to manager
-                    if let SailfishMessage::ProposeExec(full_tx) = msg {
+                    } else if let SailfishMessage::ProposeExec(full_tx) = msg {
                         if full_tx.is_epoch_change() {
                             // don't queue to manager, but store to epoch_change_tx
                             epoch_change_tx = Some(full_tx);
@@ -665,7 +729,7 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
                             epoch_txs_semaphore += 1;
                         }
                     } else {
-                        eprintln!("EW {} received unexpected message from SW: {:?}", ew_id, msg);
+                        eprintln!("EW {} received unexpected message from: {:?}", my_id, msg);
                         panic!("unexpected message");
                     }
                 },
@@ -676,53 +740,73 @@ impl<S: ObjectStore + WritableObjectStore + BackingPackageStore + ParentSync + C
             }
 
             // Maybe do epoch change, if every other tx has completed in this epoch
-            if epoch_change_tx.is_some() && epoch_txs_semaphore == 0 {
-                let full_tx = epoch_change_tx.as_ref().unwrap();
-                let txid = *full_tx.tx.digest();
+            if epoch_change_tx.is_some() {
+                if epoch_txs_semaphore == 0 {
+                    let full_tx = epoch_change_tx.as_ref().unwrap();
+                    let txid = full_tx.tx.digest();
 
-                if ew_id == select_ew_for_execution(txid, full_tx) {
-                    self.execute_tx(
-                        full_tx,
-                        &protocol_config,
-                        &move_vm,
-                        &epoch_data,
-                        reference_gas_price,
-                        metrics.clone(),
-                        ew_id,
-                    ).await;
+                    if my_id == select_ew_for_execution(txid, full_tx, &ew_ids) {
+                        self.execute_tx(
+                            full_tx,
+                            &protocol_config,
+                            &move_vm,
+                            &epoch_data,
+                            reference_gas_price,
+                            metrics.clone(),
+                        )
+                        .await;
 
-                    num_tx += 1;
-                    if full_tx.checkpoint_seq % 10_000 == 0 {
-                        println!("EW {} executed {}", ew_id, full_tx.checkpoint_seq);
+                        num_tx += 1;
+                        if full_tx.checkpoint_seq % 10_000 == 0 {
+                            println!("EW {} executed {}", my_id, full_tx.checkpoint_seq);
+                        }
+
+                        println!(
+                            "EW {} END OF EPOCH at checkpoint {}",
+                            my_id, full_tx.checkpoint_seq
+                        );
+                        (move_vm, protocol_config, epoch_data, reference_gas_price) = self
+                            .process_epoch_change(out_channel, in_channel, my_id)
+                            .await;
+                    } else {
+                        (move_vm, protocol_config, epoch_data, reference_gas_price) =
+                            self.process_epoch_start(in_channel).await;
                     }
 
-                    println!("EW {} END OF EPOCH at checkpoint {}", ew_id, full_tx.checkpoint_seq);
-                    (move_vm, protocol_config, epoch_data, reference_gas_price) = 
-                        self.process_epoch_change(&sw_sender, &mut sw_receiver).await;
+                    epoch_change_tx = None; // reset for next epoch
                 } else {
-                    (move_vm, protocol_config, epoch_data, reference_gas_price) = 
-                        self.process_epoch_start(&mut sw_receiver).await;
+                    println!(
+                        "Epoch change tx received, but semaphore is {}",
+                        epoch_txs_semaphore
+                    );
                 }
-
-                epoch_change_tx = None;  // reset for next epoch
             }
         }
 
         // Print TPS
         let elapsed = now.elapsed();
         let tps = num_tx as f64 / elapsed.as_secs_f64();
-        println!("EW {} finished, executed {} txs ({:.2} tps)", ew_id, num_tx, tps);
+        println!(
+            "EW {} finished, executed {} txs ({:.2} tps)",
+            my_id, num_tx, tps
+        );
+        sleep(Duration::from_millis(10_000)).await;
     }
 }
 
-fn select_ew_for_execution(txid: TransactionDigest, tx: &Transaction) -> u8 {
+fn select_ew_for_execution(
+    txid: TransactionDigest,
+    tx: &Transaction,
+    ew_ids: &Vec<UniqueId>,
+) -> UniqueId {
+    println!("EW IDS: {:?}", ew_ids);
     if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
-        0
+        ew_ids[0]
     } else {
-        txid.inner()[0] % 4
+        ew_ids[(txid.inner()[0] % 4) as usize]
     }
 }
 
-fn select_ew_for_object(obj_id: ObjectID) -> u8 {
-    0
+fn select_ew_for_object(obj_id: ObjectID, ew_ids: &Vec<UniqueId>) -> UniqueId {
+    ew_ids[0]
 }

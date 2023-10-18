@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::AtomicU8;
 use std::sync::{Arc, RwLock};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -10,7 +11,8 @@ use tokio::time::{sleep, Duration};
 
 use super::agents::*;
 use super::types::*;
-const FILE_PATH: &str = "./crates/sui-distributed-execution/src/configs/config.json";
+
+static GLOBAL_CONNECTION_COUNT: AtomicU8 = AtomicU8::new(0);
 
 pub struct Server<T: Agent<M>, M: Debug + Message + Send + 'static> {
     global_config: GlobalConfig, // global configuration from parsing json
@@ -33,7 +35,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     // Outputs ingress and egress channels of the Agent
     fn init_agent(
         id: UniqueId,
-        conf: ServerConfig,
+        conf: GlobalConfig,
     ) -> (
         T,
         mpsc::Sender<NetworkMessage<M>>,
@@ -41,7 +43,7 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
     ) {
         let (in_send, in_recv) = mpsc::channel(100);
         let (out_send, out_recv) = mpsc::channel(100);
-        let agent = T::new(id, in_recv, out_send, conf.attrs);
+        let agent = T::new(id, in_recv, out_send, conf);
         return (agent, in_send, out_recv);
     }
 
@@ -56,8 +58,13 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
 
         // Initialize Agent and Network Manager
         // Network manager connects to agent through channels
-        let agent_config = self.global_config.get(&self.my_id).unwrap().clone();
-        let (mut agent, in_sender, out_receiver) = Self::init_agent(self.my_id, agent_config);
+        // let agent_config = self.global_config.get(&self.my_id).unwrap().clone();
+        // let (mut agent, in_sender, out_receiver) = Self::init_agent(self.my_id, agent_config);
+        // initialize agent with global_config
+        let (mut agent, in_sender, out_receiver) =
+            Self::init_agent(self.my_id, self.global_config.clone());
+
+        let addr_table_len = addr_table.len() as u8;
 
         let mut network_manager =
             NetworkManager::new(self.my_id, addr_table, in_sender, out_receiver);
@@ -68,7 +75,15 @@ impl<T: Agent<M>, M: Debug + Message + Send + 'static> Server<T, M> {
         });
 
         // Wait for connections to be set up
-        sleep(Duration::from_millis(1_000)).await;
+        while GLOBAL_CONNECTION_COUNT.load(std::sync::atomic::Ordering::SeqCst) < addr_table_len - 1
+        {
+            println!(
+                "Connection count = {}, waiting until it is {}",
+                GLOBAL_CONNECTION_COUNT.load(std::sync::atomic::Ordering::SeqCst),
+                addr_table_len - 1,
+            );
+            sleep(Duration::from_millis(1_000)).await;
+        }
 
         // Run the agent
         agent.run().await;
@@ -138,12 +153,14 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
             tokio::select! {
                 Some(message) = out_receiver.recv() => {
                     let serialized = message.serialize();
+                    // println!("Serialized message = {}", serialized);
                     stream.write_all(serialized.as_bytes()).await.expect("send failed");
                 }
                 Ok(_) = stream.read_line(&mut line) => {
                     if line.len() == 0 {
                         panic!("Connection with remote id {remote_id} broken");
                     }
+                    // println!("Received message = {}", line);
                     let message = NetworkMessage::deserialize(line);
 
                     // TODO: network manager may want to assign the source, rather than
@@ -186,7 +203,6 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
         // Listen for incoming connections
         let listener_address = SocketAddr::new(self.my_addr, self.my_port);
         let my_id = self.my_id.clone();
-
         tokio::spawn(async move {
             let listener = TcpListener::bind(listener_address).await.unwrap();
             println!("Server {} listening on {}", my_id, listener_address);
@@ -200,6 +216,7 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
                     Self::handle_connection(my_id, socket, in_sender_clone, receiver_table_clone)
                         .await;
                 });
+                GLOBAL_CONNECTION_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         });
 
@@ -215,6 +232,7 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
                     Self::handle_connection(my_id, socket, in_sender_clone, receiver_table_clone)
                         .await;
                 });
+                GLOBAL_CONNECTION_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
         }
 
@@ -230,9 +248,16 @@ impl<M: Debug + Message + Send + 'static> NetworkManager<M> {
                 // TODO: What happens when Agent sends to itself? Spawn a task to stick
                 // the message back to the Agent ingress channel?
                 Some(message) = self.application_out.recv() => {
+                    let mut message = message;
+                    message.src = self.my_id; // set source to self
                     let dst = message.dst;
-                    let out_chan = routing_table.get(&dst).unwrap().clone();
-                    out_chan.send(message).await.expect("send failed");
+                    if dst == self.my_id {
+                        println!("Sending to self");
+                        self.application_in.send(message).await.expect("send to self failed");
+                    } else {
+                        let out_chan = routing_table.get(&dst).unwrap().clone();
+                        out_chan.send(message).await.expect("send failed");
+                    }
                 }
             }
         }

@@ -169,7 +169,7 @@ impl Default for Chain {
 pub struct Error(pub String);
 
 /// Records on/off feature flags that may vary at each protocol version.
-#[derive(Default, Clone, Serialize, Debug, ProtocolConfigFeatureFlagsGetters)]
+#[derive(Default, Clone, Serialize, Deserialize, Debug, ProtocolConfigFeatureFlagsGetters)]
 struct FeatureFlags {
     // Add feature flags here, e.g.:
     // new_protocol_feature: bool,
@@ -259,7 +259,7 @@ fn is_false(b: &bool) -> bool {
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
-#[derive(Default, Copy, Clone, Serialize, Debug)]
+#[derive(Default, Copy, Clone, Serialize, Deserialize, Debug)]
 pub enum ConsensusTransactionOrdering {
     /// No ordering. Transactions are processed in the order they appear in the consensus output.
     #[default]
@@ -306,7 +306,7 @@ impl ConsensusTransactionOrdering {
 /// return `None` if the field is not defined at that version.
 /// - If you want a customized getter, you can add a method in the impl.
 #[skip_serializing_none]
-#[derive(Clone, Serialize, Debug, ProtocolConfigGetters)]
+#[derive(Clone, Serialize, Deserialize, Debug, ProtocolConfigGetters)]
 pub struct ProtocolConfig {
     pub version: ProtocolVersion,
 

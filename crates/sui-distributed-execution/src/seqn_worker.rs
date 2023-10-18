@@ -23,7 +23,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 use tokio::sync::{mpsc, watch};
-use tokio::time::Duration;
+use tokio::time::{sleep, Duration};
 use typed_store::rocks::default_db_options;
 
 use super::types::*;
@@ -41,12 +41,13 @@ pub struct SequenceWorkerState {
 }
 
 impl SequenceWorkerState {
-    pub async fn new(_id: UniqueId, attrs: HashMap<String, String>) -> Self {
+    pub async fn new(_id: UniqueId, attrs: &HashMap<String, String>) -> Self {
         let config_path = attrs.get("config").unwrap();
         let config = NodeConfig::load(config_path).unwrap();
 
         let genesis = config.genesis().expect("Could not load genesis");
-        let registry_service = { metrics::start_prometheus_server(config.metrics_address) };
+        let metrics_address = attrs.get("metrics-address").unwrap().parse().unwrap();
+        let registry_service = { metrics::start_prometheus_server(metrics_address) };
         let prometheus_registry = registry_service.default_registry();
         let metrics = Arc::new(LimitsMetrics::new(&prometheus_registry));
         let checkpoint_store = CheckpointStore::new(&config.db_path().join("checkpoints"));
@@ -284,11 +285,9 @@ impl SequenceWorkerState {
 
     pub async fn run(
         &mut self,
-        config: NodeConfig,
-        download: u64,
-        execute: u64,
-        sw_senders: Vec<mpsc::Sender<SailfishMessage>>,
-        mut ew_receiver: mpsc::Receiver<SailfishMessage>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        ew_ids: Vec<UniqueId>,
     ) {
         let genesis = Arc::new(self.config.genesis().expect("Could not load genesis"));
         let genesis_seq = genesis.checkpoint().into_summary_and_sequence().0;
@@ -312,12 +311,17 @@ impl SequenceWorkerState {
         let mut now = Instant::now();
 
         // Epoch Start
-        for sw_sender in &sw_senders {
-            sw_sender
-                .send(SailfishMessage::EpochStart {
-                    conf: protocol_config.clone(),
-                    data: epoch_start_config.epoch_data(),
-                    ref_gas_price: reference_gas_price,
+        for ew_id in &ew_ids {
+            println!("SW sending epoch start to {}", ew_id);
+            out_channel
+                .send(NetworkMessage {
+                    src: 0,
+                    dst: *ew_id,
+                    payload: SailfishMessage::EpochStart {
+                        version: protocol_config.version,
+                        data: epoch_start_config.epoch_data(),
+                        ref_gas_price: reference_gas_price,
+                    },
                 })
                 .await
                 .expect("Sending doesn't work");
@@ -359,15 +363,19 @@ impl SequenceWorkerState {
 
                     let _ = tx.digest();
                     let full_tx = Transaction {
-                        tx: tx.clone(),
+                        tx: tx.data().clone(),
                         ground_truth_effects: tx_effects.clone(),
                         child_inputs: Vec::new(),
                         checkpoint_seq,
                     };
 
-                    for sender in &sw_senders {
-                        sender
-                            .send(SailfishMessage::ProposeExec(full_tx.clone()))
+                    for ew_id in &ew_ids {
+                        out_channel
+                            .send(NetworkMessage {
+                                src: 0,
+                                dst: *ew_id,
+                                payload: SailfishMessage::ProposeExec(full_tx.clone()),
+                            })
                             .await
                             .expect("sending failed");
                     }
@@ -380,10 +388,9 @@ impl SequenceWorkerState {
                             checkpoint_seq
                         );
 
-                        let SailfishMessage::EpochEnd {new_epoch_start_state } = ew_receiver
-                            .recv()
-                            .await
-                            .expect("Receiving doesn't work")
+                        let msg = in_channel.recv().await.expect("Receiving doesn't work");
+
+                        let SailfishMessage::EpochEnd {new_epoch_start_state } = msg.payload
                         else {
                             panic!("unexpected message")
                         };
@@ -427,12 +434,16 @@ impl SequenceWorkerState {
                         num_tx = 0;
 
                         // send EpochStart message to start next epoch
-                        for sw_sender in &sw_senders {
-                            sw_sender
-                                .send(SailfishMessage::EpochStart {
-                                    conf: protocol_config.clone(),
-                                    data: epoch_start_config.epoch_data(),
-                                    ref_gas_price: reference_gas_price,
+                        for ew_id in &ew_ids {
+                            out_channel
+                                .send(NetworkMessage {
+                                    src: 0,
+                                    dst: *ew_id,
+                                    payload: SailfishMessage::EpochStart {
+                                        version: protocol_config.version,
+                                        data: epoch_start_config.epoch_data(),
+                                        ref_gas_price: reference_gas_price,
+                                    },
                                 })
                                 .await
                                 .expect("Sending doesn't work");
@@ -442,5 +453,6 @@ impl SequenceWorkerState {
             }
         }
         println!("Sequence worker finished");
+        sleep(Duration::from_millis(100_000)).await;
     }
 }

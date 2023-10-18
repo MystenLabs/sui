@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
+
 use crate::base_types::EpochId;
 use crate::message_envelope::Message;
 use crate::messages_checkpoint::{CheckpointDigest, CheckpointSummary, CheckpointTimestamp};
 
 /// The static epoch information that is accessible to move smart contracts
-#[derive(Clone, Default, Debug)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct EpochData {
     epoch_id: EpochId,
     epoch_start_timestamp: CheckpointTimestamp,

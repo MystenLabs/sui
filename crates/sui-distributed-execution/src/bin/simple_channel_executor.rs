@@ -54,9 +54,9 @@ async fn main() {
             args.config_path.to_string_lossy().into_owned(),
         ),
         ("download".to_string(), args.download.to_string()),
-        ("execute".to_string(), args.download.to_string()),
+        ("execute".to_string(), args.execute.to_string()),
     ]);
-    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, sw_attrs).await;
+    let mut sw_state = seqn_worker::SequenceWorkerState::new(0, &sw_attrs).await;
     println!("Download watermark: {:?}", sw_state.download);
     println!("Execute watermark: {:?}", sw_state.execute);
 
@@ -105,15 +105,7 @@ async fn main() {
 
     // Run Sequence Worker asynchronously
     let sw_handler = tokio::spawn(async move {
-        sw_state
-            .run(
-                config.clone(),
-                args.download,
-                args.execute,
-                sw2ew_senders,
-                ew2sw_receiver,
-            )
-            .await;
+        sw_state.run(sw2ew_senders, ew2sw_receiver).await;
     });
 
     // Await for workers (EWs and SW) to finish.

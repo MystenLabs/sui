@@ -1,8 +1,9 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Debug;
 use std::net::IpAddr;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::ProtocolVersion;
+use sui_types::transaction::SenderSignedData;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::TransactionDigest,
@@ -11,7 +12,7 @@ use sui_types::{
     object::Object,
     storage::{DeleteKind, WriteKind},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
-    transaction::{InputObjectKind, TransactionDataAPI, TransactionKind, VerifiedTransaction},
+    transaction::{InputObjectKind, TransactionDataAPI, TransactionKind},
 };
 
 pub type UniqueId = u16;
@@ -51,28 +52,23 @@ pub struct NetworkMessage<M: Debug + Message> {
 // TODO: Maybe serialize directly to bytes, rather than String and then to bytes
 impl<M: Debug + Message> NetworkMessage<M> {
     pub fn serialize(&self) -> String {
-        format!(
-            "{}\t{}\t{}\t\n",
-            self.src,
-            self.dst,
-            self.payload.serialize()
-        )
+        format!("{}${}${}$\n", self.src, self.dst, self.payload.serialize())
     }
 
     pub fn deserialize(string: String) -> Self {
-        let mut splitted = string.split("\t");
-        let src = splitted.next().unwrap().parse().unwrap();
+        let mut splitted = string.split("$");
+        let src = splitted.next().unwrap().parse().expect(string.as_str());
         let dst = splitted.next().unwrap().parse().unwrap();
         let payload = Message::deserialize(splitted.next().unwrap().to_string());
         NetworkMessage { src, dst, payload }
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum SailfishMessage {
     // Sequencing Worker <-> Execution Worker
     EpochStart {
-        conf: ProtocolConfig,
+        version: ProtocolVersion,
         data: EpochData,
         ref_gas_price: u64,
     },
@@ -104,9 +100,19 @@ pub enum SailfishMessage {
     Checkpointed(u64),
 }
 
-#[derive(Debug, Clone)]
+impl Message for SailfishMessage {
+    fn serialize(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+
+    fn deserialize(string: String) -> Self {
+        serde_json::from_str(&string).unwrap()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
-    pub tx: VerifiedTransaction,
+    pub tx: SenderSignedData,
     pub ground_truth_effects: TransactionEffects, // full effects of tx, as ground truth exec result
     pub child_inputs: Vec<ObjectID>,              // TODO: mark mutable
     pub checkpoint_seq: u64,
@@ -114,7 +120,7 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn is_epoch_change(&self) -> bool {
-        match self.tx.data().transaction_data().kind() {
+        match self.tx.transaction_data().kind() {
             TransactionKind::ChangeEpoch(_) => true,
             _ => false,
         }
@@ -125,7 +131,7 @@ impl Transaction {
     /// It excludes child objects that are determined at runtime,
     /// but includes all owned objects inputs that must have their version numbers bumped.
     pub fn get_read_set(&self) -> HashSet<ObjectID> {
-        let tx_data = self.tx.data().transaction_data();
+        let tx_data = self.tx.transaction_data();
         let input_object_kinds = tx_data
             .input_objects()
             .expect("Cannot get input object kinds");
