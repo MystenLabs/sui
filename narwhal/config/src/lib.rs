@@ -32,6 +32,25 @@ pub mod utils;
 /// The epoch number.
 pub type Epoch = u64;
 
+// Opaque bytes uniquely identifying the current chain. Analogue of the
+// type in `sui-types` crate.
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+pub struct ChainIdentifier([u8; 32]);
+
+impl ChainIdentifier {
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    pub fn unknown() -> Self {
+        Self([0; 32])
+    }
+
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Node {0} is not in the committee")]
@@ -96,10 +115,8 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
-// TODO: the stake and voting power of a validator can be different so
-// in some places when we are actually referring to the voting power, we
-// should use a different type alias, field name, etc.
-// Also, consider unify this with `StakeUnit` on Sui side.
+// TODO: This actually represents voting power (out of 10,000) and not amount staked.
+// Consider renaming to `VotingPower`.
 pub type Stake = u64;
 pub type WorkerId = u32;
 

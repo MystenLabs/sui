@@ -103,7 +103,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
     where
         T: Serialize,
     {
-        if author != self.try_into()? {
+        if aux_verify_data.verify_legacy_zklogin_address {
+            if author != self.try_into()? && author != SuiAddress::legacy_try_from(self)? {
+                return Err(SuiError::InvalidAddress);
+            }
+        } else if author != self.try_into()? {
             return Err(SuiError::InvalidAddress);
         }
 

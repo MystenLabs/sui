@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
+use sui_types::digests::ChainIdentifier;
 use tokio::sync::Mutex;
 
 #[derive(PartialEq)]
@@ -124,6 +125,7 @@ impl NarwhalManager {
     pub async fn start<State, StateInitializer, TxValidator: TransactionValidator>(
         &self,
         committee: Committee,
+        chain: ChainIdentifier,
         protocol_config: ProtocolConfig,
         worker_cache: WorkerCache,
         execution_state: StateInitializer,
@@ -168,6 +170,7 @@ impl NarwhalManager {
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
                     committee.clone(),
+                    narwhal_config::ChainIdentifier::new(*chain.as_bytes()),
                     protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),

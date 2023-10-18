@@ -127,9 +127,9 @@ pub enum ReplayEngineError {
     GenesisReplayNotSupported { digest: TransactionDigest },
 
     #[error(
-        "Fatal! No framework versions for epoch {epoch}. Make sure version tables are populated"
+        "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
     )]
-    FrameworkObjectVersionTableNotPopulated { epoch: u64 },
+    FrameworkObjectVersionTableNotPopulated { protocol_version: u64 },
 
     #[error("Protocol version not found for epoch {epoch}")]
     ProtocolVersionNotFound { epoch: u64 },

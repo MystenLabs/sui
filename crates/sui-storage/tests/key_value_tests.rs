@@ -97,9 +97,7 @@ impl MockTxStore {
 
     fn add_random_checkpoint(&mut self) -> (CertifiedCheckpointSummary, CheckpointContents) {
         let contents =
-            CheckpointContents::new_with_causally_ordered_transactions(
-                [ExecutionDigests::random()],
-            );
+            CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::random()]);
 
         let next_seq = self.next_seq_number;
         self.next_seq_number += 1;

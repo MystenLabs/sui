@@ -507,7 +507,7 @@ impl LocalExec {
         objs: Vec<ObjectID>,
         protocol_version: u64,
     ) -> Result<Vec<Object>, ReplayEngineError> {
-        let syst_packages = self.system_package_versions_for_epoch(protocol_version)?;
+        let syst_packages = self.system_package_versions_for_protocol_version(protocol_version)?;
         let syst_packages_objs = self.multi_download(&syst_packages).await?;
 
         // Download latest version of all packages that are not system packages
@@ -1049,15 +1049,17 @@ impl LocalExec {
     }
 
     /// Must be called after `populate_protocol_version_tables`
-    pub fn system_package_versions_for_epoch(
+    pub fn system_package_versions_for_protocol_version(
         &self,
-        epoch: u64,
+        protocol_version: u64,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, ReplayEngineError> {
         match &self.fetcher {
             Fetchers::Remote(_) => Ok(self
                 .protocol_version_system_package_table
-                .get(&epoch)
-                .ok_or(ReplayEngineError::FrameworkObjectVersionTableNotPopulated { epoch })?
+                .get(&protocol_version)
+                .ok_or(ReplayEngineError::FrameworkObjectVersionTableNotPopulated {
+                    protocol_version,
+                })?
                 .clone()
                 .into_iter()
                 .collect()),
@@ -1186,11 +1188,17 @@ impl LocalExec {
         ) in self.protocol_version_epoch_table.clone()
         {
             // Use the previous versions protocol version table
-            let mut working = self
-                .protocol_version_system_package_table
-                .get_mut(&(prot_ver - 1))
-                .unwrap_or(&mut BTreeMap::new())
-                .clone();
+            let mut working = if prot_ver <= 1 {
+                BTreeMap::new()
+            } else {
+                self.protocol_version_system_package_table
+                    .iter()
+                    .rev()
+                    .find(|(ver, _)| **ver <= prot_ver)
+                    .expect("Prev entry must exist")
+                    .1
+                    .clone()
+            };
 
             for (id, versions) in system_package_revisions.iter() {
                 // Oldest appears first in list, so reverse

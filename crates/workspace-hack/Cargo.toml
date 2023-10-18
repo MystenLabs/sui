@@ -41,17 +41,16 @@ arbitrary = { version = "1", default-features = false, features = ["derive_arbit
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
-ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec = { version = "0.4", features = ["parallel"] }
-ark-ff = { version = "0.4", features = ["asm", "parallel"] }
-ark-groth16 = { version = "0.4" }
-ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
-ark-r1cs-std = { version = "0.4", default-features = false }
-ark-relations = { version = "0.4", features = ["std"] }
+ark-crypto-primitives = { version = "0.4", default-features = false, features = ["snark"] }
+ark-ec = { version = "0.4" }
+ark-ff = { version = "0.4", features = ["asm"] }
+ark-groth16 = { version = "0.4", default-features = false }
+ark-poly = { version = "0.4", default-features = false }
+ark-relations = { version = "0.4" }
 ark-secp256r1 = { version = "0.4" }
-ark-serialize = { version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive"] }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", features = ["parallel"] }
+ark-std = { version = "0.4" }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
@@ -254,8 +253,9 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", features = ["copy_key"] }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -700,8 +700,7 @@ tracing-error = { version = "0.2" }
 tracing-log = { version = "0.1", default-features = false }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
-tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
@@ -789,20 +788,19 @@ arbitrary = { version = "1", default-features = false, features = ["derive_arbit
 arc-swap = { version = "1", default-features = false, features = ["serde"] }
 ark-bls12-381 = { version = "0.4" }
 ark-bn254 = { version = "0.4" }
-ark-crypto-primitives = { version = "0.4", features = ["parallel", "prf", "r1cs", "snark"] }
-ark-ec = { version = "0.4", features = ["parallel"] }
-ark-ff = { version = "0.4", features = ["asm", "parallel"] }
+ark-crypto-primitives = { version = "0.4", default-features = false, features = ["snark"] }
+ark-ec = { version = "0.4" }
+ark-ff = { version = "0.4", features = ["asm"] }
 ark-ff-asm = { version = "0.4", default-features = false }
 ark-ff-macros = { version = "0.4", default-features = false }
-ark-groth16 = { version = "0.4" }
-ark-poly = { version = "0.4", default-features = false, features = ["parallel"] }
-ark-r1cs-std = { version = "0.4", default-features = false }
-ark-relations = { version = "0.4", features = ["std"] }
+ark-groth16 = { version = "0.4", default-features = false }
+ark-poly = { version = "0.4", default-features = false }
+ark-relations = { version = "0.4" }
 ark-secp256r1 = { version = "0.4" }
-ark-serialize = { version = "0.4", features = ["derive", "std"] }
+ark-serialize = { version = "0.4", features = ["derive"] }
 ark-serialize-derive = { version = "0.4", default-features = false }
 ark-snark = { version = "0.4", default-features = false }
-ark-std = { version = "0.4", features = ["parallel"] }
+ark-std = { version = "0.4" }
 arrayref = { version = "0.3", default-features = false }
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7" }
 arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5" }
@@ -1040,9 +1038,10 @@ expect-test = { version = "1", default-features = false }
 eyre = { version = "0.6" }
 fail = { version = "0.4", default-features = false }
 fast_chemail = { version = "0.9", default-features = false }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", features = ["copy_key"] }
-fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", default-features = false }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "59e15ab83999b464a6da37b6cdf0910fedd1216c", default-features = false }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", features = ["beacon-dkg", "copy_key"] }
+fastcrypto-derive = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", default-features = false }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "05fadba13a51dc603de0147b4c119dbd34e654f5", default-features = false }
 fastrand-dff4ba8e3ae991db = { package = "fastrand", version = "1", default-features = false }
 fastrand-f595c2ba2a3f28df = { package = "fastrand", version = "2" }
 fd-lock = { version = "3", default-features = false }
@@ -1562,8 +1561,7 @@ tracing-error = { version = "0.2" }
 tracing-log = { version = "0.1", default-features = false }
 tracing-opentelemetry = { version = "0.21" }
 tracing-serde = { version = "0.1", default-features = false }
-tracing-subscriber-468e82937335b1c9 = { package = "tracing-subscriber", version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
-tracing-subscriber-6f8ce4dd05d13bba = { package = "tracing-subscriber", version = "0.2", default-features = false }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "json", "smallvec", "time"] }
 treeline = { version = "0.1", default-features = false }
 try-lock = { version = "0.2", default-features = false }
 ttl_cache = { version = "0.5" }
