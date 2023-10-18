@@ -41,6 +41,7 @@ use std::{
     sync::Arc,
 };
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
+use sui_core::authority::AuthorityState;
 use sui_framework::BuiltInFramework;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
@@ -320,45 +321,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         }
 
         let object_ids = objects.iter().map(|obj| obj.id()).collect::<Vec<_>>();
-        let (validator, fullnode) = {
-            let dir = tempfile::TempDir::new().unwrap();
-            let network_config =
-                sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
-            let genesis = network_config.genesis;
-            let keypair = network_config.validator_configs[0]
-                .protocol_key_pair()
-                .copy();
-            let genesis = &genesis;
-            let authority_key = &keypair;
-            let state = TestAuthorityBuilder::new()
-                .with_genesis_and_keypair(genesis, authority_key)
-                .with_protocol_config(protocol_config.clone())
-                .build()
-                .await;
-            let fullnode_key_pair = get_authority_key_pair().1;
-            let fullnode = TestAuthorityBuilder::new()
-                .with_keypair(&fullnode_key_pair)
-                .with_protocol_config(protocol_config)
-                .build()
-                .await;
-            state.insert_genesis_objects(&objects).await;
-            fullnode.insert_genesis_objects(&objects).await;
-            (state, fullnode)
-        };
 
-        let metrics = KeyValueStoreMetrics::new_for_tests();
-        let kv_store = Arc::new(TransactionKeyValueStore::new(
-            "rocksdb",
-            metrics,
-            validator.clone(),
-        ));
+        let executor = create_val_fullnode_executor(&protocol_config, &objects).await;
 
         let mut test_adapter = Self {
-            executor: Box::new(ValidatorWithFullnode {
-                validator,
-                fullnode,
-                kv_store,
-            }),
+            executor: Box::new(executor),
             compiled_state: CompiledState::new(
                 named_address_mapping,
                 pre_compiled_deps,
@@ -1624,3 +1591,50 @@ pub(crate) static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         Ok(res) => res,
     }
 });
+
+async fn create_validator_fullnode(
+    protocol_config: &ProtocolConfig,
+    objects: &[Object],
+) -> (Arc<AuthorityState>, Arc<AuthorityState>) {
+    let dir = tempfile::TempDir::new().unwrap();
+    let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir).build();
+    let genesis = network_config.genesis;
+    let keypair = network_config.validator_configs[0]
+        .protocol_key_pair()
+        .copy();
+    let genesis = &genesis;
+    let authority_key = &keypair;
+    let state = TestAuthorityBuilder::new()
+        .with_genesis_and_keypair(genesis, authority_key)
+        .with_protocol_config(protocol_config.clone())
+        .build()
+        .await;
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_keypair(&fullnode_key_pair)
+        .with_protocol_config(protocol_config.clone())
+        .build()
+        .await;
+    state.insert_genesis_objects(objects).await;
+    fullnode.insert_genesis_objects(objects).await;
+    (state, fullnode)
+}
+
+async fn create_val_fullnode_executor(
+    protocol_config: &ProtocolConfig,
+    objects: &[Object],
+) -> ValidatorWithFullnode {
+    let (validator, fullnode) = create_validator_fullnode(protocol_config, objects).await;
+
+    let metrics = KeyValueStoreMetrics::new_for_tests();
+    let kv_store = Arc::new(TransactionKeyValueStore::new(
+        "rocksdb",
+        metrics,
+        validator.clone(),
+    ));
+    ValidatorWithFullnode {
+        validator,
+        fullnode,
+        kv_store,
+    }
+}
