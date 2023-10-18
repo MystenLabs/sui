@@ -5,6 +5,7 @@ import {
 	ConnectButton,
 	SuiClientProvider,
 	useAccounts,
+	useAutoConnectionStatus,
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
@@ -98,6 +99,20 @@ export const UseCurrentAccountExample = withProviders(() => {
 		</div>
 	);
 });
+
+export const UseAutoConnectionStatusExample = withProviders(
+	() => {
+		const autoConnectionStatus = useAutoConnectionStatus();
+
+		return (
+			<div style={{ padding: 20 }}>
+				<ConnectButton />
+				<div>Auto-connection status: ${autoConnectionStatus}</div>
+			</div>
+		);
+	},
+	{ autoConnect: true },
+);
 
 export const UseConnectWalletExample = withProviders(() => {
 	const wallets = useWallets();
@@ -284,7 +299,10 @@ export const UseSignAndExecuteTransactionBlockExample = withProviders(() => {
 	);
 });
 
-function withProviders(Component: React.FunctionComponent<object>) {
+function withProviders(
+	Component: React.FunctionComponent<object>,
+	walletProviderProps?: ComponentProps<typeof WalletProvider>,
+) {
 	// Work around server-side pre-rendering
 	const queryClient = new QueryClient();
 	const networks = {
@@ -304,7 +322,7 @@ function withProviders(Component: React.FunctionComponent<object>) {
 		return (
 			<QueryClientProvider client={queryClient}>
 				<SuiClientProvider networks={networks}>
-					<WalletProvider>
+					<WalletProvider {...walletProviderProps}>
 						<Component />
 					</WalletProvider>
 				</SuiClientProvider>
