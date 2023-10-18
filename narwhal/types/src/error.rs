@@ -58,6 +58,9 @@ pub enum DagError {
     #[error("Invalid system message")]
     InvalidSystemMessage,
 
+    #[error("Duplicate system message")]
+    DuplicateSystemMessage,
+
     #[error("Invalid certificate version")]
     InvalidCertificateVersion,
 
