@@ -24,7 +24,11 @@ export type SuiRpcPaginatedMethods = {
 	}>
 		? {
 				name: K;
-				result: R;
+				result: {
+					data?: R;
+					nextCursor?: Cursor | null;
+					hasNextPage: boolean;
+				};
 				params: P;
 				cursor: Cursor;
 		  }
@@ -53,9 +57,7 @@ export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods
 		...options,
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
-		queryFn: async () => {
-			return await suiContext.client[method](params as never);
-		},
+		queryFn: () => suiContext.client[method](params as never),
 		getNextPageParam: (lastPage) => {
 			return (lastPage as PaginatedResult).nextCursor ?? null;
 		},
