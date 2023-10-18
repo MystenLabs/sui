@@ -107,7 +107,7 @@ export const UseAutoConnectionStatusExample = withProviders(
 		return (
 			<div style={{ padding: 20 }}>
 				<ConnectButton />
-				<div>Auto-connection status: ${autoConnectionStatus}</div>
+				<div>Auto-connection status: {autoConnectionStatus}</div>
 			</div>
 		);
 	},
