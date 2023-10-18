@@ -7,7 +7,7 @@ use crate::{
         ast::{BasicBlock, BasicBlocks, BlockInfo, LoopEnd, LoopInfo},
         remove_no_ops,
     },
-    diagnostics::{Diagnostics},
+    diagnostics::Diagnostics,
     hlir::ast::{Command, Command_, Label},
     shared::ast_debug::*,
 };
