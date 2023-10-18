@@ -67,3 +67,4 @@ Cargo.lock
 genesis.blob
 fullnode.yaml
 suidb/
+benchmarking/data
