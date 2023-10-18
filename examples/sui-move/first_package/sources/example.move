@@ -60,21 +60,24 @@ module first_package::example {
     // === Tests ===
     use sui::test_scenario as ts;
 
+    #[test_only] const ADMIN: address = @0xAD;
+    #[test_only] const ALICE: address = @0xA;
+    #[test_only] const BOB: address = @0xB;
+
     #[test]
     public fun test_module_init() {
         let ts = ts::begin(@0x0);
-        let admin = @0xAD;
 
         // first transaction to emulate module initialization.
         {
-            ts::next_tx(&mut ts, admin);
+            ts::next_tx(&mut ts, ADMIN);
             init(ts::ctx(&mut ts));
         };
 
         // second transaction to check if the forge has been created
         // and has initial value of zero swords created
         {
-            ts::next_tx(&mut ts, admin);
+            ts::next_tx(&mut ts, ADMIN);
 
             // extract the Forge object
             let forge: Forge = ts::take_from_sender(&mut ts);
@@ -92,38 +95,35 @@ module first_package::example {
     #[test]
     fun test_sword_transactions() {
         let ts = ts::begin(@0x0);
-        let admin = @0xAD;
-        let alice = @0xA;
-        let bob = @0xB;
 
         // first transaction to emulate module initialization
         {
-            ts::next_tx(&mut ts, admin);
+            ts::next_tx(&mut ts, ADMIN);
             init(ts::ctx(&mut ts));
         };
 
         // second transaction executed by admin to create the sword
         {
-            ts::next_tx(&mut ts, admin);
+            ts::next_tx(&mut ts, ADMIN);
             let forge: Forge = ts::take_from_sender(&mut ts);
             // create the sword and transfer it to the initial owner
             let sword = new_sword(&mut forge, 42, 7, ts::ctx(&mut ts));
-            transfer::public_transfer(sword, alice);
+            transfer::public_transfer(sword, ALICE);
             ts::return_to_sender(&mut ts, forge);
         };
 
         // third transaction executed by the initial sword owner
         {
-            ts::next_tx(&mut ts, alice);
+            ts::next_tx(&mut ts, ALICE);
             // extract the sword owned by the initial owner
             let sword: Sword = ts::take_from_sender(&mut ts);
             // transfer the sword to the final owner
-            transfer::public_transfer(sword, bob);
+            transfer::public_transfer(sword, BOB);
         };
 
         // fourth transaction executed by the final sword owner
         {
-            ts::next_tx(&mut ts, bob);
+            ts::next_tx(&mut ts, BOB);
             // extract the sword owned by the final owner
             let sword: Sword = ts::take_from_sender(&mut ts);
             // verify that the sword has expected properties
