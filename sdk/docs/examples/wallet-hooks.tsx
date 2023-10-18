@@ -301,7 +301,7 @@ export const UseSignAndExecuteTransactionBlockExample = withProviders(() => {
 
 function withProviders(
 	Component: React.FunctionComponent<object>,
-	walletProviderProps?: ComponentProps<typeof WalletProvider>,
+	walletProviderProps?: Omit<ComponentProps<typeof WalletProvider>, 'children'>,
 ) {
 	// Work around server-side pre-rendering
 	const queryClient = new QueryClient();
