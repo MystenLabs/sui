@@ -1256,6 +1256,7 @@ impl PgManager {
                     StakeStatus::Pending
                 };
                 let stake = Stake {
+                    id: ID(stake_object.id().to_string()),
                     active_epoch_id: Some(stake_object.activation_epoch()),
                     estimated_reward: None, // TODO once we have a good working governance API, we should fix this
                     principal: Some(BigInt::from(stake_object.principal())),

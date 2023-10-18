@@ -637,6 +637,7 @@ type ServiceConfig {
 }
 
 type Stake {
+	id: ID!
 	estimatedReward: BigInt
 	principal: BigInt
 	status: StakeStatus

@@ -17,6 +17,7 @@ pub(crate) enum StakeStatus {
 #[derive(Clone, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Stake {
+    pub id: ID,
     #[graphql(skip)]
     pub active_epoch_id: Option<u64>,
     pub estimated_reward: Option<BigInt>,
