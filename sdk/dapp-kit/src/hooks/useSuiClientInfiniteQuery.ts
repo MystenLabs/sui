@@ -5,6 +5,7 @@ import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseInfiniteQueryOptions } from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
+import { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
 
 interface PaginatedResult {
