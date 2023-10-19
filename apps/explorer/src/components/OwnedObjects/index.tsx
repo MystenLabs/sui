@@ -79,17 +79,17 @@ export function OwnedObjects({ id }: { id: string }) {
 
 	const { data, isError, isFetching, pagination } = useCursorPagination(ownedObjects);
 
-	const isLoading = filter === FILTER_VALUES.ALL ? isFetching : kioskDataFetching;
+	const isPending = filter === FILTER_VALUES.ALL ? isFetching : kioskDataFetching;
 
 	useEffect(() => {
-		if (!isLoading) {
+		if (!isPending) {
 			setFilter(
 				kioskData?.list?.length && filter === FILTER_VALUES.KIOSKS
 					? FILTER_VALUES.KIOSKS
 					: FILTER_VALUES.ALL,
 			);
 		}
-	}, [filter, isLoading, kioskData?.list?.length, setFilter]);
+	}, [filter, isPending, kioskData?.list?.length, setFilter]);
 
 	const filteredData = useMemo(
 		() => (filter === FILTER_VALUES.ALL ? data?.data : kioskData?.list),
@@ -131,7 +131,7 @@ export function OwnedObjects({ id }: { id: string }) {
 	);
 
 	const hasAssets = sortedDataByDisplayImages.length > 0;
-	const noAssets = !hasAssets && !isLoading;
+	const noAssets = !hasAssets && !isPending;
 
 	if (isError) {
 		return <div className="pt-2 font-sans font-semibold text-issue-dark">Failed to load NFTs</div>;
@@ -188,7 +188,7 @@ export function OwnedObjects({ id }: { id: string }) {
 											label={filter.label}
 											disabled={
 												(filter.value === FILTER_VALUES.KIOSKS && !kioskData?.list?.length) ||
-												isLoading
+												isPending
 											}
 										/>
 									))}
@@ -206,23 +206,23 @@ export function OwnedObjects({ id }: { id: string }) {
 					)}
 
 					{viewMode === OBJECT_VIEW_MODES.LIST && (
-						<ListView loading={isLoading} data={sortedDataByDisplayImages} />
+						<ListView loading={isPending} data={sortedDataByDisplayImages} />
 					)}
 					{viewMode === OBJECT_VIEW_MODES.SMALL_THUMBNAILS && (
 						<SmallThumbnailsView
-							loading={isLoading}
+							loading={isPending}
 							data={sortedDataByDisplayImages}
 							limit={limit}
 						/>
 					)}
 					{viewMode === OBJECT_VIEW_MODES.THUMBNAILS && (
-						<ThumbnailsView loading={isLoading} data={sortedDataByDisplayImages} limit={limit} />
+						<ThumbnailsView loading={isPending} data={sortedDataByDisplayImages} limit={limit} />
 					)}
 					{showPagination && (
 						<div className="mt-auto flex flex-row flex-wrap gap-2 md:mb-5">
 							<Pagination {...pagination} />
 							<div className="ml-auto flex items-center">
-								{!isLoading && (
+								{!isPending && (
 									<Text variant="body/medium" color="steel">
 										Showing {start} - {end}
 									</Text>

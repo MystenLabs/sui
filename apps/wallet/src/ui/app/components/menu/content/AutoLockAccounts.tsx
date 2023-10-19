@@ -40,7 +40,7 @@ export function AutoLockAccounts() {
 			title={'Auto-lock Accounts'}
 			closeOverlay={() => navigate(mainMenuUrl)}
 		>
-			<Loading loading={autoLock.isLoading}>
+			<Loading loading={autoLock.isPending}>
 				<Form
 					className="flex flex-col h-full pt-5"
 					form={form}

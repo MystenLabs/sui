@@ -28,7 +28,7 @@ function NFTDetailsPage() {
 	const [searchParams] = useSearchParams();
 	const nftId = searchParams.get('objectId');
 	const accountAddress = useActiveAddress();
-	const { data: objectData, isLoading: isNftLoading } = useOwnedNFT(nftId || '', accountAddress);
+	const { data: objectData, isPending: isNftLoading } = useOwnedNFT(nftId || '', accountAddress);
 	const isTransferable =
 		!!objectData &&
 		objectData.content?.dataType === 'moveObject' &&
@@ -55,7 +55,7 @@ function NFTDetailsPage() {
 			);
 	const metaKeys: string[] = metaFields ? metaFields.keys : [];
 	const metaValues = metaFields ? metaFields.values : [];
-	const { data: nftDisplayData, isLoading: isLoadingDisplay } = useGetNFTMeta(nftId || '');
+	const { data: nftDisplayData, isPending: isPendingDisplay } = useGetNFTMeta(nftId || '');
 	const objectExplorerLink = useExplorerLink({
 		type: ExplorerLinkType.object,
 		objectID: nftId || '',
@@ -71,15 +71,15 @@ function NFTDetailsPage() {
 		address: ownerAddress,
 	});
 	const isGuardLoading = useUnlockedGuard();
-	const isLoading = isNftLoading || isLoadingDisplay || isGuardLoading;
+	const isPending = isNftLoading || isPendingDisplay || isGuardLoading;
 
 	return (
 		<div
 			className={cl('flex flex-1 flex-col flex-nowrap gap-5', {
-				'items-center': isLoading,
+				'items-center': isPending,
 			})}
 		>
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{objectData ? (
 					<>
 						<PageTitle back />

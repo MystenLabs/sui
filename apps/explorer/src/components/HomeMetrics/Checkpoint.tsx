@@ -5,13 +5,13 @@ import { StatsWrapper } from './FormattedStatsAmount';
 import { useGetNetworkMetrics } from '~/hooks/useGetNetworkMetrics';
 
 export function Checkpoint() {
-	const { data, isLoading } = useGetNetworkMetrics();
+	const { data, isPending } = useGetNetworkMetrics();
 
 	return (
 		<StatsWrapper
 			label="Checkpoint"
 			tooltip="The current checkpoint"
-			unavailable={isLoading}
+			unavailable={isPending}
 			size="sm"
 			orientation="horizontal"
 		>

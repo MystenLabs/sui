@@ -3,7 +3,7 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import { PaginatedCoins } from '@mysten/sui.js/client';
-import { useInfiniteQuery, UseInfiniteQueryResult } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 const MAX_COINS_PER_REQUEST = 10;
 
@@ -11,25 +11,19 @@ export function useGetCoins(
 	coinType: string,
 	address?: string | null,
 	maxCoinsPerRequest = MAX_COINS_PER_REQUEST,
-): UseInfiniteQueryResult<PaginatedCoins> {
+) {
 	const client = useSuiClient();
-	return useInfiniteQuery(
-		['get-coins', address, coinType, maxCoinsPerRequest],
-		({ pageParam }) =>
+	return useInfiniteQuery<PaginatedCoins>({
+		queryKey: ['get-coins', address, coinType, maxCoinsPerRequest],
+		initialPageParam: null,
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
+		queryFn: ({ pageParam }) =>
 			client.getCoins({
 				owner: address!,
 				coinType,
-				cursor: pageParam ? pageParam.cursor : null,
+				cursor: pageParam as string | null,
 				limit: maxCoinsPerRequest,
 			}),
-		{
-			getNextPageParam: ({ hasNextPage, nextCursor }) =>
-				hasNextPage
-					? {
-							cursor: nextCursor,
-					  }
-					: false,
-			enabled: !!address,
-		},
-	);
+		enabled: !!address,
+	});
 }

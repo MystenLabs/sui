@@ -43,8 +43,20 @@ export type UseSuiClientInfiniteQueryOptions<T extends keyof SuiRpcPaginatedMeth
 		SuiRpcPaginatedMethods[T]['result'],
 		unknown[]
 	>,
-	'queryFn'
->;
+	'queryKey' | 'queryFn' | 'initialPageParam' | 'getNextPageParam'
+> &
+	Partial<
+		Pick<
+			UseInfiniteQueryOptions<
+				SuiRpcPaginatedMethods[T]['result'],
+				Error,
+				SuiRpcPaginatedMethods[T]['result'],
+				SuiRpcPaginatedMethods[T]['result'],
+				unknown[]
+			>,
+			'queryKey'
+		>
+	>;
 
 export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods>(
 	method: T,
@@ -55,6 +67,7 @@ export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods
 
 	return useInfiniteQuery({
 		...options,
+		initialPageParam: null,
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
 		queryFn: () => suiContext.client[method](params as never),

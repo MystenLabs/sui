@@ -31,8 +31,14 @@ export type SuiRpcMethods = {
 
 export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = Omit<
 	UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
-	'queryFn'
->;
+	'queryFn' | 'queryKey'
+> &
+	Partial<
+		Pick<
+			UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
+			'queryKey'
+		>
+	>;
 
 export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 	...args: undefined extends SuiRpcMethods[T]['params']

@@ -21,7 +21,7 @@ export enum AssetFilterTypes {
 export function useGetNFTs(address?: string | null) {
 	const {
 		data,
-		isLoading,
+		isPending,
 		error,
 		isError,
 		isFetchingNextPage,
@@ -62,7 +62,7 @@ export function useGetNFTs(address?: string | null) {
 		hasNextPage,
 		isFetchingNextPage,
 		fetchNextPage,
-		isLoading: isLoading,
+		isPending: isPending,
 		isError: isError,
 		error,
 	};

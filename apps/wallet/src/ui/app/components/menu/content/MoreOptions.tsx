@@ -33,7 +33,7 @@ export function MoreOptions() {
 				variant="warning"
 				text="Logout"
 				size="narrow"
-				loading={logoutMutation.isLoading}
+				loading={logoutMutation.isPending}
 				disabled={isLogoutDialogOpen}
 				onClick={() => setIsLogoutDialogOpen(true)}
 			/>

@@ -30,7 +30,7 @@ export function ValidatorLogo({
 	showActiveStatus = false,
 	activeEpoch,
 }: ValidatorLogoProps) {
-	const { data, isLoading } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const validatorMeta = useMemo(() => {
 		if (!data) return null;
@@ -50,7 +50,7 @@ export function ValidatorLogo({
 	// flag if the validator is at risk of being removed from the active set
 	const isAtRisk = data?.atRiskValidators.some((item) => item[0] === validatorAddress);
 
-	if (isLoading) {
+	if (isPending) {
 		return <div className="flex justify-center items-center">...</div>;
 	}
 	// for inactive validators, show the epoch number
