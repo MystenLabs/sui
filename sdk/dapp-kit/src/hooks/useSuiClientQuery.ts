@@ -30,23 +30,23 @@ export type SuiRpcMethods = {
 		: never;
 };
 
-export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = PartialBy<
-	Omit<
-		UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
-		'queryFn'
-	>,
+export type UseSuiClientQueryOptions<
+	T extends keyof SuiRpcMethods,
+	TData = SuiRpcMethods[T]['result'],
+> = PartialBy<
+	Omit<UseQueryOptions<SuiRpcMethods[T]['result'], Error, TData, unknown[]>, 'queryFn'>,
 	'queryKey'
 >;
 
-export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
+export function useSuiClientQuery<T extends keyof SuiRpcMethods, TData>(
 	...args: undefined extends SuiRpcMethods[T]['params']
-		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
-		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T>]
+		? [method: T, params?: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
+		: [method: T, params: SuiRpcMethods[T]['params'], options?: UseSuiClientQueryOptions<T, TData>]
 ) {
 	const [method, params, { queryKey = [], ...options } = {}] = args as [
 		method: T,
 		params?: SuiRpcMethods[T]['params'],
-		options?: UseSuiClientQueryOptions<T>,
+		options?: UseSuiClientQueryOptions<T, TData>,
 	];
 
 	const suiContext = useSuiClientContext();
