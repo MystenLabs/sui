@@ -22,11 +22,11 @@ const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 const TOP_PANEL_MIN_SIZE = 20;
 
 function AddressResultPageHeader({ address, loading }: { address: string; loading?: boolean }) {
-	const { data: domainName, isFetching } = useResolveSuiNSName(address);
+	const { data: domainName, isLoading } = useResolveSuiNSName(address);
 
 	return (
 		<PageHeader
-			loading={loading || isFetching}
+			loading={loading || isLoading}
 			type="Address"
 			title={address}
 			subtitle={domainName}
