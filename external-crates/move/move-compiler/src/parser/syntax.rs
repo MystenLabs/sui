@@ -2435,7 +2435,12 @@ fn parse_constant_decl(
     }
     consume_token(context.tokens, Tok::Const)?;
     let name = ConstantName(parse_identifier(context)?);
-    consume_token(context.tokens, Tok::Colon)?;
+    if consume_token(context.tokens, Tok::Colon).is_err() {
+        return Err(Box::new(diag!(
+            Syntax::NeedsTypeAnnotation,
+            (name.loc(), "Add type annotation to this constant")
+        )));
+    }
     let signature = parse_type(context)?;
     consume_token(context.tokens, Tok::Equal)?;
     let value = parse_exp(context)?;

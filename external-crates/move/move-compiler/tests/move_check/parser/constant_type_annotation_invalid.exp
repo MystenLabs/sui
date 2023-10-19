@@ -1,0 +1,6 @@
+error[E01013]: Requires a type annotation 'name: type ='
+  ┌─ tests/move_check/parser/constant_type_annotation_invalid.move:2:11
+  │
+2 │     const EThreadMaxxed = 1;
+  │           ^^^^^^^^^^^^^ Add type annotation to this constant
+
