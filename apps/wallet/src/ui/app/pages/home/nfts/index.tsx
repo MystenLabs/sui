@@ -23,7 +23,7 @@ function NftsPage() {
 	const {
 		data: ownedAssets,
 		hasNextPage,
-		isInitialLoading,
+		isLoading,
 		isFetchingNextPage,
 		error,
 		isPending,
@@ -50,7 +50,7 @@ function NftsPage() {
 	}, [ownedAssets, filterType]);
 	const { hiddenAssetIds } = useHiddenAssets();
 
-	if (isInitialLoading) {
+	if (isLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
 				<LoadingSpinner />

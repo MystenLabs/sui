@@ -27,7 +27,7 @@ export function useGetNFTs(address?: string | null) {
 		isFetchingNextPage,
 		hasNextPage,
 		fetchNextPage,
-		isInitialLoading,
+		isLoading,
 	} = useGetOwnedObjects(
 		address,
 		{
@@ -58,7 +58,7 @@ export function useGetNFTs(address?: string | null) {
 
 	return {
 		data: assets,
-		isInitialLoading,
+		isLoading,
 		hasNextPage,
 		isFetchingNextPage,
 		fetchNextPage,

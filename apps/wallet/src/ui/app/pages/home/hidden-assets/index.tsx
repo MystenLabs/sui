@@ -20,7 +20,7 @@ import { useHiddenAssets } from './HiddenAssetsProvider';
 function HiddenNftsPage() {
 	const { hiddenAssetIds, showAsset } = useHiddenAssets();
 
-	const { data, isInitialLoading, isPending, isError, error } = useMultiGetObjects(
+	const { data, isLoading, isPending, isError, error } = useMultiGetObjects(
 		hiddenAssetIds,
 		{
 			showDisplay: true,
@@ -53,7 +53,7 @@ function HiddenNftsPage() {
 			});
 	}, [hiddenAssetIds, data]);
 
-	if (isInitialLoading) {
+	if (isLoading) {
 		return (
 			<div className="mt-1 flex w-full justify-center">
 				<LoadingSpinner />
