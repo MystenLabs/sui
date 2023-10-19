@@ -294,7 +294,7 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
                                 for (src, dst) in exits.into_iter() {
                                     fn_branches
                                         .entry(src)
-                                        .or_insert_with(BTreeSet::new)
+                                        .or_default()
                                         .insert(dst);
                                 }
                             }
@@ -403,7 +403,7 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
             for (func_name, path) in path_store.into_iter() {
                 let path_count = func_path_cov_stats
                     .entry(func_name)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .entry(path)
                     .or_insert(0);
                 *path_count += 1;

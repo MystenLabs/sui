@@ -158,7 +158,7 @@ impl ModuleCoverageMap {
         let func_entry = self
             .function_maps
             .entry(func_name)
-            .or_insert_with(FunctionCoverage::new);
+            .or_default();
         let pc_entry = func_entry.entry(pc).or_insert(0);
         *pc_entry += count;
     }
@@ -171,7 +171,7 @@ impl ModuleCoverageMap {
         for (key, val) in another.function_maps {
             self.function_maps
                 .entry(key)
-                .or_insert_with(FunctionCoverage::new)
+                .or_default()
                 .extend(val);
         }
     }
@@ -331,7 +331,7 @@ impl TraceMap {
         let exec_entry = self
             .exec_maps
             .entry(exec_id.to_owned())
-            .or_insert_with(Vec::new);
+            .or_default();
         exec_entry.push(TraceEntry {
             module_addr,
             module_name,

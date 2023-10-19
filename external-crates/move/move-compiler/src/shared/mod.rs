@@ -492,7 +492,7 @@ impl CompilationEnv {
                 WarningFilter::All(_) => {
                     self.known_filters
                         .entry(KnownFilterInfo::new(FILTER_ALL, filter_attr_name))
-                        .or_insert_with(BTreeSet::new)
+                        .or_default()
                         .insert(filter);
                 }
                 WarningFilter::Category { name, .. } => {
@@ -501,7 +501,7 @@ impl CompilationEnv {
                     };
                     self.known_filters
                         .entry(KnownFilterInfo::new(n, filter_attr_name))
-                        .or_insert_with(BTreeSet::new)
+                        .or_default()
                         .insert(filter);
                 }
                 WarningFilter::Code {
@@ -516,7 +516,7 @@ impl CompilationEnv {
                     let known_filter_info = KnownFilterInfo::new(n, filter_attr_name);
                     self.known_filters
                         .entry(known_filter_info.clone())
-                        .or_insert_with(BTreeSet::new)
+                        .or_default()
                         .insert(filter);
                     self.known_filter_names
                         .insert((prefix, category, code), known_filter_info);

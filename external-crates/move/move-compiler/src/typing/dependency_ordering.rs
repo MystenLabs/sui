@@ -131,14 +131,8 @@ impl<'a> Context<'a> {
             DepType::Use => Neighbor_::Dependency,
             DepType::Friend => Neighbor_::Friend,
         };
-        let current_neighbors = self
-            .neighbors_by_node
-            .entry(current.clone())
-            .or_insert_with(UniqueMap::new);
-        let current_used_addresses = self
-            .addresses_by_node
-            .entry(current.clone())
-            .or_insert_with(BTreeSet::new);
+        let current_neighbors = self.neighbors_by_node.entry(current.clone()).or_default();
+        let current_used_addresses = self.addresses_by_node.entry(current.clone()).or_default();
         current_neighbors.remove(&mident);
         current_neighbors.add(mident, sp(loc, neighbor_)).unwrap();
         current_used_addresses.insert(mident.value.address);
@@ -152,9 +146,9 @@ impl<'a> Context<'a> {
                 let m = self
                     .module_neighbors
                     .entry(node)
-                    .or_insert_with(BTreeMap::new)
+                    .or_default()
                     .entry(new_neighbor)
-                    .or_insert_with(BTreeMap::new);
+                    .or_default();
                 if m.contains_key(&dep_type) {
                     return;
                 }
@@ -175,7 +169,7 @@ impl<'a> Context<'a> {
     fn add_address_usage(&mut self, address: Address) {
         self.addresses_by_node
             .entry(self.current_node.clone().unwrap())
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(address);
     }
 }

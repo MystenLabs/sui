@@ -95,7 +95,7 @@ impl<'a> Context<'a> {
                     .for_each(|t| Self::add_tparam_edges(acc, tparam, info.clone(), t))
             }
             Param(tp) => {
-                let tp_neighbors = acc.entry(tp.clone()).or_insert_with(BTreeMap::new);
+                let tp_neighbors = acc.entry(tp.clone()).or_default();
                 match tp_neighbors.get(tparam) {
                     Some(EdgeInfo {
                         edge: Edge::Nested, ..

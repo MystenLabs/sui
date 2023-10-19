@@ -177,7 +177,7 @@ impl<'env> ModelBuilder<'env> {
         // TODO: check whether overloads are distinguishable
         self.spec_fun_table
             .entry(name)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(entry);
     }
 
