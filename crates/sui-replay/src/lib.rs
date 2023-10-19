@@ -11,6 +11,7 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
+use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
 use std::io::BufRead;
@@ -36,6 +37,23 @@ pub enum ReplayToolCommand {
     /// Generate a new network config file
     #[command(name = "gen")]
     GenerateDefaultConfig,
+
+    /// Persist sandbox state
+    #[command(name = "ps")]
+    PersistSandbox {
+        #[arg(long, short)]
+        tx_digest: String,
+        #[arg(long, short)]
+        path: PathBuf,
+    },
+
+    /// Replay from sandbox state file
+    /// This is a completely local execution
+    #[command(name = "rs")]
+    ReplaySandbox {
+        #[arg(long, short)]
+        path: PathBuf,
+    },
 
     /// Replay transaction
     #[command(name = "tx")]
@@ -125,6 +143,38 @@ pub async fn execute_replay_command(
         ExpensiveSafetyCheckConfig::default()
     };
     Ok(match cmd {
+        ReplayToolCommand::ReplaySandbox { path } => {
+            let contents = std::fs::read_to_string(path)?;
+            let sandbox_state: ExecutionSandboxState = serde_json::from_str(&contents)?;
+            info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
+            let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
+                &sandbox_state,
+                None,
+                &sandbox_state.pre_exec_diag,
+            )
+            .await?;
+            sandbox_state.check_effects()?;
+            info!("Execution finished successfully. Local and on-chain effects match.");
+            None
+        }
+        ReplayToolCommand::PersistSandbox { tx_digest, path } => {
+            let tx_digest = TransactionDigest::from_str(&tx_digest)?;
+            info!("Executing tx: {}", tx_digest);
+            let sandbox_state = LocalExec::replay_with_network_config(
+                rpc_url,
+                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                tx_digest,
+                safety,
+                use_authority,
+                None,
+                None,
+            )
+            .await?;
+
+            let out = serde_json::to_string(&sandbox_state).unwrap();
+            std::fs::write(path, out)?;
+            None
+        }
         ReplayToolCommand::GenerateDefaultConfig => {
             let set = ReplayableNetworkConfigSet::default();
             let path = set.save_config(None).unwrap();
