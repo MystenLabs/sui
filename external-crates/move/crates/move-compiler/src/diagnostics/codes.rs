@@ -257,6 +257,7 @@ codes!(
         InvalidMethodCall: { msg: "invalid method call", severity: BlockingError },
         InvalidImmVariableUsage:
             { msg: "invalid usage of immutable variable", severity: NonblockingError },
+        InvalidControlFlow: { msg: "invalid control flow", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

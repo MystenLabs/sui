@@ -5,8 +5,9 @@
 use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
-        self as P, Ability, Ability_, BinOp, ConstantName, Field, FunctionName, ModuleName,
-        Mutability, QuantKind, SpecApplyPattern, StructName, UnaryOp, Var, ENTRY_MODIFIER,
+        self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, Field, FunctionName,
+        ModuleName, Mutability, QuantKind, SpecApplyPattern, StructName, UnaryOp, Var,
+        ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -454,8 +455,9 @@ pub enum Exp_ {
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, Box<Exp>),
-    Loop(Box<Exp>),
+    While(Box<Exp>, Option<BlockLabel>, Box<Exp>),
+    Loop(Option<BlockLabel>, Box<Exp>),
+    NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
     Lambda(LValueList, Box<Exp>), // spec only
     Quant(
@@ -470,10 +472,10 @@ pub enum Exp_ {
     FieldMutate(Box<ExpDotted>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
 
-    Return(Box<Exp>),
     Abort(Box<Exp>),
-    Break(Box<Exp>),
-    Continue,
+    Return(Option<BlockLabel>, Box<Exp>),
+    Break(Option<BlockLabel>, Box<Exp>),
+    Continue(Option<BlockLabel>),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -1659,15 +1661,21 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, e) => {
+            E::While(b, name, e) => {
                 w.write("while (");
                 b.ast_debug(w);
                 w.write(")");
+                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
             }
-            E::Loop(e) => {
+            E::Loop(name, e) => {
                 w.write("loop ");
+                name.map(|name| w.write(format!(" '{}: ", name)));
                 e.ast_debug(w);
+            }
+            E::NamedBlock(name, seq) => {
+                w.write(format!("'{}: ", name));
+                seq.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
             E::Lambda(sp!(_, bs), e) => {
@@ -1711,20 +1719,25 @@ impl AstDebug for Exp_ {
                 rhs.ast_debug(w);
             }
 
-            E::Return(e) => {
-                w.write("return ");
-                e.ast_debug(w);
-            }
             E::Abort(e) => {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Break(exp) => {
+            E::Return(name, e) => {
+                w.write("return ");
+                name.map(|name| w.write(format!(" '{} ", name)));
+                e.ast_debug(w);
+            }
+            E::Break(name, exp) => {
                 w.write("break");
+                name.map(|name| w.write(format!(" '{} ", name)));
                 w.write(" ");
                 exp.ast_debug(w);
             }
-            E::Continue => w.write("continue"),
+            E::Continue(name) => {
+                w.write("continue");
+                name.map(|name| w.write(format!(" '{}", name)));
+            }
             E::Dereference(e) => {
                 w.write("*");
                 e.ast_debug(w)

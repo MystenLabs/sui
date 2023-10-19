@@ -380,11 +380,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::While(_, e1, e2) => {
+        E::While(e1, _, e2) => {
             exp(context, e1);
             exp(context, e2);
         }
         E::Loop { body, .. } => exp(context, body),
+        E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);

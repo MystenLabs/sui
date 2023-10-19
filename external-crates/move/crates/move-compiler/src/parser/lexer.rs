@@ -84,6 +84,7 @@ pub enum Tok {
     Enum,
     Type,
     Match,
+    BlockLabel,
 }
 
 impl fmt::Display for Tok {
@@ -162,6 +163,7 @@ impl fmt::Display for Tok {
             Enum => "enum",
             Type => "type",
             Match => "match",
+            BlockLabel => "'[Identifier]",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -470,6 +472,24 @@ fn find_token(
                 )));
             } else {
                 (Tok::RestrictedIdentifier, len)
+            }
+        }
+        '\'' => {
+            let (is_valid, len) = if (text.len() > 1)
+                && matches!(text[1..].chars().next(), Some('A'..='Z' | 'a'..='z' | '_'))
+            {
+                let sub = &text[1..];
+                let len = get_name_len(sub);
+                (true, len + 1)
+            } else {
+                (false, 1)
+            };
+            if !is_valid {
+                let loc = make_loc(file_hash, start_offset, start_offset + len);
+                let msg = "Found an unterminated tick (')";
+                return Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))));
+            } else {
+                (Tok::BlockLabel, len)
             }
         }
         'A'..='Z' | 'a'..='z' | '_' => {

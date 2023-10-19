@@ -1377,12 +1377,19 @@ impl Symbolicator {
                 self.exp_symbols(t, scope, references, use_defs);
                 self.exp_symbols(f, scope, references, use_defs);
             }
-            E::While(_, cond, body) => {
+            E::While(cond, _, body) => {
                 self.exp_symbols(cond, scope, references, use_defs);
                 self.exp_symbols(body, scope, references, use_defs);
             }
             E::Loop { body, .. } => {
                 self.exp_symbols(body, scope, references, use_defs);
+            }
+            E::NamedBlock(_, sequence) => {
+                // a named block is a new var scope
+                let mut new_scope = scope.clone();
+                for seq_item in sequence {
+                    self.seq_item_symbols(&mut new_scope, seq_item, references, use_defs);
+                }
             }
             E::Block(sequence) => {
                 // a block is a new var scope

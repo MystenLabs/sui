@@ -5,7 +5,9 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{Address, Attributes, Fields, Friend, ModuleIdent, SpecId, Value, Visibility},
-    naming::ast::{FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var},
+    naming::ast::{
+        BlockLabel, FunctionSignature, Neighbor, StructDefinition, Type, TypeName_, Type_, Var,
+    },
     parser::ast::{BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp, ENTRY_MODIFIER},
     shared::{ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap},
 };
@@ -159,19 +161,20 @@ pub enum UnannotatedExp_ {
     Vector(Loc, usize, Box<Type>, Box<Exp>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Var, Box<Exp>, Box<Exp>),
+    While(Box<Exp>, BlockLabel, Box<Exp>),
     Loop {
-        name: Var,
+        name: BlockLabel,
         has_break: bool,
         body: Box<Exp>,
     },
+    NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Give(Var, Box<Exp>),
-    Continue(Var),
+    Give(BlockLabel, Box<Exp>),
+    Continue(BlockLabel),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
@@ -521,10 +524,15 @@ impl AstDebug for UnannotatedExp_ {
                 if *has_break {
                     w.write("#with_break");
                 }
-                w.write("@");
-                name.ast_debug(w);
                 w.write(" ");
+                name.ast_debug(w);
+                w.write(": ");
                 body.ast_debug(w);
+            }
+            E::NamedBlock(name, seq) => {
+                name.ast_debug(w);
+                w.write(": ");
+                seq.ast_debug(w)
             }
             E::Block(seq) => seq.ast_debug(w),
             E::ExpList(es) => {
