@@ -1047,7 +1047,7 @@ impl PgManager {
             Ok(Some(Balance {
                 coin_object_count: Some(*count as u64),
                 total_balance: Some(total_balance),
-                coin_type: coin_type.clone(),
+                coin_type: coin_type.as_ref().map(|ct| MoveType::new(ct.to_string())),
             }))
         } else {
             Ok(None)
@@ -1078,7 +1078,7 @@ impl PgManager {
                             Balance {
                                 coin_object_count: Some(count as u64),
                                 total_balance: Some(total_balance),
-                                coin_type: Some(coin_type),
+                                coin_type: Some(MoveType::new(coin_type)),
                             },
                         ));
                     }
@@ -1541,6 +1541,12 @@ impl TryFrom<StoredObject> for Object {
 
     fn try_from(o: StoredObject) -> Result<Self, Self::Error> {
         let version = o.object_version as u64;
+        let balance = Balance {
+            coin_type: o.coin_type.as_ref().map(|ct| MoveType::new(ct.to_string())),
+            coin_object_count: Some(1),
+            total_balance: o.coin_balance.map(|b| BigInt::from(b as u64)),
+        };
+
         let (object_id, _sequence_number, digest) = &o.get_object_ref()?;
         let object: SuiObject = o.try_into()?;
 
@@ -1585,6 +1591,7 @@ impl TryFrom<StoredObject> for Object {
                 object.previous_transaction.into_inner(),
             )),
             kind,
+            balance: Some(balance),
         })
     }
 }

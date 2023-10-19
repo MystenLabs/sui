@@ -209,6 +209,7 @@ pub(crate) fn convert_obj(s: &sui_json_rpc_types::SuiObjectData) -> Object {
             } => ObjectKind::Shared,
             NativeOwner::Immutable => ObjectKind::Immutable,
         }),
+        balance: None,
     }
 }
 

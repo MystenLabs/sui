@@ -1,0 +1,22 @@
+{
+  object(
+    address: "0x27ac4f3f3c3f77027871f390f9f31736a2fffffafeceb27fbf64cc2d7eb27397"
+  ) {
+    balance {
+      coinType {
+        repr
+      }
+      coinObjectCount
+      totalBalance
+    }
+    balanceConnection {
+      nodes {
+        coinType {
+          repr
+        }
+        coinObjectCount
+        totalBalance
+      }
+    }
+  }
+}

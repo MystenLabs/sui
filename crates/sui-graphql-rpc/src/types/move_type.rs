@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::{code, graphql_error};
 
 /// Represents concrete types (no type parameters, no references)
-#[derive(SimpleObject)]
+#[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct MoveType {
     /// Flat representation of the type signature, as a displayable string.

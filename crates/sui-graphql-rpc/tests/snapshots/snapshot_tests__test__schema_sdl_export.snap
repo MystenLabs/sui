@@ -30,7 +30,7 @@ type AuthenticatorStateUpdate {
 }
 
 type Balance {
-	coinType: String
+	coinType: MoveType
 	coinObjectCount: Int
 	totalBalance: BigInt
 }

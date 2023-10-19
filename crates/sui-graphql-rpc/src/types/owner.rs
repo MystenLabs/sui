@@ -13,6 +13,7 @@ use async_graphql::connection::Connection;
 use async_graphql::*;
 use sui_json_rpc::name_service::NameServiceConfig;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Interface)]
 #[graphql(
     field(name = "location", ty = "SuiAddress"),

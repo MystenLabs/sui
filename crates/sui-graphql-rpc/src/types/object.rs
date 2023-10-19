@@ -28,6 +28,7 @@ pub(crate) struct Object {
     pub bcs: Option<Base64>,
     pub previous_transaction: Option<Digest>,
     pub kind: Option<ObjectKind>,
+    pub balance: Option<Balance>, // TODO (wlmyng): A non-coin object has no balance, but may own coin objects
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
@@ -144,6 +145,10 @@ impl Object {
         ctx: &Context<'_>,
         type_: Option<String>,
     ) -> Result<Option<Balance>> {
+        if let Some(balance) = &self.balance {
+            return Ok(Some(balance.clone()));
+        }
+
         ctx.data_unchecked::<PgManager>()
             .fetch_balance(self.address, type_)
             .await
@@ -249,6 +254,7 @@ impl From<&NativeSuiObject> for Object {
             bcs: Some(bcs),
             previous_transaction: Some(Digest::from_array(o.previous_transaction.into_inner())),
             kind,
+            balance: None,
         }
     }
 }
