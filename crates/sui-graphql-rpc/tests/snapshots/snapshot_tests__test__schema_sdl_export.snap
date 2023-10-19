@@ -194,6 +194,8 @@ type Epoch {
 	startTimestamp: DateTime
 	endTimestamp: DateTime
 	protocolConfigs: ProtocolConfigs
+	checkpointConnection(first: Int, after: String, last: Int, before: String): CheckpointConnection
+	transactionBlockConnection(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter): TransactionBlockConnection
 }
 
 type Event {
@@ -859,4 +861,3 @@ type ValidatorSet {
 schema {
 	query: Query
 }
-
