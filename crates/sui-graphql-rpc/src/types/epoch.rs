@@ -14,6 +14,8 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 
+const CHECKPOINT_RANGE_BOUNDING: i64 = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Epoch {
@@ -70,23 +72,27 @@ impl Epoch {
 
         let existing_filter = filter.unwrap_or_default();
 
-        // upper bound in the absence of after or before to avoid inefficiently large queries
+        // Upper bound in the absence of after or before to avoid inefficiently large queries
         let (after_default, before_default) = if last.is_some() {
             (
-                stored_epoch
-                    .last_checkpoint_id
-                    .map(|id| std::cmp::max(id - 100, stored_epoch.first_checkpoint_id) as u64),
+                stored_epoch.last_checkpoint_id.map(|id| {
+                    std::cmp::max(
+                        id - CHECKPOINT_RANGE_BOUNDING,
+                        stored_epoch.first_checkpoint_id,
+                    ) as u64
+                }),
                 stored_epoch.last_checkpoint_id.map(|id| id as u64),
             )
         } else {
             (
+                // Subtract and add 1 to include the first and last checkpoints
                 Some((stored_epoch.first_checkpoint_id - 1) as u64),
                 Some(
                     (std::cmp::min(
-                        stored_epoch.first_checkpoint_id + 100,
-                        stored_epoch
-                            .last_checkpoint_id
-                            .unwrap_or(stored_epoch.first_checkpoint_id + 100),
+                        stored_epoch.first_checkpoint_id + CHECKPOINT_RANGE_BOUNDING,
+                        stored_epoch.last_checkpoint_id.map(|id| id + 1).unwrap_or(
+                            stored_epoch.first_checkpoint_id + CHECKPOINT_RANGE_BOUNDING,
+                        ),
                     )) as u64,
                 ),
             )
@@ -95,7 +101,7 @@ impl Epoch {
         let nfilter = match (after.is_some(), before.is_some()) {
             (true, _) | (_, true) => TransactionBlockFilter {
                 after_checkpoint: Some((stored_epoch.first_checkpoint_id - 1) as u64),
-                before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| id as u64),
+                before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| (id + 1) as u64),
                 ..existing_filter
             },
             _ => TransactionBlockFilter {
