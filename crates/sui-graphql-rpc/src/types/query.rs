@@ -137,7 +137,7 @@ impl Query {
         before: Option<String>,
     ) -> Result<Option<Connection<String, Checkpoint>>> {
         ctx.data_unchecked::<PgManager>()
-            .fetch_checkpoints(first, after, last, before)
+            .fetch_checkpoints(first, after, last, before, None)
             .await
             .extend()
     }

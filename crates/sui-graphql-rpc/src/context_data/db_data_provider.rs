@@ -193,7 +193,7 @@ impl PgManager {
         bcs::from_bytes(&package.move_package).map_err(|e| Error::Internal(e.to_string()))
     }
 
-    async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
+    pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
         match epoch_id {
             Some(epoch_id) => {
                 self.run_query_async(move |conn| {
@@ -370,17 +370,28 @@ impl PgManager {
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Option<(Vec<StoredTransaction>, bool)>, Error> {
         let mut query = transactions::dsl::transactions.into_boxed();
-        if let Some(after) = after {
-            let after = self.parse_tx_cursor(&after)?;
-            query = query
-                .filter(transactions::dsl::tx_sequence_number.gt(after))
-                .order(transactions::dsl::tx_sequence_number.asc());
-        } else if let Some(before) = before {
-            let before = self.parse_tx_cursor(&before)?;
-            query = query
-                .filter(transactions::dsl::tx_sequence_number.lt(before))
-                .order(transactions::dsl::tx_sequence_number.desc());
+
+        let descending_order = last.is_some();
+        let cursor = after
+            .or(before)
+            .map(|cursor| self.parse_tx_cursor(&cursor))
+            .transpose()?;
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(transactions::dsl::tx_sequence_number.lt(cursor));
+            } else {
+                query = query.filter(transactions::dsl::tx_sequence_number.gt(cursor));
+            }
         }
+
+        if descending_order {
+            query = query.order(transactions::dsl::tx_sequence_number.desc());
+        } else {
+            query = query.order(transactions::dsl::tx_sequence_number.asc());
+        }
+
+        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+        query = query.limit(limit + 1);
 
         if let Some(filter) = filter {
             // Filters for transaction table
@@ -492,9 +503,6 @@ impl PgManager {
             }
         };
 
-        let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
-        query = query.limit(limit + 1);
-
         let result: Option<Vec<StoredTransaction>> = self
             .run_query_async(|conn| {
                 query
@@ -522,22 +530,32 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
+        epoch: Option<u64>,
     ) -> Result<Option<(Vec<StoredCheckpoint>, bool)>, Error> {
         let mut query = checkpoints::dsl::checkpoints.into_boxed();
 
-        if let Some(after) = after {
-            let after = self.parse_checkpoint_cursor(&after)?;
-            query = query
-                .filter(checkpoints::dsl::sequence_number.gt(after))
-                .order(checkpoints::dsl::sequence_number.asc());
-        } else if let Some(before) = before {
-            let before = self.parse_checkpoint_cursor(&before)?;
-            query = query
-                .filter(checkpoints::dsl::sequence_number.lt(before))
-                .order(checkpoints::dsl::sequence_number.desc());
+        let descending_order = last.is_some();
+        let cursor = after
+            .or(before)
+            .map(|cursor| self.parse_checkpoint_cursor(&cursor))
+            .transpose()?;
+        if let Some(cursor) = cursor {
+            if descending_order {
+                query = query.filter(checkpoints::dsl::sequence_number.lt(cursor));
+            } else {
+                query = query.filter(checkpoints::dsl::sequence_number.gt(cursor));
+            }
         }
-
+        if descending_order {
+            query = query.order(checkpoints::dsl::sequence_number.desc());
+        } else {
+            query = query.order(checkpoints::dsl::sequence_number.asc());
+        }
+        if let Some(epoch) = epoch {
+            query = query.filter(checkpoints::dsl::epoch.eq(epoch as i64));
+        }
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+
         query = query.limit(limit + 1);
 
         let result: Option<Vec<StoredCheckpoint>> = self
@@ -986,10 +1004,11 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
+        epoch: Option<u64>,
     ) -> Result<Option<Connection<String, Checkpoint>>, Error> {
         validate_cursor_pagination(&first, &after, &last, &before)?;
         let checkpoints = self
-            .multi_get_checkpoints(first, after, last, before)
+            .multi_get_checkpoints(first, after, last, before, epoch)
             .await?;
 
         if let Some((stored_checkpoints, has_next_page)) = checkpoints {
