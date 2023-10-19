@@ -1,4 +1,5 @@
 use std::cmp;
+use std::process::exit;
 use std::sync::Arc;
 
 use prometheus::Registry;
@@ -285,8 +286,8 @@ impl SequenceWorkerState {
 
     pub async fn run(
         &mut self,
-        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
-        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage>,
+        out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
     ) {
         let genesis = Arc::new(self.config.genesis().expect("Could not load genesis"));

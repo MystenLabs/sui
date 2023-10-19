@@ -42,27 +42,27 @@ impl Message for std::string::String {
     }
 }
 
-#[derive(Debug)]
-pub struct NetworkMessage<M: Debug + Message> {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NetworkMessage {
     pub src: UniqueId,
     pub dst: UniqueId,
-    pub payload: M,
+    pub payload: SailfishMessage,
 }
 
 // TODO: Maybe serialize directly to bytes, rather than String and then to bytes
-impl<M: Debug + Message> NetworkMessage<M> {
-    pub fn serialize(&self) -> String {
-        format!("{}${}${}$\n", self.src, self.dst, self.payload.serialize())
-    }
+// impl<M: Debug + Serialize + DeserializeOwned> NetworkMessage<M> {
+//     pub fn serialize(&self) -> String {
+//         format!("{}${}${}$\n", self.src, self.dst, self.payload.serialize())
+//     }
 
-    pub fn deserialize(string: String) -> Self {
-        let mut splitted = string.split("$");
-        let src = splitted.next().unwrap().parse().expect(string.as_str());
-        let dst = splitted.next().unwrap().parse().unwrap();
-        let payload = Message::deserialize(splitted.next().unwrap().to_string());
-        NetworkMessage { src, dst, payload }
-    }
-}
+//     pub fn deserialize(string: String) -> Self {
+//         let mut splitted = string.split("$");
+//         let src = splitted.next().unwrap().parse().expect(string.as_str());
+//         let dst = splitted.next().unwrap().parse().unwrap();
+//         let payload = Message::deserialize(splitted.next().unwrap().to_string());
+//         NetworkMessage { src, dst, payload }
+//     }
+// }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum SailfishMessage {
@@ -98,6 +98,9 @@ pub enum SailfishMessage {
     // Execution Worker <-> Storage Engine
     StateUpdate(TransactionEffects),
     Checkpointed(u64),
+
+    // For connection setup
+    Handshake(),
 }
 
 impl Message for SailfishMessage {

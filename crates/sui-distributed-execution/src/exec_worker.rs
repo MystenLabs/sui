@@ -1,26 +1,24 @@
 use core::panic;
 use dashmap::DashMap;
 use move_binary_format::CompiledModule;
+use move_bytecode_utils::module_cache::GetModule;
 use move_vm_runtime::move_vm::MoveVM;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_adapter_latest::{adapter, execution_engine};
-use sui_types::error::SuiError;
-use sui_types::execution_mode;
-use sui_types::messages_checkpoint::CheckpointDigest;
-use sui_types::multiaddr::Protocol;
-// use sui_adapter::{adapter, execution_engine, execution_mode, adapter::MoveVM};
-use move_bytecode_utils::module_cache::GetModule;
-use sui_config::genesis::{self, Genesis};
+use sui_config::genesis::Genesis;
 use sui_core::transaction_input_checker::get_gas_status_no_epoch_store_experimental;
 use sui_move_natives;
-use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use sui_types::digests::{ChainIdentifier, ObjectDigest, TransactionDigest};
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
+use sui_types::error::SuiError;
+use sui_types::execution_mode;
 use sui_types::gas::{GasCharger, SuiGasStatus};
 use sui_types::message_envelope::Message;
+use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::metrics::LimitsMetrics;
 use sui_types::object::Object;
 use sui_types::storage::{
@@ -422,7 +420,7 @@ impl<
     /// Returns new (move_vm, protocol_config, epoch_data, reference_gas_price)
     async fn process_epoch_start(
         &self,
-        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage>,
     ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
         let msg = in_channel.recv().await.expect("Receiving doesn't work");
         let SailfishMessage::EpochStart{
@@ -449,8 +447,8 @@ impl<
     /// Helper: Process an epoch change
     async fn process_epoch_change(
         &self,
-        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
-        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
+        out_channel: &mpsc::Sender<NetworkMessage>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage>,
         sw_id: UniqueId,
     ) -> (Arc<MoveVM>, ProtocolConfig, EpochData, u64) {
         // First send end of epoch message to sequence worker
@@ -486,8 +484,8 @@ impl<
         &mut self,
         metrics: Arc<LimitsMetrics>,
         exec_watermark: u64,
-        in_channel: &mut mpsc::Receiver<NetworkMessage<SailfishMessage>>,
-        out_channel: &mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        in_channel: &mut mpsc::Receiver<NetworkMessage>,
+        out_channel: &mpsc::Sender<NetworkMessage>,
         ew_ids: Vec<UniqueId>,
         sw_id: UniqueId,
         my_id: UniqueId,
@@ -799,7 +797,6 @@ fn select_ew_for_execution(
     tx: &Transaction,
     ew_ids: &Vec<UniqueId>,
 ) -> UniqueId {
-    println!("EW IDS: {:?}", ew_ids);
     if tx.is_epoch_change() || tx.get_read_set().contains(&ObjectID::from_single_byte(5)) {
         ew_ids[0]
     } else {

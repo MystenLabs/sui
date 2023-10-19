@@ -5,8 +5,8 @@ use tokio::sync::mpsc;
 
 pub struct SWAgent {
     id: UniqueId,
-    in_channel: mpsc::Receiver<NetworkMessage<SailfishMessage>>,
-    out_channel: mpsc::Sender<NetworkMessage<SailfishMessage>>,
+    in_channel: mpsc::Receiver<NetworkMessage>,
+    out_channel: mpsc::Sender<NetworkMessage>,
     attrs: GlobalConfig,
 }
 
@@ -14,8 +14,8 @@ pub struct SWAgent {
 impl Agent<SailfishMessage> for SWAgent {
     fn new(
         id: UniqueId,
-        in_channel: mpsc::Receiver<NetworkMessage<SailfishMessage>>,
-        out_channel: mpsc::Sender<NetworkMessage<SailfishMessage>>,
+        in_channel: mpsc::Receiver<NetworkMessage>,
+        out_channel: mpsc::Sender<NetworkMessage>,
         attrs: GlobalConfig,
     ) -> Self {
         SWAgent {

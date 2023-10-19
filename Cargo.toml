@@ -102,6 +102,7 @@ members = [
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-distributed-execution",
+    "crates/sui-distributed-execution/network",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
     "crates/sui-oracle",

@@ -4316,7 +4316,7 @@ impl NodeStateDump {
 
         // Packages read at runtime, which were not previously loaded into the temoorary store
         // Some packages may be fetched at runtime and wont show up in input objects
-        let mut runtime_reads = Vec::new();
+        let runtime_reads = Vec::new();
         /*for obj in inner_temporary_store.runtime_read_objects.values() {
             runtime_reads.push(obj.clone());
         }*/

@@ -1150,7 +1150,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
     ) -> SuiResult<Option<Object>> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(child).is_none());
-        if let Some((obj, kind)) = self.written.get(child) {
+        if let Some((obj, _kind)) = self.written.get(child) {
             self.runtime_read_objects.write().insert(*child);
             Ok(Some(obj.clone()))
         } else {
