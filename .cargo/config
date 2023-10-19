@@ -24,9 +24,6 @@ move-clippy = [
     "-Aclippy::manual_slice_size_calculation",
     "-Aclippy::unwrap-or-default",
     "-Aclippy::incorrect_partial_ord_impl_on_ord_type",
-    "-Aclippy::useless_attribute",
-    "-Aclippy::manual_while_let_some",
-    "-Aclippy::redundant_closure",
 ]
 
 [build]
