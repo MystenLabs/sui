@@ -182,7 +182,8 @@ codes!(
         InvalidSpecBlockMember: { msg: "invalid spec block member", severity: NonblockingError },
         InvalidRestrictedIdentifier:
             { msg: "invalid identifier escape", severity: NonblockingError },
-        NeedsTypeAnnotation: { msg: "Requires a type annotation 'name: type ='", severity: BlockingError }
+        NeedsTypeAnnotation: 
+            { msg: "Requires a type annotation 'name: type ='", severity: BlockingError },
     ],
     // errors for any rules around declaration items
     Declarations: [
