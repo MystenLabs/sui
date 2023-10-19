@@ -13,6 +13,7 @@ interface PaginatedResult {
 	nextCursor?: unknown;
 	hasNextPage: boolean;
 }
+
 export type SuiRpcPaginatedMethodName = {
 	[K in keyof SuiClient]: SuiClient[K] extends (input: any) => Promise<PaginatedResult> ? K : never;
 }[keyof SuiClient];
@@ -63,8 +64,6 @@ export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
 		queryFn: () => suiContext.client[method](params as never),
-		getNextPageParam: (lastPage) => {
-			return (lastPage as PaginatedResult).nextCursor ?? null;
-		},
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
 	});
 }

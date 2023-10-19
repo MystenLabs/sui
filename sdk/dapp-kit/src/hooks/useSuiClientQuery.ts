@@ -5,7 +5,7 @@ import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 
-import { PartialBy } from '../types/utilityTypes.js';
+import type { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
 
 export type SuiRpcMethodName = {
