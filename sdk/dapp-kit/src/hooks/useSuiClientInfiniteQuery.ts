@@ -35,28 +35,19 @@ export type SuiRpcPaginatedMethods = {
 		: never;
 };
 
-export type UseSuiClientInfiniteQueryOptions<T extends keyof SuiRpcPaginatedMethods> = Omit<
-	UseInfiniteQueryOptions<
-		SuiRpcPaginatedMethods[T]['result'],
-		Error,
-		SuiRpcPaginatedMethods[T]['result'],
-		SuiRpcPaginatedMethods[T]['result'],
-		unknown[]
+export type UseSuiClientInfiniteQueryOptions<T extends keyof SuiRpcPaginatedMethods> = PartialBy<
+	Omit<
+		UseInfiniteQueryOptions<
+			SuiRpcPaginatedMethods[T]['result'],
+			Error,
+			SuiRpcPaginatedMethods[T]['result'],
+			SuiRpcPaginatedMethods[T]['result'],
+			unknown[]
+		>,
+		'queryFn' | 'initialPageParam' | 'getNextPageParam'
 	>,
-	'queryKey' | 'queryFn' | 'initialPageParam' | 'getNextPageParam'
-> &
-	Partial<
-		Pick<
-			UseInfiniteQueryOptions<
-				SuiRpcPaginatedMethods[T]['result'],
-				Error,
-				SuiRpcPaginatedMethods[T]['result'],
-				SuiRpcPaginatedMethods[T]['result'],
-				unknown[]
-			>,
-			'queryKey'
-		>
-	>;
+	'queryKey'
+>;
 
 export function useSuiClientInfiniteQuery<T extends keyof SuiRpcPaginatedMethods>(
 	method: T,

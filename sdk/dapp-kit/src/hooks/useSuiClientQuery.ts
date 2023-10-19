@@ -5,6 +5,7 @@ import type { SuiClient } from '@mysten/sui.js/client';
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 
+import { PartialBy } from '../types/utilityTypes.js';
 import { useSuiClientContext } from './useSuiClient.js';
 
 export type SuiRpcMethodName = {
@@ -29,16 +30,13 @@ export type SuiRpcMethods = {
 		: never;
 };
 
-export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = Omit<
-	UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
-	'queryFn' | 'queryKey'
-> &
-	Partial<
-		Pick<
-			UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
-			'queryKey'
-		>
-	>;
+export type UseSuiClientQueryOptions<T extends keyof SuiRpcMethods> = PartialBy<
+	Omit<
+		UseQueryOptions<SuiRpcMethods[T]['result'], Error, SuiRpcMethods[T]['result'], unknown[]>,
+		'queryFn'
+	>,
+	'queryKey'
+>;
 
 export function useSuiClientQuery<T extends keyof SuiRpcMethods>(
 	...args: undefined extends SuiRpcMethods[T]['params']
