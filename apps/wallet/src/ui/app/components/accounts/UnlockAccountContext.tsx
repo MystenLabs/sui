@@ -14,7 +14,7 @@ interface UnlockAccountContextType {
 	accountToUnlock: SerializedUIAccount | null;
 	unlockAccount: (account: SerializedUIAccount) => void;
 	lockAccount: (account: SerializedUIAccount) => void;
-	isLoading: boolean;
+	isPending: boolean;
 	hideUnlockModal: () => void;
 }
 
@@ -73,7 +73,7 @@ export const UnlockAccountProvider = ({ children }: { children: ReactNode }) => 
 				unlockAccount,
 				hideUnlockModal,
 				lockAccount,
-				isLoading: unlockAccountMutation.isLoading,
+				isPending: unlockAccountMutation.isPending,
 			}}
 		>
 			{children}

@@ -23,7 +23,7 @@ export function ValidatorsCard() {
 	const accountAddress = useActiveAddress();
 	const {
 		data: delegatedStake,
-		isLoading,
+		isPending,
 		isError,
 		error,
 	} = useGetDelegatedStake(accountAddress || '');
@@ -74,7 +74,7 @@ export function ValidatorsCard() {
 
 	const numberOfValidators = delegatedStake?.length || 0;
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

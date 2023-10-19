@@ -10,7 +10,7 @@ import { TableCard } from '~/ui/TableCard';
 
 interface TopPackagesTableProps {
 	data: MoveCallMetric[];
-	isLoading: boolean;
+	isPending: boolean;
 }
 
 function TxnCountHeader() {
@@ -21,7 +21,7 @@ function TxnCountHeader() {
 	);
 }
 
-export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
+export function TopPackagesTable({ data, isPending }: TopPackagesTableProps) {
 	const tableData = useMemo(
 		() => ({
 			data: data?.map(([item, count]) => ({
@@ -60,7 +60,7 @@ export function TopPackagesTable({ data, isLoading }: TopPackagesTableProps) {
 		[data],
 	);
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<PlaceholderTable
 				colHeadings={['Module', 'Function', 'Package ID', 'Count']}

@@ -20,7 +20,7 @@
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-kit": "workspace:*",
-		"@tanstack/react-query": "^4.29.25",
+		"@tanstack/react-query": "^5.0.0",
 		"classnames": "^2.3.2",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",

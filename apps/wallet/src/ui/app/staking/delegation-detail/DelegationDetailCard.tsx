@@ -36,13 +36,13 @@ type DelegationDetailCardProps = {
 export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationDetailCardProps) {
 	const {
 		data: system,
-		isLoading: loadingValidators,
+		isPending: loadingValidators,
 		isError: errorValidators,
 	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const accountAddress = useActiveAddress();
 
-	const { data: allDelegation, isLoading, isError } = useGetDelegatedStake(accountAddress || '');
+	const { data: allDelegation, isPending, isError } = useGetDelegatedStake(accountAddress || '');
 
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -95,7 +95,7 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 
 	const commission = validatorData ? Number(validatorData.commissionRate) / 100 : 0;
 
-	if (isLoading || loadingValidators) {
+	if (isPending || loadingValidators) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

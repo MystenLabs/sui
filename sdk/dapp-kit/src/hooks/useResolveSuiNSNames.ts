@@ -10,9 +10,10 @@ export function useResolveSuiNSName(
 	address?: string | null,
 	options?: Omit<
 		UseQueryOptions<ResolvedNameServiceNames, Error, ResolvedNameServiceNames, unknown[]>,
-		'queryFn'
+		'queryFn' | 'queryKey'
 	>,
-) {
+	// TODO: Fix return type:
+): any {
 	const { data, ...rest } = useSuiClientQuery(
 		'resolveNameServiceNames',
 		{
@@ -20,9 +21,9 @@ export function useResolveSuiNSName(
 			limit: 1,
 		},
 		{
+			...options,
 			refetchOnWindowFocus: false,
 			retry: false,
-			...options,
 			enabled: !!address && options?.enabled !== false,
 		},
 	);

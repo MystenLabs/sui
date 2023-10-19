@@ -17,7 +17,7 @@ export function TokenIconLink({
 	accountAddress: string;
 	disabled: boolean;
 }) {
-	const { data: delegatedStake, isLoading } = useGetDelegatedStake(accountAddress);
+	const { data: delegatedStake, isPending } = useGetDelegatedStake(accountAddress);
 
 	// Total active stake for all delegations
 	const totalActivePendingStake = useMemo(() => {
@@ -42,7 +42,7 @@ export function TokenIconLink({
 					sourceFlow: 'Home page',
 				});
 			}}
-			loading={isLoading || queryResult.isLoading}
+			loading={isPending || queryResult.isPending}
 			before={<WalletActionStake24 />}
 		>
 			<div className="flex flex-col">

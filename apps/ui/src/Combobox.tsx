@@ -80,14 +80,14 @@ export function ComboboxInput(props: ComponentProps<typeof Command.Input>) {
 }
 
 type ComboboxListProps<T extends ComboboxItem> = {
-	isLoading?: boolean;
+	isPending?: boolean;
 	showResultsCount?: boolean;
 	options: T[];
 	onSelect(value: T): void;
 };
 
 export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
-	isLoading,
+	isPending,
 	showResultsCount,
 	options,
 	onSelect,
@@ -103,7 +103,7 @@ export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
 			ref={listRef}
 			className="absolute mt-1 w-full list-none rounded-md bg-white p-3.5 shadow-moduleOption h-fit max-h-verticalListLong z-10 overflow-scroll"
 		>
-			{showResultsCount && !isLoading && options.length > 0 && (
+			{showResultsCount && !isPending && options.length > 0 && (
 				<Command.Item className="text-left ml-1.5 pb-2" disabled>
 					<Text variant="caption/semibold" color="gray-75" uppercase>
 						{options.length}
@@ -112,7 +112,7 @@ export function ComboboxList<T extends ComboboxItem = ComboboxItem>({
 				</Command.Item>
 			)}
 
-			{isLoading ? (
+			{isPending ? (
 				<Command.Loading>
 					<div className="flex items-center justify-center">
 						<LoadingIndicator />

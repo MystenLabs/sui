@@ -17,13 +17,13 @@ export function DelegationDetail() {
 	const stakeIdParams = searchParams.get('staked');
 	const navigate = useNavigate();
 	const accountAddress = useActiveAddress();
-	const { data, isLoading } = useGetDelegatedStake(accountAddress || '');
+	const { data, isPending } = useGetDelegatedStake(accountAddress || '');
 
 	if (!validatorAddressParams || !stakeIdParams) {
 		return <Navigate to={'/stake'} replace={true} />;
 	}
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

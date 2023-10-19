@@ -26,7 +26,7 @@ function NftsPage() {
 		isInitialLoading,
 		isFetchingNextPage,
 		error,
-		isLoading,
+		isPending,
 		fetchNextPage,
 		isError,
 	} = useGetNFTs(accountAddress);
@@ -69,7 +69,7 @@ function NftsPage() {
 			{!!ownedAssets?.other.length && (
 				<FiltersPortal firstLastMargin tags={tags} callback={handleFilterChange} />
 			)}
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{isError ? (
 					<Alert>
 						<div>

@@ -9,10 +9,10 @@ import LoadingIndicator from '../loading/LoadingIndicator';
 
 interface LockUnlockButtonProps extends ComponentPropsWithoutRef<'button'> {
 	isLocked: boolean;
-	isLoading: boolean;
+	isPending: boolean;
 }
 
-export function LockUnlockButton({ isLocked, onClick, isLoading }: LockUnlockButtonProps) {
+export function LockUnlockButton({ isLocked, onClick, isPending }: LockUnlockButtonProps) {
 	return (
 		<Tooltip tip={isLocked ? 'Unlock Account' : 'Lock Account'}>
 			<button
@@ -20,7 +20,7 @@ export function LockUnlockButton({ isLocked, onClick, isLoading }: LockUnlockBut
 				onClick={onClick}
 				data-testid={isLocked ? 'unlock-account-button' : 'lock-account-button'}
 			>
-				{isLoading ? (
+				{isPending ? (
 					<LoadingIndicator />
 				) : isLocked ? (
 					<LockLocked16 className="h-4 w-4" />
