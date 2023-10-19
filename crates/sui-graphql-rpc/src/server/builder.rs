@@ -27,18 +27,49 @@ use axum::{
     middleware,
 };
 use axum::{headers::Header, Router};
+use futures::Future;
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
-use hyper::Server as HyperServer;
+use hyper::server::Server as HyperServer;
 use std::{any::Any, net::SocketAddr, sync::Arc};
+use tokio::signal;
+use tokio::sync::Notify;
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
+    pub shutdown_notif: Arc<Notify>,
 }
 
 #[allow(dead_code)]
 impl Server {
     pub async fn run(self) {
         self.server.await.unwrap();
+    }
+
+    async fn shutdown_signal(shutdown_notif: Arc<Notify>) {
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("failed to install signal handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = terminate => {},
+            _ = shutdown_notif.notified() => {},
+        }
+
+        println!("signal received, starting graceful shutdown");
     }
 
     pub async fn from_yaml_config(path: &str) -> Self {
@@ -149,6 +180,8 @@ impl ServerBuilder {
     pub fn build(self) -> Server {
         let address = self.address();
         let schema = self.build_schema();
+        let shutdown_notif = Arc::new(Notify::new());
+        let shutdown_notif2 = shutdown_notif.clone();
 
         let app = axum::Router::new()
             .route("/", axum::routing::get(graphiql).post(graphql_handler))
@@ -157,7 +190,9 @@ impl ServerBuilder {
             .layer(middleware::from_fn(set_version_middleware));
         Server {
             server: axum::Server::bind(&address.parse().unwrap())
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+                .with_graceful_shutdown(Server::shutdown_signal(shutdown_notif2)),
+            shutdown_notif,
         }
     }
 }

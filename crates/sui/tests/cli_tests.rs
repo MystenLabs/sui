@@ -952,7 +952,7 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
 #[sim_test]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = ::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
     let address = test_cluster.get_address_0();
     let context = &mut test_cluster.wallet;
