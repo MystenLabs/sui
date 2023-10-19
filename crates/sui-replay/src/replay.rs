@@ -716,7 +716,8 @@ impl LocalExec {
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-        let protocol_config = &tx_info.protocol_config;
+        let protocol_config =
+            &ProtocolConfig::get_for_version(tx_info.protocol_version, Chain::Unknown);
 
         let metrics = self.metrics.clone();
 
@@ -815,7 +816,10 @@ impl LocalExec {
         let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
         let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
         let epoch_start_timestamp = pre_run_sandbox.transaction_info.epoch_start_timestamp;
-        let protocol_config = pre_run_sandbox.transaction_info.protocol_config.clone();
+        let protocol_config = ProtocolConfig::get_for_version(
+            pre_run_sandbox.transaction_info.protocol_version,
+            Chain::Unknown,
+        );
         let required_objects = pre_run_sandbox.required_objects.clone();
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
@@ -1443,7 +1447,7 @@ impl LocalExec {
             effects: SuiTransactionBlockEffects::V1(effects),
             // Find the protocol version for this epoch
             // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
-            protocol_config: self.get_protocol_config(epoch_id).await?,
+            protocol_version: self.get_protocol_config(epoch_id).await?.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
@@ -1506,7 +1510,7 @@ impl LocalExec {
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
-            protocol_config,
+            protocol_version: protocol_config.version,
             tx_digest: *tx_digest,
             epoch_start_timestamp,
             sender_signed_data: orig_tx.clone(),
@@ -1562,7 +1566,7 @@ impl LocalExec {
         in_objs.extend(
             self.multi_download_relevant_packages_and_store(
                 package_inputs,
-                tx_info.protocol_config.version.as_u64(),
+                tx_info.protocol_version.as_u64(),
             )
             .await?,
         );
@@ -1625,7 +1629,7 @@ impl LocalExec {
         tx_info: &OnChainTransactionInfo,
     ) -> Result<InputObjects, ReplayEngineError> {
         // We need this for other activities in this session
-        self.current_protocol_version = tx_info.protocol_config.version.as_u64();
+        self.current_protocol_version = tx_info.protocol_version.as_u64();
 
         // Download the objects at the version right before the execution of this TX
         self.multi_download_and_store(&tx_info.modified_at_versions)

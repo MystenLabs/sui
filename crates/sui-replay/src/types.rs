@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::ProtocolVersion;
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -49,7 +49,7 @@ pub struct OnChainTransactionInfo {
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
     pub effects: SuiTransactionBlockEffects,
-    pub protocol_config: ProtocolConfig,
+    pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
 }
