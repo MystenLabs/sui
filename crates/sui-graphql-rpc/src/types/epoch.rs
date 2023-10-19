@@ -14,6 +14,8 @@ use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
 use async_graphql::*;
 
+const CHECKPOINT_RANGE_BOUNDING: i64 = 100;
+
 #[derive(Clone, Debug, PartialEq, Eq, SimpleObject)]
 #[graphql(complex)]
 pub(crate) struct Epoch {
@@ -70,23 +72,47 @@ impl Epoch {
 
         let existing_filter = filter.unwrap_or_default();
 
-        // TODO (wlmyng): The combination of ordering by tx_sequence_number and filtering by checkpoint_sequence_number is too slow
-        let filter = if last.is_some() {
-            TransactionBlockFilter {
-                before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| id as u64),
-                after_checkpoint: stored_epoch.last_checkpoint_id.map(|id| (id - 10) as u64),
-                ..existing_filter
-            }
+        // Upper bound in the absence of after or before to avoid inefficiently large queries
+        let (after_default, before_default) = if last.is_some() {
+            (
+                stored_epoch.last_checkpoint_id.map(|id| {
+                    std::cmp::max(
+                        id - CHECKPOINT_RANGE_BOUNDING,
+                        stored_epoch.first_checkpoint_id,
+                    ) as u64
+                }),
+                stored_epoch.last_checkpoint_id.map(|id| id as u64),
+            )
         } else {
-            TransactionBlockFilter {
+            (
+                // Subtract and add 1 to include the first and last checkpoints
+                Some((stored_epoch.first_checkpoint_id - 1) as u64),
+                Some(
+                    (std::cmp::min(
+                        stored_epoch.first_checkpoint_id + CHECKPOINT_RANGE_BOUNDING,
+                        stored_epoch.last_checkpoint_id.map(|id| id + 1).unwrap_or(
+                            stored_epoch.first_checkpoint_id + CHECKPOINT_RANGE_BOUNDING,
+                        ),
+                    )) as u64,
+                ),
+            )
+        };
+
+        let nfilter = match (after.is_some(), before.is_some()) {
+            (true, _) | (_, true) => TransactionBlockFilter {
                 after_checkpoint: Some((stored_epoch.first_checkpoint_id - 1) as u64),
-                before_checkpoint: Some((stored_epoch.first_checkpoint_id + 10) as u64),
+                before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| (id + 1) as u64),
                 ..existing_filter
-            }
+            },
+            _ => TransactionBlockFilter {
+                after_checkpoint: after_default,
+                before_checkpoint: before_default,
+                ..existing_filter
+            },
         };
 
         ctx.data_unchecked::<PgManager>()
-            .fetch_txs(first, after, last, before, Some(filter))
+            .fetch_txs(first, after, last, before, Some(nfilter))
             .await
             .extend()
     }
