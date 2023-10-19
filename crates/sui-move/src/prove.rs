@@ -9,6 +9,7 @@ use sui_types::sui_framework_address_concat_string;
 
 const SUI_NATIVE_TEMPLATE: &[u8] = include_bytes!("sui-natives.bpl");
 
+/// Run the Move Prover on the package at `path` (Warning: Move Prover support for Sui is currently limited)
 #[derive(Parser)]
 #[group(id = "sui-move-prover")]
 pub struct Prover {
