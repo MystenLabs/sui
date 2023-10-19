@@ -12,6 +12,7 @@ type Address implements ObjectOwner {
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 enum AddressTransactionBlockRelationship {
@@ -173,6 +174,54 @@ type ConsensusCommitPrologueTransaction {
 }
 
 scalar DateTime
+
+type DynamicField {
+	name: MoveValue
+	id: ID!
+	value: DynamicFieldValue
+}
+
+type DynamicFieldConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DynamicFieldEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DynamicField!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DynamicFieldEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: DynamicField!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+input DynamicFieldFilter {
+	namePackage: SuiAddress
+	nameModule: String
+	nameType: String
+}
+
+input DynamicFieldName {
+	type: String!
+	bcs: Base64!
+}
+
+union DynamicFieldValue = MoveObject | MoveValue
 
 type EndOfEpochData {
 	newCommittee: [CommitteeMember!]
@@ -405,10 +454,6 @@ type MoveTypeSignature =
         typeParameters: [MoveTypeSignature],
       }
     }
-<<<<<<< HEAD
-=======
-
->>>>>>> 70eac4c07c ([GraphQL] MoveType and MoveTypeSignature)
 """
 scalar MoveTypeSignature
 
@@ -458,6 +503,7 @@ type Object implements ObjectOwner {
 	kind: ObjectKind
 	owner: Owner
 	asMovePackage: MovePackage
+	dynamicField(dynamicFieldName: DynamicFieldName!): DynamicField
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
 	balance(type: String): Balance
@@ -466,6 +512,7 @@ type Object implements ObjectOwner {
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 type ObjectChange {
@@ -534,6 +581,7 @@ interface ObjectOwner {
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 type Owner implements ObjectOwner {
@@ -547,6 +595,7 @@ type Owner implements ObjectOwner {
 	stakeConnection(first: Int, after: String, last: Int, before: String): StakeConnection
 	defaultNameServiceName: String
 	nameServiceConnection(first: Int, after: String, last: Int, before: String): NameServiceConnection
+	dynamicFieldConnection(first: Int, after: String, last: Int, before: String, filter: DynamicFieldFilter): DynamicFieldConnection
 }
 
 """
