@@ -63,6 +63,7 @@ use sui_indexer::{
         checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
         tx_input_objects, tx_recipients, tx_senders,
     },
+    types_v2::OwnerType,
     PgConnectionPoolConfig,
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
@@ -586,6 +587,7 @@ impl PgManager {
         last: Option<u64>,
         before: Option<String>,
         filter: Option<ObjectFilter>,
+        owner_type: Option<OwnerType>,
     ) -> Result<Option<(Vec<StoredObject>, bool)>, Error> {
         let mut query = objects::dsl::objects.into_boxed();
 
@@ -602,10 +604,11 @@ impl PgManager {
             }
 
             if let Some(owner) = filter.owner {
+                // Default to Address owner so we can leverage the index
+                let owner_type = owner_type.unwrap_or(OwnerType::Address);
                 query = query
                     .filter(objects::dsl::owner_id.eq(owner.into_vec()))
-                    .filter(objects::dsl::owner_type.eq(2)); // TODO: differentiate between address and object owner
-                                                             // .filter(objects::dsl::owner_type.between(1, 2));
+                    .filter(objects::dsl::owner_type.eq(owner_type as i16));
             }
 
             if let Some(object_type) = filter.ty {
@@ -989,7 +992,7 @@ impl PgManager {
             self.validate_obj_filter(filter)?;
         }
         let objects = self
-            .multi_get_objs(first, after, last, before, filter)
+            .multi_get_objs(first, after, last, before, filter, None)
             .await?;
 
         if let Some((stored_objs, has_next_page)) = objects {
@@ -1261,7 +1264,14 @@ impl PgManager {
         let system_state = self.fetch_latest_sui_system_state().await?;
         let current_epoch_id = system_state.epoch_id;
         let objs = self
-            .multi_get_objs(first, after, last, before, Some(obj_filter))
+            .multi_get_objs(
+                first,
+                after,
+                last,
+                before,
+                Some(obj_filter),
+                Some(OwnerType::Address),
+            )
             .await?;
 
         if let Some((stored_objs, has_next_page)) = objs {
@@ -1408,7 +1418,14 @@ impl PgManager {
         };
 
         let objs = self
-            .multi_get_objs(first, after, last, before, Some(filter))
+            .multi_get_objs(
+                first,
+                after,
+                last,
+                before,
+                Some(filter),
+                Some(OwnerType::Object),
+            )
             .await?;
 
         self.inner
