@@ -292,10 +292,7 @@ pub fn summarize_path_cov(module: &CompiledModule, trace_map: &TraceMap) -> Modu
                             // move to branch info if there are more than one branches
                             if exits.len() > 1 {
                                 for (src, dst) in exits.into_iter() {
-                                    fn_branches
-                                        .entry(src)
-                                        .or_default()
-                                        .insert(dst);
+                                    fn_branches.entry(src).or_default().insert(dst);
                                 }
                             }
                         }

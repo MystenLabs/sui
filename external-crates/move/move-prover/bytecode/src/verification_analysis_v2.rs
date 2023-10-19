@@ -373,9 +373,7 @@ fn compute_funs_that_modify_inv(
                     let fun_id = fun_env.get_qualified_id();
                     fun_id_set.insert(fun_id);
                     funs_that_modify_some_inv.insert(fun_id);
-                    let inv_set = invs_modified_by_fun
-                        .entry(fun_id)
-                        .or_default();
+                    let inv_set = invs_modified_by_fun.entry(fun_id).or_default();
                     inv_set.insert(*inv_id);
                 }
             }

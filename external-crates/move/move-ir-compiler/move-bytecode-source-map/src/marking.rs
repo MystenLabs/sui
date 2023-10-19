@@ -72,10 +72,7 @@ impl StructMarking {
     }
 
     pub fn field(&mut self, field_index: MemberCount, message: String) {
-        self.fields
-            .entry(field_index)
-            .or_default()
-            .push(message)
+        self.fields.entry(field_index).or_default().push(message)
     }
 
     pub fn type_param(&mut self, type_param_index: usize, message: String) {
