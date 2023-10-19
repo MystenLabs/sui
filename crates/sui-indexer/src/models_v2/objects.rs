@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::language_storage::StructTag;
 use serde::de::DeserializeOwned;
+use sui_types::sui_serde::to_sui_struct_tag_string_canonical;
 use std::collections::HashMap;
 
 use diesel::prelude::*;
@@ -74,7 +76,11 @@ impl From<IndexedObject> for StoredObject {
             checkpoint_sequence_number: o.checkpoint_sequence_number as i64,
             owner_type: o.owner_type as i16,
             owner_id: o.owner_id.map(|id| id.to_vec()),
-            object_type: o.object.type_().map(|t| t.to_string()),
+            object_type: o.object.type_().map(|t| {
+                let s: StructTag = t.clone().into();
+                to_sui_struct_tag_string_canonical(&s)
+            }).transpose().unwrap(),
+            // object_type: o.object.type_().map(|t| t.to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -290,6 +296,33 @@ impl From<CoinBalance> for Balance {
             // TODO: deal with overflow
             total_balance: c.coin_balance as u128,
             locked_balance: HashMap::default(),
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canonical_string_for_object_type() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(
+            1,
+            test_obj,
+            None
+        );
+
+        let stored_obj = StoredObject::from(indexed_obj);
+
+        match stored_obj.object_type {
+            Some(t) => {
+                assert_eq!(t, "0x0000000000000000000000000000000000000000000000000000000000000002::staking_pool::StakedSui");
+            }
+            None => {
+                panic!("object_type should not be none");
+            }
         }
     }
 }
