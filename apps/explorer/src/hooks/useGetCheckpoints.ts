@@ -20,7 +20,7 @@ export function useGetCheckpoints(cursor?: string, limit = DEFAULT_CHECKPOINTS_L
 				limit,
 			}),
 		initialPageParam: null,
-		getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : false),
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
 		staleTime: 10 * 1000,
 		gcTime: 24 * 60 * 60 * 1000,
 		retry: false,

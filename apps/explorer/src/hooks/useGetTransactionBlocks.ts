@@ -30,7 +30,7 @@ export function useGetTransactionBlocks(
 				},
 			}),
 		initialPageParam: null,
-		getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : false),
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
 		staleTime: 10 * 1000,
 		retry: false,
 		placeholderData: keepPreviousData,

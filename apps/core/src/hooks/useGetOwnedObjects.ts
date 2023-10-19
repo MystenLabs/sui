@@ -31,6 +31,6 @@ export function useGetOwnedObjects(
 
 		staleTime: 10 * 1000,
 		enabled: !!address,
-		getNextPageParam: (lastPage) => (lastPage?.hasNextPage ? lastPage.nextCursor : null),
+		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
 	});
 }
