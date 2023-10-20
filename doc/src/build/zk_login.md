@@ -297,15 +297,15 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 
 1. Download two images from from Docker Hub [repository](https://hub.docker.com/repository/docker/mysten/zklogin/general) that are tagged as `prover` and `prover-fe`. 
 
-1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated.
+2. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/) that will be later used as an argument to run the prover. See [the Ceremony section](#ceremony) for more details on how the proving key was generated. Please install [git lfs](https://git-lfs.com/) which is needed before downloading the zkey.
 
 ```bash
-curl -O https://github.com/sui-foundation/zklogin-ceremony-contributions/blob/main/phase2/final.zkey
+wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-zkey.sh | bash
 ```
 
-   - To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum final.zkey`.
+   - To verify the correct zkey file is downloaded, you can check the Blake2b hash equals to `060beb961802568ac9ac7f14de0fbcd55e373e8f5ec7cc32189e26fb65700aa4e36f5604f868022c765e634d14ea1cd58bd4d79cef8f3cf9693510696bcbcbce` by running `b2sum zkLogin.zkey`.
 
-1. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
+3. Run `prover` at `PORT1` with the downloaded zkey. This needs to be run on Linux-based machines (amd64).
 
 ```bash
 docker run \
@@ -316,7 +316,7 @@ docker run \
   <prover-image>
 ```
 
-1. Run `prover-fe` at `PORT2`:
+4. Run `prover-fe` at `PORT2`:
 
 ```bash
 docker run \
@@ -327,9 +327,9 @@ docker run \
     <prover-fe-image>
 ```
 
-1. Expose the `prover-fe` service appropriately and keep the prover service internal.
+5. Expose the `prover-fe` service appropriately and keep the prover service internal.
 
-1. To call the proving service, the following two endpoints are supported:
+6. To call the proving service, the following two endpoints are supported:
    - `/ping`: To test if the service is up. Running `curl http://localhost:PORT2/ping` should return `pong`.
    - `/v1`: The request and response are the same as the Mysten Labs maintained service.
 
@@ -337,7 +337,7 @@ A few things to note:
 
 1. If you want to compile the prover from scratch (for performance reasons), please see our fork of [rapidsnark](https://github.com/MystenLabs/rapidsnark#compile-prover-in-server-mode). You'd need to compile and launch the prover in server mode.
 
-1. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
+2. Setting `DEBUG=*` turns on all logs in the prover-fe service some of which may contain PII. Consider using DEBUG=zkLogin:info,jwks in production environments.
 
 ## Assemble the zkLogin signature and submit the transaction
 
