@@ -9753,8 +9753,10 @@ name = "simulacrum"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "fastcrypto",
+ "futures",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -11622,6 +11624,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "move-package",
+ "once_cell",
  "prometheus",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -11630,6 +11633,7 @@ dependencies = [
  "sui-macros",
  "sui-protocol-config",
  "sui-simulator",
+ "sui-storage",
  "sui-test-transaction-builder",
  "sui-transaction-checks",
  "sui-types",

@@ -507,7 +507,12 @@ impl TransactionEffectsV2 {
         assert!(matches!(owner, Owner::AddressOwner(_)));
 
         for (id, _) in &self.unchanged_shared_objects {
-            assert!(unique_ids.insert(*id));
+            assert!(
+                unique_ids.insert(*id),
+                "Duplicate object id: {:?}\n{:#?}",
+                id,
+                self
+            );
         }
     }
 }

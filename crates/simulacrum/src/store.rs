@@ -8,21 +8,22 @@ use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
 use sui_types::storage::{get_module, load_package_object_from_object_store, PackageObjectArc};
 use sui_types::{
-    base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
+    base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     crypto::{AccountKeyPair, AuthorityKeyPair},
     digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::SuiError,
+    error::{SuiError, SuiResult, UserInputError},
     messages_checkpoint::{
         CheckpointContents, CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
         VerifiedCheckpoint,
     },
     object::{Object, Owner},
-    storage::{
-        BackingPackageStore, ChildObjectResolver, MarkerTableQuery, ObjectStore, ParentSync,
+    storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
+    transaction::{
+        InputObjectKind, InputObjects, ObjectReadResult, ReceivingObjectReadResult,
+        ReceivingObjects, VerifiedTransaction,
     },
-    transaction::VerifiedTransaction,
 };
 
 #[derive(Debug, Default)]
@@ -300,37 +301,6 @@ impl ChildObjectResolver for InMemoryStore {
     }
 }
 
-impl MarkerTableQuery for InMemoryStore {
-    fn have_received_object_at_version(
-        &self,
-        _object_id: &ObjectID,
-        _version: sui_types::base_types::VersionNumber,
-        _epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        // In simulation, we always have the object don't have a marker table, and we don't need to
-        // worry about equivocation protection. So we simply return false if ever asked if we
-        // received this object.
-        Ok(false)
-    }
-
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        _object_id: &ObjectID,
-        _version: &SequenceNumber,
-        _epoch_id: EpochId,
-    ) -> Result<Option<TransactionDigest>, SuiError> {
-        Ok(None)
-    }
-
-    fn is_shared_object_deleted(
-        &self,
-        _object_id: &ObjectID,
-        _epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        Ok(false)
-    }
-}
-
 impl GetModule for InMemoryStore {
     type Error = SuiError;
     type Item = CompiledModule;
@@ -420,10 +390,51 @@ impl KeyStore {
     }
 }
 
+// TODO: After we abstract object storage into the ExecutionCache trait, we can replace this with
+// sui_core::TransactionInputLoad using an appropriate cache implementation.
+impl InMemoryStore {
+    pub fn read_objects_for_synchronous_execution(
+        &self,
+        _tx_digest: &TransactionDigest,
+        input_object_kinds: &[InputObjectKind],
+        receiving_object_refs: &[ObjectRef],
+    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
+        let mut input_objects = Vec::new();
+        for kind in input_object_kinds {
+            let obj = match kind {
+                InputObjectKind::MovePackage(id) => self.get_object(id).cloned(),
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
+
+                InputObjectKind::SharedMoveObject { id, .. } => self.get_object(id).cloned(),
+            };
+
+            input_objects.push(ObjectReadResult::new(
+                *kind,
+                obj.ok_or_else(|| kind.object_not_found_error())?.into(),
+            ));
+        }
+
+        let mut receiving_objects = Vec::new();
+        for objref in receiving_object_refs {
+            // no need for marker table check in simulacrum
+            let Some(obj) = self.get_object(&objref.0).cloned() else {
+                return Err(UserInputError::ObjectNotFound {
+                    object_id: objref.0,
+                    version: Some(objref.1),
+                }
+                .into());
+            };
+            receiving_objects.push(ReceivingObjectReadResult::new(*objref, obj.into()));
+        }
+
+        Ok((input_objects.into(), receiving_objects.into()))
+    }
+}
+
 pub trait SimulatorStore:
-    sui_types::storage::BackingPackageStore
-    + sui_types::storage::ObjectStore
-    + sui_types::storage::MarkerTableQuery
+    sui_types::storage::BackingPackageStore + sui_types::storage::ObjectStore
 {
     fn get_checkpoint_by_sequence_number(
         &self,

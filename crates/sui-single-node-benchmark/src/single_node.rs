@@ -30,8 +30,8 @@ use sui_types::messages_grpc::HandleTransactionResponse;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::object::Object;
 use sui_types::transaction::{
-    CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction,
-    DEFAULT_VALIDATOR_GAS_PRICE,
+    CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
+    VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
 };
 use tokio::sync::broadcast;
 
@@ -173,17 +173,32 @@ impl SingleValidator {
         store: InMemoryObjectStore,
         transaction: Transaction,
     ) -> TransactionEffects {
+        let tx_digest = transaction.digest();
+        let input_objects = transaction.transaction_data().input_objects().unwrap();
+        let objects = if transaction
+            .data()
+            .intent_message()
+            .value
+            .is_end_of_epoch_tx()
+        {
+            store
+                .read_objects_for_synchronous_execution(&input_objects)
+                .unwrap()
+        } else {
+            store
+                .read_objects_for_execution(&*self.epoch_store, tx_digest, &input_objects)
+                .unwrap()
+        };
+
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(transaction),
             0,
         );
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
-            &store,
-            &store,
             &executable,
+            objects,
             self.epoch_store.protocol_config(),
             self.epoch_store.reference_gas_price(),
-            self.epoch_store.epoch(),
         )
         .unwrap();
         let (kind, signer, gas) = executable.transaction_data().execution_parts();

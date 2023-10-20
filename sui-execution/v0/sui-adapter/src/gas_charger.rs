@@ -9,6 +9,7 @@ pub mod checked {
 
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
+    use std::ops::Deref;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
     use sui_types::gas_model::gas_predicates::dont_charge_budget_on_storage_oog;
@@ -170,6 +171,7 @@ pub mod checked {
                         self.tx_digest
                     )
                 })
+                .deref()
                 .clone();
             // delete all gas objects except the primary_gas_object
             for (id, version, _digest) in &self.gas_coins[1..] {
