@@ -995,7 +995,7 @@ impl GlobalEnv {
         for memory in &inv.mem_usage {
             self.global_invariants_for_memory
                 .entry(memory.clone())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(id);
         }
         self.global_invariants.insert(id, inv);
@@ -3665,7 +3665,7 @@ impl<'env> FunctionEnv<'env> {
                 let type_name = mid.qualified(sid);
                 modify_targets
                     .entry(type_name)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(target.clone());
             });
         }

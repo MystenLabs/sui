@@ -174,7 +174,7 @@ impl Analyzer {
         for inst in func_insts {
             self.func_insts
                 .entry(inst)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(invariant.id);
         }
         if is_generic {

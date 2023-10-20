@@ -1271,18 +1271,14 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     {
         use SpecBlockContext::*;
         match context {
-            Function(name) => update(
-                self.fun_specs
-                    .entry(name.symbol)
-                    .or_insert_with(Spec::default),
-            ),
+            Function(name) => update(self.fun_specs.entry(name.symbol).or_default()),
             FunctionCode(name, spec_info) => update(
                 self.fun_specs
                     .entry(name.symbol)
-                    .or_insert_with(Spec::default)
+                    .or_default()
                     .on_impl
                     .entry(spec_info.offset)
-                    .or_insert_with(Spec::default),
+                    .or_default(),
             ),
             Schema(name) => update(
                 &mut self
@@ -1292,11 +1288,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                     .expect("schema defined")
                     .spec,
             ),
-            Struct(name) => update(
-                self.struct_specs
-                    .entry(name.symbol)
-                    .or_insert_with(Spec::default),
-            ),
+            Struct(name) => update(self.struct_specs.entry(name.symbol).or_default()),
             Module => update(&mut self.module_spec),
         }
     }

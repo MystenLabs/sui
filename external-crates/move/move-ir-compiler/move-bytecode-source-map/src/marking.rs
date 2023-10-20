@@ -51,14 +51,14 @@ impl FunctionMarking {
     pub fn code_offset(&mut self, code_offset: CodeOffset, message: String) {
         self.code_offsets
             .entry(code_offset)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(message)
     }
 
     pub fn type_param(&mut self, type_param_index: usize, message: String) {
         self.type_param_offsets
             .entry(type_param_index)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(message)
     }
 }
@@ -72,16 +72,13 @@ impl StructMarking {
     }
 
     pub fn field(&mut self, field_index: MemberCount, message: String) {
-        self.fields
-            .entry(field_index)
-            .or_insert_with(Vec::new)
-            .push(message)
+        self.fields.entry(field_index).or_default().push(message)
     }
 
     pub fn type_param(&mut self, type_param_index: usize, message: String) {
         self.type_param_offsets
             .entry(type_param_index)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(message)
     }
 }
@@ -102,7 +99,7 @@ impl MarkedSourceMapping {
     ) {
         self.function_marks
             .entry(function_definition_index.0)
-            .or_insert_with(FunctionMarking::new)
+            .or_default()
             .code_offset(code_offset, message)
     }
 
@@ -114,7 +111,7 @@ impl MarkedSourceMapping {
     ) {
         self.function_marks
             .entry(function_definition_index.0)
-            .or_insert_with(FunctionMarking::new)
+            .or_default()
             .type_param(type_param_offset, message)
     }
 
@@ -126,7 +123,7 @@ impl MarkedSourceMapping {
     ) {
         self.struct_marks
             .entry(struct_definition_index.0)
-            .or_insert_with(StructMarking::new)
+            .or_default()
             .field(field_index, message)
     }
 
@@ -138,7 +135,7 @@ impl MarkedSourceMapping {
     ) {
         self.struct_marks
             .entry(struct_definition_index.0)
-            .or_insert_with(StructMarking::new)
+            .or_default()
             .type_param(type_param_offset, message)
     }
 }
