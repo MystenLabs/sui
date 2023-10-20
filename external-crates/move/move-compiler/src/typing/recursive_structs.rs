@@ -36,7 +36,7 @@ impl Context {
         }
         self.struct_neighbors
             .entry(self.current_struct.unwrap())
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(*sname, loc);
     }
 

@@ -216,7 +216,7 @@ pub fn run_move_prover(
         let basedir = path
             .file_name()
             .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(String::new);
+            .unwrap_or_default();
         writeln!(
             message_writer,
             "{} proving {} modules from package `{}` in {:.3}s",

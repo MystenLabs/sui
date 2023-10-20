@@ -68,7 +68,7 @@ impl<Loc: Copy, Lbl: Clone + Ord> BorrowGraph<Loc, Lbl> {
                     None => full_borrows.insert(borrower, edge.loc),
                     Some(f) => field_borrows
                         .entry(f.clone())
-                        .or_insert_with(BTreeMap::new)
+                        .or_default()
                         .insert(borrower, edge.loc),
                 };
             }

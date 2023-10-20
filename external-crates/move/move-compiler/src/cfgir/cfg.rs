@@ -591,7 +591,7 @@ impl<'forward, Blocks: Deref<Target = BasicBlocks>> ReverseCFG<'forward, Blocks>
         for terminal_predecessor in &end_blocks {
             forward_successors
                 .entry(*terminal_predecessor)
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(terminal);
         }
         forward_predecessor.insert(terminal, end_blocks);
