@@ -20,7 +20,7 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 
-use crate::store::InMemoryStore;
+use crate::store::in_mem_store::InMemoryStore;
 
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,

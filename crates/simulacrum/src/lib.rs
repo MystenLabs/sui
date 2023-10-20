@@ -35,12 +35,13 @@ use sui_types::{
 };
 
 use self::epoch_state::EpochState;
-use self::store::KeyStore;
-pub use self::store::{InMemoryStore, SimulatorStore};
+pub use self::store::in_mem_store::InMemoryStore;
+use self::store::in_mem_store::KeyStore;
+pub use self::store::SimulatorStore;
 use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 
 mod epoch_state;
-mod store;
+pub mod store;
 
 /// A `Simulacrum` of Sui.
 ///

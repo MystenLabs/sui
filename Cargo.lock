@@ -9481,6 +9481,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "eyre",
  "fastcrypto",
  "move-binary-format",
  "move-bytecode-utils",
@@ -9489,6 +9490,7 @@ dependencies = [
  "once_cell",
  "prometheus",
  "rand 0.8.5",
+ "rocksdb",
  "serde",
  "shared-crypto",
  "sui-config",
@@ -9501,7 +9503,10 @@ dependencies = [
  "sui-swarm-config",
  "sui-transaction-checks",
  "sui-types",
+ "tempfile",
  "tracing",
+ "typed-store",
+ "typed-store-derive",
  "workspace-hack",
 ]
 
