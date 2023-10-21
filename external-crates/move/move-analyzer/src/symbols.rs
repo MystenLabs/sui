@@ -46,6 +46,8 @@
 //! definitions, the symbolicator builds a scope stack, entering encountered definitions and
 //! matching uses to a definition in the innermost scope.
 
+#![allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+
 use crate::{
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
@@ -167,6 +169,7 @@ struct StructDef {
     field_defs: Vec<FieldDef>,
 }
 
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
 #[derive(Derivative, Debug, Clone, PartialEq, Eq)]
 #[derivative(PartialOrd, Ord)]
 pub struct FunctionDef {
