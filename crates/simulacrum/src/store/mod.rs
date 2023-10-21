@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use sui_config::genesis;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -18,64 +19,66 @@ use sui_types::{
 pub mod in_mem_store;
 pub mod persisted_store;
 
-#[async_trait::async_trait]
 pub trait SimulatorStore:
     sui_types::storage::BackingPackageStore
     + sui_types::storage::ObjectStore
     + sui_types::storage::ReceivedMarkerQuery
 {
-    async fn get_checkpoint_by_sequence_number(
+    fn init_with_genesis(&mut self, genesis: &genesis::Genesis) {
+        self.insert_checkpoint(genesis.checkpoint());
+        self.insert_checkpoint_contents(genesis.checkpoint_contents().clone());
+        self.insert_committee(genesis.committee().unwrap());
+        self.insert_transaction(VerifiedTransaction::new_unchecked(
+            genesis.transaction().clone(),
+        ));
+        self.insert_transaction_effects(genesis.effects().clone());
+        self.insert_events(genesis.events().clone());
+
+        self.insert_to_live_objects(genesis.objects());
+    }
+
+    fn insert_to_live_objects(&mut self, objects: &[Object]);
+
+    fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<&VerifiedCheckpoint>;
+    ) -> Option<VerifiedCheckpoint>;
 
-    async fn get_checkpoint_by_digest(
-        &self,
-        digest: &CheckpointDigest,
-    ) -> Option<&VerifiedCheckpoint>;
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint>;
 
-    async fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint>;
+    fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint>;
 
-    async fn get_checkpoint_contents(
+    fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<&CheckpointContents>;
+    ) -> Option<CheckpointContents>;
 
-    async fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee>;
+    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee>;
 
-    async fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction>;
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction>;
 
-    async fn get_transaction_effects(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Option<&TransactionEffects>;
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects>;
 
-    async fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents>;
+    fn get_transaction_events(&self, digest: &TransactionEventsDigest)
+        -> Option<TransactionEvents>;
 
-    async fn get_object(&self, id: &ObjectID) -> Option<&Object>;
+    fn get_object(&self, id: &ObjectID) -> Option<Object>;
 
-    async fn get_object_at_version(
-        &self,
-        id: &ObjectID,
-        version: SequenceNumber,
-    ) -> Option<&Object>;
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object>;
 
-    async fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState;
+    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState;
 
-    async fn get_clock(&self) -> sui_types::clock::Clock;
+    fn get_clock(&self) -> sui_types::clock::Clock;
 
-    async fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_>;
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_>;
 
-    async fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint);
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint);
 
-    async fn insert_checkpoint_contents(&mut self, contents: CheckpointContents);
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents);
 
-    async fn insert_committee(&mut self, committee: Committee);
+    fn insert_committee(&mut self, committee: Committee);
 
-    async fn insert_executed_transaction(
+    fn insert_executed_transaction(
         &mut self,
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
@@ -83,13 +86,13 @@ pub trait SimulatorStore:
         written_objects: BTreeMap<ObjectID, Object>,
     );
 
-    async fn insert_transaction(&mut self, transaction: VerifiedTransaction);
+    fn insert_transaction(&mut self, transaction: VerifiedTransaction);
 
-    async fn insert_transaction_effects(&mut self, effects: TransactionEffects);
+    fn insert_transaction_effects(&mut self, effects: TransactionEffects);
 
-    async fn insert_events(&mut self, events: TransactionEvents);
+    fn insert_events(&mut self, events: TransactionEvents);
 
-    async fn update_objects(
+    fn update_objects(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,

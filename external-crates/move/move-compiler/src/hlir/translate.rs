@@ -756,7 +756,7 @@ fn assign(
             context
                 .used_fields
                 .entry(s.value())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
             let bs = base_types(context, tbs);
@@ -776,7 +776,7 @@ fn assign(
             context
                 .used_fields
                 .entry(s.value())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
             let tmp = context.new_temp(loc, rvalue_ty.clone());
@@ -1362,7 +1362,7 @@ fn exp_impl(
             context
                 .used_fields
                 .entry(s.value())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
             let bs = base_types(context, tbs);
@@ -1447,7 +1447,7 @@ fn exp_impl(
                 context
                     .used_fields
                     .entry(struct_name.value())
-                    .or_insert_with(BTreeSet::new)
+                    .or_default()
                     .insert(f.value());
             }
             HE::Borrow(mut_, e, f)

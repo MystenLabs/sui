@@ -462,7 +462,7 @@ impl Function {
                     .map(|bytecode| Bytecode::new(m, bytecode))
                     .collect()
             })
-            .unwrap_or_else(Vec::new);
+            .unwrap_or_default();
 
         let f = Function {
             visibility: def.visibility,

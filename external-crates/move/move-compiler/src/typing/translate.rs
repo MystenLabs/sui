@@ -1287,7 +1287,7 @@ fn exp_inner(context: &mut Context, sp!(eloc, ne_): N::Exp) -> T::Exp {
                 context
                     .used_module_members
                     .entry(mident.value)
-                    .or_insert_with(BTreeSet::new)
+                    .or_default()
                     .insert(c.value());
             }
             (ty, TE::Constant(m, c))
@@ -2321,7 +2321,7 @@ fn module_call_impl(
     context
         .used_module_members
         .entry(m.value)
-        .or_insert_with(BTreeSet::new)
+        .or_default()
         .insert(f.value());
     call
 }
@@ -2554,7 +2554,7 @@ fn process_attributes(context: &mut Context, all_attributes: &Attributes) {
                     context
                         .used_module_members
                         .entry(mident.value)
-                        .or_insert_with(BTreeSet::new)
+                        .or_default()
                         .insert(name.value);
                 }
             }

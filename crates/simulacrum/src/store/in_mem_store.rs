@@ -51,26 +51,7 @@ impl InMemoryStore {
     pub fn new(genesis: &genesis::Genesis) -> Self {
         let mut store = Self::default();
 
-        store.insert_checkpoint(genesis.checkpoint());
-        store.insert_checkpoint_contents(genesis.checkpoint_contents().clone());
-        store.insert_committee(genesis.committee().unwrap());
-        store.insert_transaction(VerifiedTransaction::new_unchecked(
-            genesis.transaction().clone(),
-        ));
-        store.insert_transaction_effects(genesis.effects().clone());
-        store.insert_events(genesis.events().clone());
-
-        for object in genesis.objects() {
-            let object_id = object.id();
-            let version = object.version();
-            store.live_objects.insert(object_id, version);
-            store
-                .objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object.clone());
-        }
-
+        store.init_with_genesis(genesis);
         store
     }
 
@@ -412,92 +393,94 @@ impl KeyStore {
     }
 }
 
-#[async_trait::async_trait]
 impl SimulatorStore for InMemoryStore {
-    async fn get_checkpoint_by_sequence_number(
+    fn insert_to_live_objects(&mut self, objects: &[Object]) {
+        for object in objects {
+            let object_id = object.id();
+            let version = object.version();
+            self.live_objects.insert(object_id, version);
+            self.objects
+                .entry(object_id)
+                .or_default()
+                .insert(version, object.clone());
+        }
+    }
+
+    fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<&VerifiedCheckpoint> {
+    ) -> Option<VerifiedCheckpoint> {
         self.get_checkpoint_by_sequence_number(sequence_number)
+            .cloned()
     }
 
-    async fn get_checkpoint_by_digest(
-        &self,
-        digest: &CheckpointDigest,
-    ) -> Option<&VerifiedCheckpoint> {
-        self.get_checkpoint_by_digest(digest)
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        self.get_checkpoint_by_digest(digest).cloned()
     }
 
-    async fn get_highest_checkpint(&self) -> Option<&VerifiedCheckpoint> {
-        self.get_highest_checkpint()
+    fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
+        self.get_highest_checkpint().cloned()
     }
 
-    async fn get_checkpoint_contents(
+    fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<&CheckpointContents> {
-        self.get_checkpoint_contents(digest)
+    ) -> Option<CheckpointContents> {
+        self.get_checkpoint_contents(digest).cloned()
     }
 
-    async fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<&Committee> {
-        self.get_committee_by_epoch(epoch)
+    fn get_committee_by_epoch(&self, epoch: EpochId) -> Option<Committee> {
+        self.get_committee_by_epoch(epoch).cloned()
     }
 
-    async fn get_transaction(&self, digest: &TransactionDigest) -> Option<&VerifiedTransaction> {
-        self.get_transaction(digest)
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
+        self.get_transaction(digest).cloned()
     }
 
-    async fn get_transaction_effects(
-        &self,
-        digest: &TransactionDigest,
-    ) -> Option<&TransactionEffects> {
-        self.get_transaction_effects(digest)
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
+        self.get_transaction_effects(digest).cloned()
     }
 
-    async fn get_transaction_events(
+    fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents> {
-        self.get_transaction_events(digest)
+    ) -> Option<TransactionEvents> {
+        self.get_transaction_events(digest).cloned()
     }
 
-    async fn get_object(&self, id: &ObjectID) -> Option<&Object> {
-        self.get_object(id)
+    fn get_object(&self, id: &ObjectID) -> Option<Object> {
+        self.get_object(id).cloned()
     }
 
-    async fn get_object_at_version(
-        &self,
-        id: &ObjectID,
-        version: SequenceNumber,
-    ) -> Option<&Object> {
-        self.get_object_at_version(id, version)
+    fn get_object_at_version(&self, id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        self.get_object_at_version(id, version).cloned()
     }
 
-    async fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
+    fn get_system_state(&self) -> sui_types::sui_system_state::SuiSystemState {
         self.get_system_state()
     }
 
-    async fn get_clock(&self) -> sui_types::clock::Clock {
+    fn get_clock(&self) -> sui_types::clock::Clock {
         self.get_clock()
     }
 
-    async fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = &Object> + '_> {
-        Box::new(self.owned_objects(owner))
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
+        Box::new(self.owned_objects(owner).cloned())
     }
 
-    async fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
         self.insert_checkpoint(checkpoint)
     }
 
-    async fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
         self.insert_checkpoint_contents(contents)
     }
 
-    async fn insert_committee(&mut self, committee: Committee) {
+    fn insert_committee(&mut self, committee: Committee) {
         self.insert_committee(committee)
     }
 
-    async fn insert_executed_transaction(
+    fn insert_executed_transaction(
         &mut self,
         transaction: VerifiedTransaction,
         effects: TransactionEffects,
@@ -507,19 +490,19 @@ impl SimulatorStore for InMemoryStore {
         self.insert_executed_transaction(transaction, effects, events, written_objects)
     }
 
-    async fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+    fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
         self.insert_transaction(transaction)
     }
 
-    async fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
+    fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
         self.insert_transaction_effects(effects)
     }
 
-    async fn insert_events(&mut self, events: TransactionEvents) {
+    fn insert_events(&mut self, events: TransactionEvents) {
         self.insert_events(events)
     }
 
-    async fn update_objects(
+    fn update_objects(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
@@ -527,4 +510,3 @@ impl SimulatorStore for InMemoryStore {
         self.update_objects(written_objects, deleted_objects)
     }
 }
-

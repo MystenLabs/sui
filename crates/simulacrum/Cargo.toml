@@ -8,7 +8,6 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 bcs.workspace = true
 eyre.workspace = true
 fastcrypto.workspace = true

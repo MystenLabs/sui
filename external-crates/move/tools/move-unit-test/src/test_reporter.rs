@@ -385,21 +385,21 @@ impl TestStatistics {
     pub fn test_failure(&mut self, test_failure: TestFailure, test_plan: &ModuleTestPlan) {
         self.failed
             .entry(test_plan.module_id.clone())
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(test_failure);
     }
 
     pub fn test_success(&mut self, test_info: TestRunInfo, test_plan: &ModuleTestPlan) {
         self.passed
             .entry(test_plan.module_id.clone())
-            .or_insert_with(BTreeSet::new)
+            .or_default()
             .insert(test_info);
     }
 
     pub fn test_output(&mut self, test_name: TestName, test_plan: &ModuleTestPlan, output: String) {
         self.output
             .entry(test_plan.module_id.clone())
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(test_name, output);
     }
 
