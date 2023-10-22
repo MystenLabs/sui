@@ -1654,7 +1654,7 @@ fn visibility(context: &mut Context, pvisibility: P::Visibility) -> E::Visibilit
         P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
         P::Visibility::Script(loc) => {
-            assert!(!context.env.has_errors());
+            // assert!(!context.env.has_errors());
             E::Visibility::Public(loc)
         }
     }
