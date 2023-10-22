@@ -4,8 +4,6 @@
 /// Generic Move and native functions for group operations.
 module sui::group_ops {
 
-    // TODO: add .spec.move file
-
     use std::vector;
 
     friend sui::bls12381;
