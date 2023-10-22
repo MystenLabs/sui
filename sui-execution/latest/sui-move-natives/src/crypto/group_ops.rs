@@ -56,8 +56,8 @@ fn binary_op_diff<
     const S2: usize,
 >(
     op: impl Fn(G1, G2) -> FastCryptoResult<G2>,
-    a1: &Vec<u8>,
-    a2: &Vec<u8>,
+    a1: &[u8],
+    a2: &[u8],
 ) -> FastCryptoResult<Vec<u8>> {
     let e1 = parse::<G1, S1>(a1)?;
     let e2 = parse::<G2, S2>(a2)?;
@@ -68,8 +68,8 @@ fn binary_op_diff<
 // Binary operations with the same type.
 fn binary_op<G: ToFromByteArray<S>, const S: usize>(
     op: impl Fn(G, G) -> FastCryptoResult<G>,
-    a1: &Vec<u8>,
-    a2: &Vec<u8>,
+    a1: &[u8],
+    a2: &[u8],
 ) -> FastCryptoResult<Vec<u8>> {
     binary_op_diff::<G, G, S, S>(op, a1, a2)
 }
@@ -387,11 +387,11 @@ where
     }
     let points = points
         .chunks(S1)
-        .map(|bytes| parse::<G, { S1 }>(bytes))
+        .map(parse::<G, { S1 }>)
         .collect::<Result<Vec<_>, _>>();
     let scalars = scalars
         .chunks(S2)
-        .map(|bytes| parse::<G::ScalarType, { S2 }>(bytes))
+        .map(parse::<G::ScalarType, { S2 }>)
         .collect::<Result<Vec<_>, _>>();
 
     if let (Ok(scalars), Ok(points)) = (scalars, points) {
