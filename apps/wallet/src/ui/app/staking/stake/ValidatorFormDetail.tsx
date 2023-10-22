@@ -6,7 +6,12 @@ import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
-import { calculateStakeShare, formatPercentageDisplay, useGetValidatorsApy } from '@mysten/core';
+import {
+	calculateStakeShare,
+	formatPercentageDisplay,
+	useGetDelegatedStake,
+	useGetValidatorsApy,
+} from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -15,7 +20,6 @@ import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getStakeSuiBySuiId } from '../getStakeSuiBySuiId';
 import { getTokenStakeSuiForValidator } from '../getTokenStakeSuiForValidator';
 import { StakeAmount } from '../home/StakeAmount';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 
 type ValidatorFormDetailProps = {
@@ -34,7 +38,14 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		isError: errorValidators,
 	} = useSuiClientQuery('getLatestSuiSystemState');
 
-	const { data: stakeData, isLoading, isError, error } = useGetDelegatedStake(accountAddress || '');
+	const {
+		data: stakeData,
+		isLoading,
+		isError,
+		error,
+	} = useGetDelegatedStake(accountAddress || '', {
+		autoRefetch: true,
+	});
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();
 

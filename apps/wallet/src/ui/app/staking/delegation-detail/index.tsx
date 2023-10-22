@@ -3,11 +3,11 @@
 
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import Overlay from '_components/overlay';
+import { useGetDelegatedStake } from '@mysten/core';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { useActiveAddress } from '../../hooks/useActiveAddress';
 import { getDelegationDataByStakeId } from '../getDelegationByStakeId';
-import { useGetDelegatedStake } from '../useGetDelegatedStake';
 import { ValidatorLogo } from '../validators/ValidatorLogo';
 import { DelegationDetailCard } from './DelegationDetailCard';
 
