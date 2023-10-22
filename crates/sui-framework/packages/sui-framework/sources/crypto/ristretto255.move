@@ -70,8 +70,6 @@ module sui::ristretto255 {
         scalar_div(e, &scalar_one())
     }
 
-    // TODO: msm? is it useful?
-
     ////////////////////////////////
     ////// G group operations //////
 

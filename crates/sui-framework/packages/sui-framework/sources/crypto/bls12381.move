@@ -24,7 +24,7 @@ module sui::bls12381 {
 
 
     /////////////////////////////////////////////
-    ////// Elliptic curve point operations //////
+    ////// Elliptic curve operations //////
 
     struct Scalar {}
     struct G1 {}
@@ -100,8 +100,6 @@ module sui::bls12381 {
     public fun scalar_inv(e: &Element<Scalar>): Element<Scalar> {
         scalar_div(e, &scalar_one())
     }
-
-    // TODO: msm? is it useful?
 
     /////////////////////////////////
     ////// G1 group operations //////

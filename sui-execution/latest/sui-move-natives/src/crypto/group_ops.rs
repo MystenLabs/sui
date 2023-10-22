@@ -1,16 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
     bls12381 as bls, ristretto255 as rist, GroupElement, HashToGroupElement, MultiScalarMul,
     Pairing,
 };
 use fastcrypto::serde_helpers::ToFromByteArray;
-use fastcrypto::{hmac, traits::ToFromBytes};
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
+use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -20,21 +17,9 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
-pub const INVALID_INPUT: u64 = 0;
+pub const INVALID_INPUT_ERROR: u64 = 0;
 
-//
-// const HMAC_SHA3_256_BLOCK_SIZE: usize = 136;
-//
-// #[derive(Clone)]
-// pub struct HmacHmacSha3256CostParams {
-//     /// Base cost for invoking the `hmac_sha3_256` function
-//     pub hmac_hmac_sha3_256_cost_base: InternalGas,
-//     ///  Cost per byte of `msg` and `key`
-//     pub hmac_hmac_sha3_256_input_cost_per_byte: InternalGas,
-//     ///  Cost per block of `msg` and `key`, with block size = 136
-//     pub hmac_hmac_sha3_256_input_cost_per_block: InternalGas,
-// }
-
+// Next should be aligned with the relevant Move modules.
 #[repr(u8)]
 enum Groups {
     Ristretto255Scalar = 0,
@@ -63,6 +48,7 @@ fn parse<G: ToFromByteArray<S>, const S: usize>(e: &[u8]) -> FastCryptoResult<G>
     G::from_byte_array(e.try_into().map_err(|_| FastCryptoError::InvalidInput)?)
 }
 
+// Binary operations with 2 different types.
 fn binary_op_diff<
     G1: ToFromByteArray<S1>,
     G2: ToFromByteArray<S2>,
@@ -79,6 +65,7 @@ fn binary_op_diff<
     Ok(result.to_byte_array().to_vec())
 }
 
+// Binary operations with the same type.
 fn binary_op<G: ToFromByteArray<S>, const S: usize>(
     op: impl Fn(G, G) -> FastCryptoResult<G>,
     a1: &Vec<u8>,
@@ -127,7 +114,6 @@ pub fn internal_validate(
         _ => false,
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
@@ -173,13 +159,12 @@ pub fn internal_add(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -223,13 +208,12 @@ pub fn internal_sub(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -284,13 +268,12 @@ pub fn internal_mul(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -345,13 +328,12 @@ pub fn internal_div(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong, inputs are invalid, or a=0.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -382,13 +364,12 @@ pub fn internal_hash_to(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -400,7 +381,8 @@ where
     G: GroupElement + ToFromByteArray<S1> + MultiScalarMul,
     G::ScalarType: ToFromByteArray<S2>,
 {
-    if points.len() % S1 != 0 || scalars.len() % S2 != 0 {
+    if points.len() % S1 != 0 || scalars.len() % S2 != 0 || points.len() / S1 != scalars.len() / S2
+    {
         return Err(FastCryptoError::InvalidInput);
     }
     let points = points
@@ -413,9 +395,6 @@ where
         .collect::<Result<Vec<_>, _>>();
 
     if let (Ok(scalars), Ok(points)) = (scalars, points) {
-        if scalars.len() != points.len() {
-            return Err(FastCryptoError::InvalidInput);
-        }
         let r = G::multi_scalar_mul(&scalars, &points)
             .expect("Already checked the lengths of the vectors");
         Ok(r.to_byte_array().to_vec())
@@ -459,14 +438,12 @@ pub fn internal_multi_scalar_mul(
         >(scalars.as_ref(), elements.as_ref()),
         _ => Err(FastCryptoError::InvalidInput),
     };
-
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }
 
@@ -497,12 +474,11 @@ pub fn internal_pairing(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    // TODO: charge fees
     let cost = context.gas_used();
 
     match result {
         Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
     }
 }

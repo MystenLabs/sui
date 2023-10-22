@@ -15,6 +15,7 @@ module crypto::ec_ops {
     use std::option::Option;
     use std::option;
     use sui::ristretto255;
+    #[test_only]
     use std::hash::sha2_256;
     #[test_only]
     use sui::test_utils::assert_eq;
@@ -26,7 +27,7 @@ module crypto::ec_ops {
     ////////////////////////////////////////
     ////// BLS signature verification //////
 
-    fun bls_min_sig_verify(msg: &vector<u8>, pk: &Element<bls12381::G2>, sig: &Element<bls12381::G1>): bool {
+    public fun bls_min_sig_verify(msg: &vector<u8>, pk: &Element<bls12381::G2>, sig: &Element<bls12381::G1>): bool {
         let hashed_msg = bls12381::hash_to_g1(msg);
         let lhs = bls12381::pairing(&hashed_msg, pk);
         let rhs = bls12381::pairing(sig, &bls12381::g2_generator());
@@ -48,12 +49,13 @@ module crypto::ec_ops {
     ////////////////////////////////////////////////////////////////
     ////// Proof of plaintext equality of ElGamal encryptions //////
 
-    // An encryption of m under pk is (r*G, r*pk + m) for random r.
+    // An encryption of group element m under pk is (r*G, r*pk + m) for random r.
     struct ElGamalEncryption has drop, store {
         ephemeral: Element<ristretto255::G>,
         ciphertext: Element<ristretto255::G>,
     }
 
+    // The following is insecure since the secret key is small, but in practice it should be a random scalar.
     #[test_only]
     fun insecure_elgamal_key_gen(sk: u64): (Element<ristretto255::Scalar>, Element<ristretto255::G>) {
         let sk = ristretto255::scalar_from_u64(sk);
@@ -61,6 +63,7 @@ module crypto::ec_ops {
         (sk, pk)
     }
 
+    // The following is insecure since the nonce is small, but in practice it should be a random scalar.
     #[test_only]
     fun insecure_elgamal_encrypt(
         pk: &Element<ristretto255::G>,
@@ -74,7 +77,7 @@ module crypto::ec_ops {
         ElGamalEncryption { ephemeral, ciphertext }
     }
 
-    fun elgamal_decrypt(sk: &Element<ristretto255::Scalar>, enc: &ElGamalEncryption): Element<ristretto255::G> {
+    public fun elgamal_decrypt(sk: &Element<ristretto255::Scalar>, enc: &ElGamalEncryption): Element<ristretto255::G> {
         let pk_r = ristretto255::g_mul(sk, &enc.ephemeral);
         ristretto255::g_sub(&enc.ciphertext, &pk_r)
     }
@@ -89,7 +92,7 @@ module crypto::ec_ops {
         z2: Element<ristretto255::Scalar>,
     }
 
-    fun fiat_shamir_challenge(
+    public fun fiat_shamir_challenge(
         pk1: &Element<ristretto255::G>,
         pk2: &Element<ristretto255::G>,
         enc1: &ElGamalEncryption,
@@ -115,6 +118,7 @@ module crypto::ec_ops {
         ristretto255::scalar_from_bytes(&hash)
     }
 
+    // The following is insecure since the nonces are small, but in practice they should be random scalars.
     #[test_only]
     fun insecure_equility_prove(
         pk1: &Element<ristretto255::G>,
@@ -122,11 +126,11 @@ module crypto::ec_ops {
         enc1: &ElGamalEncryption,
         enc2: &ElGamalEncryption,
         sk1: &Element<ristretto255::Scalar>,
-        r2:  u64,
-        r: u64,
+        r1: u64,
+        r2: u64,
     ): EqualityProof {
-        let b1 = ristretto255::scalar_from_u64(r);
-        let b2 = ristretto255::scalar_from_u64(r+123);
+        let b1 = ristretto255::scalar_from_u64(r1);
+        let b2 = ristretto255::scalar_from_u64(r1+123);
         let r2 = ristretto255::scalar_from_u64(r2);
 
         // a1 = b1*G (for proving knowledge of sk1)
@@ -148,7 +152,7 @@ module crypto::ec_ops {
         EqualityProof { a1, a2, a3, z1, z2 }
     }
 
-    fun equility_verify(
+    public fun equility_verify(
         pk1: &Element<ristretto255::G>,
         pk2: &Element<ristretto255::G>,
         enc1: &ElGamalEncryption,
@@ -192,7 +196,7 @@ module crypto::ec_ops {
         // We have two parties.
         let (sk1, pk1) = insecure_elgamal_key_gen(2110);
         let (_, pk2) = insecure_elgamal_key_gen(1021);
-        // Now, a sender wishes to send an encrypted message to pk1.
+        // A sender wishes to send an encrypted message to pk1.
         let m = ristretto255::g_mul(&ristretto255::scalar_from_u64(5555), &ristretto255::g_generator());
         let enc1 = insecure_elgamal_encrypt(&pk1, 1234, &m);
         // The first party decrypts the message.
@@ -202,13 +206,13 @@ module crypto::ec_ops {
         let r2 = 4321;
         let enc2 = insecure_elgamal_encrypt(&pk2, r2, &m);
         // And to prove equality of the two encrypted messages.
-        let proof = insecure_equility_prove(&pk1, &pk2, &enc1, &enc2, &sk1, r2, 8888);
+        let proof = insecure_equility_prove(&pk1, &pk2, &enc1, &enc2, &sk1,  8888, r2);
         // Anyone can verify it.
         assert!(equility_verify(&pk1, &pk2, &enc1, &enc2, &proof), 0);
 
         // Proving with an invalid witness should result in a failed verification.
         let bad_r2 = 1111;
-        let proof = insecure_equility_prove(&pk1, &pk2, &enc1, &enc2, &sk1, bad_r2, 8888);
+        let proof = insecure_equility_prove(&pk1, &pk2, &enc1, &enc2, &sk1, 8888, bad_r2);
         assert!(!equility_verify(&pk1, &pk2, &enc1, &enc2, &proof), 0);
     }
 
@@ -256,7 +260,7 @@ module crypto::ec_ops {
     }
 
     // Decrypt an IBE encryption using a 'target_key'.
-    fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<bls12381::G1>): Option<vector<u8>> {
+    public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<bls12381::G1>): Option<vector<u8>> {
         // sigma_prime = V xor H(e(H(target), pk^r))
         let e = bls12381::pairing(target_key, &enc.u);
         let hash = blake2b256(group_ops::bytes(&e));
@@ -289,15 +293,12 @@ module crypto::ec_ops {
         }
     }
 
-
-    // Broken since the current chain does not follow the RFC - https://github.com/drand/kyber-bls12381/issues/22
-    // TODO: Update once the new chain is deployed.
     #[test]
     fun test_ibe_decrypt_drand() {
-        // Retrieved using 'curl https://api.drand.sh/dbd506d6ef76e5f386f41c651dcb808c5bcbd75471cc4eafa3f4df7ad4e4c493/info'
-        let round = 2594767;
-        let pk = x"a0b862a7527fee3a731bcb59280ab6abd62d5c0b6ea03dc4ddf6612fdfc9d01f01c31542541771903475eb1ec6615f8d0df0b8b6dce385811d6dcf8cbefb8759e5e616a3dfd054c928940766d9a5b9db91e3b697e5d70a975181e007f87fca5e";
-        let pk = bls12381::g2_from_bytes(&pk);
+        // Retrieved using 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info'
+        let round = 1234;
+        let pk_bytes = x"83cf0f2896adee7eb8b5f01fcad3912212c437e0073e911fb90022d3e760183c8c4b450b6a0a6c3ac6a5776a2d1064510d1fec758c921cc22b0e17e63aaf4bcb5ed66304de9cf809bd274ca73bab4af5a6e9c76a4bc09e76eae8991ef5ece45a";
+        let pk = bls12381::g2_from_bytes(&pk_bytes);
         let msg = x"0101010101";
 
         // Derive the 'target' for the specific round (see drand_lib.move).
@@ -312,18 +313,18 @@ module crypto::ec_ops {
         };
         let target = sha2_256(round_bytes);
 
-        // Retreived using 'curl https://api.drand.sh/dbd506d6ef76e5f386f41c651dcb808c5bcbd75471cc4eafa3f4df7ad4e4c493/public/2594767'.
-        let sig = x"a8deec780e592680581d1d96ca5a4c743a37b1b961684cd357b80f7401be5cfb38b9f5ed1dbb6b49684caff0360453f2";
-        let target_key = bls12381::g1_from_bytes(&sig);
-        // assert!(bls_min_sig_verify(&target, &pk, &sig), 0);
+        // Retreived with 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/1234'.
+        let sig_bytes = x"a81d4aad15461a0a02b43da857be1d782a2232a3c7bb370a2763e95ce1f2628460b24de2cee7453cd12e43c197ea2f23";
+        let target_key = bls12381::g1_from_bytes(&sig_bytes);
+        assert!(bls12381::bls12381_min_sig_verify(&sig_bytes, &pk_bytes, &target), 0);
 
         let enc = insecure_ibe_encrypt(&pk, &target, &msg, &x"1234567890");
         let decrypted_msg = ibe_decrypt(enc, &target_key);
         assert!(option::extract(&mut decrypted_msg) == msg, 0);
     }
 
-    /////////////////////////////////////////////////////////////////////////////////
-    ////// Helper functions for converting 32 byte vectors to BLS12-381 order  //////
+    ///////////////////////////////////////////////////////////////////////////////////
+    ////// Helper functions for converting 32 byte vectors to BLS12-381's order  //////
 
     // Returns x-ORDER if x >= ORDER, otherwise none.
     fun try_substract(x: &vector<u8>): Option<vector<u8>> {
@@ -387,6 +388,6 @@ module crypto::ec_ops {
         assert!(modulo == expected, 0);
     }
 
-    // TODO: KZG commitment verification
-    // TODO: Groth16 proof verification
+    // TODO: KZG commitment verification?
+    // TODO: Groth16 proof verification?
 }

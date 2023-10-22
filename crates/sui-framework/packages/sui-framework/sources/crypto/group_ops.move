@@ -4,6 +4,8 @@
 /// Generic Move and native functions for group operations.
 module sui::group_ops {
 
+    // TODO: add .spec.move file
+
     use std::vector;
 
     friend sui::bls12381;
@@ -66,7 +68,7 @@ module sui::group_ops {
     public(friend) fun multi_scalar_multiplication<S, G>(type: u8, scalars: &vector<Element<S>>, elements: &vector<Element<G>>): Element<G> {
         assert!(vector::length(scalars) == vector::length(elements), EInvalidInput);
         assert!(vector::length(scalars) > 0, EInvalidInput);
-        assert!(vector::length(elements) <= 32, EInvalidInput); // TODO: other limit?
+        assert!(vector::length(elements) <= 32, EInvalidInput); // TODO: other limit? can we update this later?
 
         let scalars_bytes = vector::empty<u8>();
         let elements_bytes = vector::empty<u8>();
@@ -101,13 +103,11 @@ module sui::group_ops {
     native fun internal_mul(type: u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
     native fun internal_div(type: u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
 
-    // TODO: do we want to support any DST for BLS12-381?
     native fun internal_hash_to(type: u8, m: &vector<u8>): vector<u8>;
     native fun internal_multi_scalar_mul(type: u8, scalars: &vector<u8>, elements: &vector<u8>): vector<u8>;
 
     // 'type' represents the type of e1, and the rest are determined automatically from e1.
     native fun internal_pairing(type:u8, e1: &vector<u8>, e2: &vector<u8>): vector<u8>;
-    // TODO: multi_pairing like msm? or vectorized pairing/add/mul/etc?
 
     // Helper function for encoding a given u64 number as bytes in a given buffer.
     public(friend) fun set_as_prefix(x: u64, big_endian: bool, buffer: &mut vector<u8>) {

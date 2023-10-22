@@ -127,7 +127,7 @@ module sui::ristretto_tests {
     }
 
     #[test]
-    fun test_valid_gt_from_bytes() {
+    fun test_valid_g_from_bytes() {
         let g = ristretto255::g_generator();
         let g_from_bytes = ristretto255::g_from_bytes(group_ops::bytes(&g));
         assert!(group_ops::equal(&g, &g_from_bytes), 0);
@@ -179,6 +179,6 @@ module sui::ristretto_tests {
         let four_g = ristretto255::g_mul(&ristretto255::scalar_from_u64(4), &ristretto255::g_generator());
         assert!(rfc_four_g == *group_ops::bytes(&four_g), 0);
 
-        // TODO: more test vectors
+        // TODO: test vectors?
     }
 }
