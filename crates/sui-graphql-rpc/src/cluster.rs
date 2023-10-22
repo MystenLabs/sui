@@ -174,8 +174,6 @@ pub async fn start_test_indexer(
 
     let registry = prometheus::Registry::default();
 
-    init_metrics(&registry);
-
     let indexer_metrics = IndexerMetrics::new(&registry);
 
     let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
