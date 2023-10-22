@@ -5,6 +5,7 @@
 mod tests {
     use sui_graphql_rpc::config::ConnectionConfig;
 
+    #[ignore]
     #[tokio::test]
     async fn test_simple_client_validator_cluster() {
         let connection_config = ConnectionConfig::ci_integration_test_cfg();

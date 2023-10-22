@@ -5,7 +5,6 @@ use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::ServiceConfig;
 use crate::server::simple_server::start_example_server;
-use mysten_metrics::init_metrics;
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
 use std::env;
