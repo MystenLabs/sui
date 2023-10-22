@@ -9,6 +9,9 @@ type UseGetDelegatedStakeOptions = {
 	autoRefetch?: boolean;
 };
 
+const STALE_TIME = 10_000;
+const REFETCH_INTERVAL = 30_000;
+
 export function useGetDelegatedStake(
 	address: string,
 	options?: UseGetDelegatedStakeOptions,
@@ -18,13 +21,13 @@ export function useGetDelegatedStake(
 
 	// Generalized query options
 	const defaultQueryOptions = {
-		staleTime: 10 * 1000,
-		refetchInterval: 30 * 1000,
+		staleTime: STALE_TIME,
+		refetchInterval: REFETCH_INTERVAL,
 	};
 
 	const refetchQueryOptions = {
-		staleTime: Infinity, // not stale until data changes at the query key
-		refetchInterval: false, // no automatic refetching
+		staleTime: Infinity,
+		refetchInterval: false,
 	} as const;
 
 	return useQuery({
