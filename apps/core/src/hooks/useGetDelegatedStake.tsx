@@ -28,7 +28,7 @@ export function useGetDelegatedStake(
 	} as const;
 
 	return useQuery({
-		queryKey: ['validator', address],
+		queryKey: ['delegated-stakes', address],
 		queryFn: () => client.getStakes({ owner: address }),
 		...(autoRefetch ? refetchQueryOptions : defaultQueryOptions),
 	});

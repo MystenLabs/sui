@@ -223,7 +223,7 @@ function StakingCard() {
 						queryKey: ['system', 'state'],
 					}),
 					queryClient.invalidateQueries({
-						queryKey: ['validator'],
+						queryKey: ['delegated-stakes'],
 					}),
 				]);
 				resetForm();
