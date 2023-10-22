@@ -54,7 +54,7 @@ export function PageHeader({
 						</div>
 					</div>
 				)}
-				<div className="flex w-full flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+				<div className="flex w-full flex-col items-start justify-between gap-4 md:flex-row md:items-center">
 					<div>
 						<div className="mb-1 flex items-center gap-2">
 							{Icon && <Icon className="text-steel-dark" />}
