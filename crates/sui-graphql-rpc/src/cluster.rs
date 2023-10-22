@@ -5,6 +5,7 @@ use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
 use crate::config::ServiceConfig;
 use crate::server::simple_server::start_example_server;
+use mysten_metrics::init_metrics;
 use rand::rngs::StdRng;
 use simulacrum::Simulacrum;
 use std::env;
@@ -52,12 +53,13 @@ pub async fn start_cluster(
     // Starts validator+fullnode
     let val_fn = start_validator_with_fullnode(internal_data_source_rpc_port).await;
 
-    // Starts indexer and waits 20s for it to catch up
+    // Starts indexer
     let (pg_store, pg_handle) =
         start_test_indexer(Some(db_url), val_fn.rpc_url().to_string()).await;
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -83,19 +85,21 @@ pub async fn serve_simulator(
 ) -> SimulatorCluster {
     let db_url = graphql_connection_config.db_url.clone();
 
-    let sim_server_url: SocketAddr = format!("http://127.0.0.1:{}/", internal_data_source_rpc_port)
+    let sim_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
         .parse()
         .unwrap();
 
     let simulator_server_handle = tokio::spawn(async move {
-        sui_rest_api::start_service(sim_server_url, simulator, Some("rest".to_owned())).await;
+        sui_rest_api::start_service(sim_server_url, simulator, Some("/rest".to_owned())).await;
     });
 
-    // Starts indexer and waits 20s for it to catch up
-    let (pg_store, pg_handle) = start_test_indexer(Some(db_url), sim_server_url.to_string()).await;
+    // Starts indexer
+    let (pg_store, pg_handle) =
+        start_test_indexer(Some(db_url), format!("http://{}", sim_server_url)).await;
 
     // Starts graphql server
     let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
     let server_url = format!(
         "http://{}:{}/",
@@ -169,6 +173,9 @@ pub async fn start_test_indexer(
     }
 
     let registry = prometheus::Registry::default();
+
+    init_metrics(&registry);
+
     let indexer_metrics = IndexerMetrics::new(&registry);
 
     let store = PgIndexerStoreV2::new(blocking_pool, indexer_metrics.clone());
@@ -176,6 +183,44 @@ pub async fn start_test_indexer(
     let handle = tokio::spawn(async move {
         IndexerV2::start_writer(&config, store_clone, indexer_metrics).await
     });
-    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
     (store, handle)
 }
+
+// #[tokio::test]
+// async fn test_simulator_cluster() {
+//     use rand::SeedableRng;
+//     use sui_types::digests::ChainIdentifier;
+//     let rng = StdRng::from_seed([12; 32]);
+//     let mut sim = Simulacrum::new_with_rng(rng);
+
+//     sim.create_checkpoint();
+//     sim.create_checkpoint();
+
+//     let genesis_checkpoint_digest1 = sim
+//         .store()
+//         .get_checkpoint_by_sequence_number(0)
+//         .unwrap()
+//         .digest();
+
+//     let chain_id_actual = format!("{}", ChainIdentifier::from(*genesis_checkpoint_digest1));
+//     let exp = format!(
+//         "{{\"data\":{{\"chainIdentifier\":\"{}\"}}}}",
+//         chain_id_actual
+//     );
+//     let mut connection_config = ConnectionConfig::ci_integration_test_cfg();
+//     connection_config.db_url = "postgres://0.0.0.0:5432/postgres".to_string();
+//     let cluster = serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+
+//     let query = r#"
+//     query {
+//         chainIdentifier
+//     }
+// "#;
+//     let res = cluster
+//         .graphql_client
+//         .execute(query.to_string(), vec![])
+//         .await
+//         .unwrap();
+
+//     assert_eq!(&format!("{}", res), &exp);
+// }
