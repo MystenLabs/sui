@@ -9,10 +9,9 @@ import Alert from '_components/alert';
 import { IconButton } from '_components/IconButton';
 import Overlay from '_components/overlay';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
+import { type FormValues } from '_pages/swap/constants';
 import { Settings16 } from '@mysten/icons/src';
 import { useFormContext } from 'react-hook-form';
-
-import { type FormValues } from './utils';
 
 const MAX_SLIPPAGE_COPY =
 	'Slippage % is the difference between the price you expect to pay or receive for a coin when you initiate a transaction and the actual price at which the transaction is executed.';

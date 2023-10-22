@@ -17,24 +17,28 @@ import {
 	Coins,
 	getUSDCurrency,
 	isExceedingSlippageTolerance,
-	SUI_CONVERSION_RATE,
-	USDC_DECIMALS,
-	useBalanceConversion,
 	useCoinsReFetchingConfig,
 	useDeepBookConfigs,
 	useGetEstimate,
 	useSortedCoinsByCategories,
 } from '_hooks';
+import {
+	initialValues,
+	SUI_CONVERSION_RATE,
+	USDC_DECIMALS,
+	type FormValues,
+} from '_pages/swap/constants';
+import { useSuiUsdcBalanceConversion, useSwapData } from '_pages/swap/utils';
 import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
-import { useFormatCoin, useTransactionSummary, useZodForm } from '@mysten/core';
+import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { ArrowDown12, ArrowRight16 } from '@mysten/icons';
-import { type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
+import { type BalanceChange, type DryRunTransactionBlockResponse } from '@mysten/sui.js/client';
 import { SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -42,7 +46,12 @@ import { z } from 'zod';
 import { AssetData } from './AssetData';
 import { GasFeeSection } from './GasFeeSection';
 import { ToAssetSection } from './ToAssetSection';
-import { initialValues, type FormValues } from './utils';
+
+enum ErrorStrings {
+	MISSING_DATA = 'Missing data',
+	SLIPPAGE_EXCEEDS_TOLERANCE = 'Current slippage exceeds tolerance',
+	NOT_ENOUGH_BALANCE = 'Not enough balance',
+}
 
 function getSwapPageAtcText(
 	fromSymbol: string,
@@ -57,7 +66,21 @@ function getSwapPageAtcText(
 	return `Swap ${fromSymbol} to ${toSymbol}`;
 }
 
+function getCoinsFromBalanceChanges(coinType: string, balanceChanges: BalanceChange[]) {
+	return balanceChanges
+		.filter((balance) => {
+			return balance.coinType === coinType;
+		})
+		.sort((a, b) => {
+			const aAmount = new BigNumber(a.amount).abs();
+			const bAmount = new BigNumber(b.amount).abs();
+
+			return aAmount.isGreaterThan(bAmount) ? -1 : 1;
+		});
+}
+
 export function SwapPageContent() {
+	const [slippageErrorString, setSlippageErrorString] = useState('');
 	const queryClient = useQueryClient();
 	const mainnetPools = useDeepBookConfigs().pools;
 	const navigate = useNavigate();
@@ -79,29 +102,24 @@ export function SwapPageContent() {
 
 	const poolId = mainnetPools.SUI_USDC[0];
 
-	const { data: baseCoinBalanceData, isLoading: baseCoinBalanceDataLoading } = useSuiClientQuery(
-		'getBalance',
-		{ coinType: baseCoinType, owner: activeAccountAddress! },
-		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
-	);
-
-	const { data: quoteCoinBalanceData, isLoading: quoteCoinBalanceDataLoading } = useSuiClientQuery(
-		'getBalance',
-		{ coinType: quoteCoinType, owner: activeAccountAddress! },
-		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
-	);
+	const {
+		baseCoinBalanceData,
+		quoteCoinBalanceData,
+		formattedBaseBalance,
+		formattedQuoteBalance,
+		baseCoinMetadata,
+		quoteCoinMetadata,
+		baseCoinSymbol,
+		quoteCoinSymbol,
+		isLoading,
+	} = useSwapData({
+		baseCoinType,
+		quoteCoinType,
+		activeCoinType: activeCoinType || '',
+	});
 
 	const rawBaseBalance = baseCoinBalanceData?.totalBalance;
 	const rawQuoteBalance = quoteCoinBalanceData?.totalBalance;
-
-	const [formattedBaseBalance, baseCoinSymbol, baseCoinMetadata] = useFormatCoin(
-		rawBaseBalance,
-		activeCoinType,
-	);
-	const [formattedQuoteBalance, quoteCoinSymbol, quoteCoinMetadata] = useFormatCoin(
-		rawQuoteBalance,
-		activeCoinType,
-	);
 
 	const { data: coinBalances } = useSuiClientQuery(
 		'getAllBalances',
@@ -210,19 +228,9 @@ export function SwapPageContent() {
 
 	const isPayAll = amount === (isAsk ? formattedBaseTokenBalance : formattedQuoteTokenBalance);
 
-	const { rawValue: rawInputSuiUsdc } = useBalanceConversion(
-		new BigNumber(amount),
-		Coins.SUI,
-		Coins.USDC,
-		-SUI_CONVERSION_RATE,
-	);
-
-	const { rawValue: rawInputUsdcSui } = useBalanceConversion(
-		new BigNumber(amount),
-		Coins.USDC,
-		Coins.SUI,
-		SUI_CONVERSION_RATE,
-	);
+	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
+	const rawInputSuiUsdc = suiUsdc.rawValue;
+	const rawInputUsdcSui = usdcSui.rawValue;
 
 	const atcText = useMemo(() => {
 		if (isAsk) {
@@ -235,7 +243,7 @@ export function SwapPageContent() {
 		.shiftedBy(SUI_DECIMALS)
 		.toString();
 	const quoteBalance = new BigNumber(isAsk ? rawInputSuiUsdc || 0 : amount || 0)
-		.shiftedBy(USDC_DECIMALS)
+		.shiftedBy(SUI_CONVERSION_RATE)
 		.toString();
 
 	const {
@@ -266,13 +274,16 @@ export function SwapPageContent() {
 	const { mutate: handleSwap, isLoading: isSwapLoading } = useMutation({
 		mutationFn: async (formData: FormValues) => {
 			const txn = dataFromEstimate?.txn;
-			const baseCoinAmount = balanceChanges.find(({ coinType }) => {
-				return coinType === baseCoinType;
-			})?.amount;
 
-			const quoteCoinAmount = balanceChanges.find(({ coinType }) => {
-				return coinType === quoteCoinType;
-			})?.amount;
+			const baseCoins = getCoinsFromBalanceChanges(baseCoinType, balanceChanges);
+			const quoteCoins = getCoinsFromBalanceChanges(quoteCoinType, balanceChanges);
+
+			const baseCoinAmount = baseCoins[0]?.amount;
+			const quoteCoinAmount = quoteCoins[0]?.amount;
+
+			if (!baseCoinAmount || !quoteCoinAmount) {
+				throw new Error(ErrorStrings.MISSING_DATA);
+			}
 
 			const isExceedingSlippage = await isExceedingSlippageTolerance({
 				slipPercentage: formData.allowedMaxSlippagePercentage,
@@ -284,16 +295,20 @@ export function SwapPageContent() {
 				isAsk,
 			});
 
+			if (balanceChanges.length < 3) {
+				throw new Error(ErrorStrings.NOT_ENOUGH_BALANCE);
+			}
+
 			if (isExceedingSlippage) {
-				throw new Error('Slippage is not acceptable');
+				throw new Error(ErrorStrings.SLIPPAGE_EXCEEDS_TOLERANCE);
 			}
 
 			if (!txn || !signer) {
-				throw new Error('Missing data');
+				throw new Error(ErrorStrings.MISSING_DATA);
 			}
 
-			return signer.signAndExecuteTransactionBlock({
-				transactionBlock: txn,
+			return signer!.signAndExecuteTransactionBlock({
+				transactionBlock: txn!,
 				options: {
 					showInput: true,
 					showEffects: true,
@@ -310,6 +325,11 @@ export function SwapPageContent() {
 			)}&from=transactions`;
 			return navigate(receiptUrl);
 		},
+		onError: (error: Error) => {
+			if (error.message === ErrorStrings.SLIPPAGE_EXCEEDS_TOLERANCE) {
+				setSlippageErrorString(error.message);
+			}
+		},
 	});
 
 	const handleOnsubmit: SubmitHandler<FormValues> = async (formData) => {
@@ -319,7 +339,7 @@ export function SwapPageContent() {
 	return (
 		<Overlay showModal title="Swap" closeOverlay={() => navigate('/')}>
 			<div className="flex flex-col h-full w-full">
-				<Loading loading={baseCoinBalanceDataLoading || quoteCoinBalanceDataLoading}>
+				<Loading loading={isLoading}>
 					<BottomMenuLayout>
 						<Content>
 							<Form form={form} onSubmit={handleOnsubmit}>
@@ -389,7 +409,13 @@ export function SwapPageContent() {
 									<div className="bg-gray-45 h-px w-full group-hover:bg-hero-dark" />
 								</ButtonOrLink>
 
-								<ToAssetSection activeCoinType={activeCoinType} balanceChanges={balanceChanges} />
+								<ToAssetSection
+									slippageErrorString={slippageErrorString}
+									activeCoinType={activeCoinType}
+									balanceChanges={balanceChanges}
+									baseCoinType={baseCoinType}
+									quoteCoinType={quoteCoinType}
+								/>
 
 								<div className="mt-4">
 									<GasFeeSection

@@ -3,6 +3,13 @@
 
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
+import {
+	DEEPBOOK_KEY,
+	ESTIMATED_GAS_FEES_PERCENTAGE,
+	ONE_SUI_DEEPBOOK,
+	WALLET_FEE_ADDRESS,
+	WALLET_FEES_PERCENTAGE,
+} from '_pages/swap/constants';
 import { useDeepBookContext } from '_shared/deepBook/context';
 import { roundFloat, useGetObject } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
@@ -13,11 +20,6 @@ import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import { useMemo } from 'react';
-
-const DEEPBOOK_KEY = 'deepbook';
-export const SUI_CONVERSION_RATE = 6;
-export const USDC_DECIMALS = 9;
-export const MAX_FLOAT = 2;
 
 export enum Coins {
 	SUI = 'SUI',
@@ -48,14 +50,6 @@ export const mainnetDeepBook: {
 		[Coins.TBTC]: '0xbc3a676894871284b3ccfb2eec66f428612000e2a6e6d23f592ce8833c27c973::coin::COIN',
 	},
 };
-
-export function useDeepBookLotSize(poolId: string) {
-	const { data } = useGetObject(poolId);
-	const objectFields =
-		data?.data?.content?.dataType === 'moveObject' ? data?.data?.content?.fields : null;
-
-	return (objectFields as Record<string, string>)?.lot_size;
-}
 
 export function useDeepBookConfigs() {
 	return mainnetDeepBook;
@@ -162,11 +156,11 @@ function useAveragePrice(base: Coins, quote: Coins, isAsk: boolean) {
 
 export function useBalanceConversion(
 	balance: BigInt | BigNumber | null,
-	base: Coins,
-	quote: Coins,
+	from: Coins,
+	to: Coins,
 	conversionRate: number = 1,
 ) {
-	const { data: averagePrice, ...rest } = useAveragePrice(base, quote, quote === Coins.USDC);
+	const { data: averagePrice, ...rest } = useAveragePrice(from, to, to === Coins.USDC);
 
 	const averagePriceWithConversion = averagePrice.shiftedBy(conversionRate);
 
@@ -252,36 +246,72 @@ function formatBalanceToLotSize(balance: string, lotSize: number) {
 	}
 
 	const roundedDownBalance = balanceBigNumber.minus(remainder);
-	return roundedDownBalance.toString();
+	return roundedDownBalance.abs().toString();
 }
 
 async function getPlaceMarketOrderTxn({
 	deepBookClient,
 	poolId,
-	balance,
 	accountCapId,
-	coins,
 	address,
 	isAsk,
 	lotSize,
+	baseBalance,
+	quoteBalance,
+	quoteCoins,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
-	balance: string;
 	accountCapId: string;
-	coins: CoinStruct[];
 	address: string;
 	isAsk: boolean;
 	lotSize: number;
+	baseBalance: string;
+	quoteBalance: string;
+	baseCoins: CoinStruct[];
+	quoteCoins: CoinStruct[];
 }) {
 	const txb = new TransactionBlock();
+	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
 	let swapCoin;
+	let balanceToSwap;
+	let walletFeeCoin;
+	let txnResult;
+
 	if (isAsk) {
-		swapCoin = txb.splitCoins(txb.gas, [balance]);
+		const bigNumberBaseBalance = new BigNumber(baseBalance);
+
+		if (bigNumberBaseBalance.isLessThan(ONE_SUI_DEEPBOOK)) {
+			balanceToSwap = bigNumberBaseBalance.minus(
+				bigNumberBaseBalance.times(ESTIMATED_GAS_FEES_PERCENTAGE / 100),
+			);
+		} else {
+			balanceToSwap = bigNumberBaseBalance;
+		}
+
+		const walletFee = balanceToSwap
+			.times(WALLET_FEES_PERCENTAGE / 100)
+			.integerValue(BigNumber.ROUND_DOWN)
+			.toString();
+
+		balanceToSwap = formatBalanceToLotSize(balanceToSwap.minus(walletFee).toString(), lotSize);
+		swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
+		walletFeeCoin = txb.splitCoins(txb.gas, [walletFee]);
+		txnResult = await deepBookClient.placeMarketOrder(
+			accountCap,
+			poolId,
+			BigInt(balanceToSwap),
+			isAsk ? 'ask' : 'bid',
+			isAsk ? swapCoin : undefined,
+			isAsk ? undefined : swapCoin,
+			undefined,
+			address,
+			txb,
+		);
 	} else {
-		const primaryCoinInput = txb.object(coins[0].coinObjectId);
-		const restCoins = coins.slice(1);
+		const primaryCoinInput = txb.object(quoteCoins[0].coinObjectId);
+		const restCoins = quoteCoins.slice(1);
 
 		if (restCoins.length) {
 			txb.mergeCoins(
@@ -290,31 +320,34 @@ async function getPlaceMarketOrderTxn({
 			);
 		}
 
-		const balance = coins.reduce((acc, coin) => acc + BigInt(coin.balance), 0n);
-		swapCoin = txb.splitCoins(primaryCoinInput, [balance]);
+		const walletFee = new BigNumber(quoteBalance)
+			.times(WALLET_FEES_PERCENTAGE / 100)
+			.integerValue(BigNumber.ROUND_DOWN)
+			.toString();
+
+		balanceToSwap = new BigNumber(quoteBalance).minus(walletFee).toString();
+
+		const [swapCoin, walletCoin] = txb.splitCoins(primaryCoinInput, [balanceToSwap, walletFee]);
+
+		txnResult = await deepBookClient.swapExactQuoteForBase(
+			poolId,
+			swapCoin,
+			BigInt(balanceToSwap),
+			address,
+			undefined,
+			txb,
+		);
+
+		walletFeeCoin = walletCoin;
 	}
-
-	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
-
-	const validBalance = formatBalanceToLotSize(balance, lotSize);
-
-	const txn = await deepBookClient.placeMarketOrder(
-		accountCap,
-		poolId,
-		BigInt(validBalance),
-		isAsk ? 'ask' : 'bid',
-		isAsk ? swapCoin : undefined,
-		isAsk ? undefined : swapCoin,
-		undefined,
-		address,
-		txb,
-	);
 
 	if (!accountCapId) {
-		txn.transferObjects([accountCap], address);
+		txnResult.transferObjects([accountCap], address);
 	}
 
-	return txn;
+	if (walletFeeCoin) txnResult.transferObjects([walletFeeCoin], WALLET_FEE_ADDRESS);
+
+	return txnResult;
 }
 
 export function useGetEstimate({
@@ -361,33 +394,43 @@ export function useGetEstimate({
 			lotSize,
 		],
 		queryFn: async () => {
-			const coins = await getCoinsByBalance({
-				coinType,
-				balance: isAsk ? baseBalance : quoteBalance,
-				suiClient,
-				address: activeAddress!,
-			});
+			const [baseCoins, quoteCoins] = await Promise.all([
+				getCoinsByBalance({
+					coinType,
+					balance: baseBalance,
+					suiClient,
+					address: activeAddress!,
+				}),
+				getCoinsByBalance({
+					coinType,
+					balance: quoteBalance,
+					suiClient,
+					address: activeAddress!,
+				}),
+			]);
 
-			if (!coins?.length) {
+			if ((isAsk && !baseCoins.length) || (!isAsk && !quoteCoins.length)) {
 				throw new Error('No coins found in balance');
 			}
 
 			const txn = await getPlaceMarketOrderTxn({
 				deepBookClient,
 				poolId,
-				balance: baseBalance,
 				accountCapId,
 				address: activeAddress!,
-				coins,
 				isAsk,
 				lotSize: Number(lotSize),
+				baseCoins,
+				quoteCoins,
+				baseBalance,
+				quoteBalance,
 			});
 
 			if (!accountCapId) {
 				await queryClient.invalidateQueries(['get-owned-objects']);
 			}
 
-			const dryRunResponse = await signer?.dryRunTransactionBlock({ transactionBlock: txn });
+			const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
 
 			return {
 				txn,
@@ -404,7 +447,6 @@ export function useGetEstimate({
 	});
 }
 
-// (Current Market Price – Executed Trade Price) / Current Market Price
 export async function isExceedingSlippageTolerance({
 	slipPercentage,
 	poolId,
@@ -442,6 +484,15 @@ export async function isExceedingSlippageTolerance({
 	const slip = new BigNumber(isAsk ? bestBidPrice.toString() : bestAskPrice.toString()).dividedBy(
 		averagePricePaid,
 	);
+
+	console.table([
+		['slip', slip.toString()],
+		['slip result', new BigNumber('1').minus(slip).abs().toString()],
+		['slipPercentage', slipPercentage],
+		['baseCoinAmount', baseCoinAmount],
+		['quoteCoinAmount', quoteCoinAmount],
+		['averagePricePaid', averagePricePaid.toString()],
+	]);
 
 	return new BigNumber('1').minus(slip).abs().isGreaterThan(slipPercentage);
 }

@@ -317,9 +317,9 @@ export class DeepBookClient {
 	 * @param quoteCoin the objectId of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
 	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
-	 * @param accountCapId the account cap id to use for this transaction. If omitted, `this.accountCap` will be used
 	 * @param accountCap
 	 * @param recipientAddress the address to receive the swapped asset. If omitted, `this.currentAddress` will be used. The function
+	 * @param feeCoin
 	 * @param txb
 	 */
 	async placeMarketOrder(
@@ -377,12 +377,12 @@ export class DeepBookClient {
 	 */
 	async swapExactQuoteForBase(
 		poolId: string,
-		tokenObjectIn: string,
-		amountIn: bigint,
+		tokenObjectIn: TransactionResult | TransactionObjectArgument | string,
+		amountIn: bigint, // quantity of USDC
 		currentAddress: string,
 		clientOrderId: string | undefined = undefined,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
 		const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
@@ -391,9 +391,9 @@ export class DeepBookClient {
 				txb.object(poolId),
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
-				txb.object(String(amountIn)),
+				txb.pure.u64(String(amountIn)),
 				txb.object(SUI_CLOCK_OBJECT_ID),
-				txb.object(tokenObjectIn),
+				objArg(txb, tokenObjectIn),
 			],
 		});
 		txb.transferObjects([base_coin_ret], currentAddress);

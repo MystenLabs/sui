@@ -1,25 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import {
 	Coins,
 	getUSDCurrency,
-	MAX_FLOAT,
-	SUI_CONVERSION_RATE,
-	USDC_DECIMALS,
-	useBalanceConversion,
 	useDeepBookConfigs,
 	useRecognizedCoins,
 } from '_app/hooks/useDeepBook';
 import { Text } from '_app/shared/text';
+import Alert from '_components/alert';
 import { IconButton } from '_components/IconButton';
-import { useCoinsReFetchingConfig } from '_hooks';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { AssetData } from '_pages/swap/AssetData';
+import {
+	MAX_FLOAT,
+	SUI_CONVERSION_RATE,
+	USDC_DECIMALS,
+	type FormValues,
+} from '_pages/swap/constants';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { ToAssets } from '_pages/swap/ToAssets';
-import { useCoinMetadata, useFormatCoin } from '@mysten/core';
-import { useSuiClientQuery } from '@mysten/dapp-kit';
+import { useSuiUsdcBalanceConversion, useSwapData } from '_pages/swap/utils';
+import { useCoinMetadata } from '@mysten/core';
 import { Refresh16 } from '@mysten/icons';
 import { type BalanceChange } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -28,22 +29,34 @@ import clsx from 'classnames';
 import { useEffect, useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 
-import { type FormValues } from './utils';
-
 export function ToAssetSection({
 	activeCoinType,
 	balanceChanges,
+	slippageErrorString,
+	baseCoinType,
+	quoteCoinType,
 }: {
 	activeCoinType: string | null;
 	balanceChanges: BalanceChange[];
+	slippageErrorString: string;
+	baseCoinType: string;
+	quoteCoinType: string;
 }) {
 	const coinsMap = useDeepBookConfigs().coinsMap;
-	const activeAccount = useActiveAccount();
-	const activeAccountAddress = activeAccount?.address;
 	const recognizedCoins = useRecognizedCoins();
 	const [isToAssetOpen, setToAssetOpen] = useState(false);
 	const [isSlippageModalOpen, setSlippageModalOpen] = useState(false);
 	const isAsk = activeCoinType === SUI_TYPE_ARG;
+
+	const { formattedBaseBalance, formattedQuoteBalance, baseCoinMetadata, quoteCoinMetadata } =
+		useSwapData({
+			baseCoinType,
+			quoteCoinType,
+			activeCoinType: activeCoinType || '',
+		});
+
+	const toAssetBalance = isAsk ? formattedQuoteBalance : formattedBaseBalance;
+	const toAssetMetaData = isAsk ? quoteCoinMetadata : baseCoinMetadata;
 
 	const {
 		watch,
@@ -61,32 +74,17 @@ export function ToAssetSection({
 		.shiftedBy(isAsk ? -SUI_CONVERSION_RATE : -USDC_DECIMALS)
 		.toNumber();
 
-	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-
 	useEffect(() => {
 		const newToAsset = isAsk ? coinsMap[Coins.USDC] : SUI_TYPE_ARG;
 		setValue('toAssetType', newToAsset);
 	}, [coinsMap, isAsk, setValue]);
 
-	const { data: coinBalanceData } = useSuiClientQuery(
-		'getBalance',
-		{ coinType: toAssetType, owner: activeAccountAddress! },
-		{ enabled: !!activeAccountAddress, refetchInterval, staleTime },
-	);
-
-	const coinBalance = coinBalanceData?.totalBalance;
-
-	const [toAssetBalance, _, toAssetMetaData] = useFormatCoin(coinBalance, toAssetType);
-
 	const toAssetSymbol = toAssetMetaData.data?.symbol ?? '';
 	const amount = watch('amount');
 
-	const { rawValue, averagePrice, refetch, isRefetching } = useBalanceConversion(
-		new BigNumber(amount),
-		isAsk ? Coins.SUI : Coins.USDC,
-		isAsk ? Coins.USDC : Coins.SUI,
-		isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
-	);
+	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
+	const balanceConversionData = isAsk ? suiUsdc : usdcSui;
+	const { rawValue, averagePrice, refetch, isRefetching } = balanceConversionData || {};
 
 	const averagePriceAsString = averagePrice.toFixed(MAX_FLOAT).toString();
 
@@ -164,6 +162,13 @@ export function ToAssetSection({
 					<div className="h-px w-full bg-hero-darkest/10 my-3" />
 
 					<MaxSlippage onOpen={() => setSlippageModalOpen(true)} />
+
+					{slippageErrorString && (
+						<div className="mt-2">
+							<Alert>{slippageErrorString}</Alert>
+						</div>
+					)}
+
 					<MaxSlippageModal
 						isOpen={isSlippageModalOpen}
 						onClose={() => setSlippageModalOpen(false)}
