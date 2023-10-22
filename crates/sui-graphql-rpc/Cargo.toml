@@ -23,6 +23,7 @@ mysten-metrics.workspace = true
 move-core-types.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -38,6 +39,8 @@ uuid.workspace = true
 # TODO: put these behind feature flag to prevent leakage
 # Used for dummy data
 bcs.workspace = true
+simulacrum.workspace = true
+sui-transactional-test-runner.workspace = true
 sui-sdk.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
