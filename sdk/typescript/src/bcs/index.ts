@@ -203,12 +203,12 @@ const SharedObjectRef = bcs.struct('SharedObjectRef', {
 const ObjectArg = bcs.enum('ObjectArg', {
 	ImmOrOwned: SuiObjectRef,
 	Shared: SharedObjectRef,
+	Receiving: SuiObjectRef,
 });
 
 const CallArg = bcs.enum('CallArg', {
 	Pure: bcs.vector(bcs.u8()),
 	Object: ObjectArg,
-	ObjVec: bcs.vector(ObjectArg),
 });
 
 const TypeTag: BcsType<TypeTag> = bcs.enum('TypeTag', {
