@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isSuiNSName } from '@mysten/core';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress, formatDigest } from '@mysten/sui.js/utils';
 import { type ReactNode } from 'react';
 
 import { Link, type LinkProps } from '~/ui/Link';
@@ -47,5 +47,5 @@ export const AddressLink = createInternalLink('address', 'address', (addressOrNs
 	return formatAddress(addressOrNs);
 });
 export const ObjectLink = createInternalLink('object', 'objectId', formatAddress);
-export const TransactionLink = createInternalLink('txblock', 'digest', formatAddress);
+export const TransactionLink = createInternalLink('txblock', 'digest', formatDigest);
 export const ValidatorLink = createInternalLink('validator', 'address', formatAddress);
