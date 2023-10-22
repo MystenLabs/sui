@@ -20,12 +20,12 @@ export function useGetDelegatedStake(
 	const { autoRefetch = false } = options || {};
 
 	// Generalized query options
-	const defaultQueryOptions = {
+	const refetchQueryOptions = {
 		staleTime: STALE_TIME,
 		refetchInterval: REFETCH_INTERVAL,
 	};
 
-	const refetchQueryOptions = {
+	const defaultQueryOptions = {
 		staleTime: Infinity,
 		refetchInterval: false,
 	} as const;

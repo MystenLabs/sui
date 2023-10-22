@@ -20,7 +20,7 @@ export function TotalStaked({ address }: { address: string }) {
 	}, [delegatedStake]);
 
 	const [formatted, symbol] = useFormatCoin(totalActivePendingStake, SUI_TYPE_ARG);
-	return delegatedStake ? (
+	return totalActivePendingStake ? (
 		<div className="flex min-w-44 items-center justify-start gap-3 rounded-xl bg-white/60 px-4 py-3 backdrop-blur-sm">
 			<Sui className="flex h-8 w-8 items-center justify-center rounded-full bg-sui-primaryBlue2023 py-1.5 text-white" />
 			<div className="flex flex-col">
