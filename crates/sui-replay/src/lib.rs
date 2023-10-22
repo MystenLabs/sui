@@ -14,6 +14,7 @@ use transaction_provider::{FuzzStartPoint, TransactionSource};
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
+use std::env;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -27,6 +28,9 @@ pub mod fuzz_mutations;
 mod replay;
 pub mod transaction_provider;
 pub mod types;
+
+static DEFAULT_SANDBOX_BASE_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
 
 #[cfg(test)]
 mod tests;
@@ -43,8 +47,8 @@ pub enum ReplayToolCommand {
     PersistSandbox {
         #[arg(long, short)]
         tx_digest: String,
-        #[arg(long, short)]
-        path: PathBuf,
+        #[arg(long, short, default_value = DEFAULT_SANDBOX_BASE_PATH)]
+        base_path: PathBuf,
     },
 
     /// Replay from sandbox state file
@@ -157,7 +161,10 @@ pub async fn execute_replay_command(
             info!("Execution finished successfully. Local and on-chain effects match.");
             None
         }
-        ReplayToolCommand::PersistSandbox { tx_digest, path } => {
+        ReplayToolCommand::PersistSandbox {
+            tx_digest,
+            base_path,
+        } => {
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
@@ -172,6 +179,7 @@ pub async fn execute_replay_command(
             .await?;
 
             let out = serde_json::to_string(&sandbox_state).unwrap();
+            let path = base_path.join(format!("{}.json", tx_digest));
             std::fs::write(path, out)?;
             None
         }
