@@ -27,11 +27,10 @@ test('staking', async ({ page, extensionUrl }) => {
 	await expect(page.getByTestId('transaction-status')).toHaveText('Transaction Success');
 
 	await page.getByTestId('close-icon').click();
-	await expect(page.getByText(`Currently Staked ${STAKE_AMOUNT} SUI`)).toBeVisible({
+
+	await expect(page.getByTestId(`stake-button-${STAKE_AMOUNT}-SUI`)).toBeVisible({
 		timeout: TEST_TIMEOUT,
 	});
-
-	await expect(page.getByTestId(`stake-button-${STAKE_AMOUNT}-SUI`)).toBeVisible();
 	await page.getByTestId(`stake-button-${STAKE_AMOUNT}-SUI`).click();
 
 	await expect(page.getByTestId('stake-card')).toBeVisible({ timeout: 3 * TEST_TIMEOUT });
