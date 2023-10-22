@@ -319,6 +319,16 @@ export class TransactionBlock {
 		return this.object(Inputs.SharedObjectRef(...args));
 	}
 
+	/**
+	 * Part of the Transfer to Object implementation.
+	 *
+	 * Add a new receiving object input to the transaction using the fully-resolved receiving object reference.
+	 * If you only have an object ID, use `builder.object(id)` instead.
+	 */
+	receivingObjectRef(...args: Parameters<(typeof Inputs)['ReceivingObjectRef']>) {
+		return this.object(Inputs.ReceivingObjectRef(...args));
+	}
+
 	/** Add a transaction to the transaction block. */
 	add(transaction: TransactionType) {
 		const index = this.#blockData.transactions.push(transaction);
