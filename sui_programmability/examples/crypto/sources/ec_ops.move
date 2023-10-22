@@ -293,6 +293,7 @@ module crypto::ec_ops {
         }
     }
 
+    // This test emulates drand based timelock encryption.
     #[test]
     fun test_ibe_decrypt_drand() {
         // Retrieved using 'curl https://api.drand.sh/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/info'
