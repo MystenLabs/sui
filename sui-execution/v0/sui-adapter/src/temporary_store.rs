@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::GasCharger;
-use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
@@ -1075,28 +1073,5 @@ impl<'backing> ParentSync for TemporaryStore<'backing> {
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref_deprecated(object_id)
-    }
-}
-
-impl<'backing> GetModule for TemporaryStore<'backing> {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, module_id: &ModuleId) -> Result<Option<Self::Item>, Self::Error> {
-        let package_id = &ObjectID::from(*module_id.address());
-        if let Some((obj, _)) = self.written.get(package_id) {
-            Ok(Some(
-                obj.data
-                    .try_as_package()
-                    .expect("Bad object type--expected package")
-                    .deserialize_module(
-                        &module_id.name().to_owned(),
-                        self.protocol_config.move_binary_format_version(),
-                        self.protocol_config.no_extraneous_module_bytes(),
-                    )?,
-            ))
-        } else {
-            self.store.get_module_by_id(module_id)
-        }
     }
 }
