@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::net::TcpListener;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{ffi::OsString, fs, path::Path, process::Command};
@@ -127,6 +128,38 @@ impl fmt::Display for Network {
                 Network::Localnet => "localnet",
             }
         )
+    }
+}
+
+impl FromStr for Network {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mainnet" => Ok(Network::Mainnet),
+            "testnet" => Ok(Network::Testnet),
+            "devnet" => Ok(Network::Devnet),
+            "localnet" => Ok(Network::Localnet),
+            _ => Err("Unrecognized network".into()),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Networks {
+    pub values: Vec<Network>,
+}
+
+impl FromStr for Networks {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let values = s
+            .split(",")
+            .into_iter()
+            .map(|s| Network::from_str(s).unwrap())
+            .collect();
+        Ok(Networks { values })
     }
 }
 
