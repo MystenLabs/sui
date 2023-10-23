@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 use crate::{
     errors::{PartialVMError, PartialVMResult},
-    file_format::{AbilitySet, StructTypeParameter, Visibility},
+    file_format::{AbilitySet, DataTypeTyParameter, Visibility},
     file_format_common::VERSION_5,
     normalized::Module,
 };
@@ -254,8 +254,8 @@ fn fun_type_parameters_compatible(
 
 fn struct_type_parameters_compatible(
     disallow_changing_generic_abilities: bool,
-    old_type_parameters: &[StructTypeParameter],
-    new_type_parameters: &[StructTypeParameter],
+    old_type_parameters: &[DataTypeTyParameter],
+    new_type_parameters: &[DataTypeTyParameter],
 ) -> bool {
     old_type_parameters.len() == new_type_parameters.len()
         && old_type_parameters.iter().zip(new_type_parameters).all(
@@ -292,8 +292,8 @@ fn type_parameter_constraints_compatible(
 // relaxes the requirements for clients.
 fn type_parameter_phantom_decl_compatible(
     disallow_changing_generic_abilities: bool,
-    old_type_parameter: &StructTypeParameter,
-    new_type_parameter: &StructTypeParameter,
+    old_type_parameter: &DataTypeTyParameter,
+    new_type_parameter: &DataTypeTyParameter,
 ) -> bool {
     if disallow_changing_generic_abilities {
         // phantom/non-phantom cannot change from one version to the next.

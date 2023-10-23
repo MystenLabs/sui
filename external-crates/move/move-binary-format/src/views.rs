@@ -62,14 +62,14 @@ impl<'a, T: ModuleAccess> ModuleView<'a, T> {
             .map(move |module_handle| ModuleHandleView::new(module, module_handle))
     }
 
-    pub fn struct_handles(
+    pub fn data_type_handles(
         &self,
-    ) -> impl DoubleEndedIterator<Item = StructHandleView<'a, T>> + Send {
+    ) -> impl DoubleEndedIterator<Item = DataTypeHandleView<'a, T>> + Send {
         let module = self.module;
         module
-            .struct_handles()
+            .data_type_handles()
             .iter()
-            .map(move |struct_handle| StructHandleView::new(module, struct_handle))
+            .map(move |struct_handle| DataTypeHandleView::new(module, struct_handle))
     }
 
     pub fn function_handles(
@@ -199,20 +199,20 @@ impl<'a, T: ModuleAccess> ModuleHandleView<'a, T> {
     }
 }
 
-pub struct StructHandleView<'a, T> {
+pub struct DataTypeHandleView<'a, T> {
     module: &'a T,
-    struct_handle: &'a StructHandle,
+    struct_handle: &'a DataTypeHandle,
 }
 
-impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
-    pub fn new(module: &'a T, struct_handle: &'a StructHandle) -> Self {
+impl<'a, T: ModuleAccess> DataTypeHandleView<'a, T> {
+    pub fn new(module: &'a T, struct_handle: &'a DataTypeHandle) -> Self {
         Self {
             module,
             struct_handle,
         }
     }
 
-    pub fn handle(&self) -> &StructHandle {
+    pub fn handle(&self) -> &DataTypeHandle {
         self.struct_handle
     }
 
@@ -220,7 +220,7 @@ impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
         self.struct_handle.abilities
     }
 
-    pub fn type_parameters(&self) -> &Vec<StructTypeParameter> {
+    pub fn type_parameters(&self) -> &Vec<DataTypeTyParameter> {
         &self.struct_handle.type_parameters
     }
 
@@ -236,14 +236,14 @@ impl<'a, T: ModuleAccess> StructHandleView<'a, T> {
         self.module.module_id_for_handle(self.module_handle())
     }
 
-    /// Return the StructHandleIndex of this handle in the module's struct handle table
-    pub fn handle_idx(&self) -> StructHandleIndex {
-        for (idx, handle) in self.module.struct_handles().iter().enumerate() {
+    /// Return the DataTypeHandleIndex of this handle in the module's struct handle table
+    pub fn handle_idx(&self) -> DataTypeHandleIndex {
+        for (idx, handle) in self.module.data_type_handles().iter().enumerate() {
             if handle == self.handle() {
-                return StructHandleIndex::new(idx as u16);
+                return DataTypeHandleIndex::new(idx as u16);
             }
         }
-        unreachable!("Cannot resolve StructHandle {:?} in module {:?}. This should never happen in a well-formed `StructHandleView`. Perhaps this handle came from a different module?", self.handle(), self.module().name())
+        unreachable!("Cannot resolve DataTypeHandle {:?} in module {:?}. This should never happen in a well-formed `DataTypeHandleView`. Perhaps this handle came from a different module?", self.handle(), self.module().name())
     }
 }
 
@@ -332,13 +332,13 @@ impl<'a, T: ModuleAccess> FunctionHandleView<'a, T> {
 pub struct StructDefinitionView<'a, T> {
     module: &'a T,
     struct_def: &'a StructDefinition,
-    struct_handle_view: StructHandleView<'a, T>,
+    struct_handle_view: DataTypeHandleView<'a, T>,
 }
 
 impl<'a, T: ModuleAccess> StructDefinitionView<'a, T> {
     pub fn new(module: &'a T, struct_def: &'a StructDefinition) -> Self {
-        let struct_handle = module.struct_handle_at(struct_def.struct_handle);
-        let struct_handle_view = StructHandleView::new(module, struct_handle);
+        let struct_handle = module.data_type_handle_at(struct_def.struct_handle);
+        let struct_handle_view = DataTypeHandleView::new(module, struct_handle);
         Self {
             module,
             struct_def,
@@ -357,7 +357,7 @@ impl<'a, T: ModuleAccess> StructDefinitionView<'a, T> {
         }
     }
 
-    pub fn type_parameters(&self) -> &Vec<StructTypeParameter> {
+    pub fn type_parameters(&self) -> &Vec<DataTypeTyParameter> {
         self.struct_handle_view.type_parameters()
     }
 
@@ -722,7 +722,7 @@ impl<'a, T: ModuleAccess> ViewInternals for ModuleView<'a, T> {
 }
 
 impl_view_internals!(ModuleHandleView, ModuleHandle, module_handle);
-impl_view_internals!(StructHandleView, StructHandle, struct_handle);
+impl_view_internals!(DataTypeHandleView, DataTypeHandle, struct_handle);
 impl_view_internals!(FunctionHandleView, FunctionHandle, function_handle);
 impl_view_internals!(StructDefinitionView, StructDefinition, struct_def);
 impl_view_internals!(FunctionDefinitionView, FunctionDefinition, function_def);

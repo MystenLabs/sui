@@ -96,6 +96,7 @@ fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
                         Bytecode::LdConst(ConstantPoolIndex(2)),
                         Bytecode::Ret,
                     ],
+                    jump_tables: vec![],
                 }),
             },
         ],
@@ -104,7 +105,7 @@ fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
             Signature(vec![SignatureToken::U64]), // u64
         ],
         struct_defs: vec![],
-        struct_handles: vec![],
+        data_type_handles: vec![],
         constant_pool: vec![
             Constant {
                 type_: SignatureToken::U8,
@@ -125,6 +126,8 @@ fn mk_module_entry(vis: u8, is_entry: bool) -> normalized::Module {
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
     };
     normalized::Module::new(&m)
 }
@@ -184,6 +187,7 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
                 code: Some(CodeUnit {
                     locals: SignatureIndex(p.permute(0)),
                     code,
+                    jump_tables: vec![],
                 }),
             },
             // public(script) fun fn() { return; }
@@ -200,6 +204,7 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
                         Bytecode::LdConst(ConstantPoolIndex(p.permute(2))),
                         Bytecode::Ret,
                     ],
+                    jump_tables: vec![],
                 }),
             },
         ]),
@@ -208,7 +213,7 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
             Signature(vec![SignatureToken::U64]), // u64
         ]),
         struct_defs: vec![],
-        struct_handles: vec![],
+        data_type_handles: vec![],
         constant_pool: p.pool(vec![
             Constant {
                 type_: SignatureToken::U8,
@@ -229,6 +234,8 @@ fn mk_module_plus_code_perm(vis: u8, code: Vec<Bytecode>, p: Permutation) -> nor
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
     };
     normalized::Module::new(&m)
 }
@@ -266,33 +273,33 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
         address_identifiers: vec![
             AccountAddress::ZERO, // Module address
         ],
-        struct_handles: p.pool(vec![
-            StructHandle {
+        data_type_handles: p.pool(vec![
+            DataTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(p.permute(1)),
                 abilities: AbilitySet::PRIMITIVES,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DataTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(p.permute(2)),
                 abilities: AbilitySet::PRIMITIVES,
-                type_parameters: vec![StructTypeParameter {
+                type_parameters: vec![DataTypeTyParameter {
                     constraints: AbilitySet::PRIMITIVES,
                     is_phantom: false,
                 }],
             },
-            StructHandle {
+            DataTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(p.permute(3)),
                 abilities: AbilitySet::EMPTY | Ability::Key,
                 type_parameters: vec![],
             },
-            StructHandle {
+            DataTypeHandle {
                 module: ModuleHandleIndex(0),
                 name: IdentifierIndex(p.permute(4)),
                 abilities: AbilitySet::EMPTY | Ability::Key,
-                type_parameters: vec![StructTypeParameter {
+                type_parameters: vec![DataTypeTyParameter {
                     constraints: AbilitySet::PRIMITIVES,
                     is_phantom: false,
                 }],
@@ -301,7 +308,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
         struct_defs: p.pool(vec![
             // struct S { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(p.permute(0)),
+                struct_handle: DataTypeHandleIndex(p.permute(0)),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(p.permute(5)),
                     signature: TypeSignature(SignatureToken::U64),
@@ -309,7 +316,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
             },
             // struct GS<T> { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(p.permute(1)),
+                struct_handle: DataTypeHandleIndex(p.permute(1)),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(p.permute(5)),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),
@@ -317,7 +324,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
             },
             // struct R has key { f: u64 }
             StructDefinition {
-                struct_handle: StructHandleIndex(p.permute(2)),
+                struct_handle: DataTypeHandleIndex(p.permute(2)),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(p.permute(5)),
                     signature: TypeSignature(SignatureToken::U64),
@@ -325,7 +332,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
             },
             // struct GR<T> has key { f: T }
             StructDefinition {
-                struct_handle: StructHandleIndex(p.permute(3)),
+                struct_handle: DataTypeHandleIndex(p.permute(3)),
                 field_information: StructFieldInformation::Declared(vec![FieldDefinition {
                     name: IdentifierIndex(p.permute(5)),
                     signature: TypeSignature(SignatureToken::TypeParameter(0)),
@@ -368,6 +375,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(p.permute(0)),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
             // fun g_fn<T>() { return; }
@@ -379,6 +387,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(p.permute(0)),
                     code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
                 }),
             },
             FunctionDefinition {
@@ -389,6 +398,7 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
                 code: Some(CodeUnit {
                     locals: SignatureIndex(p.permute(0)),
                     code: vec![],
+                    jump_tables: vec![],
                 }),
             },
         ]),
@@ -422,6 +432,8 @@ fn make_complex_module_perm(p: Permutation) -> normalized::Module {
         struct_def_instantiations: vec![],
         function_instantiations: vec![],
         field_instantiations: vec![],
+        enum_defs: vec![],
+        enum_def_instantiations: vec![],
     };
     normalized::Module::new(&m)
 }

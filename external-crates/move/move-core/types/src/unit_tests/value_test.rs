@@ -7,7 +7,7 @@ use crate::{
     ident_str,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::{MoveStruct, MoveValue},
+    value::{MoveDataType, MoveValue},
 };
 use serde_json::json;
 
@@ -25,19 +25,19 @@ fn struct_deserialization() {
         fields.into_iter().zip(values.clone()).collect();
 
     // test each deserialization scheme
-    let runtime_value = MoveStruct::Runtime(values);
+    let runtime_value = MoveDataType::Runtime(values);
     assert_eq!(
         serde_json::to_value(&runtime_value).unwrap(),
         json!([7, true])
     );
 
-    let fielded_value = MoveStruct::WithFields(field_values.clone());
+    let fielded_value = MoveDataType::WithFields(field_values.clone());
     assert_eq!(
         serde_json::to_value(&fielded_value).unwrap(),
         json!({ "f": 7, "g": true })
     );
 
-    let typed_value = MoveStruct::with_types(struct_type, field_values);
+    let typed_value = MoveDataType::with_types(struct_type, field_values);
     assert_eq!(
         serde_json::to_value(&typed_value).unwrap(),
         json!({
@@ -62,7 +62,7 @@ fn struct_one_field_equiv_value() {
         MoveValue::U8(13),
         MoveValue::U8(99),
     ]);
-    let s1 = MoveValue::Struct(MoveStruct::Runtime(vec![val.clone()]))
+    let s1 = MoveValue::DataType(MoveDataType::Runtime(vec![val.clone()]))
         .simple_serialize()
         .unwrap();
     let s2 = val.simple_serialize().unwrap();
@@ -98,15 +98,15 @@ fn nested_typed_struct_deserialization() {
     };
 
     // test each deserialization scheme
-    let nested_runtime_struct = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::U64(7)]));
-    let runtime_value = MoveStruct::Runtime(vec![nested_runtime_struct]);
+    let nested_runtime_struct = MoveValue::DataType(MoveDataType::Runtime(vec![MoveValue::U64(7)]));
+    let runtime_value = MoveDataType::Runtime(vec![nested_runtime_struct]);
     assert_eq!(serde_json::to_value(&runtime_value).unwrap(), json!([[7]]));
 
-    let nested_fielded_struct = MoveValue::Struct(MoveStruct::with_fields(vec![(
+    let nested_fielded_struct = MoveValue::DataType(MoveDataType::with_fields(vec![(
         ident_str!("f").to_owned(),
         MoveValue::U64(7),
     )]));
-    let fielded_value = MoveStruct::with_fields(vec![(
+    let fielded_value = MoveDataType::with_fields(vec![(
         ident_str!("inner").to_owned(),
         nested_fielded_struct,
     )]);
@@ -115,11 +115,11 @@ fn nested_typed_struct_deserialization() {
         json!({ "inner": { "f": 7 } })
     );
 
-    let nested_typed_struct = MoveValue::Struct(MoveStruct::with_types(
+    let nested_typed_struct = MoveValue::DataType(MoveDataType::with_types(
         nested_struct_type,
         vec![(ident_str!("f").to_owned(), MoveValue::U64(7))],
     ));
-    let typed_value = MoveStruct::with_types(
+    let typed_value = MoveDataType::with_types(
         struct_type,
         vec![(ident_str!("inner").to_owned(), nested_typed_struct)],
     );

@@ -4,9 +4,9 @@
 
 use crate::{
     file_format::{
-        AbilitySet, FieldDefinition, IdentifierIndex, ModuleHandleIndex, SignatureToken,
-        StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex,
-        StructTypeParameter, TableIndex, TypeSignature,
+        AbilitySet, DataTypeHandle, DataTypeHandleIndex, DataTypeTyParameter, EnumDefinition,
+        EnumDefinitionIndex, FieldDefinition, IdentifierIndex, ModuleHandleIndex, SignatureToken,
+        StructDefinition, StructFieldInformation, TableIndex, TypeSignature, VariantDefinition,
     },
     internals::ModuleIndex,
     proptest_types::{
@@ -30,7 +30,7 @@ struct TypeSignatureIndex(u16);
 pub struct StDefnMaterializeState {
     pub self_module_handle_idx: ModuleHandleIndex,
     pub identifiers_len: usize,
-    pub struct_handles: Vec<StructHandle>,
+    pub data_type_handles: Vec<DataTypeHandle>,
     pub new_handles: BTreeSet<(ModuleHandleIndex, IdentifierIndex)>,
 }
 
@@ -38,20 +38,22 @@ impl StDefnMaterializeState {
     pub fn new(
         self_module_handle_idx: ModuleHandleIndex,
         identifiers_len: usize,
-        struct_handles: Vec<StructHandle>,
+        data_type_handles: Vec<DataTypeHandle>,
     ) -> Self {
         Self {
             self_module_handle_idx,
             identifiers_len,
-            struct_handles,
+            data_type_handles,
             new_handles: BTreeSet::new(),
         }
     }
 
-    fn add_struct_handle(&mut self, handle: StructHandle) -> Option<StructHandleIndex> {
+    fn add_data_type_handle(&mut self, handle: DataTypeHandle) -> Option<DataTypeHandleIndex> {
         if self.new_handles.insert((handle.module, handle.name)) {
-            self.struct_handles.push(handle);
-            Some(StructHandleIndex((self.struct_handles.len() - 1) as u16))
+            self.data_type_handles.push(handle);
+            Some(DataTypeHandleIndex(
+                (self.data_type_handles.len() - 1) as u16,
+            ))
         } else {
             None
         }
@@ -70,12 +72,12 @@ impl StDefnMaterializeState {
                 let inner = self.potential_abilities(ty);
                 inner.intersect(AbilitySet::VECTOR)
             }
-            Struct(idx) => {
-                let sh = &self.struct_handles[idx.0 as usize];
+            DataType(idx) => {
+                let sh = &self.data_type_handles[idx.0 as usize];
                 sh.abilities
             }
-            StructInstantiation(idx, type_args) => {
-                let sh = &self.struct_handles[idx.0 as usize];
+            DataTypeInstantiation(idx, type_args) => {
+                let sh = &self.data_type_handles[idx.0 as usize];
 
                 // Gather the abilities of the type actuals.
                 let type_args_abilities = type_args.iter().map(|ty| self.potential_abilities(ty));
@@ -88,14 +90,14 @@ impl StDefnMaterializeState {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructHandleGen {
+pub struct DataTypeHandleGen {
     module_idx: PropIndex,
     name_idx: PropIndex,
     abilities: AbilitySetGen,
     type_parameters: Vec<(AbilitySetGen, bool)>,
 }
 
-impl StructHandleGen {
+impl DataTypeHandleGen {
     pub fn strategy(ability_count: impl Into<SizeRange>) -> impl Strategy<Value = Self> {
         let ability_count = ability_count.into();
         (
@@ -117,7 +119,7 @@ impl StructHandleGen {
         self_module_handle_idx: ModuleHandleIndex,
         module_len: usize,
         identifiers_len: usize,
-    ) -> StructHandle {
+    ) -> DataTypeHandle {
         let idx = prop_index_avoid(
             self.module_idx,
             self_module_handle_idx.into_index(),
@@ -126,12 +128,12 @@ impl StructHandleGen {
         let type_parameters = self
             .type_parameters
             .into_iter()
-            .map(|(constraints, is_phantom)| StructTypeParameter {
+            .map(|(constraints, is_phantom)| DataTypeTyParameter {
                 constraints: constraints.materialize(),
                 is_phantom,
             })
             .collect();
-        StructHandle {
+        DataTypeHandle {
             module: ModuleHandleIndex(idx as TableIndex),
             name: IdentifierIndex(self.name_idx.index(identifiers_len) as TableIndex),
             abilities: self.abilities.materialize(),
@@ -202,18 +204,18 @@ impl StructDefinitionGen {
         let type_parameters = self
             .type_parameters
             .into_iter()
-            .map(|(constraints, is_phantom)| StructTypeParameter {
+            .map(|(constraints, is_phantom)| DataTypeTyParameter {
                 constraints: constraints.materialize(),
                 is_phantom,
             })
             .collect();
-        let handle = StructHandle {
+        let handle = DataTypeHandle {
             module: state.self_module_handle_idx,
             name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
             abilities,
             type_parameters,
         };
-        match state.add_struct_handle(handle) {
+        match state.add_data_type_handle(handle) {
             Some(struct_handle) => {
                 if fields.is_empty() {
                     (
@@ -241,6 +243,123 @@ impl StructDefinitionGen {
 }
 
 #[derive(Clone, Debug)]
+pub struct EnumDefinitionGen {
+    name_idx: PropIndex,
+    abilities: AbilitySetGen,
+    type_parameters: Vec<(AbilitySetGen, bool)>,
+    #[allow(dead_code)]
+    is_public: bool,
+    variant_defs: Vec<VariantDefinitionGen>,
+}
+
+impl EnumDefinitionGen {
+    pub fn strategy(
+        variant_count: impl Into<SizeRange>,
+        field_count: impl Into<SizeRange>,
+        type_parameter_count: impl Into<SizeRange>,
+    ) -> impl Strategy<Value = Self> {
+        (
+            any::<PropIndex>(),
+            AbilitySetGen::strategy(),
+            vec(
+                (AbilitySetGen::strategy(), any::<bool>()),
+                type_parameter_count,
+            ),
+            any::<bool>(),
+            vec(VariantDefinitionGen::strategy(field_count), variant_count),
+        )
+            .prop_map(
+                |(name_idx, abilities, type_parameters, is_public, variant_defs)| Self {
+                    name_idx,
+                    abilities,
+                    type_parameters,
+                    is_public,
+                    variant_defs,
+                },
+            )
+    }
+
+    pub fn materialize(
+        self,
+        state: &mut StDefnMaterializeState,
+        index: usize,
+    ) -> Option<EnumDefinition> {
+        let mut variant_names = HashSet::new();
+        let mut variants = vec![];
+        let enum_idx = EnumDefinitionIndex(index as TableIndex);
+        for vd_gen in self.variant_defs {
+            let variant = vd_gen.materialize(state, enum_idx);
+            if variant_names.insert(variant.variant_name) {
+                variants.push(variant);
+            }
+        }
+        let abilities = variants
+            .iter()
+            .flat_map(|variant| variant.fields.iter())
+            .fold(self.abilities.materialize(), |acc, field| {
+                acc.intersect(state.potential_abilities(&field.signature.0))
+            });
+
+        let type_parameters = self
+            .type_parameters
+            .into_iter()
+            .map(|(constraints, is_phantom)| DataTypeTyParameter {
+                constraints: constraints.materialize(),
+                is_phantom,
+            })
+            .collect();
+        let handle = DataTypeHandle {
+            module: state.self_module_handle_idx,
+            name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
+            abilities,
+            type_parameters,
+        };
+        match state.add_data_type_handle(handle) {
+            Some(enum_handle) => Some(EnumDefinition {
+                enum_handle,
+                variants,
+            }),
+            None => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct VariantDefinitionGen {
+    name_idx: PropIndex,
+    signature_gen: Vec<FieldDefinitionGen>,
+}
+
+impl VariantDefinitionGen {
+    fn strategy(field_count: impl Into<SizeRange>) -> impl Strategy<Value = Self> {
+        (
+            any::<PropIndex>(),
+            vec(FieldDefinitionGen::strategy(), field_count),
+        )
+            .prop_map(|(name_idx, signature_gen)| Self {
+                name_idx,
+                signature_gen,
+            })
+    }
+
+    fn materialize(
+        self,
+        state: &StDefnMaterializeState,
+        enum_def: EnumDefinitionIndex,
+    ) -> VariantDefinition {
+        VariantDefinition {
+            variant_name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
+            enum_def,
+            fields: self
+                .signature_gen
+                .into_iter()
+                .map(|field| field.materialize(state))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct FieldDefinitionGen {
     name_idx: PropIndex,
     signature_gen: SignatureTokenGen,
@@ -259,7 +378,7 @@ impl FieldDefinitionGen {
     fn materialize(self, state: &StDefnMaterializeState) -> FieldDefinition {
         FieldDefinition {
             name: IdentifierIndex(self.name_idx.index(state.identifiers_len) as TableIndex),
-            signature: TypeSignature(self.signature_gen.materialize(&state.struct_handles)),
+            signature: TypeSignature(self.signature_gen.materialize(&state.data_type_handles)),
         }
     }
 }

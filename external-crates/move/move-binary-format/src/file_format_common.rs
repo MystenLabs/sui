@@ -44,13 +44,15 @@ pub const SIGNATURE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const ADDRESS_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const IDENTIFIER_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const MODULE_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
-pub const STRUCT_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const DECLARED_TYPE_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const STRUCT_DEF_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const ENUM_DEF_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FUNCTION_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FUNCTION_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FIELD_HANDLE_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const FIELD_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const STRUCT_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
+pub const ENUM_DEF_INST_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 pub const CONSTANT_INDEX_MAX: u64 = TABLE_INDEX_MAX;
 
 pub const BYTECODE_COUNT_MAX: u64 = 65535;
@@ -72,10 +74,14 @@ pub const ACQUIRES_COUNT_MAX: u64 = 255;
 pub const FIELD_COUNT_MAX: u64 = 255;
 pub const FIELD_OFFSET_MAX: u64 = 255;
 
+pub const VARIANT_COUNT_MAX: u64 = 255;
+
 pub const TYPE_PARAMETER_COUNT_MAX: u64 = 255;
 pub const TYPE_PARAMETER_INDEX_MAX: u64 = 65536;
 
 pub const SIGNATURE_TOKEN_DEPTH_MAX: usize = 256;
+
+pub const JUMP_TABLE_INDEX_MAX: u64 = 255;
 
 /// Constants for table types in the binary.
 ///
@@ -86,21 +92,23 @@ pub const SIGNATURE_TOKEN_DEPTH_MAX: usize = 256;
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TableType {
-    MODULE_HANDLES          = 0x1,
-    STRUCT_HANDLES          = 0x2,
-    FUNCTION_HANDLES        = 0x3,
-    FUNCTION_INST           = 0x4,
-    SIGNATURES              = 0x5,
-    CONSTANT_POOL           = 0x6,
-    IDENTIFIERS             = 0x7,
-    ADDRESS_IDENTIFIERS     = 0x8,
-    STRUCT_DEFS             = 0xA,
-    STRUCT_DEF_INST         = 0xB,
-    FUNCTION_DEFS           = 0xC,
-    FIELD_HANDLE            = 0xD,
-    FIELD_INST              = 0xE,
-    FRIEND_DECLS            = 0xF,
-    METADATA                = 0x10,
+    MODULE_HANDLES        = 0x1,
+    DECLARED_TYPE_HANDLES = 0x2,
+    FUNCTION_HANDLES      = 0x3,
+    FUNCTION_INST         = 0x4,
+    SIGNATURES            = 0x5,
+    CONSTANT_POOL         = 0x6,
+    IDENTIFIERS           = 0x7,
+    ADDRESS_IDENTIFIERS   = 0x8,
+    STRUCT_DEFS           = 0xA,
+    STRUCT_DEF_INST       = 0xB,
+    FUNCTION_DEFS         = 0xC,
+    FIELD_HANDLE          = 0xD,
+    FIELD_INST            = 0xE,
+    FRIEND_DECLS          = 0xF,
+    METADATA              = 0x10,
+    ENUM_DEFS             = 0x11,
+    ENUM_DEF_INST         = 0x12,
 }
 
 /// Constants for signature blob values.
@@ -116,10 +124,10 @@ pub enum SerializedType {
     ADDRESS                 = 0x5,
     REFERENCE               = 0x6,
     MUTABLE_REFERENCE       = 0x7,
-    STRUCT                  = 0x8,
+    DECLARED_TYPE           = 0x8,
     TYPE_PARAMETER          = 0x9,
     VECTOR                  = 0xA,
-    STRUCT_INST             = 0xB,
+    DECLARED_TYPE_INST      = 0xB,
     SIGNER                  = 0xC,
     U16                     = 0xD,
     U32                     = 0xE,
@@ -131,8 +139,16 @@ pub enum SerializedType {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
 pub enum SerializedNativeStructFlag {
-    NATIVE                  = 0x1,
-    DECLARED                = 0x2,
+    NATIVE   = 0x1,
+    DECLARED = 0x2,
+}
+
+#[rustfmt::skip]
+#[allow(non_camel_case_types)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug)]
+pub enum SerializedEnumFlag {
+    DECLARED = 0x1,
 }
 
 /// List of opcodes constants.
@@ -141,83 +157,92 @@ pub enum SerializedNativeStructFlag {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
 pub enum Opcodes {
-    POP                         = 0x01,
-    RET                         = 0x02,
-    BR_TRUE                     = 0x03,
-    BR_FALSE                    = 0x04,
-    BRANCH                      = 0x05,
-    LD_U64                      = 0x06,
-    LD_CONST                    = 0x07,
-    LD_TRUE                     = 0x08,
-    LD_FALSE                    = 0x09,
-    COPY_LOC                    = 0x0A,
-    MOVE_LOC                    = 0x0B,
-    ST_LOC                      = 0x0C,
-    MUT_BORROW_LOC              = 0x0D,
-    IMM_BORROW_LOC              = 0x0E,
-    MUT_BORROW_FIELD            = 0x0F,
-    IMM_BORROW_FIELD            = 0x10,
-    CALL                        = 0x11,
-    PACK                        = 0x12,
-    UNPACK                      = 0x13,
-    READ_REF                    = 0x14,
-    WRITE_REF                   = 0x15,
-    ADD                         = 0x16,
-    SUB                         = 0x17,
-    MUL                         = 0x18,
-    MOD                         = 0x19,
-    DIV                         = 0x1A,
-    BIT_OR                      = 0x1B,
-    BIT_AND                     = 0x1C,
-    XOR                         = 0x1D,
-    OR                          = 0x1E,
-    AND                         = 0x1F,
-    NOT                         = 0x20,
-    EQ                          = 0x21,
-    NEQ                         = 0x22,
-    LT                          = 0x23,
-    GT                          = 0x24,
-    LE                          = 0x25,
-    GE                          = 0x26,
-    ABORT                       = 0x27,
-    NOP                         = 0x28,
-    EXISTS                      = 0x29,
-    MUT_BORROW_GLOBAL           = 0x2A,
-    IMM_BORROW_GLOBAL           = 0x2B,
-    MOVE_FROM                   = 0x2C,
-    MOVE_TO                     = 0x2D,
-    FREEZE_REF                  = 0x2E,
-    SHL                         = 0x2F,
-    SHR                         = 0x30,
-    LD_U8                       = 0x31,
-    LD_U128                     = 0x32,
-    CAST_U8                     = 0x33,
-    CAST_U64                    = 0x34,
-    CAST_U128                   = 0x35,
-    MUT_BORROW_FIELD_GENERIC    = 0x36,
-    IMM_BORROW_FIELD_GENERIC    = 0x37,
-    CALL_GENERIC                = 0x38,
-    PACK_GENERIC                = 0x39,
-    UNPACK_GENERIC              = 0x3A,
-    EXISTS_GENERIC              = 0x3B,
-    MUT_BORROW_GLOBAL_GENERIC   = 0x3C,
-    IMM_BORROW_GLOBAL_GENERIC   = 0x3D,
-    MOVE_FROM_GENERIC           = 0x3E,
-    MOVE_TO_GENERIC             = 0x3F,
-    VEC_PACK                    = 0x40,
-    VEC_LEN                     = 0x41,
-    VEC_IMM_BORROW              = 0x42,
-    VEC_MUT_BORROW              = 0x43,
-    VEC_PUSH_BACK               = 0x44,
-    VEC_POP_BACK                = 0x45,
-    VEC_UNPACK                  = 0x46,
-    VEC_SWAP                    = 0x47,
-    LD_U16                      = 0x48,
-    LD_U32                      = 0x49,
-    LD_U256                     = 0x4A,
-    CAST_U16                    = 0x4B,
-    CAST_U32                    = 0x4C,
-    CAST_U256                   = 0x4D,
+    POP                            = 0x01,
+    RET                            = 0x02,
+    BR_TRUE                        = 0x03,
+    BR_FALSE                       = 0x04,
+    BRANCH                         = 0x05,
+    LD_U64                         = 0x06,
+    LD_CONST                       = 0x07,
+    LD_TRUE                        = 0x08,
+    LD_FALSE                       = 0x09,
+    COPY_LOC                       = 0x0A,
+    MOVE_LOC                       = 0x0B,
+    ST_LOC                         = 0x0C,
+    MUT_BORROW_LOC                 = 0x0D,
+    IMM_BORROW_LOC                 = 0x0E,
+    MUT_BORROW_FIELD               = 0x0F,
+    IMM_BORROW_FIELD               = 0x10,
+    CALL                           = 0x11,
+    PACK                           = 0x12,
+    UNPACK                         = 0x13,
+    READ_REF                       = 0x14,
+    WRITE_REF                      = 0x15,
+    ADD                            = 0x16,
+    SUB                            = 0x17,
+    MUL                            = 0x18,
+    MOD                            = 0x19,
+    DIV                            = 0x1A,
+    BIT_OR                         = 0x1B,
+    BIT_AND                        = 0x1C,
+    XOR                            = 0x1D,
+    OR                             = 0x1E,
+    AND                            = 0x1F,
+    NOT                            = 0x20,
+    EQ                             = 0x21,
+    NEQ                            = 0x22,
+    LT                             = 0x23,
+    GT                             = 0x24,
+    LE                             = 0x25,
+    GE                             = 0x26,
+    ABORT                          = 0x27,
+    NOP                            = 0x28,
+    EXISTS                         = 0x29,
+    MUT_BORROW_GLOBAL              = 0x2A,
+    IMM_BORROW_GLOBAL              = 0x2B,
+    MOVE_FROM                      = 0x2C,
+    MOVE_TO                        = 0x2D,
+    FREEZE_REF                     = 0x2E,
+    SHL                            = 0x2F,
+    SHR                            = 0x30,
+    LD_U8                          = 0x31,
+    LD_U128                        = 0x32,
+    CAST_U8                        = 0x33,
+    CAST_U64                       = 0x34,
+    CAST_U128                      = 0x35,
+    MUT_BORROW_FIELD_GENERIC       = 0x36,
+    IMM_BORROW_FIELD_GENERIC       = 0x37,
+    CALL_GENERIC                   = 0x38,
+    PACK_GENERIC                   = 0x39,
+    UNPACK_GENERIC                 = 0x3A,
+    EXISTS_GENERIC                 = 0x3B,
+    MUT_BORROW_GLOBAL_GENERIC      = 0x3C,
+    IMM_BORROW_GLOBAL_GENERIC      = 0x3D,
+    MOVE_FROM_GENERIC              = 0x3E,
+    MOVE_TO_GENERIC                = 0x3F,
+    VEC_PACK                       = 0x40,
+    VEC_LEN                        = 0x41,
+    VEC_IMM_BORROW                 = 0x42,
+    VEC_MUT_BORROW                 = 0x43,
+    VEC_PUSH_BACK                  = 0x44,
+    VEC_POP_BACK                   = 0x45,
+    VEC_UNPACK                     = 0x46,
+    VEC_SWAP                       = 0x47,
+    LD_U16                         = 0x48,
+    LD_U32                         = 0x49,
+    LD_U256                        = 0x4A,
+    CAST_U16                       = 0x4B,
+    CAST_U32                       = 0x4C,
+    CAST_U256                      = 0x4D,
+    PACK_VARIANT                   = 0x4E,
+    PACK_VARIANT_GENERIC           = 0x4F,
+    UNPACK_VARIANT                 = 0x50,
+    UNPACK_VARIANT_IMM_REF         = 0x51,
+    UNPACK_VARIANT_MUT_REF         = 0x52,
+    UNPACK_VARIANT_GENERIC         = 0x53,
+    UNPACK_VARIANT_GENERIC_IMM_REF = 0x54,
+    UNPACK_VARIANT_GENERIC_MUT_REF = 0x55,
+    VARIANT_SWITCH                 = 0x56,
 }
 
 /// Upper limit on the binary size
@@ -405,8 +430,12 @@ pub const VERSION_5: u32 = 5;
 ///  + u16, u32, u256 integers and corresponding Ld, Cast bytecodes
 pub const VERSION_6: u32 = 6;
 
+/// Version 7: changes compared with version 6
+///  + enums
+pub const VERSION_7: u32 = 7;
+
 // Mark which version is the latest version
-pub const VERSION_MAX: u32 = VERSION_6;
+pub const VERSION_MAX: u32 = VERSION_7;
 
 // Mark which oldest version is supported.
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented
@@ -655,6 +684,15 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         CastU16 => Opcodes::CAST_U16,
         CastU32 => Opcodes::CAST_U32,
         CastU256 => Opcodes::CAST_U256,
+        PackVariant(_, _) => Opcodes::PACK_VARIANT,
+        PackVariantGeneric(_, _) => Opcodes::PACK_VARIANT_GENERIC,
+        UnpackVariant(_, _) => Opcodes::UNPACK_VARIANT,
+        UnpackVariantImmRef(_, _) => Opcodes::UNPACK_VARIANT_IMM_REF,
+        UnpackVariantMutRef(_, _) => Opcodes::UNPACK_VARIANT_MUT_REF,
+        UnpackVariantGeneric(_, _) => Opcodes::UNPACK_VARIANT_GENERIC,
+        UnpackVariantGenericImmRef(_, _) => Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
+        UnpackVariantGenericMutRef(_, _) => Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
+        VariantSwitch(_) => Opcodes::VARIANT_SWITCH,
     };
     opcode as u8
 }
