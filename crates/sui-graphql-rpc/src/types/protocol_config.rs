@@ -25,17 +25,11 @@ pub(crate) struct ProtocolConfigs {
 
 #[ComplexObject]
 impl ProtocolConfigs {
-    async fn config(&self, key: String) -> Result<Option<ProtocolConfigAttr>> {
-        match self.configs.iter().find(|config| config.key == key) {
-            Some(config) => Ok(Some(config.clone())),
-            None => Ok(None),
-        }
+    async fn config(&self, key: String) -> Option<&ProtocolConfigAttr> {
+        self.configs.iter().find(|config| config.key == key)
     }
 
-    async fn feature_flag(&self, key: String) -> Result<Option<ProtocolConfigFeatureFlag>> {
-        match self.feature_flags.iter().find(|config| config.key == key) {
-            Some(config) => Ok(Some(config.clone())),
-            None => Ok(None),
-        }
+    async fn feature_flag(&self, key: String) -> Option<&ProtocolConfigFeatureFlag> {
+        self.feature_flags.iter().find(|config| config.key == key)
     }
 }
