@@ -16,6 +16,7 @@ import { Divider } from '~/ui/Divider';
 import { PageHeader } from '~/ui/PageHeader';
 import { LOCAL_STORAGE_SPLIT_PANE_KEYS, SplitPanes } from '~/ui/SplitPanes';
 import { TabHeader, TabsList, TabsTrigger } from '~/ui/Tabs';
+import { TotalStaked } from './TotalStaked';
 
 const LEFT_RIGHT_PANEL_MIN_SIZE = 30;
 const TOP_PANEL_MIN_SIZE = 20;
@@ -30,6 +31,7 @@ function AddressResultPageHeader({ address, loading }: { address: string; loadin
 			title={address}
 			subtitle={domainName}
 			before={<Domain32 className="h-6 w-6 text-steel-darker sm:h-10 sm:w-10" />}
+			after={<TotalStaked address={address} />}
 		/>
 	);
 }

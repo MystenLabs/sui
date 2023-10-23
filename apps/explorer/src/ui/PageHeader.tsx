@@ -16,6 +16,7 @@ export interface PageHeaderProps {
 	type: PageHeaderType;
 	status?: 'success' | 'failure';
 	before?: React.ReactNode;
+	after?: React.ReactNode;
 	error?: string;
 	loading?: boolean;
 }
@@ -32,12 +33,20 @@ const TYPE_TO_ICON: Record<PageHeaderType, typeof CallIcon | null> = {
 	Address: null,
 };
 
-export function PageHeader({ title, subtitle, type, before, error, loading }: PageHeaderProps) {
+export function PageHeader({
+	title,
+	subtitle,
+	type,
+	before,
+	error,
+	loading,
+	after,
+}: PageHeaderProps) {
 	const Icon = TYPE_TO_ICON[type];
 
 	return (
 		<div data-testid="pageheader" className="group">
-			<div className="flex items-center gap-3 sm:gap-5">
+			<div className="flex w-full items-center gap-3 sm:gap-5">
 				{before && (
 					<div className="self-start sm:self-center">
 						<div className="sm:min-w-16 flex h-10 w-10 min-w-10 items-center justify-center rounded-lg bg-white/60 sm:h-16 sm:w-16 sm:rounded-xl lg:h-18 lg:w-18 lg:min-w-18">
@@ -45,7 +54,7 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 						</div>
 					</div>
 				)}
-				<div>
+				<div className="flex w-full flex-col items-start justify-between gap-4 md:flex-row md:items-center">
 					<div>
 						<div className="mb-1 flex items-center gap-2">
 							{Icon && <Icon className="text-steel-dark" />}
@@ -96,6 +105,7 @@ export function PageHeader({ title, subtitle, type, before, error, loading }: Pa
 							</Banner>
 						</div>
 					)}
+					{after && <div className="sm:self-center md:ml-auto">{after}</div>}
 				</div>
 			</div>
 		</div>
