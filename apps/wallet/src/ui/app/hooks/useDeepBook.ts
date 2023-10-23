@@ -102,7 +102,7 @@ async function getDeepBookPriceForCoin(
 
 	const prices = await Promise.all(promises);
 
-	const filter: bigint[] = prices.filter((price): price is bigint => {
+const filter: bigint[] = prices.filter((price): price is bigint => typeof price === 'bigint' && price !== 0n);
 		return typeof price !== 'undefined' && typeof price === 'bigint' && price !== 0n;
 	});
 
