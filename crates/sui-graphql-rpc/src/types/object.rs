@@ -6,6 +6,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::name_service::NameService;
 use super::{
@@ -95,6 +96,27 @@ impl Object {
 
     async fn owner(&self) -> Option<Owner> {
         self.owner.as_ref().map(|q| Owner { address: *q })
+    }
+
+    async fn as_move_object(&self) -> Result<Option<MoveObject>> {
+        let Some(bcs) = &self.bcs else {
+            return Ok(None);
+        };
+
+        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|e| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Failed to deserialize object at {}: {e}", self.address),
+            )
+        })?;
+
+        Ok(
+            if matches!(native_object.data, NativeSuiObjectData::Move(_)) {
+                Some(MoveObject { native_object })
+            } else {
+                None
+            },
+        )
     }
 
     async fn as_move_package(&self) -> Result<Option<MovePackage>> {

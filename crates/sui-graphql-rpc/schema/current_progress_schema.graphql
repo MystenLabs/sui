@@ -453,6 +453,7 @@ type Object implements ObjectOwner {
 	previousTransactionBlock: TransactionBlock
 	kind: ObjectKind
 	owner: Owner
+	asMoveObject: MoveObject
 	asMovePackage: MovePackage
 	location: SuiAddress!
 	objectConnection(first: Int, after: String, last: Int, before: String, filter: ObjectFilter): ObjectConnection
