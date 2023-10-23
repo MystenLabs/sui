@@ -364,7 +364,7 @@ pub async fn execute_replay_command(
 
             sandbox_state.check_effects()?;
 
-            info!("Execution finished successfully. Local and on-chain effects match.");
+            println!("Execution finished successfully. Local and on-chain effects match.");
             Some((1u64, 1u64))
         }
 
