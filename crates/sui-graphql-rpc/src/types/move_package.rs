@@ -59,13 +59,14 @@ impl MovePackage {
             .map(|x| x.serialized_module_map())
         {
             if mod_map.is_empty() {
-               return Err(graphql_error(
+                return Err(graphql_error(
                     INTERNAL_SERVER_ERROR,
                     format!(
                         "Published package cannot contain zero modules. Id: {}",
                         self.native_object.id()
                     ),
-                ).into());
+                )
+                .into());
             }
 
             let mut forward = true;
