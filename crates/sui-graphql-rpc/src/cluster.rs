@@ -121,7 +121,7 @@ pub async fn serve_simulator(
 async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -> JoinHandle<()> {
     // Starts graphql server
     tokio::spawn(async move {
-        start_example_server(graphql_connection_config, ServiceConfig::default()).await;
+        start_example_server(graphql_connection_config, ServiceConfig::default()).await.unwrap();
     })
 }
 

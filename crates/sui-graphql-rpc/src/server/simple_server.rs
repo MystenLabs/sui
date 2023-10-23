@@ -20,7 +20,10 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 static PROM_ADDR: &str = "0.0.0.0:9184";
 
-pub async fn start_example_server(conn: ConnectionConfig, service_config: ServiceConfig) {
+pub async fn start_example_server(
+    conn: ConnectionConfig,
+    service_config: ServiceConfig,
+) -> Result<(), crate::error::Error> {
     println!("Starting server with config: {:?}", conn);
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_env()
@@ -60,9 +63,9 @@ pub async fn start_example_server(conn: ConnectionConfig, service_config: Servic
         .extension(FeatureGate)
         .extension(Logger::default())
         .extension(Timeout::default())
-        .build()
+        .build()?
         .run()
-        .await;
+        .await
 }
 
 fn start_prom(binding_address: SocketAddr) -> Registry {

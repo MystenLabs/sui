@@ -10,6 +10,7 @@ use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::builder::Server;
 use sui_graphql_rpc::server::simple_server::start_example_server;
+use tracing::error;
 
 #[tokio::main]
 async fn main() {
@@ -37,12 +38,21 @@ async fn main() {
             let service_config = service_config(config);
 
             println!("Starting server...");
-            start_example_server(conn, service_config).await;
+            start_example_server(conn, service_config).await.unwrap();
         }
         Command::FromConfig { path } => {
             let server = Server::from_yaml_config(path.to_str().unwrap());
             println!("Starting server...");
-            server.await.run().await;
+            server
+                .await
+                .map_err(|x| {
+                    error!("Error: {:?}", x);
+                    x
+                })
+                .unwrap()
+                .run()
+                .await
+                .unwrap();
         }
     }
 }

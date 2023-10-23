@@ -94,6 +94,18 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
+function isReceivingType(normalizedType: SuiMoveNormalizedType): boolean {
+	const tag = extractStructTag(normalizedType);
+	if (tag) {
+		return (
+			tag.Struct.address === '0x2' &&
+			tag.Struct.module === 'transfer' &&
+			tag.Struct.name === 'Receiving'
+		);
+	}
+	return false;
+}
+
 function expectClient(options: BuildOptions): SuiClient {
 	if (!options.client) {
 		throw new Error(
@@ -309,6 +321,14 @@ export class TransactionBlock {
 	 */
 	objectRef(...args: Parameters<(typeof Inputs)['ObjectRef']>) {
 		return this.object(Inputs.ObjectRef(...args));
+	}
+
+	/**
+	 * Add a new receiving input to the transaction using the fully-resolved object reference.
+	 * If you only have an object ID, use `builder.object(id)` instead.
+	 */
+	receivingRef(...args: Parameters<(typeof Inputs)['ReceivingRef']>) {
+		return this.object(Inputs.ReceivingRef(...args));
 	}
 
 	/**
@@ -758,6 +778,8 @@ export class TransactionBlock {
 						initialSharedVersion,
 						mutable,
 					});
+				} else if (normalizedType && isReceivingType(normalizedType)) {
+					input.value = Inputs.ReceivingRef(getObjectReference(object)!);
 				} else {
 					input.value = Inputs.ObjectRef(getObjectReference(object as SuiObjectResponse)!);
 				}

@@ -4,6 +4,8 @@
 use super::move_module::MoveModule;
 use super::object::Object;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
+use crate::error::code::INTERNAL_SERVER_ERROR;
+use crate::error::graphql_error;
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::Error;
 use async_graphql::*;
@@ -57,8 +59,16 @@ impl MovePackage {
             .map(|x| x.serialized_module_map())
         {
             if mod_map.is_empty() {
-                return Ok(None);
+                return Err(graphql_error(
+                    INTERNAL_SERVER_ERROR,
+                    format!(
+                        "Published package cannot contain zero modules. Id: {}",
+                        self.native_object.id()
+                    ),
+                )
+                .into());
             }
+
             let mut forward = true;
             let mut count = first.unwrap_or(DEFAULT_PAGE_SIZE as u64);
             count = last.unwrap_or(count);
@@ -67,6 +77,8 @@ impl MovePackage {
                 .clone()
                 .into_iter()
                 .collect::<Vec<(String, Vec<u8>)>>();
+
+            // ok to unwrap because we know mod_map is not empty
             let mut start = &if last.is_some() {
                 forward = false;
                 mod_list.last().map(|c| c.0.clone())

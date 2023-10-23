@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, path::PathBuf};
-
+use crate::error::Error as SuiGraphQLError;
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeSet, path::PathBuf};
 use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
@@ -180,18 +180,32 @@ pub struct ServerConfig {
 
 #[allow(dead_code)]
 impl ServerConfig {
-    pub fn from_yaml(path: &str) -> Self {
-        let contents = std::fs::read_to_string(path).unwrap();
-        serde_yaml::from_str::<Self>(&contents).unwrap()
+    pub fn from_yaml(path: &str) -> Result<Self, SuiGraphQLError> {
+        let contents = std::fs::read_to_string(path).map_err(|e| {
+            SuiGraphQLError::Internal(format!(
+                "Failed to read service cfg yaml file at {}, err: {}",
+                path, e
+            ))
+        })?;
+        serde_yaml::from_str::<Self>(&contents).map_err(|e| {
+            SuiGraphQLError::Internal(format!(
+                "Failed to deserialize service cfg from yaml: {}",
+                e
+            ))
+        })
     }
 
-    pub fn to_yaml(&self) -> String {
-        serde_yaml::to_string(&self).unwrap()
+    pub fn to_yaml(&self) -> Result<String, SuiGraphQLError> {
+        serde_yaml::to_string(&self).map_err(|e| {
+            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
+        })
     }
 
-    pub fn to_yaml_file(&self, path: PathBuf) {
-        let config = self.to_yaml();
-        std::fs::write(path, config).unwrap();
+    pub fn to_yaml_file(&self, path: PathBuf) -> Result<(), SuiGraphQLError> {
+        let config = self.to_yaml()?;
+        std::fs::write(path, config).map_err(|e| {
+            SuiGraphQLError::Internal(format!("Failed to create yaml from cfg: {}", e))
+        })
     }
 }
 
