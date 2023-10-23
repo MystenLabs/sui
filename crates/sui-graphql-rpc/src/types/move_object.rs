@@ -39,7 +39,12 @@ impl MoveObject {
                 self.native_object
                     .data
                     .try_as_move()
-                    .unwrap()
+                    .ok_or_else(|| {
+                        crate::error::Error::Internal(format!(
+                            "Failed to convert native object to move object: {}",
+                            self.native_object.id()
+                        ))
+                    })?
                     .contents()
                     .into(),
             )));

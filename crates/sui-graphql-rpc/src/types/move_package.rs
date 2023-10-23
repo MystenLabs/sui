@@ -67,6 +67,8 @@ impl MovePackage {
                 .clone()
                 .into_iter()
                 .collect::<Vec<(String, Vec<u8>)>>();
+
+            // ok to unwrap because we know mod_map is not empty
             let mut start = &if last.is_some() {
                 forward = false;
                 mod_list.last().map(|c| c.0.clone())

@@ -38,6 +38,7 @@ impl FromStr for BigInt {
         let mut signed = false;
         // check that all are digits and first can start with -
         if s.starts_with('-') {
+            // Ok to unwrap because we know it starts with -
             r = s.strip_prefix('-').unwrap();
             signed = true;
         }

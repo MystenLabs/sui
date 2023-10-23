@@ -50,7 +50,9 @@ pub async fn start_cluster(connection_config: ConnectionConfig) -> Cluster {
     let addr = format!("http://{}:{}/", conn.host, conn.port);
 
     let graphql_server_handle = tokio::spawn(async move {
-        start_example_server(conn, ServiceConfig::default()).await;
+        start_example_server(conn, ServiceConfig::default())
+            .await
+            .unwrap();
     });
 
     let client = SimpleClient::new(addr);
