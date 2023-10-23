@@ -1,10 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use diesel::prelude::*;
 use diesel::sql_types::{BigInt, Binary, Text};
 use diesel::QueryableByName;
 
+use move_core_types::identifier::Identifier;
+use sui_json_rpc_types::MoveFunctionName;
+use sui_types::base_types::ObjectID;
+
+use crate::errors::IndexerError;
 use crate::schema_v2::{move_call_metrics, move_calls};
 
 #[derive(Clone, Debug, Queryable, Insertable)]
@@ -45,6 +52,24 @@ pub struct QueriedMoveCallMetrics {
     pub move_module: String,
     pub move_function: String,
     pub count: i64,
+}
+
+impl TryInto<(MoveFunctionName, usize)> for QueriedMoveCallMetrics {
+    type Error = IndexerError;
+
+    fn try_into(self) -> Result<(MoveFunctionName, usize), Self::Error> {
+        let package = ObjectID::from_str(&self.move_package)?;
+        let module = Identifier::from_str(&self.move_module)?;
+        let function = Identifier::from_str(&self.move_function)?;
+        Ok((
+            MoveFunctionName {
+                package,
+                module,
+                function,
+            },
+            self.count as usize,
+        ))
+    }
 }
 
 impl From<QueriedMoveCallMetrics> for StoredMoveCallMetrics {
