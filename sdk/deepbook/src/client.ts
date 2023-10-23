@@ -380,7 +380,7 @@ export class DeepBookClient {
 		tokenObjectIn: TransactionResult | TransactionObjectArgument | string,
 		amountIn: bigint, // quantity of USDC
 		currentAddress: string,
-		clientOrderId: string | undefined = undefined,
+		clientOrderId?: string,
 		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
 		// in this case, we assume that the tokenIn--tokenOut always exists.
