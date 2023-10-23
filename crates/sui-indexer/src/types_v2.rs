@@ -246,7 +246,7 @@ impl IndexedObject {
         df_info: Option<DynamicFieldInfo>,
     ) -> Self {
         let (owner_type, owner_id) = owner_to_owner_info(&object.owner);
-        let coin_type = object.coin_type_maybe().map(|t| t.to_string());
+        let coin_type = object.coin_type_maybe().map(|t| t.to_canonical_string());
         let coin_balance = if coin_type.is_some() {
             Some(object.get_coin_value_unsafe())
         } else {

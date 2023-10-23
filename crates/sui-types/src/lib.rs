@@ -268,3 +268,31 @@ fn is_object_struct(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_sui_struct_tag_short_account_addr() {
+        let result = parse_sui_struct_tag("0x2::sui::SUI").expect("should not error");
+        assert_eq!(result.to_string(), "0x2::sui::SUI");
+        assert_eq!(
+            result.to_canonical_string(),
+            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+        );
+    }
+
+    #[test]
+    fn test_parse_sui_struct_tag_long_account_addr() {
+        let result = parse_sui_struct_tag(
+            "0x00000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+        )
+        .expect("should not error");
+        assert_eq!(result.to_string(), "0x2::sui::SUI");
+        assert_eq!(
+            result.to_canonical_string(),
+            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+        );
+    }
+}

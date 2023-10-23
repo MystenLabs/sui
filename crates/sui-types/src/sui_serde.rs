@@ -204,31 +204,6 @@ fn to_sui_type_tag_string(value: &TypeTag) -> Result<String, fmt::Error> {
     }
 }
 
-pub fn to_sui_struct_tag_string_canonical(value: &StructTag) -> Result<String, fmt::Error> {
-    let mut f = String::new();
-    // trim leading zeros if address is in SUI_ADDRESSES
-    let address = value.address.to_canonical_string();
-
-    write!(f, "0x{}::{}::{}", address, value.module, value.name)?;
-    if let Some(first_ty) = value.type_params.first() {
-        write!(f, "<")?;
-        write!(f, "{}", to_sui_type_tag_string_canonical(first_ty)?)?;
-        for ty in value.type_params.iter().skip(1) {
-            write!(f, ", {}", to_sui_type_tag_string_canonical(ty)?)?;
-        }
-        write!(f, ">")?;
-    }
-    Ok(f)
-}
-
-fn to_sui_type_tag_string_canonical(value: &TypeTag) -> Result<String, fmt::Error> {
-    match value {
-        TypeTag::Vector(t) => Ok(format!("vector<{}>", to_sui_type_tag_string(t)?)),
-        TypeTag::Struct(s) => to_sui_struct_tag_string_canonical(s),
-        _ => Ok(value.to_string()),
-    }
-}
-
 impl<'de> DeserializeAs<'de, StructTag> for SuiStructTag {
     fn deserialize_as<D>(deserializer: D) -> Result<StructTag, D::Error>
     where

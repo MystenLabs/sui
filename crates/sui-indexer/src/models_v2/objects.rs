@@ -3,7 +3,6 @@
 
 use move_core_types::language_storage::StructTag;
 use serde::de::DeserializeOwned;
-use sui_types::sui_serde::to_sui_struct_tag_string_canonical;
 use std::collections::HashMap;
 
 use diesel::prelude::*;
@@ -78,8 +77,8 @@ impl From<IndexedObject> for StoredObject {
             owner_id: o.owner_id.map(|id| id.to_vec()),
             object_type: o.object.type_().map(|t| {
                 let s: StructTag = t.clone().into();
-                to_sui_struct_tag_string_canonical(&s)
-            }).transpose().unwrap(),
+                s.to_canonical_string()
+            }),
             // object_type: o.object.type_().map(|t| t.to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
@@ -300,29 +299,38 @@ impl From<CoinBalance> for Balance {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_canonical_string_for_object_type() {
+    fn test_canonical_string_of_object_type_for_coin() {
         let test_obj = Object::new_gas_for_testing();
-        let indexed_obj = IndexedObject::from_object(
-            1,
-            test_obj,
-            None
-        );
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
 
         let stored_obj = StoredObject::from(indexed_obj);
 
         match stored_obj.object_type {
             Some(t) => {
-                assert_eq!(t, "0x0000000000000000000000000000000000000000000000000000000000000002::staking_pool::StakedSui");
+                assert_eq!(t, "0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>");
             }
             None => {
                 panic!("object_type should not be none");
             }
         }
+    }
+
+    #[test]
+    fn test_convert_stored_obj_to_sui_coin() {
+        let test_obj = Object::new_gas_for_testing();
+        let indexed_obj = IndexedObject::from_object(1, test_obj, None);
+
+        let stored_obj = StoredObject::from(indexed_obj);
+
+        let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
+        assert_eq!(
+            sui_coin.coin_type,
+            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+        );
     }
 }

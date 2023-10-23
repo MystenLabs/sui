@@ -7,6 +7,7 @@ use crate::models_v2::display::StoredDisplay;
 use async_trait::async_trait;
 use itertools::Itertools;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::language_storage::StructTag;
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
@@ -694,11 +695,12 @@ fn try_create_dynamic_field_info(
             let version = object.version();
             let digest = object.digest();
             let object_type = object.data.type_().unwrap().clone();
+            let struct_tag: StructTag = object_type.into();
             DynamicFieldInfo {
                 name,
                 bcs_name,
                 type_,
-                object_type: object_type.to_string(),
+                object_type: struct_tag.to_canonical_string(),
                 object_id,
                 version,
                 digest,
@@ -708,7 +710,7 @@ fn try_create_dynamic_field_info(
             name,
             bcs_name,
             type_,
-            object_type: move_object.into_type().into_type_params()[1].to_string(),
+            object_type: move_object.into_type().into_type_params()[1].to_canonical_string(),
             object_id: o.id(),
             version: o.version(),
             digest: o.digest(),
