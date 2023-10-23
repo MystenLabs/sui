@@ -586,7 +586,7 @@ module sui_system::validator {
         staking_pool::pool_token_exchange_rate_at_epoch(&self.staking_pool, epoch)
     }
 
-    public fun get_deactivation_epoch_for_validator(self: &Validator):  (bool, u64) {
+    public (friend) fun get_deactivation_epoch_for_validator(self: &Validator):  (bool, u64) {
         staking_pool::get_deactivation_epoch(&self.staking_pool)
     }
 

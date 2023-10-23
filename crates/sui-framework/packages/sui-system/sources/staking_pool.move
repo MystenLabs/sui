@@ -306,7 +306,7 @@ module sui_system::staking_pool {
     }
 
     /// Returns a boolean value indicating if the StakingPool is in-active or not, the epoch number the StakingPool was de-activated at if it is inactive.
-    public fun get_deactivation_epoch(pool: &StakingPool): (bool, u64) {
+    public (friend) fun get_deactivation_epoch(pool: &StakingPool): (bool, u64) {
         if (option::is_some(&pool.deactivation_epoch)) {
             return (true, *option::borrow(&pool.deactivation_epoch))
         };
