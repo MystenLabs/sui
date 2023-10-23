@@ -27,16 +27,16 @@ pub struct RowCountEstimation {
     pub estimated_count: i64,
 }
 
-impl Into<NetworkMetrics> for StoredNetworkMetrics {
-    fn into(self) -> NetworkMetrics {
-        NetworkMetrics {
-            current_checkpoint: self.checkpoint as u64,
-            current_epoch: self.epoch as u64,
-            current_tps: self.real_time_tps,
-            tps_30_days: self.peak_tps_30d,
-            total_addresses: self.total_addresses as u64,
-            total_objects: self.total_objects as u64,
-            total_packages: self.total_packages as u64,
+impl From<StoredNetworkMetrics> for NetworkMetrics {
+    fn from(metrics: StoredNetworkMetrics) -> Self {
+        Self {
+            current_checkpoint: metrics.checkpoint as u64,
+            current_epoch: metrics.epoch as u64,
+            current_tps: metrics.real_time_tps,
+            tps_30_days: metrics.peak_tps_30d,
+            total_addresses: metrics.total_addresses as u64,
+            total_objects: metrics.total_objects as u64,
+            total_packages: metrics.total_packages as u64,
         }
     }
 }

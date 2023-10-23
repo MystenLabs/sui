@@ -59,15 +59,15 @@ pub struct StoredAddressMetrics {
     pub daily_active_addresses: i64,
 }
 
-impl Into<AddressMetrics> for StoredAddressMetrics {
-    fn into(self) -> AddressMetrics {
-        AddressMetrics {
-            checkpoint: self.checkpoint as u64,
-            epoch: self.epoch as u64,
-            timestamp_ms: self.timestamp_ms as u64,
-            cumulative_addresses: self.cumulative_addresses as u64,
-            cumulative_active_addresses: self.cumulative_active_addresses as u64,
-            daily_active_addresses: self.daily_active_addresses as u64,
+impl From<StoredAddressMetrics> for AddressMetrics {
+    fn from(metrics: StoredAddressMetrics) -> Self {
+        Self {
+            checkpoint: metrics.checkpoint as u64,
+            epoch: metrics.epoch as u64,
+            timestamp_ms: metrics.timestamp_ms as u64,
+            cumulative_addresses: metrics.cumulative_addresses as u64,
+            cumulative_active_addresses: metrics.cumulative_active_addresses as u64,
+            daily_active_addresses: metrics.daily_active_addresses as u64,
         }
     }
 }
