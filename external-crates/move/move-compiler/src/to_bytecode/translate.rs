@@ -21,6 +21,7 @@ use crate::{
         StructName, UnaryOp, UnaryOp_,
     },
     shared::{unique_map::UniqueMap, *},
+    typing::core::is_public_for_testing,
     FullyCompiledProgram,
 };
 use move_binary_format::file_format as F;
@@ -84,7 +85,7 @@ fn extract_decls(
             })
         })
         .collect();
-    let context = &mut Context::new(compilation_env, None);
+    let context = &mut Context::new(compilation_env, None, None);
     let fdecls = all_modules()
         .flat_map(|(m, mdef)| {
             mdef.functions
@@ -177,10 +178,9 @@ fn module(
         (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
     >,
 ) -> Option<AnnotatedCompiledUnit> {
-    let mut context = Context::new(compilation_env, Some(&ident));
     let G::ModuleDefinition {
         warning_filter: _warning_filter,
-        package_name: _package_name,
+        package_name,
         attributes: _attributes,
         is_source_module: _is_source_module,
         dependency_order: _dependency_order,
@@ -189,6 +189,7 @@ fn module(
         constants: gconstants,
         functions: gfunctions,
     } = mdef;
+    let mut context = Context::new(compilation_env, package_name, Some(&ident));
     let structs = struct_defs(&mut context, &ident, gstructs);
     let constants = constants(&mut context, Some(&ident), gconstants);
     let (collected_function_infos, functions) = functions(&mut context, Some(&ident), gfunctions);
@@ -281,7 +282,7 @@ fn script(
     >,
 ) -> Option<AnnotatedCompiledUnit> {
     let loc = name.loc();
-    let mut context = Context::new(compilation_env, None);
+    let mut context = Context::new(compilation_env, package_name, None);
 
     let constants = constants(&mut context, None, gconstants);
 
@@ -619,7 +620,7 @@ fn function(
         signature,
         body,
     } = fdef;
-    let v = visibility(v);
+    let v = visibility(context, &f, entry, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);
     let body = match body.value {
@@ -657,8 +658,23 @@ fn function(
     )
 }
 
-fn visibility(v: Visibility) -> IR::FunctionVisibility {
+fn visibility(
+    context: &mut Context,
+    function_name: &FunctionName,
+    entry: Option<Loc>,
+    v: Visibility,
+) -> IR::FunctionVisibility {
     match v {
+        _ if is_public_for_testing(
+            context.env,
+            context.current_package(),
+            function_name,
+            entry,
+        )
+        .is_some() =>
+        {
+            IR::FunctionVisibility::Public
+        }
         Visibility::Public(_) => IR::FunctionVisibility::Public,
         Visibility::Friend(_) => IR::FunctionVisibility::Friend,
         Visibility::Internal => IR::FunctionVisibility::Internal,

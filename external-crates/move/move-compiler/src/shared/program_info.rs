@@ -7,7 +7,7 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use crate::{
-    expansion::ast::{AbilitySet, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, Attributes, ModuleIdent, Visibility},
     naming::ast::{
         self as N, FunctionSignature, ResolvedUseFuns, StructDefinition, StructTypeParameter, Type,
     },
@@ -20,19 +20,23 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct FunctionInfo {
+    pub attributes: Attributes,
     pub defined_loc: Loc,
     pub visibility: Visibility,
+    pub entry: Option<Loc>,
     pub signature: FunctionSignature,
 }
 
 #[derive(Debug, Clone)]
 pub struct ConstantInfo {
+    pub attributes: Attributes,
     pub defined_loc: Loc,
     pub signature: Type,
 }
 
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
+    pub attributes: Attributes,
     pub package: Option<Symbol>,
     pub use_funs: ResolvedUseFuns,
     pub friends: UniqueMap<ModuleIdent, Loc>,
@@ -54,11 +58,14 @@ macro_rules! program_info {
         let mut modules = UniqueMap::maybe_from_iter(all_modules.map(|(mident, mdef)| {
             let structs = mdef.structs.clone();
             let functions = mdef.functions.ref_map(|fname, fdef| FunctionInfo {
+                attributes: fdef.attributes.clone(),
                 defined_loc: fname.loc(),
                 visibility: fdef.visibility.clone(),
+                entry: fdef.entry,
                 signature: fdef.signature.clone(),
             });
             let constants = mdef.constants.ref_map(|cname, cdef| ConstantInfo {
+                attributes: cdef.attributes.clone(),
                 defined_loc: cname.loc(),
                 signature: cdef.signature.clone(),
             });
@@ -67,6 +74,7 @@ macro_rules! program_info {
                 .map(|module_use_funs| module_use_funs.remove(&mident).unwrap())
                 .unwrap_or_default();
             let minfo = ModuleInfo {
+                attributes: mdef.attributes.clone(),
                 package: mdef.package_name,
                 use_funs,
                 friends: mdef.friends.ref_map(|_, friend| friend.loc),
