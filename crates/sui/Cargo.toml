@@ -50,6 +50,7 @@ sui-move = { workspace = true, features = ["all"] }
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
+sui-replay.workspace = true
 
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
