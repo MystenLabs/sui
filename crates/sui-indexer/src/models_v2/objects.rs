@@ -79,7 +79,6 @@ impl From<IndexedObject> for StoredObject {
                 let s: StructTag = t.clone().into();
                 s.to_canonical_string()
             }),
-            // object_type: o.object.type_().map(|t| t.to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
