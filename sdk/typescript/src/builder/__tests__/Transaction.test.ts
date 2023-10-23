@@ -13,6 +13,23 @@ it('can construct and serialize an empty tranaction', () => {
 	expect(() => tx.serialize()).not.toThrow();
 });
 
+it('can construct a receiving transaction argument', () => {
+	const tx = new TransactionBlock();
+	tx.object(Inputs.ReceivingRef(ref()));
+	expect(() => tx.serialize()).not.toThrow();
+});
+
+it('receiving transaction argument different from object argument', () => {
+	const oref = ref();
+	const rtx = new TransactionBlock();
+	rtx.object(Inputs.ReceivingRef(oref));
+	const otx = new TransactionBlock();
+	otx.object(Inputs.ObjectRef(oref));
+	expect(() => rtx.serialize()).not.toThrow();
+	expect(() => otx.serialize()).not.toThrow();
+	expect(otx.serialize()).not.toEqual(rtx.serialize());
+});
+
 it('can be serialized and deserialized to the same values', () => {
 	const tx = new TransactionBlock();
 	tx.add(Transactions.SplitCoins(tx.gas, [tx.pure.u64(100)]));
@@ -104,6 +121,26 @@ describe('offline build', () => {
 			}),
 		);
 		await tx.build();
+	});
+
+	it('uses a receiving argument', async () => {
+		const tx = setup();
+		tx.object(Inputs.ObjectRef(ref()));
+		const coin = tx.add(Transactions.SplitCoins(tx.gas, [tx.pure(100)]));
+		tx.add(Transactions.MergeCoins(tx.gas, [coin, tx.object(Inputs.ObjectRef(ref()))]));
+		tx.add(
+			Transactions.MoveCall({
+				target: '0x2::devnet_nft::mint',
+				typeArguments: [],
+				arguments: [tx.object(Inputs.ObjectRef(ref())), tx.object(Inputs.ReceivingRef(ref()))],
+			}),
+		);
+
+		const bytes = await tx.build();
+		const tx2 = TransactionBlock.from(bytes);
+		const bytes2 = await tx2.build();
+
+		expect(bytes).toEqual(bytes2);
 	});
 
 	it('builds a more complex interaction', async () => {
