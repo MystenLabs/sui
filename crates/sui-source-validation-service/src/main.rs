@@ -11,12 +11,19 @@ use telemetry_subscribers::TelemetryConfig;
 
 use sui_source_validation_service::{
     host_port, initialize, parse_config, serve, watch_for_upgrades, AppState, DirectorySource,
-    Network, PackageSource, RepositorySource,
+    Networks, PackageSource, RepositorySource,
 };
 
 #[derive(Parser, Debug)]
 struct Args {
     config_path: PathBuf,
+    #[clap(
+        long,
+        default_value = "mainnet",
+        use_value_delimiter = true,
+        value_delimiter = ','
+    )]
+    monitor_networks: Networks,
 }
 
 #[tokio::main]
@@ -31,14 +38,8 @@ pub async fn main() -> anyhow::Result<()> {
 
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let mut threads = vec![];
-    let networks_to_watch = vec![
-        Network::Mainnet,
-        Network::Testnet,
-        Network::Devnet,
-        Network::Localnet,
-    ];
     // spawn a watcher thread for upgrades for each network
-    for network in networks_to_watch {
+    for network in args.monitor_networks.values {
         let app_state_copy = app_state.clone();
         let packages: Vec<_> = package_config
             .clone()
