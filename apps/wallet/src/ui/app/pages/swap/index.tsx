@@ -332,7 +332,7 @@ export function SwapPageContent() {
 		},
 	});
 
-	const handleOnsubmit: SubmitHandler<FormValues> = async (formData) => {
+	const handleOnsubmit: SubmitHandler<FormValues> = (formData) => {
 		handleSwap(formData);
 	};
 
