@@ -1,0 +1,22 @@
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_visibility_friend_script.move:2:20
+  │
+2 │     public(friend) public(script) fun f() {}
+  │     -------------- ^^^^^^^^^^^^^^ Duplicate visibility modifier
+  │     │               
+  │     Visibility modifier previously given here
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/function_visibility_friend_script.move:2:20
+  │
+2 │     public(friend) public(script) fun f() {}
+  │                    ^^^^^^^^^^^^^^ 'public(script)' is deprecated in favor of the 'entry' modifier. Replace with 'public entry'
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/parser/function_visibility_friend_script.move:3:20
+  │
+3 │     public(script) public(friend) fun g() {}
+  │     -------------- ^^^^^^^^^^^^^^ Duplicate visibility modifier
+  │     │               
+  │     Visibility modifier previously given here
+
