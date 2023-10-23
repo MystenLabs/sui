@@ -203,6 +203,7 @@ export default {
 			minWidth: {
 				10: '2.5rem',
 				18: '4.5rem',
+				44: '11rem',
 				50: '12.5rem',
 				transactionColumn: '31.875rem',
 				smallThumbNailsViewContainer: '13.125rem',
