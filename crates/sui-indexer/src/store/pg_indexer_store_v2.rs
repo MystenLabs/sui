@@ -104,7 +104,7 @@ impl PgIndexerStoreV2 {
         }
     }
 
-    fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
+    pub fn get_latest_tx_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
         read_only_blocking!(&self.blocking_cp, |conn| {
             checkpoints::dsl::checkpoints
                 .select(max(checkpoints::sequence_number))

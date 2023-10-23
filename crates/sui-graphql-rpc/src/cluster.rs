@@ -11,6 +11,7 @@ use simulacrum::Simulacrum;
 use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::indexer_v2::IndexerV2;
 use sui_indexer::metrics::IndexerMetrics;
@@ -21,7 +22,9 @@ use sui_indexer::IndexerConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 
 const VALIDATOR_COUNT: usize = 7;
 const EPOCH_DURATION_MS: u64 = 15000;
@@ -57,9 +60,16 @@ pub async fn start_cluster(
     let (pg_store, pg_handle) =
         start_test_indexer(Some(db_url), val_fn.rpc_url().to_string()).await;
 
+    // Wait for servers to start and catchup to genesis checkpoint
+    wait_for_checkpoint(&pg_store, Some((0, Duration::from_secs(20)))).await;
+
     // Starts graphql server
-    let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    let (graphql_server_handle, graphql_server_ready) =
+        start_graphql_server(graphql_connection_config.clone()).await;
+
+    if let Err(e) = timeout(Duration::from_secs(10), graphql_server_ready.notified()).await {
+        panic!("Did not receive server start notif within 10 s: {}", e);
+    }
 
     let server_url = format!(
         "http://{}:{}/",
@@ -97,9 +107,16 @@ pub async fn serve_simulator(
     let (pg_store, pg_handle) =
         start_test_indexer(Some(db_url), format!("http://{}", sim_server_url)).await;
 
+    // Wait for servers to start and catchup to first checkpoint
+    wait_for_checkpoint(&pg_store, Some((1, Duration::from_secs(20)))).await;
+
     // Starts graphql server
-    let graphql_server_handle = start_graphql_server(graphql_connection_config.clone()).await;
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    let (graphql_server_handle, graphql_server_ready) =
+        start_graphql_server(graphql_connection_config.clone()).await;
+
+    if let Err(e) = timeout(Duration::from_secs(10), graphql_server_ready.notified()).await {
+        panic!("Did not receive server start notif within 10 s: {}", e);
+    }
 
     let server_url = format!(
         "http://{}:{}/",
@@ -118,13 +135,21 @@ pub async fn serve_simulator(
     }
 }
 
-async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -> JoinHandle<()> {
+async fn start_graphql_server(
+    graphql_connection_config: ConnectionConfig,
+) -> (JoinHandle<()>, Arc<Notify>) {
+    let notify = Arc::new(Notify::new());
+    let notify_clone = notify.clone();
     // Starts graphql server
-    tokio::spawn(async move {
-        start_example_server(graphql_connection_config, ServiceConfig::default())
-            .await
-            .unwrap();
-    })
+    (
+        tokio::spawn(async move {
+            start_example_server(graphql_connection_config, ServiceConfig::default())
+                .await
+                .unwrap();
+            notify_clone.notify_one();
+        }),
+        notify,
+    )
 }
 
 async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16>) -> TestCluster {
@@ -186,4 +211,33 @@ pub async fn start_test_indexer(
         IndexerV2::start_writer(&config, store_clone, indexer_metrics).await
     });
     (store, handle)
+}
+
+async fn wait_for_checkpoint(
+    store: &PgIndexerStoreV2,
+    wait_sync_till_checkpoint_with_timeout: Option<(u64, Duration)>,
+) {
+    if wait_sync_till_checkpoint_with_timeout.is_none() {
+        return;
+    }
+    let (target, timeout) = wait_sync_till_checkpoint_with_timeout.unwrap();
+
+    let since = std::time::Instant::now();
+    let mut cp_res = store.get_latest_tx_checkpoint_sequence_number();
+    while cp_res.is_err() {
+        cp_res = store.get_latest_tx_checkpoint_sequence_number();
+    }
+    let mut cp = cp_res.unwrap().unwrap();
+    while cp < target {
+        let now = std::time::Instant::now();
+        if now.duration_since(since) > timeout {
+            panic!("wait_for_checkpoint timed out!");
+        }
+        tokio::task::yield_now().await;
+        let mut cp_res = store.get_latest_tx_checkpoint_sequence_number();
+        while cp_res.is_err() {
+            cp_res = store.get_latest_tx_checkpoint_sequence_number();
+        }
+        cp = cp_res.unwrap().unwrap();
+    }
 }
