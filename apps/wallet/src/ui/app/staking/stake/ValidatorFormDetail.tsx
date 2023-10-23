@@ -4,6 +4,10 @@
 import { Card } from '_app/shared/card';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
 import { Text } from '_src/ui/app/shared/text';
 import { IconTooltip } from '_src/ui/app/shared/tooltip';
 import {
@@ -43,8 +47,10 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		isLoading,
 		isError,
 		error,
-	} = useGetDelegatedStake(accountAddress || '', {
-		autoRefetch: true,
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 
 	const { data: rollingAverageApys } = useGetValidatorsApy();

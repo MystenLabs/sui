@@ -12,7 +12,11 @@ import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { useAppSelector, useCoinsReFetchingConfig } from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
-import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+	MIN_NUMBER_SUI_TO_STAKE,
+} from '_src/shared/constants';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
 import { useCoinMetadata, useGetDelegatedStake, useGetValidatorsApy } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -45,8 +49,10 @@ export function DelegationDetailCard({ validatorAddress, stakedId }: DelegationD
 		data: allDelegation,
 		isLoading,
 		isError,
-	} = useGetDelegatedStake(accountAddress || '', {
-		autoRefetch: true,
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 
 	const apiEnv = useAppSelector(({ app }) => app.apiEnv);

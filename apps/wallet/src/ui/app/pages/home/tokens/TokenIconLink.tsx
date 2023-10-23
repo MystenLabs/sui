@@ -3,6 +3,10 @@
 
 import { LargeButton } from '_app/shared/LargeButton';
 import { ampli } from '_src/shared/analytics/ampli';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
 import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin, useGetDelegatedStake } from '@mysten/core';
 import { WalletActionStake24 } from '@mysten/icons';
@@ -16,8 +20,10 @@ export function TokenIconLink({
 	accountAddress: string;
 	disabled: boolean;
 }) {
-	const { data: delegatedStake, isLoading } = useGetDelegatedStake(accountAddress, {
-		autoRefetch: true,
+	const { data: delegatedStake, isLoading } = useGetDelegatedStake({
+		address: accountAddress,
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 
 	// Total active stake for all delegations

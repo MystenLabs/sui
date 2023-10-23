@@ -17,7 +17,9 @@ export function DelegationDetail() {
 	const stakeIdParams = searchParams.get('staked');
 	const navigate = useNavigate();
 	const accountAddress = useActiveAddress();
-	const { data, isLoading } = useGetDelegatedStake(accountAddress || '');
+	const { data, isLoading } = useGetDelegatedStake({
+		address: accountAddress || '',
+	});
 
 	if (!validatorAddressParams || !stakeIdParams) {
 		return <Navigate to={'/stake'} replace={true} />;

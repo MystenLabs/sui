@@ -3,36 +3,19 @@
 
 import { useSuiClient } from '@mysten/dapp-kit';
 import type { DelegatedStake } from '@mysten/sui.js/client';
-import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
-type UseGetDelegatedStakeOptions = {
-	autoRefetch?: boolean;
-};
+type UseGetDelegatedStakesOptions = {
+	address: string;
+} & UseQueryOptions<DelegatedStake[], Error>;
 
-const STALE_TIME = 10_000;
-const REFETCH_INTERVAL = 30_000;
-
-export function useGetDelegatedStake(
-	address: string,
-	options?: UseGetDelegatedStakeOptions,
-): UseQueryResult<DelegatedStake[], Error> {
+export function useGetDelegatedStake(options: UseGetDelegatedStakesOptions) {
 	const client = useSuiClient();
-	const { autoRefetch = false } = options || {};
-
-	// Generalized query options
-	const refetchQueryOptions = {
-		staleTime: STALE_TIME,
-		refetchInterval: REFETCH_INTERVAL,
-	};
-
-	const defaultQueryOptions = {
-		staleTime: Infinity,
-		refetchInterval: false,
-	} as const;
+	const { address, ...queryOptions } = options;
 
 	return useQuery({
 		queryKey: ['delegated-stakes', address],
 		queryFn: () => client.getStakes({ owner: address }),
-		...(autoRefetch ? refetchQueryOptions : defaultQueryOptions),
+		...queryOptions,
 	});
 }

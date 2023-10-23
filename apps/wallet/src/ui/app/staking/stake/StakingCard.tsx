@@ -10,7 +10,11 @@ import { parseAmount } from '_helpers';
 import { useCoinsReFetchingConfig } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
 import { ampli } from '_src/shared/analytics/ampli';
-import { MIN_NUMBER_SUI_TO_STAKE } from '_src/shared/constants';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+	MIN_NUMBER_SUI_TO_STAKE,
+} from '_src/shared/constants';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { useCoinMetadata, useGetDelegatedStake } from '@mysten/core';
@@ -61,8 +65,10 @@ function StakingCard() {
 	const validatorAddress = searchParams.get('address');
 	const stakeSuiIdParams = searchParams.get('staked');
 	const unstake = searchParams.get('unstake') === 'true';
-	const { data: allDelegation, isLoading } = useGetDelegatedStake(accountAddress || '', {
-		autoRefetch: true,
+	const { data: allDelegation, isLoading } = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 	const effectsOnlySharedTransactions = useFeatureIsOn(
 		FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string,

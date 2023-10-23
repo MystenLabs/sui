@@ -4,6 +4,10 @@
 import Alert from '_components/alert';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
 import { useGetDelegatedStake } from '@mysten/core';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,8 +22,10 @@ export function Validators() {
 		isLoading,
 		isError,
 		error,
-	} = useGetDelegatedStake(accountAddress || '', {
-		autoRefetch: true,
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 
 	const navigate = useNavigate();

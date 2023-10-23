@@ -8,7 +8,9 @@ import { Text, Heading } from '@mysten/ui';
 import { Sui } from '@mysten/icons';
 
 export function TotalStaked({ address }: { address: string }) {
-	const { data: delegatedStake } = useGetDelegatedStake(address);
+	const { data: delegatedStake } = useGetDelegatedStake({
+		address,
+	});
 
 	// Total active stake for all delegations
 	const totalActivePendingStake = useMemo(() => {
@@ -27,7 +29,7 @@ export function TotalStaked({ address }: { address: string }) {
 				<Text variant="pBody/semibold" color="steel-dark" uppercase>
 					Staking
 				</Text>
-				<Heading variant="heading6/semibold" color="hero-darkest-80" as="div">
+				<Heading variant="heading6/semibold" color="hero-darkest" as="div">
 					{formatted} {symbol}
 				</Heading>
 			</div>

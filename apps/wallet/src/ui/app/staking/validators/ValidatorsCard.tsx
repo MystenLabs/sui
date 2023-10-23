@@ -8,6 +8,10 @@ import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { ampli } from '_src/shared/analytics/ampli';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_src/shared/constants';
 import { useGetDelegatedStake } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Plus12 } from '@mysten/icons';
@@ -26,8 +30,10 @@ export function ValidatorsCard() {
 		isLoading,
 		isError,
 		error,
-	} = useGetDelegatedStake(accountAddress || '', {
-		autoRefetch: true,
+	} = useGetDelegatedStake({
+		address: accountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
 	});
 
 	const { data: system } = useSuiClientQuery('getLatestSuiSystemState');
