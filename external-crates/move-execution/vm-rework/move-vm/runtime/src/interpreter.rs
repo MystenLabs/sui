@@ -141,6 +141,7 @@ impl Interpreter {
         }
     }
 
+    #[allow(unused_variables)]
     pub fn pre_entrypoint(
         plugins: &mut Vec<Box<dyn InterpreterHook>>,
         gas_meter: &mut impl GasMeter,
@@ -167,6 +168,7 @@ impl Interpreter {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     pub fn pre_fn(
         interpreter: &mut Interpreter,
         plugins: &mut Vec<Box<dyn InterpreterHook>>,
@@ -187,6 +189,7 @@ impl Interpreter {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     pub fn post_fn(
         _interpreter: &mut Interpreter,
         plugins: &mut Vec<Box<dyn InterpreterHook>>,
@@ -202,6 +205,7 @@ impl Interpreter {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     pub fn pre_instr(
         interpreter: &mut Interpreter,
         plugins: &mut Vec<Box<dyn InterpreterHook>>,
@@ -230,6 +234,7 @@ impl Interpreter {
         Ok(())
     }
 
+    #[allow(unused_variables)]
     pub fn post_instr(
         interpreter: &mut Interpreter,
         plugins: &mut Vec<Box<dyn InterpreterHook>>,
