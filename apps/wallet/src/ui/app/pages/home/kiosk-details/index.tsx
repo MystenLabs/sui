@@ -20,7 +20,7 @@ function KioskDetailsPage() {
 	const [searchParams] = useSearchParams();
 	const kioskId = searchParams.get('kioskId');
 	const accountAddress = useActiveAddress();
-	const { data: kioskData, isLoading } = useGetKioskContents(accountAddress);
+	const { data: kioskData, isPending } = useGetKioskContents(accountAddress);
 	const kiosk = kioskData?.kiosks.get(kioskId!);
 	const items = kiosk?.items;
 
@@ -31,7 +31,7 @@ function KioskDetailsPage() {
 	return (
 		<div className="flex flex-1 flex-col flex-nowrap gap-3.75">
 			<PageTitle title="Kiosk" back />
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{!items?.length ? (
 					<div className="flex flex-1 items-center self-center text-caption font-semibold text-steel-darker">
 						Kiosk is empty

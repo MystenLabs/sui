@@ -17,7 +17,7 @@ export function SelectQredoAccountsPage() {
 	const { state } = useLocation();
 	const navigate = useNavigate();
 	const qredoRequestReviewed = !!state?.reviewed;
-	const { data: qredoPendingRequest, isLoading: isQredoRequestLoading } =
+	const { data: qredoPendingRequest, isPending: isQredoRequestLoading } =
 		useQredoUIPendingRequest(id);
 	// do not call the api if user has not clicked continue in Qredo Connect Info page
 	const fetchAccountsEnabled =

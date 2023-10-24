@@ -20,7 +20,7 @@ import { KioskItems } from './KioskItems';
 export function KioskData({ kioskId }: { kioskId: string }) {
 	const { currentAccount } = useWalletKit();
 
-	const { data: kiosk, isLoading } = useKioskDetails(kioskId);
+	const { data: kiosk, isPending } = useKioskDetails(kioskId);
 
 	const queryClient = useQueryClient();
 
@@ -28,13 +28,13 @@ export function KioskData({ kioskId }: { kioskId: string }) {
 		onSuccess: () => {
 			toast.success('Profits withdrawn successfully');
 			// invalidate query to refetch kiosk data and update the balance.
-			queryClient.invalidateQueries([TANSTACK_KIOSK_DATA_KEY, kioskId]);
+			queryClient.invalidateQueries({ queryKey: [TANSTACK_KIOSK_DATA_KEY, kioskId] });
 		},
 	});
 
 	const profits = formatSui(mistToSui(kiosk?.profits));
 
-	if (isLoading) return <Loading />;
+	if (isPending) return <Loading />;
 	return (
 		<div className="container">
 			<div className="my-12 ">
@@ -52,7 +52,7 @@ export function KioskData({ kioskId }: { kioskId: string }) {
 							Profits: {profits} SUI
 							{Number(kiosk.profits) > 0 && (
 								<Button
-									loading={withdrawMutation.isLoading}
+									loading={withdrawMutation.isPending}
 									className=" ease-in-out duration-300 rounded border border-transparent px-4 bg-gray-200 text-xs !py-1 ml-3"
 									onClick={() => withdrawMutation.mutate(kiosk)}
 								>

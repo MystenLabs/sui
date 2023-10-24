@@ -17,7 +17,7 @@ export function UnlockAccountButton({
 	title = 'Unlock Account',
 }: UnlockAccountButtonProps) {
 	const { isPasswordUnlockable } = account;
-	const { unlockAccount, isLoading } = useUnlockAccount();
+	const { unlockAccount, isPending } = useUnlockAccount();
 
 	if (isPasswordUnlockable) {
 		return <Button text={title} onClick={() => unlockAccount(account)} />;
@@ -29,7 +29,7 @@ export function UnlockAccountButton({
 				onClick={() => {
 					unlockAccount(account);
 				}}
-				loading={isLoading}
+				loading={isPending}
 				showLabel
 			/>
 		);

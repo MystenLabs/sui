@@ -14,7 +14,7 @@ export type DerivedLedgerAccount = Pick<
 >;
 type UseDeriveLedgerAccountOptions = {
 	numAccountsToDerive: number;
-} & Pick<UseQueryOptions<DerivedLedgerAccount[], unknown>, 'select' | 'onSuccess' | 'onError'>;
+} & Pick<UseQueryOptions<DerivedLedgerAccount[], unknown>, 'select'>;
 
 export function useDeriveLedgerAccounts(options: UseDeriveLedgerAccountOptions) {
 	const { numAccountsToDerive, ...useQueryOptions } = options;
@@ -30,7 +30,7 @@ export function useDeriveLedgerAccounts(options: UseDeriveLedgerAccountOptions) 
 			return deriveAccountsFromLedger(suiLedgerClient, numAccountsToDerive);
 		},
 		...useQueryOptions,
-		cacheTime: 0,
+		gcTime: 0,
 	});
 }
 
