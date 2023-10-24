@@ -19,19 +19,13 @@ export type SuiRpcPaginatedMethodName = {
 }[keyof SuiClient];
 
 export type SuiRpcPaginatedMethods = {
-	[K in SuiRpcPaginatedMethodName]: SuiClient[K] extends (input: infer P) => Promise<{
-		data?: infer R;
-		nextCursor?: infer Cursor | null;
-		hasNextPage: boolean;
-	}>
+	[K in SuiRpcPaginatedMethodName]: SuiClient[K] extends (
+		input: infer Params,
+	) => Promise<infer Result extends { nextCursor?: infer Cursor | null }>
 		? {
 				name: K;
-				result: {
-					data?: R;
-					nextCursor?: Cursor | null;
-					hasNextPage: boolean;
-				};
-				params: P;
+				result: Result;
+				params: Params;
 				cursor: Cursor;
 		  }
 		: never;
@@ -73,7 +67,11 @@ export function useSuiClientInfiniteQuery<
 		initialPageParam: null,
 		queryKey: [suiContext.network, method, params, ...queryKey],
 		enabled,
-		queryFn: () => suiContext.client[method](params as never),
-		getNextPageParam: ({ hasNextPage, nextCursor }) => (hasNextPage ? nextCursor : null),
+		queryFn: ({ pageParam }) =>
+			suiContext.client[method]({
+				...(params ?? {}),
+				cursor: pageParam,
+			} as never),
+		getNextPageParam: ({ nextCursor }) => nextCursor ?? null,
 	});
 }

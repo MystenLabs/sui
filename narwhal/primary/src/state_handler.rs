@@ -46,9 +46,8 @@ pub struct StateHandler {
 // TODO: Write a brief protocol description.
 struct RandomnessState {
     party: dkg::Party<PkG, EncG>,
-    messages: Vec<dkg::Message<PkG, EncG>>,
     processed_messages: Vec<dkg::ProcessedMessage<PkG, EncG>>,
-    shares: dkg::SharesMap<<PkG as groups::GroupElement>::ScalarType>,
+    used_messages: Option<dkg::UsedProcessedMessages<PkG, EncG>>,
     confirmations: Vec<dkg::Confirmation<EncG>>,
     dkg_output: Option<dkg::Output<PkG, EncG>>,
 }
@@ -110,9 +109,8 @@ impl RandomnessState {
         info!("random beacon: state initialized with total_weight={total_weight}, t={t}");
         Some(Self {
             party,
-            messages: Vec::new(),
             processed_messages: Vec::new(),
-            shares: dkg::SharesMap::with_capacity(0),
+            used_messages: None,
             confirmations: Vec::new(),
             dkg_output: None,
         })
@@ -127,11 +125,10 @@ impl RandomnessState {
     }
 
     fn add_message(&mut self, msg: dkg::Message<PkG, EncG>) {
-        if !self.shares.is_empty() {
+        if self.used_messages.is_some() {
             // We've already sent a `Confirmation`, so we can't add any more messages.
             return;
         }
-        self.messages.push(msg.clone());
         match self.party.process_message(msg, &mut rand::thread_rng()) {
             Ok(processed) => {
                 self.processed_messages.push(processed);
@@ -143,7 +140,7 @@ impl RandomnessState {
     }
 
     fn add_confirmation(&mut self, conf: dkg::Confirmation<EncG>) {
-        if self.shares.is_empty() {
+        if self.used_messages.is_none() {
             // We should never see a `Confirmation` before we've sent our `Message` because
             // DKG messages are processed in consensus order.
             return;
@@ -159,42 +156,42 @@ impl RandomnessState {
     // and sends it to the proposer.
     async fn advance(&mut self, tx_system_messages: &Sender<SystemMessage>) {
         // Once we have enough ProcessedMessages, send a Confirmation.
-        if self.shares.is_empty() && !self.processed_messages.is_empty() {
+        if self.used_messages.is_none() && !self.processed_messages.is_empty() {
             match self.party.merge(&self.processed_messages) {
-                Ok((shares, conf)) => {
+                Ok((conf, used_msgs)) => {
                     info!(
                         "random beacon: sending DKG Confirmation with {} complaints",
                         conf.complaints.len()
                     );
-                    self.shares = shares;
+                    self.used_messages = Some(used_msgs);
                     let _ = tx_system_messages
                         .send(SystemMessage::DkgConfirmation(conf))
                         .await;
                 }
-                // TODO: change to a more-specific error.
-                Err(fastcrypto::error::FastCryptoError::InputTooShort(_)) => (), // wait for more input
-                Err(e) => error!("Error while merging randomness DKG messages: {e:?}"),
+                Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
+                Err(e) => debug!("Error while merging randomness DKG messages: {e:?}"),
             }
         }
 
         // Once we have enough Confirmations, process them and update shares.
-        if self.dkg_output.is_none() && !self.confirmations.is_empty() {
-            match self.party.process_confirmations(
-                &self.messages,
+        if self.dkg_output.is_none()
+            && !self.confirmations.is_empty()
+            && self.used_messages.is_some()
+        {
+            match self.party.complete(
+                self.used_messages.as_ref().expect("checked above"),
                 &self.confirmations,
-                self.shares.clone(),
                 self.party.t() * 2 - 1, // t==f+1, we want 2f+1
                 &mut rand::thread_rng(),
             ) {
-                Ok(shares) => {
-                    self.dkg_output = Some(self.party.aggregate(&self.messages, shares));
+                Ok(output) => {
+                    self.dkg_output = Some(output);
                     info!(
                         "random beacon: DKG complete with Output {:?}",
                         self.dkg_output
                     );
                 }
-                // TODO: change to a more-specific error.
-                Err(fastcrypto::error::FastCryptoError::InputTooShort(_)) => (), // wait for more input
+                Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("Error while processing randomness DKG confirmations: {e:?}"),
             }
         }

@@ -78,7 +78,8 @@ use sui_types::messages_consensus::{
     ConsensusTransactionKind,
 };
 use sui_types::storage::{
-    transaction_input_object_keys, transaction_receiving_object_keys, ObjectKey, ObjectStore,
+    transaction_input_object_keys, transaction_receiving_object_keys, GetSharedLocks, ObjectKey,
+    ObjectStore,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
@@ -945,18 +946,6 @@ impl AuthorityPerEpochStore {
 
     pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
         self.tables.get_all_pending_consensus_transactions()
-    }
-
-    /// Read shared object locks / versions for a specific transaction.
-    pub fn get_shared_locks(
-        &self,
-        transaction_digest: &TransactionDigest,
-    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
-        Ok(self
-            .tables
-            .assigned_shared_object_versions
-            .get(transaction_digest)?
-            .unwrap_or_default())
     }
 
     #[cfg(test)]
@@ -2537,6 +2526,19 @@ impl AuthorityPerEpochStore {
             let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
             self.signature_verifier.insert_jwk(jwk_id, jwk);
         }
+    }
+}
+
+impl GetSharedLocks for AuthorityPerEpochStore {
+    fn get_shared_locks(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        Ok(self
+            .tables
+            .assigned_shared_object_versions
+            .get(transaction_digest)?
+            .unwrap_or_default())
     }
 }
 

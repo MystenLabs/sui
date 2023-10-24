@@ -4,6 +4,7 @@
 pub(crate) use coin_api::CoinReadApi;
 pub(crate) use coin_api_v2::CoinReadApiV2;
 pub(crate) use extended_api::ExtendedApi;
+pub(crate) use extended_api_v2::ExtendedApiV2;
 pub(crate) use governance_api::GovernanceReadApi;
 pub(crate) use governance_api_v2::GovernanceReadApiV2;
 pub(crate) use indexer_api::IndexerApi;

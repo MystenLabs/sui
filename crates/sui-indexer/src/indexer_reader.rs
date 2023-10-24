@@ -4,16 +4,23 @@
 use crate::{
     errors::IndexerError,
     models_v2::{
+        address_metrics::StoredAddressMetrics,
         checkpoints::StoredCheckpoint,
         display::StoredDisplay,
         epoch::StoredEpochInfo,
         events::StoredEvent,
+        move_call_metrics::QueriedMoveCallMetrics,
+        network_metrics::StoredNetworkMetrics,
         objects::{CoinBalance, ObjectRefColumn, StoredObject},
         packages::StoredPackage,
         transactions::StoredTransaction,
+        tx_count_metrics::StoredTxCountMetrics,
         tx_indices::TxSequenceNumber,
     },
-    schema_v2::{checkpoints, display, epochs, events, objects, packages, transactions},
+    schema_v2::{
+        address_metrics, checkpoints, display, epochs, events, move_call_metrics, network_metrics,
+        objects, packages, transactions, tx_count_metrics,
+    },
     types_v2::{IndexerResult, OwnerType},
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
@@ -29,10 +36,11 @@ use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
 };
-use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_json_rpc_types::{
-    CheckpointId, EpochInfo, EventFilter, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
+    AddressMetrics, CheckpointId, EpochInfo, EventFilter, MoveCallMetrics, MoveFunctionName,
+    NetworkMetrics, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
 };
+use sui_json_rpc_types::{Balance, Coin as SuiCoin};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
@@ -1331,6 +1339,136 @@ impl IndexerReader {
         let coin_balances =
             self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
         Ok(coin_balances.into_iter().map(|cb| cb.into()).collect())
+    }
+
+    pub fn get_latest_network_metrics(&self) -> IndexerResult<NetworkMetrics> {
+        let stored_network_metrics = self.run_query(|conn| {
+            network_metrics::table
+                .order(network_metrics::dsl::checkpoint.desc())
+                .first::<StoredNetworkMetrics>(conn)
+        })?;
+        Ok(stored_network_metrics.into())
+    }
+
+    pub fn get_latest_move_call_metrics(&self) -> IndexerResult<MoveCallMetrics> {
+        let latest_3d_move_call_metrics = self.run_query(|conn| {
+            move_call_metrics::table
+                .filter(move_call_metrics::dsl::day.eq(3))
+                .order(move_call_metrics::dsl::id.desc())
+                .limit(10)
+                .load::<QueriedMoveCallMetrics>(conn)
+        })?;
+        let latest_7d_move_call_metrics = self.run_query(|conn| {
+            move_call_metrics::table
+                .filter(move_call_metrics::dsl::day.eq(7))
+                .order(move_call_metrics::dsl::id.desc())
+                .limit(10)
+                .load::<QueriedMoveCallMetrics>(conn)
+        })?;
+        let latest_30d_move_call_metrics = self.run_query(|conn| {
+            move_call_metrics::table
+                .filter(move_call_metrics::dsl::day.eq(30))
+                .order(move_call_metrics::dsl::id.desc())
+                .limit(10)
+                .load::<QueriedMoveCallMetrics>(conn)
+        })?;
+
+        let latest_3_days: Vec<(MoveFunctionName, usize)> = latest_3d_move_call_metrics
+            .into_iter()
+            .map(|m| m.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        let latest_7_days: Vec<(MoveFunctionName, usize)> = latest_7d_move_call_metrics
+            .into_iter()
+            .map(|m| m.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        let latest_30_days: Vec<(MoveFunctionName, usize)> = latest_30d_move_call_metrics
+            .into_iter()
+            .map(|m| m.try_into())
+            .collect::<Result<Vec<_>, _>>()?;
+        // sort by call count desc.
+        let rank_3_days = latest_3_days
+            .into_iter()
+            .sorted_by(|a, b| b.1.cmp(&a.1))
+            .collect::<Vec<_>>();
+        let rank_7_days = latest_7_days
+            .into_iter()
+            .sorted_by(|a, b| b.1.cmp(&a.1))
+            .collect::<Vec<_>>();
+        let rank_30_days = latest_30_days
+            .into_iter()
+            .sorted_by(|a, b| b.1.cmp(&a.1))
+            .collect::<Vec<_>>();
+        Ok(MoveCallMetrics {
+            rank_3_days,
+            rank_7_days,
+            rank_30_days,
+        })
+    }
+
+    pub fn get_latest_address_metrics(&self) -> IndexerResult<AddressMetrics> {
+        let stored_address_metrics = self.run_query(|conn| {
+            address_metrics::table
+                .order(address_metrics::dsl::checkpoint.desc())
+                .first::<StoredAddressMetrics>(conn)
+        })?;
+        Ok(stored_address_metrics.into())
+    }
+
+    pub fn get_checkpoint_address_metrics(
+        &self,
+        checkpoint_seq: u64,
+    ) -> IndexerResult<AddressMetrics> {
+        let stored_address_metrics = self.run_query(|conn| {
+            address_metrics::table
+                .filter(address_metrics::dsl::checkpoint.eq(checkpoint_seq as i64))
+                .first::<StoredAddressMetrics>(conn)
+        })?;
+        Ok(stored_address_metrics.into())
+    }
+
+    pub fn get_all_epoch_address_metrics(
+        &self,
+        descending_order: Option<bool>,
+    ) -> IndexerResult<Vec<AddressMetrics>> {
+        let is_descending = descending_order.unwrap_or_default();
+        let epoch_address_metrics_query = format!(
+            "WITH ranked_rows AS (
+                SELECT
+                  checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses,
+                  row_number() OVER(PARTITION BY epoch ORDER BY checkpoint DESC) as row_num
+                FROM
+                  address_metrics
+              )
+              SELECT
+                checkpoint, epoch, timestamp_ms, cumulative_addresses, cumulative_active_addresses, daily_active_addresses
+              FROM ranked_rows
+              WHERE row_num = 1 ORDER BY epoch {}",
+              if is_descending { "DESC" } else { "ASC" },
+        );
+        let epoch_address_metrics = self.run_query(|conn| {
+            diesel::sql_query(epoch_address_metrics_query).load::<StoredAddressMetrics>(conn)
+        })?;
+
+        Ok(epoch_address_metrics
+            .into_iter()
+            .map(|stored_address_metrics| stored_address_metrics.into())
+            .collect())
+    }
+
+    pub fn get_total_transactions(&self) -> IndexerResult<i64> {
+        let latest_tx_count_metrics = self.run_query(|conn| {
+            tx_count_metrics::table
+                .order(tx_count_metrics::dsl::checkpoint_sequence_number.desc())
+                .first::<StoredTxCountMetrics>(conn)
+        })?;
+        // NOTE: tx are counted as:
+        // - if a tx is successful, it is counted as # of commands in the tx
+        // - otherwise, it is counted as 1.
+        Ok(
+            latest_tx_count_metrics.network_total_successful_transactions
+                + latest_tx_count_metrics.network_total_transaction_blocks
+                - latest_tx_count_metrics.network_total_successful_transaction_blocks,
+        )
     }
 }
 
