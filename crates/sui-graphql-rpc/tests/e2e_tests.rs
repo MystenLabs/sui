@@ -1,24 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
     use diesel::OptionalExtension;
     use diesel::RunQueryDsl;
     use diesel::{ExpressionMethods, QueryDsl};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
+    use std::time::Duration;
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
     use sui_indexer::indexer_reader::IndexerReader;
     use sui_indexer::models_v2::objects::StoredObject;
     use sui_indexer::schema_v2::objects;
     use sui_types::digests::ChainIdentifier;
+    use tokio::time::sleep;
 
     #[ignore]
     #[tokio::test]
+    #[serial]
     async fn test_simple_client_validator_cluster() {
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
@@ -54,7 +58,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_simple_client_simulator_cluster() {
+        sleep(Duration::from_secs(5)).await;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
@@ -73,12 +79,8 @@ mod tests {
             chain_id_actual
         );
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster = sui_graphql_rpc::cluster::serve_simulator(
-            connection_config.clone(),
-            3000,
-            Arc::new(sim),
-        )
-        .await;
+        let cluster =
+            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
 
         let query = r#"
             query {
@@ -92,8 +94,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(&format!("{}", res), &exp);
+    }
 
-        drop(cluster);
+    #[tokio::test]
+    #[serial]
+    async fn test_db_query_cost() {
+        // Wait for DB to free up
+        sleep(Duration::from_secs(5)).await;
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
         // Test query cost logic
         // Todo: Tacking on test here so we share DB
         // Split it off once we have a better way to share DB in tests
