@@ -37,7 +37,7 @@ export function AccountListItem({
 						<div className="flex items-center justify-center">
 							<LockUnlockButton
 								isLocked={account.isLocked}
-								isPending={isPending && accountToUnlock?.id === account.id}
+								isLoading={isPending && accountToUnlock?.id === account.id}
 								onClick={(e) => {
 									// prevent the account from being selected when clicking the lock button
 									e.stopPropagation();
