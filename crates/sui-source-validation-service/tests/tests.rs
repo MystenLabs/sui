@@ -6,8 +6,8 @@ use reqwest::Client;
 use std::fs;
 use std::io::Read;
 use std::os::unix::fs::FileExt;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use std::{collections::BTreeMap, path::PathBuf};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::{BuildConfig, SuiPackageHooks};
@@ -23,9 +23,9 @@ use tokio::sync::oneshot;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    host_port, initialize, serve, verify_packages, watch_for_upgrades, AppState, CloneCommand,
-    Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package, PackageSource,
-    RepositorySource, SourceInfo, SourceLookup, SourceResponse,
+    host_port, initialize, serve, verify_packages, watch_for_upgrades, AddressLookup, AppState,
+    CloneCommand, Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package,
+    PackageSource, RepositorySource, SourceInfo, SourceLookup, SourceResponse,
     SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
@@ -89,7 +89,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     };
     // Start watching for upgrades.
     let mut sources = NetworkLookup::new();
-    sources.insert(Network::Localnet, SourceLookup::new());
+    sources.insert(Network::Localnet, AddressLookup::new());
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
@@ -275,19 +275,19 @@ async fn test_api_route() -> anyhow::Result<()> {
         .into_path()
         .join("sui/move-stdlib/sources/address.move");
 
-    let mut test_lookup = BTreeMap::new();
-    test_lookup.insert(
-        (
-            AccountAddress::from_hex_literal(address).unwrap(),
-            Symbol::from(module),
-        ),
+    let mut source_lookup = SourceLookup::new();
+    source_lookup.insert(
+        Symbol::from(module),
         SourceInfo {
             path: source_path,
             source: Some("module address {...}".to_owned()),
         },
     );
+    let mut address_lookup = AddressLookup::new();
+    let account_address = AccountAddress::from_hex_literal(address).unwrap();
+    address_lookup.insert(account_address, source_lookup);
     let mut sources = NetworkLookup::new();
-    sources.insert(Network::Localnet, test_lookup);
+    sources.insert(Network::Localnet, address_lookup);
     let app_state = Arc::new(RwLock::new(AppState { sources }));
     tokio::spawn(serve(app_state).expect("Cannot start service."));
 
