@@ -340,8 +340,6 @@ export function SwapPageContent() {
 		},
 	});
 
-	console.log('balanceChanges', balanceChanges);
-
 	const handleOnsubmit: SubmitHandler<FormValues> = (formData) => {
 		handleSwap(formData);
 	};
@@ -355,7 +353,7 @@ export function SwapPageContent() {
 							<Form form={form} onSubmit={handleOnsubmit}>
 								<div
 									className={clsx(
-										'flex flex-col border border-hero-darkest/20 rounded-xl pt-5 pb-6 px-5 gap-4 border-solid',
+										'flex flex-col border border-hero-darkest/20 rounded-xl pt-5 pb-6 px-5 border-solid',
 										isValid && 'bg-gradients-graph-cards',
 									)}
 								>
@@ -369,30 +367,32 @@ export function SwapPageContent() {
 										/>
 									)}
 
-									<InputWithActionButton
-										{...register('amount')}
-										dark
-										suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
-										value={amount}
-										type="number"
-										errorString={errors.amount?.message}
-										actionText="Max"
-										actionType="button"
-										actionDisabled={isPayAll}
-										prefix={isPayAll ? '~' : undefined}
-										onActionClicked={() => {
-											setValue(
-												'amount',
-												activeCoinType === SUI_TYPE_ARG
-													? formattedBaseTokenBalance
-													: formattedQuoteTokenBalance,
-												{ shouldDirty: true },
-											);
-										}}
-									/>
+									<div className="mt-4">
+										<InputWithActionButton
+											{...register('amount')}
+											dark
+											suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
+											value={amount}
+											type="number"
+											errorString={errors.amount?.message}
+											actionText="Max"
+											actionType="button"
+											actionDisabled={isPayAll}
+											prefix={isPayAll ? '~' : undefined}
+											onActionClicked={() => {
+												setValue(
+													'amount',
+													activeCoinType === SUI_TYPE_ARG
+														? formattedBaseTokenBalance
+														: formattedQuoteTokenBalance,
+													{ shouldDirty: true },
+												);
+											}}
+										/>
+									</div>
 
 									{isValid && !!amount && (
-										<div className="ml-3">
+										<div className="ml-3 mt-3">
 											<div className="text-bodySmall font-medium text-hero-darkest/40">
 												{isPayAll ? '~ ' : ''}
 												{getUSDCurrency(isAsk ? rawInputSuiUsdc : Number(amount))}
