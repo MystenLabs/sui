@@ -647,7 +647,7 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
  "thiserror",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
@@ -920,7 +920,7 @@ dependencies = [
  "http",
  "hyper",
  "ring",
- "time 0.3.17",
+ "time",
  "tokio",
  "tower",
  "tracing",
@@ -1130,7 +1130,7 @@ dependencies = [
  "percent-encoding",
  "regex",
  "sha2 0.10.6",
- "time 0.3.17",
+ "time",
  "tracing",
 ]
 
@@ -1308,7 +1308,7 @@ dependencies = [
  "num-integer",
  "ryu",
  "serde",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
@@ -3312,7 +3312,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "thiserror",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
@@ -8112,7 +8112,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "time 0.3.17",
+ "time",
  "url",
 ]
 
@@ -8513,7 +8513,7 @@ checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
 dependencies = [
  "pem",
  "ring",
- "time 0.3.17",
+ "time",
  "yasna",
 ]
 
@@ -9501,7 +9501,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
@@ -12545,17 +12545,6 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.1.45"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
-dependencies = [
- "libc",
- "wasi 0.10.0+wasi-snapshot-preview1",
- "winapi",
-]
-
-[[package]]
-name = "time"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a561bf4617eebd33bca6434b988f39ed798e527f51a1e797d0ee4f61c0a38376"
@@ -13027,7 +13016,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.17",
+ "time",
  "tracing-subscriber",
 ]
 
@@ -13114,7 +13103,7 @@ dependencies = [
  "sharded-slab",
  "smallvec",
  "thread_local",
- "time 0.3.17",
+ "time",
  "tracing",
  "tracing-core",
  "tracing-log",
@@ -13594,12 +13583,6 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi"
-version = "0.10.0+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
-
-[[package]]
-name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
@@ -13991,6 +13974,13 @@ dependencies = [
  "arrayref",
  "arrayvec 0.5.2",
  "arrayvec 0.7.2",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
  "ascii_utils",
  "asn1-rs",
  "asn1-rs-derive",
@@ -14256,6 +14246,7 @@ dependencies = [
  "fixed-hash",
  "fixedbitset 0.2.0",
  "fixedbitset 0.4.2",
+ "flatbuffers",
  "flate2",
  "float-cmp",
  "fnv",
@@ -14293,6 +14284,7 @@ dependencies = [
  "h2",
  "hakari",
  "half 1.8.2",
+ "half 2.3.1",
  "handlebars",
  "hashbrown 0.12.3",
  "hashbrown 0.13.2",
@@ -14366,6 +14358,12 @@ dependencies = [
  "lazy_static",
  "lazycell",
  "leb128",
+ "lexical-core",
+ "lexical-parse-float",
+ "lexical-parse-integer",
+ "lexical-util",
+ "lexical-write-float",
+ "lexical-write-integer",
  "libc",
  "libloading",
  "libm",
@@ -14380,6 +14378,7 @@ dependencies = [
  "log",
  "lru 0.10.0",
  "lru 0.7.8",
+ "lz4",
  "lz4-sys",
  "mach2",
  "match_opt",
@@ -14497,6 +14496,7 @@ dependencies = [
  "opentelemetry_api",
  "opentelemetry_sdk",
  "option-ext",
+ "ordered-float 2.10.1",
  "ordered-float 3.9.1",
  "ouroboros",
  "ouroboros_macro",
@@ -14513,6 +14513,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "parking_lot_core 0.8.6",
  "parking_lot_core 0.9.5",
+ "parquet",
  "parse-zoneinfo",
  "password-hash",
  "paste",
@@ -14669,6 +14670,7 @@ dependencies = [
  "semver 0.11.0",
  "semver 1.0.16",
  "semver-parser",
+ "seq-macro",
  "serde",
  "serde-name",
  "serde-reflection",
@@ -14759,8 +14761,8 @@ dependencies = [
  "thiserror-impl",
  "thread_local",
  "threadpool",
- "time 0.1.45",
- "time 0.3.17",
+ "thrift",
+ "time",
  "time-core",
  "time-macros",
  "tiny-bip39",
@@ -14909,7 +14911,7 @@ dependencies = [
  "oid-registry",
  "rusticata-macros",
  "thiserror",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
@@ -14947,7 +14949,7 @@ checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
 dependencies = [
  "bit-vec",
  "num-bigint",
- "time 0.3.17",
+ "time",
 ]
 
 [[package]]
