@@ -9,6 +9,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+atomic_float.workspace = true
 console-subscriber = { workspace = true, optional = true }
 crossterm.workspace = true
 once_cell.workspace = true
@@ -18,6 +19,7 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 workspace-hack.workspace = true
 opentelemetry = { version = "0.20.0", features = ["rt-tokio"], optional = true }
+opentelemetry_api = { version = "0.20.0", optional = true }
 opentelemetry-otlp = { version = "0.13.0", features = ["grpc-tonic"], optional = true }
 tracing-opentelemetry = { version = "0.21.0", optional = true }
 opentelemetry-proto = { version = "0.3", optional = true }
@@ -35,7 +37,13 @@ prost = "0.11.9"
 [features]
 default = ["otlp"]
 tokio-console = ["console-subscriber"]
-otlp = ["tracing-opentelemetry", "opentelemetry", "opentelemetry-otlp", "opentelemetry-proto"]
+otlp = [
+  "tracing-opentelemetry",
+  "opentelemetry",
+  "opentelemetry-otlp",
+  "opentelemetry-proto",
+  "opentelemetry_api"
+]
 
 [dev-dependencies]
 camino.workspace = true

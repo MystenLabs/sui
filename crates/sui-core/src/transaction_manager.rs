@@ -20,7 +20,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, VerifiedCertificate},
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, trace, warn};
+use tracing::{error, instrument, trace, warn};
 
 use crate::authority::{
     authority_per_epoch_store::AuthorityPerEpochStore,
@@ -398,6 +398,7 @@ impl TransactionManager {
     ///
     /// REQUIRED: Shared object locks must be taken before calling enqueueing transactions
     /// with shared objects!
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue_certificates(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -410,6 +411,7 @@ impl TransactionManager {
         self.enqueue(executable_txns, epoch_store)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue(
         &self,
         certs: Vec<VerifiedExecutableTransaction>,
@@ -419,6 +421,7 @@ impl TransactionManager {
         self.enqueue_impl(certs, epoch_store)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn enqueue_with_expected_effects_digest(
         &self,
         certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
@@ -540,6 +543,7 @@ impl TransactionManager {
 
         // Internal lock is held only for updating the internal state.
         let mut inner = self.inner.write();
+
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
         for (available, key) in cache_miss_availability {
@@ -761,6 +765,7 @@ impl TransactionManager {
     }
 
     /// Notifies TransactionManager about a transaction that has been committed.
+    #[instrument(level = "trace", skip_all)]
     pub(crate) fn notify_commit(
         &self,
         digest: &TransactionDigest,

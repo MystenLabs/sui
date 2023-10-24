@@ -694,6 +694,7 @@ impl AuthorityState {
 
     /// This is a private method and should be kept that way. It doesn't check whether
     /// the provided transaction is a system transaction, and hence can only be called internally.
+    #[instrument(level = "trace", skip_all)]
     async fn handle_transaction_impl(
         &self,
         transaction: VerifiedTransaction,
@@ -730,6 +731,7 @@ impl AuthorityState {
     }
 
     /// Initiate a new transaction.
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -1784,7 +1786,7 @@ impl AuthorityState {
         }))
     }
 
-    #[instrument(level = "debug", skip_all, err)]
+    #[instrument(level = "trace", skip_all, err)]
     async fn post_process_one_tx(
         &self,
         certificate: &VerifiedExecutableTransaction,
@@ -1864,6 +1866,7 @@ impl AuthorityState {
         u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
@@ -1880,6 +1883,7 @@ impl AuthorityState {
         })
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
@@ -1941,6 +1945,7 @@ impl AuthorityState {
         })
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn handle_checkpoint_request(
         &self,
         request: &CheckpointRequest,
@@ -2164,6 +2169,7 @@ impl AuthorityState {
         })
     }
 
+    #[instrument(level = "error", skip_all)]
     pub async fn reconfigure(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
@@ -2241,6 +2247,7 @@ impl AuthorityState {
 
     /// This is a temporary method to be used when we enable simplified_unwrap_then_delete.
     /// It re-accumulates state hash for the new epoch if simplified_unwrap_then_delete is enabled.
+    #[instrument(level = "error", skip_all)]
     fn maybe_reaccumulate_state_hash(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
@@ -2371,6 +2378,7 @@ impl AuthorityState {
         );
     }
 
+    #[instrument(level = "error", skip_all)]
     fn check_system_consistency(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
@@ -2428,6 +2436,7 @@ impl AuthorityState {
         self.epoch_store_for_testing().epoch()
     }
 
+    #[instrument(level = "error", skip_all)]
     pub fn checkpoint_all_dbs(
         &self,
         checkpoint_path: &Path,
@@ -2495,6 +2504,7 @@ impl AuthorityState {
         Committee::clone(self.epoch_store_for_testing().committee())
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn get_object(&self, object_id: &ObjectID) -> SuiResult<Option<Object>> {
         self.database.get_object(object_id)
     }
@@ -2519,6 +2529,7 @@ impl AuthorityState {
         self.database.get_sui_system_state_object()
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_checkpoint_sequence(
         &self,
         digest: &TransactionDigest,
@@ -2538,6 +2549,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -2547,6 +2559,7 @@ impl AuthorityState {
             .get_checkpoint_by_sequence_number(sequence_number)?)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_checkpoint(
         &self,
         digest: &TransactionDigest,
@@ -2562,6 +2575,7 @@ impl AuthorityState {
         Ok(checkpoint)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
         let Some((object_key, store_object)) =
             self.database.get_latest_object_or_tombstone(*object_id)?
@@ -2604,6 +2618,7 @@ impl AuthorityState {
         Some(ChainIdentifier::from(*checkpoint.digest()))
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_move_object<T>(&self, object_id: &ObjectID) -> SuiResult<T>
     where
         T: DeserializeOwned,
@@ -2627,6 +2642,7 @@ impl AuthorityState {
     /// Depending on the object pruning policies that will be enforced in the
     /// future there is no software-level guarantee/SLA to retrieve an object
     /// with an old version even if it exists/existed.
+    #[instrument(level = "trace", skip_all)]
     pub fn get_past_object_read(
         &self,
         object_id: &ObjectID,
@@ -2680,6 +2696,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     fn read_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -2723,6 +2740,7 @@ impl AuthorityState {
             .map(|o| o.owner)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_owner_objects(
         &self,
         owner: SuiAddress,
@@ -2738,6 +2756,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_owned_coins_iterator_with_cursor(
         &self,
         owner: SuiAddress,
@@ -2753,6 +2772,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_owner_objects_iterator(
         &self,
         owner: SuiAddress,
@@ -2768,6 +2788,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn get_move_objects<T>(
         &self,
         owner: SuiAddress,
@@ -2807,6 +2828,7 @@ impl AuthorityState {
         Ok(move_objects)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_dynamic_fields(
         &self,
         owner: ObjectID,
@@ -2820,7 +2842,7 @@ impl AuthorityState {
             .collect())
     }
 
-    pub fn get_dynamic_fields_iterator(
+    fn get_dynamic_fields_iterator(
         &self,
         owner: ObjectID,
         // If `Some`, the query will start from the next item after the specified cursor
@@ -2833,6 +2855,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_dynamic_field_object_id(
         &self,
         owner: ObjectID,
@@ -2846,10 +2869,12 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_total_transaction_blocks(&self) -> SuiResult<u64> {
         Ok(self.get_indexes()?.next_sequence_number())
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn get_executed_transaction_and_effects(
         &self,
         digest: TransactionDigest,
@@ -2860,6 +2885,7 @@ impl AuthorityState {
         Ok((transaction, effects))
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],
@@ -2881,6 +2907,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn multi_get_checkpoint_by_sequence_number(
         &self,
         sequence_numbers: &[CheckpointSequenceNumber],
@@ -2890,6 +2917,7 @@ impl AuthorityState {
             .multi_get_checkpoint_by_sequence_number(sequence_numbers)?)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_events(
         &self,
         digest: &TransactionEventsDigest,
@@ -2908,6 +2936,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn loaded_child_object_versions(
         &self,
         transaction_digest: &TransactionDigest,
@@ -2933,6 +2962,7 @@ impl AuthorityState {
             .await
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn get_transactions(
         &self,
         kv_store: &Arc<TransactionKeyValueStore>,
@@ -2974,6 +3004,7 @@ impl AuthorityState {
             })
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_summary_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -2989,6 +3020,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
@@ -3004,6 +3036,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn find_publish_txn_digest(&self, package_id: ObjectID) -> SuiResult<TransactionDigest> {
         if is_system_package(package_id) {
             return self.find_genesis_txn_digest();
@@ -3014,6 +3047,7 @@ impl AuthorityState {
             .previous_transaction)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn find_genesis_txn_digest(&self) -> SuiResult<TransactionDigest> {
         let summary = self
             .get_verified_checkpoint_by_sequence_number(0)?
@@ -3028,6 +3062,7 @@ impl AuthorityState {
             .transaction)
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_verified_checkpoint_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -3043,6 +3078,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_verified_checkpoint_summary_by_digest(
         &self,
         digest: CheckpointDigest,
@@ -3058,6 +3094,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_contents(
         &self,
         digest: CheckpointContentsDigest,
@@ -3069,6 +3106,7 @@ impl AuthorityState {
             })
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
@@ -3087,6 +3125,7 @@ impl AuthorityState {
         }
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub async fn query_events(
         &self,
         kv_store: &Arc<TransactionKeyValueStore>,
@@ -3240,6 +3279,7 @@ impl AuthorityState {
         .await;
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn get_certified_transaction(
         &self,
         tx_digest: &TransactionDigest,
@@ -3261,6 +3301,7 @@ impl AuthorityState {
     }
 
     /// Make a status response for a transaction
+    #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_status(
         &self,
         transaction_digest: &TransactionDigest,
@@ -3300,6 +3341,7 @@ impl AuthorityState {
     /// Get the signed effects of the given transaction. If the effects was signed in a previous
     /// epoch, re-sign it so that the caller is able to form a cert of the effects in the current
     /// epoch.
+    #[instrument(level = "trace", skip_all)]
     pub fn get_signed_effects_and_maybe_resign(
         &self,
         transaction_digest: &TransactionDigest,
@@ -3312,7 +3354,8 @@ impl AuthorityState {
         }
     }
 
-    pub fn sign_effects(
+    #[instrument(level = "trace", skip_all)]
+    pub(crate) fn sign_effects(
         &self,
         effects: TransactionEffects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -3386,6 +3429,7 @@ impl AuthorityState {
     /// Acquires the transaction lock for a specific transaction, writing the transaction
     /// to the transaction column family if acquiring the lock succeeds.
     /// The lock service is used to atomically acquire locks.
+    #[instrument(level = "trace", skip_all)]
     async fn lock_and_write_transaction(
         &self,
         owned_input_objects: &[ObjectRef],
@@ -3410,6 +3454,7 @@ impl AuthorityState {
     }
 
     // Returns coin objects for indexing for fullnode if indexing is enabled.
+    #[instrument(level = "trace", skip_all)]
     fn fullnode_only_get_tx_coins_for_indexing(
         &self,
         inner_temporary_store: &InnerTemporaryStore,
@@ -3525,6 +3570,7 @@ impl AuthorityState {
     /// Returns Some(VerifiedEnvelope) if the given ObjectRef is locked by a certain transaction.
     /// Returns None if the a lock record is initialized for the given ObjectRef but not yet locked by any transaction,
     ///     or cannot find the transaction in transaction table, because of data race etc.
+    #[instrument(level = "trace", skip_all)]
     pub async fn get_transaction_lock(
         &self,
         object_ref: &ObjectRef,
@@ -3862,6 +3908,7 @@ impl AuthorityState {
         (next_protocol_version, system_packages)
     }
 
+    #[instrument(level = "debug", skip_all)]
     fn create_authenticator_state_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -3907,6 +3954,7 @@ impl AuthorityState {
     /// final checkpoint. As long as the network is able to create a certified checkpoint (which
     /// should be ensured by the capabilities vote), it will arrive via state sync and be executed
     /// by CheckpointExecutor.
+    #[instrument(level = "error", skip_all)]
     pub async fn create_and_execute_advance_epoch_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -4061,6 +4109,7 @@ impl AuthorityState {
 
     /// This function is called at the very end of the epoch.
     /// This step is required before updating new epoch in the db and calling reopen_epoch_db.
+    #[instrument(level = "error", skip_all)]
     async fn revert_uncommitted_epoch_transactions(
         &self,
         epoch_store: &AuthorityPerEpochStore,
@@ -4104,6 +4153,7 @@ impl AuthorityState {
         Ok(())
     }
 
+    #[instrument(level = "error", skip_all)]
     async fn reopen_epoch_db(
         &self,
         cur_epoch_store: &AuthorityPerEpochStore,
@@ -4133,6 +4183,7 @@ impl AuthorityState {
 
     // TODO: when we add stateful authenticators, we may need to take care that this function is
     // reconfig safe (i.e. cannot be called concurrently with reconfiguration).
+    #[instrument(level = "trace", skip_all)]
     pub fn verify_transaction(&self, tx: Transaction) -> SuiResult<VerifiedTransaction> {
         self.load_epoch_store_one_call_per_task()
             .signature_verifier

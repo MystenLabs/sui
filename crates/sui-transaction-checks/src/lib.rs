@@ -145,6 +145,7 @@ mod checked {
         Ok((gas_status, input_objects))
     }
 
+    #[instrument(level = "trace", skip_all)]
     pub fn check_certificate_input<S: ObjectStore, G: GetSharedLocks>(
         store: &S,
         shared_lock_store: &G,
