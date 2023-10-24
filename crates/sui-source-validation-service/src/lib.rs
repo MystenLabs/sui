@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::middleware::{self, Next};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::net::TcpListener;
@@ -11,10 +12,10 @@ use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, IntoMakeService};
 use axum::{Json, Router, Server};
-use hyper::http::Method;
+use hyper::http::{HeaderName, HeaderValue, Method};
 use hyper::server::conn::AddrIncoming;
 use hyper::{HeaderMap, StatusCode};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
@@ -37,7 +38,7 @@ use sui_sdk::SuiClientBuilder;
 use sui_source_validation::{BytecodeSourceVerifier, SourceMode};
 
 pub const HOST_PORT_ENV: &str = "HOST_PORT";
-pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "X-Sui-Source-Validation-Version";
+pub const SUI_SOURCE_VALIDATION_VERSION_HEADER: &str = "x-sui-source-validation-version";
 pub const SUI_SOURCE_VALIDATION_VERSION: &str = "0.1";
 
 pub const MAINNET_URL: &str = "https://fullnode.mainnet.sui.io:443";
@@ -432,12 +433,15 @@ pub fn serve(
 ) -> anyhow::Result<Server<AddrIncoming, IntoMakeService<Router>>> {
     let app = Router::new()
         .route("/api", get(api_route))
+        .route("/api/list", get(list_route))
         .layer(
-            ServiceBuilder::new().layer(
-                tower_http::cors::CorsLayer::new()
-                    .allow_methods([Method::GET])
-                    .allow_origin(tower_http::cors::Any),
-            ),
+            ServiceBuilder::new()
+                .layer(
+                    tower_http::cors::CorsLayer::new()
+                        .allow_methods([Method::GET])
+                        .allow_origin(tower_http::cors::Any),
+                )
+                .layer(middleware::from_fn(check_version_header)),
         )
         .with_state(app_state);
     let listener = TcpListener::bind(host_port())?;
@@ -463,7 +467,6 @@ pub struct ErrorResponse {
 }
 
 async fn api_route(
-    headers: HeaderMap,
     State(app_state): State<Arc<RwLock<AppState>>>,
     Query(Request {
         network,
@@ -472,40 +475,11 @@ async fn api_route(
     }): Query<Request>,
 ) -> impl IntoResponse {
     debug!("request network={network}&address={address}&module={module}");
-    let version = headers
-        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
-        .as_ref()
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
-
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        SUI_SOURCE_VALIDATION_VERSION_HEADER,
-        SUI_SOURCE_VALIDATION_VERSION.parse().unwrap(),
-    );
-
-    match version {
-        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
-            let error = format!(
-                "Unsupported version '{v}' specified in header \
-		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
-            );
-            return (
-                StatusCode::BAD_REQUEST,
-                headers,
-                Json(ErrorResponse { error }).into_response(),
-            );
-        }
-        Some(_) => (),
-        None => info!("No version set, using {SUI_SOURCE_VALIDATION_VERSION}"),
-    };
-
     let symbol = Symbol::from(module);
     let Ok(address) = AccountAddress::from_hex_literal(&address) else {
         let error = format!("Invalid hex address {address}");
         return (
             StatusCode::BAD_REQUEST,
-            headers,
             Json(ErrorResponse { error }).into_response(),
         );
     };
@@ -522,7 +496,6 @@ async fn api_route(
     {
         (
             StatusCode::OK,
-            headers,
             Json(SourceResponse {
                 source: source.to_owned(),
             })
@@ -531,7 +504,6 @@ async fn api_route(
     } else {
         (
             StatusCode::NOT_FOUND,
-            headers,
             Json(ErrorResponse {
                 error: format!(
                     "No source found for {symbol} at address {address} on network {network}"
@@ -540,4 +512,47 @@ async fn api_route(
             .into_response(),
         )
     }
+}
+
+async fn check_version_header<B>(
+    headers: HeaderMap,
+    req: hyper::Request<B>,
+    next: Next<B>,
+) -> Response {
+    let version = headers
+        .get(SUI_SOURCE_VALIDATION_VERSION_HEADER)
+        .as_ref()
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    match version {
+        Some(v) if v != SUI_SOURCE_VALIDATION_VERSION => {
+            let error = format!(
+                "Unsupported version '{v}' specified in header \
+		 {SUI_SOURCE_VALIDATION_VERSION_HEADER}"
+            );
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                HeaderName::from_static(SUI_SOURCE_VALIDATION_VERSION_HEADER),
+                HeaderValue::from_static(SUI_SOURCE_VALIDATION_VERSION),
+            );
+            return (
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(ErrorResponse { error }).into_response(),
+            )
+                .into_response();
+        }
+        _ => (),
+    }
+    let mut response = next.run(req).await;
+    response.headers_mut().insert(
+        HeaderName::from_static(SUI_SOURCE_VALIDATION_VERSION_HEADER),
+        HeaderValue::from_static(SUI_SOURCE_VALIDATION_VERSION),
+    );
+    response
+}
+
+async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
+    (StatusCode::OK, "").into_response()
 }
