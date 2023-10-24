@@ -9,10 +9,11 @@ use std::{
 };
 
 use async_trait::async_trait;
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use lru::LruCache;
 use move_binary_format::{
     access::ModuleAccess,
-    errors::VMError,
+    errors::{Location, VMError},
     file_format::{
         SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
         TableIndex,
@@ -24,7 +25,13 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
-use sui_types::{base_types::SequenceNumber, is_system_package, Identifier};
+use sui_indexer::{
+    errors::IndexerError as DbError, indexer_reader::IndexerReader, schema_v2::objects,
+};
+use sui_types::{
+    base_types::SequenceNumber, is_system_package, move_package::TypeOrigin, object::Object,
+    Identifier,
+};
 use thiserror::Error;
 
 // TODO Move to ServiceConfig
@@ -40,8 +47,16 @@ pub(crate) struct PackageCache {
     store: Box<dyn PackageStore + Send + Sync>,
 }
 
+struct DbPackageStore(IndexerReader);
+
 #[derive(Error, Debug)]
 pub(crate) enum Error {
+    #[error("{0}")]
+    Bcs(#[from] bcs::Error),
+
+    #[error("{0}")]
+    Db(#[from] DbError),
+
     #[error("{0}")]
     Deserialize(VMError),
 
@@ -180,6 +195,10 @@ trait PackageStore {
 }
 
 impl PackageCache {
+    pub(crate) fn new(reader: IndexerReader) -> Self {
+        Self::with_store(Box::new(DbPackageStore(reader)))
+    }
+
     fn with_store(store: Box<dyn PackageStore + Send + Sync>) -> Self {
         let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
         Self { packages, store }
@@ -641,6 +660,96 @@ impl ResolutionContext {
 
                 L::Struct(MoveStructLayout::WithTypes { type_, fields })
             }
+        })
+    }
+}
+
+#[async_trait]
+impl PackageStore for DbPackageStore {
+    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
+        let query = objects::dsl::objects
+            .select(objects::dsl::object_version)
+            .filter(objects::dsl::object_id.eq(id.to_vec()));
+
+        let Some(version) = self
+            .0
+            .run_query_async(move |conn| query.get_result::<i64>(conn).optional())
+            .await?
+        else {
+            return Err(Error::PackageNotFound(id));
+        };
+
+        Ok(SequenceNumber::from_u64(version as u64))
+    }
+
+    async fn fetch(&self, id: AccountAddress) -> Result<Package> {
+        let query = objects::dsl::objects
+            .select((
+                objects::dsl::object_version,
+                objects::dsl::serialized_object,
+            ))
+            .filter(objects::dsl::object_id.eq(id.to_vec()));
+
+        let Some((version, bcs)) = self
+            .0
+            .run_query_async(move |conn| query.get_result::<(i64, Vec<u8>)>(conn).optional())
+            .await?
+        else {
+            return Err(Error::PackageNotFound(id));
+        };
+
+        let version = SequenceNumber::from_u64(version as u64);
+        let object = bcs::from_bytes::<Object>(&bcs)?;
+
+        let Some(package) = object.data.try_as_package() else {
+            return Err(Error::NotAPackage(id));
+        };
+
+        let mut type_origins: BTreeMap<String, BTreeMap<String, AccountAddress>> = BTreeMap::new();
+        for TypeOrigin {
+            module_name,
+            struct_name,
+            package,
+        } in package.type_origin_table()
+        {
+            type_origins
+                .entry(module_name.to_string())
+                .or_default()
+                .insert(struct_name.to_string(), AccountAddress::from(*package));
+        }
+
+        let mut runtime_id = None;
+        let mut modules = BTreeMap::new();
+        for (name, bytes) in package.serialized_module_map() {
+            let origins = type_origins.remove(name).unwrap_or_default();
+            let bytecode = CompiledModule::deserialize_with_defaults(bytes)
+                .map_err(|e| Error::Deserialize(e.finish(Location::Undefined)))?;
+
+            runtime_id = Some(*bytecode.address());
+
+            let name = name.clone();
+            match Module::read(bytecode, origins) {
+                Ok(module) => modules.insert(name, module),
+                Err(struct_) => return Err(Error::NoTypeOrigin(id, name, struct_)),
+            };
+        }
+
+        let Some(runtime_id) = runtime_id else {
+            return Err(Error::EmptyPackage(id));
+        };
+
+        let linkage = package
+            .linkage_table()
+            .iter()
+            .map(|(&dep, linkage)| (dep.into(), linkage.upgraded_id.into()))
+            .collect();
+
+        Ok(Package {
+            storage_id: id,
+            runtime_id,
+            version,
+            modules,
+            linkage,
         })
     }
 }
