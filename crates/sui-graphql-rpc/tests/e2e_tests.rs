@@ -16,7 +16,9 @@ mod tests {
     use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
     use sui_indexer::indexer_reader::IndexerReader;
     use sui_indexer::models_v2::objects::StoredObject;
+    use sui_indexer::new_pg_connection_pool_impl;
     use sui_indexer::schema_v2::objects;
+    use sui_indexer::utils::reset_database;
     use sui_types::digests::ChainIdentifier;
     use tokio::time::sleep;
 
@@ -102,10 +104,11 @@ mod tests {
         // Wait for DB to free up
         sleep(Duration::from_secs(5)).await;
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let parsed_url = connection_config.db_url();
+        let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(2)).unwrap();
+        reset_database(&mut blocking_pool.get().unwrap(), true, true).unwrap();
 
         // Test query cost logic
-        // Todo: Tacking on test here so we share DB
-        // Split it off once we have a better way to share DB in tests
         let mut query = objects::dsl::objects.into_boxed();
         query = query
             .filter(objects::dsl::object_id.eq(vec![0u8, 4]))
