@@ -4,8 +4,8 @@ version = "0.0.1"
 published-at = "0xc0"
 
 [dependencies]
-A = { local = "../A1", override = true }
-B = { local = "../B0" }
+A = { local = "../a1", override = true }
+B = { local = "../b0" }
 
 [addresses]
 c = "0xc0"
