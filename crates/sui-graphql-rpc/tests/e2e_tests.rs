@@ -3,10 +3,29 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
+    use diesel::OptionalExtension;
+    use diesel::RunQueryDsl;
+    use diesel::{ExpressionMethods, QueryDsl};
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    use serial_test::serial;
+    use simulacrum::Simulacrum;
+    use std::sync::Arc;
+    use std::time::Duration;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
+    use sui_indexer::indexer_reader::IndexerReader;
+    use sui_indexer::models_v2::objects::StoredObject;
+    use sui_indexer::new_pg_connection_pool_impl;
+    use sui_indexer::schema_v2::objects;
+    use sui_indexer::utils::reset_database;
+    use sui_indexer::PgConnectionPoolConfig;
+    use sui_types::digests::ChainIdentifier;
+    use tokio::time::sleep;
 
     #[ignore]
     #[tokio::test]
+    #[serial]
     async fn test_simple_client_validator_cluster() {
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
@@ -42,12 +61,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_simple_client_simulator_cluster() {
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
-        use simulacrum::Simulacrum;
-        use std::sync::Arc;
-        use sui_types::digests::ChainIdentifier;
+        sleep(Duration::from_secs(5)).await;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
@@ -81,5 +97,34 @@ mod tests {
             .unwrap();
 
         assert_eq!(&format!("{}", res), &exp);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_db_query_cost() {
+        // Wait for DB to free up
+        sleep(Duration::from_secs(5)).await;
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let parsed_url = connection_config.db_url();
+        let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(2)).unwrap();
+        reset_database(&mut blocking_pool.get().unwrap(), true, true).unwrap();
+
+        // Test query cost logic
+        let mut query = objects::dsl::objects.into_boxed();
+        query = query
+            .filter(objects::dsl::object_id.eq(vec![0u8, 4]))
+            .filter(objects::dsl::object_version.eq(1234i64));
+
+        let mut idx_cfg = PgConnectionPoolConfig::default();
+        idx_cfg.set_pool_size(20);
+        let reader = IndexerReader::new_with_config(connection_config.db_url(), idx_cfg).unwrap();
+        reader
+            .run_query_async(|conn| {
+                let cost = extract_cost(&query, conn).unwrap();
+                assert!(cost > 0.0);
+                query.get_result::<StoredObject>(conn).optional()
+            })
+            .await
+            .unwrap();
     }
 }
