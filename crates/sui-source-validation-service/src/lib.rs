@@ -128,15 +128,17 @@ impl fmt::Display for Network {
     }
 }
 
-/// Map (package address, module name) tuples to verified source info.
-pub type SourceLookup = BTreeMap<(AccountAddress, Symbol), SourceInfo>;
+/// Map module name to verified source info.
+pub type SourceLookup = BTreeMap<Symbol, SourceInfo>;
+/// Map addresses to module names and sources.
+pub type AddressLookup = BTreeMap<AccountAddress, SourceLookup>;
 /// Top-level lookup that maps network to sources for corresponding on-chain networks.
-pub type NetworkLookup = BTreeMap<Network, SourceLookup>;
+pub type NetworkLookup = BTreeMap<Network, AddressLookup>;
 
 pub async fn verify_package(
     network: &Network,
     package_path: impl AsRef<Path>,
-) -> anyhow::Result<(Network, SourceLookup)> {
+) -> anyhow::Result<(Network, AddressLookup)> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let config = resolve_lock_file_path(
         MoveBuildConfig::default(),
@@ -165,7 +167,7 @@ pub async fn verify_package(
         )
         .await?;
 
-    let mut map = SourceLookup::new();
+    let mut address_map = AddressLookup::new();
     let address = compiled_package
         .published_at
         .as_ref()
@@ -175,16 +177,19 @@ pub async fn verify_package(
     for v in &compiled_package.package.root_compiled_units {
         let path = v.source_path.to_path_buf();
         let source = Some(fs::read_to_string(path.as_path())?);
-        match v.unit {
-            CompiledUnitEnum::Module(ref m) => {
-                map.insert((address, m.name), SourceInfo { path, source })
-            }
-            CompiledUnitEnum::Script(ref m) => {
-                map.insert((address, m.name), SourceInfo { path, source })
-            }
+        let name = match v.unit {
+            CompiledUnitEnum::Module(ref m) => m.name,
+            CompiledUnitEnum::Script(ref m) => m.name,
         };
+        if let Some(existing) = address_map.get_mut(&address) {
+            existing.insert(name, SourceInfo { path, source });
+        } else {
+            let mut source_map = SourceLookup::new();
+            source_map.insert(name, SourceInfo { path, source });
+            address_map.insert(address, source_map);
+        }
     }
-    Ok((network.clone(), map))
+    Ok((network.clone(), address_map))
 }
 
 pub fn parse_config(config_path: impl AsRef<Path>) -> anyhow::Result<Config> {
@@ -342,10 +347,10 @@ pub async fn verify_packages(config: &Config, dir: &Path) -> anyhow::Result<Netw
         }
     }
 
-    let mut mainnet_lookup = SourceLookup::new();
-    let mut testnet_lookup = SourceLookup::new();
-    let mut devnet_lookup = SourceLookup::new();
-    let mut localnet_lookup = SourceLookup::new();
+    let mut mainnet_lookup = AddressLookup::new();
+    let mut testnet_lookup = AddressLookup::new();
+    let mut devnet_lookup = AddressLookup::new();
+    let mut localnet_lookup = AddressLookup::new();
     for t in tasks {
         let (network, new_lookup) = t.await.unwrap()?;
         match network {
@@ -488,7 +493,8 @@ async fn api_route(
     let source_result = app_state
         .sources
         .get(&network)
-        .and_then(|l| l.get(&(address, symbol)));
+        .and_then(|n| n.get(&address))
+        .and_then(|a| a.get(&symbol));
     if let Some(SourceInfo {
         source: Some(source),
         ..
