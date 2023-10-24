@@ -38,7 +38,7 @@ describe('useSuiClientMutation', () => {
 				FromAddress: '0x123',
 			},
 		});
-		expect(result.current.isLoading).toBe(false);
+		expect(result.current.isPending).toBe(false);
 		expect(result.current.isError).toBe(false);
 		expect(result.current.data).toEqual({
 			data: [{ digest: '0x123' }],

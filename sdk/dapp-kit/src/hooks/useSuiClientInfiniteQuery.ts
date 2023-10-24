@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiClient } from '@mysten/sui.js/client';
-import type { UseInfiniteQueryOptions } from '@tanstack/react-query';
+import type { InfiniteData, UseInfiniteQueryOptions } from '@tanstack/react-query';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import type { PartialBy } from '../types/utilityTypes.js';
@@ -50,7 +50,7 @@ export type UseSuiClientInfiniteQueryOptions<
 
 export function useSuiClientInfiniteQuery<
 	T extends keyof SuiRpcPaginatedMethods,
-	TData = SuiRpcPaginatedMethods[T]['result'],
+	TData = InfiniteData<SuiRpcPaginatedMethods[T]['result']>,
 >(
 	method: T,
 	params: SuiRpcPaginatedMethods[T]['params'],
