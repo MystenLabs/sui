@@ -216,7 +216,7 @@ module deepbook::clob_v2 {
         open_orders: LinkedTable<u64, Order>,
     }
 
-    struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
+    struct Pool<phantom BaseAsset, phantom QuoteAsset> has key, store {
         // The key to the following Critbit Tree are order prices.
         id: UID,
         // All open bid orders.
