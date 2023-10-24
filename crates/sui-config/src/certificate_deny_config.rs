@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use sui_types::base_types::TransactionDigest;
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct CertificateDenyConfig {
     /// A list of certificate digests that are known to be either deterministically crashing
     /// every validator, or causing every validator to hang forever, i.e. there is no way
