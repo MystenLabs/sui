@@ -6,6 +6,7 @@ use crate::{
     context_data::{
         data_provider::DataProvider,
         db_data_provider::PgManager,
+        package_cache::PackageCache,
         sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0},
     },
     error::Error,
@@ -59,8 +60,10 @@ impl Server {
         let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
 
         let name_service_config = config.name_service.clone();
-        let pg_conn_pool = PgManager::new(config.connection.db_url.clone(), None)
+        let reader = PgManager::reader(config.connection.db_url.clone())
             .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
+        let pg_conn_pool = PgManager::new(reader.clone());
+        let package_cache = PackageCache::new(reader);
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
@@ -85,6 +88,7 @@ impl Server {
             .context_data(data_provider)
             .context_data(data_loader)
             .context_data(pg_conn_pool)
+            .context_data(package_cache)
             .context_data(name_service_config)
             .context_data(Arc::new(metrics))
             .context_data(config.clone());
@@ -246,12 +250,8 @@ mod tests {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
                 .context_data(pg_conn_pool)
@@ -293,12 +293,8 @@ mod tests {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
                 .context_data(pg_conn_pool)
@@ -347,12 +343,8 @@ mod tests {
             let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
             let data_provider: Box<dyn DataProvider> = Box::new(sdk);
             let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-            let pg_conn_pool = PgManager::new(db_url, None)
-                .map_err(|e| {
-                    println!("Failed to create pg connection pool: {}", e);
-                    e
-                })
-                .unwrap();
+            let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+            let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(data_provider)
                 .context_data(pg_conn_pool)
@@ -408,12 +400,8 @@ mod tests {
         let data_provider: Box<dyn DataProvider> = Box::new(sdk);
 
         let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
-        let pg_conn_pool = PgManager::new(db_url, None)
-            .map_err(|e| {
-                println!("Failed to create pg connection pool: {}", e);
-                e
-            })
-            .unwrap();
+        let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
+        let pg_conn_pool = PgManager::new(reader);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)

@@ -1,6 +1,5 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
 use crate::{
     error::Error,
     types::{
@@ -48,18 +47,17 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
 };
-use move_bytecode_utils::layout::TypeLayoutBuilder;
-use move_core_types::{language_storage::StructTag, value::MoveTypeLayout};
+use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
     indexer_reader::IndexerReader,
     models_v2::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
-        packages::StoredPackage, transactions::StoredTransaction,
+        transactions::StoredTransaction,
     },
     schema_v2::{
-        checkpoints, epochs, objects, packages, transactions, tx_calls, tx_changed_objects,
-        tx_input_objects, tx_recipients, tx_senders,
+        checkpoints, epochs, objects, transactions, tx_calls, tx_changed_objects, tx_input_objects,
+        tx_recipients, tx_senders,
     },
     PgConnectionPoolConfig,
 };
@@ -75,7 +73,6 @@ use sui_sdk::types::{
     messages_checkpoint::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
-    move_package::MovePackage as SuiMovePackage,
     object::Object as SuiObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
@@ -84,7 +81,7 @@ use sui_sdk::types::{
         GenesisObject, SenderSignedData, TransactionDataAPI, TransactionExpiration, TransactionKind,
     },
 };
-use sui_types::{base_types::MoveObjectType, governance::StakedSui, TypeTag};
+use sui_types::{base_types::MoveObjectType, governance::StakedSui};
 use sui_types::{
     base_types::ObjectID, digests::TransactionDigest, dynamic_field::Field, event::EventID,
     Identifier,
@@ -121,17 +118,16 @@ pub(crate) struct PgManager {
 }
 
 impl PgManager {
-    pub(crate) fn new<T: Into<String>>(
-        db_url: T,
-        config: Option<PgConnectionPoolConfig>,
-    ) -> Result<Self, Error> {
-        // TODO (wlmyng): support config
-        let mut config = config.unwrap_or_default();
-        config.set_pool_size(30);
-        let inner = IndexerReader::new_with_config(db_url, config)
-            .map_err(|e| Error::Internal(e.to_string()))?;
+    pub(crate) fn new(inner: IndexerReader) -> Self {
+        Self { inner }
+    }
 
-        Ok(Self { inner })
+    /// Create a new underlying reader, which is used by this type as well as other data providers.
+    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+        let mut config = PgConnectionPoolConfig::default();
+        config.set_pool_size(30);
+        IndexerReader::new_with_config(db_url, config)
+            .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 
     pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, Error>
@@ -173,24 +169,6 @@ impl PgManager {
 
         self.run_query_async(|conn| query.get_result::<StoredObject>(conn).optional())
             .await
-    }
-
-    /// TODO: cache modules/packages
-    async fn get_package(&self, address: Vec<u8>) -> Result<Option<StoredPackage>, Error> {
-        let mut query = packages::dsl::packages.into_boxed();
-        query = query.filter(packages::dsl::package_id.eq(address));
-
-        self.run_query_async(|conn| query.get_result::<StoredPackage>(conn).optional())
-            .await
-    }
-
-    pub async fn fetch_native_package(&self, package_id: Vec<u8>) -> Result<SuiMovePackage, Error> {
-        let package = self
-            .get_package(package_id)
-            .await?
-            .ok_or_else(|| Error::Internal("Package not found".to_string()))?;
-
-        bcs::from_bytes(&package.move_package).map_err(|e| Error::Internal(e.to_string()))
     }
 
     pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
@@ -640,19 +618,6 @@ impl PgManager {
 
 /// Implement methods to be used by graphql resolvers
 impl PgManager {
-    pub(crate) async fn build_with_types_in_blocking_task(
-        &self,
-        type_tag: TypeTag,
-    ) -> Result<MoveTypeLayout, Error> {
-        self.inner
-            .spawn_blocking(move |this| {
-                TypeLayoutBuilder::build_with_types(&type_tag, &this).map_err(|e| {
-                    Error::Internal(format!("Failed to build layout from type tag: {e}"))
-                })
-            })
-            .await
-    }
-
     pub(crate) fn parse_tx_cursor(&self, cursor: &str) -> Result<i64, Error> {
         let tx_sequence_number = cursor
             .parse::<i64>()
@@ -895,6 +860,7 @@ impl PgManager {
         }))
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn fetch_owner(
         &self,
         address: SuiAddress,

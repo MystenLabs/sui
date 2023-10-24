@@ -22,20 +22,13 @@ pub(crate) struct MoveObject {
 #[allow(unused_variables)]
 #[Object]
 impl MoveObject {
-    // TODO: This depends on having a module resolver so make more efficient
     async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, Error> {
         let resolver = ctx.data_unchecked::<PgManager>();
 
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
             let type_tag = TypeTag::Struct(Box::new(struct_tag));
-            let type_layout = resolver
-                .build_with_types_in_blocking_task(type_tag.clone())
-                .await
-                .extend()?;
-
             return Ok(Some(MoveValue::new(
                 type_tag.to_string(),
-                type_layout,
                 self.native_object
                     .data
                     .try_as_move()
