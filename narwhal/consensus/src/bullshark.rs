@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::consensus::{LeaderSchedule, LeaderSwapTable};
+use crate::consensus::{LeaderSchedule, LeaderSwapTable, Protocol};
 use crate::metrics::ConsensusMetrics;
 use crate::{
     consensus::{ConsensusState, Dag},
@@ -121,98 +121,6 @@ impl Bullshark {
         );
 
         reputation_score
-    }
-
-    pub fn process_certificate(
-        &mut self,
-        state: &mut ConsensusState,
-        certificate: Certificate,
-    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
-        debug!("Processing {:?}", certificate);
-        let round = certificate.round();
-
-        // Add the new certificate to the local storage.
-        if !state.try_insert(&certificate)? {
-            // Certificate has not been added to the dag since it's below commit round
-            return Ok((Outcome::CertificateBelowCommitRound, vec![]));
-        }
-
-        self.report_leader_on_time_metrics(round, state);
-
-        // Try to order the dag to commit. Start from the highest round for which we have at least
-        // f+1 certificates. This is because we need them to provide
-        // enough support to the leader.
-        let r = round - 1;
-
-        // We only elect leaders for even round numbers.
-        if r % 2 != 0 || r < 2 {
-            return Ok((Outcome::NoLeaderElectedForOddRound, Vec::new()));
-        }
-
-        // Get the certificate's digest of the leader. If we already ordered this leader,
-        // there is nothing to do.
-        let leader_round = r;
-        if leader_round <= state.last_round.committed_round {
-            return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
-        }
-
-        let mut committed_sub_dags = Vec::new();
-        let outcome = loop {
-            let (outcome, committed) = self.commit_leader(leader_round, state)?;
-
-            // always extend the returned sub dags
-            committed_sub_dags.extend(committed);
-
-            // break the loop and return the result as long as there is no schedule change.
-            // We want to retry if there is a schedule change.
-            if outcome != Outcome::ScheduleChanged {
-                break outcome;
-            }
-        };
-
-        // If we have no sub dag to commit then we simply return the outcome directly.
-        // Otherwise we let the rest of the method run.
-        if committed_sub_dags.is_empty() {
-            return Ok((outcome, committed_sub_dags));
-        }
-
-        // record the last time we got a successful leader election
-        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
-
-        self.metrics
-            .commit_rounds_latency
-            .observe(elapsed.as_secs_f64());
-
-        self.last_successful_leader_election_timestamp = Instant::now();
-
-        // The total leader_commits are expected to grow the same amount on validators,
-        // but strong vs weak counts are not expected to be the same across validators.
-        self.metrics
-            .leader_commits
-            .with_label_values(&["strong"])
-            .inc();
-        self.metrics
-            .leader_commits
-            .with_label_values(&["weak"])
-            .inc_by(committed_sub_dags.len() as u64 - 1);
-
-        // Log the latest committed round of every authority (for debug).
-        // Performance note: if tracing at the debug log level is disabled, this is cheap, see
-        // https://github.com/tokio-rs/tracing/pull/326
-        for (name, round) in &state.last_committed {
-            debug!("Latest commit of {}: Round {}", name, round);
-        }
-
-        let total_committed_certificates: u64 = committed_sub_dags
-            .iter()
-            .map(|sub_dag| sub_dag.certificates.len() as u64)
-            .sum();
-
-        self.metrics
-            .committed_certificates
-            .report(total_committed_certificates);
-
-        Ok((Outcome::Commit, committed_sub_dags))
     }
 
     /// Commits the leader of round `leader_round`. It is also recursively committing any earlier
@@ -457,5 +365,99 @@ impl Bullshark {
 
         self.max_inserted_certificate_round =
             self.max_inserted_certificate_round.max(certificate_round);
+    }
+}
+
+impl Protocol for Bullshark {
+    fn process_certificate(
+        &mut self,
+        state: &mut ConsensusState,
+        certificate: Certificate,
+    ) -> Result<(Outcome, Vec<CommittedSubDag>), ConsensusError> {
+        debug!("Processing {:?}", certificate);
+        let round = certificate.round();
+
+        // Add the new certificate to the local storage.
+        if !state.try_insert(&certificate)? {
+            // Certificate has not been added to the dag since it's below commit round
+            return Ok((Outcome::CertificateBelowCommitRound, vec![]));
+        }
+
+        self.report_leader_on_time_metrics(round, state);
+
+        // Try to order the dag to commit. Start from the highest round for which we have at least
+        // f+1 certificates. This is because we need them to provide
+        // enough support to the leader.
+        let r = round - 1;
+
+        // We only elect leaders for even round numbers.
+        if r % 2 != 0 || r < 2 {
+            return Ok((Outcome::NoLeaderElectedForOddRound, Vec::new()));
+        }
+
+        // Get the certificate's digest of the leader. If we already ordered this leader,
+        // there is nothing to do.
+        let leader_round = r;
+        if leader_round <= state.last_round.committed_round {
+            return Ok((Outcome::LeaderBelowCommitRound, Vec::new()));
+        }
+
+        let mut committed_sub_dags = Vec::new();
+        let outcome = loop {
+            let (outcome, committed) = self.commit_leader(leader_round, state)?;
+
+            // always extend the returned sub dags
+            committed_sub_dags.extend(committed);
+
+            // break the loop and return the result as long as there is no schedule change.
+            // We want to retry if there is a schedule change.
+            if outcome != Outcome::ScheduleChanged {
+                break outcome;
+            }
+        };
+
+        // If we have no sub dag to commit then we simply return the outcome directly.
+        // Otherwise we let the rest of the method run.
+        if committed_sub_dags.is_empty() {
+            return Ok((outcome, committed_sub_dags));
+        }
+
+        // record the last time we got a successful leader election
+        let elapsed = self.last_successful_leader_election_timestamp.elapsed();
+
+        self.metrics
+            .commit_rounds_latency
+            .observe(elapsed.as_secs_f64());
+
+        self.last_successful_leader_election_timestamp = Instant::now();
+
+        // The total leader_commits are expected to grow the same amount on validators,
+        // but strong vs weak counts are not expected to be the same across validators.
+        self.metrics
+            .leader_commits
+            .with_label_values(&["strong"])
+            .inc();
+        self.metrics
+            .leader_commits
+            .with_label_values(&["weak"])
+            .inc_by(committed_sub_dags.len() as u64 - 1);
+
+        // Log the latest committed round of every authority (for debug).
+        // Performance note: if tracing at the debug log level is disabled, this is cheap, see
+        // https://github.com/tokio-rs/tracing/pull/326
+        for (name, round) in &state.last_committed {
+            debug!("Latest commit of {}: Round {}", name, round);
+        }
+
+        let total_committed_certificates: u64 = committed_sub_dags
+            .iter()
+            .map(|sub_dag| sub_dag.certificates.len() as u64)
+            .sum();
+
+        self.metrics
+            .committed_certificates
+            .report(total_committed_certificates);
+
+        Ok((Outcome::Commit, committed_sub_dags))
     }
 }

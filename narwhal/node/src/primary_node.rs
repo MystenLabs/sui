@@ -7,6 +7,7 @@ use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters, Worker
 use consensus::bullshark::Bullshark;
 use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
+use consensus::whaleshark::Whaleshark;
 use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
@@ -335,14 +336,15 @@ impl PrimaryNodeInner {
         );
 
         // Spawn the consensus core who only sequences transactions.
-        let ordering_engine = Bullshark::new(
-            committee.clone(),
-            store.consensus_store.clone(),
-            protocol_config.clone(),
-            consensus_metrics.clone(),
-            Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
-            leader_schedule.clone(),
-        );
+        // let ordering_engine = Box::new(Bullshark::new(
+        //     committee.clone(),
+        //     store.consensus_store.clone(),
+        //     protocol_config.clone(),
+        //     consensus_metrics.clone(),
+        //     Self::CONSENSUS_SCHEDULE_CHANGE_SUB_DAGS,
+        //     leader_schedule.clone(),
+        // ));
+        let ordering_engine = Box::new(Whaleshark::new());
         let consensus_handles = Consensus::spawn(
             committee.clone(),
             parameters.gc_depth,
