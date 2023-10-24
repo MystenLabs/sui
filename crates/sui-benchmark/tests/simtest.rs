@@ -34,6 +34,7 @@ mod test {
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
+    use sui_surfer::default_surf_strategy::DefaultSurfStrategy;
     use sui_types::base_types::{ObjectRef, SuiAddress};
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
@@ -610,32 +611,56 @@ mod test {
         .await
         .unwrap();
 
-        let driver = BenchDriver::new(5, false);
+        let bench_task = tokio::spawn(async move {
+            let driver = BenchDriver::new(5, false);
 
-        // Use 0 for unbounded
-        let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", test_duration_secs);
-        let test_duration = if test_duration_secs == 0 {
-            Duration::MAX
-        } else {
-            Duration::from_secs(test_duration_secs)
-        };
-        let interval = Interval::Time(test_duration);
+            // Use 0 for unbounded
+            let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", test_duration_secs);
+            let test_duration = if test_duration_secs == 0 {
+                Duration::MAX
+            } else {
+                Duration::from_secs(test_duration_secs)
+            };
+            let interval = Interval::Time(test_duration);
 
-        let show_progress = interval.is_unbounded();
-        let (benchmark_stats, _) = driver
-            .run(
-                vec![proxy],
-                workloads,
-                system_state_observer,
-                &registry,
-                show_progress,
-                interval,
+            let show_progress = interval.is_unbounded();
+            let (benchmark_stats, _) = driver
+                .run(
+                    vec![proxy],
+                    workloads,
+                    system_state_observer,
+                    &registry,
+                    show_progress,
+                    interval,
+                )
+                .await
+                .unwrap();
+
+            // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
+            tracing::info!("end of test {:?}", benchmark_stats);
+            assert!(benchmark_stats.num_error_txes < 100);
+        });
+
+        let surfer_task = tokio::spawn(async move {
+            // now do a sui-surfer test
+            let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            path.extend([
+                "..",
+                "..",
+                "crates",
+                "sui-surfer",
+                "tests",
+                "move_building_blocks",
+            ]);
+            let results = sui_surfer::run::<DefaultSurfStrategy>(
+                Duration::from_secs(test_duration_secs),
+                vec![path],
             )
-            .await
-            .unwrap();
+            .await;
+            assert!(results.num_successful_transactions > 0);
+            assert!(!results.unique_move_functions_called.is_empty());
+        });
 
-        // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
-        tracing::info!("end of test {:?}", benchmark_stats);
-        assert!(benchmark_stats.num_error_txes < 100);
+        let _ = futures::join!(bench_task, surfer_task);
     }
 }

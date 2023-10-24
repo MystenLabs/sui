@@ -500,6 +500,24 @@ impl TestCluster {
         .expect("Timed out waiting for authenticator state update");
     }
 
+    /// Return the highest observed protocol version in the test cluster.
+    pub fn highest_protocol_version(&self) -> ProtocolVersion {
+        let mut max_protocol_version = 0;
+        for h in self.all_node_handles() {
+            let version = h.with(|node| {
+                node.state()
+                    .epoch_store_for_testing()
+                    .epoch_start_state()
+                    .protocol_version()
+                    .as_u64()
+            });
+            if version > max_protocol_version {
+                max_protocol_version = version;
+            }
+        }
+        ProtocolVersion::from(max_protocol_version)
+    }
+
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
         let (sender, gas) = self.wallet.get_one_gas_object().await.unwrap().unwrap();
         self.test_transaction_builder_with_gas_object(sender, gas)
@@ -914,6 +932,13 @@ impl TestClusterBuilder {
 
     pub fn with_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
         self.get_or_init_genesis_config().accounts = accounts;
+        self
+    }
+
+    pub fn with_additional_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config()
+            .accounts
+            .extend(accounts.into_iter());
         self
     }
 
