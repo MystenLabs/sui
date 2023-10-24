@@ -12,14 +12,14 @@ import { ObjectChanges } from './cards/ObjectChanges';
 
 export function TransactionSummary({
 	summary,
-	isPending,
+	isLoading,
 	isError,
 	isDryRun = false,
 	/* todo: remove this, we're using it until we update tx approval page */
 	showGasSummary = false,
 }: {
 	summary: TransactionSummaryType;
-	isPending?: boolean;
+	isLoading?: boolean;
 	isDryRun?: boolean;
 	isError?: boolean;
 	showGasSummary?: boolean;
@@ -27,7 +27,7 @@ export function TransactionSummary({
 	if (isError) return null;
 	return (
 		<section className="-mx-6 bg-sui/10 min-h-full">
-			{isPending ? (
+			{isLoading ? (
 				<div className="flex items-center justify-center p-10">
 					<LoadingIndicator />
 				</div>

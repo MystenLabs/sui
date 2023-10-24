@@ -443,7 +443,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 					) : (
 						<MyTokens
 							coinBalances={coinBalances ?? []}
-							isPending={coinBalancesLoading}
+							isLoading={coinBalancesLoading}
 							isFetched={coinBalancesFetched}
 						/>
 					)}

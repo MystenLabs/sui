@@ -44,7 +44,7 @@ export function TopPackagesCard() {
 				tooltip="Popular packages is recomputed on epoch changes."
 			>
 				<ErrorBoundary>
-					<TopPackagesTable data={filteredData} isPending={isPending} />
+					<TopPackagesTable data={filteredData} isLoading={isPending} />
 				</ErrorBoundary>
 			</TabHeader>
 		</div>

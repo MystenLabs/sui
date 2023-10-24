@@ -100,7 +100,7 @@ export function TransactionRequest({ txRequest }: TransactionRequestProps) {
 					<div className="flex flex-col gap-4">
 						<TransactionSummary
 							isDryRun
-							isPending={isDryRunLoading}
+							isLoading={isDryRunLoading}
 							isError={isDryRunError}
 							showGasSummary={false}
 							summary={summary}
