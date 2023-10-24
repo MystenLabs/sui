@@ -14,7 +14,7 @@ module 0x1.test {
     }
 }
 
-//# run --check-runtime-types
+//# run
 import 0x1.test;
 // check valid breaks in control flow check
 main() {

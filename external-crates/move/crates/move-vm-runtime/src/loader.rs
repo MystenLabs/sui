@@ -16,7 +16,7 @@ use move_binary_format::{
         FieldHandleIndex, FieldInstantiationIndex, FunctionDefinition, FunctionDefinitionIndex,
         FunctionHandleIndex, FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
         StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-        TypeParameterIndex, Visibility,
+        TypeParameterIndex,
     },
     IndexKind,
 };
@@ -368,25 +368,7 @@ impl ModuleCache {
 
         for (idx, func) in module.function_defs().iter().enumerate() {
             let findex = FunctionDefinitionIndex(idx as TableIndex);
-            let mut function = Function::new(natives, findex, func, module);
-            function.return_types = function
-                .return_
-                .0
-                .iter()
-                .map(|tok| self.make_type(module_view, tok))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            function.local_types = function
-                .locals
-                .0
-                .iter()
-                .map(|tok| self.make_type(module_view, tok))
-                .collect::<PartialVMResult<Vec<_>>>()?;
-            function.parameter_types = function
-                .parameters
-                .0
-                .iter()
-                .map(|tok| self.make_type(module_view, tok))
-                .collect::<PartialVMResult<Vec<_>>>()?;
+            let function = Function::new(natives, findex, func, module);
             self.functions.push(Arc::new(function));
         }
 
@@ -791,16 +773,16 @@ impl Loader {
             .map_err(|err| err.finish(Location::Undefined))?;
         let func = self.module_cache.read().function_at(idx);
 
-        let parameters = func
-            .parameters
+        let parameters = compiled
+            .signature_at(func.parameters)
             .0
             .iter()
             .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
-        let return_ = func
-            .return_
+        let return_ = compiled
+            .signature_at(func.return_)
             .0
             .iter()
             .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
@@ -1107,14 +1089,6 @@ impl Loader {
         .map_err(expect_no_verification_errors)?;
 
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
-
-        if self.vm_config.paranoid_type_checks && &module.self_id() != runtime_id {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Module self id mismatch with storage".to_string())
-                    .finish(Location::Module(runtime_id.clone())),
-            );
-        }
 
         // bytecode verifier checks that can be performed with the module itself
         move_bytecode_verifier::verify_module_with_config_unmetered(
@@ -1499,15 +1473,6 @@ impl<'a> Resolver<'a> {
         Ok(instantiation)
     }
 
-    #[allow(unused)]
-    pub(crate) fn type_params_count(&self, idx: FunctionInstantiationIndex) -> usize {
-        let func_inst = match &self.binary {
-            BinaryType::Module { loaded, .. } => loaded.function_instantiation_at(idx.0),
-            BinaryType::Script(script) => script.function_instantiation_at(idx.0),
-        };
-        func_inst.instantiation.len()
-    }
-
     //
     // Type resolution
     //
@@ -1550,90 +1515,6 @@ impl<'a> Resolver<'a> {
                 .map(|ty| self.subst(ty, ty_args))
                 .collect::<PartialVMResult<_>>()?,
         ))
-    }
-
-    pub(crate) fn get_field_type(&self, idx: FieldHandleIndex) -> PartialVMResult<Type> {
-        let handle = match &self.binary {
-            BinaryType::Module { loaded, .. } => &loaded.field_handles[idx.0 as usize],
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        Ok(self
-            .loader
-            .get_struct_type(handle.owner)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?
-            .fields[handle.offset]
-            .clone())
-    }
-
-    pub(crate) fn instantiate_generic_field(
-        &self,
-        idx: FieldInstantiationIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Type> {
-        let field_instantiation = match &self.binary {
-            BinaryType::Module { loaded, .. } => &loaded.field_instantiations[idx.0 as usize],
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        let struct_type = self
-            .loader
-            .get_struct_type(field_instantiation.owner)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?;
-
-        let instantiation_types = field_instantiation
-            .instantiation
-            .iter()
-            .map(|inst_ty| inst_ty.subst(ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        struct_type.fields[field_instantiation.offset].subst(&instantiation_types)
-    }
-
-    pub(crate) fn get_struct_fields(
-        &self,
-        idx: StructDefinitionIndex,
-    ) -> PartialVMResult<Arc<StructType>> {
-        let idx = match &self.binary {
-            BinaryType::Module { loaded, .. } => loaded.struct_at(idx),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        self.loader.get_struct_type(idx).ok_or_else(|| {
-            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                .with_message("Struct Definition not resolved".to_string())
-        })
-    }
-
-    pub(crate) fn instantiate_generic_struct_fields(
-        &self,
-        idx: StructDefInstantiationIndex,
-        ty_args: &[Type],
-    ) -> PartialVMResult<Vec<Type>> {
-        let struct_inst = match &self.binary {
-            BinaryType::Module { loaded, .. } => loaded.struct_instantiation_at(idx.0),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        };
-        let struct_type = self
-            .loader
-            .get_struct_type(struct_inst.def)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Struct Definition not resolved".to_string())
-            })?;
-
-        let instantiation_types = struct_inst
-            .instantiation
-            .iter()
-            .map(|inst_ty| inst_ty.subst(ty_args))
-            .collect::<PartialVMResult<Vec<_>>>()?;
-        struct_type
-            .fields
-            .iter()
-            .map(|ty| ty.subst(&instantiation_types))
-            .collect::<PartialVMResult<Vec<_>>>()
     }
 
     fn single_type_at(&self, idx: SignatureIndex) -> &Type {
@@ -1689,33 +1570,6 @@ impl<'a> Resolver<'a> {
         match &self.binary {
             BinaryType::Module { loaded, .. } => loaded.field_instantiation_count(idx.0),
             BinaryType::Script(_) => unreachable!("Scripts cannot have type instructions"),
-        }
-    }
-
-    pub(crate) fn field_handle_to_struct(&self, idx: FieldHandleIndex) -> Type {
-        match &self.binary {
-            BinaryType::Module { loaded, .. } => {
-                Type::Struct(loaded.field_handles[idx.0 as usize].owner)
-            }
-            BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
-        }
-    }
-
-    pub(crate) fn field_instantiation_to_struct(
-        &self,
-        idx: FieldInstantiationIndex,
-        args: &[Type],
-    ) -> PartialVMResult<Type> {
-        match &self.binary {
-            BinaryType::Module { loaded, .. } => Ok(Type::StructInstantiation(
-                loaded.field_instantiations[idx.0 as usize].owner,
-                loaded.field_instantiations[idx.0 as usize]
-                    .instantiation
-                    .iter()
-                    .map(|ty| ty.subst(args))
-                    .collect::<PartialVMResult<Vec<_>>>()?,
-            )),
-            BinaryType::Script(_) => unreachable!("Scripts cannot have field instructions"),
         }
     }
 
@@ -1924,15 +1778,8 @@ impl LoadedModule {
             let fh_idx = f_inst.handle;
             let owner = field_handles[fh_idx.0 as usize].owner;
             let offset = field_handles[fh_idx.0 as usize].offset;
-            let mut instantiation = vec![];
-            for ty in &module.signature_at(f_inst.type_parameters).0 {
-                instantiation.push(cache.make_type(module_view, ty)?);
-            }
-            field_instantiations.push(FieldInstantiation {
-                offset,
-                owner,
-                instantiation,
-            });
+
+            field_instantiations.push(FieldInstantiation { offset, owner });
         }
 
         Ok(Self {
@@ -2076,30 +1923,19 @@ impl LoadedScript {
         let scope = Scope::Script(*script_hash);
 
         let code: Vec<Bytecode> = script.code.code.clone();
-        let parameters = script.signature_at(script.parameters).clone();
-
-        let parameter_tys = parameters
+        let parameters = script.parameters;
+        let parameters_len = script_view.signature_at(parameters).0.len();
+        let locals_len = parameters_len + script_view.signature_at(script.code.locals).0.len();
+        let parameter_tys = script_view
+            .signature_at(parameters)
             .0
             .iter()
             .map(|tok| cache.make_type(script_view, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
-        let locals = Signature(
-            parameters
-                .0
-                .iter()
-                .chain(script.signature_at(script.code.locals).0.iter())
-                .cloned()
-                .collect(),
-        );
-        let local_tys = locals
-            .0
-            .iter()
-            .map(|tok| cache.make_type(script_view, tok))
-            .collect::<PartialVMResult<Vec<_>>>()
-            .map_err(|err| err.finish(Location::Undefined))?;
-        let return_ = Signature(vec![]);
-        let return_tys = return_
+        let return_ = SignatureIndex(0);
+        let return_len = 0;
+        let return_tys = Signature(vec![])
             .0
             .iter()
             .map(|tok| cache.make_type(script_view, tok))
@@ -2115,16 +1951,14 @@ impl LoadedScript {
             code,
             parameters,
             return_,
-            locals,
             type_parameters,
             native,
             def_is_native,
-            def_is_friend_or_private: false,
             scope,
             name,
-            return_types: return_tys.clone(),
-            local_types: local_tys,
-            parameter_types: parameter_tys.clone(),
+            parameters_len,
+            locals_len,
+            return_len,
         });
 
         let mut single_signature_token_map = BTreeMap::new();
@@ -2209,18 +2043,16 @@ pub(crate) struct Function {
     file_format_version: u32,
     index: FunctionDefinitionIndex,
     code: Vec<Bytecode>,
-    parameters: Signature,
-    return_: Signature,
-    locals: Signature,
+    parameters: SignatureIndex,
+    return_: SignatureIndex,
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
-    def_is_friend_or_private: bool,
     scope: Scope,
     name: Identifier,
-    return_types: Vec<Type>,
-    local_types: Vec<Type>,
-    parameter_types: Vec<Type>,
+    parameters_len: usize,
+    locals_len: usize,
+    return_len: usize,
 }
 
 impl Function {
@@ -2233,10 +2065,6 @@ impl Function {
         let handle = module.function_handle_at(def.function);
         let name = module.identifier_at(handle.name).to_owned();
         let module_id = module.self_id();
-        let def_is_friend_or_private = match def.visibility {
-            Visibility::Friend | Visibility::Private => true,
-            Visibility::Public => false,
-        };
         let (native, def_is_native) = if def.is_native() {
             (
                 natives.resolve(
@@ -2250,23 +2078,18 @@ impl Function {
             (None, false)
         };
         let scope = Scope::Module(module_id);
-        let parameters = module.signature_at(handle.parameters).clone();
+        let parameters = handle.parameters;
+        let parameters_len = module.signature_at(parameters).0.len();
         // Native functions do not have a code unit
-        let (code, locals) = match &def.code {
+        let (code, locals_len) = match &def.code {
             Some(code) => (
                 code.code.clone(),
-                Signature(
-                    parameters
-                        .0
-                        .iter()
-                        .chain(module.signature_at(code.locals).0.iter())
-                        .cloned()
-                        .collect(),
-                ),
+                parameters_len + module.signature_at(code.locals).0.len(),
             ),
-            None => (vec![], Signature(vec![])),
+            None => (vec![], 0),
         };
-        let return_ = module.signature_at(handle.return_).clone();
+        let return_ = handle.return_;
+        let return_len = module.signature_at(return_).0.len();
         let type_parameters = handle.type_parameters.clone();
         Self {
             file_format_version: module.version(),
@@ -2274,16 +2097,14 @@ impl Function {
             code,
             parameters,
             return_,
-            locals,
             type_parameters,
             native,
             def_is_native,
-            def_is_friend_or_private,
             scope,
             name,
-            local_types: vec![],
-            return_types: vec![],
-            parameter_types: vec![],
+            parameters_len,
+            locals_len,
+            return_len,
         }
     }
 
@@ -2321,15 +2142,15 @@ impl Function {
     }
 
     pub(crate) fn local_count(&self) -> usize {
-        self.locals.len()
+        self.locals_len
     }
 
     pub(crate) fn arg_count(&self) -> usize {
-        self.parameters.len()
+        self.parameters_len
     }
 
     pub(crate) fn return_type_count(&self) -> usize {
-        self.return_.len()
+        self.return_len
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -2342,18 +2163,6 @@ impl Function {
 
     pub(crate) fn type_parameters(&self) -> &[AbilitySet] {
         &self.type_parameters
-    }
-
-    pub(crate) fn local_types(&self) -> &[Type] {
-        &self.local_types
-    }
-
-    pub(crate) fn return_types(&self) -> &[Type] {
-        &self.return_types
-    }
-
-    pub(crate) fn parameter_types(&self) -> &[Type] {
-        &self.parameter_types
     }
 
     pub(crate) fn pretty_string(&self) -> String {
@@ -2370,10 +2179,6 @@ impl Function {
 
     pub(crate) fn is_native(&self) -> bool {
         self.def_is_native
-    }
-
-    pub(crate) fn is_friend_or_private(&self) -> bool {
-        self.def_is_friend_or_private
     }
 
     pub(crate) fn get_native(&self) -> PartialVMResult<&UnboxedNativeFunction> {
@@ -2442,7 +2247,6 @@ struct FieldInstantiation {
     // `ModuelCache::structs` global table index. It is the generic type.
     #[allow(unused)]
     owner: CachedStructIndex,
-    instantiation: Vec<Type>,
 }
 
 //
