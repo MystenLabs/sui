@@ -11682,6 +11682,7 @@ name = "sui-transaction-checks"
 version = "0.1.0"
 dependencies = [
  "fastcrypto-zkp",
+ "once_cell",
  "sui-config",
  "sui-execution",
  "sui-macros",

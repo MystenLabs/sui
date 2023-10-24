@@ -483,3 +483,10 @@ where
         self
     }
 }
+
+pub trait GetSharedLocks {
+    fn get_shared_locks(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
+}
