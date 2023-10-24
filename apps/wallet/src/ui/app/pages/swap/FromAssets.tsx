@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSortedCoinsByCategories } from '_app/hooks/useSortedCoinsByCategories';
 import Loading from '_components/loading';
 import Overlay from '_components/overlay';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useActiveAddress, useCoinsReFetchingConfig } from '_hooks';
+import { useActiveAddress, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
 import { TokenRow } from '_pages/home/tokens/TokensDetails';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
+import { Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export function BaseAssets() {
+export function FromAssets() {
 	const navigate = useNavigate();
 	const selectedAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
@@ -34,9 +34,8 @@ export function BaseAssets() {
 				<div className="flex flex-shrink-0 justify-start flex-col w-full">
 					{recognized?.map((coinBalance, index) => {
 						return (
-							<>
+							<Fragment key={coinBalance.coinType}>
 								<TokenRow
-									key={coinBalance.coinType}
 									coinBalance={coinBalance}
 									onClick={() => {
 										navigate(
@@ -46,7 +45,7 @@ export function BaseAssets() {
 								/>
 
 								{index !== recognized.length - 1 && <div className="bg-gray-45 h-px w-full" />}
-							</>
+							</Fragment>
 						);
 					})}
 				</div>

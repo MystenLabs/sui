@@ -1,14 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SharedObjectRef } from '@mysten/sui.js/bcs';
 import {
 	getFullnodeUrl,
 	OrderArguments,
 	PaginatedEvents,
 	PaginationArguments,
 	SuiClient,
+	SuiObjectRef,
 } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import {
+	TransactionArgument,
+	TransactionBlock,
+	TransactionObjectArgument,
+	TransactionResult,
+} from '@mysten/sui.js/transactions';
 import {
 	normalizeStructTag,
 	normalizeSuiAddress,
@@ -39,6 +46,29 @@ import {
 } from './utils';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
+
+function objArg(
+	txb: TransactionBlock,
+	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
+): TransactionObjectArgument {
+	if (typeof arg === 'string') {
+		return txb.object(arg);
+	}
+
+	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
+		return txb.objectRef(arg);
+	}
+
+	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
+		return txb.sharedObjectRef(arg);
+	}
+
+	if ('kind' in arg) {
+		return arg;
+	}
+
+	throw new Error('Invalid argument type');
+}
 
 export class DeepBookClient {
 	#poolTypeArgsCache: Map<string, string[]> = new Map();
@@ -121,16 +151,28 @@ export class DeepBookClient {
 	}
 
 	/**
-	 * @description: Create and Transfer custodian account to user
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @description: Create Account Cap
+	 * @param txb
 	 */
-	createAccount(currentAddress: string = this.currentAddress): TransactionBlock {
-		const txb = new TransactionBlock();
+	createAccountCap(txb: TransactionBlock) {
 		let [cap] = txb.moveCall({
 			typeArguments: [],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::create_account`,
 			arguments: [],
 		});
+		return cap;
+	}
+
+	/**
+	 * @description: Create and Transfer custodian account to user
+	 * @param currentAddress current address of the user
+	 * @param txb
+	 */
+	createAccount(
+		currentAddress: string = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
+	): TransactionBlock {
+		const cap = this.createAccountCap(txb);
 		txb.transferObjects([cap], this.#checkAddress(currentAddress));
 		return txb;
 	}
@@ -271,22 +313,25 @@ export class DeepBookClient {
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param quantity Amount of quote asset to swap in base asset
 	 * @param orderType bid for buying base with quote, ask for selling base for quote
-	 * @param baseCoin the objectId of the base coin
-	 * @param quoteCoin the objectId of the quote coin
+	 * @param baseCoin the objectId or the coin object of the base coin
+	 * @param quoteCoin the objectId or the coin object of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
-	 * @param recipientAddress: address to return the unused amounts, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * @param accountCap
+	 * @param recipientAddress the address to receive the swapped asset. If omitted, `this.currentAddress` will be used. The function
+	 * @param txb
 	 */
 	async placeMarketOrder(
+		accountCap: string | Extract<TransactionArgument, { kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',
-		baseCoin: string | undefined = undefined,
-		quoteCoin: string | undefined = undefined,
+		baseCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
+		quoteCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
 		clientOrderId: string | undefined = undefined,
-		recipientAddress: string = this.currentAddress,
+		recipientAddress: string | undefined = this.currentAddress,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		const [baseAssetType, quoteAssetType] = await this.getPoolTypeArgs(poolId);
 		if (!baseCoin && orderType === 'ask') {
 			throw new Error('Must specify a valid base coin for an ask order');
@@ -298,43 +343,46 @@ export class DeepBookClient {
 			target: `0x2::coin::zero`,
 			arguments: [],
 		});
+
 		const [base_coin_ret, quote_coin_ret] = txb.moveCall({
 			typeArguments: [baseAssetType, quoteAssetType],
 			target: `${PACKAGE_ID}::${MODULE_CLOB}::place_market_order`,
 			arguments: [
 				txb.object(poolId),
-				txb.object(this.#checkAccountCap()),
+				typeof accountCap === 'string' ? txb.object(this.#checkAccountCap(accountCap)) : accountCap,
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.pure.u64(quantity),
 				txb.pure.bool(orderType === 'bid'),
-				baseCoin ? txb.object(baseCoin) : emptyCoin,
-				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
+				baseCoin ? objArg(txb, baseCoin) : emptyCoin,
+				quoteCoin ? objArg(txb, quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
 		const recipient = this.#checkAddress(recipientAddress);
 		txb.transferObjects([base_coin_ret], recipient);
 		txb.transferObjects([quote_coin_ret], recipient);
+
 		return txb;
 	}
 
 	/**
 	 * @description: swap exact quote for base
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
-	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
-	 * @param amountIn: amount of token to buy or sell, eg: 10000000.
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @param tokenObjectIn Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
+	 * @param amountIn amount of token to buy or sell, eg: 10000000.
+	 * @param currentAddress current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose, eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * @param txb
 	 */
 	async swapExactQuoteForBase(
 		poolId: string,
-		tokenObjectIn: string,
-		amountIn: bigint,
+		tokenObjectIn: TransactionResult | TransactionObjectArgument | string,
+		amountIn: bigint, // quantity of USDC
 		currentAddress: string,
-		clientOrderId: string | undefined = undefined,
+		clientOrderId?: string,
+		txb: TransactionBlock = new TransactionBlock(),
 	): Promise<TransactionBlock> {
-		const txb = new TransactionBlock();
 		// in this case, we assume that the tokenIn--tokenOut always exists.
 		const [base_coin_ret, quote_coin_ret, _amount] = txb.moveCall({
 			typeArguments: await this.getPoolTypeArgs(poolId),
@@ -343,9 +391,9 @@ export class DeepBookClient {
 				txb.object(poolId),
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.object(this.#checkAccountCap()),
-				txb.object(String(amountIn)),
+				txb.pure.u64(String(amountIn)),
 				txb.object(SUI_CLOCK_OBJECT_ID),
-				txb.object(tokenObjectIn),
+				objArg(txb, tokenObjectIn),
 			],
 		});
 		txb.transferObjects([base_coin_ret], currentAddress);
