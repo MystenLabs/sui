@@ -939,7 +939,8 @@ pub async fn verify_archive(
     concurrency: usize,
     interactive: bool,
 ) -> Result<()> {
-    verify_archive_with_genesis_config(genesis, remote_store_config, concurrency, interactive).await
+    verify_archive_with_genesis_config(genesis, remote_store_config, concurrency, interactive, 10)
+        .await
 }
 
 pub async fn verify_archive_by_checksum(
