@@ -9542,6 +9542,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e56dd856803e253c8f298af3f4d7eb0ae5e23a737252cd90bb4f3b435033b2d"
+dependencies = [
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91d129178576168c589c9ec973feedf7d3126c01ac2bf08795109aa35b69fb8f"
+dependencies = [
+ "proc-macro2 1.0.66",
+ "quote 1.0.33",
+ "syn 2.0.32",
+]
+
+[[package]]
 name = "sha-1"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10756,11 +10781,13 @@ dependencies = [
  "once_cell",
  "prometheus",
  "rand 0.8.5",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
  "serde_with",
  "serde_yaml 0.8.26",
+ "serial_test",
  "simulacrum",
  "sui-indexer",
  "sui-json-rpc",
@@ -14660,6 +14687,8 @@ dependencies = [
  "serde_with_macros",
  "serde_yaml 0.8.26",
  "serde_yaml 0.9.21",
+ "serial_test",
+ "serial_test_derive",
  "sha-1 0.10.1",
  "sha-1 0.9.8",
  "sha1",

@@ -272,3 +272,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_senders,
     tx_indices,
 );
+
+use diesel::sql_types::Text;
+diesel::sql_function! {fn query_cost(x : Text) ->Float8;}

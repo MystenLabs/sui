@@ -82,6 +82,10 @@ impl ConnectionConfig {
             ..Default::default()
         }
     }
+
+    pub fn db_url(&self) -> String {
+        self.db_url.clone()
+    }
 }
 
 impl ServiceConfig {
