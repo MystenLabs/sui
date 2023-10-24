@@ -59,6 +59,12 @@ impl AccountAddress {
         hex::encode(self.0)
     }
 
+    /// Return a canonical string representation of the address
+    /// With the prefix '0x'
+    pub fn to_canonical_string_with_prefix(&self) -> String {
+        format!("0x{}", self.to_canonical_string())
+    }
+
     pub fn short_str_lossless(&self) -> String {
         let hex_str = hex::encode(self.0).trim_start_matches('0').to_string();
         if hex_str.is_empty() {

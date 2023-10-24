@@ -77,7 +77,7 @@ impl From<IndexedObject> for StoredObject {
             owner_id: o.owner_id.map(|id| id.to_vec()),
             object_type: o.object.type_().map(|t| {
                 let s: StructTag = t.clone().into();
-                s.to_canonical_string()
+                s.to_canonical_string_with_prefix()
             }),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
@@ -311,7 +311,7 @@ mod tests {
 
         match stored_obj.object_type {
             Some(t) => {
-                assert_eq!(t, "0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>");
+                assert_eq!(t, "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>");
             }
             None => {
                 panic!("object_type should not be none");
@@ -329,7 +329,7 @@ mod tests {
         let sui_coin = SuiCoin::try_from(stored_obj).unwrap();
         assert_eq!(
             sui_coin.coin_type,
-            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
         );
     }
 }

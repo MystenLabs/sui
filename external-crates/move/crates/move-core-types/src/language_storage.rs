@@ -86,6 +86,24 @@ impl TypeTag {
         }
     }
 
+    /// Return the canonical string representation of the type, including the prefix '0x'
+    pub fn to_canonical_string_with_prefix(&self) -> String {
+        use TypeTag::*;
+        match self {
+            Bool => "bool".to_owned(),
+            U8 => "u8".to_owned(),
+            U16 => "u16".to_owned(),
+            U32 => "u32".to_owned(),
+            U64 => "u64".to_owned(),
+            U128 => "u128".to_owned(),
+            U256 => "u256".to_owned(),
+            Address => "address".to_owned(),
+            Signer => "signer".to_owned(),
+            Vector(t) => format!("vector<{}>", t.to_canonical_string_with_prefix()),
+            Struct(s) => s.to_canonical_string_with_prefix(),
+        }
+    }
+
     /// Return the abstract size we use for gas metering
     /// This size might be imperfect but should be consistent across platforms
     /// TODO (ade): use macro to enfornce determinism
@@ -175,6 +193,27 @@ impl StructTag {
         format!(
             "{}::{}::{}{}",
             self.address.to_canonical_string(),
+            self.module,
+            self.name,
+            generics
+        )
+    }
+
+    /// Return the canonical string representation of the struct, including the prefix '0x'
+    pub fn to_canonical_string_with_prefix(&self) -> String {
+        let mut generics = String::new();
+        if let Some(first_ty) = self.type_params.first() {
+            generics.push('<');
+            generics.push_str(&first_ty.to_canonical_string_with_prefix());
+            for ty in self.type_params.iter().skip(1) {
+                generics.push(',');
+                generics.push_str(&ty.to_canonical_string_with_prefix())
+            }
+            generics.push('>');
+        }
+        format!(
+            "{}::{}::{}{}",
+            self.address.to_canonical_string_with_prefix(),
             self.module,
             self.name,
             generics

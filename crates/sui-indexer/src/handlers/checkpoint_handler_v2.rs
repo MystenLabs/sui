@@ -700,7 +700,7 @@ fn try_create_dynamic_field_info(
                 name,
                 bcs_name,
                 type_,
-                object_type: struct_tag.to_canonical_string(),
+                object_type: struct_tag.to_canonical_string_with_prefix(),
                 object_id,
                 version,
                 digest,
@@ -710,7 +710,8 @@ fn try_create_dynamic_field_info(
             name,
             bcs_name,
             type_,
-            object_type: move_object.into_type().into_type_params()[1].to_canonical_string(),
+            object_type: move_object.into_type().into_type_params()[1]
+                .to_canonical_string_with_prefix(),
             object_id: o.id(),
             version: o.version(),
             digest: o.digest(),

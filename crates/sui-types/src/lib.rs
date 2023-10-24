@@ -278,8 +278,8 @@ mod tests {
         let result = parse_sui_struct_tag("0x2::sui::SUI").expect("should not error");
         assert_eq!(result.to_string(), "0x2::sui::SUI");
         assert_eq!(
-            result.to_canonical_string(),
-            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            result.to_canonical_string_with_prefix(),
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
         );
     }
 
@@ -291,8 +291,8 @@ mod tests {
         .expect("should not error");
         assert_eq!(result.to_string(), "0x2::sui::SUI");
         assert_eq!(
-            result.to_canonical_string(),
-            "0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+            result.to_canonical_string_with_prefix(),
+            "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
         );
     }
 }
