@@ -62,6 +62,6 @@ export function useImageMod({ url = '', enabled = true }: { url?: string; enable
 		},
 		placeholderData,
 		staleTime: 24 * 60 * 60 * 1000,
-		cacheTime: Infinity,
+		gcTime: Infinity,
 	});
 }

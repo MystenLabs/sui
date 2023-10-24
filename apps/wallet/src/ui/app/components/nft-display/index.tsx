@@ -55,7 +55,7 @@ export function NFTDisplayCard({
 	isLocked,
 }: NFTDisplayCardProps) {
 	const { data: objectData } = useGetObject(objectId);
-	const { data: nftMeta, isLoading } = useGetNFTMeta(objectId);
+	const { data: nftMeta, isPending } = useGetNFTMeta(objectId);
 	const nftName = nftMeta?.name || formatAddress(objectId);
 	const nftImageUrl = nftMeta?.imageUrl || '';
 	const video = useResolveVideo(objectData);
@@ -65,7 +65,7 @@ export function NFTDisplayCard({
 
 	return (
 		<div className={nftDisplayCardStyles({ animateHover, wideView, orientation })}>
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{objectData?.data && isOwnerToken ? (
 					<Kiosk
 						object={objectData}

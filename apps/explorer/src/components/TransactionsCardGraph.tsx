@@ -68,12 +68,12 @@ export function TransactionsCardGraph() {
 		'getTotalTransactionBlocks',
 		{},
 		{
-			cacheTime: 24 * 60 * 60 * 1000,
+			gcTime: 24 * 60 * 60 * 1000,
 			staleTime: Infinity,
 			retry: 5,
 		},
 	);
-	const { data: epochMetrics, isLoading } = useEpochTransactions();
+	const { data: epochMetrics, isPending } = useEpochTransactions();
 	const lastEpochTotalTransactions =
 		epochMetrics?.[epochMetrics.length - 1]?.epochTotalTransactions;
 
@@ -104,7 +104,7 @@ export function TransactionsCardGraph() {
 						!epochMetrics?.length && 'bg-gray-40',
 					)}
 				>
-					{isLoading ? (
+					{isPending ? (
 						<div className="flex flex-col items-center gap-1">
 							<LoadingIndicator />
 							<Text color="steel" variant="body/medium">

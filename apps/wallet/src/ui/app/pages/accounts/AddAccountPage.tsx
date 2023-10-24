@@ -69,7 +69,7 @@ export function AddAccountPage() {
 	const [forcedZkLoginProvider, setForcedZkLoginProvider] = useState<ZkLoginProvider | null>(null);
 	const forceZkLoginWithProviderRef = useRef(searchParams.get('forceZkLoginProvider'));
 	const forcedLoginHandledRef = useRef(false);
-	const { data: accountsTotalByType, isLoading: isAccountsCountLoading } = useCountAccountsByType();
+	const { data: accountsTotalByType, isPending: isAccountsCountLoading } = useCountAccountsByType();
 	useEffect(() => {
 		if (isAccountsCountLoading) {
 			return;
@@ -132,7 +132,7 @@ export function AddAccountPage() {
 								setConnectLedgerModalOpen(true);
 							}
 						}}
-						disabled={createAccountsMutation.isLoading}
+						disabled={createAccountsMutation.isPending}
 					/>
 				</div>
 				<Section title="Create New">
@@ -145,7 +145,7 @@ export function AddAccountPage() {
 							setAccountsFormValues({ type: 'new-mnemonic' });
 							ampli.clickedCreateNewAccount({ sourceFlow });
 						}}
-						disabled={createAccountsMutation.isLoading}
+						disabled={createAccountsMutation.isPending}
 					/>
 				</Section>
 				<Section title="Import Existing Accounts">
@@ -157,7 +157,7 @@ export function AddAccountPage() {
 						onClick={() => {
 							ampli.clickedImportPassphrase({ sourceFlow });
 						}}
-						disabled={createAccountsMutation.isLoading}
+						disabled={createAccountsMutation.isPending}
 					/>
 					<Button
 						variant="outline"
@@ -167,7 +167,7 @@ export function AddAccountPage() {
 						onClick={() => {
 							ampli.clickedImportPrivateKey({ sourceFlow });
 						}}
-						disabled={createAccountsMutation.isLoading}
+						disabled={createAccountsMutation.isPending}
 					/>
 				</Section>
 			</div>

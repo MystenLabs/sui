@@ -17,17 +17,17 @@ import { isUntrustedQredoConnect } from './utils';
 
 export function QredoConnectInfoPage() {
 	const { requestID } = useParams();
-	const { data, isLoading } = useQredoUIPendingRequest(requestID);
+	const { data, isPending } = useQredoUIPendingRequest(requestID);
 	const isUntrusted = !!data && isUntrustedQredoConnect(data);
 	const [isUntrustedAccepted, setIsUntrustedAccepted] = useState(false);
 	const navigate = useNavigate();
 	const backgroundService = useBackgroundClient();
 	useEffect(() => {
-		if (!isLoading && !data) {
+		if (!isPending && !data) {
 			window.close();
 		}
-	}, [isLoading, data]);
-	if (isLoading) {
+	}, [isPending, data]);
+	if (isPending) {
 		return null;
 	}
 	if (!data) {

@@ -19,7 +19,7 @@ export function Validators() {
 	const accountAddress = useActiveAddress();
 	const {
 		data: stakedValidators,
-		isLoading,
+		isPending,
 		isError,
 		error,
 	} = useGetDelegatedStake({
@@ -33,9 +33,9 @@ export function Validators() {
 	const pageTitle = stakedValidators?.length ? 'Stake & Earn SUI' : 'Select a Validator';
 
 	return (
-		<Overlay showModal title={isLoading ? 'Loading' : pageTitle} closeOverlay={() => navigate('/')}>
+		<Overlay showModal title={isPending ? 'Loading' : pageTitle} closeOverlay={() => navigate('/')}>
 			<div className="w-full h-full flex flex-col flex-nowrap">
-				<Loading loading={isLoading}>
+				<Loading loading={isPending}>
 					{isError ? (
 						<div className="mb-2">
 							<Alert>

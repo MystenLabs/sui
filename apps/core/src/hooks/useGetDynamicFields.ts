@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
+import { DynamicFieldPage } from '@mysten/sui.js/src/client';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -9,17 +10,16 @@ const MAX_PAGE_SIZE = 10;
 
 export function useGetDynamicFields(parentId: string, maxPageSize = MAX_PAGE_SIZE) {
 	const client = useSuiClient();
-	return useInfiniteQuery(
-		['dynamic-fields', parentId],
-		({ pageParam = null }) =>
+	return useInfiniteQuery<DynamicFieldPage>({
+		queryKey: ['dynamic-fields', { maxPageSize, parentId }],
+		queryFn: ({ pageParam = null }) =>
 			client.getDynamicFields({
 				parentId: normalizeSuiAddress(parentId),
-				cursor: pageParam,
+				cursor: pageParam as string | null,
 				limit: maxPageSize,
 			}),
-		{
-			enabled: !!parentId,
-			getNextPageParam: ({ nextCursor, hasNextPage }) => (hasNextPage ? nextCursor : null),
-		},
-	);
+		enabled: !!parentId,
+		initialPageParam: null,
+		getNextPageParam: ({ nextCursor, hasNextPage }) => (hasNextPage ? nextCursor : null),
+	});
 }

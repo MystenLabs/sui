@@ -15,14 +15,14 @@ function NftTransferPage() {
 	const { nftId } = useParams();
 	const address = useActiveAddress();
 	// verify that the nft is owned by the user and is transferable
-	const { data: ownedNFT, isLoading: isNftLoading } = useOwnedNFT(nftId || '', address);
+	const { data: ownedNFT, isPending: isNftLoading } = useOwnedNFT(nftId || '', address);
 	const navigate = useNavigate();
 	const isGuardLoading = useUnlockedGuard();
-	const isLoading = isNftLoading || isGuardLoading;
+	const isPending = isNftLoading || isGuardLoading;
 	return (
 		<Overlay showModal={true} title="Send NFT" closeOverlay={() => navigate('/nfts')}>
 			<div className="flex w-full flex-col h-full">
-				<Loading loading={isLoading}>
+				<Loading loading={isPending}>
 					{ownedNFT &&
 					nftId &&
 					ownedNFT.content?.dataType === 'moveObject' &&
