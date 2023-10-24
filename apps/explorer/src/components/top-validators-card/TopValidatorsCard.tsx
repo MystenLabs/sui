@@ -105,14 +105,14 @@ type TopValidatorsCardProps = {
 };
 
 export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
-	const { data, isLoading, isSuccess, isError } = useSuiClientQuery('getLatestSuiSystemState');
+	const { data, isPending, isSuccess, isError } = useSuiClientQuery('getLatestSuiSystemState');
 
 	const tableData = useMemo(
 		() => (data ? validatorsTable(data.activeValidators, limit, showIcon) : null),
 		[data, limit, showIcon],
 	);
 
-	if (isError || (!isLoading && !tableData?.data.length)) {
+	if (isError || (!isPending && !tableData?.data.length)) {
 		return (
 			<Banner variant="error" fullWidth>
 				Validator data could not be loaded
@@ -122,7 +122,7 @@ export function TopValidatorsCard({ limit, showIcon }: TopValidatorsCardProps) {
 
 	return (
 		<>
-			{isLoading && (
+			{isPending && (
 				<PlaceholderTable
 					rowCount={limit || NUMBER_OF_VALIDATORS}
 					rowHeight="13px"

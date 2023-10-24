@@ -16,7 +16,7 @@ import { useAccounts } from '../../hooks/useAccounts';
 
 export function ExportAccountPage() {
 	const { accountID } = useParams();
-	const { data: allAccounts, isLoading } = useAccounts();
+	const { data: allAccounts, isPending } = useAccounts();
 	const account = allAccounts?.find(({ id }) => accountID === id) || null;
 	const backgroundClient = useBackgroundClient();
 	const exportMutation = useMutation({
@@ -35,12 +35,12 @@ export function ExportAccountPage() {
 		},
 	});
 	const navigate = useNavigate();
-	if (!account && !isLoading) {
+	if (!account && !isPending) {
 		return <Navigate to="/accounts/manage" replace />;
 	}
 	return (
 		<Overlay title="Account Private Key" closeOverlay={() => navigate(-1)} showModal>
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				{exportMutation.data ? (
 					<div className="flex flex-col flex-nowrap items-stretch gap-3">
 						<Alert>

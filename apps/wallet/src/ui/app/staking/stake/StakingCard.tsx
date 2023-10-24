@@ -55,7 +55,7 @@ function StakingCard() {
 	const activeAccount = useActiveAccount();
 	const accountAddress = activeAccount?.address;
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
-	const { data: suiBalance, isLoading: loadingSuiBalances } = useSuiClientQuery(
+	const { data: suiBalance, isPending: loadingSuiBalances } = useSuiClientQuery(
 		'getBalance',
 		{ coinType: SUI_TYPE_ARG, owner: accountAddress! },
 		{ refetchInterval, staleTime, enabled: !!accountAddress },
@@ -65,7 +65,7 @@ function StakingCard() {
 	const validatorAddress = searchParams.get('address');
 	const stakeSuiIdParams = searchParams.get('staked');
 	const unstake = searchParams.get('unstake') === 'true';
-	const { data: allDelegation, isLoading } = useGetDelegatedStake({
+	const { data: allDelegation, isPending } = useGetDelegatedStake({
 		address: accountAddress || '',
 		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
 		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
@@ -74,7 +74,7 @@ function StakingCard() {
 		FEATURES.WALLET_EFFECTS_ONLY_SHARED_TRANSACTION as string,
 	);
 
-	const { data: system, isLoading: validatorsIsloading } =
+	const { data: system, isPending: validatorsisPending } =
 		useSuiClientQuery('getLatestSuiSystemState');
 
 	const totalTokenBalance = useMemo(() => {
@@ -276,12 +276,12 @@ function StakingCard() {
 		],
 	);
 
-	if (!coinType || !validatorAddress || (!validatorsIsloading && !system)) {
+	if (!coinType || !validatorAddress || (!validatorsisPending && !system)) {
 		return <Navigate to="/" replace={true} />;
 	}
 	return (
 		<div className="flex flex-col flex-nowrap flex-grow w-full">
-			<Loading loading={isLoading || validatorsIsloading || loadingSuiBalances}>
+			<Loading loading={isPending || validatorsisPending || loadingSuiBalances}>
 				<Formik
 					initialValues={initialValues}
 					validationSchema={validationSchema}

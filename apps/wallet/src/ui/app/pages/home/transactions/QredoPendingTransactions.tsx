@@ -29,7 +29,7 @@ export function QredoPendingTransactions() {
 	const qredoID = isQredoAccount ? activeAccount.sourceID : undefined;
 	const {
 		data: qredoTransactions,
-		isLoading,
+		isPending,
 		error,
 	} = useGetQredoTransactions({
 		qredoID,
@@ -39,7 +39,7 @@ export function QredoPendingTransactions() {
 		return <Alert>{(error as Error)?.message}</Alert>;
 	}
 	return (
-		<Loading loading={isLoading}>
+		<Loading loading={isPending}>
 			{qredoTransactions?.length && activeAddress ? (
 				qredoTransactions.map((txn) => (
 					<ErrorBoundary key={txn.txID}>
