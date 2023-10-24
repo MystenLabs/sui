@@ -585,7 +585,7 @@ fn add_port_to_url(url: &str) -> Result<String, Error> {
         // split this into "scheme+host/authority+port and the rest
         // because we want to be able to just add the port, and then reconstruct
         // the whole URI without messing with the scheme/host/authority and the endpoints
-        let splits = uri.splitn(4, "/").collect::<Vec<_>>();
+        let splits = uri.splitn(4, '/').collect::<Vec<_>>();
         // if we have an endpoint path
         let (host, endpoint_path) = if splits.len() == 4 {
             (splits[2], splits[3])
