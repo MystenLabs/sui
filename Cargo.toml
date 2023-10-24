@@ -115,6 +115,7 @@ members = [
     "crates/sui-rpc-loadgen",
     "crates/sui-sdk",
     "crates/sui-simulator",
+    "crates/sui-single-node-benchmark",
     "crates/sui-snapshot",
     "crates/sui-source-validation",
     "crates/sui-source-validation-service",
@@ -128,6 +129,7 @@ members = [
     "crates/sui-tls",
     "crates/sui-tool",
     "crates/sui-transaction-builder",
+    "crates/sui-transaction-checks",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
     "crates/sui-upgrade-compatibility-transactional-tests",
@@ -225,7 +227,7 @@ cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
 chrono = { version = "0.4.26", features = ["clock", "serde"] }
-clap = { version = "3.2.17", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "wrap_help"] }
 # clap = { version = "4.3.2", features = ["derive"] }
 collectable = "0.0.2"
 colored = "2.0.0"
@@ -482,6 +484,7 @@ sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-tool = { path = "crates/sui-tool" }
 sui-transaction-builder = { path = "crates/sui-transaction-builder" }
+sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
 sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }

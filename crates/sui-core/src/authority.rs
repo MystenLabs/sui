@@ -2912,7 +2912,7 @@ impl AuthorityState {
             .get_transactions(filter, cursor, limit, reverse)
     }
 
-    fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
+    pub fn get_checkpoint_store(&self) -> Arc<CheckpointStore> {
         self.checkpoint_store.clone()
     }
 

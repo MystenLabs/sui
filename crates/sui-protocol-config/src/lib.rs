@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use sui_protocol_config_macros::{ProtocolConfigFeatureFlagsGetters, ProtocolConfigGetters};
 use tracing::{info, warn};
@@ -226,6 +227,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     narwhal_versioned_metadata: bool,
 
+    // A list of supported OIDC providers that can be used for zklogin.
+    #[serde(skip_serializing_if = "is_empty")]
+    zklogin_supported_providers: BTreeSet<String>,
+
     // Enable zklogin auth
     #[serde(skip_serializing_if = "is_false")]
     zklogin_auth: bool,
@@ -252,10 +257,18 @@ struct FeatureFlags {
     // If true, then the new algorithm for the leader election schedule will be used
     #[serde(skip_serializing_if = "is_false")]
     narwhal_new_leader_election_schedule: bool,
+
+    // If true, allow verify with legacy zklogin address
+    #[serde(skip_serializing_if = "is_false")]
+    verify_legacy_zklogin_address: bool,
 }
 
 fn is_false(b: &bool) -> bool {
     !b
+}
+
+fn is_empty(b: &BTreeSet<String>) -> bool {
+    b.is_empty()
 }
 
 /// Ordering mechanism for transactions in one Narwhal consensus output.
@@ -819,6 +832,10 @@ impl ProtocolConfig {
         self.feature_flags.zklogin_auth
     }
 
+    pub fn zklogin_supported_providers(&self) -> &BTreeSet<String> {
+        &self.feature_flags.zklogin_supported_providers
+    }
+
     pub fn consensus_transaction_ordering(&self) -> ConsensusTransactionOrdering {
         self.feature_flags.consensus_transaction_ordering
     }
@@ -837,6 +854,10 @@ impl ProtocolConfig {
 
     pub fn narwhal_new_leader_election_schedule(&self) -> bool {
         self.feature_flags.narwhal_new_leader_election_schedule
+    }
+
+    pub fn verify_legacy_zklogin_address(&self) -> bool {
+        self.feature_flags.verify_legacy_zklogin_address
     }
 }
 

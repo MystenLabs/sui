@@ -1141,3 +1141,19 @@ impl WriteStore for SingleCheckpointSharedInMemoryStore {
         self.0.insert_committee(new_committee)
     }
 }
+
+pub trait ReceivedMarkerQuery {
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: VersionNumber,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError>;
+}
+
+pub trait GetSharedLocks {
+    fn get_shared_locks(
+        &self,
+        transaction_digest: &TransactionDigest,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
+}

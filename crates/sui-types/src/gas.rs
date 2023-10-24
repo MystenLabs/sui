@@ -540,6 +540,15 @@ pub mod checked {
         }
     }
 
+    impl std::ops::AddAssign<&Self> for GasCostSummary {
+        fn add_assign(&mut self, other: &Self) {
+            self.computation_cost += other.computation_cost;
+            self.storage_cost += other.storage_cost;
+            self.storage_rebate += other.storage_rebate;
+            self.non_refundable_storage_fee += other.non_refundable_storage_fee;
+        }
+    }
+
     //
     // Helper functions to deal with gas coins operations.
     //

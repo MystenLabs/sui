@@ -823,6 +823,10 @@ impl TransactionKind {
         )
     }
 
+    pub fn is_end_of_epoch_tx(&self) -> bool {
+        matches!(self, TransactionKind::ChangeEpoch(_))
+    }
+
     /// If this is advance epoch transaction, returns (total gas charged, total gas rebated).
     /// TODO: We should use GasCostSummary directly in ChangeEpoch struct, and return that
     /// directly.
