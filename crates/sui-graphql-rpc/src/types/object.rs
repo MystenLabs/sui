@@ -64,16 +64,16 @@ impl Object {
         self.version
     }
 
-    async fn digest(&self) -> String {
-        self.digest.clone()
+    async fn digest(&self) -> &str {
+        &self.digest
     }
 
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        self.storage_rebate.clone()
+    async fn storage_rebate(&self) -> Option<&BigInt> {
+        self.storage_rebate.as_ref()
     }
 
-    async fn bcs(&self) -> Option<Base64> {
-        self.bcs.clone()
+    async fn bcs(&self) -> Option<&Base64> {
+        self.bcs.as_ref()
     }
 
     async fn previous_transaction_block(
