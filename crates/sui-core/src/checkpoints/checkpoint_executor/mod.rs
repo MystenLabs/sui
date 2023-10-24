@@ -587,6 +587,12 @@ impl CheckpointExecutor {
                     )
                     .await;
 
+                    #[cfg(msim)]
+                    {
+                        // Run pruner and compact RocksDb before accumulating state.
+                        self.prune_and_compact().await;
+                    }
+
                     // For finalizing the checkpoint, we need to pass in all checkpoint
                     // transaction effects, not just the change_epoch tx effects. However,
                     // we have already notify awaited all tx effects separately (once
@@ -632,6 +638,33 @@ impl CheckpointExecutor {
             }
         }
         false
+    }
+
+    #[cfg(msim)]
+    async fn prune_and_compact(&self) {
+        use crate::authority::authority_store_pruner::{
+            AuthorityStorePruner, AuthorityStorePruningMetrics,
+        };
+        use sui_config::node::AuthorityStorePruningConfig;
+        use sui_storage::mutex_table::RwLockTable;
+
+        let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+        let lock_table = Arc::new(RwLockTable::new(1));
+        let pruning_config = AuthorityStorePruningConfig {
+            num_epochs_to_retain: 0,
+            ..Default::default()
+        };
+        info!("Starting object pruning");
+        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+            &self.authority_store.perpetual_tables,
+            &self.checkpoint_store,
+            &lock_table,
+            pruning_config,
+            metrics,
+            usize::MAX,
+        )
+        .await;
+        let _ = AuthorityStorePruner::compact(&self.authority_store.perpetual_tables);
     }
 }
 
