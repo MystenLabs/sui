@@ -76,7 +76,7 @@ use sui_sdk::types::{
         CheckpointCommitment, CheckpointDigest, EndOfEpochData as NativeEndOfEpochData,
     },
     move_package::MovePackage as SuiMovePackage,
-    object::{Data, Object as SuiObject},
+    object::Object as SuiObject,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
     },
@@ -1565,14 +1565,10 @@ impl TryFrom<StoredObject> for Object {
             ));
         }
 
-        let bcs = match object.data {
-            // Do we BCS serialize packages?
-            Data::Package(package) => Base64::from(
-                bcs::to_bytes(&package)
-                    .map_err(|e| Error::Internal(format!("Failed to serialize package: {e}")))?,
-            ),
-            Data::Move(move_object) => Base64::from(&move_object.into_contents()),
-        };
+        let bcs = Base64::from(
+            bcs::to_bytes(&object)
+                .map_err(|e| Error::Internal(format!("Failed to serialize object: {e}")))?,
+        );
 
         Ok(Self {
             address: SuiAddress::from_array(***object_id),
