@@ -19,6 +19,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
+use tracing::instrument;
 
 pub type KVStoreTransactionData = (
     Vec<Option<Transaction>>,
@@ -474,6 +475,7 @@ impl FallbackTransactionKVStore {
 
 #[async_trait]
 impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get(
         &self,
         transactions: &[TransactionDigest],
@@ -512,6 +514,7 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         Ok((res.0, res.1, res.2))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get_checkpoints(
         &self,
         checkpoint_summaries: &[CheckpointSequenceNumber],
@@ -567,6 +570,7 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         Ok((res.0, res.1, res.2, res.3))
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn deprecated_get_transaction_checkpoint(
         &self,
         digest: TransactionDigest,
@@ -584,6 +588,7 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         Ok(res)
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn get_object(
         &self,
         object_id: ObjectID,
@@ -596,6 +601,7 @@ impl TransactionKeyValueStoreTrait for FallbackTransactionKVStore {
         Ok(res)
     }
 
+    #[instrument(level = "trace", skip_all)]
     async fn multi_get_transaction_checkpoint(
         &self,
         digests: &[TransactionDigest],

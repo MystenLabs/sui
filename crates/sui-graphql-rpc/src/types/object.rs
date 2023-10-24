@@ -6,6 +6,7 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use super::big_int::BigInt;
 use super::digest::Digest;
+use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::name_service::NameService;
 use super::{
@@ -13,9 +14,8 @@ use super::{
     transaction_block::TransactionBlock,
 };
 use crate::context_data::db_data_provider::PgManager;
+use crate::error::{code, graphql_error};
 use crate::types::base64::Base64;
-use sui_types::digests::TransactionDigest as NativeSuiTransactionDigest;
-use sui_types::move_package::MovePackage as NativeSuiMovePackage;
 use sui_types::object::{Data as NativeSuiObjectData, Object as NativeSuiObject};
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -64,16 +64,16 @@ impl Object {
         self.version
     }
 
-    async fn digest(&self) -> String {
-        self.digest.clone()
+    async fn digest(&self) -> &str {
+        &self.digest
     }
 
-    async fn storage_rebate(&self) -> Option<BigInt> {
-        self.storage_rebate.clone()
+    async fn storage_rebate(&self) -> Option<&BigInt> {
+        self.storage_rebate.as_ref()
     }
 
-    async fn bcs(&self) -> Option<Base64> {
-        self.bcs.clone()
+    async fn bcs(&self) -> Option<&Base64> {
+        self.bcs.as_ref()
     }
 
     async fn previous_transaction_block(
@@ -98,24 +98,46 @@ impl Object {
         self.owner.as_ref().map(|q| Owner { address: *q })
     }
 
+    async fn as_move_object(&self) -> Result<Option<MoveObject>> {
+        let Some(bcs) = &self.bcs else {
+            return Ok(None);
+        };
+
+        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|e| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Failed to deserialize object at {}: {e}", self.address),
+            )
+        })?;
+
+        Ok(
+            if matches!(native_object.data, NativeSuiObjectData::Move(_)) {
+                Some(MoveObject { native_object })
+            } else {
+                None
+            },
+        )
+    }
+
     async fn as_move_package(&self) -> Result<Option<MovePackage>> {
-        if let Some(bcs) = &self.bcs {
-            let bytes = bcs.0.as_slice();
+        let Some(bcs) = &self.bcs else {
+            return Ok(None);
+        };
 
-            let package = bcs::from_bytes::<NativeSuiMovePackage>(bytes)
-                .map_err(|e| Error::from(format!("Failed to deserialize package: {}", e)))?;
+        let native_object: NativeSuiObject = bcs::from_bytes(&bcs.0[..]).map_err(|_| {
+            graphql_error(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Failed to deserialize object with ID: {}", self.address),
+            )
+        })?;
 
-            Ok(Some(MovePackage {
-                native_object: NativeSuiObject::new_package_from_data(
-                    NativeSuiObjectData::Package(package),
-                    self.previous_transaction
-                        .map(|x| NativeSuiTransactionDigest::new(x.into_array()))
-                        .ok_or(Error::new("Object must have a previous transaction digest"))?,
-                ),
-            }))
-        } else {
-            Ok(None)
-        }
+        Ok(
+            if matches!(native_object.data, NativeSuiObjectData::Package(_)) {
+                Some(MovePackage { native_object })
+            } else {
+                None
+            },
+        )
     }
 
     // =========== Owner interface methods =============
@@ -230,15 +252,12 @@ impl From<&NativeSuiObject> for Object {
             panic!("Immutable or Shared object should not have an owner_id");
         }
 
-        let bcs = match &o.data {
-            // Do we BCS serialize packages?
-            NativeSuiObjectData::Package(package) => Base64::from(
-                bcs::to_bytes(package)
-                    .expect("Failed to serialize package")
-                    .to_vec(),
-            ),
-            NativeSuiObjectData::Move(move_object) => Base64::from(move_object.contents()),
-        };
+        let bcs = Base64::from(
+            bcs::to_bytes(o)
+                // TODO: Shouldn't panic here.
+                .expect("Failed to serialize object")
+                .to_vec(),
+        );
 
         Self {
             address: SuiAddress::from_array(o.id().into_bytes()),

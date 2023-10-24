@@ -15,7 +15,7 @@ use sui_types::messages_checkpoint::{
     SignedCheckpointSummary, VerifiedCheckpoint,
 };
 use sui_types::messages_consensus::ConsensusTransaction;
-use tracing::{debug, info, trace};
+use tracing::{debug, info, instrument, trace};
 
 use super::CheckpointMetrics;
 
@@ -59,6 +59,7 @@ impl LogCheckpointOutput {
 impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
     for SubmitCheckpointToConsensus<T>
 {
+    #[instrument(level = "debug", skip_all)]
     async fn checkpoint_created(
         &self,
         summary: &CheckpointSummary,
@@ -161,6 +162,7 @@ impl SendCheckpointToStateSync {
 
 #[async_trait]
 impl CertifiedCheckpointOutput for SendCheckpointToStateSync {
+    #[instrument(level = "debug", skip_all)]
     async fn certified_checkpoint_created(
         &self,
         summary: &CertifiedCheckpointSummary,

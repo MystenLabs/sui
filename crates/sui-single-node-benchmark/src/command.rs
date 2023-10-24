@@ -38,6 +38,7 @@ pub struct Command {
 
 #[derive(Copy, Clone, EnumIter, ValueEnum)]
 pub enum Component {
+    ExecutionOnly,
     /// Baseline includes the execution and storage layer only.
     Baseline,
     /// On top of Baseline, this schedules transactions through the transaction manager.

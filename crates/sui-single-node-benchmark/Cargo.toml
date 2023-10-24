@@ -6,9 +6,13 @@ publish = false
 license = "Apache-2.0"
 
 [dependencies]
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
 move-core-types.workspace = true
+sui-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
 sui-test-transaction-builder.workspace = true
+sui-transaction-checks.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 
 async-trait.workspace = true
