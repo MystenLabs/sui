@@ -9799,7 +9799,6 @@ dependencies = [
  "sui-move",
  "sui-move-build",
  "sui-protocol-config",
- "sui-replay",
  "sui-sdk",
  "sui-simulator",
  "sui-source-validation",
