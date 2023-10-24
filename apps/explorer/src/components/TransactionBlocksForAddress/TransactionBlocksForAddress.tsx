@@ -79,7 +79,7 @@ function TransactionBlocksForAddress({
 		ChangedObject: 0,
 	});
 
-	const { data, isLoading, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
+	const { data, isPending, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } =
 		useGetTransactionBlocks({
 			[filterValue]: address,
 		} as TransactionFilter);
@@ -111,7 +111,7 @@ function TransactionBlocksForAddress({
 			</div>
 
 			<div className="flex flex-col space-y-5 pt-5 text-left xl:pr-10">
-				{isLoading || isFetching || isFetchingNextPage || !cardData ? (
+				{isPending || isFetching || isFetchingNextPage || !cardData ? (
 					<PlaceholderTable
 						rowCount={DEFAULT_TRANSACTIONS_LIMIT}
 						rowHeight="16px"
@@ -127,7 +127,7 @@ function TransactionBlocksForAddress({
 				{(hasNextPage || (data && data?.pages.length > 1)) && (
 					<Pagination
 						onNext={() => {
-							if (isLoading || isFetching) {
+							if (isPending || isFetching) {
 								return;
 							}
 
@@ -135,7 +135,7 @@ function TransactionBlocksForAddress({
 							if (
 								data &&
 								currentPageState[filterValue] === data?.pages.length - 1 &&
-								!isLoading &&
+								!isPending &&
 								!isFetching
 							) {
 								fetchNextPage();

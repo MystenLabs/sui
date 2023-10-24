@@ -36,7 +36,7 @@ export function CheckpointsTable({
 
 	const checkpoints = useGetCheckpoints(initialCursor, limit);
 
-	const { data, isFetching, pagination, isLoading, isError } = useCursorPagination(checkpoints);
+	const { data, isFetching, pagination, isPending, isError } = useCursorPagination(checkpoints);
 
 	const count = useMemo(() => {
 		if (maxCursor) {
@@ -60,7 +60,7 @@ export function CheckpointsTable({
 					Failed to load Checkpoints
 				</div>
 			)}
-			{isLoading || isFetching || !cardData ? (
+			{isPending || isFetching || !cardData ? (
 				<PlaceholderTable
 					rowCount={Number(limit)}
 					rowHeight="16px"

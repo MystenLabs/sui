@@ -254,7 +254,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const {
 		data: coinBalance,
 		isError,
-		isLoading,
+		isPending,
 		isFetched,
 	} = useSuiClientQuery(
 		'getBalance',
@@ -278,7 +278,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	const {
 		data: coinBalances,
-		isLoading: coinBalancesLoading,
+		isPending: coinBalancesLoading,
 		isFetched: coinBalancesFetched,
 	} = useSuiClientQuery(
 		'getAllBalances',
@@ -301,7 +301,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 
 	const coinSymbol = useMemo(() => Coin.getCoinSymbol(activeCoinType), [activeCoinType]);
 	// Avoid perpetual loading state when fetching and retry keeps failing add isFetched check
-	const isFirstTimeLoading = isLoading && !isFetched;
+	const isFirstTimeLoading = isPending && !isFetched;
 
 	useEffect(() => {
 		const dismissed =

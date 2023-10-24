@@ -69,11 +69,11 @@ these query hooks checkout the
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading, error, refetch } = useSuiClientQuery('getOwnedObjects', {
+	const { data, isPending, error, refetch } = useSuiClientQuery('getOwnedObjects', {
 		owner: '0x123',
 	});
 
-	if (isLoading) {
+	if (isPending) {
 		return <div>Loading...</div>;
 	}
 

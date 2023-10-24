@@ -155,7 +155,7 @@ const App = () => {
 	}, [backgroundClient, autoLockEnabled]);
 
 	const storageMigration = useStorageMigrationStatus();
-	if (storageMigration.isLoading || !storageMigration?.data) {
+	if (storageMigration.isPending || !storageMigration?.data) {
 		return null;
 	}
 	if (storageMigration.data !== 'ready') {

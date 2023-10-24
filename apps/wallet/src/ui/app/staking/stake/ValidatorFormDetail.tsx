@@ -38,13 +38,13 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 	const stakeIdParams = searchParams.get('staked');
 	const {
 		data: system,
-		isLoading: loadingValidators,
+		isPending: loadingValidators,
 		isError: errorValidators,
 	} = useSuiClientQuery('getLatestSuiSystemState');
 
 	const {
 		data: stakeData,
-		isLoading,
+		isPending,
 		isError,
 		error,
 	} = useGetDelegatedStake({
@@ -91,7 +91,7 @@ export function ValidatorFormDetail({ validatorAddress, unstake }: ValidatorForm
 		apy: null,
 	};
 
-	if (isLoading || loadingValidators) {
+	if (isPending || loadingValidators) {
 		return (
 			<div className="p-2 w-full flex justify-center items-center h-full">
 				<LoadingIndicator />

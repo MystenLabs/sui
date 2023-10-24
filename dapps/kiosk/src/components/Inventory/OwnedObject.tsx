@@ -27,7 +27,7 @@ export function OwnedObject({
 			<>
 				<Button
 					className="bg-gray-200 hover:bg-primary hover:text-white"
-					loading={placeToKioskMutation.isLoading}
+					loading={placeToKioskMutation.isPending}
 					onClick={() => placeToKioskMutation.mutate({ item: object, kioskId })}
 				>
 					Place in kiosk

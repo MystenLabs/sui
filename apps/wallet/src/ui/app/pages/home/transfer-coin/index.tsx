@@ -80,8 +80,8 @@ function TransferCoinPage() {
 			}
 		},
 		onSuccess: (response) => {
-			queryClient.invalidateQueries(['get-coins']);
-			queryClient.invalidateQueries(['coin-balance']);
+			queryClient.invalidateQueries({ queryKey: ['get-coins'] });
+			queryClient.invalidateQueries({ queryKey: ['coin-balance'] });
 
 			ampli.sentCoins({
 				coinType: coinType!,
@@ -149,7 +149,7 @@ function TransferCoinPage() {
 								text="Send Now"
 								disabled={coinType === null}
 								after={<ArrowRight16 />}
-								loading={executeTransfer.isLoading}
+								loading={executeTransfer.isPending}
 							/>
 						</Menu>
 					</BottomMenuLayout>

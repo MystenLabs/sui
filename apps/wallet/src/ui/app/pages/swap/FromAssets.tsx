@@ -15,7 +15,7 @@ export function FromAssets() {
 	const selectedAddress = useActiveAddress();
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 
-	const { data: coins, isLoading } = useSuiClientQuery(
+	const { data: coins, isPending } = useSuiClientQuery(
 		'getAllBalances',
 		{ owner: selectedAddress! },
 		{
@@ -30,7 +30,7 @@ export function FromAssets() {
 
 	return (
 		<Overlay showModal title="Select a Coin" closeOverlay={() => navigate(-1)}>
-			<Loading loading={isLoading}>
+			<Loading loading={isPending}>
 				<div className="flex flex-shrink-0 justify-start flex-col w-full">
 					{recognized?.map((coinBalance, index) => {
 						return (
