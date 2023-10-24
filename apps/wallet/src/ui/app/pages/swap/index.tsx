@@ -111,7 +111,7 @@ export function SwapPageContent() {
 		quoteCoinMetadata,
 		baseCoinSymbol,
 		quoteCoinSymbol,
-		isLoading,
+		isPending,
 	} = useSwapData({
 		baseCoinType,
 		quoteCoinType,
@@ -247,7 +247,7 @@ export function SwapPageContent() {
 
 	const {
 		data: dataFromEstimate,
-		isLoading: dataFromEstimateLoading,
+		isPending: dataFromEstimateLoading,
 		isError: dataFromEstimateError,
 	} = useGetEstimate({
 		signer,
@@ -270,7 +270,7 @@ export function SwapPageContent() {
 	const totalGas = txnSummary?.gas?.totalGas;
 	const balanceChanges = dataFromEstimate?.dryRunResponse?.balanceChanges || [];
 
-	const { mutate: handleSwap, isLoading: isSwapLoading } = useMutation({
+	const { mutate: handleSwap, isPending: isSwapLoading } = useMutation({
 		mutationFn: async (formData: FormValues) => {
 			const txn = dataFromEstimate?.txn;
 
@@ -338,7 +338,7 @@ export function SwapPageContent() {
 	return (
 		<Overlay showModal title="Swap" closeOverlay={() => navigate('/')}>
 			<div className="flex flex-col h-full w-full">
-				<Loading loading={isLoading}>
+				<Loading loading={isPending}>
 					<BottomMenuLayout>
 						<Content>
 							<Form form={form} onSubmit={handleOnsubmit}>
