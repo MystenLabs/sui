@@ -7,7 +7,7 @@ export const MAX_FLOAT = 2;
 export const WALLET_FEES_PERCENTAGE = 0.5;
 export const ESTIMATED_GAS_FEES_PERCENTAGE = 1;
 export const ONE_SUI_DEEPBOOK = 1000000000;
-export const WALLET_FEE_ADDRESS =
+export const DEFAULT_WALLET_FEE_ADDRESS =
 	'0x55b0eb986766351d802ac3e1bbb8750a072b3fa40c782ebe3a0f48c9099f7fd3';
 export const DEFAULT_MAX_SLIPPAGE_PERCENTAGE = '0.5';
 export const initialValues = {

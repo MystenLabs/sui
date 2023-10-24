@@ -313,13 +313,12 @@ export class DeepBookClient {
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
 	 * @param quantity Amount of quote asset to swap in base asset
 	 * @param orderType bid for buying base with quote, ask for selling base for quote
-	 * @param baseCoin the objectId of the base coin
-	 * @param quoteCoin the objectId of the quote coin
+	 * @param baseCoin the objectId or the coin object of the base coin
+	 * @param quoteCoin the objectId or the coin object of the quote coin
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose. eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
 	 * @param accountCap
 	 * @param recipientAddress the address to receive the swapped asset. If omitted, `this.currentAddress` will be used. The function
-	 * @param feeCoin
 	 * @param txb
 	 */
 	async placeMarketOrder(
@@ -369,11 +368,12 @@ export class DeepBookClient {
 	/**
 	 * @description: swap exact quote for base
 	 * @param poolId Object id of pool, created after invoking createPool, eg: "0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4"
-	 * @param tokenObjectIn: Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
-	 * @param amountIn: amount of token to buy or sell, eg: 10000000.
-	 * @param currentAddress: current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
+	 * @param tokenObjectIn Object id of the token to swap: eg: "0x6e566fec4c388eeb78a7dab832c9f0212eb2ac7e8699500e203def5b41b9c70d"
+	 * @param amountIn amount of token to buy or sell, eg: 10000000.
+	 * @param currentAddress current user address, eg: "0xbddc9d4961b46a130c2e1f38585bbc6fa8077ce54bcb206b26874ac08d607966"
 	 * @param clientOrderId a client side defined order id for bookkeeping purpose, eg: "1" , "2", ... If omitted, the sdk will
-	 * assign a increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * assign an increasing number starting from 0. But this number might be duplicated if you are using multiple sdk instances
+	 * @param txb
 	 */
 	async swapExactQuoteForBase(
 		poolId: string,

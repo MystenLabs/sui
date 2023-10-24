@@ -209,7 +209,6 @@ export function SwapPageContent() {
 		setValue,
 		control,
 		handleSubmit,
-		trigger,
 		reset,
 		formState: { isValid, isSubmitting, errors },
 	} = form;
@@ -295,7 +294,7 @@ export function SwapPageContent() {
 				isAsk,
 			});
 
-			if (balanceChanges.length < 3) {
+			if (!balanceChanges.length) {
 				throw new Error(ErrorStrings.NOT_ENOUGH_BALANCE);
 			}
 
@@ -376,8 +375,8 @@ export function SwapPageContent() {
 												activeCoinType === SUI_TYPE_ARG
 													? formattedBaseTokenBalance
 													: formattedQuoteTokenBalance,
+												{ shouldDirty: true },
 											);
-											trigger('amount');
 										}}
 									/>
 

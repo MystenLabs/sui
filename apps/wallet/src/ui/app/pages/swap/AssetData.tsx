@@ -5,7 +5,6 @@ import { ButtonOrLink } from '_app/shared/utils/ButtonOrLink';
 import { CoinIcon } from '_components/coin-icon';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { ChevronDown16 } from '@mysten/icons';
-import clsx from 'classnames';
 
 export function AssetData({
 	tokenBalance,
@@ -31,10 +30,7 @@ export function AssetData({
 						disabled={disabled}
 						onClick={onClick}
 						to={to}
-						className={clsx(
-							'flex gap-1 items-center no-underline outline-none border-transparent bg-transparent p-0',
-							!disabled && 'cursor-pointer',
-						)}
+						className="flex gap-1 items-center no-underline outline-none border-transparent bg-transparent p-0"
 					>
 						<Heading variant="heading6" weight="semibold" color="hero-dark">
 							{symbol}

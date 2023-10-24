@@ -5,12 +5,14 @@ import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
 import {
 	DEEPBOOK_KEY,
+	DEFAULT_WALLET_FEE_ADDRESS,
 	ESTIMATED_GAS_FEES_PERCENTAGE,
 	ONE_SUI_DEEPBOOK,
-	WALLET_FEE_ADDRESS,
 	WALLET_FEES_PERCENTAGE,
 } from '_pages/swap/constants';
 import { useDeepBookContext } from '_shared/deepBook/context';
+import { FEATURES } from '_shared/experimentation/features';
+import { useFeatureValue } from '@growthbook/growthbook-react';
 import { roundFloat, useGetObject } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
@@ -102,8 +104,8 @@ async function getDeepBookPriceForCoin(
 
 	const prices = await Promise.all(promises);
 
-const filter: bigint[] = prices.filter((price): price is bigint => typeof price === 'bigint' && price !== 0n);
-		return typeof price !== 'undefined' && typeof price === 'bigint' && price !== 0n;
+	const filter: bigint[] = prices.filter((price): price is bigint => {
+		return typeof price === 'bigint' && price !== 0n;
 	});
 
 	const total = filter.reduce((acc, price) => {
@@ -259,6 +261,7 @@ async function getPlaceMarketOrderTxn({
 	baseBalance,
 	quoteBalance,
 	quoteCoins,
+	walletFeeAddress,
 }: {
 	deepBookClient: DeepBookClient;
 	poolId: string;
@@ -270,6 +273,7 @@ async function getPlaceMarketOrderTxn({
 	quoteBalance: string;
 	baseCoins: CoinStruct[];
 	quoteCoins: CoinStruct[];
+	walletFeeAddress: string;
 }) {
 	const txb = new TransactionBlock();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
@@ -345,7 +349,7 @@ async function getPlaceMarketOrderTxn({
 		txnResult.transferObjects([accountCap], address);
 	}
 
-	if (walletFeeCoin) txnResult.transferObjects([walletFeeCoin], WALLET_FEE_ADDRESS);
+	if (walletFeeCoin) txnResult.transferObjects([walletFeeCoin], walletFeeAddress);
 
 	return txnResult;
 }
@@ -367,6 +371,7 @@ export function useGetEstimate({
 	quoteBalance: string;
 	isAsk: boolean;
 }) {
+	const walletFeeAddress = useFeatureValue(FEATURES.WALLET_FEE_ADDRESS, DEFAULT_WALLET_FEE_ADDRESS);
 	const queryClient = useQueryClient();
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
@@ -424,6 +429,7 @@ export function useGetEstimate({
 				quoteCoins,
 				baseBalance,
 				quoteBalance,
+				walletFeeAddress,
 			});
 
 			if (!accountCapId) {
@@ -484,15 +490,6 @@ export async function isExceedingSlippageTolerance({
 	const slip = new BigNumber(isAsk ? bestBidPrice.toString() : bestAskPrice.toString()).dividedBy(
 		averagePricePaid,
 	);
-
-	console.table([
-		['slip', slip.toString()],
-		['slip result', new BigNumber('1').minus(slip).abs().toString()],
-		['slipPercentage', slipPercentage],
-		['baseCoinAmount', baseCoinAmount],
-		['quoteCoinAmount', quoteCoinAmount],
-		['averagePricePaid', averagePricePaid.toString()],
-	]);
 
 	return new BigNumber('1').minus(slip).abs().isGreaterThan(slipPercentage);
 }
