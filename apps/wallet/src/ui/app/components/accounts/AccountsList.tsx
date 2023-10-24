@@ -71,7 +71,7 @@ export function AccountsList() {
 						<Collapsible
 							isExternalControlled
 							isOpen={isSwitchToAccountOpen}
-							setIsOpen={setIsSwitchToAccountOpen}
+							onOpenChange={setIsSwitchToAccountOpen}
 							title="Switch To"
 							shade="darker"
 						>
