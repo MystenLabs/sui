@@ -162,11 +162,11 @@ export function TokenRow({
 
 export function MyTokens({
 	coinBalances,
-	isPending,
+	isLoading,
 	isFetched,
 }: {
 	coinBalances: CoinBalanceType[];
-	isPending: boolean;
+	isLoading: boolean;
 	isFetched: boolean;
 }) {
 	const isDefiWalletEnabled = useIsWalletDefiEnabled();
@@ -177,7 +177,7 @@ export function MyTokens({
 	const { recognized, pinned, unrecognized } = useSortedCoinsByCategories(coinBalances);
 
 	// Avoid perpetual loading state when fetching and retry keeps failing; add isFetched check.
-	const isFirstTimeLoading = isPending && !isFetched;
+	const isFirstTimeLoading = isLoading && !isFetched;
 
 	return (
 		<Loading loading={isFirstTimeLoading}>
