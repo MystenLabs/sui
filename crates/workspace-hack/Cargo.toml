@@ -65,6 +65,7 @@ async-graphql-value = { version = "6", default-features = false }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async_once = { version = "0.2", default-features = false }
+atomic_float = { version = "0.1" }
 atomicwrites = { version = "0.3", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 aws-config = { version = "0.56" }
@@ -821,6 +822,7 @@ async-stream = { version = "0.3", default-features = false }
 async-stream-impl = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
 async_once = { version = "0.2", default-features = false }
+atomic_float = { version = "0.1" }
 atomicwrites = { version = "0.3", default-features = false }
 auto_ops = { version = "0.3", default-features = false }
 autocfg = { version = "1", default-features = false }

@@ -638,6 +638,7 @@ impl AuthorityStore {
     /// packages i.e. when version is None. If the input object doesn't exist and it's a receiving
     /// object, we also check if the object exists in the object marker table and view it as
     /// existing if it is in the table.
+    #[instrument(level = "trace", skip_all)]
     pub fn multi_input_objects_available(
         &self,
         keys: impl Iterator<Item = InputKey> + Clone,

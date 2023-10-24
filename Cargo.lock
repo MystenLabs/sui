@@ -769,6 +769,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ce4f10ea3abcd6617873bae9f91d1c5332b4a778bd9ce34d0cd517474c1de82"
 
 [[package]]
+name = "atomic_float"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62af46d040ba9df09edc6528dae9d8e49f5f3e82f55b7d2ec31a733c38dbc49d"
+
+[[package]]
 name = "atomicwrites"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12010,6 +12016,7 @@ dependencies = [
 name = "telemetry-subscribers"
 version = "0.2.0"
 dependencies = [
+ "atomic_float",
  "bytes",
  "bytes-varint",
  "camino",
@@ -12021,6 +12028,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-proto",
+ "opentelemetry_api",
  "prometheus",
  "prost 0.11.9",
  "tokio",
@@ -13685,6 +13693,7 @@ dependencies = [
  "async-stream-impl",
  "async-trait",
  "async_once",
+ "atomic_float",
  "atomicwrites",
  "auto_ops",
  "autocfg",
