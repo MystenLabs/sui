@@ -316,8 +316,8 @@ export function SwapPageContent() {
 			});
 		},
 		onSuccess: (response) => {
-			queryClient.invalidateQueries(['get-coins']);
-			queryClient.invalidateQueries(['coin-balance']);
+			queryClient.invalidateQueries({ queryKey: ['get-coins'] });
+			queryClient.invalidateQueries({ queryKey: ['coin-balance'] });
 
 			const receiptUrl = `/receipt?txdigest=${encodeURIComponent(
 				response.digest,

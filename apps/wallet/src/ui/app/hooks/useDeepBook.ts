@@ -433,7 +433,7 @@ export function useGetEstimate({
 			});
 
 			if (!accountCapId) {
-				await queryClient.invalidateQueries(['get-owned-objects']);
+				await queryClient.invalidateQueries({ queryKey: ['get-owned-objects'] });
 			}
 
 			const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
