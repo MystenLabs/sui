@@ -4,7 +4,7 @@
 use strum::IntoEnumIterator;
 use sui_macros::sim_test;
 use sui_single_node_benchmark::command::{Component, WorkloadKind};
-use sui_single_node_benchmark::execution::run_benchmark;
+use sui_single_node_benchmark::run_benchmark;
 use sui_single_node_benchmark::workload::Workload;
 
 #[sim_test]

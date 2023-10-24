@@ -3,10 +3,12 @@
 
 use crate::command::Component;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
-use std::collections::BTreeMap;
+use crate::mock_storage::InMemoryObjectStore;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use sui_core::authority::authority_store_tables::LiveObject;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
@@ -88,7 +90,29 @@ impl SingleValidator {
         &self.epoch_store
     }
 
-    pub async fn execute_tx_immediately(&self, transaction: Transaction) -> TransactionEffects {
+    /// Publish a package, returns the package object and the updated gas object.
+    pub async fn publish_package(
+        &self,
+        path: PathBuf,
+        sender: SuiAddress,
+        keypair: &AccountKeyPair,
+        gas: ObjectRef,
+    ) -> (ObjectRef, ObjectRef) {
+        let transaction = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
+            .publish(path)
+            .build_and_sign(keypair);
+        let effects = self.execute_raw_transaction(transaction).await;
+        let package = effects
+            .all_changed_objects()
+            .into_iter()
+            .filter_map(|(oref, owner, _)| owner.is_immutable().then_some(oref))
+            .next()
+            .unwrap();
+        let updated_gas = effects.gas_object().0;
+        (package, updated_gas)
+    }
+
+    pub async fn execute_raw_transaction(&self, transaction: Transaction) -> TransactionEffects {
         let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
             VerifiedTransaction::new_unchecked(transaction),
             0,
@@ -103,39 +127,13 @@ impl SingleValidator {
         effects
     }
 
-    /// Publish a package, returns the package object and the updated gas object.
-    pub async fn publish_package(
-        &self,
-        path: PathBuf,
-        sender: SuiAddress,
-        keypair: &AccountKeyPair,
-        gas: ObjectRef,
-    ) -> (ObjectRef, ObjectRef) {
-        let transaction = TestTransactionBuilder::new(sender, gas, DEFAULT_VALIDATOR_GAS_PRICE)
-            .publish(path)
-            .build_and_sign(keypair);
-        let effects = self.execute_tx_immediately(transaction).await;
-        let package = effects
-            .all_changed_objects()
-            .into_iter()
-            .filter_map(|(oref, owner, _)| owner.is_immutable().then_some(oref))
-            .next()
-            .unwrap();
-        let updated_gas = effects.gas_object().0;
-        (package, updated_gas)
-    }
-
-    pub async fn execute_transaction(
+    pub async fn execute_certificate(
         &self,
         cert: CertifiedTransaction,
         component: Component,
     ) -> TransactionEffects {
-        assert!(!matches!(component, Component::TxnSigning));
         let effects = match component {
-            Component::Baseline | Component::CheckpointExecutor => {
-                // When benchmarking CheckpointExecutor, we need to execute transactions here
-                // in order to generate effects and construct checkpoints. Since the generation is
-                // not part of what we want to measure, we want it to be as fast as possible.
+            Component::Baseline => {
                 let cert = VerifiedExecutableTransaction::new_from_certificate(
                     VerifiedCertificate::new_unchecked(cert),
                 );
@@ -161,8 +159,47 @@ impl SingleValidator {
                     .await;
                 response.signed_effects.into_data()
             }
-            Component::TxnSigning => unreachable!(),
+            Component::TxnSigning | Component::CheckpointExecutor | Component::ExecutionOnly => {
+                unreachable!()
+            }
         };
+        assert!(effects.status().is_ok());
+        effects
+    }
+
+    pub(crate) async fn execute_transaction_in_memory(
+        &self,
+        store: InMemoryObjectStore,
+        transaction: Transaction,
+    ) -> TransactionEffects {
+        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(transaction),
+            0,
+        );
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+            &store,
+            &store,
+            &executable,
+            self.epoch_store.protocol_config(),
+            self.epoch_store.reference_gas_price(),
+        )
+        .unwrap();
+        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (_, effects, _) = self.epoch_store.executor().execute_transaction_to_effects(
+            &store,
+            self.epoch_store.protocol_config(),
+            self.get_validator().metrics.limits_metrics.clone(),
+            false,
+            &HashSet::new(),
+            &self.epoch_store.epoch(),
+            0,
+            input_objects,
+            gas,
+            gas_status,
+            kind,
+            signer,
+            *executable.digest(),
+        );
         assert!(effects.status().is_ok());
         effects
     }
@@ -175,7 +212,8 @@ impl SingleValidator {
 
     pub(crate) async fn build_checkpoints(
         &self,
-        transactions: Vec<CertifiedTransaction>,
+        in_memory_store: InMemoryObjectStore,
+        transactions: Vec<Transaction>,
         mut all_effects: BTreeMap<TransactionDigest, TransactionEffects>,
         checkpoint_size: usize,
     ) -> Vec<(VerifiedCheckpoint, VerifiedCheckpointContents)> {
@@ -188,10 +226,7 @@ impl SingleValidator {
         let mut checkpoints = vec![];
         for transaction in transactions {
             let effects = all_effects.remove(transaction.digest()).unwrap();
-            builder.push_transaction(
-                VerifiedTransaction::new_unchecked(transaction.clone().into_unsigned()),
-                effects.clone(),
-            );
+            builder.push_transaction(VerifiedTransaction::new_unchecked(transaction), effects);
             if builder.size() == checkpoint_size {
                 let (checkpoint, _, full_contents) = builder.build(self, 0);
                 checkpoints.push((checkpoint, full_contents));
@@ -209,7 +244,7 @@ impl SingleValidator {
             vec![],
         );
         let epoch_effects = self
-            .execute_tx_immediately(epoch_tx.clone().into_inner())
+            .execute_transaction_in_memory(in_memory_store, epoch_tx.clone().into_inner())
             .await;
         builder.push_transaction(epoch_tx, epoch_effects);
         let (checkpoint, _, full_contents) = builder.build_end_of_epoch(
@@ -239,6 +274,19 @@ impl SingleValidator {
             Arc::new(StateAccumulator::new(validator.db())),
         );
         (checkpoint_executor, ckpt_sender)
+    }
+
+    pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
+        let objects: HashMap<_, _> = self
+            .get_validator()
+            .database
+            .iter_live_object_set(false)
+            .map(|o| match o {
+                LiveObject::Normal(object) => (object.id(), object),
+                LiveObject::Wrapped(_) => unreachable!(),
+            })
+            .collect();
+        InMemoryObjectStore::new(objects)
     }
 }
 

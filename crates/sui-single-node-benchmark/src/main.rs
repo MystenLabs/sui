@@ -3,7 +3,7 @@
 
 use clap::Parser;
 use sui_single_node_benchmark::command::Command;
-use sui_single_node_benchmark::execution::run_benchmark;
+use sui_single_node_benchmark::run_benchmark;
 use sui_single_node_benchmark::workload::Workload;
 
 #[tokio::main]
