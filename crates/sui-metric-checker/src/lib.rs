@@ -108,7 +108,7 @@ pub fn timestamp_string_to_unix_seconds<N: NowProvider>(
     }
 
     if let Ok(datetime) = NaiveDateTime::parse_from_str(timestamp, "%Y-%m-%d %H:%M:%S") {
-        let utc_datetime = DateTime::<Utc>::from_utc(datetime, Utc);
+        let utc_datetime: DateTime<Utc> = DateTime::from_naive_utc_and_offset(datetime, Utc);
         Ok(utc_datetime.timestamp())
     } else {
         Err(anyhow!("Invalid timestamp format"))
@@ -129,7 +129,7 @@ pub fn fails_threshold_condition(
 
 fn unix_seconds_to_timestamp_string(unix_seconds: i64) -> String {
     let datetime = NaiveDateTime::from_timestamp_opt(unix_seconds, 0);
-    let timestamp = DateTime::<Utc>::from_utc(datetime.unwrap(), Utc);
+    let timestamp: DateTime<Utc> = DateTime::from_naive_utc_and_offset(datetime.unwrap(), Utc);
     timestamp.to_string()
 }
 
