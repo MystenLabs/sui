@@ -8,6 +8,7 @@ use crate::{
         db_data_provider::PgManager,
         sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0},
     },
+    error::Error,
     extensions::{
         feature_gate::FeatureGate,
         logger::Logger,
@@ -37,16 +38,18 @@ pub struct Server {
 
 #[allow(dead_code)]
 impl Server {
-    pub async fn run(self) {
-        self.server.await.unwrap();
+    pub async fn run(self) -> Result<(), Error> {
+        self.server
+            .await
+            .map_err(|e| Error::Internal(format!("Server run failed: {}", e)))
     }
 
-    pub async fn from_yaml_config(path: &str) -> Self {
-        let config = ServerConfig::from_yaml(path);
+    pub async fn from_yaml_config(path: &str) -> Result<Self, crate::error::Error> {
+        let config = ServerConfig::from_yaml(path)?;
         Self::from_config(&config).await
     }
 
-    pub async fn from_config(config: &ServerConfig) -> Self {
+    pub async fn from_config(config: &ServerConfig) -> Result<Self, Error> {
         let mut builder =
             ServerBuilder::new(config.connection.port, config.connection.host.clone());
 
@@ -57,18 +60,19 @@ impl Server {
 
         let name_service_config = config.name_service.clone();
         let pg_conn_pool = PgManager::new(config.connection.db_url.clone(), None)
-            .map_err(|e| {
-                println!("Failed to create pg connection pool: {}", e);
-                e
-            })
-            .unwrap();
+            .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
 
         let prom_addr: SocketAddr = format!(
             "{}:{}",
             config.connection.prom_url, config.connection.prom_port
         )
         .parse()
-        .unwrap();
+        .map_err(|_| {
+            Error::Internal(format!(
+                "Failed to parse url {}, port {} into socket address",
+                config.connection.prom_url, config.connection.prom_port
+            ))
+        })?;
         let registry_service = mysten_metrics::start_prometheus_server(prom_addr);
         println!("Starting Prometheus HTTP endpoint at {}", prom_addr);
         let registry = registry_service.default_registry();
@@ -146,7 +150,7 @@ impl ServerBuilder {
         self.schema.finish()
     }
 
-    pub fn build(self) -> Server {
+    pub fn build(self) -> Result<Server, Error> {
         let address = self.address();
         let schema = self.build_schema();
 
@@ -155,10 +159,14 @@ impl ServerBuilder {
             .layer(axum::extract::Extension(schema))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
-        Server {
-            server: axum::Server::bind(&address.parse().unwrap())
-                .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
-        }
+        Ok(Server {
+            server: axum::Server::bind(
+                &address
+                    .parse()
+                    .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
+            )
+            .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
+        })
     }
 }
 

@@ -1610,7 +1610,7 @@ fn function_(
     let attributes = flatten_attributes(context, AttributePosition::Function, pattributes);
     let warning_filter = warning_filter(context, &attributes);
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let visibility = visibility(context, pvisibility);
+    let visibility = visibility(pvisibility);
     let (old_aliases, signature) = function_signature(context, psignature);
     let acquires = acquires
         .into_iter()
@@ -1647,16 +1647,13 @@ fn function_(
     (name, fdef)
 }
 
-fn visibility(context: &mut Context, pvisibility: P::Visibility) -> E::Visibility {
+fn visibility(pvisibility: P::Visibility) -> E::Visibility {
     match pvisibility {
         P::Visibility::Friend(loc) => E::Visibility::Friend(loc),
         P::Visibility::Internal => E::Visibility::Internal,
         P::Visibility::Package(loc) => E::Visibility::Package(loc),
         P::Visibility::Public(loc) => E::Visibility::Public(loc),
-        P::Visibility::Script(loc) => {
-            assert!(!context.env.has_errors());
-            E::Visibility::Public(loc)
-        }
+        P::Visibility::Script(loc) => E::Visibility::Public(loc),
     }
 }
 

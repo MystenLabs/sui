@@ -117,6 +117,7 @@ impl<T: TName> PartialEq for UniqueSet<T> {
 }
 impl<T: TName> Eq for UniqueSet<T> {}
 
+#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
 impl<T: TName> PartialOrd for UniqueSet<T> {
     fn partial_cmp(&self, other: &UniqueSet<T>) -> Option<Ordering> {
         (self.0).0.keys().partial_cmp((other.0).0.keys())

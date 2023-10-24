@@ -125,6 +125,8 @@ impl Extension for QueryLimitsChecker {
             depth += 1;
             self.check_limits(cfg, num_nodes, depth, None)?;
             while level_len > 0 {
+                // Ok to unwrap since we checked for empty queue
+                // and level_len > 0
                 let sel = que.pop_front().unwrap();
                 // TODO: check for fragments, variables, etc
                 if let Field(f) = &sel.node {

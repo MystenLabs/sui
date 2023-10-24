@@ -32,23 +32,29 @@ pub(crate) struct Stake {
 #[ComplexObject]
 impl Stake {
     async fn active_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.active_epoch_id.unwrap())
-            .await
-            .extend()?;
-
-        Ok(Some(epoch))
+        if let Some(epoch_id) = self.active_epoch_id {
+            let epoch = ctx
+                .data_unchecked::<PgManager>()
+                .fetch_epoch_strict(epoch_id)
+                .await
+                .extend()?;
+            Ok(Some(epoch))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn request_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        let epoch = ctx
-            .data_unchecked::<PgManager>()
-            .fetch_epoch_strict(self.request_epoch_id.unwrap())
-            .await
-            .extend()?;
-
-        Ok(Some(epoch))
+        if let Some(epoch_id) = self.request_epoch_id {
+            let epoch = ctx
+                .data_unchecked::<PgManager>()
+                .fetch_epoch_strict(epoch_id)
+                .await
+                .extend()?;
+            Ok(Some(epoch))
+        } else {
+            Ok(None)
+        }
     }
     async fn as_move_object(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         let obj = ctx

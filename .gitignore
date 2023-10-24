@@ -12,7 +12,8 @@
 
 # Move build directory
 build
-storage/
+storage
+!crates/sui-types/src/storage
 !narwhal/storage
 
 # Move-related files

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::apis::{
-    CoinReadApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
+    CoinReadApiV2, ExtendedApiV2, GovernanceReadApiV2, IndexerApiV2, MoveUtilsApiV2, ReadApiV2,
     TransactionBuilderApiV2,
 };
 use crate::errors::IndexerError;
@@ -124,6 +124,7 @@ pub async fn build_json_rpc_server(
     builder.register_module(GovernanceReadApiV2::new(reader.clone()))?;
     builder.register_module(ReadApiV2::new(reader.clone()))?;
     builder.register_module(CoinReadApiV2::new(reader.clone()))?;
+    builder.register_module(ExtendedApiV2::new(reader.clone()))?;
     // builder.register_module()...
 
     let default_socket_addr: SocketAddr = SocketAddr::new(
