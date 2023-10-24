@@ -13,7 +13,7 @@ export interface SearchProps {
 	onChange: (value: string) => void;
 	onSelectResult?: (result: SearchResult) => void;
 	placeholder?: string;
-	isPending: boolean;
+	isLoading: boolean;
 	options?: SearchResult[];
 	queryValue: string;
 }
@@ -23,7 +23,7 @@ export function Search({
 	onSelectResult,
 	placeholder,
 	options = [],
-	isPending = false,
+	isLoading = false,
 	queryValue,
 }: SearchProps) {
 	return (
@@ -40,7 +40,7 @@ export function Search({
 			</div>
 
 			<ComboboxList
-				isPending={isPending}
+				isLoading={isLoading}
 				onSelect={({ item }) => {
 					onSelectResult?.(item);
 				}}

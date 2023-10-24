@@ -42,7 +42,7 @@ function Search() {
 				onChange={(value) => setQuery(value?.trim() ?? '')}
 				onSelectResult={handleSelectResult}
 				placeholder="Search"
-				isPending={isPending || debouncedQuery !== query}
+				isLoading={isPending || debouncedQuery !== query}
 				options={results}
 			/>
 		</div>

@@ -62,7 +62,7 @@ export const Default: StoryObj<SearchProps> = {
 				<div className="flex max-w-xl flex-1">
 					<Search
 						queryValue={query}
-						isPending={false}
+						isLoading={false}
 						onChange={(value) => setQuery(value)}
 						onSelectResult={(result) => setQuery(result.label)}
 						placeholder="Search Addresses / Objects / Transactions"
