@@ -322,7 +322,7 @@ async fn test_api_route() -> anyhow::Result<()> {
         .await?;
 
     let expected =
-        expect!["Unsupported version 'bogus' specified in header X-Sui-Source-Validation-Version"];
+        expect!["Unsupported version 'bogus' specified in header x-sui-source-validation-version"];
     expected.assert_eq(&json.error);
 
     Ok(())
