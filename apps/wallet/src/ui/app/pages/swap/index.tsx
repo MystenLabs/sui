@@ -15,8 +15,6 @@ import { filterAndSortTokenBalances } from '_helpers';
 import {
 	allowedSwapCoinsList,
 	Coins,
-	getUSDCurrency,
-	isExceedingSlippageTolerance,
 	useCoinsReFetchingConfig,
 	useDeepBookConfigs,
 	useGetEstimate,
@@ -28,7 +26,12 @@ import {
 	USDC_DECIMALS,
 	type FormValues,
 } from '_pages/swap/constants';
-import { useSuiUsdcBalanceConversion, useSwapData } from '_pages/swap/utils';
+import {
+	getUSDCurrency,
+	isExceedingSlippageTolerance,
+	useSuiUsdcBalanceConversion,
+	useSwapData,
+} from '_pages/swap/utils';
 import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
 import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -38,7 +41,7 @@ import { SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -210,8 +213,14 @@ export function SwapPageContent() {
 		control,
 		handleSubmit,
 		reset,
-		formState: { isValid, isSubmitting, errors },
+		formState: { isValid, isSubmitting, errors, isDirty },
 	} = form;
+
+	useEffect(() => {
+		if (isDirty) {
+			setSlippageErrorString('');
+		}
+	}, [isDirty]);
 
 	const renderButtonToCoinsList = useMemo(() => {
 		return (
@@ -330,6 +339,8 @@ export function SwapPageContent() {
 			}
 		},
 	});
+
+	console.log('balanceChanges', balanceChanges);
 
 	const handleOnsubmit: SubmitHandler<FormValues> = (formData) => {
 		handleSwap(formData);
