@@ -82,6 +82,7 @@ members = [
     "crates/sui",
     "crates/sui-adapter-transactional-tests",
     "crates/sui-analytics-indexer",
+    "crates/sui-analytics-indexer-derive",
     "crates/sui-archival",
     "crates/sui-aws-orchestrator",
     "crates/sui-benchmark",
@@ -214,6 +215,7 @@ opt-level = 1
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0.71"
+arrow-array = "47.0.0"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "6.0.7"
@@ -359,6 +361,7 @@ object_store = { version = "0.7", features = [
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = "0.12.1"
+parquet = "47.0.0"
 pkcs8 = { version = "0.9.0", features = ["std"] }
 pprof = { version = "0.11.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
@@ -541,6 +544,7 @@ simulacrum = { path = "crates/simulacrum" }
 sui = { path = "crates/sui" }
 sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
 sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
+sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-archival = { path = "crates/sui-archival" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }

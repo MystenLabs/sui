@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)]
 
+use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
+use sui_analytics_indexer_derive::SerializeParquet;
 // use std::collections::BTreeSet;
 
 //
@@ -11,7 +13,7 @@ use serde::Serialize;
 //
 
 // Checkpoint information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct CheckpointEntry {
     // indexes
     pub(crate) checkpoint_digest: String,
@@ -38,7 +40,7 @@ pub(crate) struct CheckpointEntry {
 }
 
 // Transaction information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct TransactionEntry {
     // main indexes
     pub(crate) transaction_digest: String,
@@ -95,7 +97,7 @@ pub(crate) struct TransactionEntry {
 
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct EventEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -144,7 +146,7 @@ pub enum OwnerType {
 
 // Object information.
 // A row in the live object table.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct ObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -175,7 +177,7 @@ pub(crate) struct ObjectEntry {
 // input kind (for input objects) and status (for objets in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct TransactionObjectEntry {
     // indexes
     pub(crate) object_id: String,
@@ -190,7 +192,7 @@ pub(crate) struct TransactionObjectEntry {
 }
 
 // A Move call expressed as a package, module and function.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct MoveCallEntry {
     // indexes
     pub(crate) transaction_digest: String,
@@ -204,7 +206,7 @@ pub(crate) struct MoveCallEntry {
 }
 
 // A Move package. Pacakge id and MovePackage object bytes
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, SerializeParquet)]
 pub(crate) struct MovePackageEntry {
     // indexes
     pub(crate) package_id: String,
