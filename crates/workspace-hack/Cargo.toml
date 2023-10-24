@@ -610,6 +610,7 @@ serde_urlencoded = { version = "0.7", default-features = false }
 serde_with = { version = "2", features = ["hex"] }
 serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
 serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
+serial_test = { version = "2" }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
 sha1 = { version = "0.10" }
@@ -1457,6 +1458,8 @@ serde_with = { version = "2", features = ["hex"] }
 serde_with_macros = { version = "2", default-features = false }
 serde_yaml-274715c4dabd11b0 = { package = "serde_yaml", version = "0.9", default-features = false }
 serde_yaml-c38e5c1d305a1b54 = { package = "serde_yaml", version = "0.8", default-features = false }
+serial_test = { version = "2" }
+serial_test_derive = { version = "2", default-features = false, features = ["async"] }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10" }
 sha1 = { version = "0.10" }

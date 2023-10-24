@@ -14397,6 +14397,8 @@ dependencies = [
  "serde_with_macros",
  "serde_yaml 0.8.26",
  "serde_yaml 0.9.21",
+ "serial_test",
+ "serial_test_derive",
  "sha-1 0.10.1",
  "sha-1 0.9.8",
  "sha1",
