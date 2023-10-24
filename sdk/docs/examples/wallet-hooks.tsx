@@ -77,7 +77,7 @@ export const UseCurrentWalletExample = withProviders(() => {
 					</div>
 				</div>
 			) : (
-				<div>Connection status: ${connectionStatus}</div>
+				<div>Connection status: {connectionStatus}</div>
 			)}
 		</div>
 	);

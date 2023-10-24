@@ -18,7 +18,7 @@ details on the full set of options available.
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading, error, refetch } = useSuiClientQuery(
+	const { data, isLoading, isError, error, refetch } = useSuiClientQuery(
 		'getOwnedObjects',
 		{ owner: '0x123' },
 		{
@@ -28,6 +28,10 @@ function MyComponent() {
 
 	if (isLoading) {
 		return <div>Loading...</div>;
+	}
+
+	if (isError) {
+		return <div>Error: {error.message}</div>;
 	}
 
 	return <pre>{JSON.stringify(data, null, 2)}</pre>;
@@ -44,15 +48,17 @@ For more details checkout out the
 import { useSuiClientInfiniteQuery } from '@mysten/dapp-kit';
 
 function MyComponent() {
-	const { data, isLoading, isFetching, fetchNextPage, hasNextPage } = useSuiClientInfiniteQuery(
-		'getOwnedObjects',
-		{
+	const { data, isLoading, isError, error, isFetching, fetchNextPage, hasNextPage } =
+		useSuiClientInfiniteQuery('getOwnedObjects', {
 			owner: '0x123',
-		},
-	);
+		});
 
 	if (isLoading) {
 		return <div>Loading...</div>;
+	}
+
+	if (isError) {
+		return <div>Error: {error.message}</div>;
 	}
 
 	return <pre>{JSON.stringify(data, null, 2)}</pre>;
