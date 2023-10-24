@@ -74,13 +74,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -164,13 +164,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -254,13 +254,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -344,13 +344,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -434,13 +434,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -524,13 +524,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
@@ -614,13 +614,13 @@ validator_configs:
       enable-move-vm-paranoid-checks: false
       enable-secondary-index-checks: false
     transaction-deny-config:
-      package_publish_disabled: false
-      package_upgrade_disabled: false
-      shared_object_disabled: false
-      user_transaction_disabled: false
-      receiving_objects_disabled: false
-      zklogin_sig_disabled: false
-      zklogin_disabled_providers: []
+      package-publish-disabled: false
+      package-upgrade-disabled: false
+      shared-object-disabled: false
+      user-transaction-disabled: false
+      receiving-objects-disabled: false
+      zklogin-sig-disabled: false
+      zklogin-disabled-providers: []
     certificate-deny-config: {}
     state-debug-dump-config: {}
     state-archive-write-config:
