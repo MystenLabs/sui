@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
     use diesel::OptionalExtension;
     use diesel::RunQueryDsl;
@@ -19,6 +19,7 @@ mod tests {
     use sui_indexer::new_pg_connection_pool_impl;
     use sui_indexer::schema_v2::objects;
     use sui_indexer::utils::reset_database;
+    use sui_indexer::PgConnectionPoolConfig;
     use sui_types::digests::ChainIdentifier;
     use tokio::time::sleep;
 
@@ -114,7 +115,9 @@ mod tests {
             .filter(objects::dsl::object_id.eq(vec![0u8, 4]))
             .filter(objects::dsl::object_version.eq(1234i64));
 
-        let reader = IndexerReader::new(connection_config.db_url()).unwrap();
+        let mut idx_cfg = PgConnectionPoolConfig::default();
+        idx_cfg.set_pool_size(20);
+        let reader = IndexerReader::new_with_config(connection_config.db_url(), idx_cfg).unwrap();
         reader
             .run_query_async(|conn| {
                 let cost = extract_cost(&query, conn).unwrap();
