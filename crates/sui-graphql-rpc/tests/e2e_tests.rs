@@ -1,9 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
+    use diesel::OptionalExtension;
+    use diesel::RunQueryDsl;
+    use diesel::{ExpressionMethods, QueryDsl};
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use sui_graphql_rpc::config::ConnectionConfig;
+    use sui_graphql_rpc::context_data::db_query_cost::extract_cost;
+    use sui_indexer::indexer_reader::IndexerReader;
+    use sui_indexer::models_v2::objects::StoredObject;
+    use sui_indexer::schema_v2::objects;
+    use sui_types::digests::ChainIdentifier;
 
     #[ignore]
     #[tokio::test]
@@ -43,11 +55,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_simple_client_simulator_cluster() {
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
-        use simulacrum::Simulacrum;
-        use std::sync::Arc;
-        use sui_types::digests::ChainIdentifier;
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
 
@@ -66,8 +73,12 @@ mod tests {
             chain_id_actual
         );
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
-        let cluster =
-            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+        let cluster = sui_graphql_rpc::cluster::serve_simulator(
+            connection_config.clone(),
+            3000,
+            Arc::new(sim),
+        )
+        .await;
 
         let query = r#"
             query {
@@ -81,5 +92,23 @@ mod tests {
             .unwrap();
 
         assert_eq!(&format!("{}", res), &exp);
+
+        // Test query cost logic
+        // Todo: Tacking on test here so we share DB
+        // Split it off once we have a better way to share DB in tests
+        let mut query = objects::dsl::objects.into_boxed();
+        query = query
+            .filter(objects::dsl::object_id.eq(vec![0u8, 4]))
+            .filter(objects::dsl::object_version.eq(1234i64));
+
+        let reader = IndexerReader::new(connection_config.db_url()).unwrap();
+        reader
+            .run_query_async(|conn| {
+                let cost = extract_cost(&query, conn).unwrap();
+                assert!(cost > 0.0);
+                query.get_result::<StoredObject>(conn).optional()
+            })
+            .await
+            .unwrap();
     }
 }

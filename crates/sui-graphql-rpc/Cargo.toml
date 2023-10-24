@@ -24,6 +24,7 @@ move-core-types.workspace = true
 once_cell.workspace = true
 prometheus.workspace = true
 rand.workspace = true # todo: cleanup test only deps
+regex.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
