@@ -76,6 +76,7 @@ impl Server {
             .max_query_depth(config.service.limits.max_query_depth)
             .max_query_nodes(config.service.limits.max_query_nodes)
             .context_data(pg_conn_pool)
+            .context_data(config.service.clone())
             .context_data(package_cache)
             .context_data(name_service_config)
             .context_data(Arc::new(metrics))
