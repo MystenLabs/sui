@@ -77,10 +77,12 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 26: New gas model version.
 //             Add support for receiving objects off of other objects in devnet only.
 // Version 28: Add sui::zklogin::verify_zklogin_id and related functions to sui framework.
+//             Enable transaction effects v2 in devnet.
 // Version 29: Add verify_legacy_zklogin_address flag to sui framework, this add ability to verify
 //             transactions from a legacy zklogin address.
 // Version 30: Enable Narwhal CertificateV2
 //             Add support for random beacon.
+//             Enable transaction effects v2 in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1589,6 +1591,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.narwhal_header_v2 = true;
                         cfg.feature_flags.random_beacon = true;
+                    }
+                    // Only enable effects v2 on devnet and testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.enable_effects_v2 = true;
                     }
                 }
                 // Use this template when making changes:
