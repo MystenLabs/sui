@@ -114,6 +114,8 @@ pub enum DbValidationError {
     LastBefore,
     #[error("Pagination is currently disabled on balances")]
     PaginationDisabledOnBalances,
+    #[error("after_checkpoint cannot be 0. To include 0, please leave after_checkpoint blank")]
+    AfterCheckpointCannotBeZero,
 }
 
 pub(crate) struct PgManager {
@@ -704,6 +706,11 @@ impl PgManager {
         if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
             if before <= after {
                 return Err(DbValidationError::InvalidCheckpointOrder.into());
+            }
+        }
+        if let Some(after) = filter.after_checkpoint {
+            if after == 0 {
+                return Err(DbValidationError::AfterCheckpointCannotBeZero.into());
             }
         }
         self.validate_package_dependencies(

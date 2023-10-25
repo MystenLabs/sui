@@ -68,7 +68,11 @@ impl Epoch {
             ))?;
 
         let new_filter = TransactionBlockFilter {
-            after_checkpoint: Some((stored_epoch.first_checkpoint_id - 1) as u64),
+            after_checkpoint: if stored_epoch.first_checkpoint_id > 0 {
+                Some((stored_epoch.first_checkpoint_id - 1) as u64)
+            } else {
+                None
+            },
             before_checkpoint: stored_epoch.last_checkpoint_id.map(|id| (id + 1) as u64),
             ..filter.unwrap_or_default()
         };
