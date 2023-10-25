@@ -880,7 +880,7 @@ impl AuthorityStore {
     }
 
     pub fn bulk_insert_live_objects(
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         live_objects: impl Iterator<Item = LiveObject>,
         indirect_objects_threshold: usize,
         expected_sha3_digest: &[u8; 32],
