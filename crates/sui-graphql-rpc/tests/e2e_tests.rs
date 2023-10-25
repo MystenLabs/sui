@@ -23,7 +23,6 @@ mod tests {
     use sui_types::digests::ChainIdentifier;
     use tokio::time::sleep;
 
-    #[ignore]
     #[tokio::test]
     #[serial]
     async fn test_simple_client_validator_cluster() {
