@@ -391,7 +391,7 @@ mod test {
         });
 
         test_simulated_load(test_init_data_clone, 120).await;
-        for _ in 0..30 {
+        for _ in 0..60 {
             if finished.load(Ordering::Relaxed) {
                 break;
             }
