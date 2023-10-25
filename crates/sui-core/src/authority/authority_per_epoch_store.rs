@@ -423,7 +423,7 @@ pub struct AuthorityEpochTables {
 // DeferralKey requires both the round to which the tx should be deferred (so that we can
 // efficiently load all txns that are now ready), and the round from which it has been deferred (so
 // that multiple rounds can efficiently defer to the same future round).
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeferralKey {
     RandomnessRound {
         future_round: u64,
@@ -1296,7 +1296,7 @@ impl AuthorityPerEpochStore {
         // is_consensus_message_processed
         #[cfg(debug_assertions)]
         {
-            let seen = HashSet::new();
+            let mut seen = HashSet::new();
             for txn in &txns {
                 assert!(seen.insert(txn.0.key()));
             }
@@ -1307,7 +1307,10 @@ impl AuthorityPerEpochStore {
     }
 
     // Placeholder implementation
-    fn should_defer(&self, cert: &VerifiedExecutableTransaction) -> Option<DeferralKey> {
+    fn should_defer(&self, _cert: &VerifiedExecutableTransaction) -> Option<DeferralKey> {
+        // placeholder constructions to silence lints
+        let _ = DeferralKey::new_for_randomness_round(0, 0);
+        let _ = DeferralKey::new_for_consensus_round(0, 0);
         None
     }
 
@@ -2011,11 +2014,15 @@ impl AuthorityPerEpochStore {
                 .into_iter(),
         );
 
-        // TODO: load deferred random round transactions
-        // sequenced_transactions.extend(
-        //     self.load_deferred_transactions_for_randomness_round(&mut batch, random_round)?
-        //         .into_iter(),
-        // );
+        // TODO: This is a no-op until we start using random round transactions
+        let placeholder_random_round = u64::MAX;
+        sequenced_transactions.extend(
+            self.load_deferred_transactions_for_randomness_round(
+                &mut batch,
+                placeholder_random_round,
+            )?
+            .into_iter(),
+        );
 
         PostConsensusTxReorder::reorder(
             &mut sequenced_transactions,
