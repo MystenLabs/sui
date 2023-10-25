@@ -1,0 +1,18 @@
+# Filter on recvAddress
+{
+  transactionBlockConnection(
+    filter: {
+      recvAddress:"0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      },
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  checkpoint(id:{
+    sequenceNumber: 9769
+  }) {
+    digest
+    sequenceNumber
+    timestamp
+    validatorSignature
+    previousCheckpointDigest
+    liveObjectSetDigest
+    networkTotalTransactions
+    rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }
+    epoch {
+      epochId
+    }
+    endOfEpoch {
+      newCommittee {
+        authorityName
+        stakeUnit
+      }
+      nextProtocolVersion
+    }
+    transactionBlockConnection{
+      edges {
+        node {
+          digest
+          sender {
+            location
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  epoch(id:97) {
+    transactionBlockConnection(first: 20, after:"261225985") {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          sender {
+            location
+          }
+          effects {
+            gasEffects {
+              gasObject {
+                location
+              }
+            }
+          }
+          gasInput {
+            gasPrice
+            gasBudget
+          }
+        }
+      }
+    }
+  }
+}

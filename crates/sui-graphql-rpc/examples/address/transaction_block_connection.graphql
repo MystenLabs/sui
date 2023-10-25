@@ -3,20 +3,20 @@
 # supports additional `AddressTransactionBlockRelationship` filter
 
 # Filtering on package where the sender of the TX is the current address
-{
-  transactionBlockConnection(
-    relation: SENT,
-    filter: {
-      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
-    }
-  ) {
-    nodes {
-      sender {
-        location
-      },
-      gasInput {
-        gasPrice
-        gasBudget
+query transaction_block_with_relation_filter {
+  address(address: "0x2") {
+    transactionBlockConnection(
+      relation: SENT
+      filter: {package: "0x2"}
+    ) {
+      nodes {
+        sender {
+          location
+        }
+        gasInput {
+          gasPrice
+          gasBudget
+        }
       }
     }
   }

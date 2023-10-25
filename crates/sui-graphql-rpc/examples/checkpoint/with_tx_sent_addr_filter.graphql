@@ -1,0 +1,27 @@
+
+# Select checkpoint at sequence number 14830285 for transactions from sentAddress
+{
+  checkpoint(id:{
+    sequenceNumber: 14830285
+  }) {
+    digest
+    sequenceNumber
+    timestamp
+    liveObjectSetDigest
+    transactionBlockConnection(filter: {
+      sentAddress: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }) {
+      edges {
+        node {
+          digest
+          sender {
+            location
+          }
+          expiration {
+            epochId
+          }
+        }
+      }
+    }
+  }
+}
