@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { FEATURES } from '_shared/experimentation/features';
+import { useFeatureValue } from '@growthbook/growthbook-react';
+
 export enum Coins {
 	SUI = 'SUI',
 	USDC = 'USDC',
@@ -15,8 +18,8 @@ export const mainnetDeepBook: {
 } = {
 	pools: {
 		SUI_USDC: [
+			'0x4405b50d791fd3346754e8171aaab6bc2ed26c2c46efdd033c14b30ae507ac33',
 			'0x7f526b1263c4b91b43c9e646419b5696f424de28dda3c1e6658cc0a54558baa7',
-			'0x18d871e3c3da99046dfc0d3de612c5d88859bc03b8f0568bd127d0e70dbc58be',
 		],
 		WETH_USDC: ['0xd9e45ab5440d61cc52e3b2bd915cdd643146f7593d587c715bc7bfa48311d826'],
 		TBTC_USDC: ['0xf0f663cf87f1eb124da2fc9be813e0ce262146f3df60bc2052d738eb41a25899'],
@@ -32,5 +35,5 @@ export const mainnetDeepBook: {
 };
 
 export function useDeepBookConfigs() {
-	return mainnetDeepBook;
+	return useFeatureValue(FEATURES.DEEP_BOOK_CONFIGS, mainnetDeepBook);
 }
