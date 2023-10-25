@@ -35,6 +35,20 @@ struct Linkage {
     version: u64,
 }
 
+/// Information about which previous versions of a package introduced its types.
+#[derive(SimpleObject)]
+struct TypeOrigin {
+    /// Module defining the type.
+    module: String,
+
+    /// Name of the struct.
+    #[graphql(name = "struct")]
+    struct_: String,
+
+    /// The storage ID of the package that first defined this type.
+    defining_id: SuiAddress,
+}
+
 #[allow(unreachable_code)]
 #[allow(unused_variables)]
 #[Object]
@@ -164,6 +178,22 @@ impl MovePackage {
             .collect();
 
         Ok(Some(linkage))
+    }
+
+    /// The (previous) versions of this package that introduced its types.
+    async fn type_origins(&self) -> Result<Option<Vec<TypeOrigin>>> {
+        let type_origins = self
+            .as_native_package()?
+            .type_origin_table()
+            .iter()
+            .map(|origin| TypeOrigin {
+                module: origin.module_name.clone(),
+                struct_: origin.struct_name.clone(),
+                defining_id: origin.package.into(),
+            })
+            .collect();
+
+        Ok(Some(type_origins))
     }
 
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module

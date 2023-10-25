@@ -397,6 +397,10 @@ type MovePackage {
 	"""
 	linkage: [Linkage!]
 	"""
+	The (previous) versions of this package that introduced its types.
+	"""
+	typeOrigins: [TypeOrigin!]
+	"""
 	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
 	name, followed by module bytes), in alphabetic order by module name.
 	"""
@@ -848,6 +852,24 @@ enum TransactionBlockKindInput {
 
 type TransactionSignature {
 	base64Sig: Base64!
+}
+
+"""
+Information about which previous versions of a package introduced its types.
+"""
+type TypeOrigin {
+	"""
+	Module defining the type.
+	"""
+	module: String!
+	"""
+	Name of the struct.
+	"""
+	struct: String!
+	"""
+	The storage ID of the package that first defined this type.
+	"""
+	definingId: SuiAddress!
 }
 
 type Validator {
