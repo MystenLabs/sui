@@ -21,7 +21,7 @@ use sui_config::node::AuthorityStorePruningConfig;
 use sui_storage::mutex_table::RwLockTable;
 use sui_storage::object_store::util::{
     copy_recursively, find_all_dirs_with_epoch_prefix, find_missing_epochs_dirs,
-    path_to_filesystem, put,
+    path_to_filesystem, put, write_snapshot_manifest,
 };
 use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use tracing::{debug, error, info};
@@ -272,6 +272,9 @@ impl DBCheckpointHandler {
             .clone();
         for (epoch, db_path) in dirs {
             if missing_epochs.contains(epoch) || *epoch >= last_missing_epoch {
+                // This writes a single "MANIFEST" file which contains a list of all files that make up a db snapshot
+                write_snapshot_manifest(db_path, self.input_object_store.clone()).await?;
+
                 if self.prune_and_compact_before_upload {
                     // Convert `db_path` to the local filesystem path to where db checkpoint is stored
                     let local_db_path = path_to_filesystem(self.input_root_path.clone(), db_path)?;

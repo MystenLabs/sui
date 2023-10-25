@@ -21,6 +21,8 @@ use tokio::time::Instant;
 use tracing::{error, warn};
 use url::Url;
 
+pub const MANIFEST_FILENAME: &str = "MANIFEST";
+
 pub async fn get<S: ObjectStoreGetExt>(store: &S, src: &Path) -> Result<Bytes> {
     let bytes = retry(backoff::ExponentialBackoff::default(), || async {
         store.get_bytes(src).await.map_err(|e| {
@@ -270,9 +272,43 @@ pub fn get_path(prefix: &str) -> Path {
     Path::from(prefix)
 }
 
+// Snapshot MANIFEST file is very simple. Just a newline delimited list of all paths in the snapshot directory
+// this simplicty enables easy parsing for scripts to download snapshots
+pub async fn write_snapshot_manifest(
+    dir: &Path,
+    local_disk: Arc<DynObjectStore>,
+) -> Result<(), object_store::Error> {
+    let mut file_names = vec![];
+    let mut paths = local_disk.list(Some(dir)).await?;
+    while let Some(res) = paths.next().await {
+        if let Ok(object_metadata) = res {
+            // trim the "epoch_XX/" dir prefix here
+            let path_str = object_metadata.location.to_string();
+            let mut path_parts: Vec<&str> = path_str.split('/').collect();
+            path_parts.remove(0);
+
+            file_names.push(path_parts.join("/"));
+        } else {
+            return Err(res.err().unwrap());
+        }
+    }
+
+    let bytes = Bytes::from(file_names.join("\n"));
+    put(
+        &Path::from(format!("{}/{}", dir, MANIFEST_FILENAME)),
+        bytes,
+        local_disk.clone(),
+    )
+    .await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::object_store::util::{copy_recursively, delete_recursively};
+    use crate::object_store::util::{
+        copy_recursively, delete_recursively, write_snapshot_manifest, MANIFEST_FILENAME,
+    };
     use crate::object_store::{ObjectStoreConfig, ObjectStoreType};
     use object_store::path::Path;
     use std::fs;
@@ -330,6 +366,38 @@ mod tests {
         let content =
             fs::read_to_string(output_path.join("child").join("grand_child").join("file2"))?;
         assert_eq!(content, "Lorem ipsum");
+        Ok(())
+    }
+
+    #[tokio::test]
+    pub async fn test_write_snapshot_manifest() -> anyhow::Result<()> {
+        let input = TempDir::new()?;
+        let input_path = input.path();
+        let epoch_0 = input_path.join("epoch_0");
+        fs::create_dir(&epoch_0)?;
+        let file1 = epoch_0.join("file1");
+        fs::write(file1, b"Lorem ipsum")?;
+        let file2 = epoch_0.join("file2");
+        fs::write(file2, b"Lorem ipsum")?;
+        let grandchild = epoch_0.join("grand_child");
+        fs::create_dir(&grandchild)?;
+        let file3 = grandchild.join("file2.tar.gz");
+        fs::write(file3, b"Lorem ipsum")?;
+
+        let input_store = ObjectStoreConfig {
+            object_store: Some(ObjectStoreType::File),
+            directory: Some(input_path.to_path_buf()),
+            ..Default::default()
+        }
+        .make()?;
+
+        write_snapshot_manifest(&Path::from("epoch_0"), input_store).await?;
+
+        assert!(input_path.join("epoch_0").join(MANIFEST_FILENAME).exists());
+        let content = fs::read_to_string(input_path.join("epoch_0").join(MANIFEST_FILENAME))?;
+        assert!(content.contains("file2"));
+        assert!(content.contains("file1"));
+        assert!(content.contains("grand_child/file2.tar.gz"));
         Ok(())
     }
 
