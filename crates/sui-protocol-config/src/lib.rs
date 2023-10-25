@@ -84,8 +84,10 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 30: Enable Narwhal CertificateV2
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
-//             Deprecate supported oauth providers from protocol config and rely on node config instead.
+//             Deprecate supported oauth providers from protocol config and rely on node config
+//             instead.
 //             Enable throughput aware submission for Devnet & Testnet
+//             In execution, has_public_transfer is recomputed when loading the object.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -323,6 +325,10 @@ struct FeatureFlags {
     // Enable throughput aware consensus submission
     #[serde(skip_serializing_if = "is_false")]
     throughput_aware_consensus_submission: bool,
+
+    // If true, recompute has_public_transfer from the type instead of what is stored in the object
+    #[serde(skip_serializing_if = "is_false")]
+    recompute_has_public_transfer_in_execution: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -978,6 +984,11 @@ impl ProtocolConfig {
         ret
     }
 
+    pub fn recompute_has_public_transfer_in_execution(&self) -> bool {
+        self.feature_flags
+            .recompute_has_public_transfer_in_execution
+    }
+
     // this function only exists for readability in the genesis code.
     pub fn create_authenticator_state_in_genesis(&self) -> bool {
         self.enable_jwk_consensus_updates()
@@ -1616,7 +1627,10 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
                     }
+
+                    cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
+
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
