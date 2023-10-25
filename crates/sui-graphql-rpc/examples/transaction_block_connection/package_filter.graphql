@@ -1,0 +1,18 @@
+# Filtering on package
+{
+  transactionBlockConnection(
+    filter: {
+      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      },
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

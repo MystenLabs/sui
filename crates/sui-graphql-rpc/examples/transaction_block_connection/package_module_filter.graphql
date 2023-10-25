@@ -1,0 +1,19 @@
+# Filtering on package and module
+{
+  transactionBlockConnection(
+    filter: {
+      package: "0x0000000000000000000000000000000000000000000000000000000000000003",
+      module:"sui_system"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      },
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

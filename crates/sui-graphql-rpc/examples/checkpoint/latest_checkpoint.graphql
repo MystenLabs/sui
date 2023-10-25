@@ -1,0 +1,17 @@
+# Latest checkpoint
+{
+  checkpoint {
+    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }, epoch {
+      systemStateVersion
+      referenceGasPrice
+      startTimestamp
+    }, endOfEpoch {
+      nextProtocolVersion
+    }
+  }
+}

@@ -1,0 +1,19 @@
+
+# Filter on inputObject
+{
+  transactionBlockConnection(
+    filter: {
+      inputObject:"0x0000000000000000000000000000000000000000000000000000000000000006"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      },
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

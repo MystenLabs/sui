@@ -1,0 +1,9 @@
+
+# Fetch first 10 after the cursor - note that cursor will be opaque
+{
+  checkpointConnection(first:10, after:"11") {
+    nodes {
+      digest
+    }
+  }
+}

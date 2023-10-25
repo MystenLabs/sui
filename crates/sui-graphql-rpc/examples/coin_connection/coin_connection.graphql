@@ -1,29 +1,4 @@
-{
-  address(address:"0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-    coinConnection {
-      nodes {
-        id, balance
-      },
-      pageInfo {
-        endCursor
-      }
-    }
-  }
-}
-
-{
-  address(address:"0x0000000000000000000000000000000000000000000000000000000000000000") {
-    coinConnection {
-      nodes {
-        id, balance
-      },
-      pageInfo {
-        endCursor, hasNextPage
-      }
-    }
-  }
-}
-
+# Get last 3 coins before coins at cursor 13034947
 {
   address(address:"0x0000000000000000000000000000000000000000000000000000000000000000") {
     coinConnection(last: 3, before:"13034947") {

@@ -1,0 +1,19 @@
+# At a particular sequence number
+{
+  checkpoint(id: {
+    sequenceNumber:10
+  }) {
+    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+      computationCost
+      storageCost
+      storageRebate
+      nonRefundableStorageFee
+    }, epoch {
+      systemStateVersion
+      referenceGasPrice
+      startTimestamp
+    }, endOfEpoch {
+      nextProtocolVersion
+    }
+  }
+}
