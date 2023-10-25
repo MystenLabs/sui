@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
     use diesel::OptionalExtension;
     use diesel::RunQueryDsl;
@@ -26,6 +26,10 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_simple_client_validator_cluster() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
         let connection_config = ConnectionConfig::ci_integration_test_cfg();
 
         let cluster = sui_graphql_rpc::cluster::start_cluster(connection_config, None).await;

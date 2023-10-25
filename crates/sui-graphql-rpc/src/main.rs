@@ -36,6 +36,9 @@ async fn main() {
         } => {
             let conn = ConnectionConfig::new(port, host, rpc_url, db_url, prom_host, prom_port);
             let service_config = service_config(config);
+            let _guard = telemetry_subscribers::TelemetryConfig::new()
+                .with_env()
+                .init();
 
             println!("Starting server...");
             start_example_server(conn, service_config).await.unwrap();

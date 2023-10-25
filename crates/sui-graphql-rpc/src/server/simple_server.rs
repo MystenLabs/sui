@@ -26,9 +26,6 @@ pub async fn start_example_server(
     service_config: ServiceConfig,
 ) -> Result<(), crate::error::Error> {
     println!("Starting server with config: {:?}", conn);
-    let _guard = telemetry_subscribers::TelemetryConfig::new()
-        .with_env()
-        .init();
 
     let sui_sdk_client_v0 = sui_sdk_client_v0(&conn.rpc_url).await;
     let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
