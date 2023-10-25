@@ -374,7 +374,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 												<SvgSuiTokensStack className="h-14 w-14 text-steel" />
 												<div className="flex flex-col gap-2 justify-center">
 													<Text variant="pBodySmall" color="gray-80" weight="normal">
-														To conduct transactions on the Sui network, you need SUI in your wallet.
+														To send transactions on the Sui network, you need SUI in your wallet.
 													</Text>
 												</div>
 											</div>

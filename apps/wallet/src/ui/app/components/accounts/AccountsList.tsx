@@ -69,7 +69,6 @@ export function AccountsList() {
 
 					{otherAccounts.length ? (
 						<Collapsible
-							isExternalControlled
 							isOpen={isSwitchToAccountOpen}
 							onOpenChange={setIsSwitchToAccountOpen}
 							title="Switch To"
