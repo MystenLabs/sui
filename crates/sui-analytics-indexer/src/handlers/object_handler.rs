@@ -117,6 +117,12 @@ impl ObjectHandler {
             has_public_transfer,
             storage_rebate: object.storage_rebate,
             bcs: Base64::encode(bcs::to_bytes(object).unwrap()),
+            coin_type: object.coin_type_maybe().map(|t| t.to_string()),
+            coin_balance: if object.coin_type_maybe().is_some() {
+                Some(object.get_coin_value_unsafe())
+            } else {
+                None
+            },
         };
         self.objects.push(entry);
     }
