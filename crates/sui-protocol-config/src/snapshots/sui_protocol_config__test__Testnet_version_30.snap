@@ -25,10 +25,6 @@ feature_flags:
   upgraded_multisig_supported: true
   txn_base_cost_as_multiplier: true
   narwhal_new_leader_election_schedule: true
-  zklogin_supported_providers:
-    - Facebook
-    - Google
-    - Twitch
   loaded_child_object_format: true
   enable_jwk_consensus_updates: true
   end_of_epoch_transaction_supported: true
