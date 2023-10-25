@@ -801,7 +801,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: bool,
 ) -> Result<(), anyhow::Error> {
-    eprintln!(
+    println!(
         "Beginning formal snapshot restore to end of epoch {}, network: {:?}",
         epoch, network,
     );
@@ -919,7 +919,7 @@ pub async fn download_formal_snapshot(
                     local root state hash {} after restoring from formal snapshot",
                     epoch, consensus_digest.digest, local_digest.digest,
                 );
-                eprintln!("Formal snapshot state verification completed successfully!");
+                println!("Formal snapshot state verification completed successfully!");
             }
         };
     } else {

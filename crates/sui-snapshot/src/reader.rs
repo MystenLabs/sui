@@ -11,7 +11,7 @@ use bytes::{Buf, Bytes};
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::hash::{HashFunction, Sha3_256};
 use futures::future::{AbortRegistration, Abortable};
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use integer_encoding::VarIntReader;
 use object_store::path::Path;
@@ -162,7 +162,7 @@ impl StateSnapshotReaderV1 {
 
     pub async fn read(
         &mut self,
-        perpetual_db: &AuthorityPerpetualTables,
+        perpetual_db: Arc<AuthorityPerpetualTables>,
         abort_registration: AbortRegistration,
         sender: Option<tokio::sync::mpsc::Sender<Accumulator>>,
         max_concurrency: usize,
@@ -251,10 +251,10 @@ impl StateSnapshotReaderV1 {
 
         // spawn accumualation task
         let ref_files = self.ref_files.clone();
-        let epoch_dir = self.epoch_dir().clone();
+        let epoch_dir = self.epoch_dir();
         let local_staging_dir_root = self.local_staging_dir_root.clone();
-        let accum_handle = if let Some(sender) = sender {
-            let handle = tokio::spawn(async move {
+        let accum_handle = sender.map(|sender| {
+            tokio::spawn(async move {
                 let local_staging_dir_root_clone = local_staging_dir_root.clone();
                 let epoch_dir_clone = epoch_dir.clone();
                 for (bucket, part_files) in ref_files.clone().iter() {
@@ -300,18 +300,17 @@ impl StateSnapshotReaderV1 {
                         .await;
                 }
                 accum_progress_bar.finish_with_message("Accumulation complete");
-            });
-            Some(handle)
-        } else {
-            None
-        };
+            })
+        });
 
         let input_files: Vec<_> = self
             .object_files
             .iter()
             .flat_map(|(bucket, parts)| {
-                let vec: Vec<_> = parts.iter().map(|entry| (bucket, entry)).collect();
-                vec
+                parts
+                    .into_iter()
+                    .map(|entry| (bucket.clone(), entry.clone()))
+                    .collect::<Vec<_>>()
             })
             .collect();
         let epoch_dir = self.epoch_dir();
@@ -330,15 +329,18 @@ impl StateSnapshotReaderV1 {
         let downloaded_bytes = AtomicUsize::new(0);
         let instant = Instant::now();
 
-        let ret = Abortable::new(
+        let perpetual_db_clone = perpetual_db.clone();
+        Abortable::new(
             async move {
-                futures::stream::iter(input_files.iter())
+                futures::stream::iter(input_files.into_iter())
                     .map(|(bucket, (part_num, file_metadata))| {
+                        let perpetual_db_temp = perpetual_db_clone.clone();
                         let epoch_dir = epoch_dir.clone();
-                        let file_path = file_metadata.file_path(&epoch_dir);
                         let remote_object_store = remote_object_store.clone();
                         let sha3_digests_cloned = sha3_digests.clone();
+
                         async move {
+                            let file_path = file_metadata.file_path(&epoch_dir);
                             // Download object file with retries
                             let max_timeout = Duration::from_secs(30);
                             let mut timeout = Duration::from_secs(2);
@@ -396,33 +398,36 @@ impl StateSnapshotReaderV1 {
                             };
 
                             let sha3_digest = sha3_digests_cloned.lock().await;
-                            let bucket_map =
-                                sha3_digest.get(bucket).expect("Bucket not in digest map");
+                            let bucket_map = sha3_digest
+                                .get(&bucket)
+                                .expect("Bucket not in digest map")
+                                .clone();
                             let sha3_digest = bucket_map
                                 .get(part_num)
                                 .expect("sha3 digest not in bucket map");
 
-                            Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
-                                bytes,
-                                (*file_metadata).clone(),
-                                *sha3_digest,
-                            ))
+                            tokio::task::spawn_blocking(move || {
+                                LiveObjectIter::new(file_metadata, bytes.clone())
+                                    .map(|obj_iter| {
+                                        AuthorityStore::bulk_insert_live_objects(
+                                            perpetual_db_temp,
+                                            obj_iter,
+                                            indirect_objects_threshold,
+                                            sha3_digest,
+                                        )
+                                        .expect("Failed to insert live objects");
+                                    })
+                                    .expect("Failed to create live object iterator");
+                                bytes
+                            })
+                            .await
                         }
                     })
                     .boxed()
                     .buffer_unordered(download_concurrency)
-                    .try_for_each(|(bytes, file_metadata, sha3_digest)| {
+                    .for_each(|result| {
+                        let bytes = result.expect("Failed to await bulk insertion task");
                         let bytes_len = bytes.len();
-                        let result: Result<(), anyhow::Error> =
-                            LiveObjectIter::new(&file_metadata, bytes).map(|obj_iter| {
-                                AuthorityStore::bulk_insert_live_objects(
-                                    perpetual_db,
-                                    obj_iter,
-                                    indirect_objects_threshold,
-                                    &sha3_digest,
-                                )
-                                .expect("Failed to insert live objects");
-                            });
                         downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
                         obj_progress_bar_clone.inc(1);
                         obj_progress_bar_clone.set_message(format!(
@@ -431,7 +436,7 @@ impl StateSnapshotReaderV1 {
                                 / (1024 * 1024) as f64
                                 / instant.elapsed().as_secs_f64(),
                         ));
-                        futures::future::ready(result)
+                        futures::future::ready(())
                     })
                     .await
             },
@@ -443,7 +448,7 @@ impl StateSnapshotReaderV1 {
         if let Some(handle) = accum_handle {
             handle.await?;
         }
-        ret
+        Ok(())
     }
 
     pub fn ref_iter(&self, bucket_num: u32, part_num: u32) -> Result<ObjectRefIter> {
