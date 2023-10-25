@@ -1807,7 +1807,7 @@ impl From<SuiStake> for Stake {
                 reward = Some(estimated_reward.into());
                 StakeStatus::Active
             }
-            sui_json_rpc_types::StakeStatus::Unstaked => todo!(),
+            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
         };
 
         Stake {
