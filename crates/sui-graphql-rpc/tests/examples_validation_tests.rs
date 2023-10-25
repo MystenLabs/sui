@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod test {
+#[cfg(feature = "pg_integration")]
+mod tests {
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serial_test::serial;
