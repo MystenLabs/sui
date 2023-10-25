@@ -99,7 +99,7 @@
 //! hasher.update("Test message".as_bytes());
 //! let hash_value = hasher.finish();
 //! ```
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 use bytes::Bytes;
 use hex::FromHex;
 use mirai_annotations::*;

@@ -8,20 +8,19 @@ license = "Apache-2.0"
 
 [dependencies]
 # diem dependencies
-move-compiler = { path = "../../move-compiler" }
-move-model = { path = "../../move-model" }
-move-prover = { path = ".." }
-move-stackless-bytecode = { path = "../bytecode"}
+move-compiler.workspace = true
+move-model.workspace = true
+move-prover.workspace = true
+move-stackless-bytecode.workspace = true
 
 # FB external dependencies
-z3tracer = "0.8.0"
+z3tracer.workspace = true
 
 # external dependencies
-anyhow = "1.0.52"
+anyhow.workspace = true
 clap.workspace = true
-codespan-reporting = "0.11.1"
-chrono = "0.4.19"
-itertools = "0.10.0"
-log = { version = "0.4.14", features = ["serde"] }
-plotters = { version = "0.3.0", default_features = false, features = ["evcxr", "line_series", "histogram"]}
-
+codespan-reporting.workspace = true
+chrono.workspace = true
+itertools.workspace = true
+log = { workspace = true, features = ["serde"] }
+plotters.workspace = true

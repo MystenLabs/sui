@@ -12,21 +12,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.52"
-fail = { version = "0.4.0", features = ['failpoints'] }
-tempfile = "3.2.0"
+anyhow.workspace = true
+fail = { workspace = true, features = ["failpoints"] }
+tempfile.workspace = true
 memory-stats = "1.0.0"
 
-move-core-types = {path = "../../move-core/types" }
-move-binary-format = { path = "../../move-binary-format" }
-move-bytecode-verifier = { path = "../../move-bytecode-verifier" }
-move-compiler = { path = "../../move-compiler" }
-move-vm-config = { path = "../config" }
-move-vm-runtime = { path = "../runtime" }
-move-vm-profiler = { path = "../profiler" }
-move-vm-types = { path = "../types" }
-move-vm-test-utils = { path = "../test-utils" }
-move-stdlib = { path = "../../move-stdlib" }
+move-core-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-verifier.workspace = true
+move-compiler.workspace = true
+move-vm-config.workspace = true
+move-vm-runtime.workspace = true
+move-vm-profiler.workspace = true
+move-vm-types.workspace = true
+move-vm-test-utils.workspace = true
+move-stdlib.workspace = true
 
 [features]
 default = []

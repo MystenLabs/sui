@@ -56,7 +56,7 @@
 //! # }
 //! ```
 //!
-#![allow(clippy::integer_arithmetic)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use crate::{hash::HashValue, hkdf::Hkdf, traits::Uniform as _, x25519};
 use aes_gcm::{

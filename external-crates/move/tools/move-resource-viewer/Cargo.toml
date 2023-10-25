@@ -10,12 +10,12 @@ publish = false
 edition = "2021"
 
 [dependencies]
-move-core-types = { path = "../../move-core/types" }
-move-binary-format = { path = "../../move-binary-format" }
-move-bytecode-utils = { path = "../move-bytecode-utils" }
-enum-compat-util = { path = "../../testing-infra/enum-compat-util"}
-move-proc-macros = { path = "../../testing-infra/move-proc-macros"}
-serde = { version = "1.0.124", features = ["derive", "rc"] }
+move-core-types.workspace = true
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+enum-compat-util.workspace = true
+move-proc-macros.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
 
-anyhow = "1.0.52"
-hex = "0.4.3"
+anyhow.workspace = true
+hex.workspace = true

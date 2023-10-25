@@ -282,7 +282,7 @@ impl PublicKey for MultiEd25519PublicKey {
     type PrivateKeyMaterial = MultiEd25519PrivateKey;
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for MultiEd25519PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_pubkey = self.to_bytes();
@@ -324,7 +324,7 @@ impl VerifyingKey for MultiEd25519PublicKey {
 
 impl fmt::Display for MultiEd25519PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self.to_bytes()))
+        write!(f, "{}", hex::encode(self.to_bytes()))
     }
 }
 
@@ -459,7 +459,7 @@ impl Length for MultiEd25519Signature {
     }
 }
 
-#[allow(clippy::derive_hash_xor_eq)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl std::hash::Hash for MultiEd25519Signature {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_signature = self.to_bytes();
@@ -535,7 +535,7 @@ impl Signature for MultiEd25519Signature {
             while !bitmap_get_bit(self.bitmap, bitmap_index) {
                 bitmap_index += 1;
             }
-            sig.verify_arbitrary_msg(message, &public_key.public_keys[bitmap_index as usize])?;
+            sig.verify_arbitrary_msg(message, &public_key.public_keys[bitmap_index])?;
             bitmap_index += 1;
         }
         Ok(())

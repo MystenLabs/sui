@@ -10,14 +10,14 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-move-bytecode-verifier = { path = "../move-bytecode-verifier" }
-move-command-line-common = { path = "../move-command-line-common" }
-move-ir-to-bytecode = { path = "move-ir-to-bytecode" }
-move-bytecode-source-map = { path = "move-bytecode-source-map" }
-move-binary-format = { path = "../move-binary-format" }
+anyhow.workspace = true
+move-bytecode-verifier.workspace = true
+move-command-line-common.workspace = true
+move-ir-to-bytecode.workspace = true
+move-bytecode-source-map.workspace = true
+move-binary-format.workspace = true
 clap.workspace = true
-serde_json = "1.0.64"
+serde_json.workspace = true
 
 bcs.workspace = true
 
