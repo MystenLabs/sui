@@ -52,7 +52,7 @@ impl Server {
         let name_service_config = config.name_service.clone();
         let reader = PgManager::reader(config.connection.db_url.clone())
             .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
-        let pg_conn_pool = PgManager::new(reader.clone());
+        let pg_conn_pool = PgManager::new(reader.clone(), config.service.limits);
         let package_cache = PackageCache::new(reader);
 
         let prom_addr: SocketAddr = format!(
@@ -190,7 +190,7 @@ pub mod tests {
     use super::*;
     use crate::{
         cluster::SimulatorCluster,
-        config::{ConnectionConfig, ServiceConfig},
+        config::{ConnectionConfig, Limits, ServiceConfig},
         context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::{Timeout, TimeoutConfig},
@@ -256,7 +256,7 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader);
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
                 .extension(TimedExecuteExt {
@@ -300,7 +300,7 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader);
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
                 .max_query_depth(depth)
@@ -353,7 +353,7 @@ pub mod tests {
         ) -> Response {
             let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-            let pg_conn_pool = PgManager::new(reader);
+            let pg_conn_pool = PgManager::new(reader, Limits::default());
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
                 .context_data(pg_conn_pool)
                 .max_query_nodes(nodes)
@@ -409,7 +409,7 @@ pub mod tests {
 
         let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
-        let pg_conn_pool = PgManager::new(reader);
+        let pg_conn_pool = PgManager::new(reader, service_config.limits);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    config::Limits,
     error::Error,
     types::{
         address::{Address, AddressTransactionBlockRelationship},
@@ -115,11 +116,12 @@ pub enum DbValidationError {
 
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
+    pub _limits: Limits,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader) -> Self {
-        Self { inner }
+    pub(crate) fn new(inner: IndexerReader, _limits: Limits) -> Self {
+        Self { inner, _limits }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
