@@ -198,8 +198,7 @@ async fn graphiql() -> impl axum::response::IntoResponse {
     )
 }
 
-#[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::{
         cluster::SimulatorCluster,
@@ -214,7 +213,6 @@ mod tests {
         Response,
     };
     use rand::{rngs::StdRng, SeedableRng};
-    use serial_test::serial;
     use simulacrum::Simulacrum;
     use std::sync::Arc;
     use std::time::Duration;
@@ -235,9 +233,7 @@ mod tests {
         )
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_timeout() {
+    pub async fn test_timeout_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
         struct TimedExecuteExt {
@@ -306,9 +302,7 @@ mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_query_depth_limit() {
+    pub async fn test_query_depth_limit_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
         async fn exec_query_depth_limit(
@@ -361,9 +355,7 @@ mod tests {
         assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_query_node_limit() {
+    pub async fn test_query_node_limit_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
         async fn exec_query_node_limit(
@@ -416,9 +408,7 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn test_query_complexity_metrics() {
+    pub async fn test_query_complexity_metrics_impl() {
         let (connection_config, _cluster) = prep_cluster().await;
 
         let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
