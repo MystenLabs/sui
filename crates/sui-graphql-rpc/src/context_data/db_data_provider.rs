@@ -51,6 +51,7 @@ use diesel::{
 use move_core_types::language_storage::StructTag;
 use std::str::FromStr;
 use sui_indexer::{
+    apis::GovernanceReadApiV2,
     indexer_reader::IndexerReader,
     models_v2::{
         checkpoints::StoredCheckpoint, epoch::StoredEpochInfo, objects::StoredObject,
@@ -64,7 +65,8 @@ use sui_indexer::{
 };
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc_types::{
-    EventFilter as RpcEventFilter, ProtocolConfigResponse, SuiTransactionBlockEffects,
+    EventFilter as RpcEventFilter, ProtocolConfigResponse, Stake as SuiStake,
+    SuiTransactionBlockEffects,
 };
 use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_sdk::types::{
@@ -1216,43 +1218,45 @@ impl PgManager {
             object_ids: None,
             object_keys: None,
         };
-        let system_state = self.fetch_latest_sui_system_state().await?;
-        let current_epoch_id = system_state.epoch_id;
+
         let objs = self
             .multi_get_objs(first, after, last, before, Some(obj_filter))
             .await?;
 
         if let Some((stored_objs, has_next_page)) = objs {
             let mut connection = Connection::new(false, has_next_page);
-
             let mut edges = vec![];
+            let governance_api = GovernanceReadApiV2::new(self.inner.clone());
 
-            for stored_obj in stored_objs {
-                let object = sui_types::object::Object::try_from(stored_obj).map_err(|_| {
-                    Error::Internal("Error converting from StoredObject to Object".to_string())
-                })?;
-                let stake_object = StakedSui::try_from(&object).map_err(|_| {
-                    Error::Internal("Error converting from Object to StakedSui".to_string())
-                })?;
+            // convert the stored objects into staked sui type
+            let stakes = stored_objs
+                .into_iter()
+                .flat_map(|stored_obj| {
+                    let object = sui_types::object::Object::try_from(stored_obj)
+                        .map_err(|_| eprintln!("Error converting from StoredObject to Object"))
+                        .ok()?;
+                    let stake_object = StakedSui::try_from(&object)
+                        .map_err(|_| eprintln!("Error converting from Object to StakedSui"))
+                        .ok()?;
+                    Some(stake_object)
+                })
+                .collect::<Vec<_>>();
 
-                // TODO this only does active / pending stake status, but not unstaked,
-                // unstaked does not really make sense here, fullnode tracks deleted objects
-                let status = if current_epoch_id >= stake_object.activation_epoch() {
-                    StakeStatus::Active
-                } else {
-                    StakeStatus::Pending
-                };
-                let stake = Stake {
-                    id: ID(stake_object.id().to_string()),
-                    active_epoch_id: Some(stake_object.activation_epoch()),
-                    estimated_reward: None, // TODO once we have a good working governance API, we should fix this
-                    principal: Some(BigInt::from(stake_object.principal())),
-                    request_epoch_id: Some(stake_object.activation_epoch().saturating_sub(1)),
-                    status: Some(status),
-                    staked_sui_id: stake_object.id(),
-                };
+            // retrieve the delegated stakes
+            // at the first invocation, it will likely fail because data is not cached
+            let delegated_stakes = governance_api
+                .get_delegated_stakes(stakes)
+                .await
+                .map_err(|e| Error::Internal(format!("Error fetching delegated stakes. {e}")))?;
 
-                let cursor = stake.staked_sui_id.to_string();
+            let stakes = delegated_stakes
+                .into_iter()
+                .flat_map(|x| x.stakes)
+                .collect::<Vec<_>>();
+
+            for stk in stakes {
+                let cursor = stk.staked_sui_id.to_string();
+                let stake = Stake::from(stk);
                 edges.push(Edge::new(cursor, stake));
             }
             connection.edges.extend(edges);
@@ -1759,6 +1763,30 @@ impl TryFrom<StoredObject> for Coin {
             balance,
             move_obj: MoveObject { native_object },
         })
+    }
+}
+
+impl From<SuiStake> for Stake {
+    fn from(value: SuiStake) -> Self {
+        let mut reward = None;
+        let status = match value.status {
+            sui_json_rpc_types::StakeStatus::Pending => StakeStatus::Pending,
+            sui_json_rpc_types::StakeStatus::Active { estimated_reward } => {
+                reward = Some(estimated_reward.into());
+                StakeStatus::Active
+            }
+            sui_json_rpc_types::StakeStatus::Unstaked => StakeStatus::Unstaked,
+        };
+
+        Stake {
+            id: ID(value.staked_sui_id.to_string()),
+            active_epoch_id: Some(value.stake_active_epoch),
+            estimated_reward: reward,
+            principal: Some(value.principal.into()),
+            request_epoch_id: Some(value.stake_request_epoch),
+            status: Some(status),
+            staked_sui_id: value.staked_sui_id,
+        }
     }
 }
 
