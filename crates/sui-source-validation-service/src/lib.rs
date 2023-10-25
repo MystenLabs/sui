@@ -51,7 +51,7 @@ pub const TESTNET_WS_URL: &str = "wss://rpc.testnet.sui.io:443";
 pub const DEVNET_WS_URL: &str = "wss://rpc.devnet.sui.io:443";
 pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
-pub const WS_PING_INTERVAL_MS: u64 = 20_000;
+pub const WS_PING_INTERVAL: Duration = Duration::from_millis(20_000);
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -399,7 +399,7 @@ pub async fn watch_for_upgrades(
     };
 
     let client: WsClient = WsClientBuilder::default()
-        .ping_interval(Duration::from_millis(WS_PING_INTERVAL_MS))
+        .ping_interval(WS_PING_INTERVAL)
         .build(websocket_url)
         .await?;
     let mut subscription: Subscription<SuiTransactionBlockEffects> = client

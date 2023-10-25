@@ -44,14 +44,17 @@ pub async fn main() -> anyhow::Result<()> {
             .clone()
             .packages
             .into_iter()
-            .filter(|p| match p {
-                PackageSource::Repository(RepositorySource {
-                    network: Some(n), ..
-                })
-                | PackageSource::Directory(DirectorySource {
-                    network: Some(n), ..
-                }) => *n == network,
-                _ => false,
+            .filter(|p| {
+                matches!(
+                    p,
+                    PackageSource::Repository(RepositorySource {
+                        network: Some(n),
+                        ..
+                    }) | PackageSource::Directory(DirectorySource {
+                        network: Some(n),
+                        ..
+                    }) if *n == network,
+                )
             })
             .collect();
         if packages.is_empty() {
