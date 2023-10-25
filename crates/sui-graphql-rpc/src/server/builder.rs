@@ -75,6 +75,7 @@ impl Server {
         builder = builder
             .max_query_depth(config.service.limits.max_query_depth)
             .max_query_nodes(config.service.limits.max_query_nodes)
+            .context_data(config.service.clone())
             .context_data(pg_conn_pool)
             .context_data(package_cache)
             .context_data(name_service_config)

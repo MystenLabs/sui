@@ -86,6 +86,10 @@ impl ConnectionConfig {
     pub fn db_url(&self) -> String {
         self.db_url.clone()
     }
+
+    pub fn server_address(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
 }
 
 impl ServiceConfig {
@@ -173,11 +177,11 @@ impl Default for InternalFeatureConfig {
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
 pub struct ServerConfig {
     #[serde(default)]
-    pub(crate) service: ServiceConfig,
+    pub service: ServiceConfig,
     #[serde(default)]
-    pub(crate) connection: ConnectionConfig,
+    pub connection: ConnectionConfig,
     #[serde(default)]
-    pub(crate) internal_features: InternalFeatureConfig,
+    pub internal_features: InternalFeatureConfig,
     #[serde(default)]
     pub name_service: NameServiceConfig,
 }
