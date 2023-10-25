@@ -64,12 +64,10 @@ module 0x0::loyalty {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let coin = coin::mint(cap, amount, ctx);
-        let (token, req_1) = cl::from_coin(coin, ctx);
-        let req_2 = cl::transfer(token, recipient, ctx);
+        let token = cl::mint(cap, amount, ctx);
+        let req = cl::transfer(token, recipient, ctx);
 
-        cl::confirm_with_treasury_cap(cap, req_1, ctx);
-        cl::confirm_with_treasury_cap(cap, req_2, ctx);
+        cl::confirm_with_treasury_cap(cap, req, ctx);
     }
 
     /// Buy a gift for 10 tokens.

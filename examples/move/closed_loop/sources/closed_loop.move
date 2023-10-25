@@ -321,6 +321,23 @@ module closed_loop::closed_loop {
         vec_map::insert(&mut self.rules, name, rules)
     }
 
+    /// Mint a `Token` with a given `amount` using the `TreasuryCap`.
+    public fun mint<T>(
+        cap: &mut TreasuryCap<T>, amount: u64, ctx: &mut TxContext
+    ): Token<T> {
+        let balance = balance::increase_supply(coin::supply_mut(cap), amount);
+        Token { id: object::new(ctx), balance }
+    }
+
+    /// Burn a `Token` using the `TreasuryCap`.
+    public fun burn<T>(
+        cap: &mut TreasuryCap<T>, token: Token<T>
+    ) {
+        let Token { id, balance } = token;
+        balance::decrease_supply(coin::supply_mut(cap), balance);
+        object::delete(id);
+    }
+
     /// A utility action - flush the burned balance and correct the supply in
     /// the `TreasuryCap`.
     public fun flush<T>(
