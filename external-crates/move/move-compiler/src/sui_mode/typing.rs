@@ -148,7 +148,11 @@ impl<'a> TypingVisitorContext for Context<'a> {
         });
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
             let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
-                invalid_otw_field_loc(fields).is_none()
+                let InvalidOTWFieldLoc {
+                    invalid_first_field,
+                    more_than_one_field,
+                } = invalid_otw_field_loc(fields);
+                invalid_first_field.is_none() && more_than_one_field.is_none()
             } else {
                 true
             };
@@ -381,8 +385,12 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             (last_loc, msg),
         ))
     }
+
     let otw_name: Symbol = context.otw_name();
-    if parameters.len() == 1 && context.one_time_witness.is_some() {
+    if parameters.len() == 1
+        && context.one_time_witness.is_some()
+        && tx_ctx_kind != TxContextKind::None
+    {
         // if there is 1 parameter, and a OTW, this is an error since the OTW must be used
         let msg = format!(
             "Invalid first parameter to 'init'. \
@@ -403,11 +411,12 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
     } else if parameters.len() > 1 {
         // if there is more than one parameter, the first must be the OTW
         let (_, first_var, first_ty) = parameters.first().unwrap();
-        let is_otw = matches!(
-            first_ty.value.type_name(),
-            Some(sp!(_, TypeName_::ModuleType(m, n)))
-                if m == context.current_module() && n.value() == otw_name
-        );
+        let is_otw = matches!(&first_ty.value, Type_::UnresolvedError | Type_::Var(_))
+            || matches!(
+                first_ty.value.type_name(),
+                Some(sp!(_, TypeName_::ModuleType(m, n)))
+                    if m == context.current_module() && n.value() == otw_name
+            );
         if !is_otw {
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
@@ -437,14 +446,15 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
                 .unwrap();
             check_otw_type(context, name, sdef, Some(first_ty.loc))
         }
-    } else if parameters.len() > 2 {
+    }
+    if parameters.len() > 2 {
         // no init function can take more than 2 parameters (the OTW and the TxContext)
-        let (_, second_var, _) = &parameters[1];
+        let (_, third_var, _) = &parameters[2];
         context.env.add_diag(diag!(
             INIT_FUN_DIAG,
             (name.loc(), "Invalid 'init' function declaration"),
             (
-                second_var.loc,
+                third_var.loc,
                 "'init' functions can have at most two parameters"
             ),
         ));
@@ -483,7 +493,14 @@ fn check_otw_type(
     }
 
     if let N::StructFields::Defined(fields) = &sdef.fields {
-        if let Some(invalid_field_loc) = invalid_otw_field_loc(fields) {
+        let InvalidOTWFieldLoc {
+            invalid_first_field,
+            more_than_one_field,
+        } = invalid_otw_field_loc(fields);
+        let mut check_field_loc = |invalid_field_loc_opt| {
+            let Some(invalid_field_loc) = invalid_field_loc_opt else {
+                return;
+            };
             let msg = format!(
                 "One-time witness types must have no fields, \
                 or exactly one field of type {}",
@@ -500,7 +517,9 @@ fn check_otw_type(
             diag.add_note(OTW_NOTE);
             context.env.add_diag(diag);
             valid = false
-        }
+        };
+        check_field_loc(invalid_first_field);
+        check_field_loc(more_than_one_field);
     }
 
     let invalid_ability_loc =
@@ -541,24 +560,31 @@ fn check_otw_type(
     context.one_time_witness = Some(if valid { Ok(name) } else { Err(()) })
 }
 
+struct InvalidOTWFieldLoc {
+    invalid_first_field: Option<Loc>,
+    more_than_one_field: Option<Loc>,
+}
+
 // Find the first invalid field in a one-time witness type, if any.
 // First looks for a non-boolean field, otherwise looks for any field after the first.
-fn invalid_otw_field_loc(fields: &Fields<Type>) -> Option<Loc> {
-    fields
+fn invalid_otw_field_loc(fields: &Fields<Type>) -> InvalidOTWFieldLoc {
+    let invalid_first_field = fields.iter().find_map(|(loc, _, (idx, ty))| {
+        if *idx != 0 {
+            return None;
+        }
+        match ty.value.builtin_name() {
+            Some(sp!(_, BuiltinTypeName_::Bool)) => None,
+            _ => Some(loc),
+        }
+    });
+    let more_than_one_field = fields
         .iter()
-        .find_map(|(loc, _, (idx, ty))| {
-            if (*idx == 0) && ty.value.builtin_name()?.value != BuiltinTypeName_::Bool {
-                Some(loc)
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            fields
-                .iter()
-                .find(|(_, _, (idx, _))| *idx > 0)
-                .map(|(loc, _, _)| loc)
-        })
+        .find(|(_, _, (idx, _))| *idx > 0)
+        .map(|(loc, _, _)| loc);
+    InvalidOTWFieldLoc {
+        invalid_first_field,
+        more_than_one_field,
+    }
 }
 
 //**************************************************************************************************
@@ -587,10 +613,17 @@ fn entry_signature(
 }
 
 fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
+    // Already an error, so assume a valid, mutable TxContext
+    if matches!(last_param_ty_, Type_::UnresolvedError | Type_::Var(_)) {
+        return TxContextKind::Mutable;
+    }
+
     let Type_::Ref(is_mut, inner_ty) = last_param_ty_ else {
+        // not a reference
         return TxContextKind::None;
     };
     let Type_::Apply(_, sp!(_, inner_name), _) = &inner_ty.value else {
+        // not a user defined type
         return TxContextKind::None;
     };
     if inner_name.is(SUI_ADDR_NAME, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_TYPE_NAME) {
@@ -600,6 +633,7 @@ fn tx_context_kind(sp!(_, last_param_ty_): &Type) -> TxContextKind {
             TxContextKind::Immutable
         }
     } else {
+        // not the tx context
         TxContextKind::None
     }
 }
