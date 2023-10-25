@@ -8,19 +8,19 @@ license = "Apache-2.0"
 
 [dependencies]
 # diem dependencies
-move-stackless-bytecode = { path = "../bytecode" }
-bytecode-interpreter-crypto = { path = "crypto" }
-move-binary-format = { path = "../../move-binary-format" }
-move-core-types = { path = "../../move-core/types" }
-move-model = { path = "../../move-model" }
+move-stackless-bytecode.workspace = true
+bytecode-interpreter-crypto.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-model.workspace = true
 
 # external dependencies
-anyhow = "1.0.52"
-codespan-reporting = "0.11.1"
-itertools = "0.10.0"
-num = "0.4.0"
+anyhow.workspace = true
+codespan-reporting.workspace = true
+itertools.workspace = true
+num.workspace = true
 clap.workspace = true
 
 [dev-dependencies]
-datatest-stable = "0.1.1"
-move-prover-test-utils = { path = "../test-utils" }
+datatest-stable.workspace = true
+move-prover-test-utils.workspace = true

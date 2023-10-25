@@ -84,7 +84,7 @@ pub trait ValidCryptoMaterialStringExt: ValidCryptoMaterial {
     }
     /// A function to encode into hex-string after serializing.
     fn to_encoded_string(&self) -> Result<String> {
-        Ok(::hex::encode(&self.to_bytes()))
+        Ok(::hex::encode(self.to_bytes()))
     }
 }
 

@@ -10,6 +10,6 @@ publish = ["crates-io"]
 edition = "2021"
 
 [dependencies]
-move-binary-format = { path = "../../../move-binary-format", version = "0.0.3" }
-move-core-types = { path = "../../../move-core/types", version = "0.0.4" }
-serde = { version = "1.0.124", default-features = false }
+move-binary-format.workspace = true
+move-core-types.workspace = true
+serde.workspace = true

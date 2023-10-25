@@ -10,9 +10,9 @@ license = "Apache-2.0"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.64", features = ["derive"] }
-quote = "1.0.9"
-proc-macro2 = "1.0.24"
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
 
 [dev-dependencies]
-anyhow = "1.0.52"
+anyhow.workspace = true

@@ -8,4 +8,4 @@ publish = false
 edition = "2021"
 
 [dependencies]
-move-binary-format = { path = "../../move-binary-format" }
+move-binary-format.workspace = true

@@ -360,12 +360,10 @@ impl CFG {
                 let offset = CFG::get_block_offset(&cfg_copy, &block_order, child_ids[1]);
                 match block.instructions.last() {
                     Some(Bytecode::BrTrue(_)) => {
-                        block.instructions[last_instruction_index] =
-                            Bytecode::BrTrue(offset as u16);
+                        block.instructions[last_instruction_index] = Bytecode::BrTrue(offset);
                     }
                     Some(Bytecode::BrFalse(_)) => {
-                        block.instructions[last_instruction_index] =
-                            Bytecode::BrFalse(offset as u16);
+                        block.instructions[last_instruction_index] = Bytecode::BrFalse(offset);
                     }
                     _ => unreachable!(
                         "Error: unsupported two target jump instruction, {:#?}",

@@ -10,29 +10,29 @@ publish = false
 edition = "2021"
 
 [dependencies]
-move-model = { path = "../../move-model" }
-move-binary-format = { path = "../../move-binary-format" }
-move-core-types = { path = "../../move-core/types" }
-move-command-line-common = { path = "../../move-command-line-common" }
-move-read-write-set-types = { path = "../../tools/read-write-set/types" }
-move-compiler = { path = "../../move-compiler" }
+move-model.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-command-line-common.workspace = true
+move-read-write-set-types.workspace = true
+move-compiler.workspace = true
 
-codespan = "0.11.1"
-codespan-reporting = { version = "0.11.1", features = ["serde", "serialization"] }
-ethnum = "1.0.4"
-num = "0.4.0"
-im = "15.0.0"
-itertools = "0.10.0"
-log = "0.4.14"
-serde = { version = "1.0.124", features = ["derive"] }
-paste = "1.0.5"
-petgraph = "0.5.1"
+codespan.workspace = true
+codespan-reporting = { workspace = true, features = ["serde", "serialization"] }
+ethnum.workspace = true
+num.workspace = true
+im.workspace = true
+itertools.workspace = true
+log.workspace = true
+serde.workspace = true
+paste.workspace = true
+petgraph.workspace = true
 
 [dev-dependencies]
-move-stdlib = { path = "../../move-stdlib" }
-datatest-stable = "0.1.1"
-move-prover-test-utils = { path = "../test-utils" }
-anyhow = "1.0.52"
+move-stdlib.workspace = true
+datatest-stable.workspace = true
+move-prover-test-utils.workspace = true
+anyhow.workspace = true
 
 [[test]]
 name = "testsuite"

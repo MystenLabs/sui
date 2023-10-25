@@ -12,14 +12,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.52"
-once_cell = "1.7.2"
-serde = { version = "1.0.124", features = ["derive", "rc"] }
+anyhow.workspace = true
+once_cell.workspace = true
+serde = { workspace = true, features = ["derive", "rc"] }
 
-move-binary-format = { path = "../../move-binary-format" }
-move-core-types = {path = "../../move-core/types" }
-move-vm-types = { path = "../types" }
-move-vm-profiler = { path = "../profiler" }
+move-binary-format.workspace = true
+move-core-types.workspace = true
+move-vm-types.workspace = true
+move-vm-profiler.workspace = true
 
 [features]
 default = [ ]

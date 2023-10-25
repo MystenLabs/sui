@@ -3523,7 +3523,6 @@ impl GlobalValue {
 #[cfg(feature = "fuzzing")]
 pub mod prop {
     use super::*;
-    use move_core_types::value::{MoveStruct, MoveValue};
     use proptest::{collection::vec, prelude::*};
 
     pub fn value_strategy_with_layout(layout: &MoveTypeLayout) -> impl Strategy<Value = Value> {

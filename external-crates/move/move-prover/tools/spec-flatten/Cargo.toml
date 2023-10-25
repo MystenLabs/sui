@@ -10,13 +10,13 @@ license = "Apache-2.0"
 [dependencies]
 
 # move dependencies
-move-stackless-bytecode = { path = "../../bytecode" }
-move-compiler = { path = "../../../move-compiler" }
-move-model = { path = "../../../move-model" }
-move-prover = { path = "../.." }
+move-stackless-bytecode.workspace = true
+move-compiler.workspace = true
+move-model.workspace = true
+move-prover.workspace = true
 
 # external dependencies
-anyhow = "1.0.52"
-itertools = "0.10.1"
-pretty = "0.10.0"
+anyhow.workspace = true
+itertools.workspace = true
+pretty.workspace = true
 clap.workspace = true
