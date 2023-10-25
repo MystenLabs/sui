@@ -59,19 +59,19 @@ export function useSwapData({
 }
 
 export function useSuiUsdcBalanceConversion({ amount }: { amount: string }) {
-	const suiUsdc = useBalanceConversion(
-		new BigNumber(amount),
-		Coins.SUI,
-		Coins.USDC,
-		-SUI_CONVERSION_RATE,
-	);
+	const suiUsdc = useBalanceConversion({
+		balance: new BigNumber(amount),
+		from: Coins.SUI,
+		to: Coins.USDC,
+		conversionRate: -SUI_CONVERSION_RATE,
+	});
 
-	const usdcSui = useBalanceConversion(
-		new BigNumber(amount),
-		Coins.USDC,
-		Coins.SUI,
-		SUI_CONVERSION_RATE,
-	);
+	const usdcSui = useBalanceConversion({
+		balance: new BigNumber(amount),
+		from: Coins.USDC,
+		to: Coins.SUI,
+		conversionRate: SUI_CONVERSION_RATE,
+	});
 
 	return {
 		suiUsdc,

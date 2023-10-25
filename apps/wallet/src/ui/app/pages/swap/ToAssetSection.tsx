@@ -81,7 +81,7 @@ export function ToAssetSection({
 	const balanceConversionData = isAsk ? suiUsdc : usdcSui;
 	const { rawValue, averagePrice, refetch, isRefetching } = balanceConversionData || {};
 
-	const averagePriceAsString = averagePrice.toFixed(MAX_FLOAT).toString();
+	const averagePriceAsString = averagePrice?.toFixed(MAX_FLOAT).toString();
 
 	if (!toAssetMetaData.data) {
 		return null;

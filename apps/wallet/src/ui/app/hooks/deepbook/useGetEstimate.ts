@@ -111,7 +111,6 @@ async function getPlaceMarketOrderTxn({
 	const txb = new TransactionBlock();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
-	let swapCoin;
 	let balanceToSwap;
 	let walletFeeCoin;
 	let txnResult;
@@ -133,7 +132,7 @@ async function getPlaceMarketOrderTxn({
 			.toString();
 
 		balanceToSwap = formatBalanceToLotSize(balanceToSwap.minus(walletFee).toString(), lotSize);
-		swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
+		const swapCoin = txb.splitCoins(txb.gas, [balanceToSwap]);
 		walletFeeCoin = txb.splitCoins(txb.gas, [walletFee]);
 		txnResult = await deepBookClient.placeMarketOrder(
 			accountCap,
@@ -266,7 +265,7 @@ export function useGetEstimate({
 			});
 
 			if (!accountCapId) {
-				await queryClient.invalidateQueries(['get-owned-objects']);
+				await queryClient.invalidateQueries({ queryKey: ['get-owned-objects'] });
 			}
 
 			const dryRunResponse = await signer!.dryRunTransactionBlock({ transactionBlock: txn });
