@@ -169,7 +169,7 @@ pub async fn start_test_indexer(
     };
 
     let parsed_url = config.get_db_url().unwrap();
-    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(50)).unwrap();
+    let blocking_pool = new_pg_connection_pool_impl(&parsed_url, Some(5)).unwrap();
     if config.reset_db {
         reset_database(&mut blocking_pool.get().unwrap(), true, config.use_v2).unwrap();
     }
