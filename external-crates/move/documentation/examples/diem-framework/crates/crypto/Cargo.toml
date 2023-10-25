@@ -46,7 +46,6 @@ trybuild = "=1.0.53"
 
 [features]
 default = []
-assert-private-keys-not-cloneable = []
 cloneable-private-keys = []
 fuzzing = ["proptest", "proptest-derive", "cloneable-private-keys"]
 
