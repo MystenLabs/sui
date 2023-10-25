@@ -1,25 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![warn(
-    future_incompatible,
-    nonstandard_style,
-    rust_2018_idioms,
-    rust_2021_compatibility
-)]
 
-pub mod bullshark;
-pub mod consensus;
+mod bullshark;
 #[cfg(test)]
 #[path = "tests/consensus_utils.rs"]
-pub mod consensus_utils;
-pub mod metrics;
-pub mod utils;
+mod consensus_utils;
+mod metrics;
+mod state;
+mod utils;
 
-pub use crate::consensus::Consensus;
+pub use crate::consensus::bullshark::Bullshark;
+#[cfg(test)]
+use crate::consensus::consensus_utils::{
+    make_certificate_store, make_consensus_store, NUM_SUB_DAGS_PER_SCHEDULE,
+};
+pub use crate::consensus::metrics::{ChannelMetrics, ConsensusMetrics};
+pub use crate::consensus::state::{
+    Consensus, ConsensusRound, ConsensusState, Dag, LeaderSchedule, LeaderSwapTable,
+};
+pub use crate::consensus::utils::gc_round;
+
 use store::StoreError;
 use thiserror::Error;
 
-use types::{Certificate, SequenceNumber};
+use types::Certificate;
 
 /// The default channel size used in the consensus and subscriber logic.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;

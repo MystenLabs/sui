@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::bullshark::Bullshark;
-use crate::consensus::{ConsensusState, LeaderSchedule, LeaderSwapTable};
-use crate::consensus_utils::make_consensus_store;
-use crate::metrics::ConsensusMetrics;
+
+use crate::consensus::{
+    make_consensus_store, Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule,
+    LeaderSwapTable,
+};
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use fastcrypto::hash::HashFunction;

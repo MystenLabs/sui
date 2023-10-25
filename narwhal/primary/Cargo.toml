@@ -13,6 +13,7 @@ backoff.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 config = { path = "../config", package = "narwhal-config" }
+cfg-if.workspace = true
 futures.workspace = true
 governor.workspace = true
 itertools.workspace = true
@@ -20,13 +21,12 @@ once_cell.workspace = true
 parking_lot.workspace = true
 prometheus.workspace = true
 rand = { workspace = true, features = ["small_rng"] }
+thiserror.workspace = true
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "test-util"] }
 tower.workspace = true
 tracing.workspace = true
 tap.workspace = true
 
-
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 fastcrypto-tbls.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
@@ -49,6 +49,9 @@ workspace-hack.workspace = true
 dashmap.workspace = true
 arc-swap.workspace = true
 async-trait.workspace = true
+bincode.workspace = true
+criterion.workspace = true
+futures.workspace = true
 executor = { path = "../executor", package = "narwhal-executor" }
 indexmap.workspace = true
 itertools.workspace = true
@@ -57,7 +60,6 @@ node = { path = "../node", package = "narwhal-node" }
 proptest.workspace = true
 tempfile.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
-thiserror.workspace = true
 tracing.workspace = true
 worker = { path = "../worker", package = "narwhal-worker" }
 storage = { path = "../storage", package = "narwhal-storage" }
@@ -66,3 +68,11 @@ telemetry-subscribers.workspace = true
 
 [features]
 benchmark = []
+
+[lib]
+bench = false
+
+[[bench]]
+name = "process_certificates"
+harness = false
+required-features = ["benchmark"]

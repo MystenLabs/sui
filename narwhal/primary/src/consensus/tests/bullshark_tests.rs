@@ -5,10 +5,10 @@
 
 use super::*;
 
-use crate::consensus::ConsensusRound;
-use crate::consensus_utils::NUM_SUB_DAGS_PER_SCHEDULE;
-use crate::consensus_utils::*;
-use crate::{metrics::ConsensusMetrics, Consensus, NUM_SHUTDOWN_RECEIVERS};
+use crate::consensus::{
+    make_certificate_store, make_consensus_store, Consensus, ConsensusMetrics, ConsensusRound,
+    NUM_SHUTDOWN_RECEIVERS, NUM_SUB_DAGS_PER_SCHEDULE,
+};
 use config::AuthorityIdentifier;
 #[allow(unused_imports)]
 use fastcrypto::traits::KeyPair;
