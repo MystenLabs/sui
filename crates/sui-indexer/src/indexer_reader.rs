@@ -25,6 +25,8 @@ use crate::{
     PgConnectionConfig, PgConnectionPoolConfig, PgPoolConnection,
 };
 use anyhow::{anyhow, Result};
+use cached::proc_macro::cached;
+use cached::SizedCache;
 use diesel::{
     r2d2::ConnectionManager, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl,
     RunQueryDsl,
@@ -32,6 +34,7 @@ use diesel::{
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use itertools::{any, Itertools};
+use move_core_types::language_storage::StructTag;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::{Arc, RwLock},
@@ -40,17 +43,22 @@ use sui_json_rpc_types::{
     AddressMetrics, CheckpointId, EpochInfo, EventFilter, MoveCallMetrics, MoveFunctionName,
     NetworkMetrics, SuiEvent, SuiTransactionBlockResponse, TransactionFilter,
 };
-use sui_json_rpc_types::{Balance, Coin as SuiCoin};
+use sui_json_rpc_types::{
+    Balance, Coin as SuiCoin, SuiCoinMetadata, SuiTransactionBlockEffects,
+    SuiTransactionBlockEffectsAPI,
+};
+use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
     digests::{ObjectDigest, TransactionDigest},
     dynamic_field::DynamicFieldInfo,
+    is_system_package,
     move_package::MovePackage,
     object::{Object, ObjectRead},
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
 };
-use sui_types::{dynamic_field::DynamicFieldName, event::EventID};
+use sui_types::{coin::CoinMetadata, event::EventID};
 
 pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
@@ -471,6 +479,32 @@ impl IndexerReader {
             .collect()
     }
 
+    fn get_transaction_effects_with_digest(
+        &self,
+        digest: TransactionDigest,
+    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
+        let stored_txn: StoredTransaction = self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq(digest.inner().to_vec()))
+                .first::<StoredTransaction>(conn)
+        })?;
+
+        stored_txn.try_into_sui_transaction_effects()
+    }
+
+    fn get_transaction_effects_with_sequence_number(
+        &self,
+        sequence_number: i64,
+    ) -> Result<SuiTransactionBlockEffects, IndexerError> {
+        let stored_txn: StoredTransaction = self.run_query(|conn| {
+            transactions::table
+                .filter(transactions::tx_sequence_number.eq(sequence_number))
+                .first::<StoredTransaction>(conn)
+        })?;
+
+        stored_txn.try_into_sui_transaction_effects()
+    }
+
     fn multi_get_transactions(
         &self,
         digests: &[TransactionDigest],
@@ -566,6 +600,32 @@ impl IndexerReader {
             this.query_events_impl(filter, cursor, limit, descending_order)
         })
         .await
+    }
+
+    fn filter_object_id_with_type(
+        &self,
+        object_ids: Vec<ObjectID>,
+        object_type: String,
+    ) -> Result<Vec<ObjectID>, IndexerError> {
+        let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
+        let filtered_ids = self.run_query(|conn| {
+            objects::dsl::objects
+                .filter(objects::object_id.eq_any(object_ids))
+                .filter(objects::object_type.eq(object_type))
+                .select(objects::object_id)
+                .load::<Vec<u8>>(conn)
+        })?;
+        filtered_ids
+            .into_iter()
+            .map(|id| {
+                ObjectID::from_bytes(id.clone()).map_err(|_e| {
+                    IndexerError::PersistentStorageDataCorruptionError(format!(
+                        "Can't convert {:?} to ObjectID",
+                        id,
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
     }
 
     pub async fn multi_get_objects_in_blocking_task(
@@ -1470,6 +1530,27 @@ impl IndexerReader {
                 - latest_tx_count_metrics.network_total_successful_transaction_blocks,
         )
     }
+
+    pub async fn get_coin_metadata_in_blocking_task(
+        &self,
+        coin_struct: StructTag,
+    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
+        self.spawn_blocking(move |this| this.get_coin_metadata(coin_struct))
+            .await
+    }
+
+    fn get_coin_metadata(
+        &self,
+        coin_struct: StructTag,
+    ) -> Result<Option<SuiCoinMetadata>, IndexerError> {
+        let coin_metadata_obj_id = get_coin_metadata_obj_id(self, coin_struct)?;
+        if let Some(id) = coin_metadata_obj_id {
+            let metadata_object = self.get_object(&id, None)?;
+            Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -1542,5 +1623,52 @@ impl move_bytecode_utils::module_cache::GetModule for IndexerReader {
                     id, e
                 ))
             })
+    }
+}
+
+#[cached(
+    type = "SizedCache<String, Option<ObjectID>>",
+    create = "{ SizedCache::with_size(10000) }",
+    convert = r#"{ format!("{}", coin_struct) }"#,
+    result = true
+)]
+fn get_coin_metadata_obj_id(
+    reader: &IndexerReader,
+    coin_struct: StructTag,
+) -> Result<Option<ObjectID>, IndexerError> {
+    let package_id = coin_struct.address.into();
+    let publish_txn_effects_opt = if is_system_package(package_id) {
+        Some(reader.get_transaction_effects_with_sequence_number(0))
+    } else {
+        reader.get_object(&package_id, None)?.map(|o| {
+            let publish_txn_digest = o.previous_transaction;
+            reader.get_transaction_effects_with_digest(publish_txn_digest)
+        })
+    };
+    if let Some(publish_txn_effects) = publish_txn_effects_opt {
+        let created_objs = publish_txn_effects?
+            .created()
+            .iter()
+            .map(|o| o.object_id())
+            .collect::<Vec<_>>();
+        let coin_metadata_type = CoinMetadata::type_(coin_struct).to_string();
+        let metadata_ids =
+            reader.filter_object_id_with_type(created_objs, coin_metadata_type.clone())?;
+        if metadata_ids.len() == 1 {
+            Ok(Some(metadata_ids[0]))
+        } else if metadata_ids.is_empty() {
+            // The package exists but no coin metadata object is created in that transaction. Or maybe it is wrapped and we don't know.
+            Ok(None)
+        } else {
+            // This really should never happen since there should only be one coin metadata object per coin type.
+            tracing::error!(
+                "There are more than one coin metadata objects for type {}",
+                coin_metadata_type
+            );
+            Ok(None)
+        }
+    } else {
+        // The coin package does not exist.
+        Ok(None)
     }
 }
