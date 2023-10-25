@@ -34,7 +34,7 @@ fn zklogin_authenticator_jwk() {
         .collect();
 
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Prod, true);
+    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true);
 
     let res =
         authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
@@ -55,13 +55,13 @@ fn zklogin_authenticator_jwk() {
         }
     );
 
-    let aux_verify_data = VerifyParams::new(Default::default(), vec![], ZkLoginEnv::Prod, true);
+    let aux_verify_data = VerifyParams::new(Default::default(), vec![], ZkLoginEnv::Test, true);
     let res =
         authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
     assert!(res.is_err());
 
     // Epoch expired fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Prod, true);
+    let aux_verify_data = VerifyParams::new(parsed.clone(), vec![], ZkLoginEnv::Test, true);
     assert!(authenticator
         .verify_authenticator(&intent_msg, user_address, Some(11), &aux_verify_data)
         .is_err());
@@ -76,7 +76,7 @@ fn zklogin_authenticator_jwk() {
         .collect();
 
     // Correct kid can no longer be found fails to verify.
-    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Prod, true);
+    let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true);
     assert!(authenticator
         .verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data)
         .is_err());
