@@ -51,7 +51,7 @@ export function TokenIconLink({
 			}}
 			loading={isPending || queryResult.isPending}
 			before={<WalletActionStake24 />}
-			data-testId={`stake-button-${formatted}-${symbol}`}
+			data-testid={`stake-button-${formatted}-${symbol}`}
 		>
 			<div className="flex flex-col">
 				<Text variant="pBody" weight="semibold">
