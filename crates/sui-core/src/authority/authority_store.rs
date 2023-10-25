@@ -10,7 +10,6 @@ use std::{iter, mem, thread};
 use either::Either;
 use fastcrypto::hash::{HashFunction, MultisetHash, Sha3_256};
 use futures::stream::FuturesUnordered;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::ModuleResolver;
 use serde::{Deserialize, Serialize};
 use sui_storage::mutex_table::{MutexGuard, MutexTable, RwLockGuard, RwLockTable};
@@ -21,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey,
-    ObjectStore, ReceivedMarkerQuery,
+    get_module, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey, ObjectStore,
+    ReceivedMarkerQuery,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -1988,44 +1987,13 @@ impl ParentSync for AuthorityStore {
     }
 }
 
-impl ModuleResolver for AuthorityStore {
-    type Error = SuiError;
-
-    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        // TODO: We should cache the deserialized modules to avoid
-        // fetching from the store / re-deserializing them every time.
-        // https://github.com/MystenLabs/sui/issues/809
-        Ok(self
-            .get_package_object(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                // unwrap safe since get_package() ensures it's a package object.
-                package
-                    .data
-                    .try_as_package()
-                    .unwrap()
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
-    }
-}
-
-impl GetModule for AuthorityStore {
-    type Error = SuiError;
-    type Item = CompiledModule;
-
-    fn get_module_by_id(&self, id: &ModuleId) -> anyhow::Result<Option<Self::Item>, Self::Error> {
-        get_module_by_id(self, id)
-    }
-}
-
 /// A wrapper to make Orphan Rule happy
-pub struct ResolverWrapper<T: ModuleResolver> {
+pub struct ResolverWrapper<T: BackingPackageStore> {
     pub resolver: Arc<T>,
     pub metrics: Arc<ResolverMetrics>,
 }
 
-impl<T: ModuleResolver> ResolverWrapper<T> {
+impl<T: BackingPackageStore> ResolverWrapper<T> {
     pub fn new(resolver: Arc<T>, metrics: Arc<ResolverMetrics>) -> Self {
         metrics.module_cache_size.set(0);
         ResolverWrapper { resolver, metrics }
@@ -2038,11 +2006,11 @@ impl<T: ModuleResolver> ResolverWrapper<T> {
     }
 }
 
-impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
-    type Error = T::Error;
+impl<T: BackingPackageStore> ModuleResolver for ResolverWrapper<T> {
+    type Error = SuiError;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         self.inc_cache_size_gauge();
-        self.resolver.get_module(module_id)
+        get_module(&self.resolver, module_id)
     }
 }
 
