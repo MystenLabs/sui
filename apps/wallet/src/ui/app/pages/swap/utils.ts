@@ -79,7 +79,7 @@ export function useSuiUsdcBalanceConversion({ amount }: { amount: string }) {
 	};
 }
 
-export function getUSDCurrency(amount: number | null) {
+export function getUSDCurrency(amount?: number | null) {
 	if (typeof amount !== 'number') {
 		return null;
 	}

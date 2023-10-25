@@ -237,8 +237,8 @@ export function SwapPageContent() {
 	const isPayAll = amount === (isAsk ? formattedBaseTokenBalance : formattedQuoteTokenBalance);
 
 	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
-	const rawInputSuiUsdc = suiUsdc.rawValue;
-	const rawInputUsdcSui = usdcSui.rawValue;
+	const rawInputSuiUsdc = suiUsdc.data?.rawValue;
+	const rawInputUsdcSui = usdcSui.data?.rawValue;
 
 	const atcText = useMemo(() => {
 		if (isAsk) {

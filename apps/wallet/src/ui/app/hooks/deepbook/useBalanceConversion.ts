@@ -6,7 +6,6 @@ import { useDeepBookContext } from '_shared/deepBook/context';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { useQuery } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
-import { useMemo } from 'react';
 
 async function getDeepBookPriceForCoin(
 	coin: Coins,
@@ -39,14 +38,25 @@ async function getDeepBookPriceForCoin(
 	return total / BigInt(filter.length);
 }
 
-function useAveragePrice(base: Coins, quote: Coins, isAsk: boolean) {
+export function useBalanceConversion({
+	balance,
+	from,
+	to,
+	conversionRate = 1,
+}: {
+	balance: BigInt | BigNumber | null;
+	from: Coins;
+	to: Coins;
+	conversionRate: number;
+}) {
 	const deepBookClient = useDeepBookContext().client;
 	const deepbookPools = useDeepBookConfigs().pools;
+	const isAsk = to === Coins.USDC;
 
 	return useQuery({
-		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', isAsk, base, quote],
+		queryKey: [DEEPBOOK_KEY, 'get-prices-usd', isAsk, from, to],
 		queryFn: async () => {
-			const coins = [base, quote];
+			const coins = [from, to];
 			const promises = coins.map((coin) =>
 				getDeepBookPriceForCoin(coin, deepbookPools, isAsk, deepBookClient),
 			);
@@ -60,49 +70,28 @@ function useAveragePrice(base: Coins, quote: Coins, isAsk: boolean) {
 			const quotePriceBigNumber = new BigNumber(quotePrice.toString());
 
 			let avgPrice;
-			if (quote === Coins.USDC) {
+			if (to === Coins.USDC) {
 				avgPrice = basePriceBigNumber;
 			} else {
 				avgPrice = basePriceBigNumber.dividedBy(quotePriceBigNumber);
 			}
 
-			return avgPrice;
+			const averagePriceWithConversion = avgPrice?.shiftedBy(conversionRate);
+
+			if (!averagePriceWithConversion || !balance) return null;
+
+			const rawUsdValue = new BigNumber(balance.toString())
+				.multipliedBy(averagePriceWithConversion)
+				.toNumber();
+
+			if (isNaN(rawUsdValue)) {
+				return null;
+			}
+
+			return {
+				rawValue: rawUsdValue,
+				averagePrice: averagePriceWithConversion,
+			};
 		},
 	});
-}
-
-export function useBalanceConversion({
-	balance,
-	from,
-	to,
-	conversionRate = 1,
-}: {
-	balance: BigInt | BigNumber | null;
-	from: Coins;
-	to: Coins;
-	conversionRate: number;
-}) {
-	const { data: averagePrice, ...rest } = useAveragePrice(from, to, to === Coins.USDC);
-
-	const averagePriceWithConversion = averagePrice?.shiftedBy(conversionRate);
-
-	const rawValue = useMemo(() => {
-		if (!averagePriceWithConversion || !balance) return null;
-
-		const rawUsdValue = new BigNumber(balance.toString())
-			.multipliedBy(averagePriceWithConversion)
-			.toNumber();
-
-		if (isNaN(rawUsdValue)) {
-			return null;
-		}
-
-		return rawUsdValue;
-	}, [averagePriceWithConversion, balance]);
-
-	return {
-		rawValue,
-		averagePrice: averagePriceWithConversion,
-		...rest,
-	};
 }

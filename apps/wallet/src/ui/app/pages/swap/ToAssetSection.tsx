@@ -79,7 +79,8 @@ export function ToAssetSection({
 
 	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
 	const balanceConversionData = isAsk ? suiUsdc : usdcSui;
-	const { rawValue, averagePrice, refetch, isRefetching } = balanceConversionData || {};
+	const { data, refetch, isRefetching } = balanceConversionData || {};
+	const { rawValue, averagePrice } = data || {};
 
 	const averagePriceAsString = averagePrice?.toFixed(MAX_FLOAT).toString();
 

@@ -33,12 +33,14 @@ export function GasFeeSection({
 		return new BigNumber(amount).times(WALLET_FEES_PERCENTAGE / 100);
 	}, [amount, isValid]);
 
-	const { rawValue } = useBalanceConversion({
+	const { data: balanceConversionData } = useBalanceConversion({
 		balance: estimatedFees,
 		from: isAsk ? Coins.SUI : Coins.USDC,
 		to: isAsk ? Coins.USDC : Coins.SUI,
 		conversionRate: isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
 	});
+
+	const rawValue = balanceConversionData?.rawValue;
 
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
 
