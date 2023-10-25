@@ -11,6 +11,7 @@ use network::client::NetworkClient;
 use prometheus::Registry;
 use rand::{rngs::StdRng, SeedableRng};
 use std::num::NonZeroUsize;
+use std::sync::OnceLock;
 use test_utils::CommitteeFixture;
 use test_utils::{get_protocol_config, latest_protocol_version};
 use tokio::sync::watch;
@@ -114,6 +115,7 @@ async fn propose_header_and_form_certificate_v1() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -232,6 +234,7 @@ async fn propose_header_and_form_certificate_v2() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -336,6 +339,7 @@ async fn propose_header_failure() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -469,6 +473,7 @@ async fn run_vote_aggregator_with_param(
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -540,6 +545,7 @@ async fn shutdown_core() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));

@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use consensus::consensus::LeaderSwapTable;
 use fastcrypto::{
     serde_helpers::ToFromByteArray,
     traits::{KeyPair, ToFromBytes},
@@ -16,6 +17,11 @@ async fn start_dkg() {
     let committee = fixture.committee();
     let primary = fixture.authorities().next().unwrap();
     let name = primary.id();
+
+    let network = test_utils::test_network(primary.network_keypair(), primary.address());
+    let leader_schedule = LeaderSchedule::new(committee.clone(), LeaderSwapTable::default());
+    let vss_key_output = Arc::new(OnceLock::new());
+    let (tx_system_messages, mut rx_system_messages) = test_utils::test_channel!(1);
 
     let protocol_config = test_utils::latest_protocol_version();
     let randomness_private_key = RandomnessPrivateKey::from(
@@ -35,11 +41,14 @@ async fn start_dkg() {
         &protocol_config,
         committee,
         randomness_private_key,
+        leader_schedule,
+        network,
+        vss_key_output,
+        tx_system_messages,
     )
     .unwrap();
 
-    let (tx_system_messages, mut rx_system_messages) = test_utils::test_channel!(1);
-    randomness_state.start_dkg(&tx_system_messages).await;
+    randomness_state.start_dkg().await;
 
     let dkg_message = rx_system_messages.recv().await.unwrap();
     match dkg_message {

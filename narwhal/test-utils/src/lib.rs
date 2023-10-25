@@ -40,9 +40,9 @@ use types::{
     FetchBatchesRequest, FetchBatchesResponse, FetchCertificatesRequest, FetchCertificatesResponse,
     Header, HeaderAPI, HeaderV1Builder, PrimaryToPrimary, PrimaryToPrimaryServer, PrimaryToWorker,
     PrimaryToWorkerServer, RequestBatchesRequest, RequestBatchesResponse, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse, TimestampMs,
-    Transaction, Vote, VoteAPI, WorkerBatchMessage, WorkerSynchronizeMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
+    SendRandomnessPartialSignaturesRequest, TimestampMs, Transaction, Vote, VoteAPI,
+    WorkerBatchMessage, WorkerSynchronizeMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 pub mod cluster;
@@ -243,6 +243,13 @@ impl PrimaryToPrimary for PrimaryToPrimaryMockServer {
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn send_randomness_partial_signatures(
+        &self,
+        _request: anemo::Request<SendRandomnessPartialSignaturesRequest>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         unimplemented!()
     }
 

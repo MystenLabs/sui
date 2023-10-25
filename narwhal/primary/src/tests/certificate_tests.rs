@@ -33,7 +33,7 @@ fn test_empty_certificate_verification() {
         Certificate::new_unsigned(&latest_protocol_version(), &committee, header, Vec::new())
             .unwrap();
     assert!(certificate
-        .verify(&committee, &fixture.worker_cache())
+        .verify(&committee, &fixture.worker_cache(), None)
         .is_err());
 }
 
@@ -57,7 +57,7 @@ fn test_valid_certificate_v1_verification() {
             .unwrap();
 
     assert!(certificate
-        .verify(&committee, &fixture.worker_cache())
+        .verify(&committee, &fixture.worker_cache(), None)
         .is_ok());
 }
 
@@ -79,7 +79,7 @@ fn test_valid_certificate_v2_verification() {
     let certificate =
         Certificate::new_unverified(&cert_v2_config, &committee, header, signatures).unwrap();
 
-    let verified_certificate = certificate.verify(&committee, &fixture.worker_cache());
+    let verified_certificate = certificate.verify(&committee, &fixture.worker_cache(), None);
 
     assert!(verified_certificate.is_ok());
     assert!(matches!(
@@ -115,7 +115,7 @@ fn test_certificate_insufficient_signatures() {
             .unwrap();
 
     assert!(certificate
-        .verify(&committee, &fixture.worker_cache())
+        .verify(&committee, &fixture.worker_cache(), None)
         .is_err());
 }
 
@@ -141,7 +141,7 @@ fn test_certificate_validly_repeated_public_keys() {
     let certificate = certificate_res.unwrap();
 
     assert!(certificate
-        .verify(&committee, &fixture.worker_cache())
+        .verify(&committee, &fixture.worker_cache(), None)
         .is_ok());
 }
 
@@ -197,7 +197,9 @@ proptest::proptest! {
         let certificate = Certificate::new_unverified(&latest_protocol_version(), &committee, header, signatures).unwrap();
 
         assert!(certificate
-            .verify(&committee, &fixture.worker_cache())
+            .verify(&committee, &fixture.worker_cache(), None)
             .is_ok());
     }
 }
+
+// TODO-DNS test random sig verification?

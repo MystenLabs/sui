@@ -48,7 +48,7 @@ pub fn verify_certificates(c: &mut Criterion) {
                 let worker_cache = fixture.worker_cache();
                 b.iter(|| {
                     cert.clone()
-                        .verify(&committee, &worker_cache)
+                        .verify(&committee, &worker_cache, None)
                         .expect("Verification failed");
                 })
             },

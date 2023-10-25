@@ -15,6 +15,7 @@ use itertools::Itertools;
 use network::client::NetworkClient;
 use once_cell::sync::OnceCell;
 use prometheus::Registry;
+use std::sync::OnceLock;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
@@ -31,7 +32,7 @@ use types::{
     FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV1, Metadata,
     PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
     RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SignatureVerificationState,
+    SendRandomnessPartialSignaturesRequest, SignatureVerificationState,
 };
 
 pub struct NetworkProxy {
@@ -55,6 +56,13 @@ impl PrimaryToPrimary for NetworkProxy {
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
+        unimplemented!()
+    }
+
+    async fn send_randomness_partial_signatures(
+        &self,
+        _request: anemo::Request<SendRandomnessPartialSignaturesRequest>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         unimplemented!()
     }
 
@@ -229,6 +237,7 @@ async fn fetch_certificates_v1_basic() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
@@ -519,6 +528,7 @@ async fn fetch_certificates_v2_basic() {
         tx_new_certificates.clone(),
         tx_parents.clone(),
         rx_consensus_round_updates.clone(),
+        Arc::new(OnceLock::new()),
         metrics.clone(),
         &primary_channel_metrics,
     ));
