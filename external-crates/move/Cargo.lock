@@ -1872,6 +1872,7 @@ dependencies = [
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
+ "regex",
  "serde_yaml",
  "tempfile",
  "toml_edit 0.14.4",

@@ -1,0 +1,36 @@
+Command `new P1`:
+External Command `cat P1/Move.toml`:
+[package]
+name = "P1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+p1 = "0x0"
+Command `new P2 -p other_dir`:
+External Command `cat other_dir/Move.toml`:
+[package]
+name = "P2"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+p2 = "0x0"
+Command `new Move_Package-Test123`:
+External Command `cat Move_Package-Test123/Move.toml`:
+[package]
+name = "Move_Package-Test123"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+move_package_test123 = "0x0"
+Command `new _P`:
+Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+Command `new P_!`:
+Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+Command `new 1P`:
+Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).

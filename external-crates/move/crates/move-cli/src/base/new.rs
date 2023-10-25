@@ -1,8 +1,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::{anyhow, ensure};
 use clap::*;
 use move_package::source_package::layout::SourcePackageLayout;
+use regex::Regex;
 use std::{
     fmt::Display,
     fs::create_dir_all,
@@ -21,6 +23,8 @@ pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
 
 /// Create a new Move package with name `name` at `path`. If `path` is not provided the package
 /// will be created in the directory `name`.
+///
+/// By default, this command allows a strict naming scheme based on this regex: [A-Za-z][A-Za-z0-9-_]*.
 #[derive(Parser)]
 #[clap(name = "new")]
 pub struct New {
@@ -47,6 +51,15 @@ impl New {
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
         let Self { name } = self;
+
+        let valid_identifier_re = Regex::new(r"^[A-Za-z][A-Za-z0-9-_]*$")
+            .map_err(|_| anyhow!("Cannot build the regex needed to validate package naming"))?;
+
+        ensure!(
+            valid_identifier_re.is_match(&name),
+            "Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_)."
+        );
+
         let p: PathBuf;
         let path: &Path = match path {
             Some(path) => {
@@ -74,6 +87,8 @@ name = \"{name}\"
 [addresses]"
         )?;
         for (addr_name, addr_val) in addrs {
+            let addr_name = addr_name.to_string();
+            let addr_name = addr_name.trim().replace('-', "_");
             writeln!(w, "{addr_name} = \"{addr_val}\"")?;
         }
         if !custom.is_empty() {

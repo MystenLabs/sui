@@ -19,7 +19,7 @@ tempfile.workspace = true
 walkdir.workspace = true
 codespan-reporting.workspace = true
 toml_edit.workspace = true
-
+regex.workspace = true
 bcs.workspace = true
 
 move-bytecode-verifier.workspace = true

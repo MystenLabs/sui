@@ -14,3 +14,17 @@ name = "P2"
 [dependencies]
 
 [addresses]
+Command `new Move_Package-Test123`:
+External Command `cat Move_Package-Test123/Move.toml`:
+[package]
+name = "Move_Package-Test123"
+
+[dependencies]
+
+[addresses]
+Command `new _P`:
+Error: Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+Command `new P_!`:
+Error: Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).
+Command `new 1P`:
+Error: Invalid package naming: a valid package name must start with a letter and can contain only letters, digits, hyphens (-), or underscores (_).

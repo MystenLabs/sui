@@ -46,6 +46,7 @@ futures.workspace = true
 jsonrpsee.workspace = true
 rand.workspace = true
 tempfile.workspace = true
+datatest-stable.workspace = true
 
 move-package.workspace = true
 
@@ -54,6 +55,11 @@ sui-core.workspace = true
 sui-macros.workspace = true
 sui-node.workspace = true
 sui-simulator.workspace = true
+
+
+[[test]]
+name = "build_testsuite"
+harness = false
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]
