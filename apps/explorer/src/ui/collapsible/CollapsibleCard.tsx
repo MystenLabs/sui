@@ -70,6 +70,7 @@ export interface CollapsibleCardProps extends Omit<CardProps, 'size'> {
 	collapsible?: boolean;
 	size?: Size;
 	initialClose?: boolean;
+	growOnHover?: boolean;
 }
 
 export function CollapsibleCard({
@@ -79,12 +80,20 @@ export function CollapsibleCard({
 	size = 'md',
 	children,
 	initialClose,
+	growOnHover,
 	...cardProps
 }: CollapsibleCardProps) {
 	const [open, setOpen] = useState(!initialClose);
 	return (
 		<div className="relative w-full">
-			<Card rounded="2xl" border="gray45" bg="white" spacing="none" {...cardProps}>
+			<Card
+				rounded="2xl"
+				border="gray45"
+				bg="white"
+				spacing="none"
+				growOnHover={growOnHover && !open}
+				{...cardProps}
+			>
 				<Collapsible.Root
 					open={open}
 					onOpenChange={setOpen}

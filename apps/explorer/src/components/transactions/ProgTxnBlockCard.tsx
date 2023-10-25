@@ -32,7 +32,7 @@ export function ProgrammableTxnBlockCard({
 	const itemsToShow = defaultItemsToShow || items.length;
 
 	return (
-		<CollapsibleCard collapsible initialClose={initialClose} title={cardTitle}>
+		<CollapsibleCard growOnHover collapsible initialClose={initialClose} title={cardTitle}>
 			<ExpandableList items={items} defaultItemsToShow={itemsToShow} itemsLabel={itemsLabel}>
 				<div
 					className={clsx(
