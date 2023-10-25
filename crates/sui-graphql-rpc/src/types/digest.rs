@@ -12,10 +12,6 @@ pub(crate) const BASE58_DIGEST_LENGTH: usize = 32;
 pub(crate) struct Digest([u8; BASE58_DIGEST_LENGTH]);
 
 impl Digest {
-    pub fn into_array(self) -> [u8; BASE58_DIGEST_LENGTH] {
-        self.0
-    }
-
     pub fn into_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }

@@ -24,9 +24,6 @@ pub enum Command {
         path: PathBuf,
     },
     StartServer {
-        /// URL of the RPC server for data fetching
-        #[clap(short, long)]
-        rpc_url: Option<String>,
         /// DB URL for data fetching
         #[clap(short, long)]
         db_url: Option<String>,

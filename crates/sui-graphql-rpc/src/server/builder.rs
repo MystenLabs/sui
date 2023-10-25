@@ -3,12 +3,7 @@
 
 use crate::{
     config::ServerConfig,
-    context_data::{
-        data_provider::DataProvider,
-        db_data_provider::PgManager,
-        package_cache::PackageCache,
-        sui_sdk_data_provider::{lru_cache_data_loader, sui_sdk_client_v0},
-    },
+    context_data::{db_data_provider::PgManager, package_cache::PackageCache},
     error::Error,
     extensions::{
         feature_gate::FeatureGate,
@@ -54,11 +49,6 @@ impl Server {
         let mut builder =
             ServerBuilder::new(config.connection.port, config.connection.host.clone());
 
-        // TODO: remove rpc 1.0 dependency once DB work done
-        let sui_sdk_client_v0 = sui_sdk_client_v0(&config.connection.rpc_url).await;
-        let data_provider: Box<dyn DataProvider> = Box::new(sui_sdk_client_v0.clone());
-        let data_loader = lru_cache_data_loader(&sui_sdk_client_v0).await;
-
         let name_service_config = config.name_service.clone();
         let reader = PgManager::reader(config.connection.db_url.clone())
             .map_err(|e| Error::Internal(format!("Failed to create pg connection pool: {}", e)))?;
@@ -85,8 +75,6 @@ impl Server {
         builder = builder
             .max_query_depth(config.service.limits.max_query_depth)
             .max_query_nodes(config.service.limits.max_query_nodes)
-            .context_data(data_provider)
-            .context_data(data_loader)
             .context_data(pg_conn_pool)
             .context_data(package_cache)
             .context_data(name_service_config)
