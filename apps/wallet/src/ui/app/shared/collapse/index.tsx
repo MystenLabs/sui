@@ -11,7 +11,6 @@ interface CollapsibleProps {
 	defaultOpen?: boolean;
 	children: ReactNode | ReactNode[];
 	shade?: 'lighter' | 'darker';
-	isExternalControlled?: boolean;
 	isOpen?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 }
@@ -20,7 +19,6 @@ export function Collapsible({
 	title,
 	children,
 	defaultOpen,
-	isExternalControlled,
 	isOpen,
 	onOpenChange,
 	shade = 'lighter',
