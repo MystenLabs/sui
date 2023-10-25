@@ -15,16 +15,15 @@ use telemetry_subscribers::TelemetryGuards;
 use test_utils::{get_protocol_config, latest_protocol_version, mock_certificate};
 use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
-
-use crate::bullshark::Bullshark;
-use crate::consensus::{ConsensusRound, Dag, LeaderSchedule, LeaderSwapTable};
-use crate::metrics::ConsensusMetrics;
-use crate::Consensus;
-use crate::NUM_SHUTDOWN_RECEIVERS;
 use types::{
     Certificate, CertificateAPI, CommittedSubDag, HeaderAPI, PreSubscribedBroadcastSender,
     ReputationScores, Round,
 };
+
+use crate::consensus::{
+    Bullshark, Consensus, ConsensusMetrics, ConsensusRound, Dag, LeaderSchedule, LeaderSwapTable,
+};
+use crate::NUM_SHUTDOWN_RECEIVERS;
 
 /// This test is trying to compare the output of the Consensus algorithm when:
 /// (1) running without any crash for certificates processed from round 1 to 5 (inclusive)

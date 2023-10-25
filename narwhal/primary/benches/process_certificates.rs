@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus::{bullshark::Bullshark, consensus::ConsensusState, metrics::ConsensusMetrics};
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
 use fastcrypto::hash::Hash;
-use narwhal_consensus as consensus;
-use narwhal_consensus::consensus::{LeaderSchedule, LeaderSwapTable};
+use narwhal_primary::consensus::{
+    Bullshark, ConsensusMetrics, ConsensusState, LeaderSchedule, LeaderSwapTable,
+};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use storage::NodeStorage;

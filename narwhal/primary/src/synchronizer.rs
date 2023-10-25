@@ -1,9 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use anemo::{rpc::Status, Network, Request, Response};
 use config::{AuthorityIdentifier, Committee, Epoch, WorkerCache};
-use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash as _;
 use futures::{stream::FuturesOrdered, StreamExt};
@@ -43,7 +43,7 @@ use types::{
 
 use crate::{
     aggregators::CertificatesAggregator, certificate_fetcher::CertificateFetcherCommand,
-    metrics::PrimaryMetrics, PrimaryChannelMetrics, CHANNEL_CAPACITY,
+    consensus::ConsensusRound, metrics::PrimaryMetrics, PrimaryChannelMetrics, CHANNEL_CAPACITY,
 };
 
 #[cfg(test)]
