@@ -146,7 +146,7 @@ You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL
 *Add an Applications to Kakao*
 <p>&nbsp;</p>
 
-1. Go to "Add an application" and go to "App Keys" where you can find the corresponding client ID for different platforms. 
+1. Go to "App Keys" where you can find the corresponding client ID for different platforms. 
 
 - Native app key: Used to call APIs through the Android or iOS SDK.
 - JavaScript key: Used to call APIs through the JavaScript SDK.
@@ -156,7 +156,7 @@ You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL
 *Find Client ID*
 <p>&nbsp;</p>
 
-1. Toggle on OpenID Connect Activation and set the redirect URL under this [tab](https://developers.kakao.com/console/app/980365/product/login). This should be the wallet or application frontend.
+1. Toggle on "Kakao Login Activation" and "OpenID Connect Activation". Set the redirect URL in "Kakao Login" under "Product Settings". This should be the wallet or application frontend.
 
 ![1](../../static/zklogin-kakao3.png "Set Redirect URL")
 *Set Redirect URL*
@@ -164,12 +164,12 @@ You must configure the client ID (`$CLIENT_ID`) and redirect URL (`$REDIRECT_URL
 
 ### Slack
 
-1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and Go to "Create New App" then choose "From scratch". 
+1. Register for a Slack developer account. Access the [dashboard](https://api.slack.com/apps) and go to "Create New App" then choose "From scratch". 
 
 ![1](../../static/zklogin-slack1.png "Create app in Slack")
 *Create app in Slack*
 
-1. Find the client ID and client secret under "App Credentials". 
+1. Find the Client ID and Client Secret under "App Credentials". 
 
 ![1](../../static/zklogin-slack2.png "Find Client ID and Client Secret")
 *Find Client ID and Client Secret*
