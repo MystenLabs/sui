@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use consensus::consensus::LeaderSwapTable;
+use crate::consensus::LeaderSwapTable;
 use fastcrypto::{
     serde_helpers::ToFromByteArray,
     traits::{KeyPair, ToFromBytes},
@@ -40,6 +40,7 @@ async fn start_dkg() {
         &ChainIdentifier::unknown(),
         &protocol_config,
         committee,
+        primary.id(),
         randomness_private_key,
         leader_schedule,
         network,

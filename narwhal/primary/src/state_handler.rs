@@ -1,8 +1,8 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::consensus::LeaderSchedule;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee};
-use consensus::consensus::LeaderSchedule;
 use crypto::{RandomnessPartialSignature, RandomnessPrivateKey};
 use fastcrypto::groups;
 use fastcrypto_tbls::tbls::ThresholdBls;
@@ -71,13 +71,15 @@ struct RandomnessState {
     vss_key_output: Arc<OnceLock<PublicVssKey>>,
 
     // State for randomness generation.
+    authority_id: AuthorityIdentifier,
     leader_schedule: LeaderSchedule,
     network: anemo::Network,
     last_randomness_round_sent: Option<u64>,
     randomness_round: u64,
     last_narwhal_round_sent: Round,
     narhwal_round: Round,
-    partial_sigs: BTreeMap<AuthorityIdentifier, Vec<RandomnessPartialSignature>>,
+    // Partial sig storage is keyed on (randomness round, authority ID).
+    partial_sigs: BTreeMap<(u64, AuthorityIdentifier), Vec<RandomnessPartialSignature>>,
     partial_sig_sender: Option<JoinHandle<()>>,
 }
 
@@ -89,6 +91,7 @@ impl RandomnessState {
         chain: &ChainIdentifier,
         protocol_config: &ProtocolConfig,
         committee: Committee,
+        authority_id: AuthorityIdentifier,
         private_key: RandomnessPrivateKey,
         leader_schedule: LeaderSchedule,
         network: anemo::Network,
@@ -149,6 +152,7 @@ impl RandomnessState {
             confirmations: Vec::new(),
             dkg_output: None,
             vss_key_output,
+            authority_id,
             leader_schedule,
             network,
             last_randomness_round_sent: None,
@@ -239,31 +243,34 @@ impl RandomnessState {
                         "random beacon: DKG complete with Output {:?}",
                         self.dkg_output
                     );
-                    // Begin randomenss generation.
-                    self.send_partial_signatures();
                 }
                 Err(fastcrypto::error::FastCryptoError::NotEnoughInputs) => (), // wait for more input
                 Err(e) => error!("Error while processing randomness DKG confirmations: {e:?}"),
             }
+            // Begin randomness generation.
+            if self.dkg_output.is_some() {
+                self.send_partial_signatures().await;
+            }
         }
     }
 
-    fn update_narwhal_round(&mut self, round: Round) {
+    async fn update_narwhal_round(&mut self, round: Round) {
         self.narhwal_round = round;
         let next_leader_narwhal_round = round + (round % 2);
         // Re-send partial signatures to new leader, in case the last one failed.
         if self.dkg_output.is_some() && (next_leader_narwhal_round > self.last_narwhal_round_sent) {
-            self.send_partial_signatures();
+            self.send_partial_signatures().await;
         }
     }
 
-    fn update_randomness_round(&mut self, round: u64) {
+    async fn update_randomness_round(&mut self, round: u64) {
         self.randomness_round = round;
-        self.partial_sigs.clear();
-        self.send_partial_signatures();
+        self.partial_sigs
+            .retain(|&(round, _), _| round >= self.randomness_round);
+        self.send_partial_signatures().await;
     }
 
-    fn send_partial_signatures(&mut self) {
+    async fn send_partial_signatures(&mut self) {
         let dkg_output = match &self.dkg_output {
             Some(dkg_output) => dkg_output,
             None => {
@@ -287,6 +294,13 @@ impl RandomnessState {
         self.last_narwhal_round_sent = next_leader_narwhal_round;
 
         let leader = self.leader_schedule.leader(next_leader_narwhal_round);
+        if self.authority_id == leader.id() {
+            // We're the next leader, no need to send an RPC.
+            self.receive_partial_signatures(self.authority_id, self.randomness_round, sigs)
+                .await;
+            return;
+        }
+
         let peer_id = anemo::PeerId(leader.network_key().0.to_bytes());
         let peer = self.network.waiting_peer(peer_id);
         let mut client = PrimaryToPrimaryClient::new(peer);
@@ -327,8 +341,19 @@ impl RandomnessState {
                 return;
             }
         };
-        if round != self.randomness_round {
-            debug!("random beacon: ignoring partial signatures for non-matching round {round} (we are at {})", self.randomness_round);
+        const MAX_ROUND_DELTA: u64 = 2;
+        if round < self.randomness_round {
+            debug!(
+                "random beacon: ignoring partial signatures for old round {round} (we are at {})",
+                self.randomness_round
+            );
+            return;
+        }
+        if round > self.randomness_round + MAX_ROUND_DELTA {
+            debug!(
+                "random beacon: ignoring partial signatures for too-new round {round} (we are at {})",
+                self.randomness_round
+            );
             return;
         }
         if let Some(last_sent) = self.last_randomness_round_sent {
@@ -345,9 +370,13 @@ impl RandomnessState {
             sigs.as_slice(),
             &mut rand::thread_rng(),
         ) {
-            debug!("random beacon: ignoring partial signatures with verification error: {e:?}");
+            debug!("random beacon: ignoring partial signatures from authority {authority_id} for round {round} with verification error: {e:?}");
         }
-        if self.partial_sigs.insert(authority_id, sigs).is_some() {
+        if self
+            .partial_sigs
+            .insert((round, authority_id), sigs)
+            .is_some()
+        {
             debug!("random beacon: replacing existing partial signatures from authority {authority_id} for round {round}");
         }
 
@@ -359,8 +388,9 @@ impl RandomnessState {
             // all the extra copying?
             &self
                 .partial_sigs
-                .values()
-                .flatten()
+                .iter()
+                .filter(|&((round, _), _)| *round == self.randomness_round)
+                .flat_map(|(_, sigs)| sigs)
                 .cloned()
                 .collect::<Vec<_>>(),
         ) {
@@ -379,7 +409,6 @@ impl RandomnessState {
             ))
             .await;
         self.last_randomness_round_sent = Some(self.randomness_round);
-        self.partial_sigs.clear();
     }
 }
 
@@ -416,6 +445,7 @@ impl StateHandler {
                 chain,
                 protocol_config,
                 committee,
+                authority_id,
                 randomness_private_key,
                 leader_schedule,
                 network.clone(),
@@ -466,11 +496,11 @@ impl StateHandler {
                             randomness_state.add_confirmation(conf.clone())
                         }
                         SystemMessage::RandomnessSignature(round, _sig) => {
-                            randomness_state.update_randomness_round(round + 1);
+                            randomness_state.update_randomness_round(round + 1).await;
                         }
                     }
                 }
-                // Advance the random beacon protocol if possible after each certificate.
+                // Advance the random beacon DKG protocol if possible after each certificate.
                 // TODO: Implement/audit crash recovery for random beacon.
                 randomness_state.advance_dkg().await;
             }
@@ -505,7 +535,7 @@ impl StateHandler {
 
                 Some(round) = self.rx_narwhal_round_updates.next() => {
                     if let Some(randomness_state) = self.randomness_state.as_mut() {
-                        randomness_state.update_narwhal_round(round);
+                        randomness_state.update_narwhal_round(round).await;
                     }
                 }
 

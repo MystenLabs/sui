@@ -28,7 +28,6 @@ use anemo_tower::{
 };
 use async_trait::async_trait;
 use config::{Authority, AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use consensus::consensus::{ConsensusRound, LeaderSchedule};
 use crypto::{traits::EncodeDecodeBase64, RandomnessPartialSignature, RandomnessPrivateKey};
 use crypto::{KeyPair, NetworkKeyPair, NetworkPublicKey, Signature};
 use fastcrypto::{
