@@ -26,7 +26,6 @@ async fn main() {
             }
         }
         Command::StartServer {
-            rpc_url,
             db_url,
             port,
             host,
@@ -34,7 +33,7 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
-            let conn = ConnectionConfig::new(port, host, rpc_url, db_url, prom_host, prom_port);
+            let conn = ConnectionConfig::new(port, host, db_url, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
