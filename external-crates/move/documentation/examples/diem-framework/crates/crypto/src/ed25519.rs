@@ -62,9 +62,6 @@ const L: [u8; 32] = [
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
 pub struct Ed25519PrivateKey(ed25519_dalek::SecretKey);
 
-#[cfg(feature = "assert-private-keys-not-cloneable")]
-static_assertions::assert_not_impl_any!(Ed25519PrivateKey: Clone);
-
 #[cfg(any(test, feature = "cloneable-private-keys"))]
 impl Clone for Ed25519PrivateKey {
     fn clone(&self) -> Self {
