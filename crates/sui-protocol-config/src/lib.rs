@@ -83,7 +83,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 // Version 30: Enable Narwhal CertificateV2
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
-
+//             Deprecate supported oauth providers from protocol config and rely on node config instead.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -172,7 +172,7 @@ impl SupportedProtocolVersions {
     }
 }
 
-#[derive(Clone, Serialize, Debug, PartialEq, Copy)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq)]
 pub enum Chain {
     Mainnet,
     Testnet,
@@ -1596,6 +1596,11 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.enable_effects_v2 = true;
                     }
+
+                    // zklogin_supported_providers config is deprecated, zklogin
+                    // signature verifier will use the fetched jwk map to determine
+                    // whether the provider is supported based on node config.
+                    cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
                 }
                 // Use this template when making changes:
                 //
@@ -1660,9 +1665,6 @@ impl ProtocolConfig {
 
     pub fn set_consensus_bad_nodes_stake_threshold(&mut self, val: u64) {
         self.consensus_bad_nodes_stake_threshold = Some(val);
-    }
-    pub fn set_zklogin_supported_providers(&mut self, list: BTreeSet<String>) {
-        self.feature_flags.zklogin_supported_providers = list
     }
     pub fn set_receive_object_for_testing(&mut self, val: bool) {
         self.feature_flags.receive_objects = val

@@ -111,13 +111,15 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             return Err(SuiError::InvalidAddress);
         }
 
-        if !aux_verify_data.supported_providers.contains(
-            &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
-                SuiError::InvalidSignature {
-                    error: "Unknown provider".to_string(),
-                }
-            })?,
-        ) {
+        if !aux_verify_data.supported_providers.is_empty()
+            && !aux_verify_data.supported_providers.contains(
+                &OIDCProvider::from_iss(self.inputs.get_iss()).map_err(|_| {
+                    SuiError::InvalidSignature {
+                        error: "Unknown provider".to_string(),
+                    }
+                })?,
+            )
+        {
             return Err(SuiError::InvalidSignature {
                 error: format!("OIDC provider not supported: {}", self.inputs.get_iss()),
             });
