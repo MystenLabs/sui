@@ -78,6 +78,7 @@ struct RandomnessState {
     last_narwhal_round_sent: Round,
     narhwal_round: Round,
     partial_sigs: BTreeMap<AuthorityIdentifier, Vec<RandomnessPartialSignature>>,
+    partial_sig_sender: Option<JoinHandle<()>>,
 }
 
 impl RandomnessState {
@@ -155,6 +156,7 @@ impl RandomnessState {
             last_narwhal_round_sent: 0,
             narhwal_round: 0,
             partial_sigs: BTreeMap::new(),
+            partial_sig_sender: None,
         })
     }
 
@@ -295,8 +297,11 @@ impl RandomnessState {
         })
         .with_timeout(SEND_PARTIAL_SIGNATURES_TIMEOUT);
 
-        // TODO: Consider canceling previous oustanding task to send sigs when a new one is started.
-        spawn_logged_monitored_task!(
+        if let Some(task) = &self.partial_sig_sender {
+            // Cancel previous partial signature transmission if it's not yet complete.
+            task.abort();
+        }
+        self.partial_sig_sender = Some(spawn_logged_monitored_task!(
             async move {
                 let resp = client.send_randomness_partial_signatures(request).await;
                 if let Err(e) = resp {
@@ -306,7 +311,7 @@ impl RandomnessState {
                 }
             },
             "RandomnessSendPartialSignatures"
-        );
+        ));
     }
 
     async fn receive_partial_signatures(
@@ -323,7 +328,7 @@ impl RandomnessState {
             }
         };
         if round != self.randomness_round {
-            debug!("random beacon: ignoring partial signatures for non-matching round {round}");
+            debug!("random beacon: ignoring partial signatures for non-matching round {round} (we are at {})", self.randomness_round);
             return;
         }
         if let Some(last_sent) = self.last_randomness_round_sent {
@@ -485,15 +490,28 @@ impl StateHandler {
 
         loop {
             tokio::select! {
-                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
-                    self.handle_sequenced(commit_round, certificates).await;
-                },
+                biased;
+
+                _ = self.rx_shutdown.receiver.recv() => {
+                    // shutdown network
+                    let _ = self.network.shutdown().await.tap_err(|err|{
+                        error!("Error while shutting down network: {err}")
+                    });
+
+                    warn!("Network has shutdown");
+
+                    return;
+                }
 
                 Some(round) = self.rx_narwhal_round_updates.next() => {
                     if let Some(randomness_state) = self.randomness_state.as_mut() {
                         randomness_state.update_narwhal_round(round);
                     }
                 }
+
+                Some((commit_round, certificates)) = self.rx_committed_certificates.recv() => {
+                    self.handle_sequenced(commit_round, certificates).await;
+                },
 
                 Some(
                     (authority_id, round, sigs)
@@ -505,17 +523,6 @@ impl StateHandler {
                             sigs
                         ).await;
                     }
-                }
-
-                _ = self.rx_shutdown.receiver.recv() => {
-                    // shutdown network
-                    let _ = self.network.shutdown().await.tap_err(|err|{
-                        error!("Error while shutting down network: {err}")
-                    });
-
-                    warn!("Network has shutdown");
-
-                    return;
                 }
             }
         }
