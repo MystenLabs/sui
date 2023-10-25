@@ -309,11 +309,12 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter<'a> {
         view_resource_in_move_storage(&self.storage, address, module, resource, type_args)
     }
 
+    #[allow(clippy::diverging_sub_expression)]
     async fn handle_subcommand(
         &mut self,
         _: TaskInput<Self::Subcommand>,
     ) -> Result<Option<String>> {
-        unreachable!()
+        unimplemented!()
     }
 }
 

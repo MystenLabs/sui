@@ -7,16 +7,16 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-move-core-types = { path = "../../move-core/types" }
-move-ir-types = { path = "../../move-ir/types" }
-move-symbol-pool = { path = "../../move-symbol-pool" }
-move-binary-format = { path = "../../move-binary-format" }
-move-command-line-common = { path = "../../move-command-line-common" }
+anyhow.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-symbol-pool.workspace = true
+move-binary-format.workspace = true
+move-command-line-common.workspace = true
 
 bcs.workspace = true
 
-serde = { version = "1.0.124", default-features = false }
+serde.workspace = true
 
 [features]
 default = []

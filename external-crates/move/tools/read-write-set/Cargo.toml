@@ -10,11 +10,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.52"
-move-binary-format = { path = "../../move-binary-format" }
-move-bytecode-utils = { path = "../move-bytecode-utils" }
-move-core-types = { path = "../../move-core/types" }
-move-model = { path = "../../move-model" }
-prover_bytecode = { path = "../../move-prover/bytecode", package="move-stackless-bytecode" }
-move-read-write-set-types = { path = "types" }
-read-write-set-dynamic = { path = "dynamic" }
+anyhow.workspace = true
+move-binary-format.workspace = true
+move-bytecode-utils.workspace = true
+move-core-types.workspace = true
+move-model.workspace = true
+prover_bytecode.workspace = true
+move-read-write-set-types.workspace = true
+read-write-set-dynamic.workspace = true

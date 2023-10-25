@@ -21,7 +21,7 @@ pub fn verify_or_update_baseline(baseline_file_name: &Path, text: &str) -> anyho
                 fs::create_dir_all(parent)?;
             }
             let clean_text = clean_for_baseline(text);
-            fs::write(baseline_file_name, &clean_text)?;
+            fs::write(baseline_file_name, clean_text)?;
         } else if baseline_file_name.exists() {
             fs::remove_file(baseline_file_name)?;
         }

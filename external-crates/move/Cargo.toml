@@ -70,31 +70,161 @@ members = [
     "tools/read-write-set/types",
 ]
 
-# NOTE: default-members is the complete list of binaries that form the "production Move codebase". These members should
-# never include crates that require fuzzing features or test features. These are the crates we want built with no extra
-# test-only code included.
-#
-# For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
-default-members = [
-    "move-analyzer",
-    "move-ir-compiler",
-    "move-prover",
-    "move-prover/lab",
-    "move-prover/mutation",
-    "move-prover/tools/spec-flatten",
-    "move-compiler",
-    "move-stdlib",
-    "tools/move-disassembler",
-    "tools/move-bytecode-viewer",
-    "tools/move-cli",
-    "tools/move-coverage",
-    "tools/move-unit-test",
-]
-
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
+treeline = "0.1.0"
+named-lock = "0.2.0"
+move-bytecode-viewer = { path = "tools/move-bytecode-viewer" }
+aes-gcm = "0.8.0"
+anyhow = "1.0.52"
+arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
+libfuzzer-sys = "0.4"
 bcs = "0.1.4"
+bitvec = "0.19.4"
+byteorder = "1.4.3"
+prover_bytecode = { path = "move-prover/bytecode", package="move-stackless-bytecode" }
+read-write-set-dynamic = { path = "tools/read-write-set/dynamic" }
+bytes = "1.0.1"
 clap = { version = "4", features = ["derive"] }
+module-generation = { path = "testing-infra/module-generation" }
+rayon = "1.5.0"
+codespan-reporting = "0.11.1"
+criterion = "0.3.4"
+criterion-cpu-time = "0.1.0"
+crossbeam = "0.8"
+curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
+datatest-stable = "0.1.1"
+derivative = "2.2.0"
+diem-crypto = { path = "documentation/examples/diem-framework/crates/crypto" }
+diem-crypto-derive = { path = "documentation/examples/diem-framework/crates/crypto-derive" }
+diem-framework-natives = { path = "documentation/examples/diem-framework/crates/natives" }
+digest = "0.9.0"
+dunce = "1.0.2"
+ed25519-dalek = { version = "0.1.0", package = "ed25519-dalek-fiat", default-features = false, features = ["std", "serde", "u64_backend"] }
+enum-compat-util = { path = "testing-infra/enum-compat-util"}
+getrandom = "0.2.9"
+crossbeam-channel = "0.5.0"
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+hex = "0.4.3"
+hex-literal = "0.3.4"
+hkdf = "0.10.0"
+im = "15.1.0"
+invalid-mutations = { path = "move-bytecode-verifier/invalid-mutations" }
+move-unit-test = { path = "tools/move-unit-test" }
+move-prover = { path = "move-prover" }
+z3tracer = "0.8.0"
+chrono = "0.4.19"
+plotters = { version = "0.3.0", default_features = false, features = ["evcxr", "line_series", "histogram"]}
+heck = "0.3.2"
+bytecode-interpreter-crypto = { path = "move-prover/interpreter/crypto" }
+lsp-server = "0.5.1"
+lsp-types = "0.90.1"
+mirai-annotations = "1.10.1"
+move-abstract-stack = { path = "move-abstract-stack" }
+move-binary-format = { path = "move-binary-format" }
+move-borrow-graph = { path = "move-borrow-graph" }
+move-cli = { path = "tools/move-cli" }
+move-command-line-common = { path = "move-command-line-common" }
+move-transactional-test-runner = { path = "testing-infra/transactional-test-runner" }
+better_any = "0.1.1"
+parking_lot = "0.11.1"
+tracing = "0.1.26"
+serde_yaml = "0.8.26"
+move-ir-compiler = { path = "move-ir-compiler" }
+move-compiler = { path = "move-compiler" }
+move-core-types = { path = "move-core/types" }
+move-ir-types = { path = "move-ir/types" }
+move-package = { path = "tools/move-package" }
+move-proc-macros = { path = "testing-infra/move-proc-macros"}
+move-stdlib = { path = "move-stdlib" }
+move-symbol-pool = { path = "move-symbol-pool" }
+move-vm-config = { path = "move-vm/config" }
+move-vm-runtime = { path = "move-vm/runtime" }
+move-vm-test-utils = { path = "move-vm/test-utils" }
+move-vm-types = { path = "move-vm/types" }
+move-ir-to-bytecode = { path = "move-ir-compiler/move-ir-to-bytecode" }
+move-bytecode-source-map = { path = "move-ir-compiler/move-bytecode-source-map" }
+once_cell = "1.7.2"
+petgraph = "0.5.1"
+proc-macro2 = "1.0.24"
+proptest = "1.0.0"
+proptest-derive = "0.3.0"
+quote = "1.0.9"
+rand = "0.8.0"
+ref-cast = "1.0.6"
+ripemd160 = "0.9.1"
+move-disassembler = { path = "tools/move-disassembler" }
+move-resource-viewer = { path = "tools/move-resource-viewer" }
+serde-reflection = "0.3.2"
+tui = "0.17.0"
+colored = "2.0.0"
+toml_edit =  { version = "0.14.3", features = ["easy"] }
+crossterm = "0.21"
+serde = { version = "1.0.124", features = ["derive"] }
+serde-name = "0.1.1"
+serde_bytes = "0.11.5"
+serde_json = "1.0.64"
+sha2 = "0.9.3"
+sha3 = "0.9.1"
+smallvec = "1.6.1"
+static_assertions = "1.1.0"
+num_cpus = "1.13.0"
+syn = { version = "1.0.64", features = ["derive"] }
+tempfile = "3.2.0"
+thiserror = "1.0.24"
+tiny-keccak = { version = "2.0.2", features = ["sha3"] }
+url = "2.2.2"
+variant_count = "1.1.0"
+x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
+
+fail = "0.4.0"
+
+move-bytecode-utils = { path = "tools/move-bytecode-utils" }
+move-coverage = { path = "tools/move-coverage" }
+
+move-bytecode-verifier = { path = "move-bytecode-verifier" }
+difference = "2.0.0"
+walkdir = "2.3.1"
+num-bigint = "0.4.0"
+dirs-next = "2.0.0"
+regex = "1.5.5"
+primitive-types = { version = "0.10.1", features = ["impl-serde"]}
+move-ir-to-bytecode-syntax = { path = "move-ir-compiler/move-ir-to-bytecode/syntax" }
+log = { version = "0.4.14", features = ["serde"] }
+prettydiff = "0.4.0"
+codespan = "0.11.1"
+internment = { version = "0.5.0", features = [ "arc"] }
+itertools = "0.10.0"
+move-prover-test-utils = { path = "move-prover/test-utils" }
+move-prover-boogie-backend = { path = "move-prover/boogie-backend" }
+move-model = { path = "move-model" }
+simplelog = "0.9.0"
+toml = "0.5.8"
+shell-words = "1.0.0"
+async-trait = "0.1.42"
+pretty = "0.10.0"
+futures = "0.3.12"
+paste = "1.0.5"
+move-read-write-set-types = { path = "tools/read-write-set/types" }
+read-write-set = { path = "tools/read-write-set" }
+move-stackless-bytecode-interpreter = { path = "move-prover/interpreter" }
+tera = "1.16.0"
+tokio = { version = "1.18.2", features = ["full"] }
+move-docgen = { path = "move-prover/move-docgen" }
+dir-diff = "0.3.2"
+file_diff = "1.0.0"
+phf = { version = "0.11", features = ["macros"] }
+memory-stats = "1.0.0"
+move-abigen = { path = "move-prover/move-abigen" }
+whoami = { version = "1.2.1" }
+move-errmapgen = { path = "move-prover/move-errmapgen" }
+move-stackless-bytecode = { path = "move-prover/bytecode" }
+ouroboros = "0.17.2"
+uint = "0.9.4"
+num = "0.4.0"
+ethnum = "1.0.4"
+
+move-vm-profiler = { path = "move-vm/profiler" }
 
 [profile.bench]
 debug = true

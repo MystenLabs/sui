@@ -9,8 +9,8 @@ license = "Apache-2.0"
 [dependencies]
 
 # external dependencies
-anyhow = "1.0.52"
-curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
-ed25519-dalek = { version = "0.1.0", package = "ed25519-dalek-fiat", default-features = false, features = ["std", "serde", "u64_backend"] }
-sha2 = "0.9.3"
-sha3 = "0.9.1"
+anyhow.workspace = true
+curve25519-dalek.workspace = true
+ed25519-dalek.workspace = true
+sha2.workspace = true
+sha3.workspace = true
