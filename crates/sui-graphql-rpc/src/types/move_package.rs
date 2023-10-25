@@ -5,9 +5,8 @@ use super::move_module::MoveModule;
 use super::object::Object;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
 use crate::error::code::INTERNAL_SERVER_ERROR;
-use crate::error::graphql_error;
+use crate::error::{graphql_error, Error};
 use async_graphql::connection::{Connection, Edge};
-use async_graphql::Error;
 use async_graphql::*;
 use move_binary_format::CompiledModule;
 use sui_types::object::Object as NativeSuiObject;
@@ -24,8 +23,9 @@ pub(crate) struct MovePackage {
 #[allow(unused_variables)]
 #[Object]
 impl MovePackage {
-    async fn module(&self, name: String) -> Result<Option<MoveModule>, Error> {
-        let identifier = Identifier::new(name).map_err(|e| Error::new(e.to_string()))?;
+    async fn module(&self, name: String) -> Result<Option<MoveModule>> {
+        let identifier = Identifier::new(name).map_err(|e| Error::Internal(e.to_string()))?;
+
         let module = self.native_object.data.try_as_package().map(|x| {
             x.deserialize_module(
                 &identifier,

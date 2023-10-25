@@ -6,8 +6,8 @@ use super::move_value::MoveValue;
 use super::stake::StakeStatus;
 use super::{coin::Coin, object::Object};
 use crate::context_data::db_data_provider::PgManager;
+use crate::error::Error;
 use crate::types::stake::Stake;
-use async_graphql::Error;
 use async_graphql::*;
 use move_core_types::language_storage::TypeTag;
 use sui_types::governance::StakedSui;
@@ -22,7 +22,7 @@ pub(crate) struct MoveObject {
 #[allow(unused_variables)]
 #[Object]
 impl MoveObject {
-    async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>, Error> {
+    async fn contents(&self, ctx: &Context<'_>) -> Result<Option<MoveValue>> {
         let resolver = ctx.data_unchecked::<PgManager>();
 
         if let Some(struct_tag) = self.native_object.data.struct_tag() {
@@ -33,7 +33,7 @@ impl MoveObject {
                     .data
                     .try_as_move()
                     .ok_or_else(|| {
-                        crate::error::Error::Internal(format!(
+                        Error::Internal(format!(
                             "Failed to convert native object to move object: {}",
                             self.native_object.id()
                         ))
@@ -72,14 +72,14 @@ impl MoveObject {
     }
 
     // TODO implement this properly, it is missing estimate reward
-    async fn as_stake(&self, ctx: &Context<'_>) -> Result<Option<Stake>, Error> {
+    async fn as_stake(&self, ctx: &Context<'_>) -> Result<Option<Stake>> {
         let stake =
-            StakedSui::try_from(&self.native_object).map_err(|e| Error::new(e.to_string()))?;
+            StakedSui::try_from(&self.native_object).map_err(|e| Error::Internal(e.to_string()))?;
         let latest_system_state = ctx
             .data_unchecked::<PgManager>()
             .fetch_latest_sui_system_state()
             .await
-            .map_err(|e| Error::new(e.to_string()))?;
+            .map_err(|e| Error::Internal(e.to_string()))?;
         let current_epoch_id = latest_system_state.epoch_id;
         let status = if current_epoch_id >= stake.activation_epoch() {
             StakeStatus::Active
