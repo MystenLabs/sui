@@ -19,14 +19,14 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 pub struct KVStoreMetrics {
-    pub latest_checkpoint_uploaded_to_kv_store: IntGauge,
+    pub latest_checkpoint_uploaded_to_kv_store_backfill: IntGauge,
 }
 
 impl KVStoreMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
-            latest_checkpoint_uploaded_to_kv_store: register_int_gauge_with_registry!(
-                "latest_checkpoint_uploaded_to_kv_store",
+            latest_checkpoint_uploaded_to_kv_store_backfill: register_int_gauge_with_registry!(
+                "latest_checkpoint_uploaded_to_kv_store_backfill",
                 "Latest checkpoint to have been uploaded to the remote key value store",
                 registry
             )
@@ -108,7 +108,7 @@ async fn upload_to_kv_store(
                     }
                     client.update_state(checkpoint_number).await?;
                     metrics
-                        .latest_checkpoint_uploaded_to_kv_store
+                        .latest_checkpoint_uploaded_to_kv_store_backfill
                         .set(checkpoint_number as i64);
                 }
             }
@@ -181,21 +181,19 @@ pub async fn uploader(
                             ));
                         }
                     }
+                    client.verify(KVTable::Transactions, transactions).await?;
+                    client.verify(KVTable::Effects, effects).await?;
+                    client.verify(KVTable::Events, events).await?;
+                    client.verify(KVTable::Objects, objects).await?;
                     client
-                        .multi_set(KVTable::Transactions, transactions)
-                        .await?;
-                    client.multi_set(KVTable::Effects, effects).await?;
-                    client.multi_set(KVTable::Events, events).await?;
-                    client.multi_set(KVTable::Objects, objects).await?;
-                    client
-                        .multi_set(KVTable::TransactionToCheckpoint, transactions_to_checkpoint)
+                        .verify(KVTable::TransactionToCheckpoint, transactions_to_checkpoint)
                         .await?;
 
                     let serialized_checkpoint_number = bcs::to_bytes(
                         &TaggedKey::CheckpointSequenceNumber(checkpoint_summary.sequence_number),
                     )?;
                     client
-                        .multi_set(
+                        .verify(
                             KVTable::CheckpointSummary,
                             [
                                 serialized_checkpoint_number.clone(),

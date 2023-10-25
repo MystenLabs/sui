@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use aws_sdk_dynamodb as dynamodb;
 use aws_sdk_dynamodb::config::{Credentials, Region};
 use aws_sdk_dynamodb::primitives::Blob;
-use aws_sdk_dynamodb::types::{AttributeValue, PutRequest, WriteRequest};
+use aws_sdk_dynamodb::types::{AttributeValue, KeysAndAttributes, PutRequest, WriteRequest};
 use aws_sdk_s3 as s3;
 use serde::Serialize;
 use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use sui_config::node::TransactionKeyValueStoreWriteConfig;
 
 #[derive(Hash, Eq, PartialEq, Debug, Copy, Clone)]
@@ -24,7 +24,7 @@ pub enum KVTable {
     State,
 }
 
-const UPLOAD_PROGRESS_KEY: [u8; 1] = [0];
+const UPLOAD_PROGRESS_KEY: [u8; 12] = [118, 101, 114, 105, 102, 105, 99, 97, 116, 105, 111, 110];
 
 #[async_trait]
 pub trait KVWriteClient {
@@ -32,6 +32,11 @@ pub trait KVWriteClient {
         &mut self,
         table: KVTable,
         values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send,
+    ) -> anyhow::Result<()>;
+    async fn verify<V: Serialize>(
+        &mut self,
+        table: KVTable,
+        values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send + Clone,
     ) -> anyhow::Result<()>;
     async fn get_state(&self) -> anyhow::Result<Option<u64>>;
     async fn update_state(&mut self, value: u64) -> anyhow::Result<()>;
@@ -126,8 +131,10 @@ impl KVWriteClient for DynamoDbClient {
         if items.is_empty() {
             return Ok(());
         }
-        for chunk in items.chunks(25) {
-            self.dynamo_client
+        let mut queue: VecDeque<Vec<_>> = items.chunks(25).map(|ck| ck.to_vec()).collect();
+        while let Some(chunk) = queue.pop_front() {
+            let response = self
+                .dynamo_client
                 .batch_write_item()
                 .set_request_items(Some(HashMap::from([(
                     self.table_name.clone(),
@@ -135,6 +142,66 @@ impl KVWriteClient for DynamoDbClient {
                 )])))
                 .send()
                 .await?;
+
+            if let Some(response) = response.unprocessed_items {
+                if let Some(unprocessed) = response.into_iter().next() {
+                    if !unprocessed.1.is_empty() {
+                        queue.push_back(unprocessed.1);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn verify<V: Serialize>(
+        &mut self,
+        table: KVTable,
+        values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send + Clone,
+    ) -> anyhow::Result<()> {
+        let backup_values = values.clone();
+        let mut items = vec![];
+        let mut seen = HashSet::new();
+        for (digest, _value) in values {
+            if seen.contains(&digest) {
+                continue;
+            }
+            seen.insert(digest.clone());
+            items.push(digest);
+        }
+        if items.is_empty() {
+            return Ok(());
+        }
+        for chunk in items.chunks(25) {
+            let mut query = KeysAndAttributes::builder();
+            let expected_count = chunk.len();
+            for digest in chunk {
+                query = query.keys(HashMap::from([
+                    (
+                        "digest".to_string(),
+                        AttributeValue::B(Blob::new(digest.clone())),
+                    ),
+                    (
+                        "type".to_string(),
+                        AttributeValue::S(Self::type_name(table)),
+                    ),
+                ]));
+            }
+            let response = self
+                .dynamo_client
+                .batch_get_item()
+                .request_items(self.table_name.clone(), query.build())
+                .send()
+                .await?;
+
+            if let Some(response) = response.responses {
+                if let Some(data) = response.into_iter().next() {
+                    if data.1.len() != expected_count {
+                        eprintln!("missing entries for table {:?} values {:?}", table, chunk);
+                        return self.multi_set(table, backup_values).await;
+                    }
+                }
+            }
         }
         Ok(())
     }
