@@ -347,6 +347,91 @@ module deepbook::clob_v2 {
         )
     }
 
+    fun create_pool_with_return_<BaseAsset, QuoteAsset>(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Balance<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        let base_type_name = type_name::get<BaseAsset>();
+        let quote_type_name = type_name::get<QuoteAsset>();
+
+        assert!(clob_math::unsafe_mul(lot_size, tick_size) > 0, EInvalidTickSizeLotSize);
+        assert!(base_type_name != quote_type_name, EInvalidPair);
+        assert!(taker_fee_rate >= maker_rebate_rate, EInvalidFeeRateRebateRate);
+
+        let pool_uid = object::new(ctx);
+        let pool_id = *object::uid_as_inner(&pool_uid);
+    
+        event::emit(PoolCreated {
+            pool_id,
+            base_asset: base_type_name,
+            quote_asset: quote_type_name,
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+        });
+        Pool<BaseAsset, QuoteAsset> {
+                id: pool_uid,
+                bids: critbit::new(ctx),
+                asks: critbit::new(ctx),
+                next_bid_order_id: MIN_BID_ORDER_ID,
+                next_ask_order_id: MIN_ASK_ORDER_ID,
+                usr_open_orders: table::new(ctx),
+                taker_fee_rate,
+                maker_rebate_rate,
+                tick_size,
+                lot_size,
+                base_custodian: custodian::new<BaseAsset>(ctx),
+                quote_custodian: custodian::new<QuoteAsset>(ctx),
+                creation_fee,
+                base_asset_trading_fees: balance::zero(),
+                quote_asset_trading_fees: balance::zero(),
+            }
+    }
+
+    public fun create_pool_with_return<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+        create_customized_pool_with_return<BaseAsset, QuoteAsset>(
+            tick_size,
+            lot_size,
+            REFERENCE_TAKER_FEE_RATE,
+            REFERENCE_MAKER_REBATE_RATE,
+            creation_fee,
+            ctx,
+        )
+    }
+
+    // Function for creating pool with customized taker fee rate and maker rebate rate.
+    // The taker_fee_rate should be greater than or equal to the maker_rebate_rate, and both should have a scaling of 10^9.
+    // Taker_fee_rate of 0.25% should be 2_500_000 for example
+    public fun create_customized_pool_with_return<BaseAsset, QuoteAsset>(
+        tick_size: u64,
+        lot_size: u64,
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        creation_fee: Coin<SUI>,
+        ctx: &mut TxContext,
+    ) : Pool<BaseAsset, QuoteAsset> {
+        assert!(coin::value(&creation_fee) == FEE_AMOUNT_FOR_CREATE_POOL, EInvalidFee);
+        create_pool_with_return_<BaseAsset, QuoteAsset>(
+            taker_fee_rate,
+            maker_rebate_rate,
+            tick_size,
+            lot_size,
+            coin::into_balance(creation_fee),
+            ctx
+        )
+    }
+
     public fun deposit_base<BaseAsset, QuoteAsset>(
         pool: &mut Pool<BaseAsset, QuoteAsset>,
         coin: Coin<BaseAsset>,
