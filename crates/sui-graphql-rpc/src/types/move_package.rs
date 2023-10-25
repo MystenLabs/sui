@@ -28,7 +28,7 @@ struct Linkage {
     /// The ID on-chain of the first version of the dependency.
     original_id: SuiAddress,
 
-    /// The ID on-chain of the version of the depedency that this package depends on.
+    /// The ID on-chain of the version of the dependency that this package depends on.
     upgraded_id: SuiAddress,
 
     /// The version of the dependency that this package depends on.
