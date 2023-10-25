@@ -20,7 +20,7 @@ use move_compiler::shared::NumericalAddress;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use simplelog::{
-    CombinedLogger, Config, ConfigBuilder, LevelPadding, SimpleLogger, TermLogger, TerminalMode,
+    CombinedLogger, Config, ConfigBuilder, LevelPadding, SimpleLogger
 };
 
 use codespan_reporting::diagnostic::Severity;
@@ -849,15 +849,7 @@ impl Options {
             .set_time_level(LevelFilter::Debug)
             .set_level_padding(LevelPadding::Off)
             .build();
-        let logger = if std::io::stderr().is_terminal() && std::io::stdout().is_terminal() {
-            CombinedLogger::init(vec![TermLogger::new(
-                self.verbosity_level,
-                config,
-                TerminalMode::Mixed,
-            )])
-        } else {
-            CombinedLogger::init(vec![SimpleLogger::new(self.verbosity_level, config)])
-        };
+        let logger = CombinedLogger::init(vec![SimpleLogger::new(self.verbosity_level, config)]);
         logger.expect("Unexpected CombinedLogger init failure");
     }
 
