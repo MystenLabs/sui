@@ -130,4 +130,30 @@ mod tests {
             .await
             .unwrap();
     }
+
+    use sui_graphql_rpc::server::builder::tests::*;
+
+    #[tokio::test]
+    #[serial]
+    async fn test_timeout() {
+        test_timeout_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_depth_limit() {
+        test_query_depth_limit_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_node_limit() {
+        test_query_node_limit_impl().await;
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_query_complexity_metrics() {
+        test_query_complexity_metrics_impl().await;
+    }
 }

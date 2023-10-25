@@ -198,15 +198,12 @@ async fn graphiql() -> impl axum::response::IntoResponse {
     )
 }
 
-#[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::{
-        config::ServiceConfig,
-        context_data::{
-            data_provider::DataProvider, db_data_provider::PgManager,
-            sui_sdk_data_provider::sui_sdk_client_v0,
-        },
+        cluster::SimulatorCluster,
+        config::{ConnectionConfig, ServiceConfig},
+        context_data::db_data_provider::PgManager,
         extensions::query_limits_checker::QueryLimitsChecker,
         extensions::timeout::{Timeout, TimeoutConfig},
         metrics::RequestMetrics,
@@ -215,12 +212,30 @@ mod tests {
         extensions::{Extension, ExtensionContext, NextExecute},
         Response,
     };
+    use rand::{rngs::StdRng, SeedableRng};
+    use simulacrum::Simulacrum;
+    use std::sync::Arc;
     use std::time::Duration;
-    use std::{env, sync::Arc};
+    use tokio::time::sleep;
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_timeout() {
+    async fn prep_cluster() -> (ConnectionConfig, SimulatorCluster) {
+        sleep(Duration::from_secs(2)).await;
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        (
+            connection_config.clone(),
+            crate::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await,
+        )
+    }
+
+    pub async fn test_timeout_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -246,14 +261,15 @@ mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
@@ -271,11 +287,11 @@ mod tests {
         let delay = Duration::from_millis(100);
 
         // Should complete successfully
-        let resp = test_timeout(delay, timeout).await;
+        let resp = test_timeout(delay, timeout, &connection_config).await;
         assert!(resp.is_ok());
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(timeout, timeout)
+        let errs: Vec<_> = test_timeout(timeout, timeout, &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -286,17 +302,18 @@ mod tests {
         assert_eq!(errs, vec![exp]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_depth_limit() {
-        async fn exec_query_depth_limit(depth: u32, query: &str) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+    pub async fn test_query_depth_limit_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
+        async fn exec_query_depth_limit(
+            depth: u32,
+            query: &str,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
                 .max_query_depth(depth)
                 .build_schema();
@@ -304,17 +321,18 @@ mod tests {
         }
 
         // Should complete successfully
-        let resp = exec_query_depth_limit(1, "{ chainIdentifier }").await;
+        let resp = exec_query_depth_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_depth_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await;
         assert!(resp.is_ok());
 
         // Should fail
-        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }")
+        let errs: Vec<_> = exec_query_depth_limit(0, "{ chainIdentifier }", &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -326,6 +344,7 @@ mod tests {
         let errs: Vec<_> = exec_query_depth_limit(
             2,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await
         .into_result()
@@ -336,17 +355,18 @@ mod tests {
         assert_eq!(errs, vec!["Query is nested too deep.".to_string()]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_node_limit() {
-        async fn exec_query_node_limit(nodes: u32, query: &str) -> Response {
-            let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-            let data_provider: Box<dyn DataProvider> = Box::new(sdk);
-            let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+    pub async fn test_query_node_limit_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
+        async fn exec_query_node_limit(
+            nodes: u32,
+            query: &str,
+            connection_config: &ConnectionConfig,
+        ) -> Response {
+            let db_url: String = connection_config.db_url.clone();
             let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
             let pg_conn_pool = PgManager::new(reader);
             let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
-                .context_data(data_provider)
                 .context_data(pg_conn_pool)
                 .max_query_nodes(nodes)
                 .build_schema();
@@ -354,17 +374,18 @@ mod tests {
         }
 
         // Should complete successfully
-        let resp = exec_query_node_limit(1, "{ chainIdentifier }").await;
+        let resp = exec_query_node_limit(1, "{ chainIdentifier }", &connection_config).await;
         assert!(resp.is_ok());
         let resp = exec_query_node_limit(
             5,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await;
         assert!(resp.is_ok());
 
         // Should fail
-        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }")
+        let err: Vec<_> = exec_query_node_limit(0, "{ chainIdentifier }", &connection_config)
             .await
             .into_result()
             .unwrap_err()
@@ -376,6 +397,7 @@ mod tests {
         let err: Vec<_> = exec_query_node_limit(
             4,
             "{ chainIdentifier protocolConfig { configs { value key }} }",
+            &connection_config,
         )
         .await
         .into_result()
@@ -386,9 +408,9 @@ mod tests {
         assert_eq!(err, vec!["Query is too complex.".to_string()]);
     }
 
-    #[ignore]
-    #[tokio::test]
-    async fn test_query_complexity_metrics() {
+    pub async fn test_query_complexity_metrics_impl() {
+        let (connection_config, _cluster) = prep_cluster().await;
+
         let binding_address: SocketAddr = "0.0.0.0:9184".parse().unwrap();
         let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
         let metrics = RequestMetrics::new(&registry);
@@ -396,17 +418,14 @@ mod tests {
         let metrics2 = metrics.clone();
 
         let service_config = ServiceConfig::default();
-        let sdk = sui_sdk_client_v0("https://fullnode.testnet.sui.io:443/").await;
-        let data_provider: Box<dyn DataProvider> = Box::new(sdk);
 
-        let db_url = env::var("PG_DB_URL").expect("PG_DB_URL must be set");
+        let db_url: String = connection_config.db_url.clone();
         let reader = PgManager::reader(db_url).expect("Failed to create pg connection pool");
         let pg_conn_pool = PgManager::new(reader);
         let schema = ServerBuilder::new(8000, "127.0.0.1".to_string())
             .max_query_depth(service_config.limits.max_query_depth)
             .max_query_nodes(service_config.limits.max_query_nodes)
             .context_data(service_config)
-            .context_data(data_provider)
             .context_data(pg_conn_pool)
             .context_data(metrics)
             .extension(QueryLimitsChecker::default())
