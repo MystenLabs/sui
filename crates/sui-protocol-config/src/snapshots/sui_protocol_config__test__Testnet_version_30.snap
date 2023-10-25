@@ -34,6 +34,7 @@ feature_flags:
   end_of_epoch_transaction_supported: true
   simple_conservation_checks: true
   loaded_child_object_format_type: true
+  enable_effects_v2: true
   verify_legacy_zklogin_address: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
