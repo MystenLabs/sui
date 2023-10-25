@@ -19,7 +19,6 @@ use crate::{
 };
 use itertools::Itertools;
 use move_binary_format::CompiledModule;
-use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
 pub use read_store::ReadStore;
@@ -462,11 +461,7 @@ impl Display for DeleteKind {
 }
 
 pub trait BackingStore:
-    BackingPackageStore
-    + ChildObjectResolver
-    + GetModule<Error = SuiError, Item = CompiledModule>
-    + ObjectStore
-    + ParentSync
+    BackingPackageStore + ChildObjectResolver + ObjectStore + ParentSync
 {
     fn as_object_store(&self) -> &dyn ObjectStore;
 }
@@ -475,7 +470,6 @@ impl<T> BackingStore for T
 where
     T: BackingPackageStore,
     T: ChildObjectResolver,
-    T: GetModule<Error = SuiError, Item = CompiledModule>,
     T: ObjectStore,
     T: ParentSync,
 {

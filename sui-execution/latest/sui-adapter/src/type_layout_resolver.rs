@@ -4,8 +4,8 @@
 use crate::programmable_transactions::context::load_type_from_struct;
 use crate::programmable_transactions::linkage_view::LinkageView;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::language_storage::{ModuleId, StructTag};
-use move_core_types::resolver::{ModuleResolver, ResourceResolver};
+use move_core_types::language_storage::StructTag;
+use move_core_types::resolver::ResourceResolver;
 use move_core_types::value::{MoveStructLayout, MoveTypeLayout};
 use move_vm_runtime::move_vm::MoveVM;
 use sui_types::base_types::ObjectID;
@@ -68,14 +68,6 @@ impl<'state, 'vm> LayoutResolver for TypeLayoutResolver<'state, 'vm> {
 impl<'state> BackingPackageStore for NullSuiResolver<'state> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         self.0.get_package_object(package_id)
-    }
-}
-
-impl<'state> ModuleResolver for NullSuiResolver<'state> {
-    type Error = SuiError;
-
-    fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        self.0.get_module(id)
     }
 }
 

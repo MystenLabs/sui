@@ -13,25 +13,19 @@ use crate::{
     transfer::Receiving,
 };
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::{
-    identifier::IdentStr,
-    resolver::{ModuleResolver, ResourceResolver},
-};
+use move_core_types::{identifier::IdentStr, resolver::ResourceResolver};
 use move_vm_types::loaded_data::runtime_types::Type;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-pub trait SuiResolver:
-    ResourceResolver<Error = SuiError> + ModuleResolver<Error = SuiError> + BackingPackageStore
-{
+pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
 }
 
 impl<T> SuiResolver for T
 where
     T: ResourceResolver<Error = SuiError>,
-    T: ModuleResolver<Error = SuiError>,
     T: BackingPackageStore,
 {
     fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
@@ -60,13 +54,8 @@ where
 }
 
 /// View of the store necessary to produce the layouts of types.
-pub trait TypeLayoutStore: BackingPackageStore + ModuleResolver<Error = SuiError> {}
-impl<T> TypeLayoutStore for T
-where
-    T: BackingPackageStore,
-    T: ModuleResolver<Error = SuiError>,
-{
-}
+pub trait TypeLayoutStore: BackingPackageStore {}
+impl<T> TypeLayoutStore for T where T: BackingPackageStore {}
 
 #[derive(Debug)]
 pub enum ExecutionResults {
