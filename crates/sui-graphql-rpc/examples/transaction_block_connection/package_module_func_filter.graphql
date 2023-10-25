@@ -1,0 +1,20 @@
+# Filtering on package, module and function
+{
+  transactionBlockConnection(
+    filter: {
+      package: "0x0000000000000000000000000000000000000000000000000000000000000003",
+      module:"sui_system",
+      function:"request_withdraw_stake"
+    }
+  ) {
+    nodes {
+      sender {
+        location
+      },
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+  }
+}

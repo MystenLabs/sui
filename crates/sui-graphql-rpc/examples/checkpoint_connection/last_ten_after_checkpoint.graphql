@@ -1,0 +1,8 @@
+# Fetch last 20 before the cursor
+{
+  checkpointConnection(first:20, before:"100") {
+    nodes {
+      digest
+    }
+  }
+}

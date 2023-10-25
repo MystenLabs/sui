@@ -1,23 +1,10 @@
-# Latest epoch
+# Latest epoch, since epoch omitted
 {
   epoch {
-    epochId, referenceGasPrice
-  }
-}
-
-# Data for a particular epoch
-{
-  epoch(id:124) {
-    epochId, referenceGasPrice
-  }
-}
-
-# Selecting all fields for epoch 100
-{
-  epoch(id: 100){
     protocolConfigs {
       protocolVersion
     }
+    epochId
     referenceGasPrice
     startTimestamp
     endTimestamp

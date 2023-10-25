@@ -1,0 +1,33 @@
+# Fetch some default amount of transactions, ascending
+{
+  transactionBlockConnection {
+    nodes {
+      digest
+      effects {
+        gasEffects {
+          gasObject {
+            version
+            digest
+          }
+          gasSummary {
+            computationCost
+            storageCost
+            storageRebate
+            nonRefundableStorageFee
+          }
+        }
+        errors
+      }
+      sender {
+        location
+      }
+      gasInput {
+        gasPrice
+        gasBudget
+      }
+    }
+    pageInfo {
+      endCursor
+    }
+  }
+}
