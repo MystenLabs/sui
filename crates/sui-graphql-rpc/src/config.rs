@@ -9,8 +9,10 @@ use sui_json_rpc::name_service::NameServiceConfig;
 
 use crate::functional_group::FunctionalGroup;
 
+// TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
+const MAX_DB_QUERY_COST: u64 = 50; // Max DB query cost (normally f64) truncated
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
@@ -43,6 +45,8 @@ pub struct Limits {
     pub(crate) max_query_depth: u32,
     #[serde(default)]
     pub(crate) max_query_nodes: u32,
+    #[serde(default)]
+    pub(crate) max_db_query_cost: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -134,6 +138,7 @@ impl Default for Limits {
         Self {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
+            max_db_query_cost: MAX_DB_QUERY_COST,
         }
     }
 }
@@ -225,6 +230,7 @@ mod tests {
             r#" [limits]
                 max-query-depth = 100
                 max-query-nodes = 300
+                max-db-query-cost = 50
             "#,
         )
         .unwrap();
@@ -233,6 +239,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 100,
                 max_query_nodes: 300,
+                max_db_query_cost: 50,
             },
             ..Default::default()
         };
@@ -286,6 +293,7 @@ mod tests {
                 [limits]
                 max-query-depth = 42
                 max-query-nodes = 320
+                max-db-query-cost = 20
 
                 [experiments]
                 test-flag = true
@@ -297,6 +305,7 @@ mod tests {
             limits: Limits {
                 max_query_depth: 42,
                 max_query_nodes: 320,
+                max_db_query_cost: 20,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },

@@ -27,7 +27,7 @@ pub async fn start_example_server(
 
     // TODO (wlmyng): Allow users to choose which data sources to back graphql
     let reader = PgManager::reader(conn.db_url).expect("Failed to create pg connection pool");
-    let pg_conn_pool = PgManager::new(reader.clone());
+    let pg_conn_pool = PgManager::new(reader.clone(), service_config.limits);
     let package_cache = PackageCache::new(reader);
     let name_service_config = NameServiceConfig::default();
 
