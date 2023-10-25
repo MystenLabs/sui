@@ -148,11 +148,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         });
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
             let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
-                let InvalidOTWFieldLoc {
-                    invalid_first_field,
-                    more_than_one_field,
-                } = invalid_otw_field_loc(fields);
-                invalid_first_field.is_none() && more_than_one_field.is_none()
+                invalid_otw_field_loc(fields).is_none()
             } else {
                 true
             };
@@ -470,56 +466,50 @@ fn check_otw_type(
     sdef: &N::StructDefinition,
     usage_loc: Option<Loc>,
 ) {
-    const OTW_USAGE: &str = "Used as a one-time witness here";
-
+    const OTW_USAGE: &str = "Possible attempted usage as a one-time witness here";
     if context.one_time_witness.is_some() {
         return;
     }
 
-    let mut valid = true;
-    if let Some(tp) = sdef.type_parameters.first() {
-        let msg = "One-time witness types cannot have type parameters";
-        let mut diag = diag!(
-            OTW_DECL_DIAG,
-            (name.loc(), "Invalid one-time witness declaration"),
-            (tp.param.user_specified_name.loc, msg),
-        );
+    let otw_diag = |mut diag: Diagnostic| {
         if let Some(usage) = usage_loc {
             diag.add_secondary_label((usage, OTW_USAGE))
         }
         diag.add_note(OTW_NOTE);
-        context.env.add_diag(diag);
-        valid = false
+        diag
+    };
+    let mut valid = true;
+    if let Some(tp) = sdef.type_parameters.first() {
+        let msg = "One-time witness types cannot have type parameters";
+        context.env.add_diag(otw_diag(diag!(
+            OTW_DECL_DIAG,
+            (name.loc(), "Invalid one-time witness declaration"),
+            (tp.param.user_specified_name.loc, msg),
+        )));
+        valid = false;
     }
 
     if let N::StructFields::Defined(fields) = &sdef.fields {
-        let InvalidOTWFieldLoc {
-            invalid_first_field,
-            more_than_one_field,
-        } = invalid_otw_field_loc(fields);
-        let mut check_field_loc = |invalid_field_loc_opt| {
-            let Some(invalid_field_loc) = invalid_field_loc_opt else {
-                return;
-            };
-            let msg = format!(
+        let invalid_otw_opt = invalid_otw_field_loc(fields);
+        if let Some(invalid_otw_opt) = invalid_otw_opt {
+            let msg_base = format!(
                 "One-time witness types must have no fields, \
                 or exactly one field of type {}",
                 error_format(&Type_::bool(name.loc()), &Subst::empty())
             );
-            let mut diag = diag!(
+            let (invalid_loc, invalid_msg) = match invalid_otw_opt {
+                InvalidOTW::FirstFieldNotBool(loc) => (loc, msg_base),
+                InvalidOTW::MoreThanOneField(loc) => {
+                    (loc, format!("Found more than one field. {msg_base}"))
+                }
+            };
+            context.env.add_diag(otw_diag(diag!(
                 OTW_DECL_DIAG,
                 (name.loc(), "Invalid one-time witness declaration"),
-                (invalid_field_loc, msg),
-            );
-            if let Some(usage) = usage_loc {
-                diag.add_secondary_label((usage, OTW_USAGE))
-            }
-            diag.add_note(OTW_NOTE);
-            context.env.add_diag(diag);
+                (invalid_loc, invalid_msg),
+            )));
             valid = false
         };
-        check_field_loc(invalid_first_field);
-        check_field_loc(more_than_one_field);
     }
 
     let invalid_ability_loc =
@@ -544,30 +534,25 @@ fn check_otw_type(
             "One-time witness types can only have the have the '{}' ability",
             Ability_::Drop
         );
-        let mut diag = diag!(
+        context.env.add_diag(otw_diag(diag!(
             OTW_DECL_DIAG,
             (name.loc(), "Invalid one-time witness declaration"),
             (loc, msg),
-        );
-        if let Some(usage) = usage_loc {
-            diag.add_secondary_label((usage, OTW_USAGE))
-        }
-        diag.add_note(OTW_NOTE);
-        context.env.add_diag(diag);
+        )));
         valid = false
     }
 
     context.one_time_witness = Some(if valid { Ok(name) } else { Err(()) })
 }
 
-struct InvalidOTWFieldLoc {
-    invalid_first_field: Option<Loc>,
-    more_than_one_field: Option<Loc>,
+enum InvalidOTW {
+    FirstFieldNotBool(Loc),
+    MoreThanOneField(Loc),
 }
 
 // Find the first invalid field in a one-time witness type, if any.
 // First looks for a non-boolean field, otherwise looks for any field after the first.
-fn invalid_otw_field_loc(fields: &Fields<Type>) -> InvalidOTWFieldLoc {
+fn invalid_otw_field_loc(fields: &Fields<Type>) -> Option<InvalidOTW> {
     let invalid_first_field = fields.iter().find_map(|(loc, _, (idx, ty))| {
         if *idx != 0 {
             return None;
@@ -577,14 +562,19 @@ fn invalid_otw_field_loc(fields: &Fields<Type>) -> InvalidOTWFieldLoc {
             _ => Some(loc),
         }
     });
+    if let Some(loc) = invalid_first_field {
+        return Some(InvalidOTW::FirstFieldNotBool(loc));
+    }
+
     let more_than_one_field = fields
         .iter()
         .find(|(_, _, (idx, _))| *idx > 0)
         .map(|(loc, _, _)| loc);
-    InvalidOTWFieldLoc {
-        invalid_first_field,
-        more_than_one_field,
+    if let Some(loc) = more_than_one_field {
+        return Some(InvalidOTW::MoreThanOneField(loc));
     }
+
+    None
 }
 
 //**************************************************************************************************
