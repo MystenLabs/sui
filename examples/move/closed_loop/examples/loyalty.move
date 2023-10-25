@@ -9,6 +9,7 @@
 /// - spend - spend the token in the shop
 module 0x0::loyalty {
     use std::option;
+    use std::type_name;
     use sui::transfer;
     use sui::object::{Self, UID};
     use sui::coin::{Self, TreasuryCap};
@@ -24,6 +25,9 @@ module 0x0::loyalty {
 
     /// The OTW for the Token / Coin.
     struct LOYALTY has drop {}
+
+    /// This is the Rule requirement for the `GiftShop`.
+    struct GiftShop has drop {}
 
     /// The Gift object - can be purchased for 10 tokens.
     struct Gift has key, store { id: UID }
@@ -44,9 +48,20 @@ module 0x0::loyalty {
         // create and share the `TokenPolicy`, use the cap to initialize the
         let (policy, policy_cap) = cl::new(&mut treasury_cap, ctx);
 
-        // we allow spending the balance in the shop
-        // how about a handy alias: cl::allow(policy_cap, cl::spend_name())
-        cl::allow(&mut policy, &policy_cap, cl::spend_name(), ctx);
+        // we allow spending the balance in the shop but only in this shop!
+
+        // for open policy a handy alias:
+        // cl::allow(&mut policy, &policy_cap, cl::spend_name(), ctx);
+
+        // but we constrain spend by this shop:
+        cl::set_rules_for_action(
+            &mut policy,
+            &policy_cap,
+            cl::spend_name(),
+            vector[ type_name::get<GiftShop>() ],
+            ctx
+        );
+
         cl::share_policy(policy);
 
         transfer::public_freeze_object(coin_metadata);
@@ -79,6 +94,9 @@ module 0x0::loyalty {
 
         let gift = Gift { id: object::new(ctx) };
         let req = cl::spend(token, ctx);
+
+        // only required because we've set this rule
+        cl::add_approval(GiftShop {}, &mut req, ctx);
 
         (gift, req)
     }
