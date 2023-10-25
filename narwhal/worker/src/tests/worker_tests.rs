@@ -7,13 +7,13 @@ use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::ChainIdentifier;
-use consensus::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
 };
 use futures::stream::FuturesOrdered;
 use futures::StreamExt;
+use primary::consensus::{ConsensusRound, LeaderSchedule, LeaderSwapTable};
 use primary::{Primary, CHANNEL_CAPACITY, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::Registry;
 use std::time::Duration;

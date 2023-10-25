@@ -4,16 +4,15 @@ use crate::metrics::new_registry;
 use crate::{try_join_all, FuturesUnordered, NodeError};
 use anemo::PeerId;
 use config::{AuthorityIdentifier, ChainIdentifier, Committee, Parameters, WorkerCache};
-use consensus::bullshark::Bullshark;
-use consensus::consensus::{ConsensusRound, LeaderSchedule};
-use consensus::metrics::{ChannelMetrics, ConsensusMetrics};
-use consensus::Consensus;
 use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{get_restored_consensus_output, ExecutionState, Executor, SubscriberResult};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use mysten_metrics::metered_channel;
 use mysten_metrics::{RegistryID, RegistryService};
 use network::client::NetworkClient;
+use primary::consensus::{
+    Bullshark, ChannelMetrics, Consensus, ConsensusMetrics, ConsensusRound, LeaderSchedule,
+};
 use primary::{Primary, PrimaryChannelMetrics, NUM_SHUTDOWN_RECEIVERS};
 use prometheus::{IntGauge, Registry};
 use std::sync::Arc;

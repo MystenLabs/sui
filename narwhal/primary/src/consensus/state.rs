@@ -4,9 +4,9 @@
 
 #![allow(clippy::mutable_key_type)]
 
-use crate::bullshark::Bullshark;
-use crate::utils::gc_round;
-use crate::{metrics::ConsensusMetrics, ConsensusError, SequenceNumber};
+use crate::consensus::bullshark::Bullshark;
+use crate::consensus::utils::gc_round;
+use crate::consensus::{metrics::ConsensusMetrics, ConsensusError};
 use config::{Authority, AuthorityIdentifier, Committee, Stake};
 use fastcrypto::hash::Hash;
 use mysten_metrics::metered_channel;
@@ -27,7 +27,7 @@ use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, info, instrument, trace};
 use types::{
     Certificate, CertificateAPI, CertificateDigest, CommittedSubDag, ConditionalBroadcastReceiver,
-    ConsensusCommit, HeaderAPI, ReputationScores, Round, Timestamp,
+    ConsensusCommit, HeaderAPI, ReputationScores, Round, SequenceNumber, Timestamp,
 };
 
 #[cfg(test)]
@@ -268,7 +268,7 @@ impl LeaderSchedule {
                 // we can always divide by 2 to get a monotonically incremented sequence,
                 // 2/2 = 1, 4/2 = 2, 6/2 = 3, 8/2 = 4  etc, and then do minus 1 so we can always
                 // start with base zero 0.
-                let next_leader = (round/2 - 1) as usize % self.committee.size();
+                let next_leader = (round/2 + self.committee.size() as u64 - 1) as usize % self.committee.size();
                 let authorities = self.committee.authorities().collect::<Vec<_>>();
 
                 let leader: Authority = (*authorities.get(next_leader).unwrap()).clone();

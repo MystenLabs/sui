@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    certificate_fetcher::CertificateFetcherCommand, common::create_db_stores,
-    metrics::PrimaryMetrics, synchronizer::Synchronizer, PrimaryChannelMetrics,
+    certificate_fetcher::CertificateFetcherCommand,
+    common::create_db_stores,
+    consensus::{gc_round, ConsensusRound},
+    metrics::PrimaryMetrics,
+    synchronizer::Synchronizer,
+    PrimaryChannelMetrics,
 };
 use config::Committee;
-use consensus::consensus::ConsensusRound;
-use consensus::utils::gc_round;
 use fastcrypto::{hash::Hash, traits::KeyPair};
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;

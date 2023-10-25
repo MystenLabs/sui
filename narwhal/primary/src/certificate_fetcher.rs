@@ -1,10 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::consensus::ConsensusRound;
 use crate::{metrics::PrimaryMetrics, synchronizer::Synchronizer};
 use anemo::Request;
 use config::{AuthorityIdentifier, Committee};
-use consensus::consensus::ConsensusRound;
 use crypto::NetworkPublicKey;
 use fastcrypto::hash::Hash;
 use futures::{stream::FuturesUnordered, StreamExt};

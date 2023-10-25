@@ -1,11 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::consensus::{LeaderSchedule, LeaderSwapTable};
-use crate::metrics::ConsensusMetrics;
-use crate::{
-    consensus::{ConsensusState, Dag},
-    utils, ConsensusError, Outcome,
+use crate::consensus::{
+    metrics::ConsensusMetrics, utils, ConsensusError, ConsensusState, Dag, LeaderSchedule,
+    LeaderSwapTable, Outcome,
 };
 use config::{Committee, Stake};
 use fastcrypto::hash::Hash;

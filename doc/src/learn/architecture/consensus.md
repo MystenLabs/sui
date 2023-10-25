@@ -21,7 +21,7 @@ The Narwhal mempool offers:
  * a structured graph data structure for traversing this information
  * a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/sui/blob/main/narwhal/worker)
 
-The [consensus](https://github.com/MystenLabs/sui/blob/main/narwhal/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
+The [consensus](https://github.com/MystenLabs/sui/blob/main/narwhal/primary/src/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Architecture
 
