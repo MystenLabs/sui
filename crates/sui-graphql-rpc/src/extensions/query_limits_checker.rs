@@ -33,6 +33,7 @@ struct ValidationRes {
     num_nodes: u32,
     depth: u32,
     num_variables: u32,
+    num_fragments: u32,
 }
 
 #[derive(Debug, Default)]
@@ -77,6 +78,7 @@ impl Extension for QueryLimitsChecker {
                     "nodes": validation_result.num_nodes,
                     "depth": validation_result.depth,
                     "variables": validation_result.num_variables,
+                    "fragments": validation_result.num_fragments,
                 }),
             )
         } else {
@@ -109,11 +111,22 @@ impl Extension for QueryLimitsChecker {
             ));
         }
 
+        // Document layout of the query
+        let doc = next.run(ctx, query, variables).await?;
+
+        if doc.fragments.len() > cfg.limits.max_query_fragments as usize {
+            return Err(ServerError::new(
+                format!(
+                    "Query has too many fragments definitions. The maximum allowed is {}",
+                    cfg.limits.max_query_fragments
+                ),
+                None,
+            ));
+        }
+
         // Use BFS to analyze the query and
         // count the number of nodes and the depth of the query
 
-        // Document layout of the query
-        let doc = next.run(ctx, query, variables).await?;
         // Queue to store the nodes at each level
         let mut que = VecDeque::new();
         // Number of nodes in the query
@@ -159,6 +172,7 @@ impl Extension for QueryLimitsChecker {
                 num_nodes,
                 depth,
                 num_variables: variables.len() as u32,
+                num_fragments: doc.fragments.len() as u32,
             });
         }
         if let Some(metrics) = ctx.data_opt::<Arc<RequestMetrics>>() {
