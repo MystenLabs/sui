@@ -4223,7 +4223,6 @@ impl AuthorityState {
             .shutdown_execution_for_test();
     }
 
-    #[cfg(msim)]
     pub async fn prune_objects_and_compact_for_testing(&self) {
         let pruning_config = AuthorityStorePruningConfig {
             num_epochs_to_retain: 0,

@@ -26,7 +26,7 @@ mod test {
     use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
-    use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
+    use sui_macros::{clear_fail_point, register_fail_point_async, register_fail_points, sim_test};
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::{configs::*, SimConfig};
     use sui_types::base_types::{ObjectRef, SuiAddress};
@@ -165,54 +165,16 @@ mod test {
         }
     }
 
-    async fn handle_failpoint_prune_and_compact(state: Arc<AuthorityState>) {
+    // Runs object pruning and compaction for object table in `state` probabistically.
+    async fn handle_failpoint_prune_and_compact(state: Arc<AuthorityState>, probability: f64) {
+        {
+            let mut rng = thread_rng();
+            if rng.gen_range(0.0..1.0) > probability {
+                return;
+            }
+        }
         state.prune_objects_and_compact_for_testing().await;
     }
-
-    // async fn handle_failpoint_prune_and_compact(db_dir: PathBuf) {
-    //     /*
-    //     {
-    //         let mut rng = thread_rng();
-    //         if rng.gen_range(0.0..1.0) > probability {
-    //             return;
-    //         }
-    //     }*/
-    //     for entry in std::fs::read_dir(db_dir).unwrap() {
-    //         let db_path = entry.unwrap().path();
-    //         eprintln!("Compacting {:?}", db_path);
-    //         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
-    //             &db_path.join("live").join("store"),
-    //             None,
-    //         ));
-    //         let checkpoint_store = Arc::new(CheckpointStore::open_readonly(
-    //             db_path.join("live").join("checkpoints"),
-    //             MetricConf::default(),
-    //             None,
-    //             None,
-    //         ));
-    //         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    //         let lock_table = Arc::new(RwLockTable::new(1));
-    //         let pruning_config = AuthorityStorePruningConfig {
-    //             num_epochs_to_retain: 0,
-    //             ..Default::default()
-    //         };
-    //         info!("Starting object pruning");
-    //         eprintln!("Starting object pruning");
-    //         let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
-    //             &perpetual_db,
-    //             &checkpoint_store,
-    //             &lock_table,
-    //             pruning_config,
-    //             metrics,
-    //             usize::MAX,
-    //         )
-    //         .await;
-    //         info!("Starting db compaction");
-    //         eprintln!("Start db compaction");
-    //         let _ = AuthorityStorePruner::compact(&perpetual_db);
-    //         eprintln!("Finish prune and compact");
-    //     }
-    // }
 
     async fn delay_failpoint<R>(range_ms: R, probability: f64)
     where
@@ -230,6 +192,22 @@ mod test {
         if let Some(duration) = duration {
             tokio::time::sleep(duration).await;
         }
+    }
+
+    // Tests load with aggressive pruning and compaction.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_reconfig_with_prune_and_compact() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let node_state = test_cluster.fullnode_handle.sui_node.clone().state();
+        register_fail_point_async("prune-and-compact", move || {
+            handle_failpoint_prune_and_compact(node_state.clone(), 0.5)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        // The fail point holds a reference to `node_state`, which we need to release before the test ends.
+        clear_fail_point("prune-and-compact");
     }
 
     #[sim_test(config = "test_config()")]
@@ -257,23 +235,6 @@ mod test {
                 handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.02);
             },
         );
-
-        // let db_dir = test_cluster.swarm.dir().join(FULL_NODE_DB_PATH);
-        // let _perpetual_db = test_cluster
-        //     .fullnode_handle
-        //     .sui_node
-        //     .with(|node| node.state().database.perpetual_tables);
-        // let _checkpoint_store = test_cluster
-        //     .fullnode_handle
-        //     .sui_node
-        //     .with(|node| node.checkpoint_store);
-        // register_fail_point_async("prune-and-compact", move || {
-        //     handle_failpoint_prune_and_compact(db_dir.clone())
-        // });
-        let sss = test_cluster.fullnode_handle.sui_node.state();
-        register_fail_point_async("prune-and-compact", move || {
-            handle_failpoint_prune_and_compact(sss.clone())
-        });
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
