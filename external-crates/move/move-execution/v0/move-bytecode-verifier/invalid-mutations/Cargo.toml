@@ -10,9 +10,9 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-move-core-types = { path = "../../move-core/types" }
-move-binary-format = { path = "../../move-binary-format" }
-proptest = "1.0.0"
+move-core-types.workspace = true
+move-binary-format.workspace = true
+proptest.workspace = true
 
 [features]
 default = []
