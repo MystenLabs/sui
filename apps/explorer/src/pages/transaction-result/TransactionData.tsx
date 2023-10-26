@@ -31,7 +31,7 @@ export function TransactionData({ transaction }: Props) {
 	const programmableTxn = transaction.transaction!.data.transaction as ProgrammableTransaction;
 
 	return (
-		<div className="flex flex-wrap gap-3 md:gap-6">
+		<div className="flex flex-wrap gap-3 pl-1 pr-2 md:gap-6">
 			<section className="flex w-96 flex-1 flex-col gap-3 max-md:min-w-[50%] md:gap-6">
 				<TransactionDetailCard
 					timestamp={summary?.timestamp}
