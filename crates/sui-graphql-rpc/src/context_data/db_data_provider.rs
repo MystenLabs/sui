@@ -369,8 +369,9 @@ impl PgManager {
                     .select(transactions::dsl::tx_sequence_number)
                     .into_boxed();
 
-                after_tx_seq_num = self.run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                        .await?;
+                after_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
 
                 // Return early if we cannot find txs after the specified checkpoint
                 if after_tx_seq_num.is_none() {
@@ -385,8 +386,9 @@ impl PgManager {
                     .select(transactions::dsl::tx_sequence_number)
                     .into_boxed();
 
-                before_tx_seq_num = self.run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                        .await?;
+                before_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
 
                 // Return early if we cannot find tx before the specified checkpoint
                 if before_tx_seq_num.is_none() {
