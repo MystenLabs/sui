@@ -391,7 +391,7 @@ impl QueryBuilder {
 
         query = query
             .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(1)); // Leverage index on objects table
+            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16)); // Leverage index on objects table
 
         if let Some(coin_type) = coin_type {
             query = query.filter(objects::dsl::coin_type.eq(coin_type));
@@ -448,7 +448,11 @@ impl QueryBuilder {
                         query = query.filter(objects::dsl::owner_type.eq(OwnerType::Object as i16));
                     }
                     None => {
-                        query = query.filter(objects::dsl::owner_type.between(1, 2));
+                        query = query.filter(
+                            objects::dsl::owner_type
+                                .eq(OwnerType::Address as i16)
+                                .or(objects::dsl::owner_type.eq(OwnerType::Object as i16)),
+                        );
                     }
                     _ => Err(DbValidationError::InvalidOwnerType)?,
                 }
@@ -475,7 +479,7 @@ impl QueryBuilder {
                 objects::dsl::coin_type,
             ))
             .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(1))
+            .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
             .filter(objects::dsl::coin_type.is_not_null())
             .into_boxed();
 
