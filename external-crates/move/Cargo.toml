@@ -61,9 +61,7 @@ members = [
     "tools/move-package",
     "tools/move-resource-viewer",
     "tools/move-unit-test",
-    "tools/read-write-set",
-    "tools/read-write-set/dynamic",
-    "tools/read-write-set/types",
+    "tools/move-read-write-set-types",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -79,7 +77,6 @@ bcs = "0.1.4"
 bitvec = "0.19.4"
 byteorder = "1.4.3"
 prover_bytecode = { path = "move-prover/bytecode", package="move-stackless-bytecode" }
-read-write-set-dynamic = { path = "tools/read-write-set/dynamic" }
 bytes = "1.0.1"
 clap = { version = "4", features = ["derive"] }
 module-generation = { path = "testing-infra/module-generation" }
@@ -198,8 +195,7 @@ async-trait = "0.1.42"
 pretty = "0.10.0"
 futures = "0.3.12"
 paste = "1.0.5"
-move-read-write-set-types = { path = "tools/read-write-set/types" }
-read-write-set = { path = "tools/read-write-set" }
+move-read-write-set-types = { path = "tools/move-read-write-set-types" }
 move-stackless-bytecode-interpreter = { path = "move-prover/interpreter" }
 tera = "1.16.0"
 tokio = { version = "1.18.2", features = ["full"] }

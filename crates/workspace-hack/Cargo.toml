@@ -430,7 +430,7 @@ move-model = { path = "../../external-crates/move/move-model", default-features 
 move-package = { path = "../../external-crates/move/tools/move-package", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "../../external-crates/move/tools/read-write-set/types", default-features = false }
+move-read-write-set-types = { path = "../../external-crates/move/tools/move-read-write-set-types", default-features = false }
 move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
@@ -564,8 +564,6 @@ rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen = { version = "0.9" }
-read-write-set = { path = "../../external-crates/move/tools/read-write-set", default-features = false }
-read-write-set-dynamic = { path = "../../external-crates/move/tools/read-write-set/dynamic", default-features = false }
 ref-cast = { version = "1", default-features = false }
 regex = { version = "1" }
 regex-automata = { version = "0.1" }
@@ -1248,7 +1246,7 @@ move-package = { path = "../../external-crates/move/tools/move-package", default
 move-proc-macros = { path = "../../external-crates/move/testing-infra/move-proc-macros", default-features = false }
 move-prover = { path = "../../external-crates/move/move-prover", default-features = false }
 move-prover-boogie-backend = { path = "../../external-crates/move/move-prover/boogie-backend", default-features = false }
-move-read-write-set-types = { path = "../../external-crates/move/tools/read-write-set/types", default-features = false }
+move-read-write-set-types = { path = "../../external-crates/move/tools/move-read-write-set-types", default-features = false }
 move-resource-viewer = { path = "../../external-crates/move/tools/move-resource-viewer", default-features = false }
 move-stackless-bytecode = { path = "../../external-crates/move/move-prover/bytecode", default-features = false }
 move-stackless-bytecode-interpreter = { path = "../../external-crates/move/move-prover/interpreter", default-features = false }
@@ -1413,8 +1411,6 @@ rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
 rcgen = { version = "0.9" }
-read-write-set = { path = "../../external-crates/move/tools/read-write-set", default-features = false }
-read-write-set-dynamic = { path = "../../external-crates/move/tools/read-write-set/dynamic", default-features = false }
 readonly = { version = "0.2", default-features = false }
 ref-cast = { version = "1", default-features = false }
 ref-cast-impl = { version = "1", default-features = false }
