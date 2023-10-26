@@ -338,11 +338,9 @@ impl<'env> Context<'env> {
     }
 
     pub fn current_package(&self) -> Option<Symbol> {
-        if let Some(mident) = &self.current_module {
-            self.module_info(mident).package
-        } else {
-            None
-        }
+        self.current_module
+            .as_ref()
+            .and_then(|mident| self.module_info(mident).package)
     }
 
     // `loc` indicates the location that caused the add to occur
