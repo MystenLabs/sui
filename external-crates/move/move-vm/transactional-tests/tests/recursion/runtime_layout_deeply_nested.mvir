@@ -1,7 +1,5 @@
 //# publish
 module 0x42.M {
-    import 0x1.signer;
-
     struct Box<T> has key, store { x: T }
     struct Box3<T> has store { x: Self.Box<Self.Box<T>> }
     struct Box7<T> has store { x: Self.Box3<Self.Box3<T>> }
@@ -52,52 +50,32 @@ module 0x42.M {
         return Box255<T> { x: Self.box127<Self.Box127<T>>(Self.box127<T>(move(x))) };
     }
 
-    public publish_128(account: &signer) {
+    public publish_127(): Self.Box127<bool> {
     label b0:
-        move_to<Box128<bool>>(move(account), Self.box128<bool>(true));
-        return;
+        return Self.box127<bool>(true);
     }
 
-    public publish_256(account: &signer) {
+
+    public publish_128(): Self.Box128<bool> {
     label b0:
-        move_to<Box255<bool>>(move(account), Self.box255<bool>(true));
-        return;
+        return Self.box128<bool>(true);
     }
 
-    public publish_257(account: &signer) {
+    public publish_256(): Self.Box255<bool> {
     label b0:
-        move_to<Box<Self.Box255<bool>>>(move(account), Box<Self.Box255<bool>> { x: Self.box255<bool>(true) });
-        return;
+        return Self.box255<bool>(true);
+    }
+
+    public publish_257(): Self.Box<Self.Box255<bool>> {
+    label b0:
+        return Box<Self.Box255<bool>> { x: Self.box255<bool>(true) };
     }
 }
 
+//# run 0x42::M::publish_127
 
-//# run --args @0x1
-import 0x42.M;
+//# run 0x42::M::publish_128
 
-main(account: signer) {
-label b0:
-    // hits VM_MAX_VALUE_DEPTH_REACHED
-    M.publish_128(&account);
-    return;
-}
+//# run 0x42::M::publish_256
 
-//# run --args @0x2
-import 0x42.M;
-
-main(account: signer) {
-label b0:
-    M.publish_256(&account);
-    return;
-}
-
-
-//# run --args @0x3
-import 0x42.M;
-
-main(account: signer) {
-label b0:
-    // hits VM_MAX_VALUE_DEPTH_REACHED
-    M.publish_257(&account);
-    return;
-}
+//# run 0x42::M::publish_257
