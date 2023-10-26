@@ -15,6 +15,7 @@ comfy-table.workspace = true
 eyre.workspace = true
 futures.workspace = true
 hex.workspace = true
+move-core-types.workspace = true
 itertools.workspace = true
 rocksdb.workspace = true
 ron.workspace = true
