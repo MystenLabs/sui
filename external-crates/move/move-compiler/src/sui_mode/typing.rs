@@ -466,7 +466,7 @@ fn check_otw_type(
     sdef: &N::StructDefinition,
     usage_loc: Option<Loc>,
 ) {
-    const OTW_USAGE: &str = "Possible attempted usage as a one-time witness here";
+    const OTW_USAGE: &str = "Attempted usage as a one-time witness here";
     if context.one_time_witness.is_some() {
         return;
     }
