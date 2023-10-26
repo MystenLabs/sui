@@ -9,7 +9,7 @@ use crate::{
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    value::MoveValue, vm_status::StatusCode,
+    runtime_value::MoveValue, vm_status::StatusCode,
 };
 use std::{collections::BTreeMap, fmt};
 

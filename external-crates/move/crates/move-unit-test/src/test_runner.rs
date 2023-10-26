@@ -24,7 +24,7 @@ use move_compiler::{
 };
 use move_core_types::{
     account_address::AccountAddress, effects::ChangeSet, identifier::IdentStr,
-    value::serialize_values, vm_status::StatusCode,
+    runtime_value::serialize_values, vm_status::StatusCode,
 };
 use move_model::{
     model::GlobalEnv, options::ModelBuilderOptions,

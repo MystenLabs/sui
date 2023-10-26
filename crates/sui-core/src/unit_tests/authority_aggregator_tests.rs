@@ -229,7 +229,8 @@ where
 {
     if let Ok(VerifiedObjectInfoResponse { object }) = authority
         .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            object_id, None,
+            object_id,
+            LayoutGenerationOption::None,
         ))
         .await
     {

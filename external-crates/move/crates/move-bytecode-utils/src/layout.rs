@@ -12,17 +12,12 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use serde_reflection::{ContainerFormat, Format, Named, Registry};
-use std::{
-    borrow::Borrow,
-    collections::BTreeMap,
-    convert::TryInto,
-    fmt::{Debug, Write},
-};
+use std::{borrow::Borrow, collections::BTreeMap, fmt::Write};
 
 /// Name of the Move `address` type in the serde registry
 const ADDRESS: &str = "AccountAddress";
@@ -327,127 +322,84 @@ fn print_format_type(t: &Format, depth: u64) -> Result<String> {
 pub enum TypeLayoutBuilder {}
 pub enum StructLayoutBuilder {}
 
-#[derive(Copy, Clone, Debug)]
-enum LayoutType {
-    WithTypes,
-    WithFields,
-    Runtime,
-}
-
 impl TypeLayoutBuilder {
     /// Construct a WithTypes `TypeLayout` with fields from `t`.
     /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
     /// transitively by `t`
-    pub fn build_with_types(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::WithTypes, 0)
+    pub fn build_with_types(t: &TypeTag, resolver: &impl GetModule) -> Result<A::MoveTypeLayout> {
+        Self::build(t, resolver, 0)
     }
 
-    /// Construct a WithFields `TypeLayout` with fields from `t`.
-    /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
-    /// transitively by `t`.
-    pub fn build_with_fields(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::WithFields, 0)
-    }
-
-    /// Construct a runtime `TypeLayout` from `t`.
-    /// Panics if `resolver` cannot resolve a module whose types are referenced directly or
-    /// transitively by `t`.
-    pub fn build_runtime(t: &TypeTag, resolver: &impl GetModule) -> Result<MoveTypeLayout> {
-        Self::build(t, resolver, LayoutType::Runtime, 0)
-    }
-
-    fn build(
-        t: &TypeTag,
-        resolver: &impl GetModule,
-        layout_type: LayoutType,
-        depth: u64,
-    ) -> Result<MoveTypeLayout> {
+    fn build(t: &TypeTag, resolver: &impl GetModule, depth: u64) -> Result<A::MoveTypeLayout> {
         use TypeTag::*;
         check_depth!(depth);
         Ok(match t {
-            Bool => MoveTypeLayout::Bool,
-            U8 => MoveTypeLayout::U8,
-            U16 => MoveTypeLayout::U16,
-            U32 => MoveTypeLayout::U32,
-            U64 => MoveTypeLayout::U64,
-            U128 => MoveTypeLayout::U128,
-            U256 => MoveTypeLayout::U256,
-            Address => MoveTypeLayout::Address,
+            Bool => A::MoveTypeLayout::Bool,
+            U8 => A::MoveTypeLayout::U8,
+            U16 => A::MoveTypeLayout::U16,
+            U32 => A::MoveTypeLayout::U32,
+            U64 => A::MoveTypeLayout::U64,
+            U128 => A::MoveTypeLayout::U128,
+            U256 => A::MoveTypeLayout::U256,
+            Address => A::MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
-            Vector(elem_t) => MoveTypeLayout::Vector(Box::new(Self::build(
-                elem_t,
-                resolver,
-                layout_type,
-                depth + 1,
-            )?)),
-            Struct(s) => MoveTypeLayout::Struct(StructLayoutBuilder::build(
-                s,
-                resolver,
-                layout_type,
-                depth + 1,
-            )?),
+            Vector(elem_t) => {
+                A::MoveTypeLayout::Vector(Box::new(Self::build(elem_t, resolver, depth + 1)?))
+            }
+            Struct(s) => {
+                A::MoveTypeLayout::Struct(StructLayoutBuilder::build(s, resolver, depth + 1)?)
+            }
         })
     }
 
     fn build_from_signature_token(
         m: &CompiledModule,
         s: &SignatureToken,
-        type_arguments: &[MoveTypeLayout],
+        type_arguments: &[A::MoveTypeLayout],
         resolver: &impl GetModule,
-        layout_type: LayoutType,
         depth: u64,
-    ) -> Result<MoveTypeLayout> {
+    ) -> Result<A::MoveTypeLayout> {
         use SignatureToken::*;
         check_depth!(depth);
         Ok(match s {
-            Vector(t) => MoveTypeLayout::Vector(Box::new(Self::build_from_signature_token(
+            Vector(t) => A::MoveTypeLayout::Vector(Box::new(Self::build_from_signature_token(
                 m,
                 t,
                 type_arguments,
                 resolver,
-                layout_type,
                 depth + 1,
             )?)),
-            Struct(shi) => MoveTypeLayout::Struct(StructLayoutBuilder::build_from_handle_idx(
+            Struct(shi) => A::MoveTypeLayout::Struct(StructLayoutBuilder::build_from_handle_idx(
                 m,
                 *shi,
                 vec![],
                 resolver,
-                layout_type,
                 depth + 1,
             )?),
             StructInstantiation(shi, type_actuals) => {
                 let actual_layouts = type_actuals
                     .iter()
                     .map(|t| {
-                        Self::build_from_signature_token(
-                            m,
-                            t,
-                            type_arguments,
-                            resolver,
-                            layout_type,
-                            depth + 1,
-                        )
+                        Self::build_from_signature_token(m, t, type_arguments, resolver, depth + 1)
                     })
                     .collect::<Result<Vec<_>>>()?;
-                MoveTypeLayout::Struct(StructLayoutBuilder::build_from_handle_idx(
+                A::MoveTypeLayout::Struct(StructLayoutBuilder::build_from_handle_idx(
                     m,
                     *shi,
                     actual_layouts,
                     resolver,
-                    layout_type,
                     depth + 1,
                 )?)
             }
             TypeParameter(i) => type_arguments[*i as usize].clone(),
-            Bool => MoveTypeLayout::Bool,
-            U8 => MoveTypeLayout::U8,
-            U16 => MoveTypeLayout::U16,
-            U32 => MoveTypeLayout::U32,
-            U64 => MoveTypeLayout::U64,
-            U128 => MoveTypeLayout::U128,
-            U256 => MoveTypeLayout::U256,
-            Address => MoveTypeLayout::Address,
+            Bool => A::MoveTypeLayout::Bool,
+            U8 => A::MoveTypeLayout::U8,
+            U16 => A::MoveTypeLayout::U16,
+            U32 => A::MoveTypeLayout::U32,
+            U64 => A::MoveTypeLayout::U64,
+            U128 => A::MoveTypeLayout::U128,
+            U256 => A::MoveTypeLayout::U256,
+            Address => A::MoveTypeLayout::Address,
             Signer => bail!("Type layouts cannot contain signer"),
             Reference(_) | MutableReference(_) => bail!("Type layouts cannot contain references"),
         })
@@ -455,47 +407,26 @@ impl TypeLayoutBuilder {
 }
 
 impl StructLayoutBuilder {
-    pub fn build_runtime(s: &StructTag, resolver: &impl GetModule) -> Result<MoveStructLayout> {
-        Self::build(s, resolver, LayoutType::Runtime, 0)
-    }
-
-    pub fn build_with_fields(s: &StructTag, resolver: &impl GetModule) -> Result<MoveStructLayout> {
-        Self::build(s, resolver, LayoutType::WithFields, 0)
-    }
-
     /// Construct an expanded `TypeLayout` from `s`.
     /// Panics if `resolver` cannot resolved a module whose types are referenced directly or
     /// transitively by `s`.
-    fn build(
-        s: &StructTag,
-        resolver: &impl GetModule,
-        layout_type: LayoutType,
-        depth: u64,
-    ) -> Result<MoveStructLayout> {
+    fn build(s: &StructTag, resolver: &impl GetModule, depth: u64) -> Result<A::MoveStructLayout> {
         check_depth!(depth);
         let type_arguments = s
             .type_params
             .iter()
-            .map(|t| TypeLayoutBuilder::build(t, resolver, layout_type, depth))
-            .collect::<Result<Vec<MoveTypeLayout>>>()?;
-        Self::build_from_name(
-            &s.module_id(),
-            &s.name,
-            type_arguments,
-            resolver,
-            layout_type,
-            depth,
-        )
+            .map(|t| TypeLayoutBuilder::build(t, resolver, depth))
+            .collect::<Result<Vec<A::MoveTypeLayout>>>()?;
+        Self::build_from_name(&s.module_id(), &s.name, type_arguments, resolver, depth)
     }
 
     fn build_from_definition(
         m: &CompiledModule,
         s: &StructDefinition,
-        type_arguments: Vec<MoveTypeLayout>,
+        type_arguments: Vec<A::MoveTypeLayout>,
         resolver: &impl GetModule,
-        layout_type: LayoutType,
         depth: u64,
-    ) -> Result<MoveStructLayout> {
+    ) -> Result<A::MoveStructLayout> {
         check_depth!(depth);
         let s_handle = m.struct_handle_at(s.struct_handle);
         if s_handle.type_parameters.len() != type_arguments.len() {
@@ -514,41 +445,26 @@ impl StructLayoutBuilder {
                             &f.signature.0,
                             &type_arguments,
                             resolver,
-                            layout_type,
                             depth,
                         )
                     })
-                    .collect::<Result<Vec<MoveTypeLayout>>>()?;
-                Ok(match layout_type {
-                    LayoutType::Runtime => MoveStructLayout::Runtime(layouts),
-                    LayoutType::WithFields => MoveStructLayout::WithFields(
-                        fields
-                            .iter()
-                            .map(|f| m.identifier_at(f.name).to_owned())
-                            .zip(layouts)
-                            .map(|(name, layout)| MoveFieldLayout::new(name, layout))
-                            .collect(),
-                    ),
-                    LayoutType::WithTypes => {
-                        let mid = m.self_id();
-                        let type_param_res: Result<Vec<TypeTag>> =
-                            type_arguments.iter().map(|t| t.try_into()).collect();
-                        let type_params = type_param_res?;
-                        let type_ = StructTag {
-                            address: *mid.address(),
-                            module: mid.name().to_owned(),
-                            name: m.identifier_at(s_handle.name).to_owned(),
-                            type_params,
-                        };
-                        let fields = fields
-                            .iter()
-                            .map(|f| m.identifier_at(f.name).to_owned())
-                            .zip(layouts)
-                            .map(|(name, layout)| MoveFieldLayout::new(name, layout))
-                            .collect();
-                        MoveStructLayout::WithTypes { type_, fields }
-                    }
-                })
+                    .collect::<Result<Vec<A::MoveTypeLayout>>>()?;
+
+                let mid = m.self_id();
+                let type_params: Vec<TypeTag> = type_arguments.iter().map(|t| t.into()).collect();
+                let type_ = StructTag {
+                    address: *mid.address(),
+                    module: mid.name().to_owned(),
+                    name: m.identifier_at(s_handle.name).to_owned(),
+                    type_params,
+                };
+                let fields = fields
+                    .iter()
+                    .map(|f| m.identifier_at(f.name).to_owned())
+                    .zip(layouts)
+                    .map(|(name, layout)| A::MoveFieldLayout::new(name, layout))
+                    .collect();
+                Ok(A::MoveStructLayout { type_, fields })
             }
         }
     }
@@ -556,11 +472,10 @@ impl StructLayoutBuilder {
     fn build_from_name(
         declaring_module: &ModuleId,
         name: &IdentStr,
-        type_arguments: Vec<MoveTypeLayout>,
+        type_arguments: Vec<A::MoveTypeLayout>,
         resolver: &impl GetModule,
-        layout_type: LayoutType,
         depth: u64,
-    ) -> Result<MoveStructLayout> {
+    ) -> Result<A::MoveStructLayout> {
         check_depth!(depth);
         let module = match resolver.get_module_by_id(declaring_module) {
             Err(_) | Ok(None) => bail!("Could not find module"),
@@ -576,41 +491,26 @@ impl StructLayoutBuilder {
                     declaring_module
                 )
             })?;
-        Self::build_from_definition(
-            module.borrow(),
-            def,
-            type_arguments,
-            resolver,
-            layout_type,
-            depth,
-        )
+        Self::build_from_definition(module.borrow(), def, type_arguments, resolver, depth)
     }
 
     fn build_from_handle_idx(
         m: &CompiledModule,
         s: StructHandleIndex,
-        type_arguments: Vec<MoveTypeLayout>,
+        type_arguments: Vec<A::MoveTypeLayout>,
         resolver: &impl GetModule,
-        layout_type: LayoutType,
         depth: u64,
-    ) -> Result<MoveStructLayout> {
+    ) -> Result<A::MoveStructLayout> {
         check_depth!(depth);
         if let Some(def) = m.find_struct_def(s) {
             // declared internally
-            Self::build_from_definition(m, def, type_arguments, resolver, layout_type, depth)
+            Self::build_from_definition(m, def, type_arguments, resolver, depth)
         } else {
             let handle = m.struct_handle_at(s);
             let name = m.identifier_at(handle.name);
             let declaring_module = m.module_id_for_handle(m.module_handle_at(handle.module));
             // declared externally
-            Self::build_from_name(
-                &declaring_module,
-                name,
-                type_arguments,
-                resolver,
-                layout_type,
-                depth,
-            )
+            Self::build_from_name(&declaring_module, name, type_arguments, resolver, depth)
         }
     }
 }

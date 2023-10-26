@@ -38,10 +38,11 @@ use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostPar
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
+    annotated_value as A,
     gas_algebra::InternalGas,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::MoveTypeLayout,
+    runtime_value as R,
     vm_status::StatusCode,
 };
 use move_stdlib::natives::{GasParameters, NurseryGasParameters};
@@ -779,7 +780,7 @@ pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError>
 pub(crate) fn get_tag_and_layouts(
     context: &NativeContext,
     ty: &Type,
-) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
+) -> PartialVMResult<Option<(StructTag, R::MoveTypeLayout, A::MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {

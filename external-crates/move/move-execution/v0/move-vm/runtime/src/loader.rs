@@ -26,7 +26,8 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     metadata::Metadata,
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    runtime_value as R,
+    annotated_value as A,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
@@ -1719,14 +1720,14 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
         self.loader.type_to_type_layout(ty)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         self.loader.type_to_fully_annotated_layout(ty)
     }
 
@@ -2452,8 +2453,8 @@ struct FieldInstantiation {
 struct StructInfo {
     runtime_struct_tag: Option<StructTag>,
     defining_struct_tag: Option<StructTag>,
-    struct_layout: Option<MoveStructLayout>,
-    annotated_struct_layout: Option<MoveStructLayout>,
+    struct_layout: Option<R::MoveStructLayout>,
+    annotated_struct_layout: Option<A::MoveStructLayout>,
     node_count: Option<u64>,
     annotated_node_count: Option<u64>,
 }
@@ -2630,7 +2631,7 @@ impl Loader {
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveStructLayout> {
+    ) -> PartialVMResult<R::MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(node_count) = &struct_info.node_count {
@@ -2655,7 +2656,7 @@ impl Loader {
             .collect::<PartialVMResult<Vec<_>>>()?;
         let field_node_count = *count - count_before;
 
-        let struct_layout = MoveStructLayout::new(field_layouts);
+        let struct_layout = R::MoveStructLayout::new(field_layouts);
 
         let mut cache = self.type_cache.write();
         let info = cache
@@ -2675,7 +2676,7 @@ impl Loader {
         ty: &Type,
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<R::MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
@@ -2684,24 +2685,24 @@ impl Loader {
         }
         *count += 1;
         Ok(match ty {
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
+            Type::Bool => R::MoveTypeLayout::Bool,
+            Type::U8 => R::MoveTypeLayout::U8,
+            Type::U16 => R::MoveTypeLayout::U16,
+            Type::U32 => R::MoveTypeLayout::U32,
+            Type::U64 => R::MoveTypeLayout::U64,
+            Type::U128 => R::MoveTypeLayout::U128,
+            Type::U256 => R::MoveTypeLayout::U256,
+            Type::Address => R::MoveTypeLayout::Address,
+            Type::Signer => R::MoveTypeLayout::Signer,
+            Type::Vector(ty) => R::MoveTypeLayout::Vector(Box::new(self.type_to_type_layout_impl(
                 ty,
                 count,
                 depth + 1,
             )?)),
             Type::Struct(gidx) => {
-                MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
+                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, &[], count, depth)?)
             }
-            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+            Type::StructInstantiation(gidx, ty_args) => R::MoveTypeLayout::Struct(
                 self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
             ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -2719,7 +2720,7 @@ impl Loader {
         ty_args: &[Type],
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveStructLayout> {
+    ) -> PartialVMResult<A::MoveStructLayout> {
         if let Some(struct_map) = self.type_cache.read().structs.get(&gidx) {
             if let Some(struct_info) = struct_map.get(ty_args) {
                 if let Some(annotated_node_count) = &struct_info.annotated_node_count {
@@ -2749,10 +2750,10 @@ impl Loader {
             .map(|(n, ty)| {
                 let ty = self.subst(ty, ty_args)?;
                 let l = self.type_to_fully_annotated_layout_impl(&ty, count, depth + 1)?;
-                Ok(MoveFieldLayout::new(n.clone(), l))
+                Ok(A::MoveFieldLayout::new(n.clone(), l))
             })
             .collect::<PartialVMResult<Vec<_>>>()?;
-        let struct_layout = MoveStructLayout::with_types(struct_tag, field_layouts);
+        let struct_layout = A::MoveStructLayout::new(struct_tag, field_layouts);
         let field_node_count = *count - count_before;
 
         let mut cache = self.type_cache.write();
@@ -2773,7 +2774,7 @@ impl Loader {
         ty: &Type,
         count: &mut u64,
         depth: u64,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         if *count > MAX_TYPE_TO_LAYOUT_NODES {
             return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_NODES));
         }
@@ -2782,22 +2783,22 @@ impl Loader {
         }
         *count += 1;
         Ok(match ty {
-            Type::Bool => MoveTypeLayout::Bool,
-            Type::U8 => MoveTypeLayout::U8,
-            Type::U16 => MoveTypeLayout::U16,
-            Type::U32 => MoveTypeLayout::U32,
-            Type::U64 => MoveTypeLayout::U64,
-            Type::U128 => MoveTypeLayout::U128,
-            Type::U256 => MoveTypeLayout::U256,
-            Type::Address => MoveTypeLayout::Address,
-            Type::Signer => MoveTypeLayout::Signer,
-            Type::Vector(ty) => MoveTypeLayout::Vector(Box::new(
+            Type::Bool => A::MoveTypeLayout::Bool,
+            Type::U8 => A::MoveTypeLayout::U8,
+            Type::U16 => A::MoveTypeLayout::U16,
+            Type::U32 => A::MoveTypeLayout::U32,
+            Type::U64 => A::MoveTypeLayout::U64,
+            Type::U128 => A::MoveTypeLayout::U128,
+            Type::U256 => A::MoveTypeLayout::U256,
+            Type::Address => A::MoveTypeLayout::Address,
+            Type::Signer => A::MoveTypeLayout::Signer,
+            Type::Vector(ty) => A::MoveTypeLayout::Vector(Box::new(
                 self.type_to_fully_annotated_layout_impl(ty, count, depth + 1)?,
             )),
-            Type::Struct(gidx) => MoveTypeLayout::Struct(
+            Type::Struct(gidx) => A::MoveTypeLayout::Struct(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, &[], count, depth)?,
             ),
-            Type::StructInstantiation(gidx, ty_args) => MoveTypeLayout::Struct(
+            Type::StructInstantiation(gidx, ty_args) => A::MoveTypeLayout::Struct(
                 self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
             ),
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
@@ -2817,7 +2818,7 @@ impl Loader {
         self.type_to_type_tag_impl(ty, StructTagType::Runtime)
     }
 
-    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<MoveTypeLayout> {
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<R::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_type_layout_impl(ty, &mut count, 1)
     }
@@ -2825,7 +2826,7 @@ impl Loader {
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<MoveTypeLayout> {
+    ) -> PartialVMResult<A::MoveTypeLayout> {
         let mut count = 0;
         self.type_to_fully_annotated_layout_impl(ty, &mut count, 1)
     }
@@ -2837,7 +2838,7 @@ impl Loader {
         &self,
         type_tag: &TypeTag,
         move_storage: &impl DataStore,
-    ) -> VMResult<MoveTypeLayout> {
+    ) -> VMResult<R::MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
@@ -2847,7 +2848,7 @@ impl Loader {
         &self,
         type_tag: &TypeTag,
         move_storage: &impl DataStore,
-    ) -> VMResult<MoveTypeLayout> {
+    ) -> VMResult<A::MoveTypeLayout> {
         let ty = self.load_type(type_tag, move_storage)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))

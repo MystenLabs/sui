@@ -20,9 +20,9 @@ use move_compiler::{
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
-    value::MoveStruct,
 };
 use move_symbol_pool::Symbol;
 use move_transactional_test_runner::{
@@ -63,7 +63,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::{get_key_pair_from_rng, AccountKeyPair},
     event::Event,
-    object::{self, Object, ObjectFormatOptions},
+    object::{self, Object},
     transaction::{Transaction, TransactionData, TransactionDataAPI, VerifiedTransaction},
     MOVE_STDLIB_ADDRESS, SUI_CLOCK_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -513,11 +513,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let obj = get_obj!(fake_id);
                 Ok(Some(match &obj.data {
                     object::Data::Move(move_obj) => {
-                        let layout = move_obj
-                            .get_layout(ObjectFormatOptions::default(), &&*self)
-                            .unwrap();
+                        let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+
                         self.stabilize_str(format!(
                             "Owner: {}\nVersion: {}\nContents: {}",
                             &obj.owner,

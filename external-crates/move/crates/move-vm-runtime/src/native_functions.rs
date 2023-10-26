@@ -8,10 +8,11 @@ use crate::{
 use move_binary_format::errors::{ExecutionState, PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     gas_algebra::InternalGas,
     identifier::Identifier,
     language_storage::TypeTag,
-    value::MoveTypeLayout,
+    runtime_value as R,
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
@@ -145,7 +146,7 @@ impl<'a, 'b> NativeContext<'a, 'b> {
         }
     }
 
-    pub fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, Value)> {
+    pub fn events(&self) -> &Vec<(Vec<u8>, u64, Type, R::MoveTypeLayout, Value)> {
         self.data_store.events()
     }
 
@@ -157,7 +158,7 @@ impl<'a, 'b> NativeContext<'a, 'b> {
         self.resolver.loader().type_to_runtime_type_tag(ty)
     }
 
-    pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<MoveTypeLayout>> {
+    pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
         match self.resolver.type_to_type_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
@@ -168,7 +169,7 @@ impl<'a, 'b> NativeContext<'a, 'b> {
     pub fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<Option<MoveTypeLayout>> {
+    ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
         match self.resolver.type_to_fully_annotated_layout(ty) {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),

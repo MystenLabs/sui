@@ -12,11 +12,12 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     effects::{ChangeSet, Event},
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    value::MoveTypeLayout,
+    runtime_value::MoveTypeLayout,
 };
 #[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
@@ -288,7 +289,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .get_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
+    pub fn get_fully_annotated_type_layout(
+        &self,
+        type_tag: &TypeTag,
+    ) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &self.data_cache)
@@ -301,7 +305,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .type_to_fully_annotated_layout(ty)

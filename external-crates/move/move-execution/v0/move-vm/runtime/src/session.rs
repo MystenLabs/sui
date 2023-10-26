@@ -16,7 +16,8 @@ use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    value::MoveTypeLayout,
+    runtime_value as R,
+    annotated_value as A
 };
 use move_vm_types::{
     data_store::DataStore,
@@ -37,9 +38,9 @@ pub struct Session<'r, 'l, S> {
 pub struct SerializedReturnValues {
     /// The value of any arguments that were mutably borrowed.
     /// Non-mut borrowed values are not included
-    pub mutable_reference_outputs: Vec<(LocalIndex, Vec<u8>, MoveTypeLayout)>,
+    pub mutable_reference_outputs: Vec<(LocalIndex, Vec<u8>, R::MoveTypeLayout)>,
     /// The return values from the function
-    pub return_values: Vec<(Vec<u8>, MoveTypeLayout)>,
+    pub return_values: Vec<(Vec<u8>, R::MoveTypeLayout)>,
 }
 
 impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
@@ -266,26 +267,26 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         self.runtime.loader().load_type(type_tag, &self.data_cache)
     }
 
-    pub fn get_type_layout(&self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
+    pub fn get_type_layout(&self, type_tag: &TypeTag) -> VMResult<R::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
+    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn type_to_type_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+    pub fn type_to_type_layout(&self, ty: &Type) -> VMResult<R::MoveTypeLayout> {
         self.runtime
             .loader()
             .type_to_type_layout(ty)
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .type_to_fully_annotated_layout(ty)

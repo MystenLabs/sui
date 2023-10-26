@@ -7,11 +7,11 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
-use move_core_types::value::MoveStructLayout;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
@@ -1219,14 +1219,13 @@ impl RpcExampleProvider {
             value: serde_json::Value::String("some_value".to_string()),
         };
 
+        let struct_tag = parse_sui_struct_tag("0x9::test::TestField").unwrap();
         let resp = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     unsafe {
                         MoveObject::new_from_execution_with_limit(
-                            MoveObjectType::from(
-                                parse_sui_struct_tag("0x9::test::TestField").unwrap(),
-                            ),
+                            MoveObjectType::from(struct_tag.clone()),
                             true,
                             SequenceNumber::from_u64(1),
                             Vec::new(),
@@ -1234,7 +1233,10 @@ impl RpcExampleProvider {
                         )
                         .unwrap()
                     },
-                    MoveStructLayout::WithFields(Vec::new()),
+                    MoveStructLayout {
+                        type_: struct_tag,
+                        fields: Vec::new(),
+                    },
                 )
                 .unwrap(),
             ),

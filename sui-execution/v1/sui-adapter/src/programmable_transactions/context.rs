@@ -23,7 +23,7 @@ mod checked {
     };
     use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
-    use move_core_types::value::MoveTypeLayout;
+    use move_core_types::runtime_value::MoveTypeLayout;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
         account_address::AccountAddress,

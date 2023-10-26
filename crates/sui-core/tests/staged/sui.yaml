@@ -506,12 +506,6 @@ ModuleId:
         TYPENAME: AccountAddress
     - name:
         TYPENAME: Identifier
-MoveFieldLayout:
-  STRUCT:
-    - name:
-        TYPENAME: Identifier
-    - layout:
-        TYPENAME: MoveTypeLayout
 MoveLocation:
   STRUCT:
     - module:
@@ -568,54 +562,6 @@ MovePackage:
             TYPENAME: ObjectID
           VALUE:
             TYPENAME: UpgradeInfo
-MoveStructLayout:
-  ENUM:
-    0:
-      Runtime:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveTypeLayout
-    1:
-      WithFields:
-        NEWTYPE:
-          SEQ:
-            TYPENAME: MoveFieldLayout
-    2:
-      WithTypes:
-        STRUCT:
-          - type_:
-              TYPENAME: StructTag
-          - fields:
-              SEQ:
-                TYPENAME: MoveFieldLayout
-MoveTypeLayout:
-  ENUM:
-    0:
-      bool: UNIT
-    1:
-      u8: UNIT
-    2:
-      u64: UNIT
-    3:
-      u128: UNIT
-    4:
-      address: UNIT
-    5:
-      vector:
-        NEWTYPE:
-          TYPENAME: MoveTypeLayout
-    6:
-      struct:
-        NEWTYPE:
-          TYPENAME: MoveStructLayout
-    7:
-      signer: UNIT
-    8:
-      u16: UNIT
-    9:
-      u32: UNIT
-    10:
-      u256: UNIT
 MultiSig:
   STRUCT:
     - sigs:

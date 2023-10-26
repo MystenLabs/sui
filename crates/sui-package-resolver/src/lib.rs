@@ -19,8 +19,8 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
@@ -571,7 +571,7 @@ impl ResolutionContext {
                     })
                     .collect::<Result<_>>()?;
 
-                L::Struct(MoveStructLayout::WithTypes { type_, fields })
+                L::Struct(MoveStructLayout { type_, fields })
             }
         })
     }
@@ -642,7 +642,7 @@ impl ResolutionContext {
                     })
                     .collect::<Result<_>>()?;
 
-                L::Struct(MoveStructLayout::WithTypes { type_, fields })
+                L::Struct(MoveStructLayout { type_, fields })
             }
         })
     }
