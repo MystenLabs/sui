@@ -192,52 +192,11 @@ impl QueryBuilder {
         descending_order: bool,
         limit: i64,
         filter: Option<TransactionBlockFilter>,
+        after_tx_seq_num: Option<i64>,
+        before_tx_seq_num: Option<i64>,
     ) -> Result<transactions::BoxedQuery<'a, Pg>, Error> {
         let mut query = transactions::dsl::transactions.into_boxed();
 
-        let descending_order = last.is_some();
-        let cursor = after
-            .or(before)
-            .map(|cursor| self.parse_tx_cursor(&cursor))
-            .transpose()?;
-
-        let mut after_tx_seq_num: Option<i64> = None;
-        let mut before_tx_seq_num: Option<i64> = None;
-        if let Some(filter) = &filter {
-            if let Some(checkpoint) = filter.after_checkpoint {
-                let subquery = transactions::dsl::transactions
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
-                    .order(transactions::dsl::tx_sequence_number.asc())
-                    .select(transactions::dsl::tx_sequence_number)
-                    .into_boxed();
-
-                after_tx_seq_num = self
-                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                    .await?;
-
-                // Return early if we cannot find txs after the specified checkpoint
-                if after_tx_seq_num.is_none() {
-                    return Ok(None);
-                }
-            }
-
-            if let Some(checkpoint) = filter.before_checkpoint {
-                let subquery = transactions::dsl::transactions
-                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
-                    .order(transactions::dsl::tx_sequence_number.desc())
-                    .select(transactions::dsl::tx_sequence_number)
-                    .into_boxed();
-
-                before_tx_seq_num = self
-                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
-                    .await?;
-
-                // Return early if we cannot find tx before the specified checkpoint
-                if before_tx_seq_num.is_none() {
-                    return Ok(None);
-                }
-            }
-        }
         if let Some(cursor_val) = cursor {
             if descending_order {
                 let filter_value =
@@ -708,8 +667,46 @@ impl PgManager {
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
+        let mut after_tx_seq_num: Option<i64> = None;
+        let mut before_tx_seq_num: Option<i64> = None;
+        if let Some(filter) = &filter {
+            if let Some(checkpoint) = filter.after_checkpoint {
+                let subquery = transactions::dsl::transactions
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
+                    .order(transactions::dsl::tx_sequence_number.asc())
+                    .select(transactions::dsl::tx_sequence_number)
+                    .limit(1)
+                    .into_boxed();
 
-        let query = QueryBuilder::multi_get_txs(cursor, descending_order, limit, filter)?;
+                after_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
+
+                // Return early if we cannot find txs after the specified checkpoint
+                if after_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
+            }
+
+            if let Some(checkpoint) = filter.before_checkpoint {
+                let subquery = transactions::dsl::transactions
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
+                    .order(transactions::dsl::tx_sequence_number.desc())
+                    .select(transactions::dsl::tx_sequence_number)
+                    .into_boxed();
+
+                before_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
+
+                // Return early if we cannot find tx before the specified checkpoint
+                if before_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
+            }
+        }
+
+        let query = QueryBuilder::multi_get_txs(cursor, descending_order, limit, filter, after_tx_seq_num, before_tx_seq_num)?;
 
         let result: Option<Vec<StoredTransaction>> = self
             .run_query_async(move |conn| {
