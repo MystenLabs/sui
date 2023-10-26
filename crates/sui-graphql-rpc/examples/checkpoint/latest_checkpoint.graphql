@@ -7,7 +7,6 @@
       storageRebate
       nonRefundableStorageFee
     }, epoch {
-      systemStateVersion
       referenceGasPrice
       startTimestamp
     }, endOfEpoch {

@@ -1,7 +1,7 @@
 # Get last 3 coins before coins at cursor 13034947
 {
   address(address:"0x0000000000000000000000000000000000000000000000000000000000000000") {
-    coinConnection(last: 3, before:"13034947") {
+    coinConnection(last: 3, before:"0x13034947") {
       nodes {
         id, balance
       },
