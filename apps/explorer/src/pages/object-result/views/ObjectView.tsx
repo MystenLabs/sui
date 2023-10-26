@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { CoinFormat, useFormatCoin } from '@mysten/core';
+import { CoinFormat, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { ArrowUpRight16 } from '@mysten/icons';
 import { type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js/client';
 import {
@@ -149,6 +149,12 @@ function VersionCard({ version, digest }: { version?: string; digest: string }) 
 	);
 }
 
+function AddressOwner({ address }: { address: string }) {
+	const { data: suinsDomainName } = useResolveSuiNSName(address);
+
+	return <AddressLink address={address} label={suinsDomainName} />;
+}
+
 function OwnerCard({
 	objOwner,
 	display,
@@ -181,7 +187,7 @@ function OwnerCard({
 					) : 'ObjectOwner' in objOwner ? (
 						<ObjectLink objectId={objOwner.ObjectOwner} />
 					) : (
-						<AddressLink address={objOwner.AddressOwner} />
+						<AddressOwner address={objOwner.AddressOwner} />
 					)}
 				</Description>
 			)}
