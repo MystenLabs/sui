@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sui-typescript-docs.vercel.app",
-	"version": "0.44.0",
+	"version": "0.45.0",
 	"license": "Apache-2.0",
 	"sideEffects": false,
 	"files": [
