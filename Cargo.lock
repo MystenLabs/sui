@@ -11217,6 +11217,7 @@ dependencies = [
 name = "sui-protocol-config"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "insta",
  "schemars",
  "serde",
@@ -11507,6 +11508,7 @@ dependencies = [
  "bytes",
  "fastcrypto",
  "futures",
+ "indicatif",
  "integer-encoding",
  "num_enum",
  "object_store",
@@ -11603,6 +11605,7 @@ dependencies = [
  "futures",
  "hyper",
  "hyper-rustls 0.24.0",
+ "indicatif",
  "integer-encoding",
  "itertools",
  "lru 0.10.0",
@@ -11805,6 +11808,7 @@ dependencies = [
  "move-core-types",
  "narwhal-storage",
  "narwhal-types",
+ "num_cpus",
  "object_store",
  "prometheus",
  "rocksdb",
@@ -11816,8 +11820,10 @@ dependencies = [
  "sui-config",
  "sui-core",
  "sui-network",
+ "sui-protocol-config",
  "sui-replay",
  "sui-sdk",
+ "sui-snapshot",
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",

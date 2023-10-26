@@ -462,6 +462,13 @@ impl AuthorityPerpetualTables {
         Ok(())
     }
 
+    pub fn get_root_state_hash(
+        &self,
+        epoch: EpochId,
+    ) -> SuiResult<Option<(CheckpointSequenceNumber, Accumulator)>> {
+        Ok(self.root_state_hash_by_epoch.get(&epoch)?)
+    }
+
     pub fn insert_root_state_hash(
         &self,
         epoch: EpochId,
