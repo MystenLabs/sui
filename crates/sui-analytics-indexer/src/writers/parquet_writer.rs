@@ -4,7 +4,7 @@
 use crate::{AnalyticsWriter, FileFormat, FileType};
 use crate::{ParquetSchema, ParquetValue};
 use anyhow::{anyhow, Result};
-use arrow_array::{ArrayRef, RecordBatch, StringArray, UInt64Array};
+use arrow_array::{ArrayRef, BooleanArray, Int64Array, RecordBatch, StringArray, UInt64Array};
 use serde::Serialize;
 use std::fs::File;
 use std::fs::{create_dir_all, remove_file};
@@ -106,7 +106,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         let mut batch_data = vec![];
         for column in std::mem::take(&mut self.data) {
             convert_to_arrow_array!(column, batch_data,
-                ParquetValue::U64 => UInt64Array, ParquetValue::Str => StringArray, ParquetValue::OptionU64 => UInt64Array, ParquetValue::OptionStr => StringArray
+                ParquetValue::U64 => UInt64Array, ParquetValue::Str => StringArray, ParquetValue::OptionU64 => UInt64Array, ParquetValue::OptionStr => StringArray, ParquetValue::Bool => BooleanArray, ParquetValue::I64 => Int64Array
             );
         }
         let batch = RecordBatch::try_from_iter(S::schema().iter().zip(batch_data.into_iter()))?;
