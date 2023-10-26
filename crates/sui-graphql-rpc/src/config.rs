@@ -13,6 +13,7 @@ use crate::functional_group::FunctionalGroup;
 const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
 const MAX_DB_QUERY_COST: u64 = 50; // Max DB query cost (normally f64) truncated
+const MAX_QUERY_VARIABLES: u32 = 50;
 
 /// Configuration on connections for the RPC, passed in as command-line arguments.
 #[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq)]
@@ -47,6 +48,8 @@ pub struct Limits {
     pub(crate) max_query_nodes: u32,
     #[serde(default)]
     pub(crate) max_db_query_cost: u64,
+    #[serde(default)]
+    pub(crate) max_query_variables: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Default)]
@@ -143,6 +146,7 @@ impl Default for Limits {
             max_query_depth: MAX_QUERY_DEPTH,
             max_query_nodes: MAX_QUERY_NODES,
             max_db_query_cost: MAX_DB_QUERY_COST,
+            max_query_variables: MAX_QUERY_VARIABLES,
         }
     }
 }
@@ -235,6 +239,7 @@ mod tests {
                 max-query-depth = 100
                 max-query-nodes = 300
                 max-db-query-cost = 50
+                max-query-variables = 45
             "#,
         )
         .unwrap();
@@ -244,6 +249,7 @@ mod tests {
                 max_query_depth: 100,
                 max_query_nodes: 300,
                 max_db_query_cost: 50,
+                max_query_variables: 45,
             },
             ..Default::default()
         };
@@ -298,6 +304,7 @@ mod tests {
                 max-query-depth = 42
                 max-query-nodes = 320
                 max-db-query-cost = 20
+                max-query-variables = 34
 
                 [experiments]
                 test-flag = true
@@ -310,6 +317,7 @@ mod tests {
                 max_query_depth: 42,
                 max_query_nodes: 320,
                 max_db_query_cost: 20,
+                max_query_variables: 34,
             },
             disabled_features: BTreeSet::from([FunctionalGroup::Analytics]),
             experiments: Experiments { test_flag: true },
