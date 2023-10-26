@@ -43,9 +43,16 @@ pub fn raw_sql_string_values_set(
     })?;
     let sql: String = query_builder.finish();
 
+    // handle limits, as '0' is invalid
+    let re = Regex::new(r"(LIMIT\s+)\$(\d+)")
+        .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
+
+    let output = re.replace_all(&sql, "LIMIT 1").to_string();
+
+
     let re = Regex::new(r"\$(\d+)")
         .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
-    Ok(re.replace_all(&sql, "'0'").to_string())
+    Ok(re.replace_all(&output, "'0'").to_string())
 }
 
 pub fn extract_cost(

@@ -547,33 +547,23 @@ impl PgManager {
         address: Vec<u8>,
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async(move |conn| {
-            let query = QueryBuilder::get_obj(address, version);
-            query
-                .get_result::<StoredObject>(conn)
-                .optional()
-        })
+        self.run_query_async_with_cost(
+            QueryBuilder::get_obj(address, version),
+            |query| move |conn| query.get_result::<StoredObject>(conn).optional()
+        )
         .await
     }
 
     pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
-        match epoch_id {
-            Some(epoch_id) => {
-                self.run_query_async(move |conn| {
-                    QueryBuilder::get_epoch(epoch_id)
-                        .get_result::<StoredEpochInfo>(conn)
-                        .optional()
-                })
-                .await
-            }
-            None => Some(
-                self.run_query_async(|conn| {
-                    QueryBuilder::get_latest_epoch().first::<StoredEpochInfo>(conn)
-                })
-                .await,
-            )
-            .transpose(),
-        }
+        let query = match epoch_id {
+            Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
+            None => QueryBuilder::get_latest_epoch()
+        };
+
+        self.run_query_async_with_cost(
+            query,
+            |query| move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
+        ).await
     }
 
     async fn get_checkpoint(
@@ -592,7 +582,8 @@ impl PgManager {
             _ => QueryBuilder::get_latest_checkpoint(),
         };
 
-        self.run_query_async(|conn| query.get_result::<StoredCheckpoint>(conn).optional())
+        self.run_query_async_with_cost(query,
+            |query| move |conn| query.get_result::<StoredCheckpoint>(conn).optional())
             .await
     }
 
@@ -627,11 +618,10 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async(move |conn| {
-                QueryBuilder::multi_get_coins(cursor, descending_order, limit, address, coin_type)
-                    .load(conn)
-                    .optional()
-            })
+            .run_query_async_with_cost(
+                QueryBuilder::multi_get_coins(cursor, descending_order, limit, address, coin_type),
+                |query| move |conn| query.load(conn).optional()
+            )
             .await?;
 
         result
@@ -651,11 +641,10 @@ impl PgManager {
         address: Vec<u8>,
         coin_type: String,
     ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async(move |conn| {
-            QueryBuilder::get_balance(address, coin_type)
-                .get_result(conn)
-                .optional()
-        })
+        self.run_query_async_with_cost(
+            QueryBuilder::get_balance(address, coin_type),
+            |query| move |conn| query.get_result(conn).optional()
+        )
         .await
     }
 
@@ -673,11 +662,12 @@ impl PgManager {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async(move |conn| {
-            QueryBuilder::multi_get_balances(address)
+        self.run_query_async_with_cost(
+            QueryBuilder::multi_get_balances(address),
+            |query| move |conn| query
                 .load(conn)
                 .optional()
-        })
+        )
         .await
     }
 
@@ -744,12 +734,12 @@ impl PgManager {
         )?;
 
         let result: Option<Vec<StoredTransaction>> = self
-            .run_query_async(move |conn| {
-                query
-                    .select(transactions::all_columns)
+            .run_query_async_with_cost(
+                query,
+                |query| move |conn| query
                     .load(conn)
                     .optional()
-            })
+            )
             .await?;
 
         result
@@ -780,16 +770,17 @@ impl PgManager {
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
 
         let result: Option<Vec<StoredCheckpoint>> = self
-            .run_query_async(move |conn| {
+            .run_query_async_with_cost(
                 QueryBuilder::multi_get_checkpoints(
                     cursor,
                     descending_order,
                     limit,
                     epoch.map(|e| e as i64),
-                )
+                ),
+                |query| move |conn| query
                 .load(conn)
                 .optional()
-            })
+            )
             .await?;
 
         result
@@ -824,7 +815,8 @@ impl PgManager {
             QueryBuilder::multi_get_objs(cursor, descending_order, limit, filter, owner_type)?;
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async(move |conn| query.load(conn).optional())
+            .run_query_async_with_cost(query,
+                |query| move |conn| query.load(conn).optional())
             .await?;
         result
             .map(|mut stored_objs| {
