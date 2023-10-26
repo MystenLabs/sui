@@ -1,5 +1,5 @@
 address 0x2 {
-#[allow(unused_type_parameter)]
+#[allow(unused_type_parameter, unused_mut_ref)]
 module N {
     use 0x2::M;
 
