@@ -5,7 +5,7 @@
 // in language/move-prover/byte-code-to-boogie/tests
 // so we could run these through boogie.
 
-// Test parsing the conditions themselves relative to return values, acquires clauses
+// Test parsing the conditions themselves relative to return values
 //# publish
 module 0x1.TestConditions {
 
@@ -41,24 +41,6 @@ module 0x1.TestConditions {
       label b0: return true;
   }
 
-  public ensures_with_acquires()
-  acquires T
-  ensures true
-  {
-    label b0:
-      _ = borrow_global<T>(0x0);
-      return;
-  }
-
-  public ensures_with_return_acquires(): bool
-  acquires T
-  ensures true
-  {
-    label b0:
-      _ = borrow_global<T>(0x0);
-      return true;
-  }
-
   public multiple_ensures()
   ensures true
   ensures false
@@ -68,7 +50,6 @@ module 0x1.TestConditions {
   }
 
   public all_together_now(): bool
-  acquires T
   requires true
   requires false
   ensures true
@@ -79,7 +60,6 @@ module 0x1.TestConditions {
   succeeds_if false
   {
     label b0:
-      _ = borrow_global<T>(0x0);
       return true;
   }
 
