@@ -358,11 +358,60 @@ impl PgManager {
             .or(before)
             .map(|cursor| self.parse_tx_cursor(&cursor))
             .transpose()?;
-        if let Some(cursor) = cursor {
+
+        let mut after_tx_seq_num: Option<i64> = None;
+        let mut before_tx_seq_num: Option<i64> = None;
+        if let Some(filter) = &filter {
+            if let Some(checkpoint) = filter.after_checkpoint {
+                let subquery = transactions::dsl::transactions
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
+                    .order(transactions::dsl::tx_sequence_number.asc())
+                    .select(transactions::dsl::tx_sequence_number)
+                    .into_boxed();
+
+                after_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
+
+                // Return early if we cannot find txs after the specified checkpoint
+                if after_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
+            }
+
+            if let Some(checkpoint) = filter.before_checkpoint {
+                let subquery = transactions::dsl::transactions
+                    .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64))
+                    .order(transactions::dsl::tx_sequence_number.desc())
+                    .select(transactions::dsl::tx_sequence_number)
+                    .into_boxed();
+
+                before_tx_seq_num = self
+                    .run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                    .await?;
+
+                // Return early if we cannot find tx before the specified checkpoint
+                if before_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
+            }
+        }
+        if let Some(cursor_val) = cursor {
             if descending_order {
-                query = query.filter(transactions::dsl::tx_sequence_number.lt(cursor));
+                let filter_value =
+                    before_tx_seq_num.map_or(cursor_val, |b| std::cmp::min(b, cursor_val));
+                query = query.filter(transactions::dsl::tx_sequence_number.lt(filter_value));
             } else {
-                query = query.filter(transactions::dsl::tx_sequence_number.gt(cursor));
+                let filter_value =
+                    after_tx_seq_num.map_or(cursor_val, |a| std::cmp::max(a, cursor_val));
+                query = query.filter(transactions::dsl::tx_sequence_number.gt(filter_value));
+            }
+        } else {
+            if let Some(av) = after_tx_seq_num {
+                query = query.filter(transactions::dsl::tx_sequence_number.gt(av));
+            }
+            if let Some(bv) = before_tx_seq_num {
+                query = query.filter(transactions::dsl::tx_sequence_number.lt(bv));
             }
         }
 
@@ -381,17 +430,6 @@ impl PgManager {
             if let Some(checkpoint) = filter.at_checkpoint {
                 query = query
                     .filter(transactions::dsl::checkpoint_sequence_number.eq(checkpoint as i64));
-            } else {
-                if let Some(checkpoint) = filter.after_checkpoint {
-                    query = query.filter(
-                        transactions::dsl::checkpoint_sequence_number.gt(checkpoint as i64),
-                    );
-                }
-                if let Some(checkpoint) = filter.before_checkpoint {
-                    query = query.filter(
-                        transactions::dsl::checkpoint_sequence_number.lt(checkpoint as i64),
-                    );
-                }
             }
             if let Some(transaction_ids) = filter.transaction_ids {
                 let digests = transaction_ids
