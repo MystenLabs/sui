@@ -4,6 +4,7 @@
 
 use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
+use strum_macros::Display;
 use sui_analytics_indexer_derive::SerializeParquet;
 // use std::collections::BTreeSet;
 
@@ -119,7 +120,7 @@ pub(crate) struct EventEntry {
 }
 
 // Used in the transaction object table to identify the type of input object.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum InputObjectKind {
     Input,
     SharedInput,
@@ -128,7 +129,7 @@ pub enum InputObjectKind {
 
 // Used in the object table to identify the status of object, its result in the last transaction
 // effect.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum ObjectStatus {
     Created,
     Mutated,
@@ -136,7 +137,7 @@ pub enum ObjectStatus {
 }
 
 // Object owner information.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Display)]
 pub enum OwnerType {
     AddressOwner,
     ObjectOwner,

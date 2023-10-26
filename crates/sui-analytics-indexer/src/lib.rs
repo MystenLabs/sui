@@ -33,8 +33,8 @@ use crate::handlers::transaction_handler::TransactionHandler;
 use crate::handlers::transaction_objects_handler::TransactionObjectsHandler;
 use crate::handlers::AnalyticsHandler;
 use crate::tables::{
-    CheckpointEntry, EventEntry, MoveCallEntry, MovePackageEntry, ObjectEntry, TransactionEntry,
-    TransactionObjectEntry,
+    CheckpointEntry, EventEntry, InputObjectKind, MoveCallEntry, MovePackageEntry, ObjectEntry,
+    ObjectStatus, OwnerType, TransactionEntry, TransactionObjectEntry,
 };
 use crate::writers::csv_writer::CSVWriter;
 use crate::writers::parquet_writer::ParquetWriter;
@@ -182,6 +182,8 @@ impl FileType {
 pub enum ParquetValue {
     U64(u64),
     Str(String),
+    Bool(bool),
+    I64(i64),
     OptionU64(Option<u64>),
     OptionStr(Option<String>),
 }
@@ -189,6 +191,12 @@ pub enum ParquetValue {
 impl From<u64> for ParquetValue {
     fn from(value: u64) -> Self {
         Self::U64(value)
+    }
+}
+
+impl From<i64> for ParquetValue {
+    fn from(value: i64) -> Self {
+        Self::I64(value)
     }
 }
 
@@ -207,6 +215,36 @@ impl From<Option<u64>> for ParquetValue {
 impl From<Option<String>> for ParquetValue {
     fn from(value: Option<String>) -> Self {
         Self::OptionStr(value)
+    }
+}
+
+impl From<bool> for ParquetValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<OwnerType> for ParquetValue {
+    fn from(value: OwnerType) -> Self {
+        Self::Str(value.to_string())
+    }
+}
+
+impl From<ObjectStatus> for ParquetValue {
+    fn from(value: ObjectStatus) -> Self {
+        Self::Str(value.to_string())
+    }
+}
+
+impl From<Option<ObjectStatus>> for ParquetValue {
+    fn from(value: Option<ObjectStatus>) -> Self {
+        Self::OptionStr(value.map(|v| v.to_string()))
+    }
+}
+
+impl From<Option<InputObjectKind>> for ParquetValue {
+    fn from(value: Option<InputObjectKind>) -> Self {
+        Self::OptionStr(value.map(|v| v.to_string()))
     }
 }
 
