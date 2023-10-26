@@ -3,7 +3,7 @@
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
 	"homepage": "https://sui-typescript-docs.vercel.app/typescript",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
