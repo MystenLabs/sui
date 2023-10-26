@@ -13,8 +13,8 @@ use sui_types::base_types::{
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::object::{Object, Owner};
 use sui_types::storage::{
-    get_module_by_id, BackingPackageStore, ChildObjectResolver, GetSharedLocks, MarkerTableQuery,
-    ObjectStore, ParentSync,
+    get_module_by_id, get_package_object, BackingPackageStore, ChildObjectResolver, GetSharedLocks,
+    MarkerTableQuery, ObjectStore, ParentSync,
 };
 
 #[derive(Clone)]
@@ -58,14 +58,8 @@ impl ObjectStore for InMemoryObjectStore {
 }
 
 impl BackingPackageStore for InMemoryObjectStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
-        Ok(self.get_object(package_id).unwrap().and_then(|o| {
-            if o.is_package() {
-                Some(Arc::new(o.clone()))
-            } else {
-                None
-            }
-        }))
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
+        get_package_object(self, package_id)
     }
 }
 

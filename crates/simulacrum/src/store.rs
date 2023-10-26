@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::collections::{BTreeMap, HashMap};
 use sui_config::genesis;
+use sui_types::storage::{get_module, get_package_object, PackageObjectArc};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
@@ -243,8 +242,8 @@ impl BackingPackageStore for InMemoryStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<Arc<Object>>> {
-        Ok(self.get_object(package_id).map(|o| Arc::new(o.clone())))
+    ) -> sui_types::error::SuiResult<Option<PackageObjectArc>> {
+        get_package_object(self, package_id)
     }
 }
 
@@ -347,14 +346,7 @@ impl ModuleResolver for InMemoryStore {
     type Error = SuiError;
 
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        Ok(self
-            .get_package(&ObjectID::from(*module_id.address()))?
-            .and_then(|package| {
-                package
-                    .serialized_module_map()
-                    .get(module_id.name().as_str())
-                    .cloned()
-            }))
+        get_module(self, module_id)
     }
 }
 

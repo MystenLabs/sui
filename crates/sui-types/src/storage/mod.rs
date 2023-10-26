@@ -151,45 +151,75 @@ pub trait Storage {
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
-pub trait BackingPackageStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>>;
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<MovePackage>>> {
-        self.get_package_object(package_id).map(|opt_obj| {
-            opt_obj
-                .and_then(|obj| obj.data.try_as_package().cloned())
-                .map(Arc::new)
-        })
+pub struct PackageObjectArc {
+    package_object: Arc<Object>,
+}
+
+impl PackageObjectArc {
+    pub fn new(package_object: Object) -> Self {
+        assert!(package_object.is_package());
+        Self {
+            package_object: Arc::new(package_object),
+        }
+    }
+
+    pub fn object(&self) -> &Object {
+        &self.package_object
+    }
+
+    pub fn move_package(&self) -> &MovePackage {
+        self.package_object.data.try_as_package().unwrap()
     }
 }
 
+pub trait BackingPackageStore {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>>;
+}
+
 impl<S: BackingPackageStore> BackingPackageStore for Arc<S> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(self.as_ref(), package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
 impl<S: ?Sized + BackingPackageStore> BackingPackageStore for &mut S {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObjectArc>> {
         BackingPackageStore::get_package_object(*self, package_id)
     }
 }
 
-/// Returns Ok(<package for each package id in `package_ids`>) if all package IDs in
+pub fn get_package_object(
+    store: &impl ObjectStore,
+    package_id: &ObjectID,
+) -> SuiResult<Option<PackageObjectArc>> {
+    let package = store.get_object(package_id)?;
+    if let Some(obj) = &package {
+        fp_ensure!(
+            obj.is_package(),
+            SuiError::BadObjectType {
+                error: format!("Package expected, Move object found: {package_id}"),
+            }
+        );
+    }
+    Ok(package.map(PackageObjectArc::new))
+}
+
+/// Returns Ok(<package object for each package id in `package_ids`>) if all package IDs in
 /// `package_id` were found. If any package in `package_ids` was not found it returns a list
 /// of any package ids that are unable to be found>).
-pub fn get_packages<'a>(
+pub fn get_package_objects<'a>(
     store: &impl BackingPackageStore,
     package_ids: impl IntoIterator<Item = &'a ObjectID>,
-) -> SuiResult<PackageFetchResults<Arc<MovePackage>>> {
-    let packages: Vec<Result<Arc<MovePackage>, ObjectID>> = package_ids
+) -> SuiResult<PackageFetchResults<PackageObjectArc>> {
+    let packages: Vec<Result<_, _>> = package_ids
         .into_iter()
-        .map(|id| match store.get_package(id) {
+        .map(|id| match store.get_package_object(id) {
             Ok(None) => Ok(Err(*id)),
             Ok(Some(o)) => Ok(Ok(o)),
             Err(x) => Err(x),
@@ -209,9 +239,10 @@ pub fn get_module<S: BackingPackageStore>(
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
-        .get_package(&ObjectID::from(*module_id.address()))?
+        .get_package_object(&ObjectID::from(*module_id.address()))?
         .and_then(|package| {
             package
+                .move_package()
                 .serialized_module_map()
                 .get(module_id.name().as_str())
                 .cloned()
