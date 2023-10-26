@@ -332,10 +332,6 @@ fn is_empty(b: &BTreeSet<String>) -> bool {
     b.is_empty()
 }
 
-fn is_vec_empty(b: &Vec<u64>) -> bool {
-    b.is_empty()
-}
-
 /// Ordering mechanism for transactions in one Narwhal consensus output.
 #[derive(Default, Copy, Clone, Serialize, Debug)]
 pub enum ConsensusTransactionOrdering {

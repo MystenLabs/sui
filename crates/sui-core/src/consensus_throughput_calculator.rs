@@ -78,8 +78,8 @@ impl ThroughputProfileRanges {
         };
 
         match chain_id.chain() {
-            Chain::Mainnet => ThroughputProfileRanges::new(&to_profiles(500, 1_500)),
-            Chain::Testnet => ThroughputProfileRanges::new(&to_profiles(500, 1_500)),
+            Chain::Mainnet => ThroughputProfileRanges::new(&to_profiles(500, 2_000)),
+            Chain::Testnet => ThroughputProfileRanges::new(&to_profiles(500, 2_000)),
             Chain::Unknown => ThroughputProfileRanges::new(&to_profiles(1_000, 2_000)),
         }
     }

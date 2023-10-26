@@ -450,6 +450,7 @@ impl ConsensusAdapter {
 
         let latency = std::cmp::max(latency, DEFAULT_LATENCY);
         let latency = std::cmp::min(latency, MAX_LATENCY);
+        let latency = latency * 2;
         let latency = self.override_by_throughput_profiler(position, latency);
         let (delay_step, position) =
             self.override_by_max_submit_position_settings(latency, position);
@@ -471,8 +472,8 @@ impl ConsensusAdapter {
     // When throughput profile is High then we go back to default operation and no-one co-submits.
     fn override_by_throughput_profiler(&self, position: usize, latency: Duration) -> Duration {
         const LOW_THROUGHPUT_LATENCY_MS: u64 = 0;
-        const MEDIUM_THROUGHPUT_LATENCY_MS: u64 = 1_250;
-        const HIGH_THROUGHPUT_LATENCY_MS: u64 = 2_000;
+        const MEDIUM_THROUGHPUT_LATENCY_MS: u64 = 2_500;
+        const HIGH_THROUGHPUT_LATENCY_MS: u64 = 4_000;
 
         let p = self.consensus_throughput_profiler.load();
 
@@ -485,7 +486,16 @@ impl ConsensusAdapter {
                 return match level {
                     Level::Low => Duration::from_millis(LOW_THROUGHPUT_LATENCY_MS),
                     Level::Medium => Duration::from_millis(MEDIUM_THROUGHPUT_LATENCY_MS),
-                    Level::High => Duration::from_millis(HIGH_THROUGHPUT_LATENCY_MS),
+                    Level::High => {
+                        let l = Duration::from_millis(HIGH_THROUGHPUT_LATENCY_MS);
+
+                        // back off according to recorded latency if it's significantly higher
+                        if latency >= 2 * l {
+                            latency
+                        } else {
+                            l
+                        }
+                    }
                 };
             }
         }
@@ -505,7 +515,7 @@ impl ConsensusAdapter {
             position = std::cmp::min(position, max_submit_position);
         }
 
-        let delay_step = self.submit_delay_step_override.unwrap_or(latency * 2);
+        let delay_step = self.submit_delay_step_override.unwrap_or(latency);
         (delay_step, position)
     }
 
