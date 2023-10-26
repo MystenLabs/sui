@@ -118,7 +118,7 @@ pub enum DbValidationError {
     #[error("Pagination is currently disabled on balances")]
     PaginationDisabledOnBalances,
     #[error(
-        "Cannot provide owner address for an owner that is not of owner type Address or Object"
+        "Invalid owner type. Must be Address or Object"
     )]
     InvalidOwnerType,
 }
