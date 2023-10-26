@@ -114,8 +114,6 @@ pub enum DbValidationError {
     LastBefore,
     #[error("Pagination is currently disabled on balances")]
     PaginationDisabledOnBalances,
-    #[error("after_checkpoint cannot be 0. To include 0, please leave after_checkpoint blank")]
-    AfterCheckpointCannotBeZero,
 }
 
 pub(crate) struct PgManager {
@@ -371,10 +369,13 @@ impl PgManager {
                     .select(transactions::dsl::tx_sequence_number)
                     .into_boxed();
 
-                after_tx_seq_num = Some(
-                    self.run_query_async(|conn| subquery.get_result::<i64>(conn))
-                        .await?,
-                );
+                after_tx_seq_num = self.run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                        .await?;
+
+                // Return early if we cannot find txs after the specified checkpoint
+                if after_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
             }
 
             if let Some(checkpoint) = filter.before_checkpoint {
@@ -384,10 +385,13 @@ impl PgManager {
                     .select(transactions::dsl::tx_sequence_number)
                     .into_boxed();
 
-                before_tx_seq_num = Some(
-                    self.run_query_async(|conn| subquery.get_result::<i64>(conn))
-                        .await?,
-                );
+                before_tx_seq_num = self.run_query_async(|conn| subquery.get_result::<i64>(conn).optional())
+                        .await?;
+
+                // Return early if we cannot find tx before the specified checkpoint
+                if before_tx_seq_num.is_none() {
+                    return Ok(None);
+                }
             }
         }
         if let Some(cursor_val) = cursor {
@@ -706,11 +710,6 @@ impl PgManager {
         if let (Some(before), Some(after)) = (filter.before_checkpoint, filter.after_checkpoint) {
             if before <= after {
                 return Err(DbValidationError::InvalidCheckpointOrder.into());
-            }
-        }
-        if let Some(after) = filter.after_checkpoint {
-            if after == 0 {
-                return Err(DbValidationError::AfterCheckpointCannotBeZero.into());
             }
         }
         self.validate_package_dependencies(

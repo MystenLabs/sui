@@ -2,7 +2,7 @@
 {
   transactionBlockConnection(
     filter: {
-      afterCheckpoint:10,
+      afterCheckpoint: 10,
       beforeCheckpoint: 20
     }
   ) {
