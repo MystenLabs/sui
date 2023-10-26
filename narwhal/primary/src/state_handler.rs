@@ -264,6 +264,10 @@ impl RandomnessState {
     }
 
     async fn update_randomness_round(&mut self, round: u64) {
+        if round <= self.randomness_round {
+            // Don't go backwards.
+            return;
+        }
         self.randomness_round = round;
         self.partial_sigs
             .retain(|&(round, _), _| round >= self.randomness_round);
