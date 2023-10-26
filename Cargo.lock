@@ -11808,6 +11808,7 @@ dependencies = [
  "move-core-types",
  "narwhal-storage",
  "narwhal-types",
+ "num_cpus",
  "object_store",
  "prometheus",
  "rocksdb",

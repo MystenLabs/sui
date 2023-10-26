@@ -14,6 +14,7 @@ use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
+use telemetry_subscribers::TracingHandle;
 
 use sui_types::{base_types::*, object::Owner};
 
@@ -217,8 +218,10 @@ pub enum ToolCommand {
         /// as index staging is not yet supported for formal snapshots.
         #[clap(long = "skip-indexes")]
         skip_indexes: bool,
-        #[clap(long = "num-parallel-downloads", default_value = "2")]
-        num_parallel_downloads: usize,
+        /// Number of parallel downloads to perform. Defaults to a reasonable
+        /// value based on number of available logical cores.
+        #[clap(long = "num-parallel-downloads")]
+        num_parallel_downloads: Option<usize>,
         /// If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
         /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
         /// epoch 20+, and for testnet this is epoch 12+
@@ -251,6 +254,10 @@ pub enum ToolCommand {
         archive_bucket: Option<String>,
         #[clap(long = "archive-bucket-type", default_value = "s3")]
         archive_bucket_type: ObjectStoreType,
+        /// If false (default), log level will be overridden to "off",
+        /// and output will be reduced to necessary status information.
+        #[clap(long = "formal")]
+        verbose: bool,
     },
 
     #[clap(name = "replay")]
@@ -336,7 +343,7 @@ impl std::fmt::Display for OwnerOutput {
 
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
-    pub async fn execute(self) -> Result<(), anyhow::Error> {
+    pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
             ToolCommand::FetchObject {
                 id,
@@ -454,7 +461,18 @@ impl ToolCommand {
                 snapshot_path,
                 archive_bucket,
                 archive_bucket_type,
+                verbose,
             } => {
+                if !verbose {
+                    tracing_handle
+                        .update_log("off")
+                        .expect("Failed to update log level");
+                }
+                let num_parallel_downloads = num_parallel_downloads.unwrap_or_else(|| {
+                    num_cpus::get()
+                        .checked_sub(1)
+                        .expect("Failed to get number of CPUs")
+                });
                 let snapshot_bucket = snapshot_bucket.unwrap_or_else(|| match (formal, network) {
                     (true, Chain::Mainnet) => "mysten-mainnet-formal".to_string(),
                     (false, Chain::Mainnet) => "mysten-mainnet-snapshots".to_string(),
@@ -471,7 +489,7 @@ impl ToolCommand {
                         panic!("Cannot generate default archive bucket for unknown network");
                     }
                 });
-                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or_else(|| {
+                let snapshot_bucket_type = snapshot_bucket_type.unwrap_or({
                     if formal {
                         ObjectStoreType::GCS
                     } else {
@@ -596,6 +614,7 @@ impl ToolCommand {
                         snapshot_store_config,
                         archive_store_config,
                         num_parallel_downloads,
+                        network,
                         verify,
                     )
                     .await?;

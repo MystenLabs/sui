@@ -22,7 +22,7 @@ use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use sui_core::authority::authority_store_tables::{AuthorityPerpetualTables, LiveObject};
 use sui_core::authority::AuthorityStore;
@@ -32,6 +32,7 @@ use sui_storage::object_store::ObjectStoreConfig;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber};
 use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::time::Instant;
 use tracing::{error, info};
@@ -164,7 +165,7 @@ impl StateSnapshotReaderV1 {
         &mut self,
         perpetual_db: &AuthorityPerpetualTables,
         abort_registration: AbortRegistration,
-        sender: Option<tokio::sync::oneshot::Sender<Accumulator>>,
+        sender: Option<tokio::sync::mpsc::Sender<Accumulator>>,
     ) -> Result<()> {
         // This computes and stores the sha3 digest of object references in REFERENCE file for each
         // bucket partition. When downloading objects, we will match sha3 digest of object references
@@ -173,7 +174,6 @@ impl StateSnapshotReaderV1 {
         // doesn't match but we still need to ensure that objects match references exactly.
         let sha3_digests: Arc<Mutex<DigestByBucketAndPartition>> =
             Arc::new(Mutex::new(BTreeMap::new()));
-        let mut accumulator = Accumulator::default();
 
         let num_part_files = self
             .ref_files
@@ -219,27 +219,68 @@ impl StateSnapshotReaderV1 {
         }
         checksum_progress_bar.finish_with_message("Checksumming complete");
 
-        // Spawn accumulation task
-        info!("Accumulating ref files for verification");
+        let accum_handle =
+            sender.map(|sender| self.spawn_accumulation_tasks(sender, num_part_files));
+
+        self.sync_live_objects(perpetual_db, abort_registration, sha3_digests)
+            .await?;
+
+        if let Some(handle) = accum_handle {
+            handle.await?;
+        }
+        Ok(())
+    }
+
+    fn spawn_accumulation_tasks(
+        &self,
+        sender: tokio::sync::mpsc::Sender<Accumulator>,
+        num_part_files: usize,
+    ) -> JoinHandle<()> {
+        // Spawn accumulation progress bar
+        let concurrency = self.concurrency;
+        let accum_counter = Arc::new(AtomicU64::new(0));
+        let cloned_accum_counter = accum_counter.clone();
         let accum_progress_bar = self.m.add(
-            ProgressBar::new(num_part_files as u64).with_style(
-                ProgressStyle::with_template(
-                    "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated ({msg})",
-                )
-                .unwrap(),
-            ),
-        );
-        let object_files = self.object_files.clone();
+             ProgressBar::new(num_part_files as u64).with_style(
+                 ProgressStyle::with_template(
+                     "[{elapsed_precise}] {wide_bar} {pos} out of {len} ref files accumulated ({msg})",
+                 )
+                 .unwrap(),
+             ),
+         );
+        let cloned_accum_progress_bar = accum_progress_bar.clone();
+        tokio::spawn(async move {
+            let a_instant = Instant::now();
+            loop {
+                if cloned_accum_progress_bar.is_finished() {
+                    break;
+                }
+                let num_partitions = cloned_accum_counter.load(Ordering::Relaxed);
+                let total_partitions_per_sec =
+                    num_partitions as f64 / a_instant.elapsed().as_secs_f64();
+                cloned_accum_progress_bar.set_position(num_partitions);
+                cloned_accum_progress_bar.set_message(format!(
+                    "file partitions per sec: {}",
+                    total_partitions_per_sec
+                ));
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+
+        // spawn accumualation task
         let ref_files = self.ref_files.clone();
-        let epoch_dir = self.epoch_dir().clone();
+        let epoch_dir = self.epoch_dir();
         let local_staging_dir_root = self.local_staging_dir_root.clone();
-        let accum_handle = if let Some(sender) = sender {
-            let handle = tokio::spawn(async move {
-                let local_staging_dir_root_clone = local_staging_dir_root.clone();
-                let epoch_dir_clone = epoch_dir.clone();
-                for (bucket, part_files) in ref_files.clone().iter() {
-                    for (part, _part_file) in part_files.iter() {
-                        let ref_iter = {
+        tokio::task::spawn(async move {
+            let local_staging_dir_root_clone = local_staging_dir_root.clone();
+            let epoch_dir_clone = epoch_dir.clone();
+            for (bucket, part_files) in ref_files.clone().iter() {
+                futures::stream::iter(part_files.iter())
+                    .map(|(part, _part_files)| {
+                        // TODO depending on concurrency limit here, we may be
+                        // materializing too many refs into memory at once.
+                        // This is only done because ObjectRefIter is not Send
+                        let obj_digests = {
                             let file_metadata = ref_files
                                 .get(bucket)
                                 .expect("No ref files found for bucket: {bucket_num}")
@@ -253,44 +294,53 @@ impl StateSnapshotReaderV1 {
                                 epoch_dir_clone.clone(),
                             )
                             .expect("Failed to create object ref iter")
-                        };
-                        object_files
-                            .get(bucket)
-                            .expect("No bucket exists for: {bucket}")
-                            .get(part)
-                            .expect("No part exists for bucket: {bucket}, part: {part}");
-                        // TODO these can probably be done faster by partitioning, accumulating
-                        // each partition in parallel, and then unioning the partitions
-                        for object_ref in ref_iter {
-                            accumulator.insert(object_ref.2);
                         }
-                        accum_progress_bar.inc(1);
-                        accum_progress_bar
-                            .set_message(format!("Bucket: {}, Part: {}", bucket, part));
-                    }
-                }
-                sender
-                    .send(accumulator)
-                    .expect("Unable to send accumulator from snapshot reader");
-                accum_progress_bar.finish_with_message("Accumulation complete");
-            });
-            Some(handle)
-        } else {
-            None
-        };
+                        .map(|obj_ref| obj_ref.2)
+                        .collect::<Vec<ObjectDigest>>();
+                        let sender_clone = sender.clone();
+                        tokio::spawn(async move {
+                            let mut partial_acc = Accumulator::default();
+                            partial_acc.insert_all(obj_digests);
+                            sender_clone
+                                .send(partial_acc)
+                                .await
+                                .expect("Unable to send accumulator from snapshot reader");
+                        })
+                    })
+                    .boxed()
+                    .buffer_unordered(concurrency)
+                    .for_each(|result| {
+                        result.expect("Failed to generate partial accumulator");
+                        accum_counter.fetch_add(1, Ordering::Relaxed);
+                        futures::future::ready(())
+                    })
+                    .await;
+            }
+            accum_progress_bar.finish_with_message("Accumulation complete");
+        })
+    }
 
+    async fn sync_live_objects(
+        &self,
+        perpetual_db: &AuthorityPerpetualTables,
+        abort_registration: AbortRegistration,
+        sha3_digests: Arc<Mutex<DigestByBucketAndPartition>>,
+    ) -> Result<(), anyhow::Error> {
+        let epoch_dir = self.epoch_dir();
+        let concurrency = self.concurrency;
+        let threshold = self.indirect_objects_threshold;
+        let remote_object_store = self.remote_object_store.clone();
         let input_files: Vec<_> = self
             .object_files
             .iter()
             .flat_map(|(bucket, parts)| {
-                let vec: Vec<_> = parts.iter().map(|entry| (bucket, entry)).collect();
-                vec
+                parts
+                    .clone()
+                    .into_iter()
+                    .map(|entry| (bucket, entry))
+                    .collect::<Vec<_>>()
             })
             .collect();
-        let epoch_dir = self.epoch_dir();
-        let remote_object_store = self.remote_object_store.clone();
-        let indirect_objects_threshold = self.indirect_objects_threshold;
-        let download_concurrency = self.concurrency;
         let obj_progress_bar = self.m.add(
             ProgressBar::new(input_files.len() as u64).with_style(
                 ProgressStyle::with_template(
@@ -300,9 +350,8 @@ impl StateSnapshotReaderV1 {
             ),
         );
         let obj_progress_bar_clone = obj_progress_bar.clone();
-        let downloaded_bytes = AtomicUsize::new(0);
-        let file_counter = Arc::new(AtomicUsize::new(0));
         let instant = Instant::now();
+        let downloaded_bytes = AtomicUsize::new(0);
 
         let ret = Abortable::new(
             async move {
@@ -370,45 +419,41 @@ impl StateSnapshotReaderV1 {
                             };
 
                             let sha3_digest = sha3_digests_cloned.lock().await;
-                            let bucket_map =
-                                sha3_digest.get(bucket).expect("Bucket not in digest map");
-                            let sha3_digest = bucket_map
+                            let bucket_map = sha3_digest
+                                .get(bucket)
+                                .expect("Bucket not in digest map")
+                                .clone();
+                            let sha3_digest = *bucket_map
                                 .get(part_num)
                                 .expect("sha3 digest not in bucket map");
-
                             Ok::<(Bytes, FileMetadata, [u8; 32]), anyhow::Error>((
                                 bytes,
                                 (*file_metadata).clone(),
-                                *sha3_digest,
+                                sha3_digest,
                             ))
                         }
                     })
                     .boxed()
-                    .buffer_unordered(download_concurrency)
+                    .buffer_unordered(concurrency)
                     .try_for_each(|(bytes, file_metadata, sha3_digest)| {
-                        let epoch_dir = epoch_dir.clone();
-                        let path = file_metadata.file_path(&epoch_dir);
                         let bytes_len = bytes.len();
                         let result: Result<(), anyhow::Error> =
                             LiveObjectIter::new(&file_metadata, bytes).map(|obj_iter| {
                                 AuthorityStore::bulk_insert_live_objects(
                                     perpetual_db,
                                     obj_iter,
-                                    indirect_objects_threshold,
+                                    threshold,
                                     &sha3_digest,
                                 )
                                 .expect("Failed to insert live objects");
                             });
-                        file_counter.fetch_sub(1, Ordering::Relaxed);
                         downloaded_bytes.fetch_add(bytes_len, Ordering::Relaxed);
                         obj_progress_bar_clone.inc(1);
                         obj_progress_bar_clone.set_message(format!(
-                            "Download speed: {} MiB/s, file: {}, #downloads_in_progress: {}",
+                            "Download speed: {} MiB/s",
                             downloaded_bytes.load(Ordering::Relaxed) as f64
                                 / (1024 * 1024) as f64
                                 / instant.elapsed().as_secs_f64(),
-                            path,
-                            file_counter.load(Ordering::Relaxed)
                         ));
                         futures::future::ready(result)
                     })
@@ -417,11 +462,6 @@ impl StateSnapshotReaderV1 {
             abort_registration,
         )
         .await?;
-
-        if let Some(handle) = accum_handle {
-            handle.await?;
-        }
-
         obj_progress_bar.finish_with_message("Objects download complete");
         ret
     }
