@@ -628,9 +628,11 @@ impl PgManager {
         &self,
         address: Vec<u8>,
         coin_type: String,
-    ) -> Result<(Option<i64>, Option<i64>, Option<String>), Error> {
+    ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
         self.run_query_async(move |conn| {
-            QueryBuilder::get_balance(address, coin_type).get_result(conn)
+            QueryBuilder::get_balance(address, coin_type)
+                .get_result(conn)
+                .optional()
         })
         .await
     }
@@ -642,15 +644,19 @@ impl PgManager {
         after: Option<String>,
         last: Option<u64>,
         before: Option<String>,
-    ) -> Result<Vec<(Option<i64>, Option<i64>, Option<String>)>, Error> {
+    ) -> Result<Option<Vec<(Option<i64>, Option<i64>, Option<String>)>>, Error> {
         // Todo (wlmyng): paginating on balances does not really make sense
         // We'll always need to calculate all balances first
         if first.is_some() || after.is_some() || last.is_some() || before.is_some() {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async(move |conn| QueryBuilder::multi_get_balances(address).load(conn))
-            .await
+        self.run_query_async(move |conn| {
+            QueryBuilder::multi_get_balances(address)
+                .load(conn)
+                .optional()
+        })
+        .await
     }
 
     async fn multi_get_txs(
@@ -1183,15 +1189,18 @@ impl PgManager {
         let result = self.get_balance(address, coin_type).await?;
 
         match result {
-            (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
-                coin_object_count: Some(count as u64),
-                total_balance: Some(BigInt::from(balance)),
-                coin_type: Some(coin_type),
-            })),
-            (None, None, None) => Ok(None),
-            _ => Err(Error::Internal(
-                "Expected fields are missing on balance calculation".to_string(),
-            )),
+            Some(result) => match result {
+                (Some(balance), Some(count), Some(coin_type)) => Ok(Some(Balance {
+                    coin_object_count: Some(count as u64),
+                    total_balance: Some(BigInt::from(balance)),
+                    coin_type: Some(coin_type),
+                })),
+                (None, None, None) => Ok(None),
+                _ => Err(Error::Internal(
+                    "Expected fields are missing on balance calculation".to_string(),
+                )),
+            },
+            None => Ok(None),
         }
     }
 
@@ -1209,24 +1218,28 @@ impl PgManager {
             .multi_get_balances(address, first, after, last, before)
             .await?;
 
-        let mut connection = Connection::new(false, false);
-        for (balance, count, coin_type) in balances {
-            if let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) {
-                connection.edges.push(Edge::new(
-                    coin_type.clone(),
-                    Balance {
-                        coin_object_count: Some(count as u64),
-                        total_balance: Some(BigInt::from(balance)),
-                        coin_type: Some(coin_type),
-                    },
-                ));
-            } else {
-                return Err(Error::Internal(
-                    "Expected fields are missing on balance calculation".to_string(),
-                ));
+        if let Some(balances) = balances {
+            let mut connection = Connection::new(false, false);
+            for (balance, count, coin_type) in balances {
+                if let (Some(balance), Some(count), Some(coin_type)) = (balance, count, coin_type) {
+                    connection.edges.push(Edge::new(
+                        coin_type.clone(),
+                        Balance {
+                            coin_object_count: Some(count as u64),
+                            total_balance: Some(BigInt::from(balance)),
+                            coin_type: Some(coin_type),
+                        },
+                    ));
+                } else {
+                    return Err(Error::Internal(
+                        "Expected fields are missing on balance calculation".to_string(),
+                    ));
+                }
             }
+            Ok(Some(connection))
+        } else {
+            Ok(None)
         }
-        Ok(Some(connection))
     }
 
     pub(crate) async fn fetch_coins(
