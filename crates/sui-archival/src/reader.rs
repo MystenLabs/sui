@@ -290,28 +290,38 @@ impl ArchiveReader {
             stream
                 .buffered(self.concurrency)
                 .try_for_each(|summary_data| {
-                    let result: Result<(), anyhow::Error> =
-                        make_iterator::<CertifiedCheckpointSummary, Reader<Bytes>>(
-                            SUMMARY_FILE_MAGIC,
-                            summary_data.reader(),
-                        )
-                        .and_then(|summary_iter| {
-                            summary_iter
-                                .filter(|s| {
-                                    s.sequence_number >= checkpoint_range.start
-                                        && s.sequence_number < checkpoint_range.end
-                                })
-                                .try_for_each(|summary| {
-                                    let verified_checkpoint =
-                                        Self::get_or_insert_verified_checkpoint(&store, summary)?;
-                                    // Update highest synced watermark
-                                    store
-                                        .update_highest_verified_checkpoint(&verified_checkpoint)
-                                        .map_err(|e| anyhow!("Failed to update watermark: {e}"))?;
-                                    checkpoint_counter.fetch_add(1, Ordering::Relaxed);
-                                    Ok::<(), anyhow::Error>(())
-                                })
-                        });
+                    let result: Result<(), anyhow::Error> = make_iterator::<
+                        CertifiedCheckpointSummary,
+                        Reader<Bytes>,
+                    >(
+                        SUMMARY_FILE_MAGIC,
+                        summary_data.reader(),
+                    )
+                    .and_then(|summary_iter| {
+                        summary_iter
+                            .filter(|s| {
+                                s.sequence_number >= checkpoint_range.start
+                                    && s.sequence_number < checkpoint_range.end
+                            })
+                            .try_for_each(|summary| {
+                                let verified_checkpoint = Self::get_or_insert_verified_checkpoint(
+                                    &store,
+                                    summary.clone(),
+                                )
+                                .unwrap_or_else(|_| {
+                                    panic!(
+                                        "Checkpoint verification failed for checkpoint {}",
+                                        summary.sequence_number
+                                    )
+                                });
+                                // Update highest synced watermark
+                                store
+                                    .update_highest_verified_checkpoint(&verified_checkpoint)
+                                    .expect("Failed to update watermark");
+                                checkpoint_counter.fetch_add(1, Ordering::Relaxed);
+                                Ok::<(), anyhow::Error>(())
+                            })
+                    });
                     futures::future::ready(result)
                 })
                 .await

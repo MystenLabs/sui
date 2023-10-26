@@ -869,6 +869,10 @@ impl AuthorityStore {
         }
         let sha3_digest = hasher.finalize().digest;
         if *expected_sha3_digest != sha3_digest {
+            error!(
+                "Sha does not match! expected: {:?}, actual: {:?}",
+                expected_sha3_digest, sha3_digest
+            );
             return Err(SuiError::from("Sha does not match"));
         }
         batch.write()?;
@@ -1487,8 +1491,9 @@ impl AuthorityStore {
                             .perpetual_tables
                             .object(
                                 &key,
-                                obj_opt
-                                    .expect(&format!("Older object version not found: {:?}", key)),
+                                obj_opt.unwrap_or_else(|| {
+                                    panic!("Older object version not found: {:?}", key)
+                                }),
                             )
                             .expect("Matching indirect object not found")?;
 
