@@ -23,6 +23,7 @@ mod test {
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
+    use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{register_fail_point_async, register_fail_points, sim_test};
@@ -164,6 +165,55 @@ mod test {
         }
     }
 
+    async fn handle_failpoint_prune_and_compact(state: Arc<AuthorityState>) {
+        state.prune_objects_and_compact_for_testing().await;
+    }
+
+    // async fn handle_failpoint_prune_and_compact(db_dir: PathBuf) {
+    //     /*
+    //     {
+    //         let mut rng = thread_rng();
+    //         if rng.gen_range(0.0..1.0) > probability {
+    //             return;
+    //         }
+    //     }*/
+    //     for entry in std::fs::read_dir(db_dir).unwrap() {
+    //         let db_path = entry.unwrap().path();
+    //         eprintln!("Compacting {:?}", db_path);
+    //         let perpetual_db = Arc::new(AuthorityPerpetualTables::open(
+    //             &db_path.join("live").join("store"),
+    //             None,
+    //         ));
+    //         let checkpoint_store = Arc::new(CheckpointStore::open_readonly(
+    //             db_path.join("live").join("checkpoints"),
+    //             MetricConf::default(),
+    //             None,
+    //             None,
+    //         ));
+    //         let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
+    //         let lock_table = Arc::new(RwLockTable::new(1));
+    //         let pruning_config = AuthorityStorePruningConfig {
+    //             num_epochs_to_retain: 0,
+    //             ..Default::default()
+    //         };
+    //         info!("Starting object pruning");
+    //         eprintln!("Starting object pruning");
+    //         let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
+    //             &perpetual_db,
+    //             &checkpoint_store,
+    //             &lock_table,
+    //             pruning_config,
+    //             metrics,
+    //             usize::MAX,
+    //         )
+    //         .await;
+    //         info!("Starting db compaction");
+    //         eprintln!("Start db compaction");
+    //         let _ = AuthorityStorePruner::compact(&perpetual_db);
+    //         eprintln!("Finish prune and compact");
+    //     }
+    // }
+
     async fn delay_failpoint<R>(range_ms: R, probability: f64)
     where
         R: SampleRange<u64>,
@@ -207,6 +257,23 @@ mod test {
                 handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.02);
             },
         );
+
+        // let db_dir = test_cluster.swarm.dir().join(FULL_NODE_DB_PATH);
+        // let _perpetual_db = test_cluster
+        //     .fullnode_handle
+        //     .sui_node
+        //     .with(|node| node.state().database.perpetual_tables);
+        // let _checkpoint_store = test_cluster
+        //     .fullnode_handle
+        //     .sui_node
+        //     .with(|node| node.checkpoint_store);
+        // register_fail_point_async("prune-and-compact", move || {
+        //     handle_failpoint_prune_and_compact(db_dir.clone())
+        // });
+        let sss = test_cluster.fullnode_handle.sui_node.state();
+        register_fail_point_async("prune-and-compact", move || {
+            handle_failpoint_prune_and_compact(sss.clone())
+        });
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();

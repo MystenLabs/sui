@@ -97,7 +97,7 @@ pub fn register_fail_point_async<F>(
     identifier: &'static str,
     callback: impl Fn() -> F + Sync + Send + 'static,
 ) where
-    F: Future<Output = ()> + Sync + Send + 'static,
+    F: Future<Output = ()> + Send + 'static,
 {
     register_fail_point_impl(identifier, Arc::new(move || Some(Box::pin(callback()))));
 }
