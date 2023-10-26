@@ -372,7 +372,7 @@ impl QueryBuilder {
         descending_order: bool,
         limit: i64,
         address: Vec<u8>,
-        coin_type: String,
+        coin_type: Option<String>,
     ) -> objects::BoxedQuery<'a, Pg> {
         let mut query = objects::dsl::objects.into_boxed();
         if let Some(cursor) = cursor {
@@ -391,8 +391,11 @@ impl QueryBuilder {
 
         query = query
             .filter(objects::dsl::owner_id.eq(address))
-            .filter(objects::dsl::owner_type.eq(1)) // Leverage index on objects table
-            .filter(objects::dsl::coin_type.eq(coin_type));
+            .filter(objects::dsl::owner_type.eq(1)); // Leverage index on objects table
+
+        if let Some(coin_type) = coin_type {
+            query = query.filter(objects::dsl::coin_type.eq(coin_type));
+        }
         query
     }
 
@@ -637,7 +640,6 @@ impl PgManager {
             .map(|cursor| self.parse_obj_cursor(&cursor))
             .transpose()?;
         let limit = first.or(last).unwrap_or(DEFAULT_PAGE_SIZE) as i64;
-        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
 
         let result: Option<Vec<StoredObject>> = self
             .run_query_async(move |conn| {
@@ -1229,10 +1231,9 @@ impl PgManager {
         before: Option<String>,
     ) -> Result<Option<Connection<String, Coin>>, Error> {
         let address = address.into_vec();
-        let coin_type = coin_type.unwrap_or("0x2::sui::SUI".to_string());
 
         let coins = self
-            .multi_get_coins(address, Some(coin_type), first, after, last, before)
+            .multi_get_coins(address, coin_type, first, after, last, before)
             .await?;
 
         if let Some((stored_objs, has_next_page)) = coins {
