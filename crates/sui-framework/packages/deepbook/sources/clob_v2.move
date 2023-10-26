@@ -1889,6 +1889,53 @@ module deepbook::clob_v2 {
         };
     }
 
+    // Test wrapped pool struct
+    #[test_only]
+    struct WrappedPool<phantom BaseAsset, phantom QuoteAsset> has key, store {
+        id: UID,
+        pool: Pool<BaseAsset, QuoteAsset>,
+    }
+
+    #[test_only]
+    public fun borrow_mut_pool<BaseAsset, QuoteAsset>(
+        wpool: &mut WrappedPool<BaseAsset, QuoteAsset>
+    ): (&mut Pool<BaseAsset, QuoteAsset>) {
+        (&mut wpool.pool)
+    }
+
+    #[test_only]
+    public fun setup_test_with_tick_lot_and_wrapped_pool(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        // tick size with scaling
+        tick_size: u64,
+        lot_size: u64,
+        scenario: &mut Scenario,
+        sender: address,
+    ) {
+        test_scenario::next_tx(scenario, sender);
+        {
+            clock::share_for_testing(clock::create_for_testing(test_scenario::ctx(scenario)));
+        };
+
+        test_scenario::next_tx(scenario, sender);
+        {
+            let pool = create_pool_with_return_<SUI, USD>(
+                taker_fee_rate,
+                maker_rebate_rate,
+                tick_size,
+                lot_size,
+                balance::create_for_testing(FEE_AMOUNT_FOR_CREATE_POOL),
+                test_scenario::ctx(scenario)
+            );
+            // let pool = 
+            transfer::share_object(WrappedPool {
+                id: object::new(test_scenario::ctx(scenario)),
+                pool
+            });
+        };
+    }
+
     #[test_only]
     public fun setup_test(
         taker_fee_rate: u64,
@@ -1897,6 +1944,23 @@ module deepbook::clob_v2 {
         sender: address,
     ) {
         setup_test_with_tick_lot(
+            taker_fee_rate,
+            maker_rebate_rate,
+            1 * FLOAT_SCALING,
+            1,
+            scenario,
+            sender,
+        );
+    }
+
+    #[test_only]
+    public fun setup_test_wrapped_pool(
+        taker_fee_rate: u64,
+        maker_rebate_rate: u64,
+        scenario: &mut Scenario,
+        sender: address,
+    ) {
+        setup_test_with_tick_lot_and_wrapped_pool(
             taker_fee_rate,
             maker_rebate_rate,
             1 * FLOAT_SCALING,
