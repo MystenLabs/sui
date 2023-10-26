@@ -2663,11 +2663,8 @@ fn parse_use_decl(
             match context.tokens.peek() {
                 Tok::LBrace => {
                     let parse_inner = |ctxt: &mut Context<'_, '_, '_>| {
-                        let start_loc = ctxt.tokens.start_loc();
-                        let use_ = parse_use_module(None, address, ctxt)?;
-                        let end_loc = ctxt.tokens.previous_end_loc();
-                        let loc = make_loc(ctxt.tokens.file_hash(), start_loc, end_loc);
-                        Ok((use_, loc))
+                        let (name, _, use_) = parse_use_module(ctxt)?;
+                        Ok((name, use_))
                     };
                     let use_decls = parse_comma_list(
                         context,
@@ -2676,9 +2673,20 @@ fn parse_use_decl(
                         parse_inner,
                         "a module use clause",
                     )?;
-                    Use::Modules(use_decls)
+                    Use::NestedModuleUses(address, use_decls)
                 }
-                _ => parse_use_module(Some(address_start_loc), address, context)?,
+                _ => {
+                    let (name, end_loc, use_) = parse_use_module(context)?;
+                    let loc = make_loc(context.tokens.file_hash(), address_start_loc, end_loc);
+                    let module_ident = sp(
+                        loc,
+                        ModuleIdent_ {
+                            address,
+                            module: name,
+                        },
+                    );
+                    Use::ModuleUse(module_ident, use_)
+                }
             }
         }
     };
@@ -2698,21 +2706,12 @@ fn parse_use_decl(
 //          <ModuleName> "::" <UseMember> |
 //          <ModuleName> "::" "{" Comma<UseMember> "}"
 fn parse_use_module(
-    address_start_loc: Option<usize>,
-    address: LeadingNameAccess,
     context: &mut Context,
-) -> Result<Use, Box<Diagnostic>> {
-    let start_loc = if let Some(sloc) = address_start_loc {
-        sloc
-    } else {
-        context.tokens.start_loc()
-    };
-    let module = parse_module_name(context)?;
+) -> Result<(ModuleName, usize, ModuleUse), Box<Diagnostic>> {
+    let module_name = parse_module_name(context)?;
     let end_loc = context.tokens.previous_end_loc();
-    let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
-    let module_ident = sp(loc, ModuleIdent_ { address, module });
     let alias_opt = parse_use_alias(context)?;
-    match (&alias_opt, context.tokens.peek()) {
+    let module_use = match (&alias_opt, context.tokens.peek()) {
         (None, Tok::ColonColon) => {
             consume_token(context.tokens, Tok::ColonColon)?;
             let sub_uses = match context.tokens.peek() {
@@ -2725,10 +2724,11 @@ fn parse_use_module(
                 )?,
                 _ => vec![parse_use_member(context)?],
             };
-            Ok(Use::Members(module_ident, sub_uses))
+            ModuleUse::Members(sub_uses)
         }
-        _ => Ok(Use::Module(module_ident, alias_opt.map(ModuleName))),
-    }
+        _ => ModuleUse::Module(alias_opt.map(ModuleName)),
+    };
+    Ok((module_name, end_loc, module_use))
 }
 
 // Parse an alias for a module member:

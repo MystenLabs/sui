@@ -102,15 +102,20 @@ pub struct Script {
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Use {
-    Module(ModuleIdent, Option<ModuleName>),
-    Modules(Vec<(Use, Loc)>), // Loc tracks end of inner form
-    Members(ModuleIdent, Vec<(Name, Option<Name>)>),
+    ModuleUse(ModuleIdent, ModuleUse),
+    NestedModuleUses(LeadingNameAccess, Vec<(ModuleName, ModuleUse)>),
     Fun {
         visibility: Visibility,
         function: Box<NameAccessChain>,
         ty: Box<NameAccessChain>,
         method: Name,
     },
+}
+
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum ModuleUse {
+    Module(Option<ModuleName>),
+    Members(Vec<(Name, Option<Name>)>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1212,65 +1217,36 @@ impl AstDebug for UseDecl {
     }
 }
 
+impl AstDebug for ModuleUse {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            ModuleUse::Module(alias) => {
+                alias.map(|alias| w.write(&format!("as {}", alias)));
+            }
+            ModuleUse::Members(members) => w.block(|w| {
+                w.comma(members, |w, (name, alias)| {
+                    w.write(&format!("{}", name));
+                    alias.map(|alias| w.write(&format!("as {}", alias.value)));
+                })
+            }),
+        }
+    }
+}
+
 impl AstDebug for Use {
     fn ast_debug(&self, w: &mut AstWriter) {
-        fn inner(input: &Use, w: &mut AstWriter, print_addr: bool) {
-            match input {
-                Use::Module(m, alias_opt) => {
-                    if print_addr {
-                        w.write(&format!("{}", m.value.address));
-                    }
-                    w.write("{");
-                    w.write(&format!("{}", m.value.module));
-                    if let Some(alias) = alias_opt {
-                        w.write(&format!(" as {}", alias))
-                    }
-                    w.write("}");
-                }
-                Use::Members(m, sub_uses) => {
-                    if print_addr {
-                        w.write(&format!("{}", m.value.address));
-                    }
-                    w.write("{");
-                    w.write(&format!("{}", m.value.module));
-                    w.write("}");
-                    w.write(&format!("{}::", m.value.module));
-                    w.block(|w| {
-                        w.comma(sub_uses, |w, (n, alias_opt)| {
-                            w.write(&format!("{}", n));
-                            if let Some(alias) = alias_opt {
-                                w.write(&format!(" as {}", alias))
-                            }
-                        })
-                    })
-                }
-                Use::Modules(_) | Use::Fun { .. } => unreachable!(),
-            }
-        }
-
+        w.write("use ");
         match self {
-            Use::Modules(uses) => {
-                w.write("use ");
-                inner(&uses[0].0, w, true);
-                for (use_, _) in uses.iter().skip(1) {
-                    w.write(", ");
-                    inner(use_, w, false);
-                }
+            Use::ModuleUse(mident, use_) => {
+                w.write(&format!("{}", mident));
+                use_.ast_debug(w);
             }
-            Use::Module(m, alias_opt) => {
-                w.write(&format!("use {}", m));
-                if let Some(alias) = alias_opt {
-                    w.write(&format!(" as {}", alias))
-                }
-            }
-            Use::Members(m, sub_uses) => {
-                w.write(&format!("use {}::", m));
+            Use::NestedModuleUses(addr, entries) => {
+                w.write(&format!("{}::", addr));
                 w.block(|w| {
-                    w.comma(sub_uses, |w, (n, alias_opt)| {
-                        w.write(&format!("{}", n));
-                        if let Some(alias) = alias_opt {
-                            w.write(&format!(" as {}", alias))
-                        }
+                    w.comma(entries, |w, (name, use_)| {
+                        w.write(&format!("{}::", name));
+                        use_.ast_debug(w);
                     })
                 })
             }
