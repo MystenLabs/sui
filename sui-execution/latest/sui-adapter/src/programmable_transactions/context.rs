@@ -268,7 +268,7 @@ mod checked {
             let package = package_for_linkage(&self.linkage_view, package_id)
                 .map_err(|e| self.convert_vm_error(e))?;
 
-            self.linkage_view.set_linkage(&package)
+            self.linkage_view.set_linkage(package.as_ref())
         }
 
         /// Load a type using the context's current session.
@@ -958,7 +958,7 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<MovePackage> {
+    ) -> VMResult<Arc<MovePackage>> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
@@ -998,7 +998,7 @@ mod checked {
 
         // Set the defining package as the link context while loading the
         // struct
-        let original_address = linkage_view.set_linkage(&package).map_err(|e| {
+        let original_address = linkage_view.set_linkage(package.as_ref()).map_err(|e| {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message(e.to_string())
                 .finish(Location::Undefined)

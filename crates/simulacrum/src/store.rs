@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
@@ -242,8 +243,8 @@ impl BackingPackageStore for InMemoryStore {
     fn get_package_object(
         &self,
         package_id: &ObjectID,
-    ) -> sui_types::error::SuiResult<Option<Object>> {
-        Ok(self.get_object(package_id).cloned())
+    ) -> sui_types::error::SuiResult<Option<Arc<Object>>> {
+        Ok(self.get_object(package_id).map(|o| Arc::new(o.clone())))
     }
 }
 

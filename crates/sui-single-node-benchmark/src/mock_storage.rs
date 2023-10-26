@@ -58,10 +58,10 @@ impl ObjectStore for InMemoryObjectStore {
 }
 
 impl BackingPackageStore for InMemoryObjectStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
         Ok(self.get_object(package_id).unwrap().and_then(|o| {
             if o.is_package() {
-                Some(o.clone())
+                Some(Arc::new(o.clone()))
             } else {
                 None
             }

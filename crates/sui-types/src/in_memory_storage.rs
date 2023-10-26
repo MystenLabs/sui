@@ -15,6 +15,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
@@ -24,8 +25,8 @@ pub struct InMemoryStorage {
 }
 
 impl BackingPackageStore for InMemoryStorage {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        Ok(self.persistent.get(package_id).cloned())
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
+        Ok(self.persistent.get(package_id).cloned().map(Arc::new))
     }
 }
 
