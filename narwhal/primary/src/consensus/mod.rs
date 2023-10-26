@@ -5,6 +5,7 @@ mod bullshark;
 #[cfg(test)]
 #[path = "tests/consensus_utils.rs"]
 mod consensus_utils;
+mod leader_schedule;
 mod metrics;
 mod state;
 mod utils;
@@ -14,10 +15,9 @@ pub use crate::consensus::bullshark::Bullshark;
 use crate::consensus::consensus_utils::{
     make_certificate_store, make_consensus_store, NUM_SUB_DAGS_PER_SCHEDULE,
 };
+pub use crate::consensus::leader_schedule::{LeaderSchedule, LeaderSwapTable};
 pub use crate::consensus::metrics::{ChannelMetrics, ConsensusMetrics};
-pub use crate::consensus::state::{
-    Consensus, ConsensusRound, ConsensusState, Dag, LeaderSchedule, LeaderSwapTable,
-};
+pub use crate::consensus::state::{Consensus, ConsensusRound, ConsensusState, Dag};
 pub use crate::consensus::utils::gc_round;
 
 use store::StoreError;
