@@ -20,8 +20,8 @@ use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::ECMHLiveObjectSetDigest;
 use sui_types::object::Owner;
 use sui_types::storage::{
-    get_module_by, BackingPackageStore, ChildObjectResolver, MarkerValue, ObjectKey,
-    ObjectStore, ReceivedMarkerQuery,
+    get_module, BackingPackageStore, ChildObjectResolver, MarkerTableQuery, MarkerValue,
+    ObjectKey, ObjectStore,
 };
 use sui_types::sui_system_state::get_sui_system_state;
 use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure, storage::ParentSync};
@@ -42,7 +42,6 @@ use super::{authority_store_tables::AuthorityPerpetualTables, *};
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::execution::DeletedSharedObjects;
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use typed_store::rocks::util::is_ref_count_value;
 
@@ -756,66 +755,6 @@ impl AuthorityStore {
     pub async fn execution_lock_for_reconfiguration(&self) -> ExecutionLockWriteGuard {
         self.execution_lock.write().await
     }
-
-    // /// When making changes, please see if get_input_object_keys() above needs
-    // /// similar changes as well.
-    // ///
-    // /// Before this function is invoked, TransactionManager must ensure all depended
-    // /// objects are present. Thus any missing object will panic.
-    // pub fn check_sequenced_input_objects(
-    //     &self,
-    //     digest: &TransactionDigest,
-    //     objects: &[InputObjectKind],
-    //     epoch_store: &AuthorityPerEpochStore,
-    // ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError> {
-    //     let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
-    //     let mut deleted_shared_objects = Vec::new();
-    //     let mut result = Vec::new();
-    //     for kind in objects.iter() {
-    //         match kind {
-    //             InputObjectKind::SharedMoveObject { id, mutable, .. } => {
-    //                 let shared_locks = shared_locks_cell.get_or_try_init(|| {
-    //                     Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-    //                         epoch_store.get_shared_locks(digest)?.into_iter().collect(),
-    //                     )
-    //                 })?;
-    //                 // If we can't find the locked version, it means
-    //                 // 1. either we have a bug that skips shared object version assignment
-    //                 // 2. or we have some DB corruption
-    //                 let version = shared_locks.get(id).unwrap_or_else(|| {
-    //                     panic!(
-    //                         "Shared object locks should have been set. tx_digest: {:?}, obj id: {:?}",
-    //                         digest, id
-    //                     )
-    //                 });
-    //
-    //                 match self.get_object_by_key(id, *version)? {
-    //                     Some(obj) => result.push((*kind, obj)),
-    //                     None => {
-    //                         // If the object was deleted by a concurrently certified tx then return this separately
-    //                         let epoch = epoch_store.committee().epoch;
-    //                         if let Some(dependency) = self.get_deleted_shared_object_previous_tx_digest(id, version, epoch)? {
-    //                             deleted_shared_objects.push((*id, *version, *mutable, dependency));
-    //                         } else {
-    //                             panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent in epoch {}", digest, *id, *version, epoch);
-    //                         }
-    //                     }
-    //                 };
-    //
-    //             }
-    //             InputObjectKind::MovePackage(id) => result.push((*kind, self.get_object(id)?.unwrap_or_else(|| {
-    //                 panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
-    //             }))),
-    //             InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-    //                 result.push((*kind, self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
-    //                     panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
-    //                 })))
-    //             }
-    //         };
-    //     }
-    //
-    //     Ok((result, deleted_shared_objects))
-    // }
 
     // Methods to mutate the store
 
@@ -1996,7 +1935,7 @@ impl AuthorityStore {
     }
 }
 
-impl ReceivedMarkerQuery for AuthorityStore {
+impl MarkerTableQuery for AuthorityStore {
     fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -2004,6 +1943,15 @@ impl ReceivedMarkerQuery for AuthorityStore {
         epoch_id: EpochId,
     ) -> Result<bool, SuiError> {
         self.have_received_object_at_version(object_id, version, epoch_id)
+    }
+
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        Ok(self.get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)?)
     }
 }
 

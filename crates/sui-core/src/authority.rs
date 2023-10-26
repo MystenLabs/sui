@@ -1293,6 +1293,7 @@ impl AuthorityState {
             certificate,
             epoch_store.protocol_config(),
             epoch_store.reference_gas_price(),
+            epoch_store.epoch(),
         )?;
 
         let owned_object_refs = input_objects.filter_owned_objects();

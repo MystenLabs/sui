@@ -418,16 +418,23 @@ pub fn transaction_receiving_object_keys(tx: &SenderSignedData) -> Vec<ObjectKey
         .collect()
 }
 
-pub trait ReceivedMarkerQuery {
+pub trait MarkerTableQuery {
     fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
         epoch_id: EpochId,
     ) -> Result<bool, SuiError>;
+
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError>;
 }
 
-impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for Arc<T> {
+impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
     fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -437,9 +444,18 @@ impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for Arc<T> {
         self.as_ref()
             .have_received_object_at_version(object_id, version, epoch_id)
     }
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        self.as_ref()
+            .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
+    }
 }
 
-impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for &T {
+impl<T: MarkerTableQuery> MarkerTableQuery for &T {
     fn have_received_object_at_version(
         &self,
         object_id: &ObjectID,
@@ -447,6 +463,14 @@ impl<T: ReceivedMarkerQuery> ReceivedMarkerQuery for &T {
         epoch_id: EpochId,
     ) -> Result<bool, SuiError> {
         (*self).have_received_object_at_version(object_id, version, epoch_id)
+    }
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: &SequenceNumber,
+        epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        (*self).get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
     }
 }
 

@@ -20,7 +20,7 @@ use sui_types::{
     },
     object::{Object, Owner},
     storage::{
-        BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync, ReceivedMarkerQuery,
+        BackingPackageStore, ChildObjectResolver, MarkerTableQuery, ObjectStore, ParentSync,
     },
     transaction::VerifiedTransaction,
 };
@@ -300,7 +300,7 @@ impl ChildObjectResolver for InMemoryStore {
     }
 }
 
-impl ReceivedMarkerQuery for InMemoryStore {
+impl MarkerTableQuery for InMemoryStore {
     fn have_received_object_at_version(
         &self,
         _object_id: &ObjectID,
@@ -311,6 +311,15 @@ impl ReceivedMarkerQuery for InMemoryStore {
         // worry about equivocation protection. So we simply return false if ever asked if we
         // received this object.
         Ok(false)
+    }
+
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        _object_id: &ObjectID,
+        _version: &SequenceNumber,
+        _epoch_id: EpochId,
+    ) -> Result<Option<TransactionDigest>, SuiError> {
+        Ok(None)
     }
 }
 
@@ -413,7 +422,7 @@ impl KeyStore {
 pub trait SimulatorStore:
     sui_types::storage::BackingPackageStore
     + sui_types::storage::ObjectStore
-    + sui_types::storage::ReceivedMarkerQuery
+    + sui_types::storage::MarkerTableQuery
 {
     fn get_checkpoint_by_sequence_number(
         &self,

@@ -20,8 +20,8 @@ mod checked {
     use sui_types::execution::DeletedSharedObjects;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_types::signature::GenericSignature;
+    use sui_types::storage::MarkerTableQuery;
     use sui_types::storage::ObjectStore;
-    use sui_types::storage::ReceivedMarkerQuery;
     use sui_types::storage::{BackingPackageStore, GetSharedLocks};
     use sui_types::transaction::{
         InputObjectKind, InputObjects, TransactionData, TransactionDataAPI, TransactionKind,
@@ -63,7 +63,7 @@ mod checked {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn check_transaction_input<S: BackingPackageStore + ObjectStore + ReceivedMarkerQuery>(
+    pub fn check_transaction_input<S: BackingPackageStore + ObjectStore + MarkerTableQuery>(
         store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
@@ -110,7 +110,7 @@ mod checked {
         Ok((gas_status, input_objects))
     }
 
-    pub fn check_transaction_input_with_given_gas<S: ObjectStore + ReceivedMarkerQuery>(
+    pub fn check_transaction_input_with_given_gas<S: ObjectStore + MarkerTableQuery>(
         store: &S,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
@@ -152,12 +152,13 @@ mod checked {
     }
 
     #[instrument(level = "trace", skip_all)]
-    pub fn check_certificate_input<S: ObjectStore, G: GetSharedLocks>(
+    pub fn check_certificate_input<S: ObjectStore + MarkerTableQuery, G: GetSharedLocks>(
         store: &S,
         shared_lock_store: &G,
         cert: &VerifiedExecutableTransaction,
         protocol_config: &ProtocolConfig,
         reference_gas_price: u64,
+        epoch_id: EpochId,
     ) -> SuiResult<(SuiGasStatus, InputObjects)> {
         // This should not happen - validators should not have signed the txn in the first place.
         assert!(
@@ -174,24 +175,28 @@ mod checked {
         let (input_object_data, deleted_shared_objects) = if tx_data.is_end_of_epoch_tx() {
             // When changing the epoch, we update a the system object, which is shared, without going
             // through sequencing, so we must bypass the sequence checks here.
-            (check_input_objects(store, &input_object_kinds, protocol_config)?
-             Vec::new())
+            (
+                check_input_objects(store, &input_object_kinds, protocol_config)?,
+                Vec::new(),
+            )
         } else {
             check_sequenced_input_objects(
                 store,
                 cert.digest(),
                 &input_object_kinds,
                 shared_lock_store,
+                epoch_id,
             )?
         };
+        let objects: Vec<Object> = input_object_data.iter().map(|(_, obj)| obj.clone()).collect();
         let gas_status = get_gas_status(
-            &input_object_data,
+            &objects,
             tx_data.gas(),
             protocol_config,
             reference_gas_price,
             tx_data,
         )?;
-        let input_objects = check_objects(tx_data, input_object_kinds, input_object_data, deleted_shared_objects)?;
+        let input_objects = check_objects(tx_data, input_object_data, deleted_shared_objects)?;
         // NB: We do not check receiving objects when executing. Only at signing time do we check.
         Ok((gas_status, input_objects))
     }
@@ -236,7 +241,7 @@ mod checked {
         Ok((gas_object_ref, input_objects))
     }
 
-    fn check_receiving_objects<S: ObjectStore + ReceivedMarkerQuery>(
+    fn check_receiving_objects<S: ObjectStore + MarkerTableQuery>(
         store: &S,
         receiving_objects: &[ObjectRef],
         input_objects: &InputObjects,
@@ -402,18 +407,19 @@ mod checked {
     ///
     /// Before this function is invoked, TransactionManager must ensure all depended
     /// objects are present. Thus any missing object will panic.
-    pub fn check_sequenced_input_objects<S: ObjectStore, G: GetSharedLocks>(
+    pub fn check_sequenced_input_objects<S: ObjectStore + MarkerTableQuery, G: GetSharedLocks>(
         store: &S,
         digest: &TransactionDigest,
         objects: &[InputObjectKind],
         shared_lock_store: &G,
+        epoch_id: EpochId,
     ) -> Result<(Vec<(InputObjectKind, Object)>, DeletedSharedObjects), SuiError> {
         let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
         let mut deleted_shared_objects = Vec::new();
         let mut result = Vec::new();
         for kind in objects.iter() {
             match kind {
-                InputObjectKind::SharedMoveObject { id, .. } => {
+                InputObjectKind::SharedMoveObject { id, mutable, .. } => {
                     let shared_locks = shared_locks_cell.get_or_try_init(|| {
                         Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
                             shared_lock_store.get_shared_locks(digest)?.into_iter().collect(),
@@ -424,7 +430,7 @@ mod checked {
                     // 2. or we have some DB corruption
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!(
-                            "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
+                            "Shared object locks should have been set. tx_digest: {:?}, obj id: {:?}",
                             digest, id
                         )
                     });
@@ -433,21 +439,20 @@ mod checked {
                         Some(obj) => result.push((*kind, obj)),
                         None => {
                             // If the object was deleted by a concurrently certified tx then return this separately
-                            let epoch = epoch_store.committee().epoch;
-                            if let Some(dependency) = self.get_deleted_shared_object_previous_tx_digest(id, version, epoch)? {
-                                deleted_shared_objects.push((*id, *version, dependency));
+                            if let Some(dependency) = store.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {
+                                deleted_shared_objects.push((*id, *version, *mutable, dependency));
                             } else {
-                                panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent in epoch {}", digest, *id, *version, epoch);
+                                panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent in epoch {}", digest, *id, *version, epoch_id);
                             }
                         }
                     };
 
                 }
-                InputObjectKind::MovePackage(id) => result.push((*kind, self.get_object(id)?.unwrap_or_else(|| {
+                InputObjectKind::MovePackage(id) => result.push((*kind, store.get_object(id)?.unwrap_or_else(|| {
                     panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
                 }))),
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    result.push((*kind, self.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
+                    result.push((*kind, store.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
                         panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
                     })))
                 }
@@ -456,55 +461,6 @@ mod checked {
 
         Ok((result, deleted_shared_objects))
     }
-
-    /// When making changes, please see if get_input_object_keys() above needs
-    /// similar changes as well.
-    ///
-    /// Before this function is invoked, TransactionManager must ensure all depended
-    /// objects are present. Thus any missing object will panic.
-    // fn check_sequenced_input_objects<S: ObjectStore, G: GetSharedLocks>(
-    //     store: &S,
-    //     digest: &TransactionDigest,
-    //     objects: &[InputObjectKind],
-    //     shared_locks_store: &G,
-    // ) -> Result<Vec<Object>, SuiError> {
-    //     let shared_locks_cell: OnceCell<HashMap<_, _>> = OnceCell::new();
-    //
-    //     let mut result = Vec::new();
-    //     for kind in objects {
-    //         let obj = match kind {
-    //             InputObjectKind::SharedMoveObject { id, .. } => {
-    //                 let shared_locks = shared_locks_cell.get_or_try_init(|| {
-    //                     Ok::<HashMap<ObjectID, SequenceNumber>, SuiError>(
-    //                         shared_locks_store.get_shared_locks(digest)?.into_iter().collect(),
-    //                     )
-    //                 })?;
-    //                 // If we can't find the locked version, it means
-    //                 // 1. either we have a bug that skips shared object version assignment
-    //                 // 2. or we have some DB corruption
-    //                 let version = shared_locks.get(id).unwrap_or_else(|| {
-    //                     panic!(
-    //                         "Shared object locks should have been set. tx_digset: {:?}, obj id: {:?}",
-    //                         digest, id
-    //                     )
-    //                 });
-    //                 store.get_object_by_key(id, *version)?.unwrap_or_else(|| {
-    //                     panic!("All dependencies of tx {:?} should have been executed now, but Shared Object id: {}, version: {} is absent", digest, *id, *version);
-    //                 })
-    //             }
-    //             InputObjectKind::MovePackage(id) => store.get_object(id)?.unwrap_or_else(|| {
-    //                 panic!("All dependencies of tx {:?} should have been executed now, but Move Package id: {} is absent", digest, id);
-    //             }),
-    //             InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-    //                 store.get_object_by_key(&objref.0, objref.1)?.unwrap_or_else(|| {
-    //                     panic!("All dependencies of tx {:?} should have been executed now, but Immutable or Owned Object id: {}, version: {} is absent", digest, objref.0, objref.1);
-    //                 })
-    //             }
-    //         };
-    //         result.push(obj);
-    //     }
-    //     Ok(result)
-    // }
 
     /// Check transaction gas data/info and gas coins consistency.
     /// Return the gas status to be used for the lifecycle of the transaction.
