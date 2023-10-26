@@ -1,0 +1,26 @@
+# Get the address' balance and its coins' id and type
+{
+  address(
+    address: "0x341fa71e4e58d63668034125c3152f935b00b0bb5c68069045d8c646d017fae1"
+  ) {
+    location
+    balance {
+      coinType
+      coinObjectCount
+      totalBalance
+    }
+    coinConnection {
+      nodes {
+        id
+        asMoveObject {
+          contents {
+            type {
+              repr
+            }
+          }
+        }
+        
+      }
+    }
+  }
+}
