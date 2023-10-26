@@ -30,6 +30,8 @@ module closed_loop::closed_loop {
     const EBalanceTooLow: u64 = 4;
     /// The balance is not zero.
     const ENotZero: u64 = 5;
+    /// The balance is not zero when trying to confirm with `TransferPolicyCap`.
+    const ECantConsumeBalance: u64 = 6;
 
     /// A Tag for the `burn` action. Unlike other tags, it's not a part of the
     /// default flow, only recommended for the issuer to use.
@@ -91,6 +93,8 @@ module closed_loop::closed_loop {
         sender: address,
         /// Recipient is only available in transfer operation
         recipient: Option<address>,
+        /// The balance to be "burned" in the `TokenPolicy`.
+        burned_balance: Option<Balance<T>>,
         /// Collected approvals from Rules.
         approvals: VecSet<TypeName>,
     }
@@ -123,21 +127,20 @@ module closed_loop::closed_loop {
         let amount = balance::value(&t.balance);
         transfer::transfer(t, recipient);
 
-        new_request(string::utf8(TRANSFER), amount, option::some(recipient), ctx)
+        new_request(string::utf8(TRANSFER), amount, option::some(recipient), option::none(), ctx)
     }
 
     /// Spend a `Token` by converting it into a `SpentToken`.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
         let Token { id, balance } = t;
-        let amount = balance::value(&balance);
-
         object::delete(id);
-        transfer::transfer(
-            SpentToken { id: object::new(ctx), balance },
-            tx_context::sender(ctx)
-        );
-
-        new_request(string::utf8(SPEND), amount, option::none(), ctx)
+        new_request(
+            string::utf8(SPEND),
+            balance::value(&balance),
+            option::none(),
+            option::some(balance),
+            ctx
+        )
     }
 
     /// Convert a `Token` into an open `Coin`.
@@ -150,7 +153,7 @@ module closed_loop::closed_loop {
 
         (
             coin::from_balance(balance, ctx),
-            new_request(string::utf8(TO_COIN), amount, option::none(), ctx)
+            new_request(string::utf8(TO_COIN), amount, option::none(), option::none(), ctx)
         )
     }
 
@@ -167,6 +170,7 @@ module closed_loop::closed_loop {
             new_request(
                 string::utf8(FROM_COIN),
                 amount,
+                option::none(),
                 option::none(),
                 ctx
             )
@@ -214,12 +218,14 @@ module closed_loop::closed_loop {
         name: String,
         amount: u64,
         recipient: Option<address>,
+        burned_balance: Option<Balance<T>>,
         ctx: &TxContext
     ): ActionRequest<T> {
         ActionRequest {
             name,
             amount,
             recipient,
+            burned_balance,
             sender: tx_context::sender(ctx),
             approvals: vec_set::empty(),
         }
@@ -228,13 +234,14 @@ module closed_loop::closed_loop {
     /// Confirm the request against the `TokenPolicy` and return the parameters
     /// of the request: (Name, Amount, Sender, Recipient).
     public fun confirm_request<T>(
-        policy: &TokenPolicy<T>, request: ActionRequest<T>, _ctx: &mut TxContext
+        policy: &mut TokenPolicy<T>, request: ActionRequest<T>, _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
 
         let ActionRequest {
             name, approvals,
-            amount, sender, recipient
+            burned_balance,
+            amount, sender, recipient,
         } = request;
 
         let rules = vec_map::get(&policy.rules, &name);
@@ -249,6 +256,15 @@ module closed_loop::closed_loop {
             i = i + 1;
         };
 
+        if (option::is_some(&burned_balance)) {
+            balance::join(
+                &mut policy.burned_balance,
+                option::destroy_some(burned_balance)
+            );
+        } else {
+            option::destroy_none(burned_balance);
+        };
+
         (name, amount, sender, recipient)
     }
 
@@ -258,13 +274,24 @@ module closed_loop::closed_loop {
     /// TODO: consider `&mut on TreasuryCap` as a preemptive measure and/or as
     /// a way to guarantee that `TreasuryCap` is not frozen.
     public fun confirm_with_treasury_cap<T>(
-        _treasury_cap: &TreasuryCap<T>,
+        treasury_cap: &mut TreasuryCap<T>,
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         let ActionRequest {
-            name, amount, sender, recipient, approvals: _
+            name, amount, sender, recipient, approvals: _,
+            burned_balance
         } = request;
+
+        if (option::is_some(&burned_balance)) {
+            balance::decrease_supply(
+                coin::supply_mut(treasury_cap),
+                option::destroy_some(burned_balance)
+            );
+        } else {
+            option::destroy_none(burned_balance);
+        };
+
         (name, amount, sender, recipient)
     }
 
@@ -278,9 +305,14 @@ module closed_loop::closed_loop {
         request: ActionRequest<T>,
         _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
+        assert!(option::is_none(&request.burned_balance), ECantConsumeBalance);
+
         let ActionRequest {
-            name, amount, sender, recipient, approvals: _
+            name, amount, sender, recipient, approvals: _, burned_balance
         } = request;
+
+        option::destroy_none(burned_balance);
+
         (name, amount, sender, recipient)
     }
 

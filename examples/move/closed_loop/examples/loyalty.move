@@ -72,7 +72,9 @@ module 0x0::loyalty {
     /// Handy function to reward users. Can be called by the application admin
     /// to reward users for their loyalty :)
     ///
-    /// Uses two actions: `from_coin` to mint the
+    /// `Mint` is available to the holder of the `TreasuryCap` by default and
+    /// hence does not need to be confirmed; however, for `transfer` operation
+    /// we require a confirmation.
     public fun reward_user(
         cap: &mut TreasuryCap<LOYALTY>,
         amount: u64,
@@ -86,6 +88,8 @@ module 0x0::loyalty {
     }
 
     /// Buy a gift for 10 tokens.
+    ///
+    /// We require a `TokenPolicy` since
     public fun buy_a_gift(
         token: Token<LOYALTY>,
         ctx: &mut TxContext

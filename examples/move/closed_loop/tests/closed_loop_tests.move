@@ -21,9 +21,11 @@ module closed_loop::closed_loop_tests {
 
         closed_loop::add_rules_for_testing(&mut policy, string::utf8(b"test"), vector[]);
 
-        let req = closed_loop::new_request(string::utf8(b"test"), 100, option::none(), ctx);
+        let req = closed_loop::new_request(
+            string::utf8(b"test"), 100, option::none(), option::none(), ctx
+        );
 
-        closed_loop::confirm_request(&policy, req, ctx);
+        closed_loop::confirm_request(&mut policy, req, ctx);
         return_policy(policy)
     }
 
@@ -31,9 +33,11 @@ module closed_loop::closed_loop_tests {
     fun test_confirm_request_unknown_action_fail() {
         let ctx = &mut tx_context::dummy();
         let policy = get_policy(ctx);
-        let req = closed_loop::new_request(string::utf8(b"test"), 100, option::none(), ctx);
+        let req = closed_loop::new_request(
+            string::utf8(b"test"), 100, option::none(), option::none(), ctx
+        );
 
-        closed_loop::confirm_request(&policy, req, ctx);
+        closed_loop::confirm_request(&mut policy, req, ctx);
         return_policy(policy)
     }
 
@@ -48,12 +52,14 @@ module closed_loop::closed_loop_tests {
             vector[type_name::get<Rule1>()]
         );
 
-        let req = closed_loop::new_request(string::utf8(b"test"), 100, option::none(), ctx);
+        let req = closed_loop::new_request(
+            string::utf8(b"test"), 100, option::none(), option::none(), ctx
+        );
 
         closed_loop::add_approval(Rule1 {}, &mut req, ctx);
         closed_loop::add_approval(Rule2 {}, &mut req, ctx);
 
-        closed_loop::confirm_request(&policy, req, ctx);
+        closed_loop::confirm_request(&mut policy, req, ctx);
         return_policy(policy)
     }
 

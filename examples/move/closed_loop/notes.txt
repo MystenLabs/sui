@@ -1,0 +1,8 @@
+One of the challenges in the Closed Loop request system is that most of the Coin-like systems don't allow us to store any state (unlike Kiosk, where Kiosk is the state and a container for arbitrary data - eg Extensions).
+
+- we want to have a state for applications such as allowlist / denylist
+- to keep the implementation as generic as possible we need to eliminate the need for discovery
+- every user action already requires `TokenPolicy` - we can utilize it for storage
+- we don't want to have too many dynamic fields (while better collection types are still on the way, a dummy implementation is okay for the time being, however long term we'd want to replace them)
+
+
