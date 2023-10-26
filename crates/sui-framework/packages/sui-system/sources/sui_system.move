@@ -56,11 +56,11 @@ module sui_system::sui_system {
     use sui_system::staking_pool::PoolTokenExchangeRate;
     use std::option;
     use sui::dynamic_field;
+    use sui::vec_set::VecSet;
 
     #[test_only] use sui::balance;
     #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui_system::validator_set;
-    #[test_only] use sui::vec_set::VecSet;
 
     friend sui_system::genesis;
 
