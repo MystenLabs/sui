@@ -23,10 +23,10 @@ use tokio::sync::oneshot;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
-    host_port, initialize, serve, verify_packages, watch_for_upgrades, AddressLookup, AppState,
-    CloneCommand, Config, DirectorySource, ErrorResponse, Network, NetworkLookup, Package,
-    PackageSource, RepositorySource, SourceInfo, SourceLookup, SourceResponse,
-    SUI_SOURCE_VALIDATION_VERSION_HEADER,
+    host_port, initialize, serve, start_prometheus_server, verify_packages, watch_for_upgrades,
+    AddressLookup, AppState, CloneCommand, Config, DirectorySource, ErrorResponse, Network,
+    NetworkLookup, Package, PackageSource, RepositorySource, SourceInfo, SourceLookup,
+    SourceResponse, METRICS_HOST_PORT, SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
 use test_cluster::TestClusterBuilder;
 
@@ -327,6 +327,31 @@ async fn test_api_route() -> anyhow::Result<()> {
         expect!["Unsupported version 'bogus' specified in header x-sui-source-validation-version"];
     expected.assert_eq(&json.error);
 
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_metrics_route() -> anyhow::Result<()> {
+    let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
+    let registry_service = start_prometheus_server(metrics_listener);
+    let prometheus_registry = registry_service.default_registry();
+    prometheus_registry.register(mysten_metrics::uptime_metric("v0", "sui-source-service"))?;
+
+    let client = Client::new();
+    let response = client
+        .get(format!("http://{METRICS_HOST_PORT}/metrics"))
+        .send()
+        .await
+        .expect("Request failed.")
+        .text()
+        .await?;
+
+    let expected = expect![[r#"
+        # HELP uptime uptime of the node service in seconds
+        # TYPE uptime counter
+        uptime{chain_identifier="sui-source-service",version="v0"} 0
+    "#]];
+    expected.assert_eq(response.as_str());
     Ok(())
 }
 

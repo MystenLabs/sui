@@ -15,6 +15,7 @@ use anyhow::{anyhow, bail};
 use axum::extract::{Query, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, IntoMakeService};
+use axum::Extension;
 use axum::{Json, Router, Server};
 use hyper::http::{HeaderName, HeaderValue, Method};
 use hyper::server::conn::AddrIncoming;
@@ -22,9 +23,13 @@ use hyper::{HeaderMap, StatusCode};
 use jsonrpsee::core::client::{Subscription, SubscriptionClientT};
 use jsonrpsee::core::params::ArrayParams;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use mysten_metrics::RegistryService;
+use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tracing::{debug, error, info};
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tower_http::LatencyUnit;
+use tracing::{debug, error, info, Level};
 use url::Url;
 
 use move_compiler::compiled_unit::CompiledUnitEnum;
@@ -53,6 +58,9 @@ pub const DEVNET_WS_URL: &str = "wss://rpc.devnet.sui.io:443";
 pub const LOCALNET_WS_URL: &str = "ws://127.0.0.1:9000";
 
 pub const WS_PING_INTERVAL: Duration = Duration::from_millis(20_000);
+
+pub const METRICS_ROUTE: &str = "/metrics";
+pub const METRICS_HOST_PORT: &str = "127.0.0.1:9814";
 
 pub fn host_port() -> String {
     match option_env!("HOST_PORT") {
@@ -578,4 +586,33 @@ async fn check_version_header<B>(
 
 async fn list_route(State(_app_state): State<Arc<RwLock<AppState>>>) -> impl IntoResponse {
     (StatusCode::OK, "").into_response()
+}
+
+pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
+    let registry = Registry::new();
+
+    let registry_service = RegistryService::new(registry);
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(mysten_metrics::metrics))
+        .layer(Extension(registry_service.clone()))
+        .layer(
+            ServiceBuilder::new().layer(
+                TraceLayer::new_for_http().on_response(
+                    DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .latency_unit(LatencyUnit::Seconds),
+                ),
+            ),
+        );
+
+    tokio::spawn(async move {
+        axum::Server::from_tcp(addr)
+            .unwrap()
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
+    registry_service
 }
