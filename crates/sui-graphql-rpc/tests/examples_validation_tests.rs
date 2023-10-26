@@ -10,6 +10,7 @@ mod tests {
     use std::io::Read;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use sui_graphql_rpc::cluster::SimulatorCluster;
     use sui_graphql_rpc::config::ConnectionConfig;
 
     struct ExampleQuery {
@@ -72,6 +73,59 @@ mod tests {
         groups
     }
 
+    fn bad_examples() -> ExampleQueryGroup {
+        ExampleQueryGroup {
+            name: "bad_examples".to_string(),
+            queries: vec![
+                ExampleQuery {
+                    name: "multiple_queries".to_string(),
+                    contents: "{ chainIdentifier } { chainIdentifier }".to_string(),
+                    path: PathBuf::from("multiple_queries.graphql"),
+                },
+                ExampleQuery {
+                    name: "malformed".to_string(),
+                    contents: "query { }}".to_string(),
+                    path: PathBuf::from("malformed.graphql"),
+                },
+                ExampleQuery {
+                    name: "invalid".to_string(),
+                    contents: "djewfbfo".to_string(),
+                    path: PathBuf::from("invalid.graphql"),
+                },
+                ExampleQuery {
+                    name: "empty".to_string(),
+                    contents: "     ".to_string(),
+                    path: PathBuf::from("empty.graphql"),
+                },
+            ],
+            _path: PathBuf::from("bad_examples"),
+        }
+    }
+
+    async fn validate_example_query_group(
+        cluster: &SimulatorCluster,
+        group: &ExampleQueryGroup,
+    ) -> Vec<String> {
+        let mut errors = vec![];
+        for query in &group.queries {
+            let resp = cluster
+                .graphql_client
+                .execute(query.contents.clone(), vec![])
+                .await
+                .unwrap();
+            if let Some(err) = resp.get("errors") {
+                errors.push(format!(
+                    "Query failed: {}: {} at: {}\nError: {}",
+                    group.name,
+                    query.name,
+                    query.path.display(),
+                    err
+                ));
+            }
+        }
+        errors
+    }
+
     #[tokio::test]
     #[serial]
     async fn test_single_all_examples_structure_valid() {
@@ -89,23 +143,32 @@ mod tests {
 
         let mut errors = vec![];
         for group in groups {
-            for query in group.queries {
-                let resp = cluster
-                    .graphql_client
-                    .execute(query.contents, vec![])
-                    .await
-                    .unwrap();
-                if let Some(err) = resp.get("errors") {
-                    errors.push(format!(
-                        "Query failed: {}: {} at: {}\nError: {}",
-                        group.name,
-                        query.name,
-                        query.path.display(),
-                        err
-                    ));
-                }
-            }
+            errors.extend(validate_example_query_group(&cluster, &group).await);
         }
+
         assert!(errors.is_empty(), "\n{}", errors.join("\n\n"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_bad_examples_fail() {
+        let rng = StdRng::from_seed([12; 32]);
+        let mut sim = Simulacrum::new_with_rng(rng);
+
+        sim.create_checkpoint();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::cluster::serve_simulator(connection_config, 3000, Arc::new(sim)).await;
+
+        let bad_examples = bad_examples();
+        let errors = validate_example_query_group(&cluster, &bad_examples).await;
+
+        assert_eq!(
+            errors.len(),
+            bad_examples.queries.len(),
+            "all examples should fail"
+        );
     }
 }
