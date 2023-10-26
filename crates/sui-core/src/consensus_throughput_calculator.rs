@@ -7,6 +7,8 @@ use parking_lot::Mutex;
 use std::collections::{BTreeMap, VecDeque};
 use std::num::NonZeroU64;
 use std::sync::Arc;
+use sui_protocol_config::Chain;
+use sui_types::digests::ChainIdentifier;
 use tracing::{debug, warn};
 
 const DEFAULT_OBSERVATIONS_WINDOW: u64 = 120; // number of observations to use to calculate the past throughput
@@ -24,6 +26,7 @@ pub struct ThroughputProfile {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd)]
 pub enum Level {
     Low,
+    Medium,
     High,
 }
 
@@ -31,6 +34,8 @@ impl From<usize> for Level {
     fn from(value: usize) -> Self {
         if value == 0 {
             Level::Low
+        } else if value == 1 {
+            Level::Medium
         } else {
             Level::High
         }
@@ -41,7 +46,8 @@ impl From<Level> for usize {
     fn from(value: Level) -> Self {
         match value {
             Level::Low => 0,
-            Level::High => 1,
+            Level::Medium => 1,
+            Level::High => 2,
         }
     }
 }
@@ -53,6 +59,31 @@ pub struct ThroughputProfileRanges {
 }
 
 impl ThroughputProfileRanges {
+    pub fn from_chain(chain_id: ChainIdentifier) -> ThroughputProfileRanges {
+        let to_profiles = |medium: u64, high: u64| -> Vec<ThroughputProfile> {
+            vec![
+                ThroughputProfile {
+                    level: Level::Low,
+                    throughput: 0,
+                },
+                ThroughputProfile {
+                    level: Level::Medium,
+                    throughput: medium,
+                },
+                ThroughputProfile {
+                    level: Level::High,
+                    throughput: high,
+                },
+            ]
+        };
+
+        match chain_id.chain() {
+            Chain::Mainnet => ThroughputProfileRanges::new(&to_profiles(500, 1_500)),
+            Chain::Testnet => ThroughputProfileRanges::new(&to_profiles(500, 1_500)),
+            Chain::Unknown => ThroughputProfileRanges::new(&to_profiles(1_000, 2_000)),
+        }
+    }
+
     pub fn new(profiles: &[ThroughputProfile]) -> Self {
         let mut p: BTreeMap<u64, ThroughputProfile> = BTreeMap::new();
 

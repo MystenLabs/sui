@@ -84,6 +84,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 //             Add support for random beacon.
 //             Enable transaction effects v2 in testnet.
 //             Deprecate supported oauth providers from protocol config and rely on node config instead.
+// Version 31: Enabling throughput aware submission for Devnet & Testnet
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -321,11 +322,6 @@ struct FeatureFlags {
     // Enable throughput aware consensus submission
     #[serde(skip_serializing_if = "is_false")]
     throughput_aware_consensus_submission: bool,
-
-    // The throughput profile ranges. The range values are represented as an array and are index 0
-    // based for Level::Low = 0, Level::High = 1
-    #[serde(skip_serializing_if = "is_vec_empty")]
-    consensus_throughput_profile_ranges: Vec<u64>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1018,10 +1014,6 @@ impl ProtocolConfig {
     pub fn throughput_aware_consensus_submission(&self) -> bool {
         self.feature_flags.throughput_aware_consensus_submission
     }
-
-    pub fn consensus_throughput_profile_ranges(&self) -> &Vec<u64> {
-        &self.feature_flags.consensus_throughput_profile_ranges
-    }
 }
 
 #[cfg(not(msim))]
@@ -1623,13 +1615,10 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
-
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                }
+                31 => {
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
-                    } else {
-                        // Mainnet and testnet
-                        cfg.feature_flags.consensus_throughput_profile_ranges = vec![0, 1_000];
                     }
                 }
                 // Use this template when making changes:

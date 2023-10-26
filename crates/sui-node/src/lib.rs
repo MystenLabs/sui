@@ -1072,29 +1072,12 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let r = epoch_store
-            .protocol_config()
-            .consensus_throughput_profile_ranges()
-            .iter()
-            .enumerate()
-            .map(|(profile_index, throughput)| ThroughputProfile {
-                level: profile_index.into(),
-                throughput: *throughput,
-            })
-            .collect::<Vec<ThroughputProfile>>();
-
-        let ranges = if r.is_empty() {
-            ThroughputProfileRanges::default()
-        } else {
-            ThroughputProfileRanges::new(&r)
-        };
-
         let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
             throughput_calculator.clone(),
             None,
             None,
             state.metrics.clone(),
-            ranges,
+            ThroughputProfileRanges::from_chain(epoch_store.get_chain_identifier()),
         ));
 
         consensus_adapter.swap_throughput_profiler(throughput_profiler);
