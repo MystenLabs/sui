@@ -117,9 +117,7 @@ pub enum DbValidationError {
     LastBefore,
     #[error("Pagination is currently disabled on balances")]
     PaginationDisabledOnBalances,
-    #[error(
-        "Invalid owner type. Must be Address or Object"
-    )]
+    #[error("Invalid owner type. Must be Address or Object")]
     InvalidOwnerType,
 }
 
