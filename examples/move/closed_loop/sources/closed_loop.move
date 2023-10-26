@@ -61,18 +61,23 @@ module closed_loop::closed_loop {
     /// A Capability that allows managing the `TokenPolicy`s.
     struct TokenPolicyCap<phantom T> has key, store { id: UID, for: ID }
 
-    /// A single object representing the Policy the Token.
+    /// `TokenPolicy` represents a set of rules that define what actions can be
+    /// performed on a `Token` and which `Rules` must be satisfied for the
+    /// transaction to succeeed.
     ///
-    /// Policy defines what actions can be performed on the token, and what
-    /// rules must be satisfied for the action to go through.
+    /// - For the sake of availability, `TokenPolicy` is a `key`-only object.
+    /// - Each `TokenPolicy` is managed by a matching `TokenPolicyCap`.
+    /// - For an action to become available, there needs to be a record in the
+    /// `rules` VecMap. To allow an action to be performed freely, there's an
+    /// `allow` function that can be called by the `TokenPolicyCap` owner.
     struct TokenPolicy<phantom T> has key {
         id: UID,
-        /// The balance that is effectively burned by the user (and the user
-        /// claims a storage rebate), however actual supply deduction is only
-        /// performed by Admin when necessary.
+        /// The balance that is effectively burned by the user on the "spend"
+        /// action. However, actual decrease of the supply can only be done by
+        /// the `TreasuryCap` owner.
         ///
-        /// This balance can never be withdrawn by anyone and only burned by
-        /// the Admin.
+        /// This balance can never be withdrawn by anyone and can only be
+        /// `flush`-ed by the Admin.
         burned_balance: Balance<T>,
         /// The set of rules that define what actions can be performed on the
         /// token. Each rule contains the set of `TypeName`s that must be
@@ -100,7 +105,7 @@ module closed_loop::closed_loop {
     }
 
     /// Create a new `TokenPolicy` and a matching `TokenPolicyCap`.
-    /// The `TokenPolicy` must then be shared using `share_policy`.
+    /// The `TokenPolicy` must then be shared using the `share_policy` method.
     public fun new<T>(
         _treasury_cap: &mut TreasuryCap<T>, ctx: &mut TxContext
     ): (TokenPolicy<T>, TokenPolicyCap<T>) {
@@ -130,7 +135,8 @@ module closed_loop::closed_loop {
         new_request(string::utf8(TRANSFER), amount, option::some(recipient), option::none(), ctx)
     }
 
-    /// Spend a `Token` by converting it into a `SpentToken`.
+    /// Spend a `Token` by "burning" it and storing in the `ActionRequest` for
+    /// the "spend" action.
     public fun spend<T>(t: Token<T>, ctx: &mut TxContext): ActionRequest<T> {
         let Token { id, balance } = t;
         object::delete(id);
@@ -143,7 +149,7 @@ module closed_loop::closed_loop {
         )
     }
 
-    /// Convert a `Token` into an open `Coin`.
+    /// Convert `Token` into an open `Coin`.
     public fun to_coin<T>(
         t: Token<T>, ctx: &mut TxContext
     ): (Coin<T>, ActionRequest<T>) {
@@ -153,11 +159,17 @@ module closed_loop::closed_loop {
 
         (
             coin::from_balance(balance, ctx),
-            new_request(string::utf8(TO_COIN), amount, option::none(), option::none(), ctx)
+            new_request(
+                string::utf8(TO_COIN),
+                amount,
+                option::none(),
+                option::none(),
+                ctx
+            )
         )
     }
 
-    /// Convert a free `Coin` into a `Token`.
+    /// Convert an open `Coin` into a `Token`.
     public fun from_coin<T>(
         coin: Coin<T>, ctx: &mut TxContext
     ): (Token<T>, ActionRequest<T>) {
@@ -234,7 +246,9 @@ module closed_loop::closed_loop {
     /// Confirm the request against the `TokenPolicy` and return the parameters
     /// of the request: (Name, Amount, Sender, Recipient).
     public fun confirm_request<T>(
-        policy: &mut TokenPolicy<T>, request: ActionRequest<T>, _ctx: &mut TxContext
+        policy: &mut TokenPolicy<T>,
+        request: ActionRequest<T>,
+        _ctx: &mut TxContext
     ): (String, u64, address, Option<address>) {
         assert!(vec_map::contains(&policy.rules, &request.name), EUnknownAction);
 
