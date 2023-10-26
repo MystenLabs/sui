@@ -93,7 +93,7 @@ use sui_types::{
     Identifier,
 };
 
-use super::{DEFAULT_PAGE_SIZE, db_query_cost::extract_cost};
+use super::{db_query_cost::extract_cost, DEFAULT_PAGE_SIZE};
 
 use super::sui_sdk_data_provider::convert_to_validators;
 
@@ -120,7 +120,7 @@ pub enum DbValidationError {
     #[error("Invalid owner type. Must be Address or Object")]
     InvalidOwnerType,
     #[error("Query cost exceeded - cost: {0}, limit: {1}")]
-    QueryCostExceeded(u64, u64)
+    QueryCostExceeded(u64, u64),
 }
 
 type BalanceQuery<'a> = BoxedSelectStatement<
@@ -518,31 +518,42 @@ impl PgManager {
         execute_fn: EF,
     ) -> Result<T, Error>
     where
-        Q: QueryDsl + RunQueryDsl<Pg> + diesel::query_builder::QueryFragment<diesel::pg::Pg> + Send + 'static,
+        Q: QueryDsl
+            + RunQueryDsl<Pg>
+            + diesel::query_builder::QueryFragment<diesel::pg::Pg>
+            + Send
+            + 'static,
         EF: FnOnce(Q) -> F + Send + 'static,
         F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
         E: From<diesel::result::Error> + std::error::Error + Send + 'static,
         T: Send + 'static,
     {
         let max_db_query_cost = self.limits.max_db_query_cost;
-        self.inner.spawn_blocking(move |this| {
-            let cost = extract_cost(&query, &this)?;
-            if cost > max_db_query_cost as f64 {
-                return Err(DbValidationError::QueryCostExceeded(cost as u64, max_db_query_cost).into());
-            }
-            let execute_closure = execute_fn(query);
-            this.run_query(execute_closure).map_err(|e| Error::Internal(e.to_string()))
-        }).await
+        self.inner
+            .spawn_blocking(move |this| {
+                let cost = extract_cost(&query, &this)?;
+                if cost > max_db_query_cost as f64 {
+                    return Err(DbValidationError::QueryCostExceeded(
+                        cost as u64,
+                        max_db_query_cost,
+                    )
+                    .into());
+                }
+                let execute_closure = execute_fn(query);
+                this.run_query(execute_closure)
+                    .map_err(|e| Error::Internal(e.to_string()))
+            })
+            .await
     }
 }
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async_with_cost(
-            QueryBuilder::get_tx_by_digest(digest),
-            |query| move |conn| query.get_result::<StoredTransaction>(conn).optional()
-        ).await
+        self.run_query_async_with_cost(QueryBuilder::get_tx_by_digest(digest), |query| {
+            move |conn| query.get_result::<StoredTransaction>(conn).optional()
+        })
+        .await
     }
 
     async fn get_obj(
@@ -550,23 +561,22 @@ impl PgManager {
         address: Vec<u8>,
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
-        self.run_query_async_with_cost(
-            QueryBuilder::get_obj(address, version),
-            |query| move |conn| query.get_result::<StoredObject>(conn).optional()
-        )
+        self.run_query_async_with_cost(QueryBuilder::get_obj(address, version), |query| {
+            move |conn| query.get_result::<StoredObject>(conn).optional()
+        })
         .await
     }
 
     pub async fn get_epoch(&self, epoch_id: Option<i64>) -> Result<Option<StoredEpochInfo>, Error> {
         let query = match epoch_id {
             Some(epoch_id) => QueryBuilder::get_epoch(epoch_id),
-            None => QueryBuilder::get_latest_epoch()
+            None => QueryBuilder::get_latest_epoch(),
         };
 
-        self.run_query_async_with_cost(
-            query,
-            |query| move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
-        ).await
+        self.run_query_async_with_cost(query, |query| {
+            move |conn| query.get_result::<StoredEpochInfo>(conn).optional()
+        })
+        .await
     }
 
     async fn get_checkpoint(
@@ -585,9 +595,10 @@ impl PgManager {
             _ => QueryBuilder::get_latest_checkpoint(),
         };
 
-        self.run_query_async_with_cost(query,
-            |query| move |conn| query.get_result::<StoredCheckpoint>(conn).optional())
-            .await
+        self.run_query_async_with_cost(query, |query| {
+            move |conn| query.get_result::<StoredCheckpoint>(conn).optional()
+        })
+        .await
     }
 
     async fn get_chain_identifier(&self) -> Result<ChainIdentifier, Error> {
@@ -623,7 +634,7 @@ impl PgManager {
         let result: Option<Vec<StoredObject>> = self
             .run_query_async_with_cost(
                 QueryBuilder::multi_get_coins(cursor, descending_order, limit, address, coin_type),
-                |query| move |conn| query.load(conn).optional()
+                |query| move |conn| query.load(conn).optional(),
             )
             .await?;
 
@@ -644,10 +655,9 @@ impl PgManager {
         address: Vec<u8>,
         coin_type: String,
     ) -> Result<Option<(Option<i64>, Option<i64>, Option<String>)>, Error> {
-        self.run_query_async_with_cost(
-            QueryBuilder::get_balance(address, coin_type),
-            |query| move |conn| query.get_result(conn).optional()
-        )
+        self.run_query_async_with_cost(QueryBuilder::get_balance(address, coin_type), |query| {
+            move |conn| query.get_result(conn).optional()
+        })
         .await
     }
 
@@ -665,12 +675,9 @@ impl PgManager {
             return Err(DbValidationError::PaginationDisabledOnBalances.into());
         }
 
-        self.run_query_async_with_cost(
-            QueryBuilder::multi_get_balances(address),
-            |query| move |conn| query
-                .load(conn)
-                .optional()
-        )
+        self.run_query_async_with_cost(QueryBuilder::multi_get_balances(address), |query| {
+            move |conn| query.load(conn).optional()
+        })
         .await
     }
 
@@ -737,12 +744,7 @@ impl PgManager {
         )?;
 
         let result: Option<Vec<StoredTransaction>> = self
-            .run_query_async_with_cost(
-                query,
-                |query| move |conn| query
-                    .load(conn)
-                    .optional()
-            )
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
             .await?;
 
         result
@@ -780,9 +782,7 @@ impl PgManager {
                     limit,
                     epoch.map(|e| e as i64),
                 ),
-                |query| move |conn| query
-                .load(conn)
-                .optional()
+                |query| move |conn| query.load(conn).optional(),
             )
             .await?;
 
@@ -818,8 +818,7 @@ impl PgManager {
             QueryBuilder::multi_get_objs(cursor, descending_order, limit, filter, owner_type)?;
 
         let result: Option<Vec<StoredObject>> = self
-            .run_query_async_with_cost(query,
-                |query| move |conn| query.load(conn).optional())
+            .run_query_async_with_cost(query, |query| move |conn| query.load(conn).optional())
             .await?;
         result
             .map(|mut stored_objs| {

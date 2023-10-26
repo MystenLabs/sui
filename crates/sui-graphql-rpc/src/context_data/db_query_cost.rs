@@ -7,7 +7,7 @@ use diesel::{
     PgConnection, RunQueryDsl,
 };
 use regex::Regex;
-use sui_indexer::{schema_v2::query_cost, indexer_reader::IndexerReader};
+use sui_indexer::{indexer_reader::IndexerReader, schema_v2::query_cost};
 
 /// Extracts the raw sql query string from a diesel query
 /// and replaces all the parameters with '0'
@@ -49,7 +49,6 @@ pub fn raw_sql_string_values_set(
 
     let output = re.replace_all(&sql, "LIMIT 1").to_string();
 
-
     let re = Regex::new(r"\$(\d+)")
         .map_err(|e| crate::error::Error::Internal(format!("Failed create valid regex: {}", e)))?;
     Ok(re.replace_all(&output, "'0'").to_string())
@@ -61,11 +60,8 @@ pub fn extract_cost(
     pg_reader: &IndexerReader,
 ) -> Result<f64, crate::error::Error> {
     let raw_sql_string = raw_sql_string_values_set(query)?;
-    pg_reader.run_query(|conn| {
-
-    diesel::select(query_cost(&raw_sql_string))
-        .get_result::<f64>(conn)
-    })
+    pg_reader
+        .run_query(|conn| diesel::select(query_cost(&raw_sql_string)).get_result::<f64>(conn))
         .map_err(|e| {
             crate::error::Error::Internal(format!(
                 "Unable to run query_cost function to determine query cost for {}: {}",
