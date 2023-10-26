@@ -49,7 +49,7 @@ module std::bit_vector_tests {
     #[expected_failure(abort_code = bit_vector::EINDEX)]
     fun index_bit_out_of_bounds() {
         let bitvector = bit_vector::new(bit_vector::word_size());
-        bit_vector::is_index_set(&mut bitvector, bit_vector::word_size());
+        bit_vector::is_index_set(&bitvector, bit_vector::word_size());
     }
 
     #[test]

@@ -11,6 +11,8 @@ warning[W09012]: unused 'mut' modifiers
   │             --- ^ The variable 'x' is never used mutably
   │             │    
   │             Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09012]: unused 'mut' modifiers
   ┌─ tests/move_2024/typing/unused_let_mut.move:9:24
@@ -19,6 +21,8 @@ warning[W09012]: unused 'mut' modifiers
   │                    --- ^ The variable 'x' is never used mutably
   │                    │    
   │                    Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09012]: unused 'mut' modifiers
    ┌─ tests/move_2024/typing/unused_let_mut.move:10:17
@@ -27,6 +31,8 @@ warning[W09012]: unused 'mut' modifiers
    │             --- ^ The variable 'y' is never used mutably
    │             │    
    │             Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[W09012]: unused 'mut' modifiers
    ┌─ tests/move_2024/typing/unused_let_mut.move:11:21
@@ -35,4 +41,6 @@ warning[W09012]: unused 'mut' modifiers
    │                 --- ^ The variable 'f' is never used mutably
    │                 │    
    │                 Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
