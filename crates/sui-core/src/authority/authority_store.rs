@@ -1991,7 +1991,7 @@ impl MarkerTableQuery for AuthorityStore {
 }
 
 impl BackingPackageStore for AuthorityStore {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
         let package = self.get_object(package_id)?;
         if let Some(obj) = &package {
             fp_ensure!(
@@ -2001,7 +2001,7 @@ impl BackingPackageStore for AuthorityStore {
                 }
             );
         }
-        Ok(package)
+        Ok(package.map(Arc::new))
     }
 }
 

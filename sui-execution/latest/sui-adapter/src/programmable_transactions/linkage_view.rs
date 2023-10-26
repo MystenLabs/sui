@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
 use std::{
     cell::RefCell,
     collections::{hash_map::Entry, BTreeMap, HashMap, HashSet},
@@ -316,7 +317,7 @@ impl<'state> ModuleResolver for LinkageView<'state> {
 }
 
 impl<'state> BackingPackageStore for LinkageView<'state> {
-    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>> {
         self.resolver.get_package_object(package_id)
     }
 }

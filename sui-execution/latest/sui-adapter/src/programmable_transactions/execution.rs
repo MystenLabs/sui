@@ -482,7 +482,7 @@ mod checked {
         // For newly published packages, runtime ID matches storage ID.
         let storage_id = runtime_id;
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package = context.new_package(&modules, &dependencies)?;
+        let package = context.new_package(&modules, dependencies.iter().map(|p| p.as_ref()))?;
 
         // Here we optimistacally push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
@@ -589,8 +589,12 @@ mod checked {
         let storage_id = context.tx_context.fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
-        let package =
-            context.upgrade_package(storage_id, &current_package, &modules, &dependencies)?;
+        let package = context.upgrade_package(
+            storage_id,
+            current_package.as_ref(),
+            &modules,
+            dependencies.iter().map(|p| p.as_ref()),
+        )?;
 
         context.linkage_view.set_linkage(&package)?;
         let res = publish_and_verify_modules(context, runtime_id, &modules);
@@ -683,7 +687,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<MovePackage, ExecutionError> {
+    ) -> Result<Arc<MovePackage>, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -700,7 +704,7 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<MovePackage>, ExecutionError> {
+    ) -> Result<Vec<Arc<MovePackage>>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
         match get_packages(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
