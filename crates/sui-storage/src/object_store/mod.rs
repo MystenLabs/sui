@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
 
+pub mod downloader;
 pub mod util;
 
 /// Object-store type.
