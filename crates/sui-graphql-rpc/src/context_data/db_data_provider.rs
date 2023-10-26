@@ -195,8 +195,11 @@ impl QueryBuilder {
         after_tx_seq_num: Option<i64>,
         before_tx_seq_num: Option<i64>,
     ) -> Result<transactions::BoxedQuery<'a, Pg>, Error> {
+        let mut query = transactions::dsl::transactions.into_boxed();
 
         if let Some(cursor_val) = cursor {
+            if descending_order {
+                let filter_value =
                     before_tx_seq_num.map_or(cursor_val, |b| std::cmp::min(b, cursor_val));
                 query = query.filter(transactions::dsl::tx_sequence_number.lt(filter_value));
             } else {
