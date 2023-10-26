@@ -6,12 +6,8 @@ module 0x1.Tester {
     struct Box has key { f: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    bump_and_pick(account: &signer, b1: &mut Self.Box, b2: &mut Self.Box): &u64 acquires Data {
-        let sender: address;
-        let data: &mut Self.Data;
+    bump_and_pick(data: &mut Self.Data, b1: &mut Self.Box, b2: &mut Self.Box): &u64 {
     label b0:
-        sender = signer.address_of(move(account));
-        data = borrow_global_mut<Data>(move(sender));
         *&mut copy(b1).Box::f = *&copy(data).Data::v1;
         *&mut copy(b2).Box::f = *&move(data).Data::v2;
         jump_if (*&copy(b1).Box::f >= *&copy(b2).Box::f) b2;
@@ -23,19 +19,14 @@ module 0x1.Tester {
         return &move(b1).Box::f;
     }
 
-    larger_field(account: &signer, drop: address, result: &mut u64) acquires Box, Data {
-        let b1: Self.Box;
-        let b2: Self.Box;
+    larger_field(data: &mut Self.Data, b1: Self.Box, b2: Self.Box, drop: address, result: &mut u64) {
         let returned_ref: &u64;
         let dump: u64;
     label b0:
-        b1 = move_from<Box>(signer.address_of(copy(account)));
-        b2 = move_from<Box>(move(drop));
-
         assert(*&(&b1).Box::f == 0, 42);
         assert(*&(&b2).Box::f == 0, 42);
 
-        returned_ref = Self.bump_and_pick(copy(account), &mut b1, &mut b2);
+        returned_ref = Self.bump_and_pick(move(data), &mut b1, &mut b2);
 
         // it is valid to immutably borrow the local
         // even though a mut borrow + freeze would be invalid
@@ -48,7 +39,7 @@ module 0x1.Tester {
         );
 
         *move(result) = *move(returned_ref);
-        move_to<Box>(copy(account), move(b1));
+        Box { dump } = move(b1);
         Box { dump } = move(b2);
 
         return;

@@ -38,25 +38,6 @@ module 0x1.M {
         return (copy(x), move(x));
     }
 
-    // `MoveTo` requires key
-    f5(s: &signer, x: Self.HasKey<Self.NoAbilities, u64>) {
-    label b0:
-        move_to<HasKey<Self.NoAbilities, u64>>(move(s), move(x));
-        return;
-    }
-
-    // `MoveFrom` requires key
-    f6(): Self.HasKey<Self.NoAbilities, u64> acquires HasKey {
-    label b0:
-        return move_from<HasKey<Self.NoAbilities, u64>>(0x0);
-    }
-
-    // `Exists` requires key
-    f7(): bool {
-    label b0:
-        return exists<HasKey<Self.NoAbilities, u64>>(0x0);
-    }
-
     f8(): Self.RequireStore<Self.HasStore<Self.NoAbilities, u64>> {
     label b0:
         return RequireStore<Self.HasStore<Self.NoAbilities, u64>> { a: true };

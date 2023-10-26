@@ -7,20 +7,16 @@ module 0x1.M {
         return true;
     }
 
-    public is_ok(addr: address): bool acquires R {
+    fake(addr: address): &Self.R { label l0: abort(0); }
+
+    public is_ok(addr: address): bool {
     label b0:
         // correct stack usage
         (&addr);
         (0x1D8);
-        (&borrow_global<R>().R::data);
+        (&Self.fake().R::data);
         Self.is_ok_();
         return;
     }
 
-    // ImmBorrowLoc(0),
-    // LdConst(1),
-    // ImmBorrowGlobal(StructDefinitionIndex(4)),
-    // ImmBorrowField(FieldHandleIndex(0)),
-    // Call(45),
-    // Ret,
 }

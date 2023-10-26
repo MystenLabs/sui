@@ -18,7 +18,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 3 'publish'. lines 30-49:
+task 3 'publish'. lines 30-37:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M2'. Got VMError: {
     major_status: RECURSIVE_STRUCT_DEFINITION,
     sub_status: None,
@@ -27,7 +27,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 4 'publish'. lines 51-58:
+task 4 'publish'. lines 39-46:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: RECURSIVE_STRUCT_DEFINITION,
     sub_status: None,
@@ -36,7 +36,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [],
 }
 
-task 5 'publish'. lines 60-70:
+task 5 'publish'. lines 48-58:
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::M3'. Got VMError: {
     major_status: RECURSIVE_STRUCT_DEFINITION,
     sub_status: None,
