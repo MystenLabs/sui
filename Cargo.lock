@@ -11798,6 +11798,7 @@ dependencies = [
  "hex",
  "indicatif",
  "itertools",
+ "move-core-types",
  "narwhal-storage",
  "narwhal-types",
  "object_store",
