@@ -315,7 +315,7 @@ type Linkage {
 	"""
 	originalId: SuiAddress!
 	"""
-	The ID on-chain of the version of the depedency that this package depends on.
+	The ID on-chain of the version of the dependency that this package depends on.
 	"""
 	upgradedId: SuiAddress!
 	"""
