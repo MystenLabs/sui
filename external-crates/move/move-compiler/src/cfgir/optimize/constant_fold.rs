@@ -95,9 +95,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         | E::Unreachable => false,
 
         e_ @ E::Constant(_) => {
-            let name = if let E::Constant(name) = e_ {
-                name
-            } else {
+            let E::Constant(name) = e_ else {
                 unreachable!()
             };
             if let Some(value) = consts.get(name) {
