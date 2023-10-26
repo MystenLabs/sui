@@ -63,7 +63,7 @@ fn run_examples_move_unit_tests() {
 fn run_docs_examples_move_unit_tests() -> io::Result<()> {
     let examples = {
         let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "examples", "sui-move"]);
+        buf.extend(["..", "..", "examples", "move"]);
         buf
     };
 

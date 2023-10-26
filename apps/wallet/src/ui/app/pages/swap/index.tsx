@@ -15,8 +15,6 @@ import { filterAndSortTokenBalances } from '_helpers';
 import {
 	allowedSwapCoinsList,
 	Coins,
-	getUSDCurrency,
-	isExceedingSlippageTolerance,
 	useCoinsReFetchingConfig,
 	useDeepBookConfigs,
 	useGetEstimate,
@@ -28,7 +26,12 @@ import {
 	USDC_DECIMALS,
 	type FormValues,
 } from '_pages/swap/constants';
-import { useSuiUsdcBalanceConversion, useSwapData } from '_pages/swap/utils';
+import {
+	getUSDCurrency,
+	isExceedingSlippageTolerance,
+	useSuiUsdcBalanceConversion,
+	useSwapData,
+} from '_pages/swap/utils';
 import { DeepBookContextProvider, useDeepBookContext } from '_shared/deepBook/context';
 import { useTransactionSummary, useZodForm } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -38,7 +41,7 @@ import { SUI_DECIMALS, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
 import clsx from 'classnames';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWatch, type SubmitHandler } from 'react-hook-form';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
@@ -210,8 +213,14 @@ export function SwapPageContent() {
 		control,
 		handleSubmit,
 		reset,
-		formState: { isValid, isSubmitting, errors },
+		formState: { isValid, isSubmitting, errors, isDirty },
 	} = form;
+
+	useEffect(() => {
+		if (isDirty) {
+			setSlippageErrorString('');
+		}
+	}, [isDirty]);
 
 	const renderButtonToCoinsList = useMemo(() => {
 		return (
@@ -228,8 +237,8 @@ export function SwapPageContent() {
 	const isPayAll = amount === (isAsk ? formattedBaseTokenBalance : formattedQuoteTokenBalance);
 
 	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
-	const rawInputSuiUsdc = suiUsdc.rawValue;
-	const rawInputUsdcSui = usdcSui.rawValue;
+	const rawInputSuiUsdc = suiUsdc.data?.rawValue;
+	const rawInputUsdcSui = usdcSui.data?.rawValue;
 
 	const atcText = useMemo(() => {
 		if (isAsk) {
@@ -344,7 +353,7 @@ export function SwapPageContent() {
 							<Form form={form} onSubmit={handleOnsubmit}>
 								<div
 									className={clsx(
-										'flex flex-col border border-hero-darkest/20 rounded-xl pt-5 pb-6 px-5 gap-4 border-solid',
+										'flex flex-col border border-hero-darkest/20 rounded-xl pt-5 pb-6 px-5 border-solid',
 										isValid && 'bg-gradients-graph-cards',
 									)}
 								>
@@ -358,30 +367,32 @@ export function SwapPageContent() {
 										/>
 									)}
 
-									<InputWithActionButton
-										{...register('amount')}
-										dark
-										suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
-										value={amount}
-										type="number"
-										errorString={errors.amount?.message}
-										actionText="Max"
-										actionType="button"
-										actionDisabled={isPayAll}
-										prefix={isPayAll ? '~' : undefined}
-										onActionClicked={() => {
-											setValue(
-												'amount',
-												activeCoinType === SUI_TYPE_ARG
-													? formattedBaseTokenBalance
-													: formattedQuoteTokenBalance,
-												{ shouldDirty: true },
-											);
-										}}
-									/>
+									<div className="mt-4">
+										<InputWithActionButton
+											{...register('amount')}
+											dark
+											suffix={isAsk ? baseCoinSymbol : quoteCoinSymbol}
+											value={amount}
+											type="number"
+											errorString={errors.amount?.message}
+											actionText="Max"
+											actionType="button"
+											actionDisabled={isPayAll}
+											prefix={isPayAll ? '~' : undefined}
+											onActionClicked={() => {
+												setValue(
+													'amount',
+													activeCoinType === SUI_TYPE_ARG
+														? formattedBaseTokenBalance
+														: formattedQuoteTokenBalance,
+													{ shouldDirty: true },
+												);
+											}}
+										/>
+									</div>
 
 									{isValid && !!amount && (
-										<div className="ml-3">
+										<div className="ml-3 mt-3">
 											<div className="text-bodySmall font-medium text-hero-darkest/40">
 												{isPayAll ? '~ ' : ''}
 												{getUSDCurrency(isAsk ? rawInputSuiUsdc : Number(amount))}
