@@ -30,6 +30,10 @@ use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 
 mod effects_v1;
+// TODO: effects_v2 needs to be public because we need to generate examples of `UnchangedSharedKind`
+// values in order to properly generate the layout for these in generate-format. We should look at
+// seeing if we can make this private and fix the issue with generate-format turn this module
+// private.
 pub mod effects_v2;
 mod object_change;
 
@@ -378,8 +382,7 @@ pub trait TransactionEffectsAPI {
     fn gas_cost_summary(&self) -> &GasCostSummary;
 
     fn deleted_mutably_accessed_shared_objects(&self) -> Vec<ObjectID> {
-        std::dbg!(self
-            .input_shared_objects()
+        self.input_shared_objects()
             .into_iter()
             .filter_map(|kind| match kind {
                 InputSharedObject::MutateDeleted(id, _) => Some(id),
@@ -387,7 +390,7 @@ pub trait TransactionEffectsAPI {
                 | InputSharedObject::ReadOnly(..)
                 | InputSharedObject::ReadDeleted(..) => None,
             })
-            .collect())
+            .collect()
     }
 
     // All of these should be #[cfg(test)], but they are used by tests in other crates, and

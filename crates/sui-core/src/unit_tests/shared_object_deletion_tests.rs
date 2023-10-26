@@ -34,7 +34,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{ExecutionError, SuiError, UserInputError};
 use sui_types::execution_status::ExecutionFailureStatus::{
-    InputObjectDeleted, MoveAbort, SharedObjectOperationNotAllowed,
+    InputObjectDeleted, MoveAbort, SharedObjectWrapped,
 };
 use sui_types::transaction::{ObjectArg, VerifiedCertificate};
 
@@ -650,6 +650,61 @@ async fn test_mutate_after_delete() {
 }
 
 #[tokio::test]
+async fn test_delete_after_delete() {
+    let mut user_1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user_1.create_shared_object().await;
+
+    assert_eq!(effects.created().len(), 1);
+
+    let shared_obj = effects.created()[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+
+    let delete_obj_tx1 = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_obj_tx0 = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_cert0 = user_1
+        .certify_shared_obj_transaction(delete_obj_tx0)
+        .await
+        .unwrap();
+
+    let delete_cert1 = user_1
+        .certify_shared_obj_transaction(delete_obj_tx1)
+        .await
+        .unwrap();
+
+    let (orig_effects, _error) = user_1
+        .execute_sequenced_certificate_to_effects(delete_cert0)
+        .await
+        .unwrap();
+
+    let digest = orig_effects.transaction_digest();
+
+    let (effects, error) = user_1
+        .execute_sequenced_certificate_to_effects(delete_cert1)
+        .await
+        .unwrap();
+
+    assert!(matches!(error.unwrap().kind(), InputObjectDeleted));
+    assert!(effects.status().is_err());
+    assert_eq!(effects.deleted().len(), 0);
+
+    assert!(effects.created().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.wrapped().is_empty());
+
+    // The gas coin gets mutated
+    assert_eq!(effects.mutated().len(), 1);
+
+    assert!(effects.dependencies().contains(digest));
+}
+
+#[tokio::test]
 async fn test_shifting_mutate_and_deletes_multiple_objects() {
     let mut runner = TestRunner::new("shared_object_deletion").await;
     let effects1 = runner.create_shared_object().await;
@@ -846,6 +901,77 @@ async fn test_mutate_after_delete_enqueued() {
 
     let res = user_1
         .enqueue_all_and_execute_all(vec![delete_cert, mutate_cert, mutate_cert_2])
+        .await
+        .unwrap();
+
+    let effects = res.get(1).unwrap();
+
+    assert!(effects.status().is_err());
+    assert_eq!(effects.deleted().len(), 0);
+
+    assert!(effects.created().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.wrapped().is_empty());
+
+    // The gas coin gets mutated
+    assert_eq!(effects.mutated().len(), 1);
+
+    let digest = effects.transaction_digest();
+
+    let effects = res.get(2).unwrap();
+    assert!(effects.status().is_err());
+    assert_eq!(effects.deleted().len(), 0);
+
+    assert!(effects.created().is_empty());
+    assert!(effects.unwrapped_then_deleted().is_empty());
+    assert!(effects.wrapped().is_empty());
+
+    // The gas coin gets mutated
+    assert_eq!(effects.mutated().len(), 1);
+
+    assert!(effects.dependencies().contains(digest));
+}
+
+#[tokio::test]
+async fn test_delete_after_delete_enqueued() {
+    let mut user_1 = TestRunner::new("shared_object_deletion").await;
+    let effects = user_1.create_shared_object().await;
+
+    assert_eq!(effects.created().len(), 1);
+
+    let shared_obj = effects.created()[0].0;
+    let shared_obj_id = shared_obj.0;
+    let initial_shared_version = shared_obj.1;
+
+    let delete_obj_tx0 = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_obj_tx1 = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_obj_tx_2 = user_1
+        .delete_shared_obj_tx(shared_obj_id, initial_shared_version)
+        .await;
+
+    let delete_cert = user_1
+        .certify_shared_obj_transaction(delete_obj_tx0)
+        .await
+        .unwrap();
+
+    let delete_cert1 = user_1
+        .certify_shared_obj_transaction(delete_obj_tx1)
+        .await
+        .unwrap();
+
+    let delete_cert_2 = user_1
+        .certify_shared_obj_transaction(delete_obj_tx_2)
+        .await
+        .unwrap();
+
+    let res = user_1
+        .enqueue_all_and_execute_all(vec![delete_cert, delete_cert1, delete_cert_2])
         .await
         .unwrap();
 
@@ -1143,10 +1269,7 @@ async fn test_wrap_not_allowed() {
         .await
         .unwrap();
 
-    assert!(matches!(
-        error.unwrap().kind(),
-        SharedObjectOperationNotAllowed
-    ));
+    assert!(matches!(error.unwrap().kind(), SharedObjectWrapped));
 
     let new_version = user_1.get_object_latest_version(shared_obj_id);
     assert_eq!(new_version, 4.into());

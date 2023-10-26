@@ -3,7 +3,7 @@ source: crates/sui-swarm-config/tests/snapshot_tests.rs
 expression: genesis.sui_system_object().into_genesis_version_for_tooling()
 ---
 epoch: 0
-protocol_version: 30
+protocol_version: 31
 system_state_version: 1
 validators:
   total_stake: 20000000000000000
@@ -241,6 +241,7 @@ validators:
         extra_fields:
           id:
 <<<<<<< HEAD
+<<<<<<< HEAD
             id: "0xa85ba3c3ffbe2c3d872d3a855a8fe83a07cf0f8ffa2a79aa6c46664d5d5565e9"
 =======
 <<<<<<< HEAD
@@ -306,6 +307,15 @@ validators:
         id: "0x1fbc67b24adbf7ff287f5033f6db3829596d22e8b96b81381ea98b9113428962"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+            id: "0x49c6dcb9dc61b1725524d4f79cb0229be919680dfff32ee4437f9c4bd53cd69d"
+          size: 0
+      voting_power: 10000
+      operation_cap_id: "0xa8368cbd5a296af4aa618a8e9a4348965f91dfeed33654f79c963c6704216a93"
+      gas_price: 1000
+      staking_pool:
+        id: "0x14e7607eeca27085f11cea353f1f571be751f782b8716c553c4feb7aabea9d99"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -313,6 +323,7 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
+<<<<<<< HEAD
 <<<<<<< HEAD
           id: "0xe59b16b0cd50f8a36888629b5ffcb81c7178001ea5d2d94bc3350610291ec576"
 =======
@@ -343,12 +354,16 @@ validators:
           id: "0x81e1fc988a1f6074f340d042c05713f0cf75321330a642b5ee1cd646f58bc41b"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+          id: "0x08e83961d6cc9198e6215f0448361a2f2b76310777de2a685975ca5c97e7446f"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
+<<<<<<< HEAD
 <<<<<<< HEAD
             id: "0xea0a6589011e9b92d2e9c8b1dd04bee4ff44a9efad30f5fb76e85a31d45304f8"
 =======
@@ -379,6 +394,9 @@ validators:
             id: "0xc6b879e4f355eb5f7a96ef63b6b4d2ede3106828ce9e0e1d619bd3a4ac52a111"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+            id: "0x5df46b9e5749c290304b8a3415fec3884ae717fe63d2e58ead85634c3c759ed5"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -386,6 +404,7 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
+<<<<<<< HEAD
 <<<<<<< HEAD
           id: "0x0825ab4ad0d58f93fcfb37617aad744abda466c86d351c71699f27bc634ce6a3"
 =======
@@ -484,11 +503,29 @@ validators:
     id: "0x59ce2eae3927716a73705307ff5a0bb2012bb34efdab4dac05f5a425cfca3a89"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+          id: "0xfee757c2df878eecfbabffac4254809daacef4432869572c721887aac96fb85f"
+        size: 0
+  pending_active_validators:
+    contents:
+      id: "0x0bd07311636288d42bc44bde3319b65f53c3eac3983952622fa95fd001556230"
+      size: 0
+  pending_removals: []
+  staking_pool_mappings:
+    id: "0x4a6e106c027f84eb7a3ce231994f38d9a566b5ca65ffbd0e4650d8825906a728"
+    size: 1
+  inactive_validators:
+    id: "0x6205e22328bf6ae7245f4ad5b8896b6f5575fd7c208dfc8c2155d13885c9e9d8"
+    size: 0
+  validator_candidates:
+    id: "0x228e8f3f58db7bfae2ef40f69cbb28db8f4c447acdf2e301ab9632bfa073b2b0"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
+<<<<<<< HEAD
 <<<<<<< HEAD
       id: "0x5bdbf9a2c33cc20d59f365cce2f1eb28f4c1b1e0531719667c54772b576f4c4e"
 =======
@@ -519,6 +556,9 @@ validators:
       id: "0x3e6aaba2f1ef0bb3cc5aec271752ce7ccd1e8003741dbba2fa98371c2d94ba1a"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+      id: "0x6c1291bc40663a612d17e744287e391c51461963ff90b109b79d896f4eaf5a3b"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -535,6 +575,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
+<<<<<<< HEAD
 <<<<<<< HEAD
       id: "0x980bf06d7cb399fb76a1ad0b5ff39cba4707320702c6a281d24304be8e19db21"
 =======
@@ -565,6 +606,9 @@ parameters:
       id: "0xf8682846474adf297beebf1696e3b80e00ae307ff1f1d895fc504a8db1d6d997"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+      id: "0x28807b6d3904bb59a153990ccde22e8487e9bffe6bacf0cb8ecc59984ac184af"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -578,6 +622,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
+<<<<<<< HEAD
 <<<<<<< HEAD
       id: "0xe59b0572fca0b78a26dd1a79a73c3db70310760c8ed21fb733880dad2f6c4b5d"
 =======
@@ -608,6 +653,9 @@ stake_subsidy:
       id: "0x82932189ead932198febbae0a3d61b27900c2cbcd5a398aaead7e54be7633fdd"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+      id: "0xdd1b43a03ab2559d46446978e7927b647a9066a94da76bf5c522b9ddc89a7e24"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -619,6 +667,7 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
+<<<<<<< HEAD
 <<<<<<< HEAD
     id: "0x5badcd0d4b6df51113dea993e6a40f979ac934e1bbabb550f7d67b445a010402"
 =======
@@ -649,5 +698,8 @@ extra_fields:
     id: "0x860ac1a9b97877498364dbc192a2e4063c395ef2b3fbf3eebae451f3193e0721"
 >>>>>>> d2e6bac25d (Plumb deleted shared objects deeper into effects v2)
 >>>>>>> 5a25924b33 (Add shared object smearing to marker table)
+=======
+    id: "0xddcc2cc2364d5b22057fd8c17b8ab0b551d299da948a1d7213a17748c1d976f5"
+>>>>>>> b73f2d0b25 (Address feedback and add a couple more tests)
   size: 0
 

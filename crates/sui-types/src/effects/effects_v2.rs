@@ -518,6 +518,8 @@ pub enum UnchangedSharedKind {
     /// Read-only shared objects from the input. We don't really need ObjectDigest
     /// for protocol correctness, but it will make it easier to verify untrusted read.
     ReadOnlyRoot(VersionDigest),
+    /// Deleted shared objects that appear mutably/owned in the input.
     MutateDeleted(SequenceNumber),
+    /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
 }

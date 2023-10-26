@@ -188,7 +188,10 @@ mod checked {
                 epoch_id,
             )?
         };
-        let objects: Vec<Object> = input_object_data.iter().map(|(_, obj)| obj.clone()).collect();
+        let objects: Vec<Object> = input_object_data
+            .iter()
+            .map(|(_, obj)| obj.clone())
+            .collect();
         let gas_status = get_gas_status(
             &objects,
             tx_data.gas(),

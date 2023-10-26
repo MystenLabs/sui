@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 30;
+const MAX_PROTOCOL_VERSION: u64 = 31;
 
 // Record history of protocol version allocations here:
 //
@@ -88,6 +88,7 @@ const MAX_PROTOCOL_VERSION: u64 = 30;
 //             instead.
 //             In execution, has_public_transfer is recomputed when loading the object.
 //             Add support for shared obj deletion and receiving objects off of other objects in devnet only.
+// Version 31: Add support for shared object deletion in devnet only.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1617,11 +1618,6 @@ impl ProtocolConfig {
                         cfg.feature_flags.narwhal_certificate_v2 = true;
                     }
 
-                    // Only enable shared object deletion on devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.shared_object_deletion = true;
-                    }
-
                     cfg.random_beacon_reduction_allowed_delta = Some(800);
                     // Only enable random beacon on devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
@@ -1640,7 +1636,12 @@ impl ProtocolConfig {
 
                     cfg.feature_flags.recompute_has_public_transfer_in_execution = true;
                 }
-
+                31 => {
+                    // Only enable shared object deletion on devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.shared_object_deletion = true;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

@@ -183,11 +183,8 @@ pub enum ExecutionFailureStatus {
     )]
     SuiMoveVerificationTimedout,
 
-    #[error(
-        "Shared object operations such a wrapping, freezing, or converting to owned are not \
-        allowed."
-    )]
-    SharedObjectOperationNotAllowed,
+    #[error("Wrapping a shared object is not allowed.")]
+    SharedObjectWrapped,
 
     #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
     InputObjectDeleted,
