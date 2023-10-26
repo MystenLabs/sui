@@ -706,7 +706,14 @@ impl PgManager {
             }
         }
 
-        let query = QueryBuilder::multi_get_txs(cursor, descending_order, limit, filter, after_tx_seq_num, before_tx_seq_num)?;
+        let query = QueryBuilder::multi_get_txs(
+            cursor,
+            descending_order,
+            limit,
+            filter,
+            after_tx_seq_num,
+            before_tx_seq_num,
+        )?;
 
         let result: Option<Vec<StoredTransaction>> = self
             .run_query_async(move |conn| {
