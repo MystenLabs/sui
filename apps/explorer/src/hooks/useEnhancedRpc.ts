@@ -11,17 +11,7 @@ import { Network } from '~/utils/api/DefaultRpcClient';
 export function useEnhancedRpcClient() {
 	const [network] = useNetwork();
 	const client = useSuiClient();
-	window.addEventListener('error', function (event) {
-		console.log(event);
-		// if (event?.target?.src && event.target?.src.startsWith("http://")) {
-		// Conditionally allow mixed content based on specific criteria
-		// if (event.target.src.includes("my-allowed-api.com")) {
-		// Allow the request
-		// } else {
-		// Block the request or display a message
-		// }
-		// }
-	});
+
 	const enhancedRpc = useMemo(() => {
 		if (network === Network.LOCAL) {
 			return new SuiClient({ url: 'http://localhost:9124' });
