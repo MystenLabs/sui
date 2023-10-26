@@ -7,7 +7,7 @@ use diesel::{
     PgConnection, RunQueryDsl,
 };
 use regex::Regex;
-use sui_indexer::schema_v2::query_cost;
+use sui_indexer::{schema_v2::query_cost, indexer_reader::IndexerReader};
 
 /// Extracts the raw sql query string from a diesel query
 /// and replaces all the parameters with '0'
@@ -50,11 +50,15 @@ pub fn raw_sql_string_values_set(
 
 pub fn extract_cost(
     query: &dyn QueryFragment<Pg>,
-    pg_connection: &mut PgConnection,
+    // pg_connection: &mut PgConnection,
+    pg_reader: &IndexerReader,
 ) -> Result<f64, crate::error::Error> {
     let raw_sql_string = raw_sql_string_values_set(query)?;
+    pg_reader.run_query(|conn| {
+
     diesel::select(query_cost(&raw_sql_string))
-        .get_result::<f64>(pg_connection)
+        .get_result::<f64>(conn)
+    })
         .map_err(|e| {
             crate::error::Error::Internal(format!(
                 "Unable to run query_cost function to determine query cost for {}: {}",

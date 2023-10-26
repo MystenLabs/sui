@@ -93,7 +93,7 @@ use sui_types::{
     Identifier,
 };
 
-use super::DEFAULT_PAGE_SIZE;
+use super::{DEFAULT_PAGE_SIZE, db_query_cost::extract_cost};
 
 use super::sui_sdk_data_provider::convert_to_validators;
 
@@ -119,6 +119,8 @@ pub enum DbValidationError {
     PaginationDisabledOnBalances,
     #[error("Invalid owner type. Must be Address or Object")]
     InvalidOwnerType,
+    #[error("Query cost exceeded - cost: {0}, limit: {1}")]
+    QueryCostExceeded(u64, u64)
 }
 
 type BalanceQuery<'a> = BoxedSelectStatement<
@@ -476,12 +478,12 @@ impl QueryBuilder {
 
 pub(crate) struct PgManager {
     pub inner: IndexerReader,
-    pub _limits: Limits,
+    pub limits: Limits,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader, _limits: Limits) -> Self {
-        Self { inner, _limits }
+    pub(crate) fn new(inner: IndexerReader, limits: Limits) -> Self {
+        Self { inner, limits }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
@@ -503,17 +505,41 @@ impl PgManager {
             .await
             .map_err(|e| Error::Internal(e.to_string()))
     }
+
+    /// Takes a query fragment and a lambda that executes the query
+    /// Spawns a blocking task that determines the cost of the query fragment
+    /// And if within limits, executes the query
+    async fn run_query_async_with_cost<T, Q, EF, E, F>(
+        &self,
+        query: Q,
+        execute_fn: EF,
+    ) -> Result<T, Error>
+    where
+        Q: QueryDsl + RunQueryDsl<Pg> + diesel::query_builder::QueryFragment<diesel::pg::Pg> + Send + 'static,
+        EF: FnOnce(Q) -> F + Send + 'static,
+        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
+        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
+        T: Send + 'static,
+    {
+        let max_db_query_cost = self.limits.max_db_query_cost;
+        self.inner.spawn_blocking(move |this| {
+            let cost = extract_cost(&query, &this)?;
+            if cost > max_db_query_cost as f64 {
+                return Err(DbValidationError::QueryCostExceeded(cost as u64, max_db_query_cost).into());
+            }
+            let execute_closure = execute_fn(query);
+            this.run_query(execute_closure).map_err(|e| Error::Internal(e.to_string()))
+        }).await
+    }
 }
 
 /// Implement methods to query db and return StoredData
 impl PgManager {
     async fn get_tx(&self, digest: Vec<u8>) -> Result<Option<StoredTransaction>, Error> {
-        self.run_query_async(|conn| {
-            QueryBuilder::get_tx_by_digest(digest)
-                .get_result::<StoredTransaction>(conn) // Expect exactly 0 to 1 result
-                .optional()
-        })
-        .await
+        self.run_query_async_with_cost(
+            QueryBuilder::get_tx_by_digest(digest),
+            |query| move |conn| query.get_result::<StoredTransaction>(conn).optional()
+        ).await
     }
 
     async fn get_obj(
@@ -522,7 +548,8 @@ impl PgManager {
         version: Option<i64>,
     ) -> Result<Option<StoredObject>, Error> {
         self.run_query_async(move |conn| {
-            QueryBuilder::get_obj(address, version)
+            let query = QueryBuilder::get_obj(address, version);
+            query
                 .get_result::<StoredObject>(conn)
                 .optional()
         })
