@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::storage::BackingPackageCache;
 use crate::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     coin::Coin,
@@ -19,19 +20,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageStore {
-    fn as_backing_package_store(&self) -> &dyn BackingPackageStore;
-}
-
-impl<T> SuiResolver for T
-where
-    T: ResourceResolver<Error = SuiError>,
-    T: BackingPackageStore,
-{
-    fn as_backing_package_store(&self) -> &dyn BackingPackageStore {
-        self
-    }
-}
+pub trait SuiResolver: ResourceResolver<Error = SuiError> + BackingPackageCache {}
 
 /// Interface with the store necessary to execute a programmable transaction
 pub trait ExecutionState: StorageView + SuiResolver {
@@ -52,10 +41,6 @@ where
         self
     }
 }
-
-/// View of the store necessary to produce the layouts of types.
-pub trait TypeLayoutStore: BackingPackageStore {}
-impl<T> TypeLayoutStore for T where T: BackingPackageStore {}
 
 #[derive(Debug)]
 pub enum ExecutionResults {

@@ -3,14 +3,13 @@
 
 use std::{collections::HashSet, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingPackageCache, BackingStore};
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::ExecutionError,
-    execution::TypeLayoutStore,
     execution_mode::ExecutionResult,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -88,6 +87,6 @@ pub trait Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
-        store: Box<dyn TypeLayoutStore + 'store>,
+        store: Box<dyn BackingPackageCache + 'store>,
     ) -> Box<dyn LayoutResolver + 'r>;
 }

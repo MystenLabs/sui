@@ -12,7 +12,6 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::TypeLayoutStore,
     execution_mode::{self, ExecutionResult},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -31,7 +30,7 @@ use sui_adapter_v0::execution_engine::{
 };
 use sui_adapter_v0::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_v0::all_natives;
-use sui_types::storage::BackingStore;
+use sui_types::storage::{BackingPackageCache, BackingStore};
 use sui_verifier_v0::meter::SuiVerifierMeter;
 
 use crate::executor;
@@ -175,7 +174,7 @@ impl executor::Executor for Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
-        store: Box<dyn TypeLayoutStore + 'store>,
+        store: Box<dyn BackingPackageCache + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
     }

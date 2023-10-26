@@ -151,6 +151,11 @@ pub trait Storage {
 
 pub type PackageFetchResults<Package> = Result<Vec<Package>, Vec<ObjectID>>;
 
+pub trait BackingPackageCache {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<MovePackage>>>;
+    fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Arc<Object>>>;
+}
+
 pub trait BackingPackageStore {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<Object>>;
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<MovePackage>> {
