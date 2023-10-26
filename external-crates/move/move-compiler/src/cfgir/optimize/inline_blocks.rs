@@ -7,7 +7,8 @@ use crate::{
         ast::remap_labels,
         cfg::{MutForwardCFG, CFG},
     },
-    hlir::ast::{BasicBlocks, Command_, FunctionSignature, Label, SingleType, Var},
+    hlir::ast::{BasicBlocks, Command_, FunctionSignature, Label, SingleType, Value, Var},
+    parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn optimize(
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
+    _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let changed = optimize_(cfg.start_block(), cfg.blocks_mut());
