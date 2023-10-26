@@ -2,9 +2,9 @@
 resolver = "2"
 
 exclude = [
-    "external-crates/move-execution/v0/move-bytecode-verifier",
-    "external-crates/move-execution/v0/move-stdlib",
-    "external-crates/move-execution/v0/move-vm/runtime",
+    "external-crates/move/move-execution/v0/move-bytecode-verifier",
+    "external-crates/move/move-execution/v0/move-stdlib",
+    "external-crates/move/move-execution/v0/move-vm/runtime",
     "external-crates/move/move-abstract-stack",
     "external-crates/move/move-binary-format",
     "external-crates/move/move-binary-format/serializer-tests",
