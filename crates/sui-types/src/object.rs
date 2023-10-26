@@ -43,8 +43,8 @@ pub const OBJECT_START_VERSION: SequenceNumber = SequenceNumber::from_u64(1);
 pub struct MoveObject {
     /// The type of this object. Immutable
     type_: MoveObjectType,
-    /// Determines if it is usable with the TransferObject command
-    /// Derived from the type_
+    /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
+    /// object. Instead, it is always calculated from the objects type when loaded in execution
     has_public_transfer: bool,
     /// Number that increases each time a tx takes this object as a mutable input
     /// This is a lamport timestamp, not a sequentially increasing version
