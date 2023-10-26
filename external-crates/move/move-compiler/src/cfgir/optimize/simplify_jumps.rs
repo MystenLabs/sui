@@ -5,8 +5,9 @@
 use crate::{
     cfgir::cfg::MutForwardCFG,
     hlir::ast::{
-        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value_, Var,
+        Command, Command_, Exp, FunctionSignature, SingleType, UnannotatedExp_, Value, Value_, Var,
     },
+    parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
 };
 
@@ -14,6 +15,7 @@ use crate::{
 pub fn optimize(
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
+    _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let mut changed = false;

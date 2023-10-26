@@ -492,6 +492,12 @@ mod check_valid_constant {
                 return;
             }
 
+            // NB: module scoping is checked during constant type creation, so we don't need to
+            // relitigate here.
+            E::Constant(_, _) => {
+                return;
+            }
+
             //*****************************************
             // Invalid cases
             //*****************************************
@@ -548,7 +554,6 @@ mod check_valid_constant {
                 }
                 "Structs are"
             }
-            E::Constant(_, _) => "Other constants are",
         };
         context.env.add_diag(diag!(
             TypeSafety::UnsupportedConstant,

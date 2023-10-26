@@ -6,10 +6,10 @@ use crate::{
     cfgir::cfg::MutForwardCFG,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
-        TypeName_, UnannotatedExp_, Value_, Var,
+        TypeName_, UnannotatedExp_, Value, Value_, Var,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_},
-    parser::ast::{BinOp, BinOp_, UnaryOp, UnaryOp_},
+    parser::ast::{BinOp, BinOp_, ConstantName, UnaryOp, UnaryOp_},
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
@@ -19,6 +19,7 @@ use std::convert::TryFrom;
 pub fn optimize(
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, SingleType>,
+    constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
     let mut changed = false;
@@ -26,7 +27,7 @@ pub fn optimize(
         let block = std::mem::take(block_ref);
         *block_ref = block
             .into_iter()
-            .filter_map(|mut cmd| match optimize_cmd(&mut cmd) {
+            .filter_map(|mut cmd| match optimize_cmd(constants, &mut cmd) {
                 None => {
                     changed = true;
                     None
@@ -47,18 +48,23 @@ pub fn optimize(
 
 // Some(changed) to keep
 // None to remove the cmd
-fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
+fn optimize_cmd(
+    consts: &UniqueMap<ConstantName, Value>,
+    sp!(_, cmd_): &mut Command,
+) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_ls, e) => optimize_exp(e),
+        C::Assign(_ls, e) => optimize_exp(consts, e),
         C::Mutate(el, er) => {
-            let c1 = optimize_exp(er);
-            let c2 = optimize_exp(el);
+            let c1 = optimize_exp(consts, er);
+            let c2 = optimize_exp(consts, el);
             c1 || c2
         }
-        C::Return { exp: e, .. } | C::Abort(e) | C::JumpIf { cond: e, .. } => optimize_exp(e),
+        C::Return { exp: e, .. } | C::Abort(e) | C::JumpIf { cond: e, .. } => {
+            optimize_exp(consts, e)
+        }
         C::IgnoreAndPop { exp: e, .. } => {
-            let c = optimize_exp(e);
+            let c = optimize_exp(consts, e);
             if ignorable_exp(e) {
                 // value(s), so the command can be removed
                 return None;
@@ -72,21 +78,35 @@ fn optimize_cmd(sp!(_, cmd_): &mut Command) -> Option<bool> {
     })
 }
 
-fn optimize_exp(e: &mut Exp) -> bool {
+fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
+    let optimize_exp = |e| optimize_exp(consts, e);
     match &mut e.exp.value {
         //************************************
         // Pass through cases
         //************************************
         E::Unit { .. }
         | E::Value(_)
-        | E::Constant(_)
         | E::UnresolvedError
         | E::Spec(_, _)
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }
         | E::Unreachable => false,
+
+        e_ @ E::Constant(_) => {
+            let name = if let E::Constant(name) = e_ {
+                name
+            } else {
+                unreachable!()
+            };
+            if let Some(value) = consts.get(name) {
+                *e_ = E::Value(value.clone());
+                true
+            } else {
+                false
+            }
+        }
 
         E::ModuleCall(mcall) => mcall.arguments.iter_mut().map(optimize_exp).any(|x| x),
         E::Builtin(_, args) => args.iter_mut().map(optimize_exp).any(|x| x),
