@@ -6444,36 +6444,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "narwhal-consensus"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "bincode",
- "cfg-if",
- "criterion",
- "fastcrypto",
- "futures",
- "indexmap 1.9.3",
- "mysten-metrics",
- "narwhal-config",
- "narwhal-crypto",
- "narwhal-node",
- "narwhal-storage",
- "narwhal-test-utils",
- "narwhal-types",
- "parking_lot 0.12.1",
- "prometheus",
- "rand 0.8.5",
- "sui-protocol-config",
- "telemetry-subscribers",
- "thiserror",
- "tokio",
- "tracing",
- "typed-store",
- "workspace-hack",
-]
-
-[[package]]
 name = "narwhal-crypto"
 version = "0.1.0"
 dependencies = [
@@ -6506,7 +6476,6 @@ dependencies = [
  "mockall",
  "mysten-metrics",
  "narwhal-config",
- "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-network",
  "narwhal-node",
@@ -6575,7 +6544,6 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
- "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-executor",
  "narwhal-network",
@@ -6614,7 +6582,10 @@ dependencies = [
  "async-trait",
  "backoff",
  "bcs",
+ "bincode",
  "bytes",
+ "cfg-if",
+ "criterion",
  "dashmap",
  "fastcrypto",
  "fastcrypto-tbls",
@@ -6627,7 +6598,6 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
- "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-executor",
  "narwhal-network",
@@ -6777,7 +6747,6 @@ dependencies = [
  "mysten-metrics",
  "mysten-network",
  "narwhal-config",
- "narwhal-consensus",
  "narwhal-crypto",
  "narwhal-network",
  "narwhal-node",

@@ -3,7 +3,7 @@
 
 use crate::client::simple_client::SimpleClient;
 use crate::config::ConnectionConfig;
-use crate::config::ServiceConfig;
+use crate::config::ServerConfig;
 use crate::server::simple_server::start_example_server;
 use mysten_metrics::init_metrics;
 use rand::rngs::StdRng;
@@ -119,11 +119,14 @@ pub async fn serve_simulator(
 }
 
 async fn start_graphql_server(graphql_connection_config: ConnectionConfig) -> JoinHandle<()> {
+    let server_config = ServerConfig {
+        connection: graphql_connection_config,
+        ..ServerConfig::default()
+    };
+
     // Starts graphql server
     tokio::spawn(async move {
-        start_example_server(graphql_connection_config, ServiceConfig::default())
-            .await
-            .unwrap();
+        start_example_server(&server_config).await.unwrap();
     })
 }
 

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use sui_graphql_rpc::commands::Command;
-use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
+use sui_graphql_rpc::config::{ConnectionConfig, ServerConfig, ServiceConfig};
 use sui_graphql_rpc::schema_sdl_export;
 use sui_graphql_rpc::server::builder::Server;
 use sui_graphql_rpc::server::simple_server::start_example_server;
@@ -33,14 +33,20 @@ async fn main() {
             prom_host,
             prom_port,
         } => {
-            let conn = ConnectionConfig::new(port, host, db_url, prom_host, prom_port);
+            let connection = ConnectionConfig::new(port, host, db_url, prom_host, prom_port);
             let service_config = service_config(config);
             let _guard = telemetry_subscribers::TelemetryConfig::new()
                 .with_env()
                 .init();
 
             println!("Starting server...");
-            start_example_server(conn, service_config).await.unwrap();
+            let server_config = ServerConfig {
+                connection,
+                service: service_config,
+                ..ServerConfig::default()
+            };
+
+            start_example_server(&server_config).await.unwrap();
         }
         Command::FromConfig { path } => {
             let server = Server::from_yaml_config(path.to_str().unwrap());

@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { Coins, getUSDCurrency, useBalanceConversion } from '_app/hooks/useDeepBook';
+import { Coins, useBalanceConversion } from '_app/hooks/deepbook';
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { SUI_CONVERSION_RATE, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
+import { getUSDCurrency } from '_pages/swap/utils';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { useCoinMetadata, useFormatCoin } from '@mysten/core';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
@@ -32,12 +33,14 @@ export function GasFeeSection({
 		return new BigNumber(amount).times(WALLET_FEES_PERCENTAGE / 100);
 	}, [amount, isValid]);
 
-	const { rawValue } = useBalanceConversion(
-		estimatedFees,
-		isAsk ? Coins.SUI : Coins.USDC,
-		isAsk ? Coins.USDC : Coins.SUI,
-		isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
-	);
+	const { data: balanceConversionData } = useBalanceConversion({
+		balance: estimatedFees,
+		from: isAsk ? Coins.SUI : Coins.USDC,
+		to: isAsk ? Coins.USDC : Coins.SUI,
+		conversionRate: isAsk ? -SUI_CONVERSION_RATE : SUI_CONVERSION_RATE,
+	});
+
+	const rawValue = balanceConversionData?.rawValue;
 
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
 

@@ -148,7 +148,6 @@ members = [
     "crates/workspace-hack",
     "crates/x",
     "narwhal/config",
-    "narwhal/consensus",
     "narwhal/crypto",
     "narwhal/executor",
     "narwhal/network",
@@ -605,7 +604,6 @@ workspace-hack = "0.1.0"
 x = { path = "crates/x" }
 
 narwhal-config = { path = "narwhal/config" }
-narwhal-consensus = { path = "narwhal/consensus" }
 narwhal-crypto = { path = "narwhal/crypto" }
 narwhal-executor = { path = "narwhal/executor" }
 narwhal-network = { path = "narwhal/network" }

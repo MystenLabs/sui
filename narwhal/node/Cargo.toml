@@ -24,7 +24,6 @@ url.workspace = true
 axum.workspace = true
 
 config = { path = "../config", package = "narwhal-config" }
-consensus = { path = "../consensus", package = "narwhal-consensus" }
 fastcrypto.workspace = true
 crypto = { path = "../crypto", package = "narwhal-crypto" }
 executor = { path = "../executor", package = "narwhal-executor" }
@@ -54,7 +53,7 @@ serde_yaml.workspace = true
 test-utils = { path = "../test-utils", package = "narwhal-test-utils" }
 
 [features]
-benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
+benchmark = ["worker/benchmark", "primary/benchmark"]
 trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::primary::NUM_SHUTDOWN_RECEIVERS;
+
 use crate::{
-    certificate_fetcher::CertificateFetcher, metrics::PrimaryMetrics, synchronizer::Synchronizer,
-    PrimaryChannelMetrics,
+    certificate_fetcher::CertificateFetcher, consensus::ConsensusRound, metrics::PrimaryMetrics,
+    primary::NUM_SHUTDOWN_RECEIVERS, synchronizer::Synchronizer, PrimaryChannelMetrics,
 };
 use anemo::async_trait;
 use anyhow::Result;
@@ -18,8 +18,6 @@ use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use storage::NodeStorage;
-
-use consensus::consensus::ConsensusRound;
 use test_utils::{get_protocol_config, latest_protocol_version, temp_dir, CommitteeFixture};
 use tokio::{
     sync::{
