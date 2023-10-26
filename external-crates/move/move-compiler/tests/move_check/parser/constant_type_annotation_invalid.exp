@@ -1,6 +1,6 @@
-error[E01013]: Requires a type annotation 'name: type ='
-  ┌─ tests/move_check/parser/constant_type_annotation_invalid.move:2:11
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/constant_type_annotation_invalid.move:2:25
   │
 2 │     const EThreadMaxxed = 1;
-  │           ^^^^^^^^^^^^^ Add type annotation to this constant
+  │                         ^ Expected a type annotation for this constant, e.g. 'EThreadMaxxed: <type>'
 
