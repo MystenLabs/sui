@@ -1,5 +1,5 @@
 [package]
-name = "move-stdlib"
+name = "move-stdlib-v0"
 version = "0.1.1"
 edition = "2021"
 authors = ["Diem Association <opensource@diem.com>"]
@@ -18,7 +18,7 @@ move-prover.workspace = true
 move-vm-types.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
-move-vm-runtime = { path = "../move-vm/runtime" }
+move-vm-runtime = { path = "../move-vm/runtime", package = "move-vm-runtime-v0" }
 log.workspace = true
 walkdir.workspace = true
 smallvec.workspace = true
@@ -36,5 +36,4 @@ move-cli.workspace = true
 move-package.workspace = true
 
 [features]
-default = []
 testing = []
