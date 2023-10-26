@@ -54,4 +54,9 @@ module sui::sui {
     public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
         transfer::public_transfer(c, recipient)
     }
+
+    #[test_only]
+    public fun new_for_testing(ctx: &mut TxContext): Balance<SUI> {
+        new(ctx)
+    }
 }
