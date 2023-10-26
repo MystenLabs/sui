@@ -127,7 +127,7 @@ fn unused_mut_borrows(compilation_env: &mut CompilationEnv, mutably_used: RefExp
         } = info;
         if *is_mut && !*used_mutably {
             let msg = "Mutable reference is never used mutably, \
-            consider switching to an imutable reference '&' instead";
+            consider switching to an immutable reference '&' instead";
             let mut diag = diag!(UnusedItem::MutReference, (*loc, msg));
             let display_param = param_name
                 .as_ref()

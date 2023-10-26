@@ -219,11 +219,9 @@ impl BorrowState {
         assert_eq!(exps.len(), 1);
         let infos: &mut BTreeMap<ExpBasedID, RefExpInfo> =
             &mut RefCell::borrow_mut(&self.mutably_used);
-        for e in exps {
-            let info = infos.get_mut(e).unwrap();
-            assert!(info.param_name.is_none());
-            info.param_name = Some(name)
-        }
+        let info = infos.get_mut(exps.first().unwrap()).unwrap();
+        assert!(info.param_name.is_none());
+        info.param_name = Some(name)
     }
 
     fn mark_mutably_used(&mut self, id: RefID) {
