@@ -379,11 +379,6 @@ pub struct Function_ {
     pub is_entry: bool,
     /// The type signature
     pub signature: FunctionSignature,
-    /// List of nominal resources (declared in this module) that the procedure might access
-    /// Either through: BorrowGlobal, MoveFrom, or transitively through another procedure
-    /// This list of acquires grants the borrow checker the ability to statically verify the safety
-    /// of references into global storage
-    pub acquires: Vec<StructName>,
     /// List of specifications for the Move prover (experimental)
     pub specifications: Vec<Condition>,
     /// The code for the procedure
@@ -401,18 +396,6 @@ pub type Function = Spanned<Function_>;
 /// type system and/or have access to some runtime/storage context
 #[derive(Debug, PartialEq, Clone)]
 pub enum Builtin {
-    /// Check if there is a struct object (`StructName` resolved by current module) associated with
-    /// the given address
-    Exists(StructName, Vec<Type>),
-    /// Get a reference to the resource(`StructName` resolved by current module) associated
-    /// with the given address
-    BorrowGlobal(bool, StructName, Vec<Type>),
-
-    /// Remove a resource of the given type from the account with the given address
-    MoveFrom(StructName, Vec<Type>),
-    /// Publish an instantiated struct object into signer's (signer is the first arg) account.
-    MoveTo(StructName, Vec<Type>),
-
     /// Pack a vector fix a fixed number of elements. Zero elements means an empty vector.
     VecPack(Vec<Type>, u64),
     /// Get the length of a vector
@@ -693,8 +676,6 @@ pub enum Bytecode_ {
     ImmBorrowLoc(Var),
     MutBorrowField(StructName, Vec<Type>, Field),
     ImmBorrowField(StructName, Vec<Type>, Field),
-    MutBorrowGlobal(StructName, Vec<Type>),
-    ImmBorrowGlobal(StructName, Vec<Type>),
     Add,
     Sub,
     Mul,
@@ -713,9 +694,6 @@ pub enum Bytecode_ {
     Le,
     Ge,
     Abort,
-    Exists(StructName, Vec<Type>),
-    MoveFrom(StructName, Vec<Type>),
-    MoveTo(StructName, Vec<Type>),
     Shl,
     Shr,
     VecPack(Type, u64),
@@ -973,7 +951,6 @@ impl Function_ {
         formals: Vec<(Var, Type)>,
         return_type: Vec<Type>,
         type_parameters: Vec<(TypeVar, BTreeSet<Ability>)>,
-        acquires: Vec<StructName>,
         specifications: Vec<Condition>,
         body: FunctionBody,
     ) -> Self {
@@ -982,7 +959,6 @@ impl Function_ {
             visibility,
             is_entry,
             signature,
-            acquires,
             specifications,
             body,
         }
@@ -1493,19 +1469,6 @@ impl fmt::Display for Var_ {
 impl fmt::Display for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Builtin::Exists(t, tys) => write!(f, "exists<{}{}>", t, format_type_actuals(tys)),
-            Builtin::BorrowGlobal(mut_, t, tys) => {
-                let mut_flag = if *mut_ { "_mut" } else { "" };
-                write!(
-                    f,
-                    "borrow_global{}<{}{}>",
-                    mut_flag,
-                    t,
-                    format_type_actuals(tys)
-                )
-            }
-            Builtin::MoveFrom(t, tys) => write!(f, "move_from<{}{}>", t, format_type_actuals(tys)),
-            Builtin::MoveTo(t, tys) => write!(f, "move_to<{}{}>", t, format_type_actuals(tys)),
             Builtin::VecPack(tys, num) => write!(f, "vec_pack_{}{}", num, format_type_actuals(tys)),
             Builtin::VecLen(tys) => write!(f, "vec_len{}", format_type_actuals(tys)),
             Builtin::VecImmBorrow(tys) => write!(f, "vec_imm_borrow{}", format_type_actuals(tys)),
@@ -1759,12 +1722,6 @@ impl fmt::Display for Bytecode_ {
                 format_type_actuals(tys),
                 field
             ),
-            Bytecode_::MutBorrowGlobal(n, tys) => {
-                write!(f, "MutBorrowGlobal {}{}", n, format_type_actuals(tys))
-            }
-            Bytecode_::ImmBorrowGlobal(n, tys) => {
-                write!(f, "ImmBorrowGlobal {}{}", n, format_type_actuals(tys))
-            }
             Bytecode_::Add => write!(f, "Add"),
             Bytecode_::Sub => write!(f, "Sub"),
             Bytecode_::Mul => write!(f, "Mul"),
@@ -1783,9 +1740,6 @@ impl fmt::Display for Bytecode_ {
             Bytecode_::Le => write!(f, "Le"),
             Bytecode_::Ge => write!(f, "Ge"),
             Bytecode_::Abort => write!(f, "Abort"),
-            Bytecode_::Exists(n, tys) => write!(f, "Exists {}{}", n, format_type_actuals(tys)),
-            Bytecode_::MoveFrom(n, tys) => write!(f, "MoveFrom {}{}", n, format_type_actuals(tys)),
-            Bytecode_::MoveTo(n, tys) => write!(f, "MoveTo {}{}", n, format_type_actuals(tys)),
             Bytecode_::Shl => write!(f, "Shl"),
             Bytecode_::Shr => write!(f, "Shr"),
             Bytecode_::VecPack(ty, n) => write!(f, "VecPack {} {}", ty, n),

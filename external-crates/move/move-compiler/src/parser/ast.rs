@@ -281,7 +281,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: Vec<NameAccessChain>,
     pub name: FunctionName,
     pub body: FunctionBody,
 }
@@ -1521,7 +1520,6 @@ impl AstDebug for Function {
             visibility,
             entry,
             signature,
-            acquires,
             name,
             body,
         } = self;
@@ -1535,11 +1533,6 @@ impl AstDebug for Function {
         }
         w.write(&format!("fun {}", name));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires, |w, m| w.write(&format!("{}", m)));
-            w.write(" ");
-        }
         match &body.value {
             FunctionBody_::Defined(body) => w.block(|w| body.ast_debug(w)),
             FunctionBody_::Native => w.writeln(";"),

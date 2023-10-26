@@ -93,22 +93,13 @@ pub fn verify(
     cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, BorrowState> {
     let super::CFGContext {
-        signature,
-        acquires,
-        locals,
-        ..
+        signature, locals, ..
     } = context;
-    let acquires = *acquires;
     let mut safety = BorrowSafety::new(locals);
 
     // check for existing errors
     let has_errors = compilation_env.has_errors();
-    let mut initial_state = BorrowState::initial(
-        locals,
-        safety.mutably_used.clone(),
-        acquires.clone(),
-        has_errors,
-    );
+    let mut initial_state = BorrowState::initial(locals, safety.mutably_used.clone(), has_errors);
     initial_state.bind_arguments(&signature.parameters);
     initial_state.canonicalize_locals(&safety.local_numbers);
     let (final_state, ds) = safety.analyze_function(cfg, initial_state);
@@ -253,35 +244,6 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             vec![value]
         }
 
-        E::Builtin(b, args) => {
-            let evalues: Values = args.iter().flat_map(|arg| exp(context, arg)).collect();
-            let b: &BuiltinFunction = b;
-            match b {
-                sp!(_, BuiltinFunction_::BorrowGlobal(mut_, t)) => {
-                    assert!(!assert_single_value(evalues).is_ref());
-                    let (diags, value) = context.borrow_state.borrow_global(*eloc, *mut_, t);
-                    context.add_diags(diags);
-                    vec![value]
-                }
-                sp!(_, BuiltinFunction_::MoveFrom(t)) => {
-                    assert!(!assert_single_value(evalues).is_ref());
-                    let (diags, value) = context.borrow_state.move_from(*eloc, t);
-                    assert!(!value.is_ref());
-                    context.add_diags(diags);
-                    vec![value]
-                }
-                _ => {
-                    let ret_ty = &parent_e.ty;
-                    let (diags, values) =
-                        context
-                            .borrow_state
-                            .call(*eloc, evalues, &BTreeMap::new(), ret_ty);
-                    context.add_diags(diags);
-                    values
-                }
-            }
-        }
-
         E::Vector(_, n, _, args) => {
             let evalues: Values = args.iter().flat_map(|arg| exp(context, arg)).collect();
             debug_assert_eq!(*n, evalues.len());
@@ -296,10 +258,7 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
                 .flat_map(|arg| exp(context, arg))
                 .collect();
             let ret_ty = &parent_e.ty;
-            let (diags, values) =
-                context
-                    .borrow_state
-                    .call(*eloc, evalues, &mcall.acquires, ret_ty);
+            let (diags, values) = context.borrow_state.call(*eloc, evalues, ret_ty);
             context.add_diags(diags);
             values
         }

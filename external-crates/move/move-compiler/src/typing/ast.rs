@@ -97,7 +97,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
     pub body: FunctionBody,
 }
 
@@ -149,16 +148,11 @@ pub struct ModuleCall {
     pub type_arguments: Vec<Type>,
     pub arguments: Box<Exp>,
     pub parameter_types: Vec<Type>,
-    pub acquires: BTreeMap<StructName, Loc>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
-    MoveTo(Type),
-    MoveFrom(Type),
-    BorrowGlobal(bool, Type),
-    Exists(Type),
     Freeze(Type),
     Assert(/* is_macro */ bool),
 }
@@ -254,11 +248,6 @@ impl BuiltinFunction_ {
         use crate::naming::ast::BuiltinFunction_ as NB;
         use BuiltinFunction_ as B;
         match self {
-            B::MoveTo(_) => NB::MOVE_TO,
-            B::MoveFrom(_) => NB::MOVE_FROM,
-            B::BorrowGlobal(false, _) => NB::BORROW_GLOBAL,
-            B::BorrowGlobal(true, _) => NB::BORROW_GLOBAL_MUT,
-            B::Exists(_) => NB::EXISTS,
             B::Freeze(_) => NB::FREEZE,
             B::Assert(_) => NB::ASSERT_MACRO,
         }
@@ -416,7 +405,6 @@ impl AstDebug for (FunctionName, &Function) {
                 visibility,
                 entry,
                 signature,
-                acquires,
                 body,
             },
         ) = self;
@@ -431,11 +419,6 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-            w.write(" ");
-        }
         match &body.value {
             FunctionBody_::Defined(body) => body.ast_debug(w),
             FunctionBody_::Native => w.writeln(";"),
@@ -705,21 +688,12 @@ impl AstDebug for ModuleCall {
             name,
             type_arguments,
             parameter_types,
-            acquires,
             arguments,
         } = self;
         w.write(&format!("{}::{}", module, name));
-        if !acquires.is_empty() || !parameter_types.is_empty() {
+        if !parameter_types.is_empty() {
             w.write("[");
-            if !acquires.is_empty() {
-                w.write("acquires: [");
-                w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-                w.write("], ");
-            }
             if !parameter_types.is_empty() {
-                if !acquires.is_empty() {
-                    w.write(", ");
-                }
                 w.write("parameter_types: [");
                 parameter_types.ast_debug(w);
                 w.write("]");
@@ -739,11 +713,6 @@ impl AstDebug for BuiltinFunction_ {
         use crate::naming::ast::BuiltinFunction_ as NF;
         use BuiltinFunction_ as F;
         let (n, bt_opt) = match self {
-            F::MoveTo(bt) => (NF::MOVE_TO, Some(bt)),
-            F::MoveFrom(bt) => (NF::MOVE_FROM, Some(bt)),
-            F::BorrowGlobal(true, bt) => (NF::BORROW_GLOBAL_MUT, Some(bt)),
-            F::BorrowGlobal(false, bt) => (NF::BORROW_GLOBAL, Some(bt)),
-            F::Exists(bt) => (NF::EXISTS, Some(bt)),
             F::Freeze(bt) => (NF::FREEZE, Some(bt)),
             F::Assert(_) => (NF::ASSERT_MACRO, None),
         };

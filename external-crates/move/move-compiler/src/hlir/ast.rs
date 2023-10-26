@@ -138,7 +138,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
     pub body: FunctionBody,
 }
 
@@ -273,17 +272,7 @@ pub struct ModuleCall {
     pub name: FunctionName,
     pub type_arguments: Vec<BaseType>,
     pub arguments: Vec<Exp>,
-    pub acquires: BTreeMap<StructName, Loc>,
 }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BuiltinFunction_ {
-    MoveTo(BaseType),
-    MoveFrom(BaseType),
-    BorrowGlobal(bool, BaseType),
-    Exists(BaseType),
-}
-pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Value_ {
@@ -336,7 +325,6 @@ pub enum UnannotatedExp_ {
     Constant(ConstantName),
 
     ModuleCall(Box<ModuleCall>),
-    Builtin(Box<BuiltinFunction>, Vec<Exp>),
     Freeze(Box<Exp>),
     Vector(Loc, usize, Box<BaseType>, Vec<Exp>),
 
@@ -909,7 +897,6 @@ impl AstDebug for (FunctionName, &Function) {
                 visibility,
                 entry,
                 signature,
-                acquires,
                 body,
             },
         ) = self;
@@ -924,11 +911,6 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-            w.write(" ");
-        }
         match &body.value {
             FunctionBody_::Defined { locals, body } => w.block(|w| (locals, body).ast_debug(w)),
             FunctionBody_::Native => w.writeln(";"),
@@ -1277,12 +1259,6 @@ impl AstDebug for UnannotatedExp_ {
             E::ModuleCall(mcall) => {
                 mcall.ast_debug(w);
             }
-            E::Builtin(bf, rhs) => {
-                bf.ast_debug(w);
-                w.write("(");
-                rhs.ast_debug(w);
-                w.write(")");
-            }
             E::Vector(_loc, n, ty, elems) => {
                 w.write(&format!("vector#{}", n));
                 w.write("<");
@@ -1375,39 +1351,15 @@ impl AstDebug for ModuleCall {
             module,
             name,
             type_arguments,
-            acquires,
             arguments,
         } = self;
         w.write(&format!("{}::{}", module, name));
-        if !acquires.is_empty() {
-            w.write("[acquires: [");
-            w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-            w.write("]], ");
-        }
         w.write("<");
         type_arguments.ast_debug(w);
         w.write(">");
         w.write("(");
         arguments.ast_debug(w);
         w.write(")");
-    }
-}
-
-impl AstDebug for BuiltinFunction_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        use crate::naming::ast::BuiltinFunction_ as NF;
-        use BuiltinFunction_ as F;
-        let (n, bt) = match self {
-            F::MoveTo(bt) => (NF::MOVE_TO, bt),
-            F::MoveFrom(bt) => (NF::MOVE_FROM, bt),
-            F::BorrowGlobal(true, bt) => (NF::BORROW_GLOBAL_MUT, bt),
-            F::BorrowGlobal(false, bt) => (NF::BORROW_GLOBAL, bt),
-            F::Exists(bt) => (NF::EXISTS, bt),
-        };
-        w.write(n);
-        w.write("<");
-        bt.ast_debug(w);
-        w.write(">");
     }
 }
 

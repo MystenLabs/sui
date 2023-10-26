@@ -162,7 +162,7 @@ mod count {
                     exp(context, arg);
                 }
             }
-            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+            E::Vector(_, _, _, args) => {
                 for arg in args.iter() {
                     exp(context, arg);
                 }
@@ -204,7 +204,6 @@ mod count {
             | E::Spec(_, _)
             | E::BorrowLocal(_, _)
             | E::Copy { .. }
-            | E::Builtin(_, _)
             | E::Freeze(_)
             | E::Dereference(_)
             | E::ModuleCall(_)
@@ -352,7 +351,7 @@ mod eliminate {
                     exp(context, arg);
                 }
             }
-            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
+            E::Vector(_, _, _, args) => {
                 for arg in args.iter_mut() {
                     exp(context, arg);
                 }

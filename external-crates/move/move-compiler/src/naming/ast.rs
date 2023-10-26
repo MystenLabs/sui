@@ -168,7 +168,6 @@ pub struct Function {
     pub visibility: Visibility,
     pub entry: Option<Loc>,
     pub signature: FunctionSignature,
-    pub acquires: BTreeMap<StructName, Loc>,
     pub body: FunctionBody,
 }
 
@@ -289,10 +288,6 @@ pub type ExpDotted = Spanned<ExpDotted_>;
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
-    MoveTo(Option<Type>),
-    MoveFrom(Option<Type>),
-    BorrowGlobal(bool, Option<Type>),
-    Exists(Option<Type>),
     Freeze(Option<Type>),
     Assert(/* is_macro */ bool),
 }
@@ -519,26 +514,13 @@ impl TVar {
 }
 
 static BUILTIN_FUNCTION_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
-    [
-        BuiltinFunction_::MOVE_TO,
-        BuiltinFunction_::MOVE_FROM,
-        BuiltinFunction_::BORROW_GLOBAL,
-        BuiltinFunction_::BORROW_GLOBAL_MUT,
-        BuiltinFunction_::EXISTS,
-        BuiltinFunction_::FREEZE,
-        BuiltinFunction_::ASSERT_MACRO,
-    ]
-    .into_iter()
-    .map(Symbol::from)
-    .collect()
+    [BuiltinFunction_::FREEZE, BuiltinFunction_::ASSERT_MACRO]
+        .into_iter()
+        .map(Symbol::from)
+        .collect()
 });
 
 impl BuiltinFunction_ {
-    pub const MOVE_TO: &'static str = "move_to";
-    pub const MOVE_FROM: &'static str = "move_from";
-    pub const BORROW_GLOBAL: &'static str = "borrow_global";
-    pub const BORROW_GLOBAL_MUT: &'static str = "borrow_global_mut";
-    pub const EXISTS: &'static str = "exists";
     pub const FREEZE: &'static str = "freeze";
     pub const ASSERT_MACRO: &'static str = "assert";
 
@@ -549,11 +531,6 @@ impl BuiltinFunction_ {
     pub fn resolve(name_str: &str, arg: Option<Type>) -> Option<Self> {
         use BuiltinFunction_ as BF;
         match name_str {
-            BF::MOVE_TO => Some(BF::MoveTo(arg)),
-            BF::MOVE_FROM => Some(BF::MoveFrom(arg)),
-            BF::BORROW_GLOBAL => Some(BF::BorrowGlobal(false, arg)),
-            BF::BORROW_GLOBAL_MUT => Some(BF::BorrowGlobal(true, arg)),
-            BF::EXISTS => Some(BF::Exists(arg)),
             BF::FREEZE => Some(BF::Freeze(arg)),
             _ => None,
         }
@@ -562,11 +539,6 @@ impl BuiltinFunction_ {
     pub fn display_name(&self) -> &'static str {
         use BuiltinFunction_ as BF;
         match self {
-            BF::MoveTo(_) => BF::MOVE_TO,
-            BF::MoveFrom(_) => BF::MOVE_FROM,
-            BF::BorrowGlobal(false, _) => BF::BORROW_GLOBAL,
-            BF::BorrowGlobal(true, _) => BF::BORROW_GLOBAL_MUT,
-            BF::Exists(_) => BF::EXISTS,
             BF::Freeze(_) => BF::FREEZE,
             BF::Assert(_) => BF::ASSERT_MACRO,
         }
@@ -992,7 +964,6 @@ impl AstDebug for (FunctionName, &Function) {
                 visibility,
                 entry,
                 signature,
-                acquires,
                 body,
             },
         ) = self;
@@ -1007,11 +978,6 @@ impl AstDebug for (FunctionName, &Function) {
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
-        if !acquires.is_empty() {
-            w.write(" acquires ");
-            w.comma(acquires.keys(), |w, s| w.write(&format!("{}", s)));
-            w.write(" ")
-        }
         match &body.value {
             FunctionBody_::Defined(body) => body.ast_debug(w),
             FunctionBody_::Native => w.writeln(";"),
@@ -1414,11 +1380,6 @@ impl AstDebug for BuiltinFunction_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use BuiltinFunction_ as F;
         let (n, bt) = match self {
-            F::MoveTo(bt) => (F::MOVE_TO, bt),
-            F::MoveFrom(bt) => (F::MOVE_FROM, bt),
-            F::BorrowGlobal(true, bt) => (F::BORROW_GLOBAL_MUT, bt),
-            F::BorrowGlobal(false, bt) => (F::BORROW_GLOBAL, bt),
-            F::Exists(bt) => (F::EXISTS, bt),
             F::Freeze(bt) => (F::FREEZE, bt),
             F::Assert(_) => (F::ASSERT_MACRO, &None),
         };

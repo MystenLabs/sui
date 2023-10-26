@@ -107,7 +107,6 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         }
 
         E::ModuleCall(mcall) => mcall.arguments.iter_mut().map(optimize_exp).any(|x| x),
-        E::Builtin(_, args) => args.iter_mut().map(optimize_exp).any(|x| x),
 
         E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _) => optimize_exp(e),
 

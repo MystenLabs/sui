@@ -52,14 +52,10 @@ pub enum Tok {
     Abort,
     /// Aborts if in the spec language
     AbortsIf,
-    Acquires,
     As,
     Assert,
-    BorrowGlobal,
-    BorrowGlobalMut,
     Copy,
     Ensures,
-    Exists,
     False,
     Freeze,
     /// Like borrow_global, but for spec language
@@ -83,8 +79,6 @@ pub enum Tok {
     Main,
     Module,
     Move,
-    MoveFrom,
-    MoveTo,
     Native,
     Old,
     Public,
@@ -273,11 +267,6 @@ impl<'input> Lexer<'input> {
                             "vec_push_back" => (Tok::VecPushBack, len),
                             "vec_pop_back" => (Tok::VecPopBack, len),
                             "vec_swap" => (Tok::VecSwap, len),
-                            "borrow_global" => (Tok::BorrowGlobal, len + 1),
-                            "borrow_global_mut" => (Tok::BorrowGlobalMut, len + 1),
-                            "exists" => (Tok::Exists, len + 1),
-                            "move_from" => (Tok::MoveFrom, len + 1),
-                            "move_to" => (Tok::MoveTo, len + 1),
                             "main" => (Tok::Main, len),
                             _ => {
                                 if let Some(stripped) = name.strip_prefix("vec_pack_") {
@@ -457,7 +446,6 @@ fn get_name_token(name: &str) -> Tok {
         "_" => Tok::Underscore,
         "abort" => Tok::Abort,
         "aborts_if" => Tok::AbortsIf,
-        "acquires" => Tok::Acquires,
         "as" => Tok::As,
         "copy" => Tok::Copy,
         "ensures" => Tok::Ensures,

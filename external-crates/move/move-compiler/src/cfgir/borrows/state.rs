@@ -14,10 +14,10 @@ use crate::{
         Diagnostic, Diagnostics,
     },
     hlir::{
-        ast::{self as H, TypeName_, *},
+        ast::{self as H, *},
         translate::{display_var, DisplayVar},
     },
-    parser::ast::{Field, StructName},
+    parser::ast::Field,
     shared::{unique_map::UniqueMap, *},
 };
 use move_borrow_graph::references::RefID;
@@ -32,7 +32,6 @@ use std::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Label {
     Local(Symbol),
-    Resource(Symbol),
     Field(Symbol),
 }
 
@@ -74,7 +73,6 @@ pub struct BorrowState {
 
     // fields necessary to the analysis
     locals: UniqueMap<Var, Value>,
-    acquired_resources: BTreeMap<StructName, Loc>,
     borrows: BorrowGraph,
     next_id: usize,
     // true if the previous pass had errors
@@ -117,14 +115,12 @@ impl BorrowState {
     pub fn initial<T>(
         locals: &UniqueMap<Var, T>,
         mutably_used: RefExpInfoMap,
-        acquired_resources: BTreeMap<StructName, Loc>,
         prev_had_errors: bool,
     ) -> Self {
         let mut new_state = BorrowState {
             locals: locals.ref_map(|_, _| Value::NonRef),
             borrows: BorrowGraph::new(),
             next_id: locals.len() + 1,
-            acquired_resources,
             prev_had_errors,
             mutably_used,
             next_eid: ExpBasedID {
@@ -170,8 +166,8 @@ impl BorrowState {
                 let adj = mut_adj(*borrower);
                 let field = match field_lbl {
                     Label::Field(f) => f,
-                    Label::Local(_) | Label::Resource(_) => panic!(
-                        "ICE local/resource should not be field borrows as they only exist from \
+                    Label::Local(_) => panic!(
+                        "ICE local should not be field borrows as they only exist from \
                          the virtual 'root' reference"
                     ),
                 };
@@ -196,10 +192,6 @@ impl BorrowState {
 
     fn local_label(local: &Var) -> Label {
         Label::Local(local.value().to_owned())
-    }
-
-    fn resource_label(resource: &StructName) -> Label {
-        Label::Resource(resource.value().to_owned())
     }
 
     //**********************************************************************************************
@@ -300,15 +292,6 @@ impl BorrowState {
             .add_strong_field_borrow(loc, Self::LOCAL_ROOT, Self::local_label(local), id)
     }
 
-    fn add_resource_borrow(&mut self, loc: Loc, resource: &StructName, id: RefID) {
-        self.borrows.add_weak_field_borrow(
-            loc,
-            Self::LOCAL_ROOT,
-            Self::resource_label(resource),
-            id,
-        )
-    }
-
     fn writable<F: Fn() -> String>(&self, loc: Loc, msg: F, id: RefID) -> Diagnostics {
         assert!(self.borrows.is_mutable(id), "ICE type checking failed");
         let (full_borrows, field_borrows) = self.borrows.borrowed_by(id);
@@ -395,7 +378,6 @@ impl BorrowState {
         *self = Self::initial(
             &self.locals,
             self.mutably_used.clone(),
-            self.acquired_resources.clone(),
             self.prev_had_errors,
         );
     }
@@ -405,14 +387,6 @@ impl BorrowState {
         assert!(full_borrows.is_empty());
         field_borrows
             .remove(&Self::local_label(local))
-            .unwrap_or_default()
-    }
-
-    fn resource_borrowed_by(&self, resource: &StructName) -> BTreeMap<RefID, Loc> {
-        let (full_borrows, mut field_borrows) = self.borrows.borrowed_by(Self::LOCAL_ROOT);
-        assert!(full_borrows.is_empty());
-        field_borrows
-            .remove(&Self::resource_label(resource))
             .unwrap_or_default()
     }
 
@@ -545,26 +519,6 @@ impl BorrowState {
                 );
                 diags.add_opt(local_diag)
             }
-        }
-
-        // Check resources are not borrowed
-        for resource in self.acquired_resources.keys() {
-            let borrowed_by = self.resource_borrowed_by(resource);
-            let resource_diag = Self::borrow_error(
-                &self.borrows,
-                loc,
-                &borrowed_by,
-                &BTreeMap::new(),
-                ReferenceSafety::InvalidReturn,
-                || {
-                    format!(
-                        "Invalid return. Resource variable '{}' is still being borrowed.",
-                        resource
-                    )
-                },
-            );
-
-            diags.add_opt(resource_diag)
         }
 
         // check any returned reference is not borrowed
@@ -823,85 +777,8 @@ impl BorrowState {
         (diags, Value::Ref(field_borrow_id))
     }
 
-    pub fn borrow_global(&mut self, loc: Loc, mut_: bool, t: &BaseType) -> (Diagnostics, Value) {
-        let new_id = self.declare_new_ref(loc, mut_);
-        let resource = match &t.value {
-            BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(_, s)), _) => s,
-            _ => panic!("ICE type checking failed"),
-        };
-        let borrowed_by = self.resource_borrowed_by(resource);
-        let borrows = &self.borrows;
-        let msg = || format!("Invalid borrowing of resource '{}'", resource);
-        let diags = if mut_ {
-            Self::borrow_error(
-                borrows,
-                loc,
-                &borrowed_by,
-                &BTreeMap::new(),
-                ReferenceSafety::MutOwns,
-                msg,
-            )
-        } else {
-            let mut_borrows = borrowed_by
-                .into_iter()
-                .filter(|(id, _loc)| borrows.is_mutable(*id))
-                .collect();
-            Self::borrow_error(
-                borrows,
-                loc,
-                &mut_borrows,
-                &BTreeMap::new(),
-                ReferenceSafety::RefTrans,
-                msg,
-            )
-        };
-        self.add_resource_borrow(loc, resource, new_id);
-        (diags.into(), Value::Ref(new_id))
-    }
-
-    pub fn move_from(&mut self, loc: Loc, t: &BaseType) -> (Diagnostics, Value) {
-        let resource = match &t.value {
-            BaseType_::Apply(_, sp!(_, TypeName_::ModuleType(_, s)), _) => s,
-            _ => panic!("ICE type checking failed"),
-        };
-        let borrowed_by = self.resource_borrowed_by(resource);
-        let borrows = &self.borrows;
-        let msg = || format!("Invalid extraction of resource '{}'", resource);
-        let diags = Self::borrow_error(
-            borrows,
-            loc,
-            &borrowed_by,
-            &BTreeMap::new(),
-            ReferenceSafety::Dangling,
-            msg,
-        );
-        (diags.into(), Value::NonRef)
-    }
-
-    pub fn call(
-        &mut self,
-        loc: Loc,
-        args: Values,
-        resources: &BTreeMap<StructName, Loc>,
-        return_ty: &Type,
-    ) -> (Diagnostics, Values) {
+    pub fn call(&mut self, loc: Loc, args: Values, return_ty: &Type) -> (Diagnostics, Values) {
         let mut diags = Diagnostics::new();
-        // Check acquires
-        for resource in resources.keys() {
-            let borrowed_by = self.resource_borrowed_by(resource);
-            let borrows = &self.borrows;
-            // TODO point to location of acquire
-            let msg = || format!("Invalid acquiring of resource '{}'", resource);
-            let ds = Self::borrow_error(
-                borrows,
-                loc,
-                &borrowed_by,
-                &BTreeMap::new(),
-                ReferenceSafety::Dangling,
-                msg,
-            );
-            diags.add_opt(ds);
-        }
 
         // Check mutable arguments are not borrowed
         args.iter()
@@ -1013,7 +890,6 @@ impl BorrowState {
 
         let borrows = self.borrows.join(&other.borrows);
         let next_id = locals.len() + 1;
-        let acquired_resources = self.acquired_resources.clone();
         let prev_had_errors = self.prev_had_errors;
         let mut id_to_exp = self.id_to_exp;
         for (id, exps) in other.id_to_exp {
@@ -1021,12 +897,10 @@ impl BorrowState {
         }
         assert!(next_id == self.next_id);
         assert!(next_id == other.next_id);
-        assert!(acquired_resources == other.acquired_resources);
         assert!(prev_had_errors == other.prev_had_errors);
 
         Self {
             locals,
-            acquired_resources,
             borrows,
             next_id,
             prev_had_errors,
@@ -1041,7 +915,6 @@ impl BorrowState {
             locals: self_locals,
             borrows: self_borrows,
             next_id: self_next,
-            acquired_resources: self_resources,
             prev_had_errors: self_prev_had_errors,
             // metadata gathered
             mutably_used: _,
@@ -1052,7 +925,6 @@ impl BorrowState {
             locals: other_locals,
             borrows: other_borrows,
             next_id: other_next,
-            acquired_resources: other_resources,
             prev_had_errors: other_prev_had_errors,
             // metadata gathered
             mutably_used: _,
@@ -1060,10 +932,6 @@ impl BorrowState {
             id_to_exp: other_id_to_exp,
         } = other;
         assert!(self_next == other_next, "ICE canonicalization failed");
-        assert!(
-            self_resources == other_resources,
-            "ICE acquired resources static for the function"
-        );
         assert!(
             self_prev_had_errors == other_prev_had_errors,
             "ICE previous errors flag changed"
@@ -1099,7 +967,6 @@ impl std::fmt::Display for Label {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Label::Local(s) => write!(f, "local%{}", s),
-            Label::Resource(s) => write!(f, "resource%{}", s),
             Label::Field(s) => write!(f, "{}", s),
         }
     }

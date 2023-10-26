@@ -321,7 +321,7 @@ fn unreachable_loc_exp(parent_e: &Exp) -> Option<Loc> {
         | E::Copy { .. }
         | E::Move { .. } => None,
         E::ModuleCall(mcall) => mcall.arguments.iter().find_map(unreachable_loc_exp),
-        E::Builtin(_, args) | E::Vector(_, _, _, args) => args.iter().find_map(unreachable_loc_exp),
+        E::Vector(_, _, _, args) => args.iter().find_map(unreachable_loc_exp),
         E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)

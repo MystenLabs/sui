@@ -129,7 +129,7 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
         }),
 
         E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
-        E::Builtin(_, args) | E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
+        E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
         E::Freeze(e)
         | E::Dereference(e)
         | E::UnaryExp(_, e)
@@ -351,9 +351,7 @@ mod last_usage {
                 .iter_mut()
                 .rev()
                 .for_each(|arg| exp(context, arg)),
-            E::Builtin(_, args) | E::Vector(_, _, _, args) => {
-                args.iter_mut().rev().for_each(|arg| exp(context, arg))
-            }
+            E::Vector(_, _, _, args) => args.iter_mut().rev().for_each(|arg| exp(context, arg)),
             E::Freeze(e)
             | E::Dereference(e)
             | E::UnaryExp(_, e)
