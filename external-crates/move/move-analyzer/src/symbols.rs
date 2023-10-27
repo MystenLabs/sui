@@ -2376,19 +2376,23 @@ fn assert_use_def_with_doc_string(
     type_def: Option<(u32, u32, &str)>,
     doc_string: &str,
 ) {
-    let uses = mod_symbols.get(use_line).unwrap();
-    let use_def = uses.iter().nth(use_idx).unwrap();
-    assert!(use_def.col_start == use_col);
-    assert!(use_def.def_loc.start.line == def_line);
-    assert!(use_def.def_loc.start.character == def_col);
+    let Some(uses) = mod_symbols.get(use_line) else {
+        panic!("No use_line {use_line} in mod_symbols {mod_symbols:#?}");
+    };
+    let Some(use_def) = uses.iter().nth(use_idx) else {
+        panic!("No use_line {use_idx} in uses {uses:#?}");
+    };
+    assert_eq!(use_def.col_start, use_col);
+    assert_eq!(use_def.def_loc.start.line, def_line);
+    assert_eq!(use_def.def_loc.start.character, def_col);
     assert!(file_name_mapping
         .get(&use_def.def_loc.fhash)
         .unwrap()
         .as_str()
         .ends_with(def_file));
-    assert!(type_str == format!("{}", use_def.use_type));
+    assert_eq!(type_str, format!("{}", use_def.use_type));
 
-    assert!(doc_string == use_def.doc_string);
+    assert_eq!(doc_string, use_def.doc_string);
     match use_def.type_def_loc {
         Some(type_def_loc) => {
             let tdef_line = type_def.unwrap().0;
@@ -2590,7 +2594,7 @@ fn docstring_test() {
         31,
         8,
         "M6.move",
-        "fun Symbols::M6::acq(addr: address): u64 acquires Symbols::M6::DocumentedStruct",
+        "fun Symbols::M6::acq(uint: u64): u64",
         None,
         "Asterix based single-line docstring\n",
     );
@@ -2918,46 +2922,7 @@ fn symbols_test() {
         34,
         8,
         "M1.move",
-        "fun Symbols::M1::acq(addr: address): u64 acquires Symbols::M1::SomeStruct",
-        None,
-    );
-    // struct name in acquires (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        2,
-        34,
-        41,
-        2,
-        11,
-        "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
-    );
-    // struct name in builtin type param (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        1,
-        35,
-        32,
-        2,
-        11,
-        "M1.move",
-        "Symbols::M1::SomeStruct",
-        Some((2, 11, "M1.move")),
-    );
-    // param name in builtin (acq function)
-    assert_use_def(
-        mod_symbols,
-        &symbols.file_name_mapping,
-        2,
-        35,
-        44,
-        34,
-        12,
-        "M1.move",
-        "address",
+        "fun Symbols::M1::acq(uint: u64): u64",
         None,
     );
     // const in first param (multi_arg_call function)

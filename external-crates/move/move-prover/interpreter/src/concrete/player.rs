@@ -2323,13 +2323,6 @@ impl<'env> FunctionContext<'env> {
         TypedValue::mk_bool(verified)
     }
 
-    fn native_diem_account_create_signer(&self, addr: TypedValue) -> TypedValue {
-        if cfg!(debug_assertions) {
-            assert_eq!(self.ty_args.len(), 0);
-        }
-        TypedValue::mk_signer(addr.into_address())
-    }
-
     //
     // expressions
     //
