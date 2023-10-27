@@ -228,7 +228,7 @@ jobs:
   move-test:
     needs: diff
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
-    timeout-mins: 10
+    timeout-minutes: 10
     runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
