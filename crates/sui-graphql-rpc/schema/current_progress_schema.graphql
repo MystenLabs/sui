@@ -306,6 +306,9 @@ type GenesisTransaction {
 
 
 
+"""
+Arbitrary JSON data.
+"""
 scalar JSON
 
 """

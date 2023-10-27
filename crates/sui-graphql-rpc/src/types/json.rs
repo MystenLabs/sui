@@ -9,7 +9,7 @@ use async_graphql::*;
 #[derive(Debug)]
 pub(crate) struct Json(Value);
 
-#[Scalar(name = "JSON")]
+#[Scalar(name = "JSON", use_type_description = true)]
 impl ScalarType for Json {
     fn parse(value: Value) -> InputValueResult<Self> {
         Ok(Self(value))
@@ -17,6 +17,12 @@ impl ScalarType for Json {
 
     fn to_value(&self) -> Value {
         self.0.clone()
+    }
+}
+
+impl Description for Json {
+    fn description() -> &'static str {
+        "Arbitrary JSON data."
     }
 }
 
