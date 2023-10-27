@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::base64::Base64;
 use super::move_module::MoveModule;
 use super::object::Object;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
@@ -132,6 +133,31 @@ impl MovePackage {
         }
 
         Ok(None)
+    }
+
+    /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+    /// name, followed by module bytes), in alphabetic order by module name.
+    async fn bcs(&self) -> Result<Option<Base64>> {
+        let modules = self
+            .native_object
+            .data
+            .try_as_package()
+            .ok_or_else(|| {
+                Error::Internal(format!(
+                    "Failed to convert native object to move package: {}",
+                    self.native_object.id(),
+                ))
+            })?
+            .serialized_module_map();
+
+        let bcs = bcs::to_bytes(modules).map_err(|_| {
+            Error::Internal(format!(
+                "Failed to serialize package {}",
+                self.native_object.id(),
+            ))
+        })?;
+
+        Ok(Some(bcs.into()))
     }
 
     async fn as_object(&self) -> Option<Object> {
