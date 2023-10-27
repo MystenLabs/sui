@@ -1,6 +1,6 @@
 # Selecting all fields for epoch 100
 {
-  epoch(id: 100){
+  epoch(id: 100) {
     protocolConfigs {
       protocolVersion
     }

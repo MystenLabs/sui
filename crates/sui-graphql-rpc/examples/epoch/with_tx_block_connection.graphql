@@ -1,6 +1,6 @@
 {
-  epoch(id:97) {
-    transactionBlockConnection(first: 20, after:"261225985") {
+  epoch(id: 97) {
+    transactionBlockConnection(first: 20, after: "261225985") {
       pageInfo {
         hasNextPage
         endCursor
