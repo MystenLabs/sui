@@ -403,7 +403,7 @@ A few things to note:
 
 ## Assemble the zkLogin signature and submit the transaction
 
-First, sign the transaction bytes with the ephemeral private key using the keypair generated previously. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
+First, sign the transaction bytes with the ephemeral private key using the key pair generated previously. This is the same as [traditional KeyPair signing](https://sui-typescript-docs.vercel.app/typescript/cryptography/keypairs). Make sure that the transaction `sender ` is also defined.
   ```typescript
 const client = new SuiClient({ url: "<YOUR_RPC_URL>" });
 
@@ -451,7 +451,7 @@ Finally, execute the transaction.
 
 As mentioned before, each ZK proof is tied to an ephemeral key pair. So the proof can be reused to sign any number of transactions until the ephemeral key pair expires, i.e., until the current epoch crosses `maxEpoch`.
 
-Developers may thus want to cache the ephemeral key pair along with the ZKP for future uses.
+You might want to cache the ephemeral key pair along with the ZKP for future uses.
 
 However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process as above).
 
