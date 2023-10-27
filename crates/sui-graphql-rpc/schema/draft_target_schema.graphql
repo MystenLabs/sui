@@ -977,6 +977,8 @@ type MovePackage {
     before: String,
   ): MoveModuleConnection
 
+  bcs: Base64
+
   asObject: Object!
 }
 

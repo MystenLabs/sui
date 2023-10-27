@@ -374,6 +374,11 @@ type MoveObject {
 type MovePackage {
 	module(name: String!): MoveModule
 	moduleConnection(first: Int, after: String, last: Int, before: String): MoveModuleConnection
+	"""
+	BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
+	name, followed by module bytes), in alphabetic order by module name.
+	"""
+	bcs: Base64
 	asObject: Object
 }
 
@@ -876,3 +881,4 @@ type ValidatorSet {
 schema {
 	query: Query
 }
+
