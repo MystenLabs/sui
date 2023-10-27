@@ -6,9 +6,13 @@ use crate::metrics::RequestMetrics;
 use async_graphql::extensions::NextParseQuery;
 use async_graphql::extensions::NextRequest;
 use async_graphql::parser::types::ExecutableDocument;
-use async_graphql::parser::types::Selection::Field;
+use async_graphql::parser::types::FragmentDefinition;
+use async_graphql::parser::types::Selection;
+use async_graphql::parser::types::SelectionSet;
 use async_graphql::value;
+use async_graphql::Name;
 use async_graphql::Pos;
+use async_graphql::Positioned;
 use async_graphql::Response;
 use async_graphql::ServerResult;
 use async_graphql::Variables;
@@ -19,6 +23,7 @@ use async_graphql::{
 use axum::headers;
 use axum::http::HeaderName;
 use axum::http::HeaderValue;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -66,6 +71,11 @@ impl ExtensionFactory for QueryLimitsChecker {
     }
 }
 
+struct ComponentCost {
+    pub num_nodes: u32,
+    pub depth: u32,
+}
+
 #[async_trait::async_trait]
 impl Extension for QueryLimitsChecker {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
@@ -96,6 +106,8 @@ impl Extension for QueryLimitsChecker {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         // TODO: limit number of variables, fragments, etc
+        // TODO: limit/ban directives for now
+        // TODO: limit overall query size
 
         let cfg = ctx
             .data::<ServiceConfig>()
@@ -124,49 +136,31 @@ impl Extension for QueryLimitsChecker {
             ));
         }
 
-        // Use BFS to analyze the query and
-        // count the number of nodes and the depth of the query
-
-        // Queue to store the nodes at each level
-        let mut que = VecDeque::new();
-        // Number of nodes in the query
-        let mut num_nodes: u32 = 0;
-        // Depth of the query
-        let mut depth: u32 = 0;
-        // Number of nodes at each level
-        let mut level_len;
-
-        for (_name, oper) in doc.operations.iter() {
-            for sel in oper.node.selection_set.node.items.iter() {
-                que.push_back(sel);
-                num_nodes += 1;
-                self.check_limits(cfg, num_nodes, depth, Some(sel.pos))?;
+        // Only allow one operation
+        match doc.operations.iter().count() {
+            0 => {
+                return Err(ServerError::new(
+                    "One operation is required".to_string(),
+                    None,
+                ));
+            }
+            1 => {}
+            _ => {
+                return Err(ServerError::new(
+                    "Query has too many operations. The maximum allowed is 1".to_string(),
+                    None,
+                ));
             }
         }
-        // Track the number of nodes at first level if any
-        level_len = que.len();
 
-        while !que.is_empty() {
-            // Signifies the start of a new level
-            depth += 1;
-            self.check_limits(cfg, num_nodes, depth, None)?;
-            while level_len > 0 {
-                // Ok to unwrap since we checked for empty queue
-                // and level_len > 0
-                let sel = que.pop_front().unwrap();
-                // TODO: check for fragments, variables, etc
-                if let Field(f) = &sel.node {
-                    // TODO: check for directives, variables, etc
-                    for sel in f.node.selection_set.node.items.iter() {
-                        que.push_back(sel);
-                        num_nodes += 1;
-                        self.check_limits(cfg, num_nodes, depth, Some(sel.pos))?;
-                    }
-                }
-                level_len -= 1;
-            }
-            level_len = que.len();
-        }
+        // TODO: Limit the complexity of fragments early on
+
+        // Okay to unwrap since we checked for 1 operation
+        let (_name, oper) = doc.operations.iter().next().unwrap();
+
+        let ComponentCost { num_nodes, depth } =
+            self.analyze_selection_set(cfg, &doc.fragments, &oper.node.selection_set)?;
+
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
                 num_nodes,
@@ -213,5 +207,82 @@ impl QueryLimitsChecker {
         }
 
         Ok(())
+    }
+
+    fn analyze_selection_set(
+        &self,
+        cfg: &ServiceConfig,
+        fragment_defs: &HashMap<Name, Positioned<FragmentDefinition>>,
+        sel_set: &Positioned<SelectionSet>,
+    ) -> ServerResult<ComponentCost> {
+        // Use BFS to analyze the query and
+        // count the number of nodes and the depth of the query
+
+        // Queue to store the nodes at each level
+        let mut que = VecDeque::new();
+        // Number of nodes in the query
+        let mut num_nodes: u32 = 0;
+        // Depth of the query
+        let mut depth: u32 = 0;
+        // Number of nodes at each level
+        let mut level_len;
+
+        for top_level_sel in sel_set.node.items.iter() {
+            que.push_back(top_level_sel);
+            num_nodes += 1;
+            self.check_limits(cfg, num_nodes, depth, Some(top_level_sel.pos))?;
+        }
+
+        // Track the number of nodes at first level if any
+        level_len = que.len();
+
+        while !que.is_empty() {
+            // Signifies the start of a new level
+            depth += 1;
+            self.check_limits(cfg, num_nodes, depth, None)?;
+            while level_len > 0 {
+                // Ok to unwrap since we checked for empty queue
+                // and level_len > 0
+                let curr_sel = que.pop_front().unwrap();
+
+                match &curr_sel.node {
+                    Selection::Field(f) => {
+                        for field_sel in f.node.selection_set.node.items.iter() {
+                            que.push_back(field_sel);
+                            num_nodes += 1;
+                            self.check_limits(cfg, num_nodes, depth, Some(field_sel.pos))?;
+                        }
+                    }
+                    Selection::FragmentSpread(fs) => {
+                        let frag_name = &fs.node.fragment_name.node;
+                        let frag_def = fragment_defs.get(frag_name).ok_or_else(|| {
+                            ServerError::new(
+                                format!("Fragment {} not found", frag_name),
+                                Some(fs.pos),
+                            )
+                        })?;
+
+                        // TODO: this is inefficient as we might loop over same fragment multiple times
+                        // Ideally web should cache the costs of fragments we've seen before
+                        // Will do as enhancement
+                        for frag_sel in frag_def.node.selection_set.node.items.iter() {
+                            que.push_back(frag_sel);
+                            num_nodes += 1;
+                            self.check_limits(cfg, num_nodes, depth, Some(frag_sel.pos))?;
+                        }
+                    }
+                    Selection::InlineFragment(fs) => {
+                        for in_frag_sel in fs.node.selection_set.node.items.iter() {
+                            que.push_back(in_frag_sel);
+                            num_nodes += 1;
+                            self.check_limits(cfg, num_nodes, depth, Some(in_frag_sel.pos))?;
+                        }
+                    }
+                }
+                level_len -= 1;
+            }
+            level_len = que.len();
+        }
+        Ok(ComponentCost { num_nodes, depth })
     }
 }
