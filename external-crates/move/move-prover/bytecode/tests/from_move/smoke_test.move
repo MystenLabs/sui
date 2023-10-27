@@ -4,8 +4,6 @@
 // dep: ../../move-stdlib/sources/signer.move
 
 module 0x42::SmokeTest {
-    use std::signer;
-
     // -----------------
     // Basic Ops
     // -----------------
@@ -25,49 +23,6 @@ module 0x42::SmokeTest {
         if (c != 2) abort 42;
         (c, a)
     }
-
-    // -----------------
-    // Resources
-    // -----------------
-
-    struct R has key {
-        x: u64
-    }
-
-    fun create_resource(sender: &signer) {
-        move_to<R>(sender, R{x:1});
-    }
-
-    fun exists_resource(sender: &signer): bool {
-        exists<R>(signer::address_of(sender))
-    }
-
-    fun move_from_addr(a: address) acquires R {
-        let r = move_from<R>(a);
-        let R{x: _} = r;
-    }
-
-    fun move_from_addr_to_sender(sender: &signer, a: address) acquires R {
-        let r = move_from<R>(a);
-        let R{x: x} = r;
-        move_to<R>(sender, R{x: x});
-    }
-
-    fun borrow_global_mut_test(a: address) acquires R {
-        let r = borrow_global_mut<R>(a);
-        _ = r;
-        let r2 = borrow_global_mut<R>(a);
-        _ = r2;
-    }
-
-    struct G<X> has key {
-        x: X
-    }
-
-    fun create_resoure_generic(sender: &signer) {
-        move_to<G<u64>>(sender, G{x:1});
-    }
-
 
     struct A {
         addr: address,

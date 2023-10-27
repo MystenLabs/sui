@@ -29,13 +29,4 @@ module 0x42::m {
         loop {}
     }
 
-    struct R has key { }
-
-    #[test(a=@1)]
-    #[expected_failure(major_status=4004, location=Self)]
-    fun t5(a: signer) {
-        move_to(&a, R {});
-        move_to(&a, R {});
-    }
-
 }
