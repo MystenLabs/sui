@@ -4,20 +4,35 @@
 use super::base64::Base64;
 use super::move_module::MoveModule;
 use super::object::Object;
+use super::sui_address::SuiAddress;
 use crate::context_data::db_data_provider::validate_cursor_pagination;
 use crate::error::code::INTERNAL_SERVER_ERROR;
 use crate::error::{graphql_error, Error};
 use async_graphql::connection::{Connection, Edge};
 use async_graphql::*;
 use move_binary_format::CompiledModule;
-use sui_types::object::Object as NativeSuiObject;
-use sui_types::Identifier;
+use sui_types::{
+    move_package::MovePackage as NativeMovePackage, object::Object as NativeSuiObject, Identifier,
+};
 
 const DEFAULT_PAGE_SIZE: usize = 10;
 
 #[derive(Clone)]
 pub(crate) struct MovePackage {
     pub native_object: NativeSuiObject,
+}
+
+/// Information used by a package to link to a specific version of its dependency.
+#[derive(SimpleObject)]
+struct Linkage {
+    /// The ID on-chain of the first version of the dependency.
+    original_id: SuiAddress,
+
+    /// The ID on-chain of the version of the dependency that this package depends on.
+    upgraded_id: SuiAddress,
+
+    /// The version of the dependency that this package depends on.
+    version: u64,
 }
 
 #[allow(unreachable_code)]
@@ -135,20 +150,26 @@ impl MovePackage {
         Ok(None)
     }
 
+    /// The transitive dependencies of this package.
+    async fn linkage(&self) -> Result<Option<Vec<Linkage>>> {
+        let linkage = self
+            .as_native_package()?
+            .linkage_table()
+            .iter()
+            .map(|(&runtime_id, upgrade_info)| Linkage {
+                original_id: runtime_id.into(),
+                upgraded_id: upgrade_info.upgraded_id.into(),
+                version: upgrade_info.upgraded_version.value(),
+            })
+            .collect();
+
+        Ok(Some(linkage))
+    }
+
     /// BCS representation of the package's modules.  Modules appear as a sequence of pairs (module
     /// name, followed by module bytes), in alphabetic order by module name.
     async fn bcs(&self) -> Result<Option<Base64>> {
-        let modules = self
-            .native_object
-            .data
-            .try_as_package()
-            .ok_or_else(|| {
-                Error::Internal(format!(
-                    "Failed to convert native object to move package: {}",
-                    self.native_object.id(),
-                ))
-            })?
-            .serialized_module_map();
+        let modules = self.as_native_package()?.serialized_module_map();
 
         let bcs = bcs::to_bytes(modules).map_err(|_| {
             Error::Internal(format!(
@@ -162,5 +183,16 @@ impl MovePackage {
 
     async fn as_object(&self) -> Option<Object> {
         Some(Object::from(&self.native_object))
+    }
+}
+
+impl MovePackage {
+    fn as_native_package(&self) -> Result<&NativeMovePackage> {
+        Ok(self.native_object.data.try_as_package().ok_or_else(|| {
+            Error::Internal(format!(
+                "Failed to convert native object to move package: {}",
+                self.native_object.id(),
+            ))
+        })?)
     }
 }
