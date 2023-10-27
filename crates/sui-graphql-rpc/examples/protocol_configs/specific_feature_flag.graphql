@@ -1,8 +1,7 @@
-
 {
   protocolConfig {
     protocolVersion
-    featureFlag(key:"advance_epoch_start_time_in_safe_mode") {
+    featureFlag(key: "advance_epoch_start_time_in_safe_mode") {
       value
     }
   }

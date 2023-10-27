@@ -2,13 +2,13 @@
 {
   transactionBlockConnection(
     filter: {
-      changedObject:"0x0000000000000000000000000000000000000000000000000000000000000006"
+      changedObject: "0x0000000000000000000000000000000000000000000000000000000000000006"
     }
   ) {
     nodes {
       sender {
         location
-      },
+      }
       gasInput {
         gasPrice
         gasBudget
