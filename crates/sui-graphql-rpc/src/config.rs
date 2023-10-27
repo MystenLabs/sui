@@ -12,7 +12,7 @@ use crate::functional_group::FunctionalGroup;
 // TODO: calculate proper cost limits
 const MAX_QUERY_DEPTH: u32 = 10;
 const MAX_QUERY_NODES: u32 = 100;
-const MAX_DB_QUERY_COST: u64 = 50; // Max DB query cost (normally f64) truncated
+const MAX_DB_QUERY_COST: u64 = 50000; // Max DB query cost (normally f64) truncated
 const MAX_QUERY_VARIABLES: u32 = 50;
 const MAX_QUERY_FRAGMENTS: u32 = 50;
 

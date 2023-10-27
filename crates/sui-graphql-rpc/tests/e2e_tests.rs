@@ -122,10 +122,10 @@ mod tests {
         idx_cfg.set_pool_size(20);
         let reader = IndexerReader::new_with_config(connection_config.db_url(), idx_cfg).unwrap();
         reader
-            .run_query_async(|conn| {
-                let cost = extract_cost(&query, conn).unwrap();
+            .spawn_blocking(move |this| {
+                let cost = extract_cost(&query, &this).unwrap();
                 assert!(cost > 0.0);
-                query.get_result::<StoredObject>(conn).optional()
+                this.run_query(|conn| query.get_result::<StoredObject>(conn).optional())
             })
             .await
             .unwrap();
