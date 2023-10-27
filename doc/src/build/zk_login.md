@@ -32,7 +32,7 @@ More questions? See [this page](#faq).
 
 The following table lists the OpenID providers that can support zkLogin or are currently being reviewed to determine whether they can support zkLogin.
 
-| Provider     | Can support? | DevNet   | TestNet  | MainNet  |
+| Provider     | Can support? | Devnet   | Testnet  | Mainnet  |
 | ------------ | ----------   | -------- | -------- | -------- |
 | Facebook     | Yes          |	 Yes    |  Yes     | Yes      |
 | Google       | Yes          |   Yes    |  Yes     | Yes      |
@@ -295,11 +295,11 @@ There are two options:
 
 If you wish to use the Mysten ran ZK Proving Service for Mainnet, please contact us for whitelisting your registered client ID. Only valid JWT token authenticated with whitelisted client IDs are accepted.
 
-To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for DevNet zkLogin transactions, submitting it to TestNet or MainNet will fail.  
+To use `prover-dev` endpoint, you do not need to whitelist client IDs. Note that the proof generated with the `prover-dev` endpoint can only be submitted for Devnet zkLogin transactions, submitting it to Testnet or Mainnet will fail.  
 
 | Network | Prover URL |
-| MainNet, TestNet | https://prover.mystenlabs.com/v1 | 
-| DevNet | https://prover-dev.mystenlabs.com/v1 | 
+| Mainnet, Testnet | https://prover.mystenlabs.com/v1 | 
+| Devnet | https://prover-dev.mystenlabs.com/v1 | 
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64. 
 
