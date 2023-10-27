@@ -1,22 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { Coins, useDeepBookConfigs, useRecognizedCoins } from '_app/hooks/deepbook';
+import { useRecognizedCoins } from '_app/hooks/deepbook';
 import { Text } from '_app/shared/text';
 import Alert from '_components/alert';
-import { IconButton } from '_components/IconButton';
-import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
 import { AssetData } from '_pages/swap/AssetData';
 import {
-	MAX_FLOAT,
+	Coins,
 	SUI_CONVERSION_RATE,
-	USDC_DECIMALS,
+	USDC_CONVERSION_RATE,
 	type FormValues,
 } from '_pages/swap/constants';
 import { MaxSlippage, MaxSlippageModal } from '_pages/swap/MaxSlippage';
 import { ToAssets } from '_pages/swap/ToAssets';
-import { getUSDCurrency, useSuiUsdcBalanceConversion, useSwapData } from '_pages/swap/utils';
-import { useCoinMetadata } from '@mysten/core';
-import { Refresh16 } from '@mysten/icons';
+import { getUSDCurrency, useSwapData } from '_pages/swap/utils';
+import { useDeepBookContext } from '_shared/deepBook/context';
 import { type BalanceChange } from '@mysten/sui.js/client';
 import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import BigNumber from 'bignumber.js';
@@ -37,7 +34,7 @@ export function ToAssetSection({
 	baseCoinType: string;
 	quoteCoinType: string;
 }) {
-	const coinsMap = useDeepBookConfigs().coinsMap;
+	const coinsMap = useDeepBookContext().configs.coinsMap;
 	const recognizedCoins = useRecognizedCoins();
 	const [isToAssetOpen, setToAssetOpen] = useState(false);
 	const [isSlippageModalOpen, setSlippageModalOpen] = useState(false);
@@ -47,7 +44,6 @@ export function ToAssetSection({
 		useSwapData({
 			baseCoinType,
 			quoteCoinType,
-			activeCoinType: activeCoinType || '',
 		});
 
 	const toAssetBalance = isAsk ? formattedQuoteBalance : formattedBaseBalance;
@@ -58,7 +54,6 @@ export function ToAssetSection({
 		setValue,
 		formState: { isValid },
 	} = useFormContext<FormValues>();
-	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
 	const toAssetType = watch('toAssetType');
 
 	const rawToAssetAmount = balanceChanges.find(
@@ -66,7 +61,7 @@ export function ToAssetSection({
 	)?.amount;
 
 	const toAssetAmountAsNum = new BigNumber(rawToAssetAmount || '0')
-		.shiftedBy(isAsk ? -SUI_CONVERSION_RATE : -USDC_DECIMALS)
+		.shiftedBy(isAsk ? -SUI_CONVERSION_RATE : -USDC_CONVERSION_RATE)
 		.toNumber();
 
 	useEffect(() => {
@@ -76,13 +71,6 @@ export function ToAssetSection({
 
 	const toAssetSymbol = toAssetMetaData.data?.symbol ?? '';
 	const amount = watch('amount');
-
-	const { suiUsdc, usdcSui } = useSuiUsdcBalanceConversion({ amount });
-	const balanceConversionData = isAsk ? suiUsdc : usdcSui;
-	const { data, refetch, isRefetching } = balanceConversionData || {};
-	const { rawValue, averagePrice } = data || {};
-
-	const averagePriceAsString = averagePrice?.toFixed(MAX_FLOAT).toString();
 
 	if (!toAssetMetaData.data) {
 		return null;
@@ -118,7 +106,7 @@ export function ToAssetSection({
 					isValid && 'border-solid border-hero-darkest/10',
 				)}
 			>
-				{toAssetAmountAsNum && !isRefetching ? (
+				{isValid && toAssetAmountAsNum ? (
 					<>
 						<Text variant="body" weight="semibold" color="steel-darker">
 							{toAssetAmountAsNum}
@@ -133,27 +121,11 @@ export function ToAssetSection({
 					</Text>
 				)}
 			</div>
-			{rawValue && (
+			{isValid && toAssetAmountAsNum && amount ? (
 				<div className="ml-3">
-					<DescriptionItem
-						title={
-							<Text variant="bodySmall" color="steel-dark">
-								{isRefetching ? '--' : getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
-							</Text>
-						}
-					>
-						<div className="flex gap-1 items-center">
-							<Text variant="bodySmall" weight="medium" color="steel-dark">
-								1 {activeCoinData?.symbol} = {isRefetching ? '--' : averagePriceAsString}{' '}
-								{toAssetSymbol}
-							</Text>
-							<IconButton
-								icon={<Refresh16 className="h-4 w-4 text-steel-dark hover:text-hero-dark" />}
-								onClick={() => refetch()}
-								loading={isRefetching}
-							/>
-						</div>
-					</DescriptionItem>
+					<Text variant="bodySmall" color="steel-dark">
+						{getUSDCurrency(isAsk ? toAssetAmountAsNum : Number(amount))}
+					</Text>
 
 					<div className="h-px w-full bg-hero-darkest/10 my-3" />
 
@@ -170,7 +142,7 @@ export function ToAssetSection({
 						onClose={() => setSlippageModalOpen(false)}
 					/>
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { allowedSwapCoinsList } from '_app/hooks/deepbook';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
@@ -10,7 +9,12 @@ import Alert from '_components/alert';
 import { CoinIcon } from '_components/coin-icon';
 import Loading from '_components/loading';
 import { filterAndSortTokenBalances } from '_helpers';
-import { useAppSelector, useCoinsReFetchingConfig, useSortedCoinsByCategories } from '_hooks';
+import {
+	useAllowedSwapCoinsList,
+	useAppSelector,
+	useCoinsReFetchingConfig,
+	useSortedCoinsByCategories,
+} from '_hooks';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
@@ -98,6 +102,7 @@ export function TokenRow({
 	const params = new URLSearchParams({
 		type: coinBalance.coinType,
 	});
+	const allowedSwapCoinsList = useAllowedSwapCoinsList();
 
 	const isRenderSwapButton = allowedSwapCoinsList.includes(coinType);
 

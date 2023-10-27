@@ -1,18 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+import { useLotSize } from '_app/hooks/deepbook/useLotSize';
 import { useActiveAccount } from '_app/hooks/useActiveAccount';
 import { type WalletSigner } from '_app/WalletSigner';
 import {
 	DEEPBOOK_KEY,
-	DEFAULT_WALLET_FEE_ADDRESS,
 	ESTIMATED_GAS_FEES_PERCENTAGE,
-	ONE_SUI_DEEPBOOK,
+	USDC_CONVERSION_RATE,
 	WALLET_FEES_PERCENTAGE,
 } from '_pages/swap/constants';
 import { useDeepBookContext } from '_shared/deepBook/context';
-import { FEATURES } from '_src/shared/experimentation/features';
-import { useFeatureValue } from '@growthbook/growthbook-react';
-import { useGetObject } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { TransactionBlock } from '@mysten/sui.js/builder';
@@ -117,8 +114,9 @@ async function getPlaceMarketOrderTxn({
 
 	if (isAsk) {
 		const bigNumberBaseBalance = new BigNumber(baseBalance);
+		const oneSuiDeepBook = new BigNumber(1).shiftedBy(USDC_CONVERSION_RATE);
 
-		if (bigNumberBaseBalance.isLessThan(ONE_SUI_DEEPBOOK)) {
+		if (bigNumberBaseBalance.isLessThan(oneSuiDeepBook)) {
 			balanceToSwap = bigNumberBaseBalance.minus(
 				bigNumberBaseBalance.times(ESTIMATED_GAS_FEES_PERCENTAGE / 100),
 			);
@@ -203,18 +201,13 @@ export function useGetEstimate({
 	quoteBalance: string;
 	isAsk: boolean;
 }) {
-	const walletFeeAddress = useFeatureValue(FEATURES.WALLET_FEE_ADDRESS, DEFAULT_WALLET_FEE_ADDRESS);
+	const walletFeeAddress = useDeepBookContext().walletFeeAddress;
 	const queryClient = useQueryClient();
 	const suiClient = useSuiClient();
 	const activeAccount = useActiveAccount();
 	const activeAddress = activeAccount?.address;
 	const deepBookClient = useDeepBookContext().client;
-
-	const { data } = useGetObject(poolId);
-	const objectFields =
-		data?.data?.content?.dataType === 'moveObject' ? data?.data?.content?.fields : null;
-
-	const lotSize = (objectFields as Record<string, string>)?.lot_size;
+	const lotSize = useLotSize(poolId);
 
 	return useQuery({
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
