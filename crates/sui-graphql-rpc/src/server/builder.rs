@@ -222,13 +222,11 @@ async fn health_checks(
         .await
         .elapsed()
         .as_secs_f64();
-    let ret = format!(
+    format!(
         r#"{{"status": "UP","uptime": {},"checks": {{"DB": "{}",}}}}
         "#,
         uptime, db_up
-    );
-
-    ret
+    )
 }
 
 // One server per proc, so this is okay
