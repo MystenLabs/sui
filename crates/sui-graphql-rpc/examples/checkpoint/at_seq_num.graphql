@@ -1,17 +1,24 @@
-# At a particular sequence number
+# Get the checkpoint's information at a particular sequence number
 {
-  checkpoint(id: {
-    sequenceNumber:10
-  }) {
-    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+  checkpoint(id: { sequenceNumber: 10 }) {
+    digest
+    sequenceNumber
+    validatorSignature
+    previousCheckpointDigest
+    networkTotalTransactions
+    rollingGasSummary {
       computationCost
       storageCost
       storageRebate
       nonRefundableStorageFee
-    }, epoch {
+    }
+    epoch {
+      epochId
       referenceGasPrice
       startTimestamp
-    }, endOfEpoch {
+      endTimestamp
+    }
+    endOfEpoch {
       nextProtocolVersion
     }
   }

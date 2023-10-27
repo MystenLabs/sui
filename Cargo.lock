@@ -10305,6 +10305,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "im",
+ "indexmap 1.9.3",
  "itertools",
  "lru 0.10.0",
  "more-asserts",

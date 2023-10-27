@@ -6,7 +6,6 @@ use clap;
 use move_command_line_common::parser::{parse_u256, parse_u64};
 use move_command_line_common::values::{ParsableValue, ParsedValue};
 use move_command_line_common::{parser::Parser as MoveCLParser, values::ValueToken};
-use move_core_types::identifier::Identifier;
 use move_core_types::u256::U256;
 use move_core_types::value::{MoveStruct, MoveValue};
 use move_symbol_pool::Symbol;
@@ -376,20 +375,10 @@ impl ParsableValue for SuiExtraValueArgs {
         }
     }
 
-    fn concrete_struct(
-        _addr: move_core_types::account_address::AccountAddress,
-        _module: String,
-        _name: String,
-        values: std::collections::BTreeMap<String, Self::ConcreteValue>,
-    ) -> anyhow::Result<Self::ConcreteValue> {
-        Ok(SuiValue::MoveValue(MoveValue::Struct(
-            MoveStruct::WithFields(
-                values
-                    .into_iter()
-                    .map(|(f, v)| Ok((Identifier::new(f)?, v.assert_move_value())))
-                    .collect::<anyhow::Result<_>>()?,
-            ),
-        )))
+    fn concrete_struct(values: Vec<Self::ConcreteValue>) -> anyhow::Result<Self::ConcreteValue> {
+        Ok(SuiValue::MoveValue(MoveValue::Struct(MoveStruct::Runtime(
+            values.into_iter().map(|v| v.assert_move_value()).collect(),
+        ))))
     }
 
     fn into_concrete_value(

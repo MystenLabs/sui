@@ -1,4 +1,4 @@
-# Fetch some default amount of checkpoints, ascending
+# Use the checkpoint connection to fetch some default amount of checkpoints in an ascending order
 {
   checkpointConnection {
     nodes {
@@ -14,8 +14,10 @@
         nonRefundableStorageFee
       }
       epoch {
+        epochId
         referenceGasPrice
         startTimestamp
+        endTimestamp
       }
       endOfEpoch {
         nextProtocolVersion

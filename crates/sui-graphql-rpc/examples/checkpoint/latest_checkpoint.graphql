@@ -1,15 +1,24 @@
-# Latest checkpoint
+# Latest checkpoint's data
 {
   checkpoint {
-    digest, sequenceNumber, validatorSignature, previousCheckpointDigest, networkTotalTransactions, rollingGasSummary {
+    digest
+    sequenceNumber
+    validatorSignature
+    previousCheckpointDigest
+    networkTotalTransactions
+    rollingGasSummary {
       computationCost
       storageCost
       storageRebate
       nonRefundableStorageFee
-    }, epoch {
+    }
+    epoch {
+      epochId
       referenceGasPrice
       startTimestamp
-    }, endOfEpoch {
+      endTimestamp
+    }
+    endOfEpoch {
       nextProtocolVersion
     }
   }

@@ -399,10 +399,7 @@ impl Bullshark {
         leader_round: Round,
         reputation_scores: &ReputationScores,
     ) -> bool {
-        // Do not perform any update if the feature is disabled
-        if self.protocol_config.narwhal_new_leader_election_schedule()
-            && reputation_scores.final_of_schedule
-        {
+        if reputation_scores.final_of_schedule {
             // create the new swap table and update the scheduler
             self.leader_schedule
                 .update_leader_swap_table(LeaderSwapTable::new(

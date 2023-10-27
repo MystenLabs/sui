@@ -1,0 +1,20 @@
+---
+title: Shared versus Owned Objects
+description: On Sui, you can use shared objects, owned objects, or both in your programmable transaction blocks. Weigh the benefits of each to decide the best approach for your project. 
+---
+
+With owned objects, only a single address can access and change the object. Transactions that use only owned objects can execute in parallel with other transactions that don't have any objects in common without needing to go through consensus. Because of this, owned objects are not subject to contention under load and are less affected by system throughput. If you want your transaction to execute quickly and consistently, then you should prefer owned objects.
+
+With shared objects, anyone can read or write the object in contrast to the single-writer owned objects. This means that shared objects require consensus to sequence reads and writes to the object. Under high contention (lots of transactions trying to use the shared object at once), processing times for transactions that include shared objects are slower than a transaction using only owned objects. 
+
+For more information on the types of objects that Sui supports, see [Object Ownership](/concepts/object-ownership.mdx). 
+
+## Choosing shared or owned objects
+
+In other blockchains every object is shared. On Sui, however, you often have the choice to implement a particular use case with either shared objects, owned objects, or a combination of the two. The choice of which object type to use can have implications for performance, security, and implementation complexity. For example, you should avoid using a shared object for objects that you expect high contention over. This might be unavoidable, though, based on increased complexity of the implementation, or because of security or liveness implications.
+
+Examine and weigh the tradeoffs between shared and owned objects on a case-by-case basis. To get an idea of the implications involved with shared versus owned objects, compare the following use cases, each implemented with shared and owned objects: 
+
+- Escrow: [shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
+- Auction: [shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
+- Tic Tac Toe: [shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)

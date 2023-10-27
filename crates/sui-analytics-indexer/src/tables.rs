@@ -219,4 +219,6 @@ pub(crate) struct MovePackageEntry {
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
     pub(crate) bcs: String,
+    // txn publishing the package
+    pub(crate) transaction_digest: String,
 }

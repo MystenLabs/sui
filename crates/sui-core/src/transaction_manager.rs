@@ -5,22 +5,23 @@ use std::{
     cmp::max,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
+use indexmap::IndexMap;
 use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
+use sui_types::{base_types::TransactionDigest, error::SuiResult, fp_ensure};
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, TransactionDigest},
+    base_types::{ObjectID, SequenceNumber},
     committee::EpochId,
     digests::TransactionEffectsDigest,
     error::SuiError,
-    error::SuiResult,
-    executable_transaction::VerifiedExecutableTransaction,
-    fp_ensure,
-    transaction::{SenderSignedData, TransactionDataAPI, VerifiedCertificate},
+    transaction::{TransactionDataAPI, VerifiedCertificate},
 };
-use tap::TapOptional;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, instrument, trace, warn};
 
 use crate::authority::{
@@ -28,7 +29,8 @@ use crate::authority::{
     authority_store::{InputKey, LockMode},
 };
 use crate::authority::{AuthorityMetrics, AuthorityStore};
-use crate::execution_driver::ExecutionDispatcher;
+use sui_types::transaction::SenderSignedData;
+use tap::TapOptional;
 
 #[cfg(test)]
 #[path = "unit_tests/transaction_manager_tests.rs"]
@@ -54,7 +56,10 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
     authority_store: Arc<AuthorityStore>,
-    pub(crate) execution_dispatcher: Arc<ExecutionDispatcher>,
+    tx_ready_certificates: UnboundedSender<(
+        VerifiedExecutableTransaction,
+        Option<TransactionEffectsDigest>,
+    )>,
     metrics: Arc<AuthorityMetrics>,
     inner: RwLock<Inner>,
 }
@@ -246,10 +251,10 @@ struct Inner {
     // Maps input objects to transactions waiting for locks on the object.
     lock_waiters: HashMap<InputKey, LockQueue>,
 
-    // Number of transactions that depend on each object ID. Should match exactly with total
-    // number of transactions per object ID prefix in the missing_inputs table.
+    // Stores age info for all transactions depending on each object.
     // Used for throttling signing and submitting transactions depending on hot objects.
-    input_objects: HashMap<ObjectID, usize>,
+    // An `IndexMap` is used to ensure that the insertion order is preserved.
+    input_objects: HashMap<ObjectID, IndexMap<TransactionDigest, Instant>>,
 
     // Maps object IDs to the highest observed sequence number of the object. When the value is
     // None, indicates that the object is immutable, corresponding to an InputKey with no sequence
@@ -312,7 +317,7 @@ impl Inner {
             return ready_certificates;
         }
 
-        let input_count = self
+        let input_txns = self
             .input_objects
             .get_mut(&input_key.id())
             .unwrap_or_else(|| {
@@ -321,8 +326,12 @@ impl Inner {
                     input_key.id()
                 )
             });
-        *input_count -= digests.len();
-        if *input_count == 0 {
+        for digest in digests.iter() {
+            // The digest of the transaction must be inside the map.
+            assert!(input_txns.shift_remove(digest).is_some());
+        }
+
+        if input_txns.is_empty() {
             self.input_objects.remove(&input_key.id());
         }
 
@@ -372,14 +381,17 @@ impl TransactionManager {
     pub(crate) fn new(
         authority_store: Arc<AuthorityStore>,
         epoch_store: &AuthorityPerEpochStore,
-        execution_dispatcher: Arc<ExecutionDispatcher>,
+        tx_ready_certificates: UnboundedSender<(
+            VerifiedExecutableTransaction,
+            Option<TransactionEffectsDigest>,
+        )>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
             authority_store,
-            execution_dispatcher,
             metrics: metrics.clone(),
             inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
+            tx_ready_certificates,
         };
         transaction_manager
             .enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store)
@@ -665,8 +677,8 @@ impl TransactionManager {
                 }
                 if acquire {
                     pending_cert.acquiring_locks.insert(key, lock_mode);
-                    let input_count = inner.input_objects.entry(key.id()).or_default();
-                    *input_count += 1;
+                    let input_txns = inner.input_objects.entry(key.id()).or_default();
+                    input_txns.insert(digest, Instant::now());
                 } else {
                     pending_cert.acquired_locks.insert(key, lock_mode);
                 }
@@ -822,9 +834,11 @@ impl TransactionManager {
             .executing_certificates
             .insert(*cert.digest(), pending_certificate.acquired_locks)
             .is_none());
-        self.execution_dispatcher
-            .dispatch_certificate(cert, expected_effects_digest);
+        let _ = self
+            .tx_ready_certificates
+            .send((cert, expected_effects_digest));
         self.metrics.transaction_manager_num_ready.inc();
+        self.metrics.execution_driver_dispatch_queue.inc();
     }
 
     /// Gets the missing input object keys for the given transaction.
@@ -836,14 +850,20 @@ impl TransactionManager {
             .map(|cert| cert.acquiring_locks.keys().cloned().collect())
     }
 
-    // Returns the number of transactions waiting on each object ID.
-    pub(crate) fn objects_queue_len(&self, keys: Vec<ObjectID>) -> Vec<(ObjectID, usize)> {
+    // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
+    pub(crate) fn objects_queue_len_and_age(
+        &self,
+        keys: Vec<ObjectID>,
+    ) -> Vec<(ObjectID, usize, Option<Duration>)> {
         let inner = self.inner.read();
         keys.into_iter()
             .map(|key| {
+                let default_map = IndexMap::new();
+                let txns = inner.input_objects.get(&key).unwrap_or(&default_map);
                 (
                     key,
-                    inner.input_objects.get(&key).cloned().unwrap_or_default(),
+                    txns.len(),
+                    txns.first().map(|(_, time)| time.elapsed()),
                 )
             })
             .collect()
@@ -862,7 +882,11 @@ impl TransactionManager {
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
-    pub(crate) fn check_execution_overload(&self, tx_data: &SenderSignedData) -> SuiResult {
+    pub(crate) fn check_execution_overload(
+        &self,
+        txn_age_threshold: Duration,
+        tx_data: &SenderSignedData,
+    ) -> SuiResult {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
@@ -873,7 +897,7 @@ impl TransactionManager {
             }
         );
 
-        for (object_id, queue_len) in self.objects_queue_len(
+        for (object_id, queue_len, txn_age) in self.objects_queue_len_and_age(
             tx_data
                 .transaction_data()
                 .input_objects()?
@@ -890,6 +914,17 @@ impl TransactionManager {
                     threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
                 }
             );
+            if let Some(age) = txn_age {
+                // Check that we don't have a txn that has been waiting for a long time in the queue.
+                fp_ensure!(
+                    age < txn_age_threshold,
+                    SuiError::TooOldTransactionPendingOnObject {
+                        object_id,
+                        txn_age_sec: age.as_secs(),
+                        threshold: txn_age_threshold.as_secs(),
+                    }
+                );
+            }
         }
         Ok(())
     }

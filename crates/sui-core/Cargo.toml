@@ -19,6 +19,7 @@ enum_dispatch.workspace = true
 eyre.workspace = true
 futures.workspace = true
 im.workspace = true
+indexmap.workspace = true
 itertools.workspace = true
 lru.workspace = true
 num_cpus.workspace = true
