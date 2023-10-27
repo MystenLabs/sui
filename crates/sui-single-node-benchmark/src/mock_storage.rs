@@ -126,6 +126,13 @@ impl MarkerTableQuery for InMemoryObjectStore {
         // Currently the workload doesn't yet support deleted shared objects
         unimplemented!()
     }
+    fn is_shared_object_deleted(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        unimplemented!()
+    }
 }
 
 impl ParentSync for InMemoryObjectStore {

@@ -321,6 +321,14 @@ impl MarkerTableQuery for InMemoryStore {
     ) -> Result<Option<TransactionDigest>, SuiError> {
         Ok(None)
     }
+
+    fn is_shared_object_deleted(
+        &self,
+        _object_id: &ObjectID,
+        _epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        Ok(false)
+    }
 }
 
 impl GetModule for InMemoryStore {

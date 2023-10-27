@@ -138,6 +138,62 @@ async fn shared_object_deletion_multiple_times() {
         .unwrap();
 }
 
+#[sim_test]
+async fn shared_object_deletion_multiple_times_cert_racing() {
+    let num_deletions = 10;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            address: None,
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT; num_deletions],
+        }])
+        .build()
+        .await;
+
+    let (package, counter) = publish_basics_package_and_make_counter(&test_cluster.wallet).await;
+    let package_id = package.0;
+    let counter_id = counter.0;
+    let counter_initial_shared_version = counter.1;
+
+    let accounts_and_gas = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_gas[0].0;
+    let gas_coins = accounts_and_gas[0].1.clone();
+
+    // Make a bunch transactions that all want to delete the counter object.
+    let validators = test_cluster.get_validator_pubkeys();
+    let mut digests = vec![];
+    for coin_ref in gas_coins.into_iter() {
+        let transaction = test_cluster
+            .test_transaction_builder_with_gas_object(sender, coin_ref)
+            .await
+            .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
+            .build();
+        let signed = test_cluster.sign_transaction(&transaction);
+        test_cluster
+            .create_certificate(signed.clone())
+            .await
+            .unwrap();
+        test_cluster
+            .submit_transaction_to_validators(signed.clone(), &validators)
+            .await
+            .unwrap();
+        digests.push(*signed.digest());
+    }
+
+    // Start a new fullnode and let it sync from genesis and wait for us to see all the deletion
+    // transactions.
+    let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
+    fullnode
+        .state()
+        .db()
+        .notify_read_executed_effects(digests)
+        .await
+        .unwrap();
+}
+
 /// Test for execution of shared object certs that are sequenced after a shared object is deleted.
 /// The test strategy is:
 /// 0. Inject a random delay just before execution of a transaction.

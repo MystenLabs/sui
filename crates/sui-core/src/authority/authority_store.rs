@@ -418,6 +418,34 @@ impl AuthorityStore {
         }
     }
 
+    pub fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        let object_key = ObjectKey::max_for_id(object_id);
+        let marker_key = (epoch_id, object_key);
+
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table
+            .unbounded_iter()
+            .skip_prior_to(&marker_key)?
+            .next();
+        match marker_entry {
+            Some(((epoch, key), marker)) => {
+                // Make sure object id matches and version is >= `version`
+                let object_id_matches = key.0 == *object_id;
+                // Make sure we don't have a stale epoch for some reason (e.g., a revert)
+                let epoch_data_ok = epoch == epoch_id;
+                // Make sure the object was deleted or wrapped.
+                let mark_data_ok = matches!(marker, MarkerValue::SharedDeleted(_));
+                Ok(object_id_matches && epoch_data_ok && mark_data_ok)
+            }
+            None => Ok(false),
+        }
+    }
+
     /// Returns future containing the state hash for the given epoch
     /// once available
     pub async fn notify_read_root_state_hash(
@@ -1952,6 +1980,13 @@ impl MarkerTableQuery for AuthorityStore {
         epoch_id: EpochId,
     ) -> Result<Option<TransactionDigest>, SuiError> {
         Ok(self.get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)?)
+    }
+    fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        self.is_shared_object_deleted(object_id, epoch_id)
     }
 }
 

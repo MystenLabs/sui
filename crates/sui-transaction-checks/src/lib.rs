@@ -89,7 +89,7 @@ mod checked {
         // Runs verifier, which could be expensive.
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
 
-        let inputs = check_input_objects(store, &input_objects, protocol_config)?;
+        let inputs = check_input_objects(store, &input_objects, protocol_config, epoch_id)?;
         let objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let gas_status = get_gas_status(
@@ -124,7 +124,8 @@ mod checked {
         check_non_system_packages_to_be_published(transaction, protocol_config, metrics)?;
         let receiving_objects = transaction.receiving_objects();
         let input_object_kinds = transaction.input_objects()?;
-        let mut inputs = check_input_objects(store, &input_object_kinds, protocol_config)?;
+        let mut inputs =
+            check_input_objects(store, &input_object_kinds, protocol_config, epoch_id)?;
 
         let gas_object_ref = gas_object.compute_object_reference();
         inputs.push((
@@ -176,7 +177,7 @@ mod checked {
             // When changing the epoch, we update a the system object, which is shared, without going
             // through sequencing, so we must bypass the sequence checks here.
             (
-                check_input_objects(store, &input_object_kinds, protocol_config)?,
+                check_input_objects(store, &input_object_kinds, protocol_config, epoch_id)?,
                 Vec::new(),
             )
         } else {
@@ -206,11 +207,12 @@ mod checked {
 
     /// WARNING! This should only be used for the dev-inspect transaction. This transaction type
     /// bypasses many of the normal object checks
-    pub fn check_dev_inspect_input<S: ObjectStore>(
+    pub fn check_dev_inspect_input<S: ObjectStore + MarkerTableQuery>(
         store: &S,
         config: &ProtocolConfig,
         kind: &TransactionKind,
         gas_object: Object,
+        epoch_id: EpochId,
     ) -> SuiResult<(ObjectRef, InputObjects)> {
         let gas_object_ref = gas_object.compute_object_reference();
         kind.validity_check(config)?;
@@ -222,7 +224,7 @@ mod checked {
             .into());
         }
         let mut input_objects = kind.input_objects()?;
-        let inputs = check_input_objects(store, &input_objects, config)?;
+        let inputs = check_input_objects(store, &input_objects, config, epoch_id)?;
         let mut objects: Vec<Object> = inputs.iter().map(|(_, o)| o.clone()).collect();
 
         let mut used_objects: HashSet<SuiAddress> = HashSet::new();
@@ -374,10 +376,11 @@ mod checked {
         Ok(())
     }
 
-    pub fn check_input_objects<S: ObjectStore>(
+    pub fn check_input_objects<S: ObjectStore + MarkerTableQuery>(
         object_store: &S,
         objects: &[InputObjectKind],
         protocol_config: &ProtocolConfig,
+        epoch_id: EpochId,
     ) -> Result<Vec<(InputObjectKind, Object)>, SuiError> {
         let mut result = Vec::new();
 
@@ -392,9 +395,14 @@ mod checked {
 
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject { id, .. } => {
-                    object_store.get_object(id)?
+                InputObjectKind::SharedMoveObject { id, .. } => {
+                    let res = object_store.get_object(id)?;
+                    if res.is_none() && object_store.is_shared_object_deleted(id, epoch_id)? {
+                        continue;
+                    }
+                    res
                 }
+                InputObjectKind::MovePackage(id) => object_store.get_object(id)?,
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     object_store.get_object_by_key(&objref.0, objref.1)?
                 }

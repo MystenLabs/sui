@@ -432,6 +432,12 @@ pub trait MarkerTableQuery {
         version: &SequenceNumber,
         epoch_id: EpochId,
     ) -> Result<Option<TransactionDigest>, SuiError>;
+
+    fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError>;
 }
 
 impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
@@ -453,6 +459,13 @@ impl<T: MarkerTableQuery> MarkerTableQuery for Arc<T> {
         self.as_ref()
             .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
     }
+    fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        self.as_ref().is_shared_object_deleted(object_id, epoch_id)
+    }
 }
 
 impl<T: MarkerTableQuery> MarkerTableQuery for &T {
@@ -471,6 +484,13 @@ impl<T: MarkerTableQuery> MarkerTableQuery for &T {
         epoch_id: EpochId,
     ) -> Result<Option<TransactionDigest>, SuiError> {
         (*self).get_deleted_shared_object_previous_tx_digest(object_id, version, epoch_id)
+    }
+    fn is_shared_object_deleted(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> Result<bool, SuiError> {
+        (*self).is_shared_object_deleted(object_id, epoch_id)
     }
 }
 

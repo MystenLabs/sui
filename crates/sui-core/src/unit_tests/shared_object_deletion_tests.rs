@@ -32,7 +32,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::EpochId;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{ExecutionError, SuiError, UserInputError};
+use sui_types::error::{ExecutionError, SuiError};
 use sui_types::execution_status::ExecutionFailureStatus::{
     InputObjectDeleted, MoveAbort, SharedObjectWrapped,
 };
@@ -1439,18 +1439,9 @@ async fn test_certs_fail_after_delete() {
 
     let mutate_cert_result = user_1.certify_shared_obj_transaction(mutate_obj_tx).await;
 
-    assert!(mutate_cert_result.is_err());
-
-    match mutate_cert_result.err().unwrap() {
-        SuiError::UserInputError {
-            error: UserInputError::ObjectNotFound { object_id, .. },
-        } => {
-            assert_eq!(object_id, shared_obj_id);
-        }
-        _ => {
-            panic!("Expected UserInputError ObjectNotFound");
-        }
-    }
+    // In same epoch, so can still certify this transaction even though it uses a deleted shared
+    // object.
+    assert!(mutate_cert_result.is_ok());
 }
 
 #[tokio::test]

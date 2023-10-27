@@ -1529,6 +1529,7 @@ impl AuthorityState {
             protocol_config,
             &transaction_kind,
             gas_object,
+            epoch_store.epoch(),
         )?;
 
         let gas_budget = max_tx_gas;
