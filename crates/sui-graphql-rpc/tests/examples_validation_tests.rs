@@ -1,23 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(feature = "pg_integration")]
+//#[cfg(feature = "pg_integration")]
 mod tests {
+    use markdown_gen::markdown::{AsMarkdown, Markdown};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serial_test::serial;
     use simulacrum::Simulacrum;
-    use std::io::Read;
+    use std::fs::File;
+    use std::io::{BufWriter, Read, Write};
     use std::path::PathBuf;
     use std::sync::Arc;
     use sui_graphql_rpc::cluster::SimulatorCluster;
     use sui_graphql_rpc::config::ConnectionConfig;
 
+    #[derive(Debug)]
     struct ExampleQuery {
         pub name: String,
         pub contents: String,
         pub path: PathBuf,
     }
+
+    #[derive(Debug)]
     struct ExampleQueryGroup {
         pub name: String,
         pub queries: Vec<ExampleQuery>,
@@ -25,6 +30,96 @@ mod tests {
     }
 
     const QUERY_EXT: &str = "graphql";
+
+    fn regularize_string(s: &str) -> String {
+        // Replace underscore with space and make every word first letter uppercase
+        s.replace('_', " ")
+            .split_whitespace()
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().chain(chars).collect(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    #[test]
+    fn verify_examples_x() {
+        let groups = verify_examples_impl();
+
+        let mut out_file = File::create("docs/examples.md").unwrap();
+        let mut output = BufWriter::new(Vec::new());
+        let mut md = Markdown::new(&mut output);
+
+        md.write("Sui GraphQL Examples".heading(1)).unwrap();
+
+        // TODO: reduce multiple loops
+        // Generate the table of contents
+        for (id, group) in groups.iter().enumerate() {
+            let group_name = regularize_string(&group.name);
+            let group_name_toc = format!("[{}](#{})", group_name, id);
+            md.write(group_name_toc.heading(3)).unwrap();
+
+            for (inner, query) in group.queries.iter().enumerate() {
+                let inner_id = inner + 0xFFFF * id;
+                let inner_name = regularize_string(&query.name);
+
+                let inner_name_toc = format!("&emsp;&emsp;[{}](#{})", inner_name, inner_id);
+                md.write(inner_name_toc.heading(4)).unwrap();
+            }
+        }
+
+        for (id, group) in groups.iter().enumerate() {
+            let group_name = regularize_string(&group.name);
+
+            let id_tag = format!("<a id={}></a>", id);
+            md.write(id_tag.heading(2)).unwrap();
+            md.write(group_name.heading(2)).unwrap();
+            for (inner, query) in group.queries.iter().enumerate() {
+                let inner_id = inner + 0xFFFF * id;
+                let name = regularize_string(&query.name);
+
+                let id_tag = format!("<a id={}></a>", inner_id);
+                md.write(id_tag.heading(3)).unwrap();
+                md.write(name.heading(3)).unwrap();
+
+                // Extract all lines that start with `#` and use them as headers
+                let mut headers = vec![];
+                let mut query_start = 0;
+                for (idx, line) in query.contents.lines().enumerate() {
+                    let line = line.trim();
+                    if line.starts_with('#') {
+                        headers.push(line.trim_start_matches('#'));
+                    } else if line.starts_with('{') {
+                        query_start = idx;
+                        break;
+                    }
+                }
+
+                // Remove headers from query
+                let query = query
+                    .contents
+                    .lines()
+                    .skip(query_start)
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                let content = format!("<pre>{}</pre>", query);
+                for header in headers {
+                    md.write(header.heading(4)).unwrap();
+                }
+                md.write(content.quote()).unwrap();
+            }
+        }
+        let bytes = output.into_inner().unwrap();
+        let string = String::from_utf8(bytes).unwrap().replace('\\', "");
+
+        // write string to out_file
+        out_file.write_all(string.as_bytes()).unwrap();
+    }
 
     fn verify_examples_impl() -> Vec<ExampleQueryGroup> {
         let mut buf: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

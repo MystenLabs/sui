@@ -5292,6 +5292,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "markdown-gen"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8034621d7f1258317ca1dfb9205e3925d27ee4aa2a46620a09c567daf0310562"
+
+[[package]]
 name = "match_opt"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10626,6 +10632,7 @@ dependencies = [
  "hyper",
  "insta",
  "lru 0.10.0",
+ "markdown-gen",
  "move-binary-format",
  "move-bytecode-utils",
  "move-compiler",
@@ -14210,6 +14217,7 @@ dependencies = [
  "lz4",
  "lz4-sys",
  "mach2",
+ "markdown-gen",
  "match_opt",
  "matchers",
  "matchit 0.5.0",
