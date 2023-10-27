@@ -1,9 +1,11 @@
-import siteConfig from '@generated/docusaurus.config';
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+import siteConfig from "@generated/docusaurus.config";
 export default function prismIncludeLanguages(PrismObject) {
   const {
-    themeConfig: {prism},
+    themeConfig: { prism },
   } = siteConfig;
-  const {additionalLanguages} = prism;
+  const { additionalLanguages } = prism;
   // Prism components work on the Prism instance on the window, while prism-
   // react-renderer uses its own Prism instance. We temporarily mount the
   // instance onto window, import components to enhance it, then remove it to
@@ -15,6 +17,6 @@ export default function prismIncludeLanguages(PrismObject) {
     // eslint-disable-next-line global-require, import/no-dynamic-require
     require(`prismjs/components/prism-${lang}`);
   });
-  require('./prism-sui-move');
+  require("./prism-sui-move");
   delete globalThis.Prism;
 }

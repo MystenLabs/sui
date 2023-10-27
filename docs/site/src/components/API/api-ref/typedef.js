@@ -1,16 +1,14 @@
-import React, { useState } from "react";
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+import React from "react";
 import _ from "lodash";
 import { getRef } from "../index";
 
-import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
-import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
-import docco from 'react-syntax-highlighter/dist/esm/styles/hljs/docco';
-import dark from 'react-syntax-highlighter/dist/esm/styles/hljs/dracula';
-
-
+import { Light as SyntaxHighlighter } from "react-syntax-highlighter";
+import json from "react-syntax-highlighter/dist/esm/languages/hljs/json";
+import dark from "react-syntax-highlighter/dist/esm/styles/hljs/dracula";
 
 const TypeDef = (props) => {
-
   const { schema, schemas } = props;
   const schemaObj = schemas[schema];
   let refs = [{ title: schema, ...schemaObj }];
@@ -25,28 +23,32 @@ const TypeDef = (props) => {
         collectRefs(value);
       }
       if (key == "$ref")
-            refs.push({ title: getRef(value), ...schemas[getRef(value)] });
+        refs.push({ title: getRef(value), ...schemas[getRef(value)] });
     }
   };
 
   collectRefs(schemaObj);
 
-  refs.map( (ref) => {
-        collectRefs(schemas[ref.title]);
-  })
-
-  refs.map( (ref) => {
+  refs.map((ref) => {
     collectRefs(schemas[ref.title]);
-})
+  });
+
+  refs.map((ref) => {
+    collectRefs(schemas[ref.title]);
+  });
 
   return (
     <div>
-      {_.uniqWith(refs, (a, b) => {return a.title === b.title}).map((curObj, idx) => {
+      {_.uniqWith(refs, (a, b) => {
+        return a.title === b.title;
+      }).map((curObj, idx) => {
         return (
           <div key={idx}>
             <p className="text-lg font-bold mb-0 mt-8">{curObj.title}</p>
             <hr className="mt-0" />
-            <SyntaxHighlighter language={json} style={dark}>{JSON.stringify(_.omit(curObj, "title"), null, 4)}</SyntaxHighlighter>
+            <SyntaxHighlighter language={json} style={dark}>
+              {JSON.stringify(_.omit(curObj, "title"), null, 4)}
+            </SyntaxHighlighter>
           </div>
         );
       })}
