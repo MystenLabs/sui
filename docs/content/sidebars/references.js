@@ -20,6 +20,7 @@ const references = [
 			id: 'references/sui-api',
 		},
 		items: [
+			`references/sui-api/beta-graph-ql`,
 			'references/sui-api/json-rpc-format',
 			{
 				type: 'link',

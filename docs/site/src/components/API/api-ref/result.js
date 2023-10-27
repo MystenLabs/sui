@@ -100,7 +100,7 @@ const Result = (props) => {
                     )}}`,
                   );
                 } else if (v.items.items[0].type === "string") {
-                  console.log("ooooo");
+                  items.push("string");
                 } else {
                   v.items.items.map((item) => {
                     if (typeof item["$ref"] !== "undefined") {
@@ -223,7 +223,6 @@ const Result = (props) => {
           x++;
         }
       } catch (err) {
-        console.log(refObj);
         console.log(err);
       }
     }

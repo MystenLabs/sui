@@ -29,7 +29,10 @@ const Ref = (props) => {
 
           {Object.entries(schema.properties).map((property, idx) => {
             return (
-              <div className="grid grid-cols-6 even:bg-sui-gray-35 dark:even:bg-sui-gray-95 ml-4 rounded-lg items-center">
+              <div
+                key={idx}
+                className="grid grid-cols-6 even:bg-sui-gray-35 dark:even:bg-sui-gray-95 ml-4 rounded-lg items-center"
+              >
                 <div className="col-span-2 p-2 overflow-x-auto">
                   <PropType proptype={property}></PropType>
                 </div>
