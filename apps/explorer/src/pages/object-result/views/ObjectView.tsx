@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { CoinFormat, useFormatCoin, useResolveSuiNSName } from '@mysten/core';
-import { ArrowUpRight16 } from '@mysten/icons';
+import { ArrowUpRight16, Info16 } from '@mysten/icons';
 import { type ObjectOwner, type SuiObjectResponse } from '@mysten/sui.js/client';
 import {
 	formatAddress,
@@ -135,13 +135,23 @@ function DescriptionCard({
 				<ObjectLink objectId={objectId} />
 			</Description>
 
-			<Description title="Type">
-				<Tooltip tip={<div className="flex flex-wrap break-all">{objectType}</div>}>
-					<ObjectLink
-						label={<div className="text-right">{normalizedStructTag}</div>}
-						objectId={`${address}?module=${module}`}
-					/>
-				</Tooltip>
+			<Description
+				title={
+					<div className="flex items-center gap-1">
+						<Text variant="pBodySmall/medium" color="steel-dark">
+							Type
+						</Text>
+
+						<Tooltip tip={<div className="flex flex-wrap break-all">{objectType}</div>}>
+							<Info16 />
+						</Tooltip>
+					</div>
+				}
+			>
+				<ObjectLink
+					label={<div className="text-right">{normalizedStructTag}</div>}
+					objectId={`${address}?module=${module}`}
+				/>
 			</Description>
 		</ObjectViewCard>
 	);
