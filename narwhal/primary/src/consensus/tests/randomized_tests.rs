@@ -23,9 +23,9 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 use storage::ConsensusStore;
 use sui_protocol_config::ProtocolConfig;
+use test_utils::latest_protocol_version;
 use test_utils::mock_certificate_with_rand;
 use test_utils::CommitteeFixture;
-use test_utils::{get_protocol_config, latest_protocol_version};
 #[allow(unused_imports)]
 use tokio::sync::mpsc::channel;
 use types::CertificateAPI;
@@ -76,18 +76,6 @@ impl ExecutionPlan {
 #[ignore]
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn bullshark_randomised_tests() {
-    // Run the consensus tests without the new consensus schedule changes
-    let protocol_config = get_protocol_config(19);
-    bullshark_randomised_tests_with_config(protocol_config).await;
-
-    // TODO: remove once the new leader election schedule feature is enabled on a protocol version
-    // Run the consensus tests with the new consensus schedule changes enabled
-    let mut config: ProtocolConfig = latest_protocol_version();
-    config.set_consensus_bad_nodes_stake_threshold(33);
-    bullshark_randomised_tests_with_config(config).await;
-}
-
-async fn bullshark_randomised_tests_with_config(protocol_config: ProtocolConfig) {
     // Configuration regarding the randomized tests. The tests will run for different values
     // on the below parameters to increase the different cases we can generate.
 
@@ -121,6 +109,9 @@ async fn bullshark_randomised_tests_with_config(protocol_config: ProtocolConfig)
             minimum_committee_size: None,
         },
     ];
+
+    let mut config: ProtocolConfig = latest_protocol_version();
+    config.set_consensus_bad_nodes_stake_threshold(33);
 
     let mut test_execution_list = FuturesUnordered::new();
     let (tx, mut rx) = channel(1000);
@@ -186,7 +177,7 @@ async fn bullshark_randomised_tests_with_config(protocol_config: ProtocolConfig)
 
                 let consensus_store = store.clone();
 
-                let config = protocol_config.clone();
+                let config = config.clone();
 
                 let handle = tokio::spawn(async move {
                     // Create a randomized DAG
