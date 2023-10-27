@@ -485,7 +485,9 @@ impl ConsensusAdapter {
             if self.protocol_config.throughput_aware_consensus_submission() && position == 1 {
                 return match level {
                     Level::Low => Duration::from_millis(LOW_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS),
-                    Level::Medium => Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS),
+                    Level::Medium => {
+                        Duration::from_millis(MEDIUM_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS)
+                    }
                     Level::High => {
                         let l = Duration::from_millis(HIGH_THROUGHPUT_DELAY_BEFORE_SUBMIT_MS);
 
