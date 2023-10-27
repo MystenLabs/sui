@@ -39,7 +39,7 @@ use std::{
     sync::Arc,
     thread,
 };
-use sui_config::node::StateDebugDumpConfig;
+use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::NodeConfig;
 use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tap::{TapFallible, TapOptional};
@@ -649,6 +649,9 @@ pub struct AuthorityState {
 
     /// Config for state dumping on forks
     debug_dump_config: StateDebugDumpConfig,
+
+    /// Config for when we consider the node overloaded.
+    overload_threshold_config: OverloadThresholdConfig,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -672,6 +675,10 @@ impl AuthorityState {
 
     pub fn clone_committee_store(&self) -> Arc<CommitteeStore> {
         self.committee_store.clone()
+    }
+
+    pub fn max_txn_age_in_queue(&self) -> Duration {
+        self.overload_threshold_config.max_txn_age_in_queue
     }
 
     pub fn get_epoch_state_commitments(
@@ -800,7 +807,8 @@ impl AuthorityState {
         consensus_adapter: &Arc<ConsensusAdapter>,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
-        self.transaction_manager.check_execution_overload(tx_data)?;
+        self.transaction_manager
+            .check_execution_overload(self.max_txn_age_in_queue(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
     }
@@ -2011,6 +2019,7 @@ impl AuthorityState {
         certificate_deny_config: CertificateDenyConfig,
         indirect_objects_threshold: usize,
         debug_dump_config: StateDebugDumpConfig,
+        overload_threshold_config: OverloadThresholdConfig,
         archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -2062,6 +2071,7 @@ impl AuthorityState {
             transaction_deny_config,
             certificate_deny_config,
             debug_dump_config,
+            overload_threshold_config,
         });
 
         // Start a task to execute ready certificates.
