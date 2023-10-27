@@ -149,6 +149,7 @@ impl ServerBuilder {
 
         let app = axum::Router::new()
             .route("/", axum::routing::get(graphiql).post(graphql_handler))
+            .route("/schema", axum::routing::get(get_schema))
             .layer(axum::extract::Extension(schema))
             .layer(middleware::from_fn(check_version_middleware))
             .layer(middleware::from_fn(set_version_middleware));
@@ -161,6 +162,19 @@ impl ServerBuilder {
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
         })
     }
+}
+
+async fn get_schema() -> impl axum::response::IntoResponse {
+    let schema = include_str!("../../schema/current_progress_schema.graphql").to_string();
+    let schema = format!(
+        r#"
+    <span style="white-space: pre;">{}
+    </span>  
+    "#,
+        schema
+    );
+
+    axum::response::Html(schema)
 }
 
 async fn graphql_handler(
