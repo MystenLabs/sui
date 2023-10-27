@@ -1611,8 +1611,7 @@ impl ProtocolConfig {
                     // signature verifier will use the fetched jwk map to determine
                     // whether the provider is supported based on node config.
                     cfg.feature_flags.zklogin_supported_providers = BTreeSet::default();
-                }
-                31 => {
+
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.throughput_aware_consensus_submission = true;
                     }
